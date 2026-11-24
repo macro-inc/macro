@@ -19,7 +19,6 @@ files:
   - apps/web/src/features/passwords/components/**
   - apps/web/src/features/notifications-inbox/components/**
   - apps/web/src/features/channel-notification-stacks/components/**
-  - apps/web/src/features/new-home/components/**
   - apps/web/src/features/command/components/**
   - apps/web/src/features/document-composer/components/**
   - apps/web/src/features/task-composer/components/**

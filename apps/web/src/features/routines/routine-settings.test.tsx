@@ -109,7 +109,7 @@ describe('routine settings', () => {
     expect(screen.getAllByRole('heading', { name: 'Routines' })).toHaveLength(
       1
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Create Routine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create routine' }));
     expect(mocks.close).toHaveBeenCalledOnce();
     expect(mocks.popoverSplit).toHaveBeenCalledWith({
       type: 'component',

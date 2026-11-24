@@ -176,7 +176,9 @@ fn native_effort_profiles_preserve_defaults_and_provider_boundaries() {
         "anthropic/claude-opus-5-5",
         "openai/gpt-5.5",
         "openai/gpt-5-mini",
-        "openai/gpt-6.1-sol",
+        "openai/gpt-6.2-sol",
+        "openai/gpt-6-luna",
+        "anthropic/claude-haiku-5-5",
         "openai/gpt-6-astra",
     ] {
         assert!(!ReasoningEffort::supported(model).is_empty(), "{model}");
@@ -226,5 +228,44 @@ fn brief_structured_answers_lower_only_gemini_thinking() {
     assert_eq!(
         params("anthropic/claude-sonnet-5-5", CompletionThinking::Low),
         None
+    );
+}
+
+#[test]
+fn haiku_5_5_thinks_adaptively_and_takes_effort() {
+    let router = test_router();
+    let RoutedModel::Anthropic(haiku) = router.route("anthropic/claude-haiku-5-5").unwrap() else {
+        panic!("haiku should use the native Anthropic client");
+    };
+    let params = haiku
+        .thinking_params(Some(ReasoningEffort::Low))
+        .expect("Haiku 5.5 supports thinking and effort");
+    assert_eq!(params["thinking"]["type"], "adaptive");
+    assert!(params["thinking"].get("budget_tokens").is_none());
+    assert_eq!(params["output_config"]["effort"], "low");
+}
+
+#[test]
+fn luna_defaults_to_low_effort_like_the_mini_it_replaces() {
+    let router = test_router();
+    let RoutedModel::OpenAiResponses(luna) = router.route("openai/gpt-6-luna").unwrap() else {
+        panic!("GPT-6 Luna should use OpenAI Responses");
+    };
+    assert_eq!(
+        luna.thinking_params(Some(ReasoningEffort::Default))
+            .unwrap()["reasoning"]["effort"],
+        "low"
+    );
+    assert_eq!(
+        luna.thinking_params(Some(ReasoningEffort::None)).unwrap()["reasoning"]["effort"],
+        "none"
+    );
+    let RoutedModel::OpenAiResponses(sol) = router.route("openai/gpt-6.2-sol").unwrap() else {
+        panic!("GPT-6.2 Sol should use OpenAI Responses");
+    };
+    // GPT-6.2 Sol rejects `none`, so it is never sent.
+    assert_eq!(
+        sol.thinking_params(Some(ReasoningEffort::None)).unwrap()["reasoning"]["effort"],
+        "high"
     );
 }

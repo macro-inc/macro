@@ -281,7 +281,9 @@ body.tauri-ios {
   --color-orange-ink: var(--color-orange);
   --color-orange-hover: color-mix(in oklch, var(--color-orange) 20%, transparent);
   --color-amber-bg: color-mix(in oklch, var(--color-amber) 15%, transparent);
-  --color-amber-ink: var(--color-amber);
+  /* Amber is too light for text on a light surface (about 2:1): ink mixed in
+     brings it past 4.5:1 there and keeps it bright on a dark one. */
+  --color-amber-ink: color-mix(in oklch, var(--color-amber) 60%, var(--color-ink));
   --color-amber-hover: color-mix(in oklch, var(--color-amber) 20%, transparent);
   --color-yellow-bg: color-mix(in oklch, var(--color-yellow) 15%, transparent);
   --color-yellow-ink: var(--color-yellow);
@@ -473,7 +475,9 @@ body.tauri-ios {
   --color-orange-ink: var(--color-orange);
   --color-orange-hover: color-mix(in oklch, var(--color-orange) 20%, transparent);
   --color-amber-bg: color-mix(in oklch, var(--color-amber) 15%, transparent);
-  --color-amber-ink: var(--color-amber);
+  /* Amber is too light for text on a light surface (about 2:1): ink mixed in
+     brings it past 4.5:1 there and keeps it bright on a dark one. */
+  --color-amber-ink: color-mix(in oklch, var(--color-amber) 60%, var(--color-ink));
   --color-amber-hover: color-mix(in oklch, var(--color-amber) 20%, transparent);
   --color-yellow-bg: color-mix(in oklch, var(--color-yellow) 15%, transparent);
   --color-yellow-ink: var(--color-yellow);

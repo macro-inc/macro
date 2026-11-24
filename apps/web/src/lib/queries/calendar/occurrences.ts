@@ -15,10 +15,15 @@ import {
   useGraphqlCalendarHost,
 } from './graphql/flag';
 import {
+  CALENDAR_CACHE_READ_DEADLINE_MS,
   calendarCacheAnswered,
   recordCalendarRestAnswer,
+  withinDeadline,
 } from './graphql/readiness';
-import { activeCalendarSyncController } from './graphql/sync-controller';
+import {
+  activeCalendarSyncController,
+  type CalendarSyncController,
+} from './graphql/sync-controller';
 import { readCalendarViewport } from './graphql/viewport';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 
@@ -294,26 +299,55 @@ export function useCalendarOccurrencesQuery(
   });
 }
 
+async function runDeltaForRefresh(
+  controller: CalendarSyncController
+): Promise<'synced' | 'failed'> {
+  const run = await ResultAsync.fromPromise(
+    controller.runDelta(),
+    (error) => error
+  );
+  if (run.isOk()) return 'synced';
+  console.warn('Calendar delta sync failed', run.error);
+  return 'failed';
+}
+
 /**
  * Refetches every mounted occurrence viewport. With calendar reads on the
  * cache, the delta runs first so the viewports see the change that prompted
  * the refresh rather than the cache from before it. A cache still starting
  * would hold the delta, so the viewports refetch without it, from REST; the
- * first read the cache answers afterwards runs the delta before it. The
- * refetch is skipped when `stillCurrent` turns false while the delta runs.
+ * first read the cache answers afterwards runs the delta before it. A delta
+ * that fails, or is still running at the read deadline (a cache waiting on
+ * another tab), does not hold the refetch: the change is noticed, so reads
+ * wait for the delta or go to REST instead of answering from the older
+ * cache. The refetch is skipped when `stillCurrent` turns false while the
+ * delta runs.
  */
 export async function invalidateCalendarOccurrences(
   stillCurrent: () => boolean = () => true
 ) {
-  const controller = activeCalendarSyncController();
-  if (controller?.answering()) {
-    await controller.runDelta().catch((error) => {
-      console.warn('Calendar delta sync failed', error);
+  return Telemetry.span('calendar.occurrences_refresh', async (span) => {
+    const controller = activeCalendarSyncController();
+    span.setAttr('calendar.transport', controller ? 'graphql' : 'rest');
+    controller?.noticeChange();
+    if (controller?.answering()) {
+      span.setAttr(
+        'calendar.delta.outcome',
+        await withinDeadline(
+          runDeltaForRefresh(controller),
+          CALENDAR_CACHE_READ_DEADLINE_MS
+        )
+      );
+    } else if (controller) {
+      span.setAttr('calendar.delta.outcome', 'cache_starting');
+    }
+    if (!stillCurrent()) {
+      span.setAttr('calendar.refresh.superseded', true);
+      return;
+    }
+    return queryClient.invalidateQueries({
+      queryKey: calendarKeys.occurrences._def,
     });
-  }
-  if (!stillCurrent()) return;
-  return queryClient.invalidateQueries({
-    queryKey: calendarKeys.occurrences._def,
   });
 }
 

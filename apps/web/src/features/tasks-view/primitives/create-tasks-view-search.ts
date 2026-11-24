@@ -1,7 +1,7 @@
 import { normalizeFacetSelection } from '@app/features/soup/filters/facets';
 import { type Accessor, createEffect, on } from 'solid-js';
 import { produce, type SetStoreFunction, type Store } from 'solid-js/store';
-import { TASK_DEFAULT_GROUP_BY } from '../constants';
+import { isTaskDateSort, TASK_DEFAULT_GROUP_BY } from '../constants';
 import { DEFAULT_TASK_FACET_SELECTION } from '../filters/task-facets';
 import type { TasksTabSearchParams } from '../tasks-tab-search';
 import type { TaskSortId, TasksTab, TasksViewState } from '../types';
@@ -26,6 +26,7 @@ export function createTasksViewSearch(options: {
   const entryGroupBy = state.groupBy;
   const entryLayout = state.layout;
   const entryDueDate = state.dueDate ? { ...state.dueDate } : undefined;
+  const entryStartDate = state.startDate ? { ...state.startDate } : undefined;
 
   createEffect(
     on(
@@ -39,6 +40,9 @@ export function createTasksViewSearch(options: {
           search.dueDate,
           search.dueStart,
           search.dueEnd,
+          search.startDate,
+          search.startFrom,
+          search.startTo,
           options.nonListLayoutsEnabled?.() ?? true,
           search.savedView,
           state.savedViewActive,
@@ -52,6 +56,9 @@ export function createTasksViewSearch(options: {
         dueDate,
         dueStart,
         dueEnd,
+        startDate,
+        startFrom,
+        startTo,
         nonListLayoutsEnabled,
       ]) => {
         if (!options.enabled) return;
@@ -74,6 +81,7 @@ export function createTasksViewSearch(options: {
               );
               draft.collapsedGroupIds = [];
               draft.dueDate = undefined;
+              draft.startDate = undefined;
             }
 
             draft.layout =
@@ -88,7 +96,7 @@ export function createTasksViewSearch(options: {
                   ? entryGroupBy
                   : TASK_DEFAULT_GROUP_BY[tab]);
             const reversed =
-              !sort?.startsWith('due_date_') && sortReversed === 'true';
+              !(sort && isTaskDateSort(sort)) && sortReversed === 'true';
             if (!savedViewActive) {
               draft.sort = sort
                 ? [{ id: sort, reversed }]
@@ -116,6 +124,22 @@ export function createTasksViewSearch(options: {
                 draft.dueDate = { ...entryDueDate };
               } else {
                 draft.dueDate = undefined;
+              }
+              if (startDate === 'range') {
+                const validRange =
+                  (startFrom || startTo) &&
+                  (!startFrom || !startTo || startFrom <= startTo);
+                draft.startDate = validRange
+                  ? { type: 'range', start: startFrom, end: startTo }
+                  : undefined;
+              } else if (startDate === 'any') {
+                draft.startDate = undefined;
+              } else if (startDate) {
+                draft.startDate = { type: startDate };
+              } else if (tab === entryTab && entryStartDate) {
+                draft.startDate = { ...entryStartDate };
+              } else {
+                draft.startDate = undefined;
               }
             }
           })
@@ -156,15 +180,22 @@ export function createTasksViewSearch(options: {
           dueEnd: filter?.type === 'range' ? filter.end : undefined,
         });
       }
+
+      if (args[0] === 'startDate') {
+        const filter = state.startDate;
+        options.setSearch({
+          startDate: filter?.type ?? 'any',
+          startFrom: filter?.type === 'range' ? filter.start : undefined,
+          startTo: filter?.type === 'range' ? filter.end : undefined,
+        });
+      }
     },
   });
 
   const setPrimarySort = (id: TaskSortId) => {
     const current = state.sort[0];
     const reversed =
-      !id.startsWith('due_date_') && current?.id === id
-        ? !current.reversed
-        : false;
+      !isTaskDateSort(id) && current?.id === id ? !current.reversed : false;
 
     options.setState('sort', [{ id, reversed }]);
     if (!options.enabled) return;

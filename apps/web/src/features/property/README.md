@@ -118,6 +118,53 @@ Parent Task, Subtasks and Time logged only on tasks. A mixed selection lists
 every definition. The create dialog uses the same type. The Properties panel
 reads the same list for its entity, so the picker opens with it loaded.
 
+A Link property takes its URL in the editor's search field
+(`editor/link-property-editor.tsx`): Enter sets it, or adds it when the
+property holds several links, and the item's links are listed below to remove
+one at a time, with **Clear all** once there are two. With nothing typed no row
+is highlighted, so Enter removes nothing until the arrow keys or the pointer
+pick a link, and every save closes the editor (Shift does not keep it open, as
+the listed links would be stale until the save lands). It validates and saves
+exactly as the property row's link editor does (`utils/linkValues.ts`). With
+several items selected no links are listed, and a URL replaces each item's
+value.
+
+Opened on a property definition for one saved item (a list row's shortcut or
+menu, the command menu), the editor does not know the value the item already
+holds until its properties are read. A property that holds several values
+(select, entity or Link) lists nothing and changes nothing until then: a save
+sends the whole value, so a pick would drop the values it hasn't read. A
+property that holds one value is replaced either way and stays editable.
+`SavedValueStatus` shows "Loading …" or, when the read fails, "Couldn't load
+this item's …" in place of the rows. Tag assignment waits only while the tags
+load, since unread tags would all look unapplied; a failed read still allows
+tagging, as its saves are additions and removals the server merges. Rows that
+arrive after a wait start with none highlighted (`createUnhighlightedArrival`),
+unless a search typed meanwhile found a match: the first row may be **Clear
+all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
+editor takes them from the property's definition.
+
+## Adding a property
+
+Picking a property, or creating one, adds it to the item empty and opens its
+value field straight away: the host starts the add and does not make the
+editor wait for it. The add writes an empty value, so a save of the same
+property that started before the add was answered could reach the server first
+and be cleared by it. `executeGraphqlEntityPropertyMutation` therefore holds
+such a save until the add is answered, whether it succeeded or failed, up to
+`ADD_HOLD_LIMIT_MS` (`pendingAdds`, in `lib/queries/properties/graphql/entity.ts`).
+A save of another property is not held, but a save of several items goes out
+in order, so a held one delays those after it. Until the save goes out, the
+side panel shows the placeholder, "Not set". The hold lives in the page: a
+value not yet sent is lost if the page is closed.
+
+A value saved straight after the add shows with a temporary id before the
+server names it. The title row pins a property only once it has the server's
+id (`isTemporaryGraphqlProperty`).
+
+The side panel skips an add of a property the item already carries: attaching
+it again would clear its value.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates

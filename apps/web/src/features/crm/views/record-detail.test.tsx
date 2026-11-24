@@ -15,7 +15,10 @@ import {
 } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmCommentTarget } from '../context/workspace-context';
+import type {
+  CrmCommentTarget,
+  CrmRecordOpenOptions,
+} from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
 import type {
   CrmRecordRef,
@@ -253,8 +256,17 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
   const [records, setRecords] = createSignal<readonly CrmRecordRef[]>([record]);
   const [section, setSection] = createSignal<CrmRecordSection>();
   const [commentTarget, setCommentTarget] = createSignal<CrmCommentTarget>();
-  const open = (trail: readonly CrmRecordRef[]) =>
+  const opened = vi.fn();
+  const open = (
+    trail: readonly CrmRecordRef[],
+    options?: CrmRecordOpenOptions
+  ) => {
+    opened(
+      trail.map((entry) => entry.id),
+      options
+    );
     setRecords(trail.map((entry) => ({ ...entry })));
+  };
   const close = vi.fn(() => setRecords([]));
   const failed = vi.fn(() => <div>Navigation failed</div>);
   render(() => (
@@ -283,7 +295,7 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
       </Show>
     </ErrorBoundary>
   ));
-  return { close, records, failed, setCommentTarget };
+  return { close, records, failed, setCommentTarget, opened };
 }
 
 const crumbs = () =>
@@ -333,6 +345,29 @@ it('opens a People contact in place and follows its company without duplicating 
 
   fireEvent.click(screen.getByRole('button', { name: 'People' }));
   expect(close).toHaveBeenCalledOnce();
+});
+
+it('follows a contact’s company link to a split already showing it, from the trail too', () => {
+  const { opened } = renderDetail(
+    { type: 'contact', id: 'contact-1', name: 'Maya' },
+    'People'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
+  expect(opened).toHaveBeenLastCalledWith(['contact-1', 'company-1'], {
+    followLink: true,
+  });
+});
+
+it('follows the company link back along the trail to a split already showing it', () => {
+  const { opened } = renderDetail(
+    { type: 'company', id: 'company-1', name: 'Northstar' },
+    'Pipeline'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Open Maya' }));
+  // The company is already in the trail; the link still follows it.
+  fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
+  expect(opened).toHaveBeenLastCalledWith(['company-1'], { followLink: true });
+  expect(crumbs()).toEqual(['Pipeline', 'Northstar']);
 });
 
 it('registers the actual company detail while mounted and clears it on unmount', async () => {

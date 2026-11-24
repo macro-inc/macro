@@ -1,5 +1,5 @@
 use super::*;
-use item_filters::NotificationFilters;
+use item_filters::{EmailLabelMatch, NotificationFilters};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -10,6 +10,7 @@ struct Thread {
     calendar: bool,
     sent: bool,
     draft: bool,
+    attachment: bool,
 }
 
 #[derive(Default)]
@@ -24,6 +25,9 @@ struct Source {
     /// Threads outside the viewer's inboxes in folders granted to them.
     project_shared: Vec<SharedThread>,
     threads: HashMap<Uuid, Thread>,
+    favorites: Vec<Uuid>,
+    tags: Vec<TagOption>,
+    labels: Vec<String>,
     shared_requests: Mutex<Vec<Vec<Uuid>>>,
     project_requests: Mutex<Vec<(Vec<String>, Vec<Uuid>, bool, bool)>>,
 }
@@ -120,9 +124,26 @@ impl EmailSearchSource for Source {
                     && (!states.calendar_only || thread.calendar)
                     && (!states.sent || thread.sent)
                     && (!states.has_draft || thread.draft)
+                    && (!states.has_attachment || thread.attachment)
             })
             .copied()
             .collect())
+    }
+
+    async fn favorite_threads(
+        &self,
+        _: &MacroUserId<Lowercase<'_>>,
+        limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        Ok(self.favorites.iter().take(limit).copied().collect())
+    }
+
+    async fn tag_options(&self, _: &MacroUserId<Lowercase<'_>>) -> Result<Vec<TagOption>, Report> {
+        Ok(self.tags.clone())
+    }
+
+    async fn inbox_labels(&self, _: &[Uuid]) -> Result<Vec<String>, Report> {
+        Ok(self.labels.clone())
     }
 }
 
@@ -151,7 +172,7 @@ fn shared(id: u128) -> SharedThread {
 
 fn threads(scope: EmailScope) -> EmailThreads {
     match scope {
-        EmailScope::Threads(threads) => threads,
+        EmailScope::Threads(threads) => *threads,
         EmailScope::Nothing => panic!("expected threads to search"),
     }
 }
@@ -765,4 +786,265 @@ async fn shared_among_reads_threads_shared_through_their_folder() {
             .collect::<Vec<_>>(),
         vec![Uuid::from_u128(10), Uuid::from_u128(31)]
     );
+}
+
+#[tokio::test]
+async fn favorites_narrow_the_search_by_id() {
+    let favorite = Uuid::from_u128(30);
+    let named = Uuid::from_u128(31);
+    let source = Source {
+        favorites: vec![favorite, named],
+        ..Source::default()
+    };
+    let service = EmailSearchService(source);
+
+    let starred = EmailFilters {
+        favorite: Some(true),
+        ..EmailFilters::default()
+    };
+    let scope = threads(
+        service
+            .scope(&viewer(), &starred, &inboxes())
+            .await
+            .unwrap(),
+    );
+    assert_eq!(scope.required_thread_ids, vec![favorite, named]);
+    assert_eq!(scope.user_ids, inboxes().user_ids);
+
+    let starred_and_named = EmailFilters {
+        favorite: Some(true),
+        email_thread_ids: vec![named.to_string(), Uuid::from_u128(32).to_string()],
+        ..EmailFilters::default()
+    };
+    let scope = threads(
+        service
+            .scope(&viewer(), &starred_and_named, &inboxes())
+            .await
+            .unwrap(),
+    );
+    assert_eq!(scope.required_thread_ids, vec![named]);
+}
+
+#[tokio::test]
+async fn no_favorites_match_nothing_and_leaving_them_out_excludes_them() {
+    let service = EmailSearchService(Source::default());
+    let starred = EmailFilters {
+        favorite: Some(true),
+        ..EmailFilters::default()
+    };
+    assert_eq!(
+        service
+            .scope(&viewer(), &starred, &inboxes())
+            .await
+            .unwrap(),
+        EmailScope::Nothing
+    );
+
+    let favorite = Uuid::from_u128(33);
+    let service = EmailSearchService(Source {
+        favorites: vec![favorite],
+        ..Source::default()
+    });
+    let not_starred = EmailFilters {
+        favorite: Some(false),
+        ..EmailFilters::default()
+    };
+    let scope = threads(
+        service
+            .scope(&viewer(), &not_starred, &inboxes())
+            .await
+            .unwrap(),
+    );
+    assert_eq!(scope.excluded_thread_ids, vec![favorite]);
+    assert!(scope.required_thread_ids.is_empty());
+}
+
+#[tokio::test]
+async fn a_label_name_matches_tags_and_inbox_labels_ignoring_case() {
+    let travel = Uuid::from_u128(40);
+    let source = Source {
+        tags: vec![
+            TagOption {
+                label: "Travel".to_string(),
+                option_id: travel,
+            },
+            TagOption {
+                label: "Work".to_string(),
+                option_id: Uuid::from_u128(41),
+            },
+        ],
+        labels: vec!["TRAVEL".to_string(), "Receipts".to_string()],
+        ..Source::default()
+    };
+    let service = EmailSearchService(source);
+    let filters = EmailFilters {
+        label_names: vec![
+            EmailLabelMatch {
+                name: "travel".to_string(),
+                exclude: false,
+            },
+            EmailLabelMatch {
+                name: "receipts".to_string(),
+                exclude: true,
+            },
+            EmailLabelMatch {
+                name: "nothing by this name".to_string(),
+                exclude: true,
+            },
+        ],
+        ..EmailFilters::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(
+        scope.label_conditions,
+        vec![
+            LabelCondition {
+                labels: vec!["TRAVEL".to_string()],
+                tag_option_ids: vec![travel],
+                exclude: false,
+            },
+            LabelCondition {
+                labels: vec!["Receipts".to_string()],
+                tag_option_ids: Vec::new(),
+                exclude: true,
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_label_that_names_nothing_matches_nothing() {
+    let service = EmailSearchService(Source::default());
+    let filters = EmailFilters {
+        label_names: vec![EmailLabelMatch {
+            name: "travel".to_string(),
+            exclude: false,
+        }],
+        ..EmailFilters::default()
+    };
+
+    assert_eq!(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+        EmailScope::Nothing
+    );
+}
+
+#[tokio::test]
+async fn a_left_out_view_excludes_its_threads_or_checks_each_page() {
+    let sent = Uuid::from_u128(50);
+    let source = Source {
+        own_sent: vec![sent],
+        own_drafts: (0..=MAX_THREAD_SET_ALLOWLIST as u128)
+            .map(|id| Uuid::from_u128(1_000 + id))
+            .collect(),
+        ..Source::default()
+    };
+    let service = EmailSearchService(source);
+    let filters = EmailFilters {
+        exclude_views: vec![EmailSearchView::Sent, EmailSearchView::Drafts],
+        ..EmailFilters::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(scope.excluded_thread_ids, vec![sent]);
+    assert_eq!(
+        scope.hit_states.excluded,
+        vec![ThreadStates {
+            has_draft: true,
+            ..ThreadStates::default()
+        }]
+    );
+}
+
+#[tokio::test]
+async fn page_checks_drop_threads_that_meet_an_exclusion() {
+    let with_attachment = Uuid::from_u128(60);
+    let unread_with_attachment = Uuid::from_u128(61);
+    let unread = Uuid::from_u128(62);
+    let source = Source {
+        threads: HashMap::from([
+            (
+                with_attachment,
+                Thread {
+                    read: true,
+                    attachment: true,
+                    ..Thread::default()
+                },
+            ),
+            (
+                unread_with_attachment,
+                Thread {
+                    attachment: true,
+                    ..Thread::default()
+                },
+            ),
+            (unread, Thread::default()),
+        ]),
+        ..Source::default()
+    };
+    let service = EmailSearchService(source);
+    let page = [with_attachment, unread_with_attachment, unread];
+
+    let without_attachment = ThreadStates::from_filters(&EmailFilters {
+        has_attachment: Some(false),
+        ..EmailFilters::default()
+    });
+    assert_eq!(
+        service
+            .matching_threads(&viewer(), &page, &without_attachment)
+            .await
+            .unwrap(),
+        HashSet::from([unread])
+    );
+
+    let unread_with = ThreadStates::from_filters(&EmailFilters {
+        is_read: Some(false),
+        has_attachment: Some(true),
+        ..EmailFilters::default()
+    });
+    assert_eq!(
+        service
+            .matching_threads(&viewer(), &page, &unread_with)
+            .await
+            .unwrap(),
+        HashSet::from([unread_with_attachment])
+    );
+}
+
+#[test]
+fn an_attachment_kind_already_means_an_attachment() {
+    let states = ThreadStates::from_filters(&EmailFilters {
+        has_attachment: Some(true),
+        attachments: vec![AttachmentKind::Pdf],
+        ..EmailFilters::default()
+    });
+
+    assert!(!states.has_attachment);
+    assert_eq!(states.attachments, vec![AttachmentKind::Pdf]);
+}
+
+#[test]
+fn the_calendar_view_is_the_calendar_only_filter() {
+    let states = ThreadStates::from_filters(&EmailFilters {
+        view: Some(EmailSearchView::Calendar),
+        ..EmailFilters::default()
+    });
+
+    assert!(states.calendar_only);
 }

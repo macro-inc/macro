@@ -333,6 +333,19 @@ where
             }),
         };
         publish_email_event(&ctx.effects, &event);
+    } else if let Some(resync) = &resync
+        && stored_labels_changed(&ctx.repository, message_db_id, resync).await
+    {
+        // A re-sync of a stored message publishes nothing else, and its labels
+        // are indexed for search.
+        publish_email_event(
+            &ctx.effects,
+            &EmailMacroEvent::thread_reindex_requested(
+                link.id,
+                link.macro_id.clone(),
+                thread_db_id,
+            ),
+        );
     }
 
     let refused_upload = handle_attachment_upload(ctx, link, payload, &message.attachments).await?;
@@ -389,6 +402,29 @@ where
     }
 
     Ok(())
+}
+
+/// Whether the message's labels differ from those stored before its re-sync.
+/// A failed read counts as changed: a retry would find the new labels stored
+/// and see no change, and an extra reindex is harmless.
+async fn stored_labels_changed<R: InboxSyncRepository>(
+    db: &R,
+    message_id: Uuid,
+    resync: &InboxSyncResync,
+) -> bool {
+    let Ok(labels) = db
+        .labels(message_id)
+        .await
+        .inspect_err(|error| tracing::warn!(error = ?error, %message_id, "failed to read labels after a message re-sync"))
+    else {
+        return true;
+    };
+    let before: HashSet<&str> = resync.stored_labels.iter().map(String::as_str).collect();
+    let after: HashSet<&str> = labels
+        .iter()
+        .map(|label| label.provider_label_id.as_str())
+        .collect();
+    before != after
 }
 
 /// Capture stored labels and pending writes around a provider fetch.

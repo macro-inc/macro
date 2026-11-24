@@ -178,7 +178,8 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <Show when={!isTouchDevice()}>
           <ConversationsCreateMenu presentation="sidebar" />
         </Show>
-        <SidebarRoutineSuggestions surface="chat" />
+        {/* With this column's gap-3: 1rem under New, 1.5rem above the tabs. */}
+        <SidebarRoutineSuggestions surface="chat" class="pt-1 pb-3" />
         <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
             ref={setTabs}

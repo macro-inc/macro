@@ -237,7 +237,31 @@ each run.
   person has `enable-event-routines` and the deployment evaluates conditions,
   and to add CRM companies only where the person may: in a team whose CRM is
   open to them) and
-  count what it suggested (`suggested`). A session hands back
+  count what it suggested (`suggested`). A brief is for a `BriefPart`:
+  `Whole` (today's session, which picks and drafts), or, at an onboarding
+  with `routine-suggestions-find-work` on, `Picks` (catalog picks only, no
+  guide) and `Drafts` (drafted routines only). A `Drafts` brief carries the
+  work streams `RoutineSuggestionApi::find_work` found (`suggestions/work.rs`:
+  one model call (`WORK_TRIES`: asked once more when its answer strays
+  from the list's shape), `WORK_MODEL` thinking little, over the person's last 30
+  days of mail, up to 500 messages, the text of the newest 100, read through
+  `SuggestionSources::inbox_window`, beside what they sent in those days, up
+  to `SENT_MESSAGES` with the text of the newest `SENT_TEXTS`, through
+  `SuggestionSources::sent_window`; the answer bounded by `WorkList::from_answer`
+  and passed inside `<untrusted>` tags in a fenced `json` block, which the
+  harness's Markdown round trip leaves as written: `WorkList::to_brief`
+  writes `&` and backticks as JSON escapes), and drafts one routine per stream
+  the catalog lacks, at most `MAX_DRAFTS`. The list and the month's mail are
+  stored nowhere: the finding call runs inside
+  `genai_telemetry::withhold_content`, so its spans carry none of what it
+  reads or answers, and the drafting sessions that carry the list are
+  prompted with `PromptRoutineSession::withhold_content`
+  (`BriefPart::carries_work_list`), so their turns record no content on
+  traces either. The list lives in those sessions' prompts (their control
+  queue and log) until the generation deletes them as it ends. Its
+  fields (senders, cadence, what each asks, what the person does with it and
+  to whom, who already handles it) are
+  meant to serve other setup suggestions later. A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
   `macro.routines.review()` (`GET .../suggestions/review`) and retires open
@@ -278,13 +302,16 @@ each run.
   never generates: per surface, drafted routines, then catalog picks (each
   best first, a second with the same catalog title or name left out), then
   catalog routines marked `suggest` as Macro's templates (stable ids,
-  `template_id`) to `PER_SURFACE`, showing only open AI suggestions and
+  `template_id`) to `PER_SURFACE` (drafted routines to `DRAFTED_PER_SURFACE`
+  with `routine-suggestions-find-work` on), showing only open AI suggestions and
   skipping dismissed templates (permanent, `.../{id}/dismiss` for either
   kind) and templates saved from (`scheduled_action.suggestion_id`); its
   `status` is the person's latest
   generation's (`GenerationStatuses`). `onByDefault` marks at most two safe
   catalog picks AI rated likely kept, never one that affects others. Spans:
-  `routine.suggestions.brief`, `.suggest`, `.review`, `.retire`, `.texts`; log events
+  `routine.suggestions.brief` (with its `part`), `.find_work` (with
+  `.read_month`, `.read_sent` and `.list_work` under it), `.suggest`, `.review`,
+  `.retire`, `.texts`; log events
   `routine_suggestions.generated` and `.surface` (from `record`, after a
   generation's routines sessions), `.suggested`, `.retired`, `.dismissed`,
   `.saved`.
@@ -496,9 +523,18 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names
   the field. Cron schedules have 6 or 7 fields.
+- `POST /scheduled-actions/{id}/stop` (owner only) stops the routine's run in
+  progress, found by its claim (`running_run`); with none running it changes
+  nothing. Any instance can serve it, so the stop goes to every instance
+  through Postgres `NOTIFY` (`outbound/pg_run_stops.rs`, the `StopRelay`
+  port) and `RunStops` (`domain/run_stops.rs`) hands it to the executor,
+  which ends that run as `RunEnd::Stopped`: its runner is cancelled, its
+  claim released and its record kept with `stopped` set and error "Stopped".
+  A stopped event run is `Interrupted`, for good. No notification is sent
+  for it. A stop sent while an instance's listener is reconnecting is lost.
 - The list response carries each routine's `last_run`, its latest finished
   run record (what each step did), so clients can flag failures and say what
-  it did; single reads omit it. Every finished run is
+  it did; single reads omit it. Every finished run but a stopped one is
   reported to the owner by the host's `RoutineRunObserver`
   (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
   as an inbox-only `routine_run_finished` notification.
@@ -517,8 +553,24 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
   Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
   an access grant: each owner's entity access is still checked.
+- A new-email filter can name `inboxes` (email link ids, at most 25; empty is
+  every inbox). Saving checks them against the owner's current own and
+  delegated inboxes on create and on a trigger change, so a later disconnect
+  never blocks unrelated edits. `OwnerInboxes` asks the email domain's
+  `EmailRepo` which of the picked ids the owner reads (`inbox_ids_among`, the
+  same own-plus-delegated set the app lists, one index probe per pick), so the
+  check never reads the owner's other inboxes or an inbox's other delegates.
+  `routine.admit_event` counts the routines only their inboxes turned away as
+  `outside_inboxes`. No run keeps the received `inbox`, so every replica can
+  read every run: admission checks it, and a filter changed since supersedes
+  the run by revision. A shared template drops its inboxes: they are the
+  publisher's own. Code without inbox filters can't decode a routine that
+  picks some, and skips it at intake.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
+  Its dispatcher fails a whole page of pending runs on one such row, stopping
+  every routine's event runs, so don't store what only admission needs, as
+  the received inbox.
 
 ## Related
 

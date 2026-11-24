@@ -17,19 +17,22 @@ beforeEach(() => {
 
 describe('chat input storage: model defaults', () => {
   it('remembers the last model a user picked for a chat', () => {
-    storeChatStateImmediate('chat-a', { model: Model.gpt56, input: 'draft' });
+    storeChatStateImmediate('chat-a', {
+      model: Model.gpt62Sol,
+      input: 'draft',
+    });
 
     const restored = getChatInputStoredState('chat-a');
-    expect(restored.model).toBe(Model.gpt56);
+    expect(restored.model).toBe(Model.gpt62Sol);
     expect(restored.input).toBe('draft');
-    expect(getChatStoredModel('chat-a')).toBe(Model.gpt56);
+    expect(getChatStoredModel('chat-a')).toBe(Model.gpt62Sol);
   });
 
   it('keeps each chat on its own remembered model', () => {
-    storeChatStateImmediate('chat-a', { model: Model.gpt56 });
+    storeChatStateImmediate('chat-a', { model: Model.gpt62Sol });
     storeChatStateImmediate('chat-b', { model: Model.sonnet55 });
 
-    expect(getChatInputStoredState('chat-a').model).toBe(Model.gpt56);
+    expect(getChatInputStoredState('chat-a').model).toBe(Model.gpt62Sol);
     expect(getChatInputStoredState('chat-b').model).toBe(Model.sonnet55);
   });
 
@@ -42,8 +45,8 @@ describe('chat input storage: model defaults', () => {
     storeChatStateImmediate('input-only', { input: 'draft' });
     const restored = getChatInputStoredState('input-only');
     expect(restored.model).toBeUndefined();
-    expect(resolveChatInputModel(Model.gpt56, restored.model)).toBe(
-      Model.gpt56
+    expect(resolveChatInputModel(Model.gpt62Sol, restored.model)).toBe(
+      Model.gpt62Sol
     );
     expect(resolveChatInputModel(undefined, restored.model)).toBe(
       DEFAULT_MODEL
@@ -56,12 +59,12 @@ describe('chat input storage: model defaults', () => {
     try {
       storeChatState('chat-a', {
         input: 'sent prompt',
-        model: Model.gpt56,
+        model: Model.gpt62Sol,
         attachments: [],
       });
       storeChatStateImmediate('chat-a', {
         input: '',
-        model: Model.gpt56,
+        model: Model.gpt62Sol,
         attachments: [],
       });
       vi.advanceTimersByTime(300);
@@ -73,16 +76,24 @@ describe('chat input storage: model defaults', () => {
 
   it('preserves a historical provider for icons without selecting an unavailable model', () => {
     storeChatStateImmediate('chat-c', {
-      model: 'openai/gpt-5.5' as Model,
+      model: 'openai/gpt-4o' as Model,
     });
     const restored = getChatInputStoredState('chat-c');
     expect(restored.model).toBeUndefined();
-    expect(getChatStoredModel('chat-c')).toBe('openai/gpt-5.5');
-    expect(resolveChatInputModel(Model.gpt56, restored.model)).toBe(
-      Model.gpt56
+    expect(getChatStoredModel('chat-c')).toBe('openai/gpt-4o');
+    expect(resolveChatInputModel(Model.gpt62Sol, restored.model)).toBe(
+      Model.gpt62Sol
     );
     expect(resolveChatInputModel(undefined, restored.model)).toBe(
       DEFAULT_MODEL
     );
+  });
+
+  it('reopens a draft saved on a retired model on its replacement', () => {
+    storeChatStateImmediate('chat-d', {
+      model: 'openai/gpt-5.6-mini' as Model,
+      input: 'draft',
+    });
+    expect(getChatInputStoredState('chat-d').model).toBe(Model.gpt6Luna);
   });
 });

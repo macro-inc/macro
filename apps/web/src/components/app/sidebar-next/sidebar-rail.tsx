@@ -1,19 +1,23 @@
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { enableTimeTracking } from '@core/constant/featureFlags';
 import {
   appNavigationAttribute,
   hotkeyScopeNeutralAttribute,
 } from '@core/dom-selectors';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   createMemo,
   createSignal,
   For,
   Match,
+  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -28,6 +32,11 @@ import { railNavFitCount } from './rail-fit';
 import { ReturnToCallButton } from './return-to-call-button';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
+
+const RunningTimerRail = lazyNamed(
+  () => import('../../../features/time-tracking/running-timer-indicator'),
+  'RunningTimerRail'
+);
 
 function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
   const hasActiveCall = useHasActiveChannelsCall();
@@ -54,6 +63,7 @@ function CalendarListNav(props: Omit<ListNavProps, 'badge'>) {
  */
 export const SidebarRail = () => {
   const gates = useNavItemGates();
+  const timeTrackingFlag = useFeatureFlag(enableTimeTracking);
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const unread = useNavigationUnread();
@@ -120,7 +130,6 @@ export const SidebarRail = () => {
                       item={item}
                       unread={unread.has(item.id)}
                       unreadCount={unread.count(item.id)}
-                      homeMode={gates().homeMode}
                     />
                   }
                 >
@@ -163,6 +172,11 @@ export const SidebarRail = () => {
       <div ref={spacer} class="min-h-0 flex-1" />
 
       <ReturnToCallButton />
+      <Show when={timeTrackingFlag().enabled}>
+        <Suspense>
+          <RunningTimerRail />
+        </Suspense>
+      </Show>
       <FooterActions />
     </div>
   );

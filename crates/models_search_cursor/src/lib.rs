@@ -190,6 +190,10 @@ pub struct SearchCursor {
         deserialize_with = "known_term_matching"
     )]
     pub document_term_matching: Option<CursorTermMatching>,
+    /// When the first page read the query's relative dates (`newer_than:3d`),
+    /// in epoch milliseconds, so every later page bounds the same instants.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_time_millis: Option<i64>,
 }
 
 fn known_term_matching<'de, D: serde::Deserializer<'de>>(
@@ -303,6 +307,18 @@ mod test {
     }
 
     #[test]
+    fn query_time_round_trips() {
+        let cursor = SearchCursor {
+            query_time_millis: Some(1_763_000_000_000),
+            ..Default::default()
+        };
+
+        let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
+
+        assert_eq!(decoded.query_time_millis, Some(1_763_000_000_000));
+    }
+
+    #[test]
     fn crm_cursor_round_trips() {
         let cursor = SearchCursor {
             crm_company_cursor: SearchCursorOption::Done,
@@ -321,6 +337,7 @@ mod test {
             crm_company_cursor: SearchCursorOption::Done,
             channel_name_cursor: SearchCursorOption::Done,
             document_term_matching: None,
+            query_time_millis: None,
         };
         assert!(cursor.is_exhausted());
 

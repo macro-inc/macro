@@ -25,6 +25,7 @@ use crate::domain::ports::{
     FinishedRoutineRun, RoutineRun, RoutineRunObserver, RunEnd, RunTarget, RunTrigger,
     ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner,
 };
+use crate::domain::run_stops::{RunStops, StopWatch};
 
 /// Run identity allocated before any awaited preparation. Runners can cancel
 /// partially created remote sessions even when preparation never returns.
@@ -93,6 +94,7 @@ pub struct InProcessExecutor<Rpo, Live, Runner> {
     runner: Arc<Runner>,
     admission: Arc<dyn AiAdmissionService>,
     observer: Arc<dyn RoutineRunObserver>,
+    stops: RunStops,
     tracker: TaskTracker,
     cancellation: CancellationToken,
 }
@@ -105,6 +107,7 @@ impl<Rpo, Live, Runner> Clone for InProcessExecutor<Rpo, Live, Runner> {
             runner: self.runner.clone(),
             admission: self.admission.clone(),
             observer: self.observer.clone(),
+            stops: self.stops.clone(),
             tracker: self.tracker.clone(),
             cancellation: self.cancellation.clone(),
         }
@@ -132,6 +135,7 @@ where
             live_updates,
             admission: Arc::new(DisabledAiAdmissionService),
             observer: Arc::new(()),
+            stops: RunStops::default(),
             tracker,
             cancellation,
         }
@@ -147,6 +151,13 @@ where
     /// Tell `observer` about every run that starts and then ends.
     pub fn with_observer(mut self, observer: Arc<dyn RoutineRunObserver>) -> Self {
         self.observer = observer;
+        self
+    }
+
+    /// Hear stop requests for runs in progress through `stops`, shared with
+    /// the service that sends them. Without it, no stop reaches its runs.
+    pub fn with_stops(mut self, stops: RunStops) -> Self {
+        self.stops = stops;
         self
     }
 
@@ -258,6 +269,26 @@ const CANCELLATION_TIMEOUT: Duration = Duration::from_secs(10);
 #[error("scheduled action cancelled")]
 struct ExecutionCancelled;
 
+/// What a stopped run's history says.
+#[derive(Debug, thiserror::Error)]
+#[error("Stopped")]
+struct RunStopped;
+
+/// End `operation` as [`RunStopped`] once `watch` hears a stop of `run`.
+/// Dropping it triggers local session guards, as a deadline does; the
+/// caller cancels the runner's remote work separately.
+async fn stoppable<T>(
+    watch: StopWatch,
+    run: Uuid,
+    operation: impl Future<Output = Result<T>> + Send,
+) -> Result<T> {
+    tokio::select! {
+        biased;
+        () = watch.stopped(run) => Err(RunStopped.into()),
+        result = operation => result,
+    }
+}
+
 /// Bound preparation and execution by the claim's original deadline. Dropping
 /// the operation triggers local session guards; bounded remote cancellation is
 /// attempted separately before bookkeeping.
@@ -297,6 +328,7 @@ fn finished_run(
     let end = match result {
         Ok(()) => RunEnd::Succeeded,
         Err(error) if error.is::<ExecutionCancelled>() => RunEnd::Interrupted,
+        Err(error) if error.is::<RunStopped>() => RunEnd::Stopped,
         Err(error) => match error.downcast_ref::<AiAdmissionError>() {
             Some(AiAdmissionError::Denied(_)) => RunEnd::AiLimitReached,
             _ => RunEnd::Failed,
@@ -332,7 +364,8 @@ fn execution_record(
         result: serde_json::to_value(
             ExecutionResult::new(resource, result.as_ref().err().map(ToString::to_string))
                 .with_steps(handle.steps.clone(), action.configuration_revision)
-                .with_run(handle.run.clone()),
+                .with_run(handle.run.clone())
+                .with_stopped(result.as_ref().is_err_and(|error| error.is::<RunStopped>())),
         )
         .expect("execution metadata is JSON serializable"),
         created_at: end_time,
@@ -369,6 +402,9 @@ where
         // The run outlives the request that started it; keep it on that trace.
         let span = tracing::info_span!("routine.execute", action_id = %id);
         let run = async move {
+            // Listen before claiming: a stop can name the run once its claim
+            // is stored.
+            let watch = executor.stops.watch();
             let claim = bounded(
                 deadline,
                 executor.cancellation.cancelled(),
@@ -417,7 +453,7 @@ where
                 firing: Some(firing.cause()),
                 ..ExecutionHandle::for_run(token)
             };
-            let result = bounded(deadline, executor.cancellation.cancelled(), async {
+            let execution = async {
                 let resource = executor.prepare(&action, &mut handle).await?;
                 if let Some(ready_tx) = ready_tx.take() {
                     let _ = ready_tx.send(Ok(InProgressExecution {
@@ -427,7 +463,12 @@ where
                     }));
                 }
                 executor.runner.run(&action, &mut handle, firing).await
-            })
+            };
+            let result = bounded(
+                deadline,
+                executor.cancellation.cancelled(),
+                stoppable(watch, token.as_uuid(), execution),
+            )
             .await;
             if let Err(error) = &result {
                 executor.cancel(&action, &handle, error).await;
@@ -520,12 +561,17 @@ where
             }
         };
         let deadline = run.deadline.min(run.started_at + MAX_ACTION_TIME);
-        let result = bounded(deadline, shutdown, async {
+        let execution = async {
             self.prepare(&run.action, &mut handle).await?;
             self.runner
                 .run(&run.action, &mut handle, RoutineRun::Event(&run.run))
                 .await
-        })
+        };
+        let result = bounded(
+            deadline,
+            shutdown,
+            stoppable(self.stops.watch(), run.token.as_uuid(), execution),
+        )
         .await;
         if let Err(error) = &result {
             self.cancel(&run.action, &handle, error).await;
@@ -548,7 +594,11 @@ where
         EventExecutionResult {
             outcome: match &result {
                 Ok(()) => EventRunOutcome::Succeeded,
-                Err(error) if error.is::<ExecutionCancelled>() => EventRunOutcome::Interrupted,
+                // A stop ends the event's run for good, as an interruption
+                // does; replicas built before stops read the same outcome.
+                Err(error) if error.is::<ExecutionCancelled>() || error.is::<RunStopped>() => {
+                    EventRunOutcome::Interrupted
+                }
                 Err(_) => EventRunOutcome::Failed,
             },
             record: Some(record),

@@ -1,0 +1,53 @@
+# Logged time over a period, totalled by person, task or day. The server
+# orders the groups and leaves out tasks the viewer cannot see.
+
+fragment TimeGroupKeyFields on GraphqlTimeGroupKey {
+  by
+  userId
+  taskId
+  date
+  task {
+    __typename
+    id
+    name
+  }
+}
+
+fragment TimeTotalFields on GraphqlTimeTotal {
+  key {
+    ...TimeGroupKeyFields
+  }
+  minutes
+}
+
+fragment TimeSummaryFields on GraphqlTimeSummary {
+  from
+  to
+  totalMinutes
+  taskCount
+  scopeTaskCount
+  complete
+  groups {
+    key {
+      ...TimeGroupKeyFields
+    }
+    minutes
+    taskCount
+    rows {
+      ...TimeTotalFields
+    }
+  }
+  thenTotals {
+    ...TimeTotalFields
+  }
+}
+
+# timeSummary reads the primary, so a summary read right after a write has it.
+query TimeSummary($input: TimeSummaryInput!) {
+  user {
+    id
+    timeSummary(input: $input) {
+      ...TimeSummaryFields
+    }
+  }
+}
