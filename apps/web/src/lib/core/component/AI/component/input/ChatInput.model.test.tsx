@@ -159,7 +159,9 @@ it.each([true, false])(
         within(dialog).getByRole('textbox', { name: 'Search models' }),
         { target: { value: 'GPT-6 Luna' } }
       );
-      fireEvent.click(within(dialog).getByRole('radio', { name: 'GPT-6 Luna' }));
+      fireEvent.click(
+        within(dialog).getByRole('radio', { name: 'GPT-6 Luna' })
+      );
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     } else {
       fireEvent.input(

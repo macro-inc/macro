@@ -17,7 +17,10 @@ beforeEach(() => {
 
 describe('chat input storage: model defaults', () => {
   it('remembers the last model a user picked for a chat', () => {
-    storeChatStateImmediate('chat-a', { model: Model.gpt62Sol, input: 'draft' });
+    storeChatStateImmediate('chat-a', {
+      model: Model.gpt62Sol,
+      input: 'draft',
+    });
 
     const restored = getChatInputStoredState('chat-a');
     expect(restored.model).toBe(Model.gpt62Sol);
