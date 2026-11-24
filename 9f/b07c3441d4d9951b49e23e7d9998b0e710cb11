@@ -1,0 +1,71 @@
+crates/opensearch_client/AGENTS.md
+  s_b0738c327fac1e::t_a8ae42c088e1f9 174-181
+crates/opensearch_client/src/search/emails/test.rs
+  s_b0738c327fac1e::t_a8ae42c088e1f9 7,13,22,28,34-35,41,47,53-56,910,913,945-1007
+apps/web/src/lib/queries/soup/search.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 6,42
+apps/web/src/lib/queries/soup/search-quotes.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 1-7
+crates/search_service/AGENTS.md
+  s_b0738c327fac1e::t_a8ae42c088e1f9 112-115
+crates/search_service/src/api/search/email_operators/test.rs
+  s_b0738c327fac1e::t_a8ae42c088e1f9 58-74
+  s_b0738c327fac1e::t_5da841a89d645c 57
+apps/web/src/lib/queries/soup/search.test.tsx
+  s_b0738c327fac1e::t_a8ae42c088e1f9 135-136
+apps/web/src/lib/core/hotkey/hotkeys.test.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 211-241
+crates/opensearch_client/src/search/emails.rs
+  s_b0738c327fac1e::t_a8ae42c088e1f9 6,173,238-240,265-266,269,274,276-277,283-321,339-341,348,350-353,355
+apps/web/src/features/email-view/components/EmailHeader.tsx
+  s_b0738c327fac1e::t_a8ae42c088e1f9 31,43-47,148-149,154-160,242
+apps/web/src/features/email-view/tab-icons.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 1-37
+crates/opensearch_client/tests/content_search/email_operators.rs
+  s_b0738c327fac1e::t_a8ae42c088e1f9 185,197,344-414,464,475-476
+apps/web/tests/native/fixtures/server.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 226
+apps/web/src/features/soup/search/create-search-state.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 11,48
+apps/web/src/features/soup/search/create-search-state.test.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 21,128-135
+  s_b0738c327fac1e::t_3c4f02dac4b1c1 136
+crates/search_service/src/api/search/terms/test.rs
+  s_b0738c327fac1e::t_a8ae42c088e1f9 51-77,349,351
+  s_b0738c327fac1e::t_cbad9404f8e480 50
+crates/search_service/src/api/search/terms.rs
+  s_b0738c327fac1e::t_a8ae42c088e1f9 4-9,19-25,34-37,46,55
+docs/agent-guide/email.md
+  s_b0738c327fac1e::t_a8ae42c088e1f9 842-843
+docs/agent-guide/ui-conventions.md
+  s_b0738c327fac1e::t_431e86b670da9e 62-63
+apps/web/tests/native/README.md
+  s_b0738c327fac1e::t_a8ae42c088e1f9 39-40
+apps/web/src/lib/core/hotkey/utils.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 555-557
+apps/web/src/lib/core/hotkey/utils.test.ts
+  s_b0738c327fac1e::t_a8ae42c088e1f9 96-110
+apps/web/tests/native/runner.ts
+  s_b0738c327fac1e::t_431e86b670da9e 293,295,317-322,325-326
+  s_b0738c327fac1e::t_a8ae42c088e1f9 279-292,294,296-316,323-324
+crates/opensearch_client/src/search/query.rs
+  s_b0738c327fac1e::t_a8ae42c088e1f9 88
+apps/web/src/features/email-view/components/EmailSidebar.tsx
+  s_b0738c327fac1e::t_a8ae42c088e1f9 10,15,49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9fb07c3441d4d9951b49e23e7d9998b0e710cb11",
+  "prompts": {},
+  "sessions": {
+    "s_b0738c327fac1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dad57e5d-e59a-4fce-aa2c-dd92b16fd55e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
