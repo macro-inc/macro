@@ -1,0 +1,9 @@
+{
+  "source": "FRESH_FIRST_MS=1 run.sh smoke at the harness that adds FRESH_FIRST_MS (seed 1, 1 sequence x 3 steps, 1 lane): every first cold mount gets a 1 ms bound and overruns, so the retry at SETTLE_MS (5000) stands in on every step.",
+  "runs": [
+    { "mutant": null, "verdict": "passed", "freshFirstMounts": 24, "overran": 24, "retried": 12, "retrySettled": 12, "settleClasses": { "fresh-retry": 24 }, "openDifferences": 0 },
+    { "mutant": "drop-row", "verdict": "caught", "applied": 19, "caughtAt": "step:fresh" },
+    { "mutant": "stale-cache", "verdict": "caught", "applied": 3, "caughtAt": "step:live" },
+    { "mutant": "skip-live-update", "verdict": "caught", "applied": 7, "caughtAt": "step:live", "retried": 12, "retrySettled": 12 }
+  ]
+}

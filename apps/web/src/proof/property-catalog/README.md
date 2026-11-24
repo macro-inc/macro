@@ -253,40 +253,60 @@ retried page load happened.
 
 ## Recorded run
 
-`run.sh all` at harness commit `f9758c2a201`, 2026-11-23 19:05–23:21 UTC,
-with `OLD_COMMIT=c8b5760036c` (main). Outside `apps/web/src/proof/` that
-commit is identical to the web PR head `b407dc8d5ca`, which contains the
-server PR head `98445d10909`; the local stack ran that server code (no stale
-services). Later commits change only this README and `results/`. The
+`run.sh all` at harness commit `9defcb1dcf7`, 2026-11-24 01:53–06:51 UTC,
+with `OLD_COMMIT=fff2890add8` (main). Outside `apps/web/src/proof/` that
+commit is identical to the web PR head `fb1a5bedd54`, which contains the
+server PR head `ac32b7f8314`; the local stack ran that server code. Its
+`seed-1` failed (below) and was run again with `run.sh quiet` at
+`605f8d4da16`, which adds the cold-mount retry, 07:00–08:28 UTC. Later
+commits change only this README, `results/`, and a smoke-only knob
+(`FRESH_FIRST_MS`) that leaves every recorded run's behaviour as it was. The
 sanitized summary is `results/summary.json` (`summarize.mjs`, account
-addresses masked).
+addresses masked); the failed first `seed-1` is in it as
+`seed-1-first-9defcb1`.
 
 | Run | Seed | Sequences × steps | Raw cases | Reader / caller comparisons | Fresh mounts | Differences | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `seed-1` quiet, then 2,500-definition volume | 1 | 200 × 20 | 27,044 | 113,112 / 141,728 | 17,716 | 0 | passed |
-| `seed-2-load` under load (6 load accounts, same-user reads), then volume | 2 | 200 × 20 | 27,141 | 111,480 / 141,728 | 17,716 | 0 | passed |
-| `seed-4` quiet | 4 | 100 × 20 | 13,498 | 55,576 / 70,528 | 8,816 | 0 | passed |
-| `control` main against main, with volume | 3 | 40 × 20 | 6,919 | 22,772 / 28,960 | 3,620 | 0 | passed |
+| `seed-1` quiet, then 2,500-definition volume (`605f8d4da16`) | 1 | 200 × 20 | 27,108 | 113,112 / 141,728 | 17,716 | 0 | passed |
+| `seed-1` first attempt (`9defcb1dcf7`) | 1 | 200 × 20 | 27,108 | 113,100 / 141,712 | 17,716 | 7 in 6 signatures | failed, see below |
+| `seed-2-load` under load (6 load accounts, same-user reads), then volume | 2 | 200 × 20 | 27,205 | 111,480 / 141,728 | 17,716 | 0 | passed |
+| `seed-4` quiet | 4 | 100 × 20 | 13,530 | 55,576 / 70,528 | 8,816 | 0 | passed |
+| `control` main against main, with volume | 3 | 40 × 20 | 6,951 | 22,772 / 28,960 | 3,620 | 0 | passed |
 | `optimism` | 1 | 24 cases | | | | 0 failed checks | passed |
 
-- Every difference the runs found is classified (`tie-order`,
-  `timestamp-format`, `old-stale`, `refused-busy`); none is left open.
-  The control run shows the old side tying rows the same way against itself.
+- Every difference the passing runs found is classified (`tie-order`,
+  `old-stale`, `refused-busy`, `harness-time`); none is left open. The
+  control run shows the old side tying rows the same way against itself.
 - All five mutants (`drop-row`, `swap-order`, `alter-field`,
   `stale-cache`, `skip-live-update`) were applied and caught, against a
   clean baseline of the same seed and shape.
-- No settle timed out and none needed the harness-time allowance
-  (`harnessTime` 0); the slowest live settle took 7.2 s and was a
-  `refused-busy` side (64 over the three runs), the slowest fresh mount
-  4.1 s, under load.
-- Under load the six load accounts made 98,887 calls and 9,856 of them
+- The first `seed-1` ran while the machine's load average was 80–180 on 96
+  cores from other work. Two of the head's cold mounts overran the 5 s bound
+  (9.1 s and 13.5 s; their catalog reads took 2.6–3.0 s each against
+  at most 0.24 s for a whole cold mount in a smoke on a quiet machine), so the two steps they belonged to had no
+  reference read of the server, and the five live comparisons there (lane 3
+  sequence 15 step 18, and volume step 10) lost their `old-stale` excuses:
+  main's live reader and the head's differed by one option (5 against 4, 301
+  against 300 twice, 2 against 3) or by rows (19 against 2,487).
+  `605f8d4da16` mounts an overrunning cold mount again and keeps the first
+  attempt as `fresh-retry`; the same seed then passed with no cold mount
+  overrunning (slowest 2.9 s) and no open difference. The retry
+  itself is exercised by `FRESH_FIRST_MS=1 run.sh smoke`, where every first
+  cold mount overruns: with no mutant it passed with 24 overruns, 12 retries,
+  12 settled, and `drop-row`, `stale-cache` and `skip-live-update` were
+  each still caught (`results/fresh-retry-check.json`).
+- No live settle timed out. `seed-4` used the harness-time allowance 10
+  times (a settle past the bound only through the harness's own work); the
+  slowest live settle took 7.7 s, 69 settles over the three passing fuzz runs
+  were `refused-busy`, and the slowest cold mount took 8.8 s.
+- Under load the six load accounts made 101,455 calls and 10,623 of them
   failed; the load loop does not record why. The fuzzed accounts' own
-  same-user reads (240,199, both transports) had no errors, and every
+  same-user reads (244,926, both transports) had no errors, and every
   comparison in that run passed.
 - The optimism run covered pending, failed (with rollback in a second tab)
   and offline-then-reconnect for each of the eight writes. In 18 cases main's
   live reader was stale where the head was current. A queued write landed
-  452–526 ms after the reconnect on the head, against 0–59 ms on main (the
+  51–648 ms after the reconnect on the head, against 0–58 ms on main (the
   shared queue's retry delay; see the PR).
 
 ## What the counts mean
@@ -402,6 +422,8 @@ The counts measure work attempted, not successes, and are not interchangeable:
   attempt is kept in `settleTimeouts` as class `fresh-retry`, with the retry's
   durations (`retryMs`); `settle.fresh.retried` and `settle.fresh.retrySettled`
   count them. A retry that overruns too is `state`, as any timeout was before.
+  `FRESH_FIRST_MS=<ms> run.sh smoke` gives the first cold mount that bound
+  (the retry keeps `SETTLE_MS`), so a smoke drives the retry on every step.
   In the quiet seed-1 run at harness `9defcb1dcf7`, with the machine's load
   average near 80 on 96 cores from other work, two head cold mounts overran
   (9.1 s and 13.5 s, their catalog reads taking 2.6–3.0 s each), and the five
