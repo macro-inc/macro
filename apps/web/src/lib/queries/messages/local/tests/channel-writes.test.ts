@@ -30,6 +30,15 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
 
 const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Waits for a write whose answer the test does not check. */
+const settled = async (write: Promise<unknown>) => {
+  try {
+    await write;
+  } catch {
+    // Only what the write sent is checked.
+  }
+};
+
 // A test that times out under fake timers would leave them on for the next.
 afterEach(() => {
   vi.useRealTimers();
@@ -277,9 +286,9 @@ describe('createChannelWrites', () => {
     // delete is queued, so the delete does not wait for it.
     host.readRecordsByKeys = () => new Promise(() => undefined);
 
-    const removing = writes
-      .remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
-      .catch(() => undefined);
+    const removing = settled(
+      writes.remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
+    );
     await vi.advanceTimersByTimeAsync(400);
     expect(calls).toHaveLength(0);
     await vi.advanceTimersByTimeAsync(200);
@@ -311,9 +320,9 @@ describe('createChannelWrites', () => {
       return read(args);
     };
 
-    const removing = writes
-      .remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
-      .catch(() => undefined);
+    const removing = settled(
+      writes.remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
+    );
     await vi.advanceTimersByTimeAsync(500);
     expect(calls).toHaveLength(1);
     // The reply's read answers after the delete was queued without a root.
@@ -638,6 +647,37 @@ describe('createChannelWrites', () => {
       true
     );
     expect(fetched).toEqual([id]);
+  });
+
+  it('calls a send the queue stopped retrying unknown when the server cannot say', async () => {
+    const id = graphqlMessage(7).id;
+    const { client } = fakeClient(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const device = writeHost();
+    const lookups: string[] = [];
+    const writes = createChannelWrites({
+      host: device.host,
+      runtime: { notifyChanged: vi.fn() },
+      client: () => client,
+      now: () => NOW,
+      fetchMessage: (_channelId, messageId) => {
+        lookups.push(messageId);
+        return Promise.reject(new Error('offline'));
+      },
+    });
+    const sending = writes.send(send(id));
+    await settleMicrotasks();
+    device.settle({
+      transactionId: '4',
+      status: 'permanently-failed',
+      errorCode: 'MUTATION_RETRY_EXHAUSTED',
+      error: 'stopped after 3 server failures',
+    });
+    const error = await sending.catch((thrown: unknown) => thrown);
+    // The composer sends a restored draft again under this id only then.
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
+    expect(lookups).toEqual([id, id, id]);
   });
 
   it('resolves a send another tab delivered while this page was away', async () => {

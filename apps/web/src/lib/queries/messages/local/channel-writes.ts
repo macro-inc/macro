@@ -222,6 +222,12 @@ function refusal(code: string | undefined, message: string): ThrownResultError {
   return new ThrownResultError([{ code: code ?? 'UNKNOWN', message }]);
 }
 
+const unknownDelivery = () =>
+  refusal(
+    'DELIVERY_UNKNOWN',
+    'the server could not say whether it has the send'
+  );
+
 function refusalOf(error: CombinedError): ThrownResultError {
   const code = error.graphQLErrors[0]?.extensions.code;
   return refusal(
@@ -658,21 +664,27 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     if (write.operation !== SEND_OPERATION) {
       throw refusal('NOT_FOUND', 'the message is not on the device');
     }
-    // A failed send restores its draft, and sending that again would post a
-    // second copy of one that arrived: ask the server more than once.
+    const delivered = await askServer(write);
+    if (delivered) return delivered;
+    throw delivered === null
+      ? refusal('NOT_SENT', 'the send was rolled back elsewhere')
+      : unknownDelivery();
+  }
+
+  /**
+   * A failed send restores its draft, and sending that again would post a
+   * second copy of one that arrived: ask the server more than once.
+   */
+  async function askServer(
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>
+  ): Promise<Message | null | undefined> {
     let delivered = await serverCopy(write);
     for (const waitMs of SERVER_LOOKUP_RETRIES_MS) {
       if (delivered !== undefined) break;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       delivered = await serverCopy(write);
     }
-    if (delivered) return delivered;
-    throw delivered === null
-      ? refusal('NOT_SENT', 'the send was rolled back elsewhere')
-      : refusal(
-          'DELIVERY_UNKNOWN',
-          'the server could not say whether it has the send'
-        );
+    return delivered;
   }
 
   /** Reads a waiting write's outcome from the device and the server. */
@@ -698,7 +710,8 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   /**
    * A send the queue gave up on after retrying it may still have reached the
    * server: a restored draft would go out again under a new id. The server's
-   * copy, when it has one, is the send's answer.
+   * copy, when it has one, is the send's answer; when the server cannot say,
+   * the send is unknown, so the composer sends it again under its own id.
    */
   async function deliveredAfterAll(
     write: Pick<
@@ -709,7 +722,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   ): Promise<Message | undefined> {
     if (write.operation !== SEND_OPERATION) return undefined;
     if (!thrownResultErrorHasCode(error, RETRY_EXHAUSTED)) return undefined;
-    return (await serverCopy(write)) ?? undefined;
+    const delivered = await askServer(write);
+    if (delivered === undefined) throw unknownDelivery();
+    return delivered ?? undefined;
   }
 
   async function queuedWrite<TData, TVariables extends AnyVariables>(
