@@ -244,8 +244,8 @@ async fn writes_sharing_a_closed_connection_are_resent_on_a_new_one() {
         tokio::join!(
             client.reconcile_agent_session(&first_session, None),
             client.reconcile_agent_session(&second_session, None),
-            client.bulk_upsert_email_messages(&first_email, None),
-            client.bulk_upsert_email_messages(&second_email, None),
+            client.write_email_documents(1, &first_email, &[], None),
+            client.write_email_documents(1, &second_email, &[], None),
         )
     })
     .await
@@ -271,7 +271,7 @@ async fn a_response_cut_off_mid_body_is_resent() {
 
     let result = tokio::time::timeout(
         Duration::from_secs(20),
-        client(&server).bulk_upsert_email_messages(&messages, None),
+        client(&server).write_email_documents(1, &messages, &[], None),
     )
     .await
     .unwrap();
@@ -288,7 +288,7 @@ async fn a_connection_lost_on_every_attempt_fails_after_three_attempts() {
 
     let result = tokio::time::timeout(
         Duration::from_secs(20),
-        client(&server).bulk_upsert_email_messages(&messages, None),
+        client(&server).write_email_documents(1, &messages, &[], None),
     )
     .await
     .unwrap();
@@ -300,7 +300,7 @@ async fn a_connection_lost_on_every_attempt_fails_after_three_attempts() {
         panic!("expected a lost connection, got {result:?}");
     };
     assert_eq!(cause, TransportFailure::ConnectionClosed);
-    assert_eq!(operation, OpensearchOperation::BulkUpsertEmailMessages);
+    assert_eq!(operation, OpensearchOperation::WriteEmailDocuments);
     assert_eq!(server.requests.load(Ordering::SeqCst), 3);
 }
 
@@ -311,14 +311,14 @@ async fn an_error_response_is_not_resent() {
     let messages = [email("message-1")];
 
     let result = client(&server)
-        .bulk_upsert_email_messages(&messages, None)
+        .write_email_documents(1, &messages, &[], None)
         .await;
 
     assert!(
         matches!(
             result,
             Err(OpensearchClientError::Unknown {
-                operation: OpensearchOperation::BulkUpsertEmailMessages,
+                operation: OpensearchOperation::WriteEmailDocuments,
                 ..
             })
         ),

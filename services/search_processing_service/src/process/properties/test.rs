@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use super::*;
 
 type Requests = std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>;
 
 /// Stands in for OpenSearch: records each request as `METHOD path` with its
 /// body and accepts every update.
-async fn fake_opensearch() -> (OpensearchClient, Requests) {
+async fn fake_opensearch() -> (Arc<OpensearchClient>, Requests) {
     use axum::{
         Json,
         body::Bytes,
@@ -27,8 +29,19 @@ async fn fake_opensearch() -> (OpensearchClient, Requests) {
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     (
-        OpensearchClient::new(endpoint, String::new(), String::new()).unwrap(),
+        Arc::new(OpensearchClient::new(endpoint, String::new(), String::new()).unwrap()),
         requests,
+    )
+}
+
+fn email_indexer(pool: &sqlx::PgPool, opensearch: &Arc<OpensearchClient>) -> EmailIndexer {
+    EmailIndexer::new(
+        crate::outbound::email_index_source::PgEmailIndexSource::new(pool.clone()),
+        crate::outbound::email_thread_leases::PgEmailThreadLeases::new(
+            (*pool.connect_options()).clone(),
+            2,
+        ),
+        crate::outbound::email_search::OpenSearchEmailIndex::new(opensearch.clone()),
     )
 }
 
@@ -64,11 +77,18 @@ async fn a_calendar_events_property_change_reaches_its_search_document(pool: sql
     .await
     .unwrap();
     let (opensearch, requests) = fake_opensearch().await;
+    let email_indexer = email_indexer(&pool, &opensearch);
 
-    let update =
-        process_entity_property_update(&opensearch, &pool, event_id, EntityType::CalendarEvent)
-            .await
-            .unwrap();
+    let update = process_entity_property_update(
+        &opensearch,
+        &email_indexer,
+        &pool,
+        event_id,
+        EntityType::CalendarEvent,
+        LeasePool::Live,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(update, PropertyRefresh::Written);
 
@@ -88,4 +108,27 @@ async fn a_calendar_events_property_change_reaches_its_search_document(pool: sql
             "values": [project_id],
         }])
     );
+}
+
+/// A thread's property change rewrites the thread under its lease instead of
+/// an update-by-query, which cannot carry the version email writes are fenced
+/// by. A thread the source no longer holds has nothing to rewrite.
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn an_email_thread_property_change_never_updates_by_query(pool: sqlx::PgPool) {
+    let (opensearch, requests) = fake_opensearch().await;
+    let email_indexer = email_indexer(&pool, &opensearch);
+
+    let update = process_entity_property_update(
+        &opensearch,
+        &email_indexer,
+        &pool,
+        "01980000-0000-7000-8000-00000000e1a1",
+        EntityType::Thread,
+        LeasePool::Live,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(update, PropertyRefresh::NotIndexed);
+    assert!(requests.lock().unwrap().is_empty());
 }

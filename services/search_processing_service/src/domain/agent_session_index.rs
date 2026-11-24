@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use super::{
+    fence::ProjectionVersion,
     jobs::JobProgress,
     models::{BackfillError, BackfillReceipt},
 };
@@ -40,23 +41,6 @@ pub trait AgentSessionSearchIndex: Send + Sync + 'static {
         index_override: Option<&str>,
         version: ProjectionVersion,
     ) -> impl Future<Output = Result<(), Report>> + Send;
-}
-
-/// Orders one session's index writes: each reconcile's version is later than
-/// every earlier reconcile's, because it is the time the database granted
-/// that reconcile's session lease.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ProjectionVersion(u64);
-
-impl ProjectionVersion {
-    /// Microseconds since the epoch at the lease grant.
-    pub fn from_grant(granted_at: chrono::DateTime<chrono::Utc>) -> Result<Self, Report> {
-        Ok(Self(u64::try_from(granted_at.timestamp_micros())?))
-    }
-
-    pub fn get(self) -> u64 {
-        self.0
-    }
 }
 
 /// What one reconcile changed in the index.

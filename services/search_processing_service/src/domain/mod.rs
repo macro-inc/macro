@@ -12,6 +12,8 @@ pub mod backfill_gate;
 pub mod backlog;
 pub mod chat_message_repair;
 pub mod email_attachment_status;
+pub mod email_index;
+pub mod fence;
 pub mod jobs;
 pub mod models;
 pub mod ports;

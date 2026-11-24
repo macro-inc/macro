@@ -1,11 +1,11 @@
 use models_opensearch::SearchIndex;
 
-use super::BulkUpsertResult;
-use super::properties::{IndexedProperty, PropertyUpdate};
+use super::properties::IndexedProperty;
 use crate::{
     Result,
     date_format::EpochMillis,
     error::{OpensearchClientError, OpensearchOperation},
+    upsert::agent_session::external_version,
 };
 
 /// The arguments for upserting an email message into the opensearch index
@@ -56,190 +56,102 @@ pub struct UpsertEmailArgs {
     pub properties: Vec<IndexedProperty>,
 }
 
+/// One email document, named by the thread and message it is keyed by: a
+/// message has one document under each thread it was indexed under.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct EmailDocumentKey {
+    /// The thread the document is indexed under (its `entity_id`).
+    pub thread_id: String,
+    /// The message the document holds.
+    pub message_id: String,
+}
+
+impl EmailDocumentKey {
+    fn document_id(&self) -> String {
+        email_document_id(&self.thread_id, &self.message_id)
+    }
+}
+
+/// What a versioned email write did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EmailWrites {
+    /// Documents written.
+    pub indexed: usize,
+    /// Documents deleted, or found already absent.
+    pub deleted: usize,
+    /// Writes and deletes the index refused because it already holds a later
+    /// version of the document: a newer writer got there first.
+    pub refused_stale: usize,
+}
+
 /// The id of a message's document under a thread: one per thread it is
 /// indexed under.
 pub(crate) fn email_document_id(thread_id: &str, message_id: &str) -> String {
     format!("{thread_id}:{message_id}")
 }
 
-#[tracing::instrument(skip(client))]
-pub(crate) async fn upsert_email_message(
-    client: &opensearch::OpenSearch,
-    args: &UpsertEmailArgs,
-) -> Result<()> {
-    let id = email_document_id(&args.thread_id, &args.message_id);
-    let response = client
-        .index(opensearch::IndexParts::IndexId(
-            SearchIndex::Emails.as_ref(),
-            &id,
-        ))
-        .body(args)
-        .send()
-        .await
-        .map_err(|err| {
-            OpensearchClientError::request_failed(OpensearchOperation::UpsertEmailMessage, &err)
-        })?;
-
-    let status_code = response.status_code();
-    if status_code.is_success() {
-        tracing::trace!(id=%id, "email message upserted successfully");
-    } else {
-        let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed(
-                OpensearchOperation::UpsertEmailMessage,
-                &err,
-            )
-        })?;
-
-        tracing::error!(
-            status_code=%status_code,
-            body=%body,
-            "error upserting email message",
-        );
-
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            operation: OpensearchOperation::UpsertEmailMessage,
-        });
+fn serialization_error(error: serde_json::Error) -> OpensearchClientError {
+    OpensearchClientError::SerializationFailed {
+        details: error.to_string(),
+        operation: OpensearchOperation::WriteEmailDocuments,
     }
-    Ok(())
 }
 
-#[tracing::instrument(skip(client, messages))]
-pub(crate) async fn bulk_upsert_email_messages(
+/// Writes `documents` and deletes `deletes` in one `_bulk` request, every
+/// action carrying `version` as an `external_gte` version. The index refuses
+/// an action on a document that already holds a later version, so a writer
+/// that read its source before a newer writer cannot undo what that writer
+/// wrote or deleted; a delete's version is remembered for the index's
+/// `gc_deletes`. Each action names its document by id, so it needs no refresh
+/// and a resend of the same request applies again rather than conflicting.
+pub(crate) async fn write_email_documents(
     client: &opensearch::OpenSearch,
-    messages: &[UpsertEmailArgs],
+    version: u64,
+    documents: &[UpsertEmailArgs],
+    deletes: &[EmailDocumentKey],
     index_override: Option<&str>,
-) -> Result<BulkUpsertResult> {
-    if messages.is_empty() {
-        return Ok(BulkUpsertResult::default());
+) -> Result<EmailWrites> {
+    if documents.is_empty() && deletes.is_empty() {
+        return Ok(EmailWrites::default());
     }
+    let operation = OpensearchOperation::WriteEmailDocuments;
+    let version = external_version(version, operation)?;
 
-    let mut bulk_body = Vec::new();
-
-    for msg in messages {
-        let id = email_document_id(&msg.thread_id, &msg.message_id);
-
-        let action = serde_json::json!({
-            "index": {
-                "_id": id
-            }
-        });
-
-        bulk_body.push(action.to_string());
-        bulk_body.push(serde_json::to_string(msg).map_err(|e| {
-            OpensearchClientError::SerializationFailed {
-                details: e.to_string(),
-                operation: OpensearchOperation::BulkUpsertEmailMessages,
-            }
-        })?);
+    let mut body = Vec::with_capacity(documents.len() * 2 + deletes.len());
+    for document in documents {
+        let id = email_document_id(&document.thread_id, &document.message_id);
+        body.push(fenced_action("index", &id, version).to_string());
+        body.push(serde_json::to_string(document).map_err(serialization_error)?);
+    }
+    for delete in deletes {
+        body.push(fenced_action("delete", &delete.document_id(), version).to_string());
     }
 
     let index = index_override.unwrap_or(SearchIndex::Emails.as_ref());
-
-    super::bulk_upsert_to_index(
-        client,
-        index,
-        bulk_body,
-        OpensearchOperation::BulkUpsertEmailMessages,
-    )
-    .await
-}
-
-/// Update only the denormalized `properties` on every message doc of a
-/// thread, without touching content. The emails index is flat (one doc per
-/// message sharing the thread's `entity_id`), so this is an update-by-query
-/// rather than a single-doc update. Zero matched docs changes nothing and is
-/// [`PropertyUpdate::NotIndexed`]: the thread isn't indexed yet, so the next
-/// full index will include the properties. Version conflicts proceed, and a
-/// message that changed under the update still counts as matched, so
-/// [`PropertyUpdate::Applied`] says the thread is indexed, not that every
-/// message took this write. A concurrent full reindex writes the properties
-/// it read, which misses a change made between its read and its write; the
-/// next property event or reindex repairs it.
-pub(crate) async fn update_email_thread_properties(
-    client: &opensearch::OpenSearch,
-    thread_id: &str,
-    properties: &[IndexedProperty],
-) -> Result<PropertyUpdate> {
-    let properties_value =
-        serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            operation: OpensearchOperation::UpdateEmailThreadProperties,
-        })?;
-    let body = serde_json::json!({
-        "query": { "term": { "entity_id": thread_id } },
-        "script": {
-            "source": "ctx._source.properties = params.properties",
-            "lang": "painless",
-            "params": { "properties": properties_value }
-        }
-    });
-
     let response = client
-        .update_by_query(opensearch::UpdateByQueryParts::Index(&[
-            SearchIndex::Emails.as_ref(),
-        ]))
-        .conflicts(opensearch::params::Conflicts::Proceed)
-        .refresh(true) // Ensure the index reflects changes immediately
+        .bulk(opensearch::BulkParts::Index(index))
         .body(body)
         .send()
         .await
-        .map_err(|err| {
-            OpensearchClientError::request_failed(
-                OpensearchOperation::UpdateEmailThreadProperties,
-                &err,
-            )
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed(operation, &err))?;
+    let status = response.status_code().as_u16();
+    let text = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(operation, &err))?;
 
-    let status_code = response.status_code();
-    if status_code.is_success() {
-        // A 200 can still carry per-document failures in the body.
-        let body: serde_json::Value = response.json().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed(
-                OpensearchOperation::UpdateEmailThreadProperties,
-                &err,
-            )
-        })?;
-        if let Some(failures) = body.get("failures").and_then(|f| f.as_array())
-            && !failures.is_empty()
-        {
-            tracing::error!(
-                thread_id=%thread_id,
-                failures=?failures,
-                "update_by_query reported failures updating email thread properties",
-            );
-            return Err(OpensearchClientError::Unknown {
-                details: serde_json::Value::from(failures.clone()).to_string(),
-                operation: OpensearchOperation::UpdateEmailThreadProperties,
-            });
-        }
-        if body["total"].as_u64() == Some(0) {
-            tracing::debug!(
-                thread_id=%thread_id,
-                "email thread not indexed yet; no message to update"
-            );
-            return Ok(PropertyUpdate::NotIndexed);
-        }
-        tracing::trace!(thread_id=%thread_id, "email thread properties updated");
-        return Ok(PropertyUpdate::Applied);
-    }
-    let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed(
-            OpensearchOperation::UpdateEmailThreadProperties,
-            &err,
-        )
-    })?;
-
-    tracing::error!(
-        status_code=?status_code,
-        body=?body,
-        thread_id=%thread_id,
-        "error updating email thread properties",
-    );
-
-    Err(OpensearchClientError::Unknown {
-        details: body,
-        operation: OpensearchOperation::UpdateEmailThreadProperties,
+    let items = super::classify_versioned_bulk_response(status, &text, operation)?;
+    Ok(EmailWrites {
+        indexed: items.indexed,
+        deleted: items.deleted,
+        refused_stale: items.refused_stale,
     })
+}
+
+fn fenced_action(action: &str, id: &str, version: i64) -> serde_json::Value {
+    serde_json::json!({ action: {
+        "_id": id,
+        "version": version,
+        "version_type": "external_gte",
+    } })
 }

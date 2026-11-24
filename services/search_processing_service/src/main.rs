@@ -70,6 +70,13 @@ pub type AgentSessionIndexer = domain::agent_session_index::AgentSessionIndexSer
     outbound::agent_session_search::OpenSearchAgentSessionIndex,
 >;
 
+/// Production wiring for fenced email search indexing.
+pub type EmailIndexer = domain::email_index::EmailIndexService<
+    outbound::email_index_source::PgEmailIndexSource,
+    outbound::email_thread_leases::PgEmailThreadLeases,
+    outbound::email_search::OpenSearchEmailIndex,
+>;
+
 /// Production wiring for the email attachment status backfill.
 pub type EmailAttachmentStatusBackfill =
     domain::email_attachment_status::EmailAttachmentStatusBackfill<
@@ -280,6 +287,19 @@ async fn main() -> anyhow::Result<()> {
         outbound::agent_session_search::OpenSearchAgentSessionIndex(opensearch_client.clone()),
     ));
 
+    // Every email writer leases its threads on the primary and reads the
+    // primary, so its version covers every change committed before it.
+    let email_indexer = Arc::new(EmailIndexer::new(
+        outbound::email_index_source::PgEmailIndexSource::new(db.clone()),
+        outbound::email_thread_leases::PgEmailThreadLeases::new(
+            <sqlx::postgres::PgConnectOptions as std::str::FromStr>::from_str(
+                config.database_url.as_ref(),
+            )?,
+            config.backfill_max_in_flight,
+        ),
+        outbound::email_search::OpenSearchEmailIndex::new(opensearch_client.clone()),
+    ));
+
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_control = DynamoBackfillControl::new(
         dynamodb_client.clone(),
@@ -311,7 +331,11 @@ async fn main() -> anyhow::Result<()> {
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
-        DirectPropertyBackfillIndexer::new(db.clone(), opensearch_client.clone()),
+        DirectPropertyBackfillIndexer::new(
+            db.clone(),
+            opensearch_client.clone(),
+            email_indexer.clone(),
+        ),
         backfill_gate.clone(),
     ));
 
@@ -362,6 +386,7 @@ async fn main() -> anyhow::Result<()> {
 
         let kafka_processing_context = KafkaProcessingContext {
             agent_session_indexer: agent_session_indexer.clone(),
+            email_indexer: email_indexer.clone(),
             db: db.clone(),
             opensearch_client: opensearch_client.clone(),
             s3_client: s3_client.clone(),
@@ -378,6 +403,7 @@ async fn main() -> anyhow::Result<()> {
         };
         let search_processing_context = SearchProcessingContext {
             db: db.clone(),
+            email_indexer: email_indexer.clone(),
             worker: Arc::new(worker.clone()),
             document_storage_bucket: config.document_storage_bucket.to_string(),
             s3_client: s3_client.clone(),

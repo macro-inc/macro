@@ -4,8 +4,9 @@ use crate::{
     error::{OpensearchClientError, OpensearchOperation, WriteRefusal},
     test_support::serve_once,
     upsert::{
-        call_record::UpsertCallRecordSegmentArgs, document::UpsertDocumentArgs,
-        email::UpsertEmailArgs,
+        call_record::UpsertCallRecordSegmentArgs,
+        document::UpsertDocumentArgs,
+        email::{EmailDocumentKey, EmailWrites, UpsertEmailArgs},
     },
 };
 
@@ -23,6 +24,16 @@ const MAPPING_ERROR_ITEM: &str = r#"{"took":182,"errors":true,"items":[
 const ALL_WRITTEN: &str = r#"{"took":3,"errors":false,"items":[
 {"index":{"_id":"thread-1:message-1","result":"created","status":201}},
 {"index":{"_id":"thread-1:message-2","result":"updated","status":200}}]}"#;
+
+/// A versioned bulk answered by OpenSearch 3.5 where the index held version
+/// 200 of `message-1`: the stale write and delete of it at 100 are refused,
+/// `message-2` is written, and the delete of `message-3`, never indexed, finds
+/// nothing.
+const STALE_ITEMS: &str = r#"{"took":8,"errors":true,"items":[
+{"index":{"_index":"emails_v1","_id":"thread-1:message-1","status":409,"error":{"type":"version_conflict_engine_exception","reason":"[thread-1:message-1]: version conflict, current version [200] is higher than the one provided [100]","index":"emails_v1","shard":"0"}}},
+{"index":{"_index":"emails_v1","_id":"thread-1:message-2","_version":100,"result":"created","status":201}},
+{"delete":{"_index":"emails_v1","_id":"thread-1:message-3","_version":100,"result":"not_found","status":404}},
+{"delete":{"_index":"emails_v1","_id":"thread-1:message-1","status":409,"error":{"type":"version_conflict_engine_exception","reason":"[thread-1:message-1]: version conflict, current version [200] is higher than the one provided [100]","index":"emails_v1","shard":"0"}}}]}"#;
 
 fn client(url: String) -> OpensearchClient {
     OpensearchClient::new(url, "".into(), "".into()).unwrap()
@@ -105,7 +116,7 @@ async fn an_email_bulk_with_a_refused_item_fails() {
     let (url, server) = serve_once("200 OK", REFUSED_ITEM);
 
     let result = client(url)
-        .bulk_upsert_email_messages(&[email("message-1"), email("message-2")], None)
+        .write_email_documents(1, &[email("message-1"), email("message-2")], &[], None)
         .await;
     server.join().unwrap();
 
@@ -117,7 +128,7 @@ async fn an_email_bulk_with_a_mapping_error_fails_without_a_refusal() {
     let (url, server) = serve_once("200 OK", MAPPING_ERROR_ITEM);
 
     let result = client(url)
-        .bulk_upsert_email_messages(&[email("message-1"), email("message-2")], None)
+        .write_email_documents(1, &[email("message-1"), email("message-2")], &[], None)
         .await;
     server.join().unwrap();
 
@@ -132,7 +143,7 @@ async fn an_email_bulk_with_a_mapping_error_fails_without_a_refusal() {
         panic!("a failed item must fail the call: {result:?}");
     };
     assert_eq!((failed, total, refusal), (1, 2, None));
-    assert_eq!(operation, OpensearchOperation::BulkUpsertEmailMessages);
+    assert_eq!(operation, OpensearchOperation::WriteEmailDocuments);
     assert_eq!(
         errors,
         ["mapper_parsing_exception: failed to parse field [sent_at_millis] of type [long]"]
@@ -180,12 +191,12 @@ async fn a_bulk_whose_items_all_succeed_counts_them() {
     let (url, server) = serve_once("200 OK", ALL_WRITTEN);
 
     let result = client(url)
-        .bulk_upsert_email_messages(&[email("message-1"), email("message-2")], None)
+        .write_email_documents(1, &[email("message-1"), email("message-2")], &[], None)
         .await
         .unwrap();
     server.join().unwrap();
 
-    assert_eq!(result.successful, 2);
+    assert_eq!(result.indexed, 2);
 }
 
 #[tokio::test]
@@ -196,7 +207,7 @@ async fn a_refused_bulk_request_is_a_write_refusal() {
     );
 
     let result = client(url)
-        .bulk_upsert_email_messages(&[email("message-1")], None)
+        .write_email_documents(1, &[email("message-1")], &[], None)
         .await;
     server.join().unwrap();
 
@@ -205,7 +216,122 @@ async fn a_refused_bulk_request_is_a_write_refusal() {
             result,
             Err(OpensearchClientError::WritesRefused {
                 cause: WriteRefusal::TooManyRequests,
-                operation: OpensearchOperation::BulkUpsertEmailMessages,
+                operation: OpensearchOperation::WriteEmailDocuments,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+}
+
+fn deleted(thread_id: &str, message_id: &str) -> EmailDocumentKey {
+    EmailDocumentKey {
+        thread_id: thread_id.to_owned(),
+        message_id: message_id.to_owned(),
+    }
+}
+
+#[tokio::test]
+async fn a_versioned_email_write_fences_every_action_with_its_version() {
+    let (url, server) = serve_once("200 OK", ALL_WRITTEN);
+
+    client(url)
+        .write_email_documents(
+            1_764_000_000_000_000,
+            &[email("message-1")],
+            &[deleted("thread-2", "message-2")],
+            None,
+        )
+        .await
+        .unwrap();
+    let (request_line, body) = server.join().unwrap();
+
+    assert!(request_line.starts_with("POST /emails/_bulk "), "{request_line}");
+    let lines: Vec<serde_json::Value> = body
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(lines.len(), 3, "{body}");
+    assert_eq!(
+        lines[0],
+        serde_json::json!({"index": {
+            "_id": "thread-1:message-1",
+            "version": 1_764_000_000_000_000_i64,
+            "version_type": "external_gte",
+        }})
+    );
+    assert_eq!(lines[1]["entity_id"], "thread-1");
+    assert_eq!(
+        lines[2],
+        serde_json::json!({"delete": {
+            "_id": "thread-2:message-2",
+            "version": 1_764_000_000_000_000_i64,
+            "version_type": "external_gte",
+        }})
+    );
+}
+
+#[tokio::test]
+async fn stale_writes_are_refused_not_failed_and_an_absent_delete_is_done() {
+    let (url, server) = serve_once("200 OK", STALE_ITEMS);
+
+    let writes = client(url)
+        .write_email_documents(
+            100,
+            &[email("message-1"), email("message-2")],
+            &[
+                deleted("thread-1", "message-3"),
+                deleted("thread-1", "message-1"),
+            ],
+            None,
+        )
+        .await
+        .unwrap();
+    server.join().unwrap();
+
+    assert_eq!(
+        writes,
+        EmailWrites {
+            indexed: 1,
+            deleted: 1,
+            refused_stale: 2,
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_versioned_email_write_with_a_refused_item_still_fails() {
+    let (url, server) = serve_once("200 OK", REFUSED_ITEM);
+
+    let result = client(url)
+        .write_email_documents(1, &[email("message-1"), email("message-2")], &[], None)
+        .await;
+    server.join().unwrap();
+
+    assert_refused_item(&result);
+}
+
+#[tokio::test]
+async fn an_empty_versioned_email_write_sends_nothing() {
+    let writes = client("http://127.0.0.1:9".to_owned())
+        .write_email_documents(1, &[], &[], None)
+        .await
+        .unwrap();
+
+    assert_eq!(writes, EmailWrites::default());
+}
+
+#[test]
+fn an_unversioned_bulk_still_fails_on_a_version_conflict() {
+    let result =
+        super::classify_bulk_response(200, STALE_ITEMS, OpensearchOperation::UpsertDocument);
+
+    assert!(
+        matches!(
+            result,
+            Err(OpensearchClientError::BulkItemsFailed {
+                failed: 3,
+                total: 4,
                 ..
             })
         ),
@@ -218,7 +344,7 @@ fn a_bulk_answer_without_items_acknowledges_nothing() {
     let result = super::classify_bulk_response(
         200,
         r#"{"took":1,"errors":false}"#,
-        OpensearchOperation::BulkUpsertEmailMessages,
+        OpensearchOperation::WriteEmailDocuments,
     );
 
     assert!(

@@ -3,6 +3,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct SearchProcessingContext {
     pub db: sqlx::Pool<sqlx::Postgres>,
+    /// Fenced writes of every email search document.
+    pub email_indexer: Arc<crate::EmailIndexer>,
     pub worker: Arc<sqs_worker::SQSWorker>,
     pub document_storage_bucket: String,
     pub s3_client: Arc<s3_client::S3>,

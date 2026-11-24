@@ -61,8 +61,8 @@ OpenSearch, and exposes backfill HTTP routes for each.
   one-thread email reindex requests while a reread for that session or thread
   is queued; only add an event kind there if handling it rereads the entity's
   whole current state. Handing off any other event for the key releases its
-  claim, since the reread runs before it; keep that, or a blind delete queued
-  behind a reread swallows the request that would undo it. Never shard a
+  claim, since the reread runs before it; keep that, or a message-level
+  event queued behind a reread swallows the thread request that follows it. Never shard a
   thread event by its mailbox: one mailbox's import then runs on one worker
   and its full channel stalls every topic in its lane.
 - A lane's topics share its member's one librdkafka prefetch queue; the
@@ -90,6 +90,16 @@ OpenSearch, and exposes backfill HTTP routes for each.
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
   replies) with every tag they do not know, so a new message index writes its
   pastes the same way.
+- Every `emails` index write goes through `domain/email_index.rs`
+  (`EmailIndexService`): it leases the threads, rereads the primary, and
+  sends every write and delete by id with the lease's grant time as an
+  `external_gte` version (README "Email indexing fence"). Never add an email
+  writer outside it, never write that index without a version (an unversioned
+  write lets older writers win again), and never read its source from the
+  replica: a version promises every change committed before the grant. A
+  write the index refuses is `refused_stale`, not a failure. The fence relies
+  on `gc_deletes` 15m on the emails index; an email index created another way
+  needs it too.
 - A thread reindex deletes, and a message upsert skips, every message its
   mailbox facts put in Trash or Junk or mark gone at the provider
   (`ParsedSearchMessage::excluded_from_search`, read from

@@ -336,6 +336,9 @@ enum EventOutcome {
     /// without processing, or found by its write, such as a property write
     /// for an entity the index does not hold yet.
     NoIndexChange,
+    /// The index refused some of the event's writes because a later writer
+    /// already wrote or deleted those documents.
+    RefusedStale,
 }
 
 impl From<Handled> for EventOutcome {
@@ -345,6 +348,7 @@ impl From<Handled> for EventOutcome {
             Handled::Ignored => Self::Ignored,
             Handled::NoIndexChange => Self::NoIndexChange,
             Handled::SourceMissing => Self::SourceMissing,
+            Handled::RefusedStale => Self::RefusedStale,
         }
     }
 }
@@ -880,8 +884,7 @@ async fn process_event(
         }
         DeclaredMacroEvent::EmailMacroEvent(event) => {
             process_email_event(
-                db,
-                opensearch_client,
+                &context.email_indexer,
                 &context.mailbox_deletes,
                 event,
                 partition,
@@ -894,7 +897,16 @@ async fn process_event(
             process_project_event(db, opensearch_client, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
-            process_property_event(db, opensearch_client, event, partition, offset, attempts).await
+            process_property_event(
+                db,
+                opensearch_client,
+                &context.email_indexer,
+                event,
+                partition,
+                offset,
+                attempts,
+            )
+            .await
         }
     }
 }

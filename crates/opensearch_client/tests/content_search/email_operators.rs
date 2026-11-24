@@ -991,9 +991,13 @@ async fn seed_and_search(
     messages: &[Message],
     cases: Vec<Case>,
 ) -> anyhow::Result<Vec<String>> {
-    for message in messages {
-        client.upsert_email_message(&upsert_args(message)?).await?;
-    }
+    let documents = messages
+        .iter()
+        .map(upsert_args)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    client
+        .write_email_documents(1, &documents, &[], None)
+        .await?;
     refresh(raw, EMAILS).await?;
 
     let mut failures = Vec::new();

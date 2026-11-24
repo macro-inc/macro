@@ -13,7 +13,10 @@ use rootcause::Report;
 use std::sync::Arc;
 
 use crate::{
-    domain::agent_session_index::{AgentSessionSearchIndex, ProjectionVersion, ProjectionWrites},
+    domain::{
+        agent_session_index::{AgentSessionSearchIndex, ProjectionWrites},
+        fence::ProjectionVersion,
+    },
     parsers::message_text::with_pastes_as_content,
 };
 

@@ -16,7 +16,11 @@ use anyhow::Context;
 use sqs_client::search::SearchQueueMessage;
 use uuid::Uuid;
 
-use crate::process::context::SearchProcessingContext;
+use crate::{
+    domain::email_index::{EmailWriter, LeasePool},
+    process::context::SearchProcessingContext,
+};
+use rootcause::compat::anyhow1::IntoAnyhow as _;
 
 /// Processes a message from the search text extractor queue.
 /// If the processing  is successful, the message is deleted.
@@ -70,14 +74,15 @@ pub async fn process_message(
                         .context("failed to parse thread_id as UUID")
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
-            email::upsert::process_upsert_thread_batch_message(
-                &ctx.opensearch_client,
-                &ctx.db,
-                &thread_ids,
-                &message.macro_user_id,
-                message.index_override.as_deref(),
-            )
-            .await?;
+            ctx.email_indexer
+                .reconcile_threads(
+                    &thread_ids,
+                    message.index_override.as_deref(),
+                    EmailWriter::Bulk,
+                    LeasePool::Bulk,
+                )
+                .await
+                .into_anyhow()?;
         }
         SearchQueueMessage::ExtractDocumentText(message) => {
             document::process_extract_text_message(

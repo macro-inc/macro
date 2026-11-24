@@ -22,7 +22,7 @@ fn delete_by_query_counts_default_to_zero_and_failures_fail_the_call() {
     assert_eq!(
         parse_deleted_by_query(
             r#"{"deleted":2,"version_conflicts":1,"failures":[]}"#,
-            OpensearchOperation::DeleteEmailMessages
+            OpensearchOperation::DeleteEmailByUserId
         )
         .unwrap(),
         DeletedByQuery {
@@ -31,390 +31,117 @@ fn delete_by_query_counts_default_to_zero_and_failures_fail_the_call() {
         }
     );
     assert_eq!(
-        parse_deleted_by_query(r#"{"took":3}"#, OpensearchOperation::DeleteEmailMessages).unwrap(),
+        parse_deleted_by_query(r#"{"took":3}"#, OpensearchOperation::DeleteEmailByUserId).unwrap(),
         DeletedByQuery::default()
     );
     assert!(
         parse_deleted_by_query(
             r#"{"deleted":0,"failures":[{"cause":{"type":"es_rejected_execution_exception"}}]}"#,
-            OpensearchOperation::DeleteEmailMessages,
+            OpensearchOperation::DeleteEmailByUserId,
         )
         .is_err()
     );
 }
 
-fn scripted(
-    passes: Vec<DeletedByQuery>,
-) -> (
-    std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<DeletedByQuery>>>,
-    impl FnMut() -> std::future::Ready<Result<DeletedByQuery>>,
-) {
-    let passes = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from(
-        passes,
-    )));
-    let remaining = std::sync::Arc::clone(&passes);
-    (passes, move || {
-        std::future::ready(Ok(remaining
-            .lock()
-            .unwrap()
-            .pop_front()
-            .expect("no unscripted delete pass")))
-    })
+#[test]
+fn a_copy_search_finds_a_message_s_documents_outside_the_kept_threads() {
+    assert_eq!(
+        message_documents_query(&["message-1".to_owned()], &["thread-2".to_owned()]),
+        serde_json::json!({
+            "size": MESSAGE_DOCUMENTS_PER_SEARCH,
+            "_source": ["entity_id", "message_id"],
+            "query": {
+                "bool": {
+                    "filter": [{ "terms": { "message_id": ["message-1"] } }],
+                    "must_not": [{ "terms": { "entity_id": ["thread-2"] } }]
+                }
+            }
+        })
+    );
 }
 
-fn counted_refresh(
-    refreshes: &std::sync::atomic::AtomicUsize,
-) -> impl FnOnce() -> std::future::Ready<Result<()>> + '_ {
-    move || {
-        refreshes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        std::future::ready(Ok(()))
+#[tokio::test]
+async fn a_copy_search_returns_each_document_s_thread_and_message() {
+    let (url, server) = crate::test_support::serve_once(
+        "200 OK",
+        r#"{"took":1,"hits":{"total":{"value":2,"relation":"eq"},"hits":[
+{"_index":"emails_v1","_id":"thread-1:message-1","_source":{"entity_id":"thread-1","message_id":"message-1"}},
+{"_index":"emails_v1","_id":"old-thread:message-1","_source":{"entity_id":"old-thread","message_id":"message-1"}}]}}"#,
+    );
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let found = client
+        .email_message_documents(&["message-1".to_owned()], &[], None)
+        .await
+        .unwrap();
+
+    let (request_line, _) = server.join().unwrap();
+    assert!(request_line.starts_with("POST /emails/_search "), "{request_line}");
+    assert_eq!(
+        found,
+        [
+            EmailDocumentKey {
+                thread_id: "thread-1".to_owned(),
+                message_id: "message-1".to_owned(),
+            },
+            EmailDocumentKey {
+                thread_id: "old-thread".to_owned(),
+                message_id: "message-1".to_owned(),
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_copy_search_for_no_message_sends_nothing() {
+    let client =
+        crate::OpensearchClient::new("http://127.0.0.1:9".into(), "".into(), "".into()).unwrap();
+
+    let found = client.email_message_documents(&[], &[], None).await.unwrap();
+
+    assert!(found.is_empty());
+}
+
+fn args(thread_id: &str, message_id: &str) -> crate::upsert::email::UpsertEmailArgs {
+    crate::upsert::email::UpsertEmailArgs {
+        thread_id: thread_id.to_owned(),
+        message_id: message_id.to_owned(),
+        sender: String::new(),
+        sender_name: None,
+        reply_to: None,
+        recipients: vec![],
+        recipient_names: vec![],
+        cc: vec![],
+        cc_names: vec![],
+        bcc: vec![],
+        bcc_names: vec![],
+        labels: vec![],
+        link_id: "link-1".to_owned(),
+        user_id: "user-1".to_owned(),
+        updated_at_millis: crate::date_format::EpochMillis::new(20).unwrap(),
+        subject: None,
+        sent_at_millis: None,
+        content: "Body".to_owned(),
+        properties: vec![],
     }
 }
 
-#[tokio::test]
-async fn a_message_delete_without_conflicts_runs_once_and_never_refreshes() {
-    let refreshes = std::sync::atomic::AtomicUsize::new(0);
-    let (left, pass) = scripted(vec![DeletedByQuery {
-        deleted: 1,
-        version_conflicts: 0,
-    }]);
-
-    let deleted = delete_with_recheck(pass, counted_refresh(&refreshes))
-        .await
-        .unwrap();
-
-    assert_eq!(
-        deleted,
-        EmailMessageDeleted {
-            deleted: 1,
-            passes: 1
-        }
-    );
-    assert!(left.lock().unwrap().is_empty());
-    assert_eq!(refreshes.load(std::sync::atomic::Ordering::SeqCst), 0);
-}
-
-#[tokio::test]
-async fn a_conflicted_message_delete_refreshes_then_deletes_on_a_second_pass() {
-    let refreshes = std::sync::atomic::AtomicUsize::new(0);
-    let (left, pass) = scripted(vec![
-        DeletedByQuery {
-            deleted: 0,
-            version_conflicts: 1,
-        },
-        DeletedByQuery {
-            deleted: 1,
-            version_conflicts: 0,
-        },
-    ]);
-
-    let deleted = delete_with_recheck(pass, counted_refresh(&refreshes))
-        .await
-        .unwrap();
-
-    assert_eq!(
-        deleted,
-        EmailMessageDeleted {
-            deleted: 1,
-            passes: 2
-        }
-    );
-    assert!(left.lock().unwrap().is_empty());
-    assert_eq!(refreshes.load(std::sync::atomic::Ordering::SeqCst), 1);
-}
-
-#[tokio::test]
-async fn a_message_that_keeps_conflicting_fails_for_the_caller_to_retry() {
-    let refreshes = std::sync::atomic::AtomicUsize::new(0);
-    let (_, pass) = scripted(vec![
-        DeletedByQuery {
-            deleted: 0,
-            version_conflicts: 1,
-        },
-        DeletedByQuery {
-            deleted: 0,
-            version_conflicts: 1,
-        },
-    ]);
-
-    assert!(
-        delete_with_recheck(pass, counted_refresh(&refreshes))
-            .await
-            .is_err()
-    );
-}
-
-#[test]
-fn a_thread_page_delete_with_a_conflict_fails_so_the_thread_is_reread() {
-    assert!(
-        fail_on_conflict(DeletedByQuery {
-            deleted: 2,
-            version_conflicts: 1
-        })
-        .is_err()
-    );
-    assert_eq!(
-        fail_on_conflict(DeletedByQuery {
-            deleted: 2,
-            version_conflicts: 0
-        })
-        .unwrap(),
-        DeletedByQuery {
-            deleted: 2,
-            version_conflicts: 0
-        }
-    );
-}
-
-#[tokio::test]
-async fn a_thread_page_is_one_delete_by_query_over_all_its_message_ids() {
-    let (url, server) = crate::test_support::serve_once(
-        "200 OK",
-        r#"{"deleted":2,"version_conflicts":0,"failures":[]}"#,
-    );
-    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
-
-    client
-        .delete_email_messages(&["message-1".to_owned(), "message-2".to_owned()], None)
-        .await
-        .unwrap();
-    let (request_line, request_body) = server.join().unwrap();
-
-    assert!(
-        request_line.starts_with("POST /emails/_delete_by_query?"),
-        "{request_line}"
-    );
-    assert!(request_line.contains("conflicts=proceed"), "{request_line}");
-    assert!(request_line.contains("refresh=true"), "{request_line}");
-    let body: serde_json::Value = serde_json::from_str(&request_body).unwrap();
-    assert_eq!(
-        body,
-        serde_json::json!({ "query": { "terms": { "message_id": ["message-1", "message-2"] } } })
-    );
-}
-
-#[tokio::test]
-async fn a_page_without_spam_or_trash_sends_no_request() {
-    // Nothing listens on port 1, so any request would fail.
-    let client =
-        crate::OpensearchClient::new("http://127.0.0.1:1".into(), "".into(), "".into()).unwrap();
-
-    client.delete_email_messages(&[], None).await.unwrap();
-}
-
-#[tokio::test]
-async fn a_page_over_the_id_limit_is_deleted_in_chunks_and_its_counts_summed() {
-    let (first_url, first) = crate::test_support::serve_once(
-        "200 OK",
-        r#"{"deleted":1000,"version_conflicts":0,"failures":[]}"#,
-    );
-    let ids: Vec<String> = (0..MESSAGE_IDS_PER_DELETE + 1)
-        .map(|index| format!("message-{index}"))
-        .collect();
-    let client = crate::OpensearchClient::new(first_url, "".into(), "".into()).unwrap();
-
-    // The one-request server answers the first chunk; the second chunk then
-    // finds nothing listening, which proves the ids went out in two requests.
-    let result = client.delete_email_messages(&ids, None).await;
-    let (_, first_body) = first.join().unwrap();
-
-    let first_body: serde_json::Value = serde_json::from_str(&first_body).unwrap();
-    assert_eq!(
-        first_body["query"]["terms"]["message_id"]
-            .as_array()
-            .unwrap()
-            .len(),
-        MESSAGE_IDS_PER_DELETE
-    );
-    assert!(result.is_err(), "the second chunk needed its own request");
-}
-
-#[test]
-fn chunk_counts_add_up() {
-    let mut total = DeletedByQuery {
-        deleted: 2,
-        version_conflicts: 0,
-    };
-    total += DeletedByQuery {
-        deleted: 3,
-        version_conflicts: 1,
-    };
-    assert_eq!(
-        total,
-        DeletedByQuery {
-            deleted: 5,
-            version_conflicts: 1
-        }
-    );
-}
-
-#[tokio::test]
-async fn a_message_delete_goes_by_id_then_sweeps_other_threads_without_forcing_a_refresh() {
-    let (url, server) = serve_script(vec![
-        Reply::Respond("200 OK", r#"{"result":"deleted"}"#),
-        Reply::Respond(
-            "200 OK",
-            r#"{"deleted":1,"version_conflicts":0,"failures":[]}"#,
-        ),
-    ]);
-    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
-
-    client
-        .delete_email_message("message-1", "thread-1", None)
-        .await
-        .unwrap();
-    let requests = server.join().unwrap();
-
-    let (by_id, _) = &requests[0];
-    assert!(
-        by_id.starts_with("DELETE /emails/_doc/thread-1%3Amessage-1 "),
-        "{by_id}"
-    );
-    let (sweep, sweep_body) = &requests[1];
-    assert!(
-        sweep.starts_with("POST /emails/_delete_by_query?"),
-        "{sweep}"
-    );
-    assert!(sweep.contains("conflicts=proceed"), "{sweep}");
-    assert!(!sweep.contains("refresh=true"), "{sweep}");
-    let body: serde_json::Value = serde_json::from_str(sweep_body).unwrap();
-    assert_eq!(body, outside_thread_query("message-1", "thread-1"));
-}
-
-#[tokio::test]
-async fn a_message_never_indexed_under_its_thread_is_still_swept_elsewhere() {
-    let (url, server) = serve_script(vec![
-        Reply::Respond("404 Not Found", r#"{"result":"not_found"}"#),
-        Reply::Respond(
-            "200 OK",
-            r#"{"deleted":0,"version_conflicts":0,"failures":[]}"#,
-        ),
-    ]);
-    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
-
-    client
-        .delete_email_message("message-1", "thread-1", None)
-        .await
-        .unwrap();
-
-    assert_eq!(server.join().unwrap().len(), 2);
-}
-
-#[tokio::test]
-async fn a_conflicted_page_delete_refreshes_before_it_fails() {
-    let (url, server) = serve_script(vec![
-        Reply::Respond(
-            "200 OK",
-            r#"{"deleted":0,"version_conflicts":1,"failures":[]}"#,
-        ),
-        Reply::Respond(
-            "200 OK",
-            r#"{"_shards":{"total":1,"successful":1,"failed":0}}"#,
-        ),
-    ]);
-    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
-
-    let result = client
-        .delete_email_messages(&["message-1".to_owned()], None)
-        .await;
-    let requests = server.join().unwrap();
-
-    assert!(result.is_err(), "the caller rereads the thread");
-    assert!(
-        requests[1].0.ends_with("/emails/_refresh HTTP/1.1"),
-        "{}",
-        requests[1].0
-    );
-}
-
-#[test]
-fn only_a_missing_document_is_a_harmless_404() {
-    assert!(is_missing_document(404, r#"{"result":"not_found"}"#));
-    assert!(!is_missing_document(
-        404,
-        r#"{"error":{"type":"index_not_found_exception"},"status":404}"#
-    ));
-    assert!(!is_missing_document(500, r#"{"result":"not_found"}"#));
-}
-
-async fn index_email_document(
-    client: &opensearch::OpenSearch,
-    index: &str,
-    thread_id: &str,
-    message_id: &str,
-) -> anyhow::Result<()> {
-    client
-        .index(opensearch::IndexParts::IndexId(
-            index,
-            &crate::upsert::email::email_document_id(thread_id, message_id),
-        ))
-        .body(serde_json::json!({"entity_id": thread_id, "message_id": message_id}))
-        .send()
-        .await?
-        .error_for_status_code()?;
-    Ok(())
-}
-
-async fn refresh_email_index(client: &opensearch::OpenSearch, index: &str) -> anyhow::Result<()> {
-    client
-        .indices()
-        .refresh(opensearch::indices::IndicesRefreshParts::Index(&[index]))
-        .send()
-        .await?
-        .error_for_status_code()?;
-    Ok(())
-}
-
-async fn refresh_count(client: &opensearch::OpenSearch, index: &str) -> anyhow::Result<u64> {
-    let stats: serde_json::Value = client
-        .indices()
-        .stats(opensearch::indices::IndicesStatsParts::IndexMetric(
-            &[index],
-            &["refresh"],
-        ))
-        .send()
-        .await?
-        .error_for_status_code()?
-        .json()
-        .await?;
-    Ok(stats["_all"]["primaries"]["refresh"]["total"]
-        .as_u64()
-        .unwrap_or_default())
-}
-
-async fn message_documents(
-    client: &opensearch::OpenSearch,
-    index: &str,
-    message_id: &str,
-) -> anyhow::Result<u64> {
-    let body: serde_json::Value = client
-        .count(opensearch::CountParts::Index(&[index]))
-        .body(serde_json::json!({"query": {"term": {"message_id": message_id}}}))
-        .send()
-        .await?
-        .error_for_status_code()?
-        .json()
-        .await?;
-    Ok(body["count"].as_u64().unwrap_or_default())
-}
-
-/// The event thread's document is searchable and has a copy under another
-/// thread; another message was indexed a moment ago and no refresh has made it
-/// searchable. Each delete removes every copy without forcing a refresh, a
-/// repeat within the refresh interval forces none either, and a thread
-/// reindex that deletes the same message before the next refresh fails once,
-/// refreshed, so its retry goes through.
+/// The race the fence closes, on a real index: a reindex reads a thread while
+/// it still holds a message, the message is deleted with a later version,
+/// then the reindex writes what it read. The index refuses the stale write,
+/// while it remembers the delete's version (`gc_deletes`), and a later
+/// writer's write still applies.
 #[tokio::test]
 #[ignore = "requires local OpenSearch at http://localhost:9200"]
-async fn deleted_messages_leave_every_thread_without_a_forced_refresh() {
+async fn a_stale_reindex_cannot_bring_back_a_deleted_message() {
     let client =
         crate::OpensearchClient::new("http://localhost:9200".into(), "".into(), "".into()).unwrap();
-    let index = format!("email-message-delete-test-{}", uuid::Uuid::now_v7());
+    let index = format!("email-fence-test-{}", uuid::Uuid::now_v7());
     client
         .ensure_index_exists(
             &index,
             serde_json::json!({
-                "settings": {"number_of_shards": 2, "number_of_replicas": 0, "refresh_interval": "-1"},
+                "settings": {"number_of_shards": 2, "number_of_replicas": 0, "gc_deletes": "15m"},
                 "mappings": {"dynamic": false, "properties": {
                     "entity_id": {"type": "keyword"},
                     "message_id": {"type": "keyword"}
@@ -423,106 +150,63 @@ async fn deleted_messages_leave_every_thread_without_a_forced_refresh() {
         )
         .await
         .unwrap();
-    let os = &client.inner;
 
     let result: anyhow::Result<()> = async {
-        index_email_document(os, &index, "thread-1", "message-1").await?;
-        index_email_document(os, &index, "old-thread", "message-1").await?;
-        index_email_document(os, &index, "old-thread", "message-2").await?;
-        refresh_email_index(os, &index).await?;
-        index_email_document(os, &index, "thread-3", "message-3").await?;
-        let refreshes = refresh_count(os, &index).await?;
+        let first = client
+            .write_email_documents(100, &[args("thread-1", "message-1")], &[], Some(&index))
+            .await?;
+        assert_eq!(first.indexed, 1);
 
-        let first = delete_email_message(os, "message-1", "thread-1", Some(&index)).await?;
-        let unrefreshed = delete_email_message(os, "message-3", "thread-3", Some(&index)).await?;
-        let repeat = delete_email_message(os, "message-3", "thread-3", Some(&index)).await?;
+        let removed = EmailDocumentKey {
+            thread_id: "thread-1".to_owned(),
+            message_id: "message-1".to_owned(),
+        };
+        let delete = client
+            .write_email_documents(300, &[], std::slice::from_ref(&removed), Some(&index))
+            .await?;
+        assert_eq!(delete.deleted, 1);
 
+        let stale = client
+            .write_email_documents(200, &[args("thread-1", "message-1")], &[], Some(&index))
+            .await?;
         assert_eq!(
-            refresh_count(os, &index).await?,
-            refreshes,
-            "a delete forced a refresh"
-        );
-        assert!(first.by_id);
-        assert_eq!(
-            first.other_threads,
-            EmailMessageDeleted {
-                deleted: 1,
-                passes: 1
+            stale,
+            crate::upsert::email::EmailWrites {
+                indexed: 0,
+                deleted: 0,
+                refused_stale: 1,
             }
         );
-        assert!(unrefreshed.by_id, "found before any refresh");
-        assert_eq!(unrefreshed.other_threads.passes, 1);
-        assert!(!repeat.by_id);
-        assert_eq!(repeat.other_threads.passes, 1);
-
-        let page = ["message-1".to_owned()];
+        client
+            .inner
+            .indices()
+            .refresh(opensearch::indices::IndicesRefreshParts::Index(&[&index]))
+            .send()
+            .await?
+            .error_for_status_code()?;
         assert!(
             client
-                .delete_email_messages(&page, Some(&index))
-                .await
-                .is_err(),
-            "the page delete meets the message's unrefreshed deletions"
+                .email_message_documents(&["message-1".to_owned()], &[], Some(&index))
+                .await?
+                .is_empty(),
+            "the deleted message came back"
         );
-        client.delete_email_messages(&page, Some(&index)).await?;
 
-        refresh_email_index(os, &index).await?;
-        assert_eq!(message_documents(os, &index, "message-1").await?, 0);
-        assert_eq!(message_documents(os, &index, "message-3").await?, 0);
-        assert_eq!(
-            message_documents(os, &index, "message-2").await?,
-            1,
-            "another message was deleted"
-        );
+        let later = client
+            .write_email_documents(400, &[args("thread-1", "message-1")], &[], Some(&index))
+            .await?;
+        assert_eq!(later.indexed, 1, "a later writer must still apply");
         Ok(())
     }
     .await;
-    os.indices()
+    client
+        .inner
+        .indices()
         .delete(opensearch::indices::IndicesDeleteParts::Index(&[&index]))
         .send()
         .await
         .ok();
     result.unwrap();
-}
-
-#[test]
-fn a_moved_message_keeps_only_its_copy_under_its_current_thread() {
-    assert_eq!(
-        outside_thread_query("message-1", "thread-2"),
-        serde_json::json!({
-            "query": {
-                "bool": {
-                    "filter": [{ "term": { "message_id": "message-1" } }],
-                    "must_not": [{ "term": { "entity_id": "thread-2" } }]
-                }
-            }
-        })
-    );
-}
-
-#[tokio::test]
-async fn deleting_a_moved_message_s_old_copies_forces_no_refresh() {
-    let (url, server) = crate::test_support::serve_once(
-        "200 OK",
-        r#"{"deleted":1,"version_conflicts":0,"failures":[]}"#,
-    );
-    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
-
-    client
-        .delete_email_message_outside_thread("message-1", "thread-2")
-        .await
-        .unwrap();
-
-    let (request_line, body) = server.join().unwrap();
-    assert!(
-        request_line.starts_with("POST /emails/_delete_by_query?"),
-        "{request_line}"
-    );
-    assert!(request_line.contains("conflicts=proceed"), "{request_line}");
-    assert!(!request_line.contains("refresh"), "{request_line}");
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
-        outside_thread_query("message-1", "thread-2")
-    );
 }
 
 #[test]
