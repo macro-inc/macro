@@ -243,7 +243,8 @@ export function createAppCrmContext(): CrmContext {
       return createEmailPrivacySource(
         { ...deps, privacy: crmEmailPrivacyClient },
         () => (team.isSuccess ? team.data?.team.id : undefined),
-        userId
+        userId,
+        usePrimaryEmailLinkId()
       );
     },
     registerTaskComposerRecord(source) {
