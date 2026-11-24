@@ -1,0 +1,22 @@
+crates/fusion_import/src/outbound/rollout.rs
+  s_8c8123a52748fa::t_b99fcb10d099ed 14-23,25,28-33
+crates/fusion_import/src/outbound/rollout/test.rs
+  s_8c8123a52748fa::t_b99fcb10d099ed 12,15,46-53
+  s_8c8123a52748fa::t_8d1e4528c3d135 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ddfe14e663471e0345ebac147cda179d724808a5",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
