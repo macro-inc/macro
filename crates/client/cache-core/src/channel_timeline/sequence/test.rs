@@ -45,6 +45,8 @@ fn the_watermark_never_skips_a_change() {
         (Lower(7), None, (Some(7), Applied)),
         (Lower(7), Some(9), (Some(7), Applied)),
         (Lower(7), Some(5), (Some(5), Applied)),
+        (Lower(10), Some(1_009), (Some(10), Applied)),
+        (Lower(10), Some(1_010), (Some(1_010), Stale)),
         (advance(7, 8), Some(7), (Some(8), Applied)),
         (advance(5, 8), Some(7), (Some(8), Applied)),
         (advance(7, 8), Some(6), (Some(6), Gap)),
@@ -92,7 +94,7 @@ fn coverage_joins_what_is_held_unless_the_commit_drops_it() {
         .map(|(scope, keys)| (scope, keys.map(str::to_owned).into()))
         .into();
     let written = |commit: &ChannelTimelineCommit| {
-        coverage_writes(commit, &guard, &listed)
+        coverage_writes(commit, ChannelCommitStatus::Applied, &guard, &listed)
             .into_iter()
             .map(|write| (write.scope, write.spans))
             .collect::<Vec<_>>()

@@ -312,6 +312,11 @@ fn removals_are_remembered_as_far_as_the_server_replays() {
             .await
             .unwrap();
         assert_eq!(content(&mut engine, "m2").await, None);
+        // A page as old is not taken back to.
+        let late = [root("m3", "30"), root("m2", "20")];
+        let outcome = apply(&mut engine, "11", &late, &whole("11")).await;
+        assert_eq!(outcome, (Some(far), ChannelCommitStatus::Stale));
+        assert_eq!(content(&mut engine, "m2").await, None);
     });
 }
 
@@ -549,6 +554,41 @@ fn a_pending_edit_of_an_entry_that_leaves_the_device_shows_nothing_of_it() {
 }
 
 #[test]
+fn a_pending_edit_never_brings_back_an_entry_known_removed() {
+    block_on(async {
+        for held in [true, false] {
+            let mut engine = held_with_mutations().await;
+            let queued = if held { "m2" } else { "m9" };
+            let edited = saying(root(queued, "20"), "pending");
+            let claim = queue(&mut engine, &edited, false).await;
+            let removal = removing(changes("c1", "10", "11"), &[queued]);
+            apply(&mut engine, "11", &[], &removal).await;
+            // Neither a reset nor the end of what the server replays forgets it.
+            let reset = ChannelTimelineCommit {
+                reset: true,
+                ..whole("20")
+            };
+            apply(&mut engine, "20", &[root("m1", "10")], &reset).await;
+            assert_eq!(roots(&mut engine).await, covered(&["m1"]), "{queued}");
+            let far = (20 + TOMBSTONE_REPLAY).to_string();
+            apply(&mut engine, &far, &[], &changes("c1", "20", &far)).await;
+            assert_eq!(roots(&mut engine).await, covered(&["m1"]), "{queued}");
+
+            let records = engine.storage().len();
+            let (transaction, claim) = claim;
+            engine
+                .rollback_optimistic_write(transaction, claim)
+                .await
+                .unwrap();
+            let next = (21 + TOMBSTONE_REPLAY).to_string();
+            apply(&mut engine, &next, &[], &changes("c1", &far, &next)).await;
+            assert_eq!(engine.storage().len(), records - 1, "{queued}");
+            assert_eq!(roots(&mut engine).await, covered(&["m1"]), "{queued}");
+        }
+    });
+}
+
+#[test]
 fn a_settled_answer_never_replaces_newer_content() {
     block_on(async {
         let mut engine = held_with_mutations().await;
@@ -603,6 +643,31 @@ fn an_entry_is_as_new_as_the_oldest_answer_that_carries_it() {
             engine.channel_timeline_commit(&removal).await.unwrap();
             assert_eq!(content(&mut engine, "m4").await.is_none(), applied, "{seq}");
         }
+    });
+}
+
+#[test]
+fn a_removal_beats_an_older_copy_in_its_own_response() {
+    block_on(async {
+        let mut engine = held().await;
+        for (seq, kept) in [("12", false), ("14", true)] {
+            let mut removal = removing(commit("c1"), &["m2"]);
+            removal.seq = Some("13".into());
+            apply(&mut engine, seq, &[root("m2", "20")], &removal).await;
+            assert_eq!(content(&mut engine, "m2").await.is_some(), kept, "{seq}");
+        }
+    });
+}
+
+#[test]
+fn a_page_whose_entries_have_no_position_covers_nothing() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut placeless = root("m2", "20");
+        placeless["sortKey"] = json!("");
+        let entries = [placeless, root("m1", "10")];
+        apply(&mut engine, "10", &entries, &whole("10")).await;
+        assert_eq!(roots(&mut engine).await, None);
     });
 }
 

@@ -1,7 +1,7 @@
 //! Admission of channel content, and the channel half of a record write.
 
 use super::channel_changes::{ChannelChangeKind, ChannelChanges};
-use super::{Engine, EngineError, Storage};
+use super::{Engine, EngineError, Storage, layer_keys};
 use crate::channel_timeline::{
     ChannelCommitOutcome, ChannelCommitStatus, ChannelEntries, ChannelGuard, ChannelGuardQuery,
     ChannelRowWrite, ChannelStamps, ChannelSync, ChannelTimelineCommit, ChannelTombstone,
@@ -121,6 +121,11 @@ impl ChannelAdmission {
                         channel_id: channel_id.to_owned(),
                         seq,
                     });
+                } else {
+                    // A list cannot order an entry without its position.
+                    for write in &mut self.write.coverage {
+                        write.spans.clear();
+                    }
                 }
             }
         }
@@ -172,9 +177,13 @@ impl<S: Storage> Engine<S> {
         if entries.is_empty() && commit.is_none() {
             return Ok(ChannelAdmission::default());
         }
+        let mut query = guard_query(&entries, updates, stamps, commit);
+        if commit.is_some_and(|commit| commit.reset) {
+            query.keys.extend(self.pending_channel_entries());
+        }
         let guard = self
             .storage
-            .load_channel_guard(&guard_query(&entries, updates, stamps, commit))
+            .load_channel_guard(&query)
             .await
             .map_err(EngineError::Storage)?;
         let mut admission = ChannelAdmission::default();
@@ -233,8 +242,14 @@ impl<S: Storage> Engine<S> {
             }
         }
         if let Some((commit, held, after, status)) = moved {
-            self.admit_channel_commit(&mut admission, updates, &guard, commit, (held, after))
-                .await?;
+            self.admit_channel_commit(
+                &mut admission,
+                updates,
+                &guard,
+                commit,
+                (held, after, status),
+            )
+            .await?;
             admission.outcome = Some(ChannelCommitOutcome {
                 channel_id: commit.channel_id.clone(),
                 seq: after.map(|seq| seq.to_string()),
@@ -245,18 +260,19 @@ impl<S: Storage> Engine<S> {
     }
 
     /// Adds what `commit` removes, covers and syncs, with the watermark it
-    /// found and the one it leaves.
+    /// found, the one it leaves and what that makes of it.
     async fn admit_channel_commit(
         &mut self,
         admission: &mut ChannelAdmission,
         updates: &mut RecordUpdates,
         guard: &ChannelGuard,
         commit: &ChannelTimelineCommit,
-        (held, after): (Option<i64>, Option<i64>),
+        (held, after, status): (Option<i64>, Option<i64>, ChannelCommitStatus),
     ) -> Result<(), EngineError<S::Error>> {
         let channel_id = commit.channel_id.as_str();
         let seq = commit.parsed_seq()?;
         let pruned_through = after.map(|after| after.saturating_sub(TOMBSTONE_REPLAY));
+        let pending = self.pending_channel_entries();
         if let Some(seq) = seq {
             for key in commit.removed_keys() {
                 let state = guard.entries.get(&key).filter(|_| !commit.reset);
@@ -264,12 +280,16 @@ impl<S: Storage> Engine<S> {
                     .is_some_and(|state| seq < state.seq || (state.removed && seq == state.seq));
                 let forgotten =
                     state.is_none() && pruned_through.is_none_or(|through| seq <= through);
-                if newer || forgotten || admission.stamped.contains_key(&key) {
+                let listed = admission.stamped.get(&key);
+                if newer || forgotten || listed.is_some_and(|admitted| admitted.seq >= seq) {
                     continue;
                 }
+                admission.stamped.remove(&key);
                 updates.insert(key.clone(), tombstone_record(&key));
                 admission.replaced.insert(key.clone());
-                admission.tombstones.insert(key.clone());
+                if !pending.contains(&key) {
+                    admission.tombstones.insert(key.clone());
+                }
                 admission.changes_reads |= state.is_some_and(|state| !state.removed);
                 admission.write.tombstones.push(ChannelTombstone {
                     record_key: key,
@@ -296,22 +316,26 @@ impl<S: Storage> Engine<S> {
         );
         for entries in sets {
             let keys = self.channel_entries(channel_id, entries).await?;
-            admission.deleted.extend(
-                keys.into_iter().filter(|key| {
-                    !admission.stamped.contains_key(key) && !updates.contains_key(key)
-                }),
-            );
+            admission.deleted.extend(keys.into_iter().filter(|key| {
+                let removed = guard.entries.get(key).is_some_and(|state| state.removed);
+                !admission.stamped.contains_key(key)
+                    && !updates.contains_key(key)
+                    && !(removed && pending.contains(key))
+            }));
         }
         let mut doomed = admission.deleted.clone();
         if let Some(through) = pruned_through.filter(|_| !commit.reset) {
             let keys = self
                 .channel_entries(channel_id, ChannelEntries::TombstonesThrough(through))
                 .await?;
-            doomed.extend(keys.into_iter().filter(|key| !updates.contains_key(key)));
+            doomed.extend(
+                keys.into_iter()
+                    .filter(|key| !updates.contains_key(key) && !pending.contains(key)),
+            );
         }
         admission.write.deleted = doomed.into_iter().collect();
 
-        admission.write.coverage = coverage_writes(commit, guard, &admission.listed);
+        admission.write.coverage = coverage_writes(commit, status, guard, &admission.listed);
         let stored = guard.sync.get(channel_id);
         let touched = stored.map_or(0, |sync| sync.touched_at_ms);
         let sync = ChannelSync {
@@ -336,6 +360,14 @@ impl<S: Storage> Engine<S> {
             admission.note_change(channel_id, kind);
         }
         Ok(())
+    }
+
+    /// The entries queued writes change. Such a write shows its entry without a
+    /// record under it, so the removal of one stays until the write settles.
+    fn pending_channel_entries(&self) -> BTreeSet<EntityKey<'static>> {
+        let mut pending = layer_keys(&self.optimistic);
+        pending.retain(is_channel_entry);
+        pending
     }
 
     async fn channel_entries(

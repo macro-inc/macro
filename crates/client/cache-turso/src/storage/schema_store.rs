@@ -336,15 +336,16 @@ fn apply(
             changed,
             every_document,
         } => {
+            let dropping = with_channel_entries(changed);
             let identity = queue_identity(connection, decode_record)?;
             // Facts go before the documents, which would otherwise cascade
             // to them one document at a time.
             if *every_document {
                 keep_only_facts(connection, DOCUMENTS_KEEPING_FACTS, Vec::new())?;
             } else {
-                drop_facts(connection, changed)?;
+                drop_facts(connection, &dropping)?;
             }
-            adoption.dropped_records = drop_types(connection, changed)?;
+            adoption.dropped_records = drop_types(connection, &dropping)?;
             restore_identity(connection, &identity)?;
             if *every_document {
                 let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
@@ -499,6 +500,18 @@ fn drop_facts(connection: &Db, changed: &BTreeSet<String>) -> Result<(), TursoSt
         &format!("NOT ({dropped})"),
         ranges.into_iter().flatten().collect(),
     )
+}
+
+/// `changed`, with both types of channel entry when it has one. Their shared
+/// tables also say which copies are out of date, so one outliving them would
+/// stay readable for good.
+fn with_channel_entries(changed: &BTreeSet<String>) -> BTreeSet<String> {
+    let entries = [MESSAGE_TYPENAME, ACTIVITY_TYPENAME];
+    let mut dropping = changed.clone();
+    if entries.iter().any(|typename| changed.contains(*typename)) {
+        dropping.extend(entries.map(str::to_owned));
+    }
+    dropping
 }
 
 /// Drops the records of `changed` record types with every row derived from

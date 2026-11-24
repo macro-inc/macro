@@ -1847,6 +1847,31 @@ fn channel_rows(storage: &TursoStorage) -> i64 {
 }
 
 #[test]
+fn a_changed_channel_entry_type_takes_the_other_with_it() {
+    const ACTIVITIES: &str = "type Query { thing: Thing activity: GraphqlChannelTimelineActivity message: GraphqlChannelMessage } type Thing { id: ID! value: String } type GraphqlChannelMessage { id: ID! content: String } type GraphqlChannelTimelineActivity { id: ID! kind: String }";
+    let mut storage = TursoStorage::open_in_memory("scope").unwrap();
+    adopt(&storage, ACTIVITIES, &ProjectionInputs::none());
+    let held = ["Thing:1", "GraphqlChannelMessage:1"].map(|held| (key(held), record("held")));
+    block_on(storage.put_batch(held.into())).unwrap();
+    hold_channel(&storage);
+    let retyped = ACTIVITIES.replace("kind: String", "kind: Int");
+    let adoption = adopt(&storage, &retyped, &ProjectionInputs::none());
+    let Some(Tier::Types { changed, .. }) = &adoption.change else {
+        panic!("{:?}", adoption.change);
+    };
+    assert!(!changed.contains("GraphqlChannelMessage"), "{changed:?}");
+    let left = driver::query(
+        &storage.connection(),
+        "SELECT __typename FROM records WHERE __typename <> '__meta'",
+        vec![],
+    )
+    .unwrap();
+    let left = left.iter().map(|row| required_text(row, 0).unwrap());
+    assert_eq!(left.collect::<Vec<_>>(), ["Thing"]);
+    storage.try_close().unwrap();
+}
+
+#[test]
 fn dropped_channel_messages_take_their_rows_coverage_removals_and_watermark() {
     let storage = TursoStorage::open_in_memory("scope").unwrap();
     assert_eq!(

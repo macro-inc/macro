@@ -422,7 +422,8 @@ export type ChannelCommitOutcome = {
   seq: string | null;
   /**
    * `stale`: the watermark already covered the changes, which were taken where
-   * newer than what is held. `gap`: changes before these are missing; they
+   * newer than what is held; also a page too far behind it to cover anything,
+   * which is fetched again. `gap`: changes before these are missing; they
    * were taken the same way and the watermark stayed. `unheld`: the device
    * holds no state of the channel they continue, so nothing of it was stored.
    */
