@@ -166,7 +166,24 @@ for (const width of [320, 390, 430]) {
     // When this fails, the open view's tab is scrolled out of the rail, so the
     // toolbar no longer says which view is on screen.
     test('shows the selected view tab whole', async ({ page }) => {
-      await open(page, 'selected=view-8');
+      // The web font arrives after the toolbar has drawn and revealed its
+      // tab, as on a first visit: the wider tabs must be revealed again.
+      let releaseFonts = () => {};
+      const fontsHeld = new Promise<void>((resolve) => {
+        releaseFonts = resolve;
+      });
+      await page.route('**/*.woff2', async (route) => {
+        await fontsHeld;
+        await route.continue();
+      });
+      // The page's load event waits for the font, so only for its document.
+      await page.goto(
+        '/src/features/database/browser-test/toolbar.html?selected=view-8',
+        { waitUntil: 'domcontentloaded' }
+      );
+      await expect(page.getByRole('group', { name: 'Views' })).toBeVisible();
+      releaseFonts();
+      await page.evaluate(() => document.fonts.ready);
       await expect.poll(() => selectedTabOverflow(page)).toBeLessThan(1);
 
       await page.getByRole('button', { name: 'All records' }).tap();

@@ -162,15 +162,21 @@ export function createViewControls(props: DatabaseToolbarProps) {
       props.onReorderViews?.(moved);
   }
   // A selection made elsewhere (a link, a new view, a rename) can land on a
-  // tab the rail has scrolled away, and a narrower rail can cut it off.
+  // tab the rail has scrolled away, and a narrower rail can cut it off. So
+  // can the tab growing after it was revealed, as when the web font arrives.
+  const [selectedTab, setSelectedTab] = createSignal<HTMLElement>();
   const revealSelectedView = () => {
     const rail = viewRail();
     const selected =
       rail?.querySelector<HTMLElement>('input[aria-label="View name"]') ??
       rail?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (rail && selected) revealInRail(rail, selected);
+    if (!rail || !selected) return;
+
+    setSelectedTab(selected);
+    revealInRail(rail, selected);
   };
   createResizeObserver(viewRail, revealSelectedView);
+  createResizeObserver(selectedTab, revealSelectedView);
   createEffect(
     on(
       [
