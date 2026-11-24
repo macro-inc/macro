@@ -302,9 +302,7 @@ test('owner can inspect and remove a private-thread exception', async ({
   await expect(
     dialog.getByText('Private conversation', { exact: true })
   ).toBeVisible();
-  await expect(
-    dialog.getByText(/A teammate’s contributed copy can still be visible/)
-  ).toBeVisible();
+  await expect(dialog.getByText(/Only your copy is hidden/)).toBeVisible();
   expect(
     await dialog.evaluate(
       (element) => element.scrollWidth <= element.clientWidth

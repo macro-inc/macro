@@ -160,7 +160,7 @@ export default {
     'Your thread is excluded from CRM. Manage it in Email settings; a teammate’s copy may still be shared.',
   privacyThreadsTitle: 'Excluded threads',
   privacyThreadsDescription:
-    'To add one, choose “Exclude thread from CRM” in the thread’s menu.',
+    'Only your copy is hidden. To add one, choose “Exclude thread from CRM” in the thread’s menu.',
   privacyNoThreads: 'No excluded threads.',
   privacyThreadNoSubject: '(No subject)',
   privacyRestoreThread: 'Remove',
