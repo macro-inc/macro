@@ -13,7 +13,11 @@ export function withProjectPropertyValue(
     return { ...property, value: value.values };
   if (property.valueType === 'ENTITY' && value.valueType === 'ENTITY')
     return { ...property, value: value.refs };
-  if (property.valueType === 'DATE' && value.valueType === 'DATE')
-    return { ...property, value: value.value };
+  if (property.valueType === 'DATE' && value.valueType === 'DATE') {
+    const { hasTime: _previous, ...day } = property;
+    return value.hasTime
+      ? { ...day, value: value.value, hasTime: true }
+      : { ...day, value: value.value };
+  }
   return property;
 }

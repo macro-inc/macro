@@ -22,11 +22,11 @@ import { InlineTagsPill } from '@property/tags';
 import type { Property as PropertyType } from '@property/types';
 import { isDateProperty } from '@property/utils';
 import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { Key } from '@solid-primitives/keyed';
 import { Button, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
 import {
   type Component,
   createContext,
-  For,
   type JSX,
   Show,
   Suspense,
@@ -326,7 +326,7 @@ function Properties(props: { class?: string }) {
     enabled: startDateEnabled,
     other: () => draftDate(SYSTEM_PROPERTY_IDS.START_DATE),
     saveOther: (property, value) =>
-      composer.saveHandler.saveProperty(property, { valueType: 'DATE', value }),
+      composer.saveHandler.saveProperty(property, value),
     get editor() {
       return pickers.datesEditor;
     },
@@ -361,20 +361,22 @@ function Properties(props: { class?: string }) {
             editor.focus(undefined, { defaultSelection: 'rootEnd' });
           }}
         >
-          <For each={composer.properties()}>
+          {/* Keyed by definition: a pill whose value changes keeps its open editor. */}
+          <Key each={composer.properties()} by="propertyDefinitionId">
             {(property) => (
               <InlinePropertyValue
-                property={property}
-                emptyLabel={property.displayName}
+                property={property()}
+                emptyLabel={property().displayName}
                 editor={
-                  property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE
+                  property().propertyDefinitionId ===
+                  SYSTEM_PROPERTY_IDS.DUE_DATE
                     ? dueDatesEditor
                     : pickers.propertyEditor
                 }
-                valueText={dueDatesText(property)}
+                valueText={dueDatesText(property())}
               />
             )}
-          </For>
+          </Key>
           <CustomerContactPill
             values={composer.propertyValues}
             onChange={composer.setPropertyValues}

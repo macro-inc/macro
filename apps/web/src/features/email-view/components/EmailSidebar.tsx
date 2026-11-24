@@ -64,11 +64,11 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
 };
 
 function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, setTab, savedViewActive } = useEmailView();
 
   return (
     <ViewSidebar.Item
-      active={!savedViewActive() && state.tab === props.id}
+      active={!savedViewActive() && shownTab() === props.id}
       {...pressHandlers(() => {
         setTab(props.id);
         props.onNavigate?.();
@@ -83,7 +83,11 @@ function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, selectInbox, savedViewActive } = useEmailView();
+  const inboxShown = () => {
+    const tab = shownTab();
+    return tab === 'inbox' || (tab !== 'search' && isEmailInboxTab(tab));
+  };
   const isVisible = useVisibleEmailTab();
   return (
     <Show
@@ -125,14 +129,9 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
         <ViewSidebar.Nav aria-label="Email tabs">
           <ViewSidebar.Item
             ref={tourTarget(EMAIL_TOUR.inbox)}
-            active={!savedViewActive() && isEmailInboxTab(state.tab)}
+            active={!savedViewActive() && inboxShown()}
             {...pressHandlers(() => {
-              // Reopen the Inbox view that was last open: Focus, Signal or Noise.
-              setTab(
-                !savedViewActive() && isEmailInboxTab(state.tab)
-                  ? state.tab
-                  : 'important'
-              );
+              selectInbox();
               props.onNavigate?.();
             })}
           >

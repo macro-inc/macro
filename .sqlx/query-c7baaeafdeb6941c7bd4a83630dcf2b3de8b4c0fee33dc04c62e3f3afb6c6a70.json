@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT hidden, email_sync,\n                      EXISTS (SELECT 1 FROM crm_domains d\n                              WHERE d.company_id = scoped.id AND LOWER(d.domain) = $3) AS \"holds!\"\n               FROM (SELECT id, team_id, hidden, email_sync FROM crm_companies WHERE id = $1 OFFSET 0) scoped\n               WHERE team_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_sync",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "holds!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "c7baaeafdeb6941c7bd4a83630dcf2b3de8b4c0fee33dc04c62e3f3afb6c6a70"
+}

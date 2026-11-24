@@ -405,14 +405,6 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = defineFlag({
   default: false,
 }).enabled;
 
-/** Desktop download settings rollout on web; native desktop always shows it. */
-export const desktopApp = defineFlag({ key: 'desktop-app' });
-
-export const ENABLE_APP_STORE_QR_CODE = defineFlag({
-  env: 'ENABLE_APP_STORE_QR_CODE',
-  default: true,
-}).enabled;
-
 export const ENABLE_PR_DISCUSSION_INPUT = defineFlag({
   env: 'ENABLE_PR_DISCUSSION_INPUT',
   default: false,
@@ -519,6 +511,17 @@ export const enableTaskSourceProperty = defineFlag({
 export const enableTaskStartDate = defineFlag({
   key: 'enable-task-start-date',
   env: 'ENABLE_TASK_START_DATE',
+  default: onInDev,
+});
+
+/**
+ * Time tracking on tasks: the Time pill and its entries, the running timer,
+ * and Time logged wherever task properties show. The backend refuses time
+ * writes under the same key.
+ */
+export const enableTimeTracking = defineFlag({
+  key: 'enable-time-tracking',
+  env: 'ENABLE_TIME_TRACKING',
   default: onInDev,
 });
 
@@ -802,24 +805,6 @@ export const enableUnifiedNotifications = defineFlag({
   key: 'enable-unified-notifications',
   env: 'ENABLE_UNIFIED_NOTIFICATIONS',
   default: onInDev,
-});
-
-// New Home: Home with Recent and Notifications tabs, desktop only. Replaces
-// the rail's Notifications entry and takes `g h`; old Home stays beside it
-// unless `disable-old-home` is also on. PostHog-gated with a dev-mode
-// default; override with VITE_ENABLE_NEW_HOME.
-export const enableNewHome = defineFlag({
-  key: 'enable-new-home',
-  env: 'ENABLE_NEW_HOME',
-  default: onInDev,
-});
-
-// With `enable-new-home` on, hide old Home so New Home takes its place and
-// `/home`. Off in dev, so dev keeps both Homes side by side to compare;
-// override with VITE_DISABLE_OLD_HOME.
-export const disableOldHome = defineFlag({
-  key: 'disable-old-home',
-  env: 'DISABLE_OLD_HOME',
 });
 
 // Keep navigation numbers off in every environment while unread counts are

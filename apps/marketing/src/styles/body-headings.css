@@ -2,7 +2,6 @@
    headings, and the entire homepage on their own typography. */
 #app-scroll-root:not(.macro-homepage) :is(
   .product-feature-intro h2,
-  .homepage-feature-heading h2,
   .feature-page-end h2,
   .homepage-demo-slide-copy h2,
   .homepage-blog h2,

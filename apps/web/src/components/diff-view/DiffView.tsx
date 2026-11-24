@@ -10,6 +10,7 @@ import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import ArrowsInIcon from '@icon/system/regular/arrows-in.svg';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import { DIFFS_TAG_NAME } from '@pierre/diffs';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, Card, cn, Tabs } from '@ui';
@@ -123,6 +124,12 @@ type DiffListProps = {
    * the host points at, such as a focused comment's.
    */
   selection?: Accessor<LineRange | undefined>;
+  /**
+   * Lines to scroll to once the active file has scrolled in, such as a code
+   * link's. They should also be in `selection`, since the lit line is the
+   * one scrolled to.
+   */
+  reveal?: Accessor<LineRange | undefined>;
   /** Turns on the gutter "+" for picking lines; omit for a read-only diff. */
   onSelectLines?: (range: LineRange) => void;
   /**
@@ -163,6 +170,18 @@ function Stack(props: DiffListProps) {
   let pendingSelection = activePath();
   let scrollingToAnchor = false;
   let resizePending = false;
+  // The line a code link revealed, held centred while files above it still
+  // render, until the user takes over scrolling.
+  let revealed: Element | undefined;
+  const keepRevealed = () => {
+    if (!revealed?.isConnected) return;
+    const box = revealed.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    const drift = box.top + box.height / 2 - (view.top + view.height / 2);
+    if (Math.abs(drift) > 1) {
+      revealed.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  };
   const alignAnchor = () => {
     const card = anchoredPath ? diffReveal.card(anchoredPath) : undefined;
     if (!card?.isConnected) return;
@@ -177,6 +196,30 @@ function Stack(props: DiffListProps) {
       card.scrollIntoView({ block: 'start', behavior: 'instant' });
     }
   };
+  // Once the anchored file has settled, a line to reveal takes over: scroll
+  // it in and stop holding the file header. Pierre draws lines in its shadow
+  // root, numbered per side; until the body has rendered there is no line
+  // yet, and a later resize tries again. A line outside the diff's hunks has
+  // no row, and the file header stays.
+  const revealLine = () => {
+    const range = props.reveal?.();
+    if (!anchoredPath || range?.path !== anchoredPath) return;
+    const root = diffReveal
+      .card(anchoredPath)
+      ?.querySelector(DIFFS_TAG_NAME)?.shadowRoot;
+    // Split view numbers each column's rows by its own side; unified view
+    // has one column, where the other side's changed rows share numbers.
+    const otherSide =
+      range.side === 'deletions' ? 'change-addition' : 'change-deletion';
+    const row = `[data-line="${range.lineNumber}"]:not([data-line-type="${otherSide}"])`;
+    const line =
+      root?.querySelector(`[data-${range.side}] ${row}`) ??
+      root?.querySelector(row);
+    if (!line) return;
+    releaseAnchor();
+    revealed = line;
+    line.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
   // Wait for a quiet scroll interval so resize corrections do not interrupt
   // the initial smooth jump. Scroll events extend the interval on every frame.
   const settleAnchor = debounce(() => {
@@ -185,8 +228,10 @@ function Stack(props: DiffListProps) {
       resizePending = false;
       alignAnchor();
     }
+    revealLine();
   }, 120);
   const releaseAnchor = () => {
+    revealed = undefined;
     anchoredPath = undefined;
     pendingSelection = undefined;
     scrollingToAnchor = false;
@@ -211,6 +256,8 @@ function Stack(props: DiffListProps) {
           return;
         }
         alignAnchor();
+        revealLine();
+        keepRevealed();
       }
     );
   }

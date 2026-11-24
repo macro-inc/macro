@@ -66,8 +66,10 @@ impl ControlEvent {
         principal: ControlPrincipal,
         access: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<Self> {
-        // Notification metadata is authored inside the harness, never by API callers.
-        if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.is_some()) {
+        // Notification metadata, and a prompt's withholding of its content from
+        // traces, are authored inside the harness, never by API callers.
+        if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.is_some() || prompt.withhold_content)
+        {
             return Err(AgentSessionError::Forbidden);
         }
 

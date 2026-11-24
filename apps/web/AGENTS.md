@@ -229,7 +229,11 @@ header, `Tabs` and list controller, in a wide and a 700px split (stand-in
 panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
 header's tabs from its list, are focus order on a header button, leave an
 open item that replaced the list open, and leave a thread beside the list
-open after a click on its text.
+open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+order, and a folder's disclosure caret or a control there that opens a menu
+or a dialog chooses nothing.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -352,6 +356,12 @@ track sizing, which its own contents can push out, so a glyph sized off the cell
 feeds that loop and can settle with one emoji filling the picker. The same suite
 checks that widening a cell leaves the glyph alone.
 
+Space and Shift+Space page an open thread (the real desktop thread view in a
+frame like Mail's, over the real hotkey root and `registerEmailHotkeys`) from
+the moment it opens, while a focused button, a field and the reply composer
+keep their own Space; backend-free, desktop only:
+`bunx playwright test --config src/features/block-email/browser-test/playwright.config.ts`.
+
 The email reminder menu reads typed times through the real natural-time wasm
 package; its backend-free desktop/phone regression, at a fixed New York clock,
 checks both readings of a guessed hour, saving either, the reasons shown for
@@ -459,6 +469,18 @@ The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
+conversation and a pinned favorite), Home, a Soup list, the Notifications
+inbox, Agents (sidebar and phone list), Projects and Search on phone and
+tablet: each shows the same rendered grey at its centre and edge, holds it
+after release and through a quick tap's click, never shows it for a press that
+turns into a scroll, and drops it when a phone long press opens the row's
+action drawer (`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots); no
+element from a long-pressable row's owner down to its surface draws WebKit's
+tap highlight. `long-press-tap.browser.e2e.ts` long-presses a row of Mail's
+phone list (the real context menu and action drawer), dismisses the drawer and
+taps other rows, recording every press marker change: only the tapped row is
+ever pressed.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,
@@ -829,6 +851,11 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
 
+Its `display-options.browser.e2e.ts` checks that desktop Notifications has
+All and Unread and Display options in place of a settings gear, that
+Condensed turns rows into Home's one-line rows and back, and that phones have
+no Display options.
+
 Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
 row keeps its toggle in place as Hide (beside the Hide under its last
 notification), hovering a row swaps its time for Mark done without moving
@@ -962,8 +989,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - `openExternalUrl` opens only a link scheme (`isAllowedLinkUrl` in `packages/lexical-core/utils/link-url.ts`), a relative URL, or a scheme in its `OPENABLE_PROTOCOLS` (`core/util/url.ts`); add a scheme there when a caller needs one. Renderers that draw an anchor from saved content check the URL the same way.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
-- Keep contact address edits (add, remove, make primary) and company edits (personal-provider
-  link/switch, Remove company unless an address is on the company's domain) in shared CRM field views, using Tasks
+- Keep contact address edits (add, remove, make primary), company edits (personal-provider
+  link/switch, Remove company unless an address is on the company's domain) and company domain
+  edits (add, remove) in shared CRM field views, using Tasks
   property primitives and committed-response/session-fenced cache updates. Close
   direct cache-write admission on logout and login replacement, and drain admitted
   durable writes before clearing storage, while starting independent local/server
@@ -1025,6 +1053,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Match record metadata to the 24px property-control scale while reserving separate
   44px touch targets; see the CRM README for the visible-face and hit-area contract.
   Keep explanations on the chip and retain company-only Email sharing controls.
+  Order both information panels with `RECORD_PANEL_ORDER` (References last) and
+  lay Record details on `SidePanel.Grid`/`SidePanel.Row`, like Properties.
   Use the explicit Visible/Archived filter for People, Companies and company Team;
   reset its admin-only choice on account/team/role/list changes and preserve search.
   Apply confirmed visibility changes to detail, list and normalized search caches;
@@ -1244,7 +1274,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   no results), the keys stay in the field. `wide` lets the open field take the rest of
   the header (the view hides its other actions from `onOpenChange`), and
   `suggestions` lists rows under the field that the arrows walk before the
-  results; Email's wide search uses both. It registers the
+  results (a row that `editsQuery`, such as Email's `in:` views, keeps the
+  keyboard in the field); `operators` marks search operators (`in:sent`) in
+  the text, which `search-operator-text.tsx` draws as tokens behind the input
+  while the text stays ordinary editable text; future operators reuse it.
+  Email's wide search uses all of them. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
@@ -1273,8 +1307,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
+- Desktop native crashes (Rust panics, Chromium crash dumps on macOS) reach PostHog as `$exception` with `native_crash_*` properties from the next webview start; a dump never leaves the machine, only its signature. Keep panic messages scrubbed and send nothing else from a dump. See `tauri/src-tauri/README.md#native-crash-reports`.
+- Diagnose desktop native updates with `native_update_outcome` and the `native.update.*` spans (`observability/native-update.ts`), which the page sends from the host's reports; keep their schema closed (versions, code-defined kinds), never error text or paths. See [update telemetry](tauri/src-tauri/README.md#update-telemetry).
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
-- Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
+- Store mobile OTA bundles and markers outside purgeable caches: iOS in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup, and Android in `<app data>/bundle-updates`; ignore legacy cache contents rather than migrating them. Desktop keeps the updater's existing cache location. Startup serves a saved bundle only when every file its completion record lists is present. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
@@ -1284,6 +1320,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   scrolling peek window beside it. `activity.browser.e2e.ts` in
   `block-agent/browser-test` replays a long run and checks it shows one live
   line, then one settled row.
+- Never name a generic tool failure in an agent transcript or a channel/DM
+  agent reply: no **Failed**/**Timed out**/**Cancelled**/**Interrupted** text,
+  failure ink, fade, or `· N failed` count on tool rows, groups, or the live
+  line; the agent explains failures in its reply. Keep the status in the data
+  (`data-tool-status`, `data-status`); product cards (user tools, reviews,
+  elicitations, permissions, approvals) and session-event rows keep their
+  outcomes.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
@@ -1955,7 +1998,7 @@ on mobile; retain power controls and polling while waiting.
 - Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
-- Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
+- Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Deduplicate visits and coalesce cue bursts within 1.5 seconds without queueing suppressed cues. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. Preserve incoming ring deadlines on duplicate starts, latch cross-tab silence on expiry or terminal resolutions, and reject late resolved-call alerts and ended-call cache writes. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
 
 ### Agent result task lists
 
@@ -1970,7 +2013,9 @@ unbroken titles, and keyboard opening.
 Inline property fields stay `readOnly`, never `disabled`, while they save: a
 browser moves focus off a disabled field, so a failed save would strand it. Enter
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
-away leaves focus where the user put it. The backend-free regression is
+away leaves focus where the user put it. A Link value's remove × takes its own
+space after the title, which truncates before it; desktop shows it on hover or
+focus, touch always. The backend-free regression for both is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
 
 ### Assignee people scope

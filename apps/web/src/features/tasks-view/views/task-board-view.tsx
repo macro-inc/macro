@@ -1,3 +1,4 @@
+import { TaskTimerCount } from '@app/features/time-tracking/task-timer-count';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -6,7 +7,7 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { formatStartDueCompact, startDueOf } from '@property/utils/start-due';
 import { hasValue, isDateProperty } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
 import {
@@ -149,9 +150,11 @@ export function TaskBoardView(props: {
     // With start dates a card's due date reads as the range and edits both
     // ends; it shows once either end is set.
     const isDue = id === SYSTEM_PROPERTY_IDS.DUE_DATE;
+    const timedDue = (due: Property) =>
+      startDateEnabled() && isDateProperty(due) && due.hasTime === true;
     const datesText = (due: Property) => {
       if (!isDue || !startDateEnabled()) return undefined;
-      return formatStartDue(startDueOf(startDate(task().id), due));
+      return formatStartDueCompact(startDueOf(startDate(task().id), due));
     };
     const editor = isDue
       ? startDueEditorFor({
@@ -159,10 +162,7 @@ export function TaskBoardView(props: {
           enabled: startDateEnabled,
           other: () => startDate(task().id),
           saveOther: (property, value) =>
-            props.data.saveProperty(task().id, property, {
-              valueType: 'DATE',
-              value,
-            }),
+            props.data.saveProperty(task().id, property, value),
         })
       : undefined;
 
@@ -190,7 +190,8 @@ export function TaskBoardView(props: {
                     ? taskDueDateUrgency(
                         task().dueDate,
                         task().closed ?? true,
-                        calendar()
+                        calendar(),
+                        timedDue(property()) ? { now: Date.now() } : undefined
                       )
                     : undefined
                 }
@@ -240,6 +241,7 @@ export function TaskBoardView(props: {
         >
           {task().name || 'Untitled task'}
         </button>
+        <TaskTimerCount taskId={task().id} />
         <div data-kanban-no-drag class="flex shrink-0 items-center">
           {renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.ASSIGNEES, true)}
         </div>

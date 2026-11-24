@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
+import type { CompanyDomainChange } from '../core/company';
 import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
@@ -118,7 +119,10 @@ export type CrmContext = {
     ): void;
     showCompanies(): void;
     /** Open any soup row (email, file, call, ...) in a split. */
-    openEntity(entity: import('@entity').EntityData): void;
+    openEntity(
+      entity: import('@entity').EntityData,
+      options?: { newSplit?: boolean }
+    ): void;
   };
   listsEnabled(): Accessor<boolean>;
 
@@ -243,6 +247,11 @@ export type CrmContext = {
     { contact: CrmContact; companyId: string | null },
     CrmContact
   >;
+  editCompanyDomain(): CrmMutation<{
+    companyId: string;
+    domain: string;
+    change: CompanyDomainChange;
+  }>;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

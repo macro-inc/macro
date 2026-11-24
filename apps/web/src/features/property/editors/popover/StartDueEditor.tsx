@@ -3,11 +3,17 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
-import type { DateProperty } from '../../types';
+import type { DateApiValue, DateProperty } from '../../types';
 import { isDateProperty } from '../../utils';
-import type { DateField, StartDue } from '../../utils/start-due';
+import {
+  type DateField,
+  type StartDue,
+  startDueOf,
+} from '../../utils/start-due';
 import { StartDueSelector } from '../selectors/StartDueSelector';
 import { EditorPopover } from './EditorPopover';
+
+const ENDS: DateField[] = ['start', 'due'];
 
 export type StartDueEditorProps = {
   /** Which end the pill or row that opens the picker shows. */
@@ -15,7 +21,7 @@ export type StartDueEditorProps = {
   /** The other end, a placeholder while it is unset. */
   other: () => DateProperty;
   /** Saves the other end, which the pill or row does not own. */
-  saveOther: (property: DateProperty, value: Date | null) => Promise<unknown>;
+  saveOther: (property: DateProperty, value: DateApiValue) => Promise<unknown>;
 };
 
 /** The dates picker in a popover, opened from a Start Date or Due Date pill. */
@@ -23,8 +29,10 @@ export function StartDueEditor(props: StartDueEditorProps) {
   const ctx = useProperty();
   return (
     <Show when={ctx.editorOpen() && isDateProperty(ctx.property())}>
-      {/* The two fields and the footer need more room than a single date's calendar. */}
-      <EditorPopover class="max-h-[28rem]">
+      {/* The two fields and the footer need more room than a single date's
+          calendar. Capped at the room the popper has, so adding times near the
+          screen's edge scrolls the time list instead of pushing the footer off. */}
+      <EditorPopover class="max-h-[min(28rem,var(--kb-popper-content-available-height,28rem))] *:min-h-0">
         <StartDueEditorBody {...props} />
       </EditorPopover>
     </Show>
@@ -56,17 +64,18 @@ function StartDueEditorBody(
   const own = ctx.property() as DateProperty;
   const other = props.other();
   const end = (field: DateField) => (field === props.field ? own : other);
-  const day = (property: DateProperty) =>
-    property.value != null ? new Date(property.value) : null;
+  const [dates, setDates] = createSignal<StartDue>(
+    startDueOf(end('start'), end('due'))
+  );
 
-  const [dates, setDates] = createSignal<StartDue>({
-    start: day(end('start')),
-    due: day(end('due')),
-  });
-
-  const save = async (field: DateField, value: Date | null) => {
+  const save = async (field: DateField, next: StartDue) => {
+    const value: DateApiValue = {
+      valueType: 'DATE',
+      value: next[field],
+      ...(next.timed && next[field] ? { hasTime: true } : {}),
+    };
     if (field === props.field) {
-      await ctx.onSave?.(own, { valueType: 'DATE', value });
+      await ctx.onSave?.(own, value);
       return;
     }
     await props.saveOther(other, value);
@@ -79,18 +88,31 @@ function StartDueEditorBody(
   // Saves run in the order they were made, so an older one never lands last.
   let pending: Promise<void> = Promise.resolve();
 
+  // The server keeps a start on or before the saved due date, so a start
+  // moving past that due date waits until the new due date is saved.
+  const saveOrder = (next: StartDue, changed: DateField[]): DateField[] =>
+    changed.includes('due') && next.start && saved.due && next.start > saved.due
+      ? ['due', ...changed.filter((end) => end !== 'due')]
+      : changed;
+
   const commit = async (
     next: StartDue,
-    changed: DateField[],
+    ends: DateField[],
     made: Record<DateField, number>
   ) => {
+    const changed = saveOrder(next, ends);
     for (const [index, field] of changed.entries()) {
       const result = await ResultAsync.fromPromise(
-        save(field, next[field]),
+        save(field, next),
         (error) => error
       );
       if (result.isOk()) {
-        saved = { ...saved, [field]: next[field] };
+        saved = {
+          ...saved,
+          [field]: next[field],
+          timed: next.timed,
+          wholeDay: saved.wholeDay === field ? undefined : saved.wholeDay,
+        };
         continue;
       }
       // mutation onError owns toast
@@ -100,6 +122,14 @@ function StartDueEditorBody(
       setDates((shown) => ({
         start: restore.includes('start') ? saved.start : shown.start,
         due: restore.includes('due') ? saved.due : shown.due,
+        timed: restore.length > 0 ? saved.timed : shown.timed,
+        // Only a restored end takes back its saved precision; a newer edit
+        // of the other end keeps its own.
+        wholeDay: ENDS.find((end) =>
+          restore.includes(end)
+            ? saved.wholeDay === end
+            : shown.wholeDay === end
+        ),
       }));
       return;
     }
@@ -125,7 +155,12 @@ function StartDueEditorBody(
         due: end('due').displayName,
       }}
       onChange={(next, changed) => {
-        setDates(next);
+        // An end edited with times on is saved with its time.
+        setDates(
+          next.wholeDay && changed.includes(next.wholeDay)
+            ? { ...next, wholeDay: undefined }
+            : next
+        );
         fireAndForget(enqueue(next, changed), 'property-editor');
       }}
       onClose={() => ctx.closeEditor()}

@@ -172,8 +172,8 @@ pub enum RateBudget {
     /// Interactive, incremental, and user-initiated work, which may use the
     /// mailbox's whole allowance.
     Live,
-    /// Mailbox backfills, held below the full allowance so live work keeps
-    /// room while a backfill runs.
+    /// Mailbox backfills and other bulk reads (a window of a user's mail),
+    /// held below the full allowance so live work keeps room while they run.
     Backfill,
 }
 

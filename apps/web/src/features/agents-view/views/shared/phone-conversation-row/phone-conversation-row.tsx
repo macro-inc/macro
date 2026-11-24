@@ -52,7 +52,10 @@ export function PhoneConversationRow(props: {
       : t('agentWork.untitledChat'));
   const match = () => literalSearchRange(title(), props.search);
   return (
-    <div class="soup-list-entity flex h-[46px] w-full min-w-0 items-center gap-2 px-3 text-ink">
+    <div
+      data-press-surface
+      class="soup-list-entity flex h-[46px] w-full min-w-0 shrink-0 items-center gap-2 px-3 text-ink"
+    >
       <Button
         appearance="bare"
         class="flex h-full min-w-0 flex-1 items-center gap-2 p-0 text-left font-normal focus-visible:outline-2 focus-visible:outline-edge-focus"

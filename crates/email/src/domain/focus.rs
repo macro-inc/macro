@@ -38,8 +38,8 @@ pub use models::{
     ThreadDates, ThreadFocus,
 };
 pub use ports::{
-    DueDateExtractor, FocusClassifier, FocusClassifierError, FocusEnrollment, FocusNotifier,
-    FocusStore, ProfileSource,
+    ClassifierLane, DueDateExtractor, FocusClassifier, FocusClassifierError, FocusEnrollment,
+    FocusNotifier, FocusStore, ProfileSource,
 };
 pub use questions::{FOCUS_QUESTIONS, FocusQuestion};
 pub use rule::{FOCUS_RULE_VERSION, decide};

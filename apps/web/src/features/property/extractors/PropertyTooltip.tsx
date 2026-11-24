@@ -9,6 +9,7 @@ type Props = {
   children: JSX.Element;
   trailingAction?: JSX.Element;
   actions?: JSX.Element;
+  valueText?: string;
 };
 
 /**
@@ -42,6 +43,7 @@ export function PropertyTooltip(props: Props) {
           <CorePropertyTooltip
             property={props.property}
             trailingAction={trailingAction()}
+            valueText={props.valueText}
           />
           <Show when={actions.toArray().length > 0}>
             <div class="mt-2 border-t border-edge-muted pt-1.5">

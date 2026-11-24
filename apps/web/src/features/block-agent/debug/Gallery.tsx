@@ -1340,7 +1340,7 @@ export default function AgentUiGallery() {
                 status={pulse() ? 'running' : 'completed'}
               />
             </ToolGroup>
-            <ToolGroup count={2} failed={1} defaultOpen>
+            <ToolGroup count={2} defaultOpen>
               <ToolCard
                 title="Search"
                 subtitle="fold"

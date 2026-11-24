@@ -57,8 +57,7 @@ export function CreateProject(props: {
     field: 'due',
     enabled: startDateEnabled,
     other: draftedStart,
-    saveOther: async (property, value) =>
-      composer.saveDraft(property, { valueType: 'DATE', value }),
+    saveOther: async (property, value) => composer.saveDraft(property, value),
   });
   let titleInput: HTMLInputElement | undefined;
   let description: EditorControls | undefined;

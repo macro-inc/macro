@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapMediaItems } from '../media-items';
+import { mapMediaItems, partitionAttachments } from '../media-items';
 
 describe('mapMediaItems', () => {
   it('preserves local preview metadata across optimistic attachment reconciliation', () => {
@@ -35,5 +35,21 @@ describe('mapMediaItems', () => {
         height: 200,
       }),
     ]);
+  });
+});
+
+describe('partitionAttachments', () => {
+  it('keeps voice memos out of the media grid and the document chips', () => {
+    expect(
+      partitionAttachments([
+        { entity_type: 'static/image', entity_id: 'image' },
+        { entity_type: 'static/audio', entity_id: 'memo' },
+        { entity_type: 'document', entity_id: 'doc' },
+      ])
+    ).toEqual({
+      mediaAttachments: [{ entity_type: 'static/image', entity_id: 'image' }],
+      audioAttachments: [{ entity_type: 'static/audio', entity_id: 'memo' }],
+      documentAttachments: [{ entity_type: 'document', entity_id: 'doc' }],
+    });
   });
 });

@@ -1,3 +1,7 @@
+import {
+  AGENTS_ARCHIVE_ROUTE_ID,
+  AGENTS_ARCHIVE_VIEW_ID,
+} from '@app/features/agents-view/archive-navigation';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import {
@@ -447,6 +451,14 @@ export const settingsRoute = defineRoute({
 // a conversation swaps the pane beside the sidebar instead of rebuilding both.
 const AGENTS_WORKSPACE_MOUNT = 'agents-workspace';
 
+export const agentsArchiveRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: AGENTS_ARCHIVE_ROUTE_ID,
+  path: 'agents/archive',
+  mountKey: AGENTS_WORKSPACE_MOUNT,
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: AGENTS_ARCHIVE_VIEW_ID }),
+});
 export const agentsRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'agents',
@@ -585,12 +597,6 @@ export const homeSplitRoute = defineRoute({
   id: 'view-home',
   path: 'home',
   search: '*' as const,
-});
-
-/** New Home's entry: it sends the split to the tab New Home was left on. */
-export const newHomeRoute = defineRoute({
-  id: 'view-new-home',
-  path: 'new-home',
 });
 
 export const recentRoute = defineRoute({

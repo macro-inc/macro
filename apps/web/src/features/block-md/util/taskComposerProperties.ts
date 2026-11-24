@@ -409,9 +409,14 @@ export function createTaskComposerProperties(args: {
         args.values?.() ?? propertyValues,
         options()
       ),
+      ...(timedDraft(definition.id) ? { hasTime: true } : {}),
       options: options().get(definition.id),
     } as Property;
   };
+  function timedDraft(definitionId: string) {
+    const value = (args.values?.() ?? propertyValues)[definitionId];
+    return value?.valueType === 'DATE' && value.hasTime === true;
+  }
   const properties = (): Property[] => filterMap(visibleIds(), draftProperty);
   /**
    * The pills plus the properties the host edits with its own control. An

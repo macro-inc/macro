@@ -1,6 +1,7 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   isStaticAttachmentType,
+  STATIC_AUDIO,
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
@@ -15,6 +16,7 @@ function toInputAttachmentKind(
 ): InputAttachmentData['kind'] | undefined {
   if (entityType === STATIC_IMAGE) return 'image';
   if (entityType === STATIC_VIDEO) return 'video';
+  if (entityType === STATIC_AUDIO) return 'audio';
   if (!isStaticAttachmentType(entityType)) return 'document';
 }
 
