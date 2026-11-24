@@ -14,7 +14,10 @@ import {
   PropertyCatalogDefinitionsWithOptionsDocument,
   type PropertyCatalogDefinitionsWithOptionsQuery,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import type { AnyVariables, OperationResult } from '@urql/core';
 import { type Accessor, createMemo, untrack } from 'solid-js';
 import { offlineAsSuccess } from './catalog/list-result';
@@ -140,7 +143,9 @@ export function useListPropertiesQuery(
  * refreshing cannot cancel it. A mounted reader of the same list shares this
  * operation, so a request of its that fails can answer this one with the
  * failure even though the cache holds the list; the cached list wins then,
- * as TanStack's cached data did.
+ * as TanStack's cached data did. Only a request that failed in the network
+ * asks the cache again, and only the normalized cache: the plain network
+ * client answers a cache-only read by sending the request again.
  */
 export async function loadPropertyDefinitionsWithOptions(
   params: Omit<ListPropertiesQueryParams, 'includeOptions'>
@@ -157,12 +162,14 @@ export async function loadPropertyDefinitionsWithOptions(
     })
     .toPromise();
   if (result.data) return definitionsWithOptions(result.data);
-  const cached = await client
-    .query(PropertyCatalogDefinitionsWithOptionsDocument, variables, {
-      requestPolicy: 'cache-only',
-    })
-    .toPromise();
-  if (cached.data) return definitionsWithOptions(cached.data);
+  if (result.error?.networkError && getGraphqlSoupCacheHost()) {
+    const cached = await client
+      .query(PropertyCatalogDefinitionsWithOptionsDocument, variables, {
+        requestPolicy: 'cache-only',
+      })
+      .toPromise();
+    if (cached.data) return definitionsWithOptions(cached.data);
+  }
   throw result.error ?? new Error('Property definitions returned no data');
 }
 
