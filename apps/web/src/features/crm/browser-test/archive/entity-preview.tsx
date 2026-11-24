@@ -25,6 +25,14 @@ export function ListEntity(props: {
   );
 }
 
+// The real icon and title reach soup and Markdown modules this harness
+// replaces; these keep their markup (a sized glyph, a truncating span).
+export function EntityRowIcon(props: { class?: string }) {
+  return <svg class={props.class} viewBox="0 0 16 16" aria-hidden="true" />;
+}
+export function EntityRowTitle(props: { entity: { name: string } }) {
+  return <span class="truncate">{props.entity.name}</span>;
+}
 export {
   formatDateAndTime,
   formatRelativeTimestamp,

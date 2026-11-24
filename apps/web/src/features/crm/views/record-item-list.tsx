@@ -2,11 +2,14 @@ import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-h
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
 import { usePending } from '@app/observability/flow';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
+  type EntityData,
+  EntityRowIcon,
+  EntityRowTitle,
   ListEntity,
   ListEntityMetadataQueryProvider,
   ListLayoutProvider,
-  type NarrowLayoutVariant,
 } from '@entity';
 import {
   createMemo,
@@ -45,8 +48,11 @@ export function RecordItemList(props: {
   /** Clear the search when this list has its own search control. */
   onClearSearch?: () => void;
   search?: string;
-  /** Row layout when the list is narrow, e.g. in the information panel. */
-  narrowLayout?: NarrowLayoutVariant;
+  /**
+   * Rows for the information panel: the side panel's own item rows, like a
+   * document's References, instead of the list's.
+   */
+  panel?: boolean;
   /** Property IDs to display as inline reference pills when needed. */
   referencePropertyIds?: readonly string[];
   /** Group the existing newest-first list by its last-updated date. */
@@ -56,6 +62,9 @@ export function RecordItemList(props: {
 }) {
   const { openEntity } = useCrmContext().createNavigation();
   const workspace = useOptionalCrmWorkspace();
+  const open = (entity: EntityData, event?: MouseEvent | KeyboardEvent) => {
+    if (!workspace?.host.record.openItem(entity, event)) openEntity(entity);
+  };
   // Reading `data` before the first page resolves would suspend the tab.
   const items = () =>
     props.source.isPending ? [] : (props.source.data?.entities ?? []);
@@ -105,13 +114,11 @@ export function RecordItemList(props: {
     <div class="flex min-h-0 w-full flex-1 flex-col">
       <Switch>
         <Match when={loading()}>
-          <CrmListSkeleton
-            count={props.narrowLayout === 'condensed' ? 2 : undefined}
-          />
+          <CrmListSkeleton count={props.panel ? 2 : undefined} />
         </Match>
         <Match when={props.source.isError}>
           <Show
-            when={props.narrowLayout !== 'condensed'}
+            when={!props.panel}
             fallback={
               <CrmListRetry
                 message="Couldn't load this list."
@@ -135,7 +142,7 @@ export function RecordItemList(props: {
                 when={props.search?.trim()}
                 fallback={
                   <Show
-                    when={props.narrowLayout !== 'condensed'}
+                    when={!props.panel}
                     fallback={
                       <p class="text-xs text-ink-muted">
                         {props.empty ?? 'No items yet.'}
@@ -180,7 +187,7 @@ export function RecordItemList(props: {
         </Match>
         <Match when={items().length > 0}>
           <ListEntityMetadataQueryProvider>
-            <ListLayoutProvider ref={listRef} narrowLayout={props.narrowLayout}>
+            <ListLayoutProvider ref={listRef}>
               <div
                 ref={setListRef}
                 class="flex flex-col"
@@ -215,16 +222,23 @@ export function RecordItemList(props: {
                           />
                         )}
                       </Show>
-                      <ListEntity
-                        entity={entity}
-                        hideCheckbox
-                        timestamp={entity.updatedAt}
-                        onClick={(event) => {
-                          if (!workspace?.host.record.openItem(entity, event))
-                            openEntity(entity);
-                        }}
-                        referencePropertyIds={props.referencePropertyIds}
-                      />
+                      <Show
+                        when={props.panel}
+                        fallback={
+                          <ListEntity
+                            entity={entity}
+                            hideCheckbox
+                            timestamp={entity.updatedAt}
+                            onClick={(event) => open(entity, event)}
+                            referencePropertyIds={props.referencePropertyIds}
+                          />
+                        }
+                      >
+                        <PanelItemRow
+                          entity={entity}
+                          onOpen={(event) => open(entity, event)}
+                        />
+                      </Show>
                     </>
                   )}
                 </For>
@@ -249,6 +263,45 @@ export function RecordItemList(props: {
           </Show>
         </Match>
       </Switch>
+    </div>
+  );
+}
+
+/**
+ * An item row shaped like a document's References row in its side panel:
+ * 12px text in a 32px row that starts at the section's text edge, so the
+ * information panel reads as one scale. Opens like the list rows do.
+ */
+function PanelItemRow(props: {
+  entity: EntityData;
+  onOpen: (event: MouseEvent | KeyboardEvent) => void;
+}) {
+  const navigation = useSplitNavigationHandler<HTMLDivElement>((event) =>
+    props.onOpen(event)
+  );
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      data-entity-id={props.entity.id}
+      class="flex min-h-8 min-w-0 items-center gap-1.5 rounded-lg py-1 text-xs leading-5 text-ink hover:bg-hover/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      onMouseDown={navigation.onMouseDown}
+      onClick={navigation.onClick}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        props.onOpen(event);
+      }}
+    >
+      <EntityRowIcon
+        entity={props.entity}
+        class="size-4 shrink-0"
+        suppressClick
+        showTooltip={false}
+      />
+      <span class="ph-no-capture flex min-w-0 truncate">
+        <EntityRowTitle entity={props.entity} />
+      </span>
     </div>
   );
 }

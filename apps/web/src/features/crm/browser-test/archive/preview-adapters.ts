@@ -1,3 +1,4 @@
+import type { EntityData } from '@entity';
 import type { storageServiceClient as Storage } from '@service-storage/client';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
@@ -355,6 +356,16 @@ const deps = {
   client,
   storage: storageServiceClient as unknown as typeof Storage,
 };
+const references: EntityData[] = ['Kickoff notes', 'Pricing review'].map(
+  (name, index) => ({
+    type: 'document',
+    id: `reference-${index + 1}`,
+    name,
+    fileType: 'md',
+    ownerId: '',
+    updatedAt: '2026-10-15T12:00:00Z',
+  })
+);
 export const useCrmContext = () => ({
   userId: () => 'user-1',
   isTeamAdmin: () => () => role() !== 'member',
@@ -375,7 +386,7 @@ export const useCrmContext = () => ({
     isPending: false,
     isEnabled: true,
     isLoading: false,
-    data: { entities: [] },
+    data: { entities: params.has('refs') ? references : [] },
     hasNextPage: false,
     isFetchingNextPage: false,
     isError: false,

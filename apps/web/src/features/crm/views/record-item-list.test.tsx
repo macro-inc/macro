@@ -5,6 +5,7 @@ import type { ItemListSource } from '../context/crm-sources';
 import { RecordItemList } from './record-item-list';
 
 const mounted = vi.hoisted(() => vi.fn());
+const openEntity = vi.hoisted(() => vi.fn());
 
 vi.mock('@app/features/next-soup/soup-view/date-group-heading', () => ({
   DateGroupHeading: (props: { label: string }) => (
@@ -21,6 +22,10 @@ vi.mock('@entity', () => ({
   },
   ListEntityMetadataQueryProvider: (props: ParentProps) => props.children,
   ListLayoutProvider: (props: ParentProps) => props.children,
+  EntityRowIcon: () => null,
+  EntityRowTitle: (props: { entity: { name: string } }) => (
+    <span>{props.entity.name}</span>
+  ),
 }));
 vi.mock('@ui', () => ({
   cn: (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' '),
@@ -50,7 +55,7 @@ vi.mock('../../../lib/primitives/infinite-scroll-sentinel', () => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
-    createNavigation: () => ({ openEntity: vi.fn() }),
+    createNavigation: () => ({ openEntity }),
   }),
 }));
 
@@ -76,6 +81,18 @@ function source(overrides: Partial<ItemListSource>): ItemListSource {
     ...overrides,
   };
 }
+
+it('opens an information panel row on click and on Enter', () => {
+  mounted.mockClear();
+  openEntity.mockClear();
+  render(() => <RecordItemList source={source({})} empty="Nothing" panel />);
+
+  const row = screen.getByRole('button', { name: 'Kickoff notes' });
+  fireEvent.click(row);
+  fireEvent.keyDown(row, { key: 'Enter' });
+  expect(openEntity).toHaveBeenCalledTimes(2);
+  expect(mounted).not.toHaveBeenCalled();
+});
 
 it('replaces cached rows and retries the query after a failed refetch', () => {
   const failed = source({ isError: true });
