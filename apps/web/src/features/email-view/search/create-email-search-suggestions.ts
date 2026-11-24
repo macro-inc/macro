@@ -1,6 +1,12 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   completeEmailSearchOperator,
@@ -103,8 +109,9 @@ export type EmailSearchSuggestions = ListSearchSuggestions & {
 /**
  * The rows offered under Email's search field. A search is remembered, with
  * its `in:` filter, once the person settles on it: Enter, a picked recent
- * search, or leaving the field with the search's own results on screen. Not
- * on every keystroke, nor when another window or app takes the focus.
+ * search, opening a thread while it is on screen, or leaving the field with
+ * its own results on screen. Not on every keystroke, nor when another window
+ * or app takes the focus.
  */
 export function createEmailSearchSuggestions(options: {
   userId: Accessor<string | undefined>;
@@ -115,6 +122,8 @@ export function createEmailSearchSuggestions(options: {
    * kept on screen from the search before.
    */
   hasResults: Accessor<boolean>;
+  /** The thread open from the list, beside it or in its place. */
+  openThread: Accessor<string | undefined>;
   /** Whether the person has the view, such as Focus behind its flag. */
   scopeAvailable: (scope: EmailSearchScopeId) => boolean;
   /**
@@ -211,6 +220,18 @@ export function createEmailSearchSuggestions(options: {
   // page then has no focus: the person comes back to the field as it was.
   const leftWithResults = () =>
     document.hasFocus() && options.hasResults() && !typesOperatorName();
+
+  // A thread opened from the results settles the search, whether or not the
+  // field saw a blur first (iOS keeps focus in it for a tap on a row).
+  createEffect(
+    on(
+      options.openThread,
+      (thread) => {
+        if (thread !== undefined) remember();
+      },
+      { defer: true }
+    )
+  );
 
   const listed = createMemo((): EmailSearchSuggestion[] => {
     if (!focused()) return [];

@@ -43,8 +43,9 @@ the Soup-backed thread list, and saved email views.
   finishes one; its tests and the service's read
   `crates/search_service/src/api/search/email_operators/typed_operators.json`),
   recent searches (`recent-searches.ts`, per person in browser storage; a
-  search is remembered on Enter, a picked recent search, or leaving the field
-  with its own results on screen, `hasResults`) and
+  search is remembered on Enter, a picked recent search, a thread opened
+  from it, or leaving the field with its own results on screen, `hasResults`)
+  and
   the rows the search field lists: views (then labels) while `in:` is typed,
   people after `from:`/`to:`/`cc:`/`bcc:`, labels and tags after `label:`,
   otherwise the operators that finish the typed token, then recent searches

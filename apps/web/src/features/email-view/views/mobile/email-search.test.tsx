@@ -36,6 +36,7 @@ function renderPage(
       search,
       setSearch,
       hasResults: () => options.hasResults ?? true,
+      openThread: () => undefined,
       scopeAvailable: () => true,
     });
     return (

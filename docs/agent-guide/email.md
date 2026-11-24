@@ -139,10 +139,11 @@ wherever the list was scrolled. With the field focused, up to five recent search
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
 result. A search is remembered, with its `in:` filter, once the person settles
-on it: `Enter` (the phone's Search key too), a picked recent search, or leaving
-the field with that search's own results on screen. Leaving before they arrive,
-another window or app taking the focus, or leaving on a last word the field
-offers to finish as an operator (`bef` for `before:`) remembers nothing; an
+on it: `Enter` (the phone's Search key too), a picked recent search, opening a
+thread from its results, or leaving the field with that search's own results on
+screen. Leaving before they arrive, another window or app taking the focus, or
+leaving on a last word the field offers to finish as an operator (`bef` for
+`before:`) remembers nothing; an
 operator still being typed is left out of what is remembered. A remembered
 search drops the earlier ones it starts with (`bud` once `budget` is), and at
 most eight are kept per person, in this browser only and not per inbox. Typing `in:` lists the views instead (only those the person has, so

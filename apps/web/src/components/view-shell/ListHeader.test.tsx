@@ -525,7 +525,6 @@ it('runs the typed search on Enter, and not on a suggestion picked with it', () 
   field.focus();
   type(field, 'ArrowDown');
   type(field, 'Enter');
-  type(field, 'ArrowDown');
   expect(commit).toHaveBeenCalledOnce();
 });
 

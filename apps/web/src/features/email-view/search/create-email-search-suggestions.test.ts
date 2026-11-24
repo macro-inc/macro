@@ -49,16 +49,18 @@ const LABELS = [
 function setup(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
   const [hasResults, setHasResults] = createSignal(true);
+  const [openThread, setOpenThread] = createSignal<string>();
   const suggestions = createEmailSearchSuggestions({
     userId: () => 'user-a',
     search,
     setSearch,
     hasResults,
+    openThread,
     scopeAvailable: (scope) => scope !== 'focus',
     people: () => PEOPLE,
     labels: () => LABELS,
   });
-  return { search, setSearch, setHasResults, suggestions };
+  return { search, setSearch, setHasResults, setOpenThread, suggestions };
 }
 
 /** The recent searches the empty field lists. */
@@ -150,6 +152,21 @@ it('leaves a word on its way to an operator unremembered, unless Enter runs it',
     expect(remembered(setSearch, suggestions)).toEqual(['new', 'invoice new']);
     dispose();
   });
+});
+
+it('remembers a search when a thread is opened from it, the field still focused', () => {
+  // Mounted first, as the view is, so its effects run before the person acts.
+  const { dispose, setSearch, setHasResults, setOpenThread, suggestions } =
+    createRoot((dispose) => ({ dispose, ...setup() }));
+  setHasResults(false);
+  suggestions.setFocused(true);
+  // A word the field offers to finish as an operator still counts here.
+  setSearch('flights la');
+  setOpenThread('thread-1');
+  suggestions.setFocused(false);
+
+  expect(remembered(setSearch, suggestions)).toEqual(['flights la']);
+  dispose();
 });
 
 it('puts a picked recent search first', () => {
@@ -480,6 +497,7 @@ it('keeps the row the keyboard picked out as people arrive around it', () => {
       search,
       setSearch,
       hasResults: () => true,
+      openThread: () => undefined,
       scopeAvailable: () => true,
       people,
     });

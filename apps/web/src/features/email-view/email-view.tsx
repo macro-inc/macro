@@ -122,7 +122,8 @@ const answersTypedSearch = (source: EmailDataSource) =>
   !(source.showsPreviousRows?.() ?? false);
 
 const showsTypedSearchResults = (source: EmailDataSource) =>
-  answersTypedSearch(source) && source.items().length > 0;
+  answersTypedSearch(source) &&
+  source.items().some((row) => row.kind === 'entity');
 
 function DesktopEmailPanes(props: {
   list: JSX.Element;
@@ -133,7 +134,7 @@ function DesktopEmailPanes(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, setState, list, source } = useEmailView();
+  const { state, setState, list, source, selectedThread } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const recentSearches = createEmailSearchSuggestions({
@@ -141,6 +142,7 @@ function DesktopEmailPanes(props: {
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     hasResults: () => showsTypedSearchResults(source),
+    openThread: () => selectedThread()?.id,
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),
     labels: () => searchValues.labels(),
@@ -330,7 +332,8 @@ function EmailLayout(props: {
 }
 
 export function EmailMobileLayout(props: ParentProps) {
-  const { state, setState, registerSearchField, source } = useEmailView();
+  const { state, setState, registerSearchField, source, selectedThread } =
+    useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const suggestions = createEmailSearchSuggestions({
@@ -338,6 +341,7 @@ export function EmailMobileLayout(props: ParentProps) {
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     hasResults: () => showsTypedSearchResults(source),
+    openThread: () => selectedThread()?.id,
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),
     labels: () => searchValues.labels(),
