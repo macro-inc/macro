@@ -19,18 +19,22 @@ export const isServerBusy = (failure: SyncFailure): boolean =>
   failure.kind === 'http' && SYNC_BUSY_STATUSES.includes(failure.status);
 
 /**
- * The server does not speak this client's sync protocol: the cache engine is
- * older than the oldest the server supports, or newer than the newest.
+ * Statuses after which this client cannot stream however often it asks: the
+ * server does not speak its sync protocol (426: the cache engine is older
+ * than the oldest the server supports, or newer than the newest), has no
+ * stream endpoint (404, 405, 410: not deployed, or rolled back), or rejects
+ * the request itself (400).
  */
-const SYNC_PROTOCOL_REFUSED = 426;
+const SYNC_REFUSED_STATUSES: readonly number[] = [400, 404, 405, 410, 426];
 
 /**
- * A server that refuses the cache engine's sync protocol leaves this client
- * unable to stream, as a host that cannot stream does: `unsupported`, so the
- * paged backfill takes over instead of retrying.
+ * A server that refuses this client's stream leaves it unable to stream, as a
+ * host that cannot stream does: `unsupported`, so the paged backfill takes
+ * over instead of retrying. Network errors, 5xx, 401 and a busy server
+ * (`isServerBusy`) stay failures the sync retries.
  */
 export const unsupportedWhenRefused = (failure: SyncFailure): SyncFailure =>
-  failure.kind === 'http' && failure.status === SYNC_PROTOCOL_REFUSED
+  failure.kind === 'http' && SYNC_REFUSED_STATUSES.includes(failure.status)
     ? { kind: 'unsupported' }
     : failure;
 

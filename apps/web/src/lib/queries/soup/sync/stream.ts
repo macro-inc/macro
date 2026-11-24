@@ -94,7 +94,7 @@ export type StreamedSyncHost = CacheHost & SyncHost;
 
 /**
  * One stream of `pass`, retried with backoff (except `unsupported`, which a
- * server's refusal of the sync protocol counts as). A busy
+ * server's refusal of the stream counts as). A busy
  * server is asked again every `SYNC_BUSY_PAUSE_MS` for as long as it stays
  * busy, without spending retries. Every attempt sends the cache's saved lane
  * state, from which the server plans it again, so it resumes rather than

@@ -488,15 +488,33 @@ describe('runCacheSync', () => {
     await Effect.runPromise(Fiber.interrupt(fiber));
   });
 
-  it('falls back to the paged backfill at once when the server refuses the sync protocol', async () => {
+  // 426: the sync protocol; 404, 405, 410: no stream endpoint; 400: the
+  // request itself.
+  it.each([
+    426, 404, 405, 410, 400,
+  ])('falls back to the paged backfill at once when the server answers %i', async (status) => {
     runSyncPass.mockResolvedValue({
       ok: false,
-      failure: { kind: 'http', status: 426 },
+      failure: { kind: 'http', status },
     });
     const host = fakeHost();
     const fiber = await start(runCacheSync('user-1', asHost(host), true));
     expect(runSyncPass).toHaveBeenCalledOnce();
     expect(host.currentStorageGeneration).toHaveBeenCalled();
+    await Effect.runPromise(Fiber.interrupt(fiber));
+  });
+
+  it.each([
+    { kind: 'http', status: 401 },
+    { kind: 'http', status: 502 },
+    { kind: 'stream', message: 'Failed to fetch' },
+  ])('retries the stream rather than paging after %o', async (failure) => {
+    runSyncPass.mockResolvedValue({ ok: false, failure });
+    const host = fakeHost();
+    const fiber = await start(runCacheSync('user-1', asHost(host), true));
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(runSyncPass).toHaveBeenCalledTimes(2);
+    expect(host.currentStorageGeneration).not.toHaveBeenCalled();
     await Effect.runPromise(Fiber.interrupt(fiber));
   });
 

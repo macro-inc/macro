@@ -376,8 +376,9 @@ streamed sync (`sync/stream.ts`) in the leader tab when the remote flag
 `enable-streamed-cache-sync` is on and the cache host can stream
 (`isSyncHost`). Otherwise, when a host answers `unsupported` (a native build
 older than the sync commands answers `Command … not found`), and when the
-server refuses the cache engine's protocol (426), the paged backfill runs as
-before. A lane that fails is re-run in the same pass after
+server refuses the stream (426 for the cache engine's protocol, 404, 405 or
+410 without the endpoint, 400 for the request), the paged backfill runs as
+before (`unsupportedWhenRefused` in `sync/host.ts`). A lane that fails is re-run in the same pass after
 2 s, then 4 s; after three failures it is left out of the pass and resumes on
 the next one. A first-pass stream the server ended early (`deadline`) is
 resumed until the pass completes, and only then does the second pass start.

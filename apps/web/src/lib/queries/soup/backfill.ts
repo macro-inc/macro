@@ -715,7 +715,7 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
  * Keeps the cache synced: through the streamed sync when `streamed` is on and
  * the host can stream, otherwise through the paged backfill. A host that
  * reports it cannot stream (an older native build), or a server that refuses
- * its cache engine's sync protocol (426), falls back to the paged backfill
+ * the stream (`unsupportedWhenRefused`), falls back to the paged backfill
  * too. A streamed sync that stops after its retries runs again once
  * the device is back online, the app is back in the foreground, or a pause
  * ran out.
