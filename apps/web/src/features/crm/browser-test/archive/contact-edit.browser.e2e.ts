@@ -275,6 +275,31 @@ test('a company set by the email domain stays read-only and opens from its name'
   ).toBeVisible();
 });
 
+test('a company name cut short in Record details shows in full, with why it cannot change', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Tooltips are desktop only');
+  const longName = 'Example company with a much longer registered name';
+  await page.goto(`/?companyName=${encodeURIComponent(longName)}`);
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  const name = page
+    .getByRole('button', { name: `Open ${longName}`, exact: true })
+    .last();
+  await expect(name).toBeVisible();
+  expect(
+    await name
+      .locator('span.ph-no-capture')
+      .evaluate((element) => element.scrollWidth > element.clientWidth)
+  ).toBe(true);
+  await name.hover();
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toContainText(longName);
+  await expect(tooltip).toContainText(
+    'Linked by an email address on this company’s domain.'
+  );
+});
+
 test('company pending and rejection preserve draft for retry', async ({
   page,
   isMobile,

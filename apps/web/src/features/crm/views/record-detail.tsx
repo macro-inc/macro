@@ -26,7 +26,10 @@ import {
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordTabs } from '../components/record-tabs';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmCommentTarget } from '../context/workspace-context';
+import type {
+  CrmCommentTarget,
+  CrmRecordOpenOptions,
+} from '../context/workspace-context';
 import {
   COMPANY_SECTIONS,
   CONTACT_SECTIONS,
@@ -75,7 +78,10 @@ type CrmRecordDetailProps = {
   section: CrmRecordSection | undefined;
   commentTarget?: CrmCommentTarget;
   viewName: string;
-  onOpen: (records: readonly CrmRecordRef[]) => void;
+  onOpen: (
+    records: readonly CrmRecordRef[],
+    options?: CrmRecordOpenOptions
+  ) => void;
   onSectionChange: (section: CrmRecordSection) => void;
   onClose: () => void;
   navigation: JSX.Element;
@@ -105,12 +111,12 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
     if (index === trail().length - 1) return;
     props.onOpen(trail().slice(0, index + 1));
   };
-  const open = (record: CrmRecordRef) => {
+  const open = (record: CrmRecordRef, options?: CrmRecordOpenOptions) => {
     const index = trail().findIndex(
       (entry) => recordKey(entry) === recordKey(record)
     );
     if (index !== -1) return returnTo(index);
-    props.onOpen([...trail(), record]);
+    props.onOpen([...trail(), record], options);
   };
   const back = () =>
     trail().length > 1 ? returnTo(trail().length - 2) : props.onClose();
@@ -250,7 +256,10 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                       headerToggle={false}
                       onOpenPipeline={props.onOpenPipeline}
                       onOpenCompany={(companyId) => {
-                        open({ type: 'company', id: companyId, name: '' });
+                        open(
+                          { type: 'company', id: companyId, name: '' },
+                          { followLink: true }
+                        );
                         return true;
                       }}
                     />
