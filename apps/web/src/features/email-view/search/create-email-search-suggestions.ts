@@ -61,6 +61,26 @@ export function emailSearchValueBeingTyped(
   return token ? typedEmailSearchValue(token) : undefined;
 }
 
+/** What a row names, which stays the same as rows load around it. */
+function suggestionKey(row: EmailSearchSuggestion | undefined) {
+  if (!row) return undefined;
+  return match(row)
+    .with({ kind: 'recent' }, ({ search }) => `recent:${search}`)
+    .with(
+      { kind: 'view' },
+      ({ scope, exclude }) => `view:${exclude ? '-' : ''}${scope}`
+    )
+    .with(
+      { kind: 'operator' },
+      { kind: 'value' },
+      { kind: 'person' },
+      { kind: 'label' },
+      (completion) =>
+        `${completion.kind}:${emailSearchCompletionText(completion)}`
+    )
+    .exhaustive();
+}
+
 export type EmailSearchSuggestions = ListSearchSuggestions & {
   /** The header's search field is open, so it owns the header. */
   open: Accessor<boolean>;
@@ -105,18 +125,21 @@ export function createEmailSearchSuggestions(options: {
   const [focused, setFocusedState] = createSignal(false);
   // Each edit of the search is a new object, so a row picked out by the
   // keyboard before an edit no longer counts, even when the edit brings the
-  // same text back: typing changes the rows under it.
+  // same text back: typing changes the rows under it. Between edits the row
+  // is followed by what it names, as people and labels load around it.
   const searchEdit = createMemo(() => ({ search: options.search() }));
-  const [activeRow, setActiveRow] = createSignal({
-    index: -1,
-    edit: searchEdit(),
-  });
+  const [activeRow, setActiveRow] = createSignal<{
+    key: string | undefined;
+    edit: { search: string };
+  }>({ key: undefined, edit: searchEdit() });
   const setActive = (index: number) =>
-    setActiveRow({ index, edit: searchEdit() });
+    setActiveRow({ key: suggestionKey(listed()[index]), edit: searchEdit() });
   const active = () => {
     const row = activeRow();
-    if (row.edit !== searchEdit()) return -1;
-    return Math.min(row.index, listed().length - 1);
+    if (row.edit !== searchEdit() || row.key === undefined) return -1;
+    return listed().findIndex(
+      (listedRow) => suggestionKey(listedRow) === row.key
+    );
   };
   const [awaitsPickedResults, setAwaitsPickedResults] = createSignal(false);
 

@@ -369,3 +369,34 @@ it('leaves out after in: the labels that read as a view, which label: still offe
     dispose();
   });
 });
+
+it('keeps the row the keyboard picked out as people arrive around it', () => {
+  createRoot((dispose) => {
+    const [search, setSearch] = createSignal('');
+    const [people, setPeople] = createSignal(PEOPLE.slice(1));
+    const suggestions = createEmailSearchSuggestions({
+      userId: () => 'user-a',
+      search,
+      setSearch,
+      scopeAvailable: () => true,
+      people,
+    });
+    suggestions.setFocused(true);
+    setSearch('from:');
+    suggestions.setActive(0);
+    expect(recentListed(suggestions)[suggestions.active()]).toBe(
+      'from:bo@example.com '
+    );
+
+    setPeople(PEOPLE);
+    expect(suggestions.active()).toBe(1);
+    suggestions.pick(suggestions.active());
+    expect(search()).toBe('from:bo@example.com ');
+
+    setSearch('from:');
+    suggestions.setActive(0);
+    setPeople([]);
+    expect(suggestions.active()).toBe(-1);
+    dispose();
+  });
+});
