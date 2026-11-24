@@ -1,4 +1,5 @@
 import { cn, Layer } from '@ui';
+import { endOfDay, startOfDay } from 'date-fns';
 import {
   createMemo,
   createSignal,
@@ -101,9 +102,16 @@ export function GanttBar(
     'children',
     'title',
   ]);
+  // On a timed bar an end saved without a time covers its whole day.
   const times = (start: GanttDate, end: GanttDate): GanttTimes | undefined => {
-    const first = toGanttInstant(start);
-    const last = toGanttInstant(end);
+    const exactFirst = toGanttInstant(start);
+    const exactLast = toGanttInstant(end);
+    const first =
+      exactFirst && local.wholeDay === 'start'
+        ? startOfDay(exactFirst)
+        : exactFirst;
+    const last =
+      exactLast && local.wholeDay === 'end' ? endOfDay(exactLast) : exactLast;
     return first && last && last >= first
       ? { start: first, end: last }
       : undefined;

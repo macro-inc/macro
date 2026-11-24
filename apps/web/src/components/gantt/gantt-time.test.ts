@@ -255,6 +255,36 @@ describe('rescheduling a timed range', () => {
     ).toEqual(wholeDayStart);
   });
 
+  it('stops the start edge on the grid before a due date held at the end of its day', () => {
+    const endOfDay = new Date(2026, 9, 13, 23, 59, 59, 999);
+    expect(
+      rescheduledGanttTimes(
+        { start: new Date(2026, 9, 13, 9), end: endOfDay },
+        'start',
+        october9,
+        october9 + 1,
+        60,
+        'end'
+      )
+    ).toEqual({ start: new Date(2026, 9, 13, 23), end: endOfDay });
+  });
+
+  it('keeps the start edge before an end in the hour clocks repeat', () => {
+    // 1:30 AM EST on Nov 1, after the clocks fell back: an hour earlier is
+    // 1:30 AM EDT, whose wall-clock hour would round to 2:00 AM EST.
+    const end = new Date('2026-11-01T06:30:00Z');
+    const moved = rescheduledGanttTimes(
+      { start: new Date(2026, 9, 31, 20), end },
+      'start',
+      november1 - 1,
+      november1 + 1,
+      60,
+      'end'
+    );
+    expect(moved.start).toEqual(new Date('2026-11-01T05:30:00Z'));
+    expect(moved.start < moved.end).toBe(true);
+  });
+
   it('measures a move across a clock change at the start', () => {
     // From Oct 30, 3 days 11 hours later is Nov 2, 8 PM, short of half a day past 3 days.
     expect(
