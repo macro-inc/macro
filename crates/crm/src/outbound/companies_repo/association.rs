@@ -216,6 +216,9 @@ impl CompaniesRepositoryImpl {
             .collect())
     }
 
+    // Each arm reads the company by primary key behind an `OFFSET 0` fence
+    // before the team filter: with stale statistics a custom plan can
+    // otherwise scan the team's companies.
     async fn company_contacts(
         &self,
         scope: CrmContactListScope<'_>,
@@ -226,16 +229,20 @@ impl CompaniesRepositoryImpl {
                 sqlx::query!(
                     r#"
                     SELECT co.id AS "company_id!", ct.id AS "contact_id?"
-                    FROM crm_companies co
+                    FROM (
+                        SELECT id, team_id, hidden
+                        FROM crm_companies
+                        WHERE id = COALESCE(
+                            (SELECT a.company_id FROM crm_company_aliases a WHERE a.retired_id = $2),
+                            $2
+                        )
+                        OFFSET 0
+                    ) co
                     JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id
                        AND (NOT ct.hidden OR tu.team_role <> 'member')
-                    WHERE co.id = COALESCE(
-                          (SELECT a.company_id FROM crm_company_aliases a WHERE a.retired_id = $2),
-                          $2
-                      )
-                      AND (NOT co.hidden OR tu.team_role <> 'member')
+                    WHERE NOT co.hidden OR tu.team_role <> 'member'
                     ORDER BY ct.id
                     "#,
                     user_id,
@@ -252,14 +259,18 @@ impl CompaniesRepositoryImpl {
                 sqlx::query!(
                     r#"
                     SELECT co.id AS "company_id!", ct.id AS "contact_id?"
-                    FROM crm_companies co
+                    FROM (
+                        SELECT id, team_id, hidden
+                        FROM crm_companies
+                        WHERE id = COALESCE(
+                            (SELECT a.company_id FROM crm_company_aliases a WHERE a.retired_id = $1),
+                            $1
+                        )
+                        OFFSET 0
+                    ) co
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id AND (NOT ct.hidden OR $3)
-                    WHERE co.id = COALESCE(
-                          (SELECT a.company_id FROM crm_company_aliases a WHERE a.retired_id = $1),
-                          $1
-                      )
-                      AND co.team_id = $2
+                    WHERE co.team_id = $2
                       AND (NOT co.hidden OR $3)
                     ORDER BY ct.id
                     "#,
