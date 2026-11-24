@@ -126,10 +126,7 @@ function ImportJobRow(props: {
 }) {
   const source = () => SOURCES[props.job.source];
   // Opening the chat you are in changes nothing on screen, so say so.
-  const openLabel = () =>
-    props.inSession
-      ? t('importJobs.inThisChat')
-      : t('importJobs.openImport', { source: source().name });
+  const here = () => (props.inSession ? t('importJobs.inThisChat') : undefined);
   const label = () => phaseLabel(props.job.source, props.job.phase);
   const percent = () => {
     const fraction = phaseFraction(props.job.phase);
@@ -184,8 +181,11 @@ function ImportJobRow(props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={openLabel()}
-            tooltip={openLabel()}
+            aria-label={t('importJobs.openImportChatLabel', {
+              source: source().name,
+            })}
+            aria-description={here()}
+            tooltip={here() ?? t('importJobs.openImportChat')}
             onClick={() => props.onOpen(props.job)}
           >
             <ArrowSquareOut class="size-4 shrink-0" />

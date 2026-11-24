@@ -10,7 +10,9 @@ import { isImportSessionActive, openImportSession } from './open-session';
 
 const mocks = vi.hoisted(() => ({
   manager: vi.fn<() => SplitManager | undefined>(),
+  touch: vi.fn(() => false),
 }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: mocks.touch }));
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: mocks.manager,
 }));
@@ -37,6 +39,7 @@ const active = (manager: SplitManager) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.touch.mockReturnValue(false);
 });
 
 describe('opening the chat that ran an import', () => {
@@ -78,5 +81,45 @@ describe('opening the chat that ran an import', () => {
     expect(active(manager)).toBe('import-chat');
     expect(isImportSessionActive('import-chat')).toBe(true);
     expect(manager.events()?.type).toBe(SplitEvent.ReturnFocus);
+  });
+
+  it('knows the chat in the Agents workspace is the active split', () => {
+    const manager = layout('/agents/import-chat');
+    expect(isImportSessionActive('import-chat')).toBe(true);
+
+    openImportSession('import-chat');
+
+    expect(manager.splits()).toHaveLength(1);
+    expect(manager.events()?.type).toBe(SplitEvent.ReturnFocus);
+  });
+
+  it('knows a preview of the chat inside the active split', () => {
+    const manager = layout('/agent/other-chat');
+    const split = manager.activeSplitId();
+    if (!split) throw new Error('Fixture split missing');
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      onTestFinished(
+        manager.registerOpenViews(() => [
+          {
+            owner: Symbol('inline-preview'),
+            split,
+            content: { type: 'agent', id: 'import-chat' },
+          },
+        ])
+      );
+    });
+
+    expect(isImportSessionActive('import-chat')).toBe(true);
+  });
+
+  it('leaves focus alone on touch, where it would raise the keyboard', () => {
+    mocks.touch.mockReturnValue(true);
+    const manager = layout('/agent/other-chat');
+
+    openImportSession('import-chat');
+
+    expect(active(manager)).toBe('import-chat');
+    expect(manager.events()?.type).not.toBe(SplitEvent.ReturnFocus);
   });
 });

@@ -174,7 +174,7 @@ describe('a finished import opens the chat that ran it', () => {
     tray([done], { onOpen, activeSessionId: 'other-chat' });
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Open the chat that ran the Notion import',
+        name: 'Open the Notion import chat',
       })
     );
     expect(onOpen).toHaveBeenCalledTimes(1);
@@ -183,11 +183,34 @@ describe('a finished import opens the chat that ran it', () => {
   it('says so when that chat is already the active one, and still goes there', () => {
     const onOpen = vi.fn();
     tray([done], { onOpen, activeSessionId: 'import-chat' });
-    expect(screen.queryByRole('button', { name: /^Open the chat/ })).toBeNull();
-    const here = screen.getByRole('button', { name: 'You’re in this chat' });
+    const here = screen.getByRole('button', {
+      name: 'Open the Notion import chat',
+    });
+    expect(here.getAttribute('aria-description')).toBe('You’re in this chat');
     expect(here.hasAttribute('disabled')).toBe(false);
     fireEvent.click(here);
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows the active split while the list stays open', () => {
+    const [active, setActive] = createSignal('other-chat');
+    render(() => (
+      <ImportJobsRailButton
+        jobs={[done]}
+        open
+        onOpenChange={vi.fn()}
+        isSessionActive={(sessionId) => sessionId === active()}
+        onOpen={vi.fn()}
+        onDismiss={vi.fn()}
+        onReconnect={vi.fn()}
+      />
+    ));
+    const button = screen.getByRole('button', {
+      name: 'Open the Notion import chat',
+    });
+    expect(button.getAttribute('aria-description')).toBeNull();
+    setActive('import-chat');
+    expect(button.getAttribute('aria-description')).toBe('You’re in this chat');
   });
 });
 

@@ -25,7 +25,7 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
   await expect(notion).toContainText('Scanning 120 pages');
   await expect(
     notion.getByRole('button', {
-      name: 'Open the chat that ran the Notion import',
+      name: 'Open the Notion import chat',
     })
   ).toHaveCount(0);
   await expect(
@@ -41,9 +41,13 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
     'aria-valuenow',
     '25'
   );
-  await notion
-    .getByRole('button', { name: 'Open the chat that ran the Notion import' })
-    .click();
+  // The tooltip names the destination; the accessible name adds the source.
+  const openChat = notion.getByRole('button', {
+    name: 'Open the Notion import chat',
+  });
+  await openChat.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Open import chat');
+  await openChat.click();
   await expect(page.getByRole('status', { name: 'Opened session' })).toHaveText(
     'notion-session'
   );
@@ -55,7 +59,13 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
   // Back in the list, the row says that chat is the one showing, and still
   // goes there.
   await button.click();
-  await notion.getByRole('button', { name: 'You’re in this chat' }).click();
+  const here = notion.getByRole('button', {
+    name: 'Open the Notion import chat',
+  });
+  await expect(here).toHaveAttribute('aria-description', 'You’re in this chat');
+  await here.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('You’re in this chat');
+  await here.click();
   await expect(tray).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Finish Notion' }).click();
@@ -157,7 +167,7 @@ test('collapses the corner rows when a chat opens, as the rail closes its list',
   const tray = page.getByRole('region', { name: 'Imports' });
   await tray
     .getByRole('listitem', { name: 'Notion' })
-    .getByRole('button', { name: 'Open the chat that ran the Notion import' })
+    .getByRole('button', { name: 'Open the Notion import chat' })
     .click();
   await expect(page.getByLabel('Opened session')).toHaveText('notion-session');
   await expect(tray.getByRole('listitem')).toHaveCount(0);
@@ -165,8 +175,8 @@ test('collapses the corner rows when a chat opens, as the rail closes its list',
   await expect(
     tray
       .getByRole('listitem', { name: 'Notion' })
-      .getByRole('button', { name: 'You’re in this chat' })
-  ).toBeVisible();
+      .getByRole('button', { name: 'Open the Notion import chat' })
+  ).toHaveAttribute('aria-description', 'You’re in this chat');
 });
 
 test('keeps the rail button readable: no tooltip over its list, a focus ring after Escape, one-line rows', async ({
