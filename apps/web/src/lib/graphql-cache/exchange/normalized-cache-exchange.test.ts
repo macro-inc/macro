@@ -778,11 +778,7 @@ describe('normalizedCacheExchange', () => {
     const held = vi.fn();
     const letGo = vi.fn();
     const mutationQueueLocks = {
-      request: async (
-        name: string,
-        _options: LockOptions,
-        callback: () => Promise<void>
-      ) => {
+      request: async (name: string, callback: () => Promise<void>) => {
         held(name);
         await callback();
         letGo(name);
