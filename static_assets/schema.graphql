@@ -366,6 +366,8 @@ type CompleteMutationRoot {
 	createPropertyDefinition(input: CreatePropertyDefinitionInput!): GraphqlPropertyDefinition!
 	"""
 	Delete a property definition and identify its normalized cache record.
+	A definition the caller cannot find answers as deleted, so a queued
+	delete sent again after a lost reply settles instead of failing.
 	"""
 	deletePropertyDefinition(propertyDefinitionId: ID!): GraphqlCacheDeletion!
 	"""
@@ -378,7 +380,8 @@ type CompleteMutationRoot {
 	"""
 	updatePropertyOption(input: UpdatePropertyOptionInput!): GraphqlPropertyOption!
 	"""
-	Delete one option and identify its normalized cache record.
+	Delete one option and identify its normalized cache record. An option
+	or definition the caller cannot find answers as deleted, as above.
 	"""
 	deletePropertyOption(propertyDefinitionId: ID!, optionId: ID!): GraphqlCacheDeletion!
 	"""
