@@ -9,7 +9,8 @@
 //!
 //! None of the numbers live in code. Every host reads the mandatory
 //! `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
-//! (Premium), `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS` and
+//! (Premium), `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`,
+//! `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS` and
 //! `AI_USAGE_OVERAGE_MARKUP_PERCENT` from Doppler at startup (see
 //! [`crate::config`]) and injects one [`AiPricing`] into each billing component
 //! it composes. Change the values in Doppler and redeploy to change pricing.
@@ -88,6 +89,8 @@ pub struct PlanAllowances {
     pub free: IncludedAllowanceCents,
     /// Included AI per Premium seat per period.
     pub premium: IncludedAllowanceCents,
+    /// Included AI per Business seat per period.
+    pub business: IncludedAllowanceCents,
     /// Included AI per Max seat per period.
     pub max: IncludedAllowanceCents,
 }
@@ -98,6 +101,7 @@ impl PlanAllowances {
         match tier {
             PlanTier::Free => self.free,
             PlanTier::Premium => self.premium,
+            PlanTier::Business => self.business,
             PlanTier::Max => self.max,
         }
     }
@@ -194,11 +198,13 @@ impl AiPricing {
 
 #[cfg(test)]
 impl PlanAllowances {
-    /// The $5 free cap, $20 Premium and $100 Max allowances the crate's tests assume.
+    /// The $5 free cap, $20 Premium, $60 Business and $100 Max allowances the
+    /// crate's tests assume.
     pub(crate) fn testing() -> Self {
         Self {
             free: IncludedAllowanceCents::new(500).unwrap(),
             premium: IncludedAllowanceCents::new(2_000).unwrap(),
+            business: IncludedAllowanceCents::new(6_000).unwrap(),
             max: IncludedAllowanceCents::new(10_000).unwrap(),
         }
     }
@@ -209,6 +215,7 @@ impl PlanAllowances {
         Self {
             free: allowance,
             premium: allowance,
+            business: allowance,
             max: allowance,
         }
     }

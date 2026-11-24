@@ -199,13 +199,11 @@ impl CustomerRepositoryImpl {
                         .find(|item| item["price"].as_str() == Some(source_price.as_str()))
                 })
                 .cloned();
-            let has_target_item = next["items"]
-                .as_array()
-                .is_some_and(|items| {
-                    items
-                        .iter()
-                        .any(|item| item["price"].as_str() == Some(target_price.as_str()))
-                });
+            let has_target_item = next["items"].as_array().is_some_and(|items| {
+                items
+                    .iter()
+                    .any(|item| item["price"].as_str() == Some(target_price.as_str()))
+            });
             if let Some(mut item) = source_item
                 && !has_target_item
                 && let Some(items) = next["items"].as_array_mut()

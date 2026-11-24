@@ -52,10 +52,9 @@ use crate::domain::{
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
         RemovedTeamMember, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, SeatDowngrade, SeatPlan, SetTeamMemberPlanError, Team,
-        TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
+        RevokePermissionsForTeamMembersError, SeatDowngrade, SeatPlan, SetTeamMemberPlanError,
+        Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole,
+        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{
@@ -1129,11 +1128,11 @@ where
                     })
                     .ok();
                 self.restore_pending_seat_change(
-                subscription_id.as_ref(),
-                user_id,
-                pending_downgrade,
-            )
-                    .await;
+                    subscription_id.as_ref(),
+                    user_id,
+                    pending_downgrade,
+                )
+                .await;
                 return Err(RemoveUserFromTeamError::TeamError(
                     channel_error_to_team_error(error),
                 ));
@@ -1156,11 +1155,7 @@ where
                 "removing team member roles",
             )
             .await;
-            self.restore_pending_seat_change(
-                subscription_id.as_ref(),
-                user_id,
-                pending_downgrade,
-            )
+            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_downgrade)
                 .await;
             return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
         }
@@ -1187,11 +1182,7 @@ where
                 "releasing the open seat",
             )
             .await;
-            self.restore_pending_seat_change(
-                subscription_id.as_ref(),
-                user_id,
-                pending_downgrade,
-            )
+            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_downgrade)
                 .await;
             return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
         }

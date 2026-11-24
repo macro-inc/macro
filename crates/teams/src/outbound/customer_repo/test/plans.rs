@@ -21,9 +21,7 @@ fn posted_forms(requests: &[wiremock::Request]) -> Vec<HashMap<String, String>> 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_first_business_seat_on_an_annual_subscription_uses_the_annual_price(
-    pool: sqlx::PgPool,
-) {
+async fn a_first_business_seat_on_an_annual_subscription_uses_the_annual_price(pool: sqlx::PgPool) {
     let server = MockServer::start().await;
     let mut sub = annual_subscription();
     sub.items.data = vec![item("si_max", "price_max_year", 1)];
@@ -42,9 +40,7 @@ async fn a_first_business_seat_on_an_annual_subscription_uses_the_annual_price(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn premium_is_refused_on_an_annual_subscription_before_anything_is_sent(
-    pool: sqlx::PgPool,
-) {
+async fn premium_is_refused_on_an_annual_subscription_before_anything_is_sent(pool: sqlx::PgPool) {
     let server = MockServer::start().await;
     let sub = annual_subscription();
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;

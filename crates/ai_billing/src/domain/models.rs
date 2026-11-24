@@ -92,18 +92,38 @@ pub enum PlanTier {
     Free,
     /// The $40/seat/month plan (recorded as the legacy `sub_opus` role).
     Premium,
-    /// The $200/seat/month plan, with its own configured AI allowance.
+    /// The $80/seat/month annual ($90 monthly) plan, with its own configured
+    /// AI allowance.
+    Business,
+    /// The $200/seat/month annual ($220 monthly) plan, with its own
+    /// configured AI allowance.
     Max,
 }
 
 impl PlanTier {
-    /// Monthly subscription price per seat, in cents.
+    /// Month-to-month subscription price per seat, in cents.
     pub const fn monthly_price_cents(self) -> i64 {
         match self {
             PlanTier::Free => 0,
             PlanTier::Premium => 4_000,
-            PlanTier::Max => 20_000,
+            PlanTier::Business => 9_000,
+            PlanTier::Max => 22_000,
         }
+    }
+
+    /// Price per seat per month when billed annually, in cents. `None` for
+    /// tiers not sold annually.
+    pub const fn annual_price_per_month_cents(self) -> Option<i64> {
+        match self {
+            PlanTier::Free | PlanTier::Premium => None,
+            PlanTier::Business => Some(8_000),
+            PlanTier::Max => Some(20_000),
+        }
+    }
+
+    /// Whether this tier is priced above Premium (Business or Max).
+    pub const fn is_above_premium(self) -> bool {
+        matches!(self, PlanTier::Business | PlanTier::Max)
     }
 
     /// Monthly automatic reload limit a payer on this tier starts from, in
@@ -112,6 +132,7 @@ impl PlanTier {
         match self {
             PlanTier::Free => None,
             PlanTier::Premium => Some(20_000),
+            PlanTier::Business => Some(40_000),
             PlanTier::Max => Some(100_000),
         }
     }
@@ -130,10 +151,13 @@ impl PlanTier {
     }
 
     /// Derive the tier from a user's roles. `sub_max` wins over every other
-    /// paid role; any other paid subscription role is Premium.
+    /// paid role, then `sub_business`; any other paid subscription role is
+    /// Premium.
     pub fn from_roles(roles: &HashSet<RoleId>) -> Self {
         if roles.contains(&RoleId::SubMax) {
             PlanTier::Max
+        } else if roles.contains(&RoleId::SubBusiness) {
+            PlanTier::Business
         } else if roles.iter().any(RoleId::is_paid_subscription) {
             PlanTier::Premium
         } else {
@@ -146,6 +170,7 @@ impl From<teams::domain::model::SeatPlan> for PlanTier {
     fn from(plan: teams::domain::model::SeatPlan) -> Self {
         match plan {
             teams::domain::model::SeatPlan::Premium => PlanTier::Premium,
+            teams::domain::model::SeatPlan::Business => PlanTier::Business,
             teams::domain::model::SeatPlan::Max => PlanTier::Max,
         }
     }
@@ -191,6 +216,39 @@ impl BillingPeriod {
             }
         }
         Self::calendar_month(now)
+    }
+
+    /// The month of this subscription period that contains `at`. Allowances
+    /// reset monthly, so an annual subscription is metered in month-long
+    /// windows counted from its period start (the last one ends with the
+    /// period). A period of a month or less, or one not containing `at`, is
+    /// returned as is.
+    pub fn month_containing(self, at: DateTime<Utc>) -> Self {
+        let longer_than_a_month = self
+            .start
+            .checked_add_months(Months::new(1))
+            .is_some_and(|month_end| month_end < self.end);
+        if !longer_than_a_month || at < self.start || at >= self.end {
+            return self;
+        }
+        // Each boundary is counted from the period start, so a start on the
+        // 31st keeps landing on each month's last day instead of drifting.
+        let mut month = 0u32;
+        while month < 1_200 {
+            let start = self.start.checked_add_months(Months::new(month));
+            let end = self.start.checked_add_months(Months::new(month + 1));
+            match (start, end) {
+                (Some(start), Some(end)) if at < end => {
+                    return Self {
+                        start,
+                        end: end.min(self.end),
+                    };
+                }
+                (Some(_), Some(_)) => month += 1,
+                _ => break,
+            }
+        }
+        self
     }
 
     /// The stored anchor when it contains `now`.

@@ -57,11 +57,11 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, SeatDowngrade, DueInviteReminder, ItemQuantityChange,
+        AcceptedTeamInvite, CustomerError, DueInviteReminder, ItemQuantityChange,
         JoinTeamDirectlyError, PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError,
-        RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError,
-        Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
-        TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatDowngrade, SeatPlan,
+        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
+        TeamInviteLinkToken, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
         ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::ClearedTeam,
@@ -2597,7 +2597,12 @@ async fn team_payment_revoke_removes_exact_premium_roles_from_members() {
         make_team_member(team_id, "macro|member-one@example.com", TeamRole::Member),
         make_team_member(team_id, "macro|member-two@example.com", TeamRole::Admin),
     ];
-    let expected_roles = vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax];
+    let expected_roles = vec![
+        RoleId::TeamSubscriber,
+        RoleId::SubOpus,
+        RoleId::SubBusiness,
+        RoleId::SubMax,
+    ];
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
         .with_team_members(members);
@@ -3130,7 +3135,12 @@ async fn set_team_member_plan_upgrades_premium_seat_to_max_and_swaps_tier_role()
         *remove_calls.lock().unwrap(),
         vec![(
             member_id.to_string(),
-            vec![RoleId::SubHaiku, RoleId::SubSonnet, RoleId::SubOpus, RoleId::SubBusiness]
+            vec![
+                RoleId::SubHaiku,
+                RoleId::SubSonnet,
+                RoleId::SubOpus,
+                RoleId::SubBusiness
+            ]
         )]
     );
 }
@@ -3258,7 +3268,11 @@ fn seat_plan_maps_to_tier_roles() {
         SeatPlan::Premium
     );
     assert_eq!(
-        SeatPlan::from_roles(&HashSet::from([RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax])),
+        SeatPlan::from_roles(&HashSet::from([
+            RoleId::SubOpus,
+            RoleId::SubBusiness,
+            RoleId::SubMax
+        ])),
         SeatPlan::Max
     );
     assert_eq!(SeatPlan::from_roles(&HashSet::new()), SeatPlan::Premium);
@@ -6403,7 +6417,12 @@ async fn remove_user_from_team_releases_open_seat_before_returning() {
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
+            vec![
+                RoleId::TeamSubscriber,
+                RoleId::SubOpus,
+                RoleId::SubBusiness,
+                RoleId::SubMax
+            ]
         )]
     );
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
@@ -6481,7 +6500,12 @@ async fn remove_user_from_team_restores_snapshotted_roles_when_release_fails() {
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
+            vec![
+                RoleId::TeamSubscriber,
+                RoleId::SubOpus,
+                RoleId::SubBusiness,
+                RoleId::SubMax
+            ]
         )]
     );
     assert_eq!(
@@ -6580,7 +6604,12 @@ async fn remove_user_from_team_does_not_release_seat_when_role_removal_fails() {
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
+            vec![
+                RoleId::TeamSubscriber,
+                RoleId::SubOpus,
+                RoleId::SubBusiness,
+                RoleId::SubMax
+            ]
         )]
     );
     assert!(open_seat_release.releases().is_empty());
@@ -7673,7 +7702,12 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
+            vec![
+                RoleId::TeamSubscriber,
+                RoleId::SubOpus,
+                RoleId::SubBusiness,
+                RoleId::SubMax
+            ]
         )]
     );
     assert_eq!(

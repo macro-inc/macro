@@ -2986,6 +2986,32 @@ async fn missing_anchor_reads_the_subscription_period_once_and_stores_it() {
 }
 
 #[tokio::test]
+async fn an_annual_subscription_is_metered_and_stored_by_the_month() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_period(PeriodReply::Found(BillingPeriod {
+        start: d(2026, 1, 10),
+        end: d(2027, 1, 10),
+    }));
+
+    let position = svc.position(&payer, apr_18_noon()).await.unwrap();
+
+    // The allowance resets monthly, so April 18 falls in the Apr 10 - May 10
+    // month of the year-long subscription period.
+    assert_eq!(
+        position.period,
+        BillingPeriod {
+            start: d(2026, 4, 10),
+            end: d(2026, 5, 10),
+        }
+    );
+    assert_eq!(
+        repo.settings(&payer).await.unwrap().period_anchor,
+        Some((d(2026, 4, 10), d(2026, 5, 10)))
+    );
+}
+
+#[tokio::test]
 async fn ended_anchor_is_refreshed_from_the_subscription_before_rolling_forward() {
     let (svc, repo, payments, _) = premium_service(0);
     let payer = user("payer@x.com");

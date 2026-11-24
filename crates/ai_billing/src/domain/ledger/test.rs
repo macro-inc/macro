@@ -630,6 +630,60 @@ fn billing_period_uses_anchor_and_rolls_forward() {
 }
 
 #[test]
+fn an_annual_period_is_metered_one_month_at_a_time() {
+    let year = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 1, 31, 9, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2027, 1, 31, 9, 0, 0).unwrap(),
+    };
+
+    // Boundaries count from the period start, so a start on the 31st lands on
+    // each month's last day.
+    assert_eq!(
+        year.month_containing(Utc.with_ymd_and_hms(2026, 3, 10, 0, 0, 0).unwrap()),
+        BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 2, 28, 9, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 3, 31, 9, 0, 0).unwrap(),
+        }
+    );
+    assert_eq!(
+        year.month_containing(Utc.with_ymd_and_hms(2026, 5, 1, 0, 0, 0).unwrap()),
+        BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 4, 30, 9, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 5, 31, 9, 0, 0).unwrap(),
+        }
+    );
+    // The last month ends with the period.
+    assert_eq!(
+        year.month_containing(Utc.with_ymd_and_hms(2027, 1, 20, 0, 0, 0).unwrap()),
+        BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 12, 31, 9, 0, 0).unwrap(),
+            end: year.end,
+        }
+    );
+}
+
+#[test]
+fn a_monthly_period_or_a_time_outside_it_is_metered_as_is() {
+    let month = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 1, 31, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 2, 28, 0, 0, 0).unwrap(),
+    };
+    let year = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2027, 1, 1, 0, 0, 0).unwrap(),
+    };
+
+    assert_eq!(
+        month.month_containing(Utc.with_ymd_and_hms(2026, 2, 10, 0, 0, 0).unwrap()),
+        month
+    );
+    assert_eq!(
+        year.month_containing(Utc.with_ymd_and_hms(2027, 2, 1, 0, 0, 0).unwrap()),
+        year
+    );
+}
+
+#[test]
 fn billing_period_falls_back_to_the_calendar_month() {
     let now = Utc.with_ymd_and_hms(2026, 9, 10, 12, 0, 0).unwrap();
     let period = BillingPeriod::current(None, now);
@@ -728,6 +782,8 @@ fn plan_tier_from_roles_prefers_max() {
 
     let mut roles = HashSet::from([RoleId::ProfessionalSubscriber, RoleId::SubOpus]);
     assert_eq!(PlanTier::from_roles(&roles), PlanTier::Premium);
+    roles.insert(RoleId::SubBusiness);
+    assert_eq!(PlanTier::from_roles(&roles), PlanTier::Business);
     roles.insert(RoleId::SubMax);
     assert_eq!(PlanTier::from_roles(&roles), PlanTier::Max);
     assert_eq!(

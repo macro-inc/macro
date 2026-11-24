@@ -1422,6 +1422,7 @@ fn plan_name(plan: crate::domain::PlanTier) -> &'static str {
     match plan {
         crate::domain::PlanTier::Free => "free",
         crate::domain::PlanTier::Premium => "premium",
+        crate::domain::PlanTier::Business => "business",
         crate::domain::PlanTier::Max => "max",
     }
 }

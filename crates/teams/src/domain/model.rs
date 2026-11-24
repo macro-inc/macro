@@ -183,9 +183,7 @@ impl SeatPlan {
     pub fn cheapest_at(cadence: BillingCadence) -> Self {
         match cadence {
             BillingCadence::Year => SeatPlan::Business,
-            BillingCadence::Day | BillingCadence::Week | BillingCadence::Month => {
-                SeatPlan::Premium
-            }
+            BillingCadence::Day | BillingCadence::Week | BillingCadence::Month => SeatPlan::Premium,
         }
     }
 

@@ -81,6 +81,11 @@ async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
                 pricing.included_allowance_cents_for(PlanTier::Premium)
             ),
             (
+                PlanTier::Business,
+                true,
+                pricing.included_allowance_cents_for(PlanTier::Business)
+            ),
+            (
                 PlanTier::Max,
                 true,
                 pricing.included_allowance_cents_for(PlanTier::Max)
@@ -89,7 +94,8 @@ async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
     );
     assert_eq!(summary[0].2, 500);
     assert_eq!(summary[1].2, 2_000);
-    assert_eq!(summary[2].2, 10_000);
+    assert_eq!(summary[2].2, 6_000);
+    assert_eq!(summary[3].2, 10_000);
 
     // The Auto-Reload dialog reads its starting values and ceiling from here.
     assert_eq!(
@@ -112,7 +118,33 @@ async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
             .iter()
             .map(|plan| plan.auto_reload_default_monthly_limit_cents)
             .collect::<Vec<_>>(),
-        vec![None, Some(20_000), Some(100_000)]
+        vec![None, Some(20_000), Some(40_000), Some(100_000)]
+    );
+}
+
+#[tokio::test]
+async fn plan_catalog_lists_annual_prices_only_for_plans_sold_annually() {
+    let catalog = get_plans_handler(State(AiPricing::testing())).await.0;
+    let prices = catalog
+        .plans
+        .iter()
+        .map(|plan| {
+            (
+                plan.tier,
+                plan.monthly_price_cents,
+                plan.annual_price_per_month_cents,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        prices,
+        vec![
+            (PlanTier::Free, 0, None),
+            (PlanTier::Premium, 4_000, None),
+            (PlanTier::Business, 9_000, Some(8_000)),
+            (PlanTier::Max, 22_000, Some(20_000)),
+        ]
     );
 }
 

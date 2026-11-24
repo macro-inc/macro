@@ -6,6 +6,7 @@ fn record(from: PlanTier, to: PlanTier, seconds: i64) -> RecordedPlanChange {
     let allowance = |plan| match plan {
         PlanTier::Free => None,
         PlanTier::Premium => Some(2_000),
+        PlanTier::Business => Some(6_000),
         PlanTier::Max => Some(10_000),
     };
     RecordedPlanChange {
@@ -138,6 +139,36 @@ fn renewal_downgrade_starts_fresh_public_pro_funding() {
         PlanUsage {
             used_cents: 2_200,
             chargeable_cents: 0
+        }
+    );
+}
+
+#[test]
+fn business_sits_between_premium_and_max() {
+    assert!(PlanChange::is_upgrade(PlanTier::Free, PlanTier::Business));
+    assert!(PlanChange::is_upgrade(
+        PlanTier::Premium,
+        PlanTier::Business
+    ));
+    assert!(PlanChange::is_upgrade(PlanTier::Business, PlanTier::Max));
+    assert!(!PlanChange::is_upgrade(PlanTier::Max, PlanTier::Business));
+    assert!(!PlanChange::is_upgrade(
+        PlanTier::Business,
+        PlanTier::Premium
+    ));
+}
+
+#[test]
+fn pro_to_business_resets_usage_and_meters_the_business_allowance() {
+    // $15 used on Pro, then an upgrade to Business: usage restarts and only
+    // spend past Business's $60 is chargeable (legacy metering, as for Max).
+    let changes = [record(PlanTier::Premium, PlanTier::Business, 10)];
+    let costs = [segment(0, 15.0), segment(10, 65.0)];
+    assert_eq!(
+        meter_plan_usage(&changes, &costs, true),
+        PlanUsage {
+            used_cents: 6_500,
+            chargeable_cents: 500,
         }
     );
 }

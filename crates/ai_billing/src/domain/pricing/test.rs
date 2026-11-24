@@ -44,6 +44,7 @@ fn pricing_exposes_every_configured_value() {
         PlanAllowances {
             free: IncludedAllowanceCents::new(500).unwrap(),
             premium: IncludedAllowanceCents::new(3_500).unwrap(),
+            business: IncludedAllowanceCents::new(9_000).unwrap(),
             max: IncludedAllowanceCents::new(15_000).unwrap(),
         },
         OverageMarkupPercent::new(12).unwrap(),
