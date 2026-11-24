@@ -189,3 +189,34 @@ fn bounds_the_lane_queries() {
         Err(RequestError::LaneQueriesTooLarge(_))
     ));
 }
+
+#[test]
+fn refuses_a_request_without_lane_queries_as_unsupported() {
+    assert!(matches!(
+        parse(json!({ "protocol": 1, "pass": "first", "queries": {} })),
+        Err(RequestError::NoLaneQueries)
+    ));
+}
+
+#[test]
+fn refuses_a_query_that_selects_another_list() {
+    for query in [
+        // A second, aliased Soup list.
+        "query SoupSyncTaskIds($input: SoupInput!) { user { id soup(input: $input) { items { id } nextCursor } more: soup(input: { initial: { limit: 1 } }) { items { id } } } }",
+        // The lane's list aliased.
+        "query SoupSyncTaskIds($input: SoupInput!) { user { id tasks: soup(input: $input) { items { id } nextCursor } } }",
+        // The lane's list with an inline input.
+        "query SoupSyncTaskIds { user { id soup(input: { initial: { limit: 1 } }) { items { id } nextCursor } } }",
+        // A calendar list through a fragment.
+        "query SoupSyncTaskIds($input: SoupInput!) { user { id soup(input: $input) { items { id } nextCursor } ...Extra } } fragment Extra on GraphqlUser { calendarOccurrences(input: { startsAt: \"x\" }) { nodes { id } } }",
+    ] {
+        let mut queries = crate::test_support::client_queries();
+        queries["SoupSyncTaskIds"] = json!(query);
+        let error =
+            parse(json!({ "protocol": 1, "pass": "first", "queries": queries })).unwrap_err();
+        assert!(
+            matches!(&error, RequestError::LaneQuery { lane, source: LaneError::PagedField(_) } if lane == "tasks-ids"),
+            "{query}: {error:?}"
+        );
+    }
+}

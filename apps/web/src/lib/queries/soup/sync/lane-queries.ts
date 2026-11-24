@@ -21,7 +21,12 @@ import {
   SoupSyncTaskProjectIdsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { graphqlSoupTransportDocument } from '@service-storage/graphql-soup';
-import { type DocumentNode, Kind, print } from 'graphql';
+import {
+  type DocumentNode,
+  Kind,
+  print,
+  stripIgnoredCharacters,
+} from 'graphql';
 
 /**
  * Every operation a sync lane may run. The server leaves out a lane whose
@@ -56,14 +61,15 @@ let laneQueries: Readonly<Record<string, string>> | undefined;
 
 /**
  * Each lane operation's document by name, as the GraphQL transport sends it
- * (without client-only directives). The cache writes a lane's pages with the
- * same document.
+ * (without client-only directives), and without whitespace: it goes with
+ * every stream request. The cache writes a lane's pages with the same
+ * document.
  */
 export function syncLaneQueries(): Readonly<Record<string, string>> {
   laneQueries ??= Object.fromEntries(
     LANE_DOCUMENTS.map((document) => [
       operationName(document),
-      graphqlSoupTransportDocument(print(document)),
+      stripIgnoredCharacters(graphqlSoupTransportDocument(print(document))),
     ])
   );
   return laneQueries;

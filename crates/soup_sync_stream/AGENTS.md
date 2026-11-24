@@ -3,7 +3,8 @@
 ## What it is
 
 Server half of the streamed cache sync for Soup: owns each pass's lanes (the
-Soup and calendar GraphQL queries the cache is filled from), plans a stream's
+operation each runs, its inputs and its order; the documents, the fields the
+cache stores, are the client's and come with the request), plans a stream's
 lanes from the client's saved lane state, runs them page by page, following
 each page's cursor, and encodes every page as one NDJSON line. The wire format
 is the shared contract in
@@ -15,7 +16,8 @@ file.
 
 `SyncPlan::from_json` reads the body's `protocol` first, against
 `PROTOCOL_VERSIONS` (`RequestError::UnsupportedProtocol`, which DSS answers
-with 426), then the pass and the saved lane state, and plans the lanes
+with 426), then the pass, the saved lane state and the lane documents
+(`queries`; none is `NoLaneQueries`, also 426), and plans the lanes
 (`plan.rs`): an unfinished pass resumes from its `resume` checkpoint, a
 completed lane catches up from its watermark, membership and restart-on-run
 lanes start fresh, and calendar windows fill what the 32-lane cap leaves.
@@ -57,6 +59,11 @@ whose pages took the least time first.
   the fixture the catalog tests plan with:
   `UPDATE_SYNC_LANE_QUERIES=1 bunx vitest run src/lib/queries/soup/sync/lane-queries.test.ts`
   in `apps/web`, which writes `src/catalog/test/client_queries.json`.
+- A lane document must select exactly one Soup or calendar list, unaliased
+  `user { soup(input: $input) }` (`LanePlan::new`, `LaneError::PagedField`):
+  stream pages run with `SoupLaneLists` and the sync's email budgets, which
+  `/soup/graphql` does not give, so a client may spend them on its lane's
+  list only.
 - Add a lane operation: add it to the app's documents and to
   `LANE_DOCUMENTS` in `apps/web/src/lib/queries/soup/sync/lane-queries.ts`,
   then to `LANE_QUERIES` here. Older clients do not send it, and the server

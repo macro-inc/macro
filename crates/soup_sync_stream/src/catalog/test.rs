@@ -115,7 +115,9 @@ fn minimal_lanes_select_the_fields_local_filtering_needs() {
             .iter()
             .find(|lane| lane.id.as_str() == id)
             .unwrap();
-        let query = lane.query.split_whitespace().collect::<Vec<_>>().join(" ");
+        // The client sends its documents without whitespace; compare without.
+        let unspaced = |text: &str| text.split_whitespace().collect::<String>();
+        let query = unspaced(&lane.query);
         for field in [
             "cacheProjection",
             "name",
@@ -132,7 +134,7 @@ fn minimal_lanes_select_the_fields_local_filtering_needs() {
             "notifications { __typename id entityId entityType state }",
             "fragment SoupPropertyValueFields on GraphqlPropertyValue",
         ] {
-            assert!(query.contains(field), "{id} selects {field}");
+            assert!(query.contains(&unspaced(field)), "{id} selects {field}");
         }
         // The cache refuses this lane's pages when their rows are incomplete.
         assert!(lane_query(lane).complete_projections, "{id}");

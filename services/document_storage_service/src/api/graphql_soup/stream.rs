@@ -88,7 +88,7 @@ pub(super) async fn sync_stream_handler(
         Ok(plan) => plan,
         // The client's cache engine speaks another protocol: it cannot sync
         // through this server and pages instead.
-        Err(error @ RequestError::UnsupportedProtocol(_)) => {
+        Err(error @ (RequestError::UnsupportedProtocol(_) | RequestError::NoLaneQueries)) => {
             return (StatusCode::UPGRADE_REQUIRED, error.to_string()).into_response();
         }
         Err(error @ RequestError::Catalog { .. }) => {

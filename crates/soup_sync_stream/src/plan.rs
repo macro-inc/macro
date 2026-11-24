@@ -143,9 +143,9 @@ pub(crate) fn plan_lanes(
             let lane = draft.id.to_string();
             LanePlan::new(draft).map_err(|source| match source {
                 // The client's document: a bad request.
-                LaneError::QueryParse(_) | LaneError::OperationNotSelected(_) => {
-                    RequestError::LaneQuery { lane, source }
-                }
+                LaneError::QueryParse(_)
+                | LaneError::OperationNotSelected(_)
+                | LaneError::PagedField(_) => RequestError::LaneQuery { lane, source },
                 _ => RequestError::Catalog { lane, source },
             })
         })

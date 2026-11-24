@@ -93,8 +93,8 @@ pub(crate) struct CalendarRequest {
 }
 
 /// Why a request body was rejected: HTTP 426 for
-/// [`RequestError::UnsupportedProtocol`], 500 for [`RequestError::Catalog`],
-/// 400 for the rest.
+/// [`RequestError::UnsupportedProtocol`] and [`RequestError::NoLaneQueries`],
+/// 500 for [`RequestError::Catalog`], 400 for the rest.
 #[derive(Debug, thiserror::Error)]
 pub enum RequestError {
     /// The body names no protocol, or one outside [`PROTOCOL_VERSIONS`]: the
@@ -121,6 +121,11 @@ pub enum RequestError {
     /// More than [`MAX_COVERAGE_SPANS`] calendar coverage spans.
     #[error("a request carries at most {MAX_COVERAGE_SPANS} coverage spans, got {0}")]
     TooManyCoverageSpans(usize),
+    /// No lane documents: a cache engine from before clients sent them, which
+    /// can run no lane and pages instead (HTTP 426, like
+    /// [`RequestError::UnsupportedProtocol`]).
+    #[error("the request sends no lane queries; this server runs only the client's lane documents")]
+    NoLaneQueries,
     /// More than [`MAX_LANE_QUERIES`] lane query documents.
     #[error("a request carries at most {MAX_LANE_QUERIES} lane queries, got {0}")]
     TooManyLaneQueries(usize),
@@ -184,6 +189,9 @@ impl SyncPlan {
             .map_or(0, |calendar| calendar.coverage.len());
         if spans > MAX_COVERAGE_SPANS {
             return Err(RequestError::TooManyCoverageSpans(spans));
+        }
+        if request.queries.is_empty() {
+            return Err(RequestError::NoLaneQueries);
         }
         if request.queries.len() > MAX_LANE_QUERIES {
             return Err(RequestError::TooManyLaneQueries(request.queries.len()));

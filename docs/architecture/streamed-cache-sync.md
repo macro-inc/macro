@@ -68,14 +68,14 @@ Request body:
 - `skipLanes` (optional): Soup lanes to leave out of this stream.
 - `maxPages` (optional): stop the stream after this many pages.
 - `queries`: the document of every lane operation the client runs, by
-  operation name, without client-only directives
+  operation name, without client-only directives or whitespace
   (`apps/web/src/lib/queries/soup/sync/lane-queries.ts`). The server picks the
   lanes, their inputs and their order; the field selection is the client's
   own, so a page never holds a field the client's cache schema does not know,
   and a field the app adds to a fragment reaches synced records with the build
   that adds it. A lane whose operation is missing is left out (a lane newer
-  than the client); a document that does not parse or names no query
-  operation of that name is a 400. At most 64 documents and 512 KiB.
+  than the client); see [Server rules](#server-rules) for what a document
+  must hold.
 
 ### Planning
 
@@ -109,9 +109,14 @@ Pages run like this:
 ### Server rules
 
 - 401 without an authenticated user; 426 when the body names no protocol or
-  one the server does not speak, checked before the rest of the body; 400 for
-  an invalid body (at most 256 saved lanes, 256 skipped lanes and 10,000
-  coverage spans); 500 when a lane of the server's catalog does not build.
+  one the server does not speak, checked before the rest of the body, and when
+  it sends no lane documents; 400 for an invalid body (at most 256 saved
+  lanes, 256 skipped lanes, 10,000 coverage spans, 64 lane documents and
+  512 KiB of them) and for a lane document that does not run its lane: it must
+  parse, name a query operation, and select exactly one Soup or calendar list,
+  unaliased `user { soup(input: $input) }` (or `calendarOccurrences`), since
+  stream pages run with fetch budgets `/soup/graphql` does not give; 500 when
+  a lane of the server's catalog does not build.
 - 409 when the user already has a stream open on this server task; 503 with
   `Retry-After` when the task already holds its most open streams
   (`MAX_STREAMS_PER_TASK`).

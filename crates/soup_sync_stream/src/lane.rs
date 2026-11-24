@@ -7,11 +7,14 @@ mod test;
 use crate::calendar::CalendarSpan;
 use async_graphql::parser::{
     self, parse_query,
-    types::{DocumentOperations, ExecutableDocument, OperationType},
+    types::{
+        DocumentOperations, ExecutableDocument, OperationDefinition, OperationType, Selection,
+        SelectionSet,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 const MAX_LANE_ID_LEN: usize = 64;
 /// The variable every lane pages through.
@@ -121,7 +124,9 @@ impl LanePaging {
     }
 }
 
-/// A lane the catalog cannot build: a server bug, never the client's.
+/// Why a lane does not build: a document the client sent does not run it
+/// ([`LaneError::QueryParse`], [`LaneError::OperationNotSelected`],
+/// [`LaneError::PagedField`]), or the server's catalog is wrong (the rest).
 #[derive(Debug, thiserror::Error)]
 pub enum LaneError {
     /// The id is not `[a-z0-9-]{1,64}`.
@@ -133,6 +138,12 @@ pub enum LaneError {
     /// The operation name selects no query operation.
     #[error("query has no query operation `{0}`")]
     OperationNotSelected(String),
+    /// The operation does not page through exactly one list, unaliased
+    /// `user.<field>(input: $input)`.
+    #[error(
+        "query must select one unaliased `user {{ {0}(input: $input) }}` and no other Soup or calendar list"
+    )]
+    PagedField(&'static str),
     /// The variables have no pageable `input` object.
     #[error("variables need an `input` object of the paging's shape")]
     InvalidInput,
@@ -181,13 +192,14 @@ impl LanePlan {
     /// Parses the draft's query and derives how its pages continue.
     pub(crate) fn new(draft: LaneDraft) -> Result<Self, LaneError> {
         let document = parse_query(&*draft.query).map_err(LaneError::QueryParse)?;
-        if selected_operation(&document.operations, draft.operation_name)
-            != Some(OperationType::Query)
-        {
+        let Some(operation) = selected_operation(&document.operations, draft.operation_name)
+            .filter(|operation| operation.ty == OperationType::Query)
+        else {
             return Err(LaneError::OperationNotSelected(
                 draft.operation_name.to_owned(),
             ));
-        }
+        };
+        check_paged_field(&document, operation, draft.paging)?;
         let input = draft
             .variables
             .get(INPUT_VARIABLE)
@@ -217,12 +229,118 @@ impl LanePlan {
     }
 }
 
-/// The named operation's type, as async-graphql selects it in `Schema::execute`.
-fn selected_operation(operations: &DocumentOperations, name: &str) -> Option<OperationType> {
+/// The named operation, as async-graphql selects it in `Schema::execute`.
+fn selected_operation<'a>(
+    operations: &'a DocumentOperations,
+    name: &str,
+) -> Option<&'a OperationDefinition> {
     match operations {
         DocumentOperations::Single(_) => None,
         DocumentOperations::Multiple(operations) => {
-            operations.get(name).map(|operation| operation.node.ty)
+            operations.get(name).map(|operation| &operation.node)
+        }
+    }
+}
+
+/// Fields under `user` that list Soup items or calendar occurrences.
+const LIST_FIELDS: [&str; 2] = [SOUP_FIELD, CALENDAR_FIELD];
+const USER_FIELD: &str = "user";
+const SOUP_FIELD: &str = "soup";
+const CALENDAR_FIELD: &str = "calendarOccurrences";
+/// The `input` variable as an argument value prints (the parser does not
+/// export its argument value type).
+const INPUT_ARGUMENT: &str = "$input";
+
+/// The client's document may page through its lane's list only. Stream pages
+/// run with fetch budgets `/soup/graphql` does not give (`SoupLaneLists`, the
+/// sync's email limits), so the operation selects exactly one Soup or calendar
+/// list in all, unaliased `user { <field>(input: $input) }`, which the server
+/// feeds every page's input.
+fn check_paged_field(
+    document: &ExecutableDocument,
+    operation: &OperationDefinition,
+    paging: Paging,
+) -> Result<(), LaneError> {
+    let field = match paging {
+        Paging::Soup => SOUP_FIELD,
+        Paging::Calendar => CALENDAR_FIELD,
+    };
+    let mut lists = 0;
+    count_lists(
+        document,
+        &operation.selection_set.node,
+        &mut HashSet::new(),
+        &mut lists,
+    );
+    let paged = operation
+        .selection_set
+        .node
+        .items
+        .iter()
+        .filter_map(|selection| match &selection.node {
+            Selection::Field(user) if user.node.name.node == USER_FIELD => Some(&user.node),
+            _ => None,
+        })
+        .filter(|user| user.alias.is_none())
+        .flat_map(|user| user.selection_set.node.items.iter())
+        .any(|selection| match &selection.node {
+            Selection::Field(list) => {
+                let list = &list.node;
+                list.name.node == field
+                    && list.alias.is_none()
+                    && list.directives.is_empty()
+                    && matches!(
+                        list.arguments.as_slice(),
+                        [(name, value)] if name.node == INPUT_VARIABLE
+                            && value.node.to_string() == INPUT_ARGUMENT
+                    )
+            }
+            _ => false,
+        });
+    if lists == 1 && paged {
+        Ok(())
+    } else {
+        Err(LaneError::PagedField(field))
+    }
+}
+
+/// Counts every Soup and calendar list `selections` reaches, through
+/// fragments and aliases.
+fn count_lists<'a>(
+    document: &'a ExecutableDocument,
+    selections: &'a SelectionSet,
+    fragments: &mut HashSet<&'a str>,
+    lists: &mut usize,
+) {
+    for selection in &selections.items {
+        match &selection.node {
+            Selection::Field(field) => {
+                if LIST_FIELDS.contains(&field.node.name.node.as_str()) {
+                    *lists += 1;
+                }
+                count_lists(document, &field.node.selection_set.node, fragments, lists);
+            }
+            Selection::InlineFragment(fragment) => {
+                count_lists(
+                    document,
+                    &fragment.node.selection_set.node,
+                    fragments,
+                    lists,
+                );
+            }
+            Selection::FragmentSpread(spread) => {
+                let name = spread.node.fragment_name.node.as_str();
+                if fragments.insert(name)
+                    && let Some(fragment) = document.fragments.get(name)
+                {
+                    count_lists(
+                        document,
+                        &fragment.node.selection_set.node,
+                        fragments,
+                        lists,
+                    );
+                }
+            }
         }
     }
 }
