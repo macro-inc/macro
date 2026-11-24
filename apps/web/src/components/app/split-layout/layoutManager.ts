@@ -1449,15 +1449,20 @@ export function createSplitLayout(
       activate: activate ?? false,
       allowDuplicate,
     });
-    if (result instanceof Promise) return;
-    if (result.status !== 'committed') return;
-
-    const split = getSplit(splitOf(result.pane));
     // The router hands content another pane already shows (a hosted detail
     // that findOpenView can't see) to that pane instead of a new one; bring
     // it up as the open asked, as a replace does.
-    if (activate && split && existingSplits.has(split.id)) split.activate();
-    return split;
+    if (activate) {
+      afterNavigation(result, (outcome) => {
+        if (outcome.status !== 'committed') return;
+        const split = splitOf(outcome.pane);
+        if (existingSplits.has(split)) activateSplit(split);
+      });
+    }
+    if (result instanceof Promise) return;
+    if (result.status !== 'committed') return;
+
+    return getSplit(splitOf(result.pane));
   }
 
   /** Removes a split; the last one shows the default content instead. */
