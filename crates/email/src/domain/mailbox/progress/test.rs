@@ -22,6 +22,14 @@ impl MailboxProgressRepository for FlakyStore {
     async fn backlogs(&self) -> Result<Vec<MailboxBacklog>, MailboxError> {
         Ok(Vec::new())
     }
+    async fn folder_line(&self) -> Result<FolderLine, MailboxError> {
+        Ok(FolderLine {
+            polls_due: 0,
+            oldest_poll_due_seconds: 0,
+            import_rounds_due: 0,
+            oldest_import_round_due_seconds: 0,
+        })
+    }
 }
 
 #[tokio::test]

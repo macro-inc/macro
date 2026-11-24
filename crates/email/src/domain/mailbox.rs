@@ -202,6 +202,8 @@ pub struct StreamLease {
     pub initial_complete: bool,
     pub lease_id: Uuid,
     pub fence: i64,
+    /// When the stream came due: the claim's wait in line runs from here.
+    pub due_at: chrono::DateTime<chrono::Utc>,
     /// The stream's pending notification: the newest one that no delta
     /// checkpoint has read past yet, so a deferred or multi-page read keeps
     /// carrying it.

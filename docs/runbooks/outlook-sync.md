@@ -21,6 +21,7 @@ Graph and token spans, so find them by their fields:
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
 | Accounts Graph serves no mailbox for | Logs: `"outlook mailbox health" @mailbox_unavailable:true`; their probes: spans `resource_name:outlook.sync.discover @outlook.defer_reason:no_mailbox`, field `@graph.error_code` ([No mailbox](#no-mailbox)) |
+| The folder claim line | Logs: `"outlook folder line"` once a minute (`@polls_due`, `@oldest_poll_due_seconds`, `@import_rounds_due`, `@oldest_import_round_due_seconds`); per claim, spans `resource_name:outlook.sync.enumerate`, field `@outlook.due_ms` (its wait after it came due), split by `@outlook.import_round` |
 | Its subscription upkeep | Spans: `resource_name:outlook.subscription.maintain @mailbox.link_id:<id>`, field `@outlook.upkeep_failures` (failed runs in a row); mailboxes whose upkeep Graph keeps refusing or failing: `"outlook mailbox health" @watch_failures:>0` (throttled and token-deferred runs are not counted; find those by `@outlook.defer_reason` on the spans) |
 
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always

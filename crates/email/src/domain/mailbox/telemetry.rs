@@ -35,7 +35,9 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
     }
 }
 
-/// The root span of one claimed folder stream.
+/// The root span of one claimed folder stream. `outlook.due_ms` is how long
+/// the stream waited in line after it came due, and `outlook.import_round`
+/// whether it was claimed in its import round rather than as a poll.
 pub(super) fn enumerate_span(lease: &StreamLease) -> Span {
     tracing::info_span!(
         "outlook.sync.enumerate",
@@ -43,6 +45,8 @@ pub(super) fn enumerate_span(lease: &StreamLease) -> Span {
         mailbox.sync_generation = lease.mailbox.sync_generation,
         outlook.stream_kind = lease.pass.kind().as_str(),
         outlook.stream_id = %lease.id,
+        outlook.import_round = !lease.initial_complete,
+        outlook.due_ms = since_ms(lease.due_at),
         outlook.page_items = tracing::field::Empty,
         outlook.rows_queued = tracing::field::Empty,
         outlook.live_pass_opened = tracing::field::Empty,

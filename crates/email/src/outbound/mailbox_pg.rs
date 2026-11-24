@@ -127,6 +127,7 @@ struct ClaimedStream {
     position: Option<String>,
     initial_complete: bool,
     fence: i64,
+    next_run_at: chrono::DateTime<chrono::Utc>,
     notified_at: Option<chrono::DateTime<chrono::Utc>>,
     notified_traceparent: Option<String>,
     import_started_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -207,7 +208,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                     notified_traceparent = NULL
                 FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
                 RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
-                    s.position, s.initial_complete, s.fence, s.notified_at, c.notified_traceparent,
+                    s.position, s.initial_complete, s.fence, s.next_run_at, s.notified_at, c.notified_traceparent,
                     s.import_started_at
             "#, lease_id, f64::from(IMPORT_ROUND_HEAD_START_SECONDS)).fetch_optional(&self.db).await,
             StreamKind::LivePass => sqlx::query_as!(ClaimedStream, r#"
@@ -224,7 +225,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 notified_traceparent = NULL
             FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
             RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
-                s.position, s.initial_complete, s.fence, s.notified_at, c.notified_traceparent,
+                s.position, s.initial_complete, s.fence, s.next_run_at, s.notified_at, c.notified_traceparent,
                 s.import_started_at
         "#, lease_id, kind.as_str()).fetch_optional(&self.db).await,
         }
@@ -249,6 +250,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 initial_complete: row.initial_complete,
                 lease_id,
                 fence: row.fence,
+                due_at: row.next_run_at,
                 notification: notification(row.notified_at, row.notified_traceparent),
             })
         })
