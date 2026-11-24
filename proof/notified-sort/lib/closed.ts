@@ -269,6 +269,24 @@ export const CLOSURES: Closure[] = [
     outcome:
       "Invisible as rows: the list keeps the rows it holds, the same on both sides in every instance, and the next read answers. Seen once per side, only under load.",
   },
+  {
+    id: 'M1',
+    match: /(^|\s)dom:old-empty-under-storm$/,
+    title: "Main's touch Home shows no rows while a storm of notifications arrives; the branch's shows them",
+    cause:
+      "run.ts names a Home check this way only when main's Home showed no rows, the branch's did, and the viewer got at least 5 notifications a second during the check. On main touch Home is a REST list ordered by notified_at, so every notification for an entity the tab has not cached sends POST /dss/items/soup (lib/queries/soup/normalized-cache/operations.ts:761, :771) and each new row invalidates every REST Soup list (:795, :800), which cancels the read in flight and starts it again; a list still on its first read is read again once that settles (:825). A 2000-entity viewer's first read is slow, so while notifications keep coming main's Home stays on its first read with no rows. On the branch the list is GraphQL: a notification only marks it for a re-read, at most one every 2 s (lib/queries/notification/notification-soup.ts:158, lib/queries/visible-refresh.ts:7), and the list keeps its rows meanwhile. Instance: load-reads seed 3703, viewer n2000, touch Signal: main 0 rows, the branch 201, 3479 notifications in 168 s. Repro: dbg-storm.ts (DBG_TOUCH=1, n2000, 15 notifications a second): main's Home had 0 rows for the first 20 s of the storm while the branch's had 100 to 200, main's tab sent 1565 POST /dss/items/soup against the branch's 2 in the reads variant, and main's page later crashed.",
+    outcome:
+      "Visible on main only, in the branch's favour: on main a viewer flooded with notifications sees an empty Home until a read completes between notifications; on the branch Home keeps its rows and catches up within the re-read interval.",
+  },
+  {
+    id: 'T13',
+    match: /(^|\s)error:(old|new):network-under-storm$/,
+    title: 'A REST read the browser dropped while hundreds of notifications arrived, on either side',
+    cause:
+      "run.ts names a transport failure '-under-storm' when the viewer got at least 5 notifications a second during the read. Every notification for an entity the tab has not cached runs refetchSoupEntity (lib/queries/notification/notification-soup.ts:77, :93), which sends POST /dss/items/soup whenever a REST list ordered by notified_at is mounted (lib/queries/soup/normalized-cache/operations.ts:736-771, mountedNotifiedLists at :813) and, on a new row, invalidates every REST Soup list (:800, invalidateAllSoup at :279), which aborts and restarts their reads. Desktop Home is grouped and REST on both sides, so both tabs ran this path: across load-reads seed 3703, Chromium failed 95,081 of main's Soup requests and 39,943 of the branch's with net::ERR_ABORTED or net::ERR_INSUFFICIENT_RESOURCES (too many requests in flight in the tab; out/load-reads/requestfailed.jsonl), main's mostly flat REST reads (/soup/ast, 43,094 aborted), the branch's per-notification refetches and grouped reads. The failed read surfaces as 'Network error occurred' (lib/core/util/safeFetch.ts:383-390). None of these lines differs between main and the branch except comments. Instances: reads 208, 1331 and 1679 on the branch, each a grouped list that is REST on both sides (1008, 896 and 1257 notifications during the read); read 339 on main, a flat Signal list that is REST on main and GraphQL on the branch (2297 notifications), which the branch answered.",
+    outcome:
+      "Visible the same way on both sides: during such a storm a REST Soup list can show its error state with Retry, through code the PR does not change; the run's retries (readUntilAnswered) also failed, and the next read after the storm answers. The PR moves flat notified lists off this path, so the branch's tab sends fewer of these requests; its remaining failures are in grouped lists, which stay REST on both sides. No row is compared on an errored read.",
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {

@@ -500,11 +500,14 @@ describe('reads under load', () => {
 });
 
 describe('load closures', () => {
-  it('close the race, transport failures on a quiet viewer and the branch REST deadline, and nothing near them', () => {
+  it('close the race, transport failures (quiet or under a storm) and the branch REST deadline, and nothing near them', () => {
     expect(closureOf('raced')?.id).toBe('W1');
     expect(closureOf('raw spec2 error:new:network')?.id).toBe('T12');
     expect(closureOf('error:old:network')?.id).toBe('T12');
     expect(closureOf('error:new:rest-deadline')?.id).toBe('T11');
-    for (const open of ['error:new:network-under-storm', 'raced:extra', 'error:new', 'membership:missing-in-new:document']) expect(closureOf(open), open).toBeUndefined();
+    expect(closureOf('error:new:network-under-storm')?.id).toBe('T13');
+    expect(closureOf('error:old:network-under-storm')?.id).toBe('T13');
+    expect(closureOf('home touch signal dom:old-empty-under-storm')?.id).toBe('M1');
+    for (const open of ['error:new:network-under-stormy', 'error:new:deadline-under-storm', 'home touch signal dom:new-empty-under-storm', 'raced:extra', 'error:new', 'membership:missing-in-new:document']) expect(closureOf(open), open).toBeUndefined();
   });
 });
