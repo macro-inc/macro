@@ -81,7 +81,7 @@ fn fast_claude_records_cache_writes_and_rejects_unknown_tiers() {
 
 #[test]
 fn priority_gpt_prices_either_reported_name_and_downgrades() {
-    let (pricing, recorder) = setup("openai/gpt-6.1-sol", ModelSpeed::Priority);
+    let (pricing, recorder) = setup("openai/gpt-6.2-sol", ModelSpeed::Priority);
     for (input, tier) in [
         (10, "priority"),
         (10, "fast"),
@@ -99,13 +99,65 @@ fn priority_gpt_prices_either_reported_name_and_downgrades() {
     assert_eq!(
         events.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(),
         [
-            "gpt-6.1-sol:priority",
-            "gpt-6.1-sol:priority",
-            "gpt-6.1-sol:priority:long",
-            "gpt-6.1-sol"
+            "gpt-6.2-sol:priority",
+            "gpt-6.2-sol:priority",
+            "gpt-6.2-sol:priority:long",
+            "gpt-6.2-sol"
         ]
     );
     let body = serde_json::json!({ "service_tier": "priority" });
-    let model = ProviderModel::new("openai", "gpt-6.1-sol").unwrap();
+    let model = ProviderModel::new("openai", "gpt-6.2-sol").unwrap();
     assert!(pricing.matches(&model, &body));
+}
+
+#[test]
+fn haiku_5_5_prices_prompts_over_100k_at_its_long_rate() {
+    let (pricing, recorder) = setup("anthropic/claude-haiku-5-5", ModelSpeed::Standard);
+    for (input, cached, written) in [(60_000, 40_000, 0), (60_000, 40_000, 1), (100, 0, 0)] {
+        pricing
+            .record(
+                UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(
+                    input, 10, cached, written, 0,
+                )),
+                Some("standard"),
+            )
+            .unwrap();
+    }
+    let events = recorder.0.lock().unwrap();
+    assert_eq!(
+        events.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(),
+        ["claude-haiku-5-5", "claude-haiku-5-5:long", "claude-haiku-5-5"]
+    );
+}
+
+#[test]
+fn luna_and_sol_price_prompts_over_272k_at_their_long_rate() {
+    for (model, key) in [
+        ("openai/gpt-6-luna", "gpt-6-luna"),
+        ("openai/gpt-6.2-sol", "gpt-6.2-sol"),
+    ] {
+        let (pricing, recorder) = setup(model, ModelSpeed::Standard);
+        for input in [272_000, 272_001] {
+            pricing
+                .record(
+                    UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(input, 10, 0, 0, 0)),
+                    Some("default"),
+                )
+                .unwrap();
+        }
+        let events = recorder.0.lock().unwrap();
+        assert_eq!(
+            events.iter().map(|e| e.model.clone()).collect::<Vec<_>>(),
+            [key.to_owned(), format!("{key}:long")]
+        );
+    }
+}
+
+#[test]
+fn other_claude_models_have_no_long_rate() {
+    assert_eq!(ModelSpeed::long_context_threshold("anthropic/claude-opus-5-5"), None);
+    assert_eq!(
+        ModelSpeed::long_context_threshold("anthropic/claude-haiku-5-5"),
+        Some(100_000)
+    );
 }
