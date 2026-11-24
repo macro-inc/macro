@@ -128,18 +128,97 @@ async fn timeline_keyset_rewrite_matches_previous_sql_selection(pool: PgPool) {
                                 .collect::<Vec<_>>(),
                             expected
                         );
-                        let (older, newer) = match direction {
-                            MessageDirection::Older => (more, cursor.is_some()),
-                            MessageDirection::Newer => (cursor.is_some(), more),
+                        // The side the cursor came from is offered only when a
+                        // root the reader may see lies there.
+                        let boundary = match direction {
+                            MessageDirection::Older => page.items.first(),
+                            MessageDirection::Newer => page.items.last(),
                         };
-                        assert_eq!(page.next_cursor.is_some(), older && !expected.is_empty());
-                        assert_eq!(
-                            page.previous_cursor.is_some(),
-                            newer && !expected.is_empty()
-                        );
+                        let opposite = match (cursor.is_some(), boundary) {
+                            (true, Some(item)) => {
+                                let mut back = more_query.clone();
+                                back.limit = Some(1);
+                                back.cursor = Some(MessageCursor {
+                                    created_at: item.message.created_at,
+                                    id: item.message.id,
+                                });
+                                back.direction = match direction {
+                                    MessageDirection::Older => MessageDirection::Newer,
+                                    MessageDirection::Newer => MessageDirection::Older,
+                                };
+                                !legacy_roots(&pool, &parent, &back).await.is_empty()
+                            }
+                            _ => false,
+                        };
+                        let (older, newer) = match direction {
+                            MessageDirection::Older => (more, opposite),
+                            MessageDirection::Newer => (opposite, more),
+                        };
+                        assert_eq!(page.next_cursor.is_some(), older);
+                        assert_eq!(page.previous_cursor.is_some(), newer);
                     }
                 }
             }
         }
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_cursor_whose_message_is_gone_offers_no_page_on_its_side(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let channel_id = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels(id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel_id,
+        USER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let parent = MessageParent::Channel(channel_id);
+    let mut roots = Vec::new();
+    for _ in 0..3 {
+        let mut input = command("message-doc-a", None, "root");
+        input.parent = parent.clone();
+        roots.push(repo.create(input).await.unwrap().0);
+    }
+    let cursor_of = |root: &Message| MessageCursor {
+        created_at: root.created_at,
+        id: root.id,
+    };
+    let page = |cursor, direction| {
+        repo.timeline(
+            &parent,
+            MessageTimelineQuery {
+                cursor: Some(cursor),
+                direction,
+                ..Default::default()
+            },
+        )
+    };
+
+    // While the edge messages exist, each cursor's own side has a page.
+    let older = page(cursor_of(&roots[2]), MessageDirection::Older)
+        .await
+        .unwrap();
+    assert!(older.previous_cursor.is_some());
+    let newer = page(cursor_of(&roots[0]), MessageDirection::Newer)
+        .await
+        .unwrap();
+    assert!(newer.next_cursor.is_some());
+
+    repo.delete(&parent, roots[2].id).await.unwrap();
+    repo.delete(&parent, roots[0].id).await.unwrap();
+
+    let older = page(cursor_of(&roots[2]), MessageDirection::Older)
+        .await
+        .unwrap();
+    assert_eq!(older.items.len(), 1);
+    assert!(older.previous_cursor.is_none());
+    let newer = page(cursor_of(&roots[0]), MessageDirection::Newer)
+        .await
+        .unwrap();
+    assert_eq!(newer.items.len(), 1);
+    assert!(newer.next_cursor.is_none());
 }
