@@ -407,9 +407,13 @@ The same host and subscribers survive. Pending operations reject without replay;
 an admitted optimistic enqueue is reported as uncertain so it cannot fall through
 to a second API write. Durable storage and the cache scope are preserved, while
 live-query dependencies and revision checkpoints are invalidated after reconnect.
-Restarted startup is bounded by the registration retry budget; exhaustion uses
-the normal session fallback without quarantining a healthy database. The
-`graphql_cache.owner` event records `ownerEvent: coordinator-restarted`.
+Restarted startup is bounded by the registration retry budget. A restart that
+cuts startup off, restarts that use up `COORDINATOR_CONNECT_ATTEMPTS`, and a
+registration whose every attempt met a restarted coordinator all reject with
+`CoordinatorRestartedError` (`owner-epoch-lost`), which preserves the database
+and scope and which page recovery retries like an untouched bootstrap, without
+the "Local cache unavailable" toast. The `graphql_cache.owner` event records
+`ownerEvent: coordinator-restarted`.
 
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS
@@ -437,7 +441,8 @@ failures storage-safe. Engine recovery retains its bounded five retries.
 Exhausted bootstrap retries preserve the cache
 scope only when the coordinator explicitly proves storage was untouched, not from
 a page's last-seen phase. Missing/broken transports remain conservatively
-uncertain. Pages retry proven untouched bootstrap and owner-lock failures on reconnect,
+uncertain. Pages retry proven untouched bootstrap, owner-lock and coordinator-restart
+failures on reconnect,
 foregrounding, or explicit draft Retry, with jittered exponential backoff capped
 at thirty seconds. A newly registered host restarts an exhausted untouched
 coordinator at a new owner epoch with `open-existing`; failed hosts remain

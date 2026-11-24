@@ -107,7 +107,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
         EmailSearchArgs {
             terms: args.email_search_args.terms,
             user_id: args.user_id,
-            user_ids: args.email_search_args.user_ids,
+            inbox_link_ids: args.email_search_args.inbox_link_ids,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
@@ -121,6 +121,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
             recipients: args.email_search_args.recipients,
+            label_link_ids: args.email_search_args.label_link_ids,
             include_labels: args.email_search_args.include_labels,
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
@@ -256,11 +257,14 @@ pub struct UnifiedDocumentSearchArgs {
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
-    pub user_ids: Vec<String>,
-    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// The inboxes the caller reads, by link id: their own and those
+    /// delegated to them. Mail matches by the inbox holding it, not by its
+    /// owner, whose other inboxes may not be delegated.
+    pub inbox_link_ids: Vec<String>,
+    /// Threads reachable besides the `inbox_link_ids` inboxes, or, with
     /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
-    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    /// Search only `thread_ids`, not the `inbox_link_ids` inboxes.
     pub ids_only: bool,
     /// When non-empty, every hit's thread must be one of these, on top of
     /// the access filter.
@@ -272,6 +276,9 @@ pub struct UnifiedEmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    /// The inboxes whose labels the caller may read: their own and the ones
+    /// they manage. Labels match, and come back on a hit, only in these.
+    pub label_link_ids: Vec<String>,
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
@@ -657,6 +664,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                         email_message_id: a.message_id,
                         bcc: a.bcc,
                         cc: a.cc,
+                        link_id: a.link_id,
                         labels: a.labels,
                         sent_at: millis_to_datetime(a.sent_at_millis),
                         sender: a.sender,
@@ -914,6 +922,19 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     Ok(search_request_builder.build())
 }
 
+/// Leaves the labels on an email hit only when the caller may read its
+/// inbox's labels: a thread shared from someone else's inbox comes back
+/// without the labels its owner made.
+fn keep_readable_labels(results: &mut [SearchHit], label_link_ids: &[String]) {
+    for hit in results {
+        if let Some(SearchGotoContent::Emails(goto)) = &mut hit.goto
+            && !label_link_ids.contains(&goto.link_id)
+        {
+            goto.labels.clear();
+        }
+    }
+}
+
 /// Trim a page of top-level OpenSearch hits and derive the next cursor.
 ///
 /// The query fetches `page_size + 1` *top-level* hits — one per parent entity
@@ -1061,7 +1082,8 @@ pub(crate) async fn search_unified(
         "opensearch response"
     );
 
-    let (results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
+    let (mut results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
+    keep_readable_labels(&mut results, &args.email_search_args.label_link_ids);
 
     Ok((results, cursor))
 }

@@ -545,6 +545,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         email_search_args: UnifiedEmailSearchArgs {
             terms: vec!["test".to_string()],
+            inbox_link_ids: vec!["inbox1".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             link_ids: vec!["id1".to_string(), "id2".to_string()],
             sender: vec!["id1".to_string(), "id2".to_string()],
@@ -638,8 +639,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           }
                         },
                         {
-                          "term": {
-                            "user_id": "user"
+                          "terms": {
+                            "link_id": ["inbox1"]
                           }
                         }
                       ]
@@ -862,6 +863,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         email_search_args: UnifiedEmailSearchArgs {
             terms: vec!["test".to_string()],
+            inbox_link_ids: vec!["inbox1".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             link_ids: vec!["id1".to_string(), "id2".to_string()],
             sender: vec!["id1".to_string(), "id2".to_string()],

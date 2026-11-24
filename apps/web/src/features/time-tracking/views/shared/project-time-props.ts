@@ -1,5 +1,8 @@
 import type { OpenReportTask } from '../../components/time-breakdown';
-import type { PersonLabel } from '../../components/time-key-label';
+import type {
+  PersonLabel,
+  TaskLabelParts,
+} from '../../components/time-key-label';
 import type {
   ProjectTimeClock,
   SaveCsv,
@@ -10,6 +13,7 @@ export type ProjectTimeViewProps = {
   project: { id: string; name: string };
   clock: ProjectTimeClock;
   person: PersonLabel;
+  task: TaskLabelParts;
   onOpenTask: OpenReportTask;
   /** Saves the CSV export; phones offer no export. */
   save: SaveCsv;

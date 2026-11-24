@@ -13079,6 +13079,7 @@ dependencies = [
 name = "macro_authorization"
 version = "0.1.0"
 dependencies = [
+ "agent_credentials",
  "axum",
  "bot_id",
  "bot_token",
@@ -13093,6 +13094,8 @@ dependencies = [
  "macro_user_id",
  "model-error-response",
  "model_user",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rootcause",
  "serde",
  "serde_json",
@@ -13102,6 +13105,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "uuid",
  "workspace-hack",
@@ -18837,6 +18841,7 @@ dependencies = [
  "macro_auth",
  "macro_authorization",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_user_id",
  "model",
  "model-entity",
@@ -18859,6 +18864,7 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "utoipa",

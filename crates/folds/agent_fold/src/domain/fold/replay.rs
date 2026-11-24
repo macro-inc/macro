@@ -102,8 +102,7 @@ impl Replay {
         }
         self.replay_users(&mut state, &mut user_chunks, &mut provenance);
         if state.turn.as_ref().is_some_and(|turn| {
-            turn.can_noop
-                && turn.noop_buffer == "<noop/>"
+            turn.answered_with_noop()
                 && turn
                     .prompt_id
                     .as_ref()
