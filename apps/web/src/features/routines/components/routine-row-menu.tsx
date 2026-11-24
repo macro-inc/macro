@@ -14,7 +14,9 @@ import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import { deepEqual } from '@core/util/compareUtils';
 import type { EntityData } from '@entity';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { cn, Dropdown } from '@ui';
 import {
   type Accessor,
   children,
@@ -46,6 +48,10 @@ export type RoutineRowMenuActions = {
   onRun(row: RoutineRow): void;
   /** "Run now" was chosen and the server hasn't answered yet. */
   runPending(row: RoutineRow): boolean;
+  /** Stop its run in progress. */
+  onStop(row: RoutineRow): void;
+  /** Its Stop was chosen and the server hasn't answered yet. */
+  stopPending(row: RoutineRow): boolean;
   onDuplicate(row: RoutineRow): void;
   onKeep(row: RoutineRow): void;
   onCopyLink(row: RoutineRow): void;
@@ -282,5 +288,58 @@ export function RoutineRowMenu(props: ParentProps<RoutineRowMenuProps>) {
         );
       }}
     </Show>
+  );
+}
+
+/**
+ * The same actions as the row's right-click menu, behind a "…" button for a
+ * routine card. It shows on the card's hover or focus, and stays while open.
+ */
+export function RoutineRowMenuButton(
+  props: RoutineRowMenuProps & { actions: RoutineRowMenuActions }
+) {
+  const entries = createRoutineMenuEntries(props, () => props.actions);
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t('routinesList.moreFor', { name: props.row.name })}
+        class="opacity-0 group-hover/routine-card:opacity-100 focus-visible:opacity-100 data-expanded:opacity-100"
+        onClick={(event: MouseEvent) => event.stopPropagation()}
+      >
+        <DotsThreeIcon class="size-4" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-52 max-w-[min(22rem,calc(100vw-1rem))]">
+        <Dropdown.Group>
+          <For each={entries()}>
+            {(group, index) => (
+              <>
+                <Show when={index() > 0}>
+                  <Dropdown.Separator class="my-1.5 h-px border-0 bg-edge-muted" />
+                </Show>
+                <For each={group}>
+                  {(entry) => (
+                    <Dropdown.Item
+                      disabled={entry.disabled}
+                      onSelect={entry.run}
+                    >
+                      <Dropdown.ItemLabel
+                        class={cn(
+                          'min-w-0 flex-1 truncate',
+                          entry.destructive && 'text-failure-ink'
+                        )}
+                      >
+                        {entry.label}
+                      </Dropdown.ItemLabel>
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

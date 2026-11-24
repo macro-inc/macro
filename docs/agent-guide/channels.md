@@ -186,8 +186,9 @@ An external email can be selected as a channel participant. For an unregistered 
 **New direct message** opens a draft message whose To
 field takes either people or one existing conversation. People open their DM
 or group chat, creating it on the first message. While the field is empty it
-also suggests the channels and group chats you belong to (the same set as
-Share To; reach a one-to-one DM by picking the person). A picked channel is the
+also suggests every channel and group chat in your channel list, whatever its
+size (the same set as Share To and the iOS share sheet; reach a one-to-one DM
+by picking the person). A picked channel is the
 only recipient: the field takes no typing and suggests nothing until its chip
 is removed (its X, or Backspace), and once anyone is picked channels are no
 longer suggested. Send posts into the channel and opens it at the message, as
@@ -633,7 +634,11 @@ Escape also cancels an edit. The iOS app uses its native media picker. Check inl
 on desktop and touch: attach a file and save, then edit again and discard changes
 without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
-Check this arrangement at both phone and tablet widths.
+Check this arrangement at both phone and tablet widths. Its To field is the
+New direct message field (see [Create a channel](#create-a-channel)): people,
+or one channel or group chat, which fills the field until its chip is removed.
+Send posts into that channel and closes the sheet without leaving the current
+view. Phones and tablets behave the same.
 
 With a wrapping draft present, repeatedly narrow and widen the desktop split
 and window, then scroll the message history. The composer should settle into

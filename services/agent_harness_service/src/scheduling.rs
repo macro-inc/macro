@@ -39,6 +39,7 @@ use scheduled_action::domain::ports::{
     ScheduledActionDispatcher, SessionCreations,
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
+use scheduled_action::domain::run_stops::RunStops;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::suggestions::{
     RoutineBriefing, RoutineSuggestionService, StoredSuggestionOrigins,
@@ -73,6 +74,7 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
+use scheduled_action::outbound::pg_run_stops::{PgStopRelay, listen_for_stops};
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
@@ -682,6 +684,16 @@ where
         .with_code(Arc::clone(&code), Arc::clone(&upgrades))
         .with_knob_entities(Arc::clone(&knob_entities)),
     );
+    // A stop of a run can reach any instance; every instance hears it through
+    // Postgres and the one running the run ends it.
+    let run_stops = RunStops::new(Some(Arc::new(PgStopRelay::new(db.clone()))));
+    listen_for_stops(
+        db.clone(),
+        run_stops.clone(),
+        &lifecycle.workers,
+        lifecycle.stop_workers.clone(),
+    )
+    .await;
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
@@ -689,6 +701,7 @@ where
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
+    .with_stops(run_stops.clone())
     .with_admission(Arc::clone(&ai_admission))
     .with_observer(Arc::new((
         routine_analytics::RoutineAnalytics(
@@ -828,6 +841,7 @@ where
             access.clone(),
         )
         .with_event_routines(event_routines)
+        .with_run_stops(run_stops)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(
             TargetValidation::new(Arc::clone(&sessions)).with_knob_entities(knob_entities),

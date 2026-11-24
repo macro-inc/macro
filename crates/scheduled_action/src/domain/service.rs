@@ -38,6 +38,7 @@ use super::ports::{
 };
 
 mod sub_routines;
+use super::run_stops::RunStops;
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
@@ -71,6 +72,8 @@ pub struct ScheduledActionServiceImpl<
     origins: Option<Arc<dyn SuggestionOrigins>>,
     /// Finds the agent session behind a create, to tell a routine run's.
     run_sessions: Option<Arc<dyn RequestSessions>>,
+    /// Where a stop of a run in progress is sent.
+    stops: RunStops,
 }
 
 /// What keeps a draft session's check as its answer.
@@ -120,6 +123,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             drafts: None,
             origins: None,
             run_sessions: None,
+            stops: RunStops::default(),
         }
     }
 }
@@ -145,6 +149,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            stops: self.stops,
         }
     }
 
@@ -167,6 +172,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            stops: self.stops,
         }
     }
 
@@ -189,6 +195,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            stops: self.stops,
         }
     }
 
@@ -213,6 +220,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            stops: self.stops,
         }
     }
 
@@ -240,6 +248,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     /// routine's sub-routines, finding the session through `sessions`.
     pub fn with_run_sessions(mut self, sessions: Arc<dyn RequestSessions>) -> Self {
         self.run_sessions = Some(sessions);
+        self
+    }
+
+    /// Send stops of runs in progress through `stops`, shared with the
+    /// executor that runs them.
+    pub fn with_run_stops(mut self, stops: RunStops) -> Self {
+        self.stops = stops;
         self
     }
 
@@ -1288,6 +1303,24 @@ where
         action.owner_user()?;
         // Manual execution deliberately has no event reference or event-run ID.
         self.executor.execute_action(action).await
+    }
+
+    #[tracing::instrument(name = "routine.stop", skip_all, err, fields(action_id = tracing::field::Empty, running = tracing::field::Empty))]
+    async fn stop_run(&self, receipt: EntityAccessReceipt<OwnerAccessLevel>) -> Result<()> {
+        let action = self.load_granted(&receipt).await?;
+        let Some(id) = action.id else {
+            bail!("cannot stop a run without an id");
+        };
+        let span = tracing::Span::current();
+        span.record("action_id", tracing::field::display(id));
+        // A routine that isn't running has nothing to stop; a stop sent again
+        // after its run ended changes nothing.
+        let running = self.repo.running_run(&id).await?;
+        span.record("running", running.is_some());
+        match running {
+            Some(run) => self.stops.request(run.run_id).await,
+            None => Ok(()),
+        }
     }
 
     async fn get_execution_records(

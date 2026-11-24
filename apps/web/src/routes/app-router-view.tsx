@@ -78,6 +78,7 @@ import {
   SettingsRouteView,
   TasksDetailRouteView,
   TasksRouteView,
+  TasksTimeTaskRouteView,
 } from './lazy-route-views';
 import {
   BookingReceiptRoutePage,
@@ -184,6 +185,8 @@ import {
   taskSlugRoute,
   tasksProjectsRoute,
   tasksSplitRoute,
+  tasksTimeRoute,
+  tasksTimeTaskRoute,
   teamInviteRoute,
   welcomeRoute,
 } from './routes';
@@ -434,6 +437,12 @@ export function appRouteElements(): JSX.Element {
             />
           </Route>
           <Route definition={tasksProjectsRoute} />
+          <Route definition={tasksTimeRoute}>
+            <Route
+              definition={tasksTimeTaskRoute}
+              component={TasksTimeTaskRouteView}
+            />
+          </Route>
           <Route
             definition={taskDetailRoute}
             component={TasksDetailRouteView}

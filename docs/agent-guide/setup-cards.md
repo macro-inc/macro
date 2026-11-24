@@ -125,11 +125,17 @@ card sits above **Settings**, outside the scrolling list.
 ## Suggested routines
 
 With `enable-routine-suggestions` on, the
-Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
+Email, Calendar, Tasks, Drive, Customers, Chat, Calls and Reviews
 sidebars start with a suggestions card while the scheduler has suggestions for
-that area; it never shows on touch devices. The card shows up to three
-different routine icons overlapping (each routine's other area besides the
-sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
+that area; it never shows on touch devices. The Agents surface has
+suggestions, but the desktop Agents sidebar (`DesktopAgentsSidebar`) doesn't
+mount the card; only the touch one does, where it stays hidden. In every
+sidebar it sits 1rem (`--sidebar-content-inset`) under New and 1.5rem
+(`--sidebar-section-gap`) above what follows, as the first child of a default
+`ViewSidebar.Content` places it; a sidebar laid out otherwise (Calendar, Chat)
+pads the card (padding, which its collapse animates, not margin) to match.
+The card shows up to three different routine icons overlapping (each
+routine's other area besides the sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
 you**, the suggestions' names, and a caret, framed like the Email sidebar's
 **Accounts** card. Clicking it opens **Routines for <area>**: a two-column
 grid of cards, with **For you** and **Templates** tabs (each with a count)

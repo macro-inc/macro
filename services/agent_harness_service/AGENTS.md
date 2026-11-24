@@ -254,10 +254,12 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   a thread's due date for `email_focus_worker` and meters it as `EmailFocus`.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
   domain/adapters live in `crates/scheduled_action`. Its run observers send
-  `routine_run_finished` analytics and, for every run, an inbox-only
-  `routine_run_finished` notification to the owner
+  `routine_run_finished` analytics and, for every run but one its owner
+  stopped, an inbox-only `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`), which names a
-  sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
+  sub-routine's run "<name> · from <parent>". Every instance listens for run
+  stops (`listen_for_stops`) and shares one `RunStops` between the executor
+  and the service. `with_run_sessions` hands the
   scheduler the code-mode invocation lookup so a routine an Ask AI step's
   session creates becomes its run's sub-routine. AI drafts routines
   (`POST /scheduled-actions/drafts`) in a hidden session of the in-process

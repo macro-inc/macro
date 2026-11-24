@@ -22,6 +22,7 @@ const context: CrmContext = {
   EmailThreadMention: unused,
   createEmailPrivacy: unused,
   createEmailPolicy: unused,
+  connectMailbox: unused,
   createPipelines: unused,
   openCreateItem: unused,
   openEmailComposer: unused,
