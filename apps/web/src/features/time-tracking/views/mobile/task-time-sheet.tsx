@@ -7,7 +7,14 @@ import { t } from '@app/lib/i18n';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createSignal,
+  createUniqueId,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { EntryForm } from '../../components/entry-form';
 import { QuickLengths } from '../../components/log-time-input';
 import { TimePill } from '../../components/time-pill';
@@ -24,6 +31,30 @@ type Mode =
   | { kind: 'list' }
   | { kind: 'new' }
   | { kind: 'edit'; entry: TimeEntryFieldsFragment };
+
+/**
+ * One's own entry, which a tap anywhere on opens for editing. The button lies
+ * over the row rather than around it, so the note's Show more stays a button
+ * of its own.
+ */
+function EditableEntry(props: {
+  onEdit: () => void;
+  children: JSX.Element;
+}): JSX.Element {
+  const labelId = createUniqueId();
+  return (
+    <div class="relative">
+      <div id={labelId}>{props.children}</div>
+      <button
+        type="button"
+        class="absolute inset-0"
+        aria-labelledby={labelId}
+        aria-description={t('timeTracking.editEntry')}
+        onClick={() => props.onEdit()}
+      />
+    </div>
+  );
+}
 
 /**
  * The Time pill and its bottom sheet, on touch devices. Given `open`, the
@@ -209,14 +240,11 @@ export function TaskTimeSheet(
                                 />
                               }
                             >
-                              <button
-                                type="button"
-                                class="w-full text-left"
-                                aria-description={t('timeTracking.editEntry')}
-                                onClick={() => setMode({ kind: 'edit', entry })}
+                              <EditableEntry
+                                onEdit={() => setMode({ kind: 'edit', entry })}
                               >
                                 {content}
-                              </button>
+                              </EditableEntry>
                             </SwipableRow>
                           </Show>
                         )}

@@ -7,8 +7,7 @@ import { Button, Dropdown, Input } from '@ui';
 import { parseISO } from 'date-fns';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { EntryForm } from '../components/entry-form';
-import { EntryList } from '../components/entry-list';
-import type { PersonLabel } from '../components/time-key-label';
+import { EntryList, type EntryPerson } from '../components/entry-list';
 import { GridLength } from '../components/week-grid';
 import { useTimeTracking } from '../context/time-tracking-context';
 import { formatLength } from '../core/format-length';
@@ -24,7 +23,7 @@ type CellProps = {
   day: string;
   today: string;
   minutes: number | undefined;
-  person: PersonLabel;
+  person: EntryPerson;
   editAccess: TaskEditAccess;
   /** After a write lands, so the week reads it again at once. */
   onWritten(): void;

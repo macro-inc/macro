@@ -228,6 +228,7 @@ function renderWeek(
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 1 }}
         showWeekends={() => options.showWeekends ?? false}
         person={(userId) => <span>{userId}</span>}
+        entryPerson={{ avatar: () => null, name: (userId) => userId }}
         onOpenTask={onOpenTask}
         editAccess={(_taskId, render) =>
           render(() => ('canEdit' in options ? options.canEdit : true))

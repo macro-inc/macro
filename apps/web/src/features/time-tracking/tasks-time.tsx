@@ -1,6 +1,7 @@
 import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/entity-detail-target';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type JSX, Show, Suspense } from 'solid-js';
+import { ENTRY_PERSON } from './entry-person';
 import {
   ReportPerson,
   TaskEditAccess,
@@ -35,6 +36,7 @@ export function TasksTime(props: {
     clock: useReportClock(),
     showWeekends: useShowWeekends(),
     person: (userId) => <ReportPerson userId={userId} />,
+    entryPerson: ENTRY_PERSON,
     onOpenTask: (taskId, options) => {
       props.onOpenTask({ id: taskId }, options);
     },
