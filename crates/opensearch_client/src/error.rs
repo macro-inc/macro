@@ -66,6 +66,9 @@ pub enum OpensearchOperation {
     DeleteCallRecordById,
     DeleteCallRecordsByChannelId,
     DeleteAgentSession,
+    WriteDatabaseRows,
+    DeleteDatabaseRowsByQuery,
+    PageDatabaseRows,
 }
 
 /// Why a request produced no response.
