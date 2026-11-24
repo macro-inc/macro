@@ -147,7 +147,7 @@ export function ModelSelectionList(props: {
   return (
     <div
       ref={root}
-      class="flex min-h-0 flex-col"
+      class={cn('flex min-h-0 flex-col gap-6', props.mobile && 'gap-4')}
       onKeyDown={(event) => {
         if (event.key === 'Escape') return;
         if (event.target === search) {
@@ -179,10 +179,7 @@ export function ModelSelectionList(props: {
       }}
     >
       <div
-        class={cn(
-          'flex shrink-0 flex-col',
-          props.mobile ? 'gap-0' : 'gap-1.5 pb-1'
-        )}
+        class={cn('flex shrink-0 flex-col', props.mobile ? 'gap-0' : 'gap-1.5')}
       >
         <div class={cn('px-2 pt-2.5', props.mobile && 'px-3 py-2.5')}>
           <Button
@@ -215,7 +212,7 @@ export function ModelSelectionList(props: {
             </Show>
           </Button>
         </div>
-        <div class="px-3">
+        <div class="px-3" data-corvu-no-drag>
           <div
             class={cn(
               'flex h-9 items-center gap-2.5 rounded-[10px] bg-active px-3 focus-within:ring-1 focus-within:ring-accent',
@@ -264,9 +261,7 @@ export function ModelSelectionList(props: {
       <div
         class={cn(
           'min-h-0 overflow-y-auto overscroll-contain px-2 pb-4',
-          props.mobile && 'px-3 pt-1.5',
-          !props.mobile && nav.page() === 'list' && 'pt-3',
-          !props.mobile && nav.page() !== 'list' && 'pt-2'
+          props.mobile && 'px-3'
         )}
       >
         <Show when={nav.page() === 'list'}>

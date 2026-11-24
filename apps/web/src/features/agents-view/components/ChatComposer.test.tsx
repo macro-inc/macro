@@ -1037,6 +1037,11 @@ it('keeps the list composer expanded across model selection and dismisses an orp
     style.animationName ||= 'none';
     return style;
   });
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-corvu-drawer-content') ? 600 : 0;
+    }
+  );
   onTestFinished(() => {
     vi.unstubAllGlobals();
   });
@@ -1088,7 +1093,26 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   fireEvent.click(trigger);
   fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
   let search = await screen.findByRole('textbox');
-  const sheet = search.closest('[data-corvu-drawer-content]')!;
+  const sheet = search.closest<HTMLElement>('[data-corvu-drawer-content]')!;
+  search.focus();
+  fireEvent(window, new Event('resize'));
+  expect(document.activeElement).toBe(search);
+  expect(open()).toBe(true);
+  await waitFor(() => expect(sheet.style.transform).toContain('0px'));
+  const press = new MouseEvent('pointerdown', {
+    bubbles: true,
+    button: 0,
+    clientX: 100,
+    clientY: 100,
+  });
+  Object.defineProperty(press, 'pointerType', { value: 'touch' });
+  fireEvent(search, press);
+  fireEvent.touchStart(search, { touches: [{ clientX: 100, clientY: 100 }] });
+  fireEvent.touchMove(search, { touches: [{ clientX: 100, clientY: 102 }] });
+  fireEvent.touchMove(search, { touches: [{ clientX: 100, clientY: 742 }] });
+  fireEvent.touchEnd(search, { touches: [] });
+  expect(open()).toBe(true);
+  expect(document.activeElement).toBe(search);
   fireEvent.click(sheet.querySelector('button')!);
   // The closing sheet must retire its focus trap before a new card mounts.
   expect(

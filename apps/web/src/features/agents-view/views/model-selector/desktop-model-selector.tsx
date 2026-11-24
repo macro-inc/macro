@@ -2,7 +2,7 @@ import { t } from '@app/lib/i18n';
 import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { Show, untrack } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
 import { ModelSelectionList } from '../shared/model-selection-list';
@@ -72,10 +72,14 @@ export function DesktopModelSelector() {
           }}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            const target = nav.page() === 'card' ? 'button' : 'input';
-            content
-              ?.querySelector<HTMLElement>(target)
-              ?.focus({ preventScroll: true });
+            // Kobalte calls this inside its focus-scope effect. A page read
+            // must not recreate that scope and restore focus to the composer.
+            untrack(() => {
+              const target = nav.page() === 'card' ? 'button' : 'input';
+              content
+                ?.querySelector<HTMLElement>(target)
+                ?.focus({ preventScroll: true });
+            });
           }}
           onCloseAutoFocus={state.onCloseAutoFocus}
           onEscapeKeyDown={(event) => {

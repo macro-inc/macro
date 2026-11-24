@@ -11,7 +11,15 @@ import {
   within,
 } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { createRoot, createSignal, For, type JSX } from 'solid-js';
+import { createEditor, type LexicalEditor } from 'lexical';
+import {
+  createRoot,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerMode } from '../core/mode';
 import {
@@ -31,7 +39,11 @@ import { type AgentRequest, NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
   userId: () => 'user' as string | undefined,
+  editor: undefined as LexicalEditor | undefined,
   touch: false,
+  renderRealComposer: undefined as
+    | ((props: ComposerProps) => JSX.Element)
+    | undefined,
   freePlan: false,
   modelsPending: false,
   tier: 'max',
@@ -74,6 +86,15 @@ vi.mock('@channel/Input', async () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId(),
+  useHasPermission: () => () => false,
+}));
+vi.mock('@queries/connectors', () => ({
+  useConnectors: () => ({
+    list: () => [],
+    ready: () => true,
+    error: () => false,
+    retry: vi.fn(),
+  }),
 }));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: mocks.openSettings }),
@@ -218,7 +239,65 @@ vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
 }));
 
-// Keep the real picker and send wiring; substitute only the Lexical editor.
+vi.mock(
+  '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder',
+  () => ({
+    buildConfig: () => {
+      const lexical = createEditor();
+      mocks.editor = lexical;
+      let markdown = '';
+      const builder = {
+        lexical,
+        buildHandle: () => ({ lexical }),
+        withAppLinkResolver: () => builder,
+        namespace: () => builder,
+        withMentions: () => builder,
+        withEmojis: () => builder,
+        withLinks: () => builder,
+        withHistory: () => builder,
+        withCode: () => builder,
+        withRestoreFocus: () => builder,
+        withFilePaste: () => builder,
+        withSkills: () => builder,
+        onEnter: () => builder,
+        onFocusLeave: () => builder,
+        onChange: () => builder,
+        controls: {
+          getMarkdown: () => markdown,
+          setMarkdown: (value: string) => {
+            markdown = value;
+          },
+          clear: () => {
+            markdown = '';
+          },
+          focus: () => lexical.getRootElement()?.focus(),
+        },
+      };
+      return builder;
+    },
+  })
+);
+vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
+  MarkdownShell: (props: { ariaLabel?: string; onConnect?: () => void }) => {
+    let root: HTMLDivElement | undefined;
+    const editor = mocks.editor;
+    onMount(() => {
+      editor?.setRootElement(root ?? null);
+      props.onConnect?.();
+    });
+    onCleanup(() => editor?.setRootElement(null));
+    return (
+      <div
+        ref={root}
+        contentEditable
+        role="textbox"
+        aria-label={props.ariaLabel}
+      />
+    );
+  },
+}));
+
+// Most cases isolate the editor; the real-composer regression retains its DOM and events.
 type ComposerProps = {
   corner: JSX.Element;
   selector: JSX.Element;
@@ -233,48 +312,51 @@ type ComposerProps = {
   onMentionUser?: (userId: string) => void;
 };
 vi.mock('../components/ChatComposer', () => ({
-  ChatComposer: (props: ComposerProps) => (
-    <>
-      {props.corner}
-      {props.selector}
-      <output data-testid="attachments">
-        {props.attachments.map((a) => a.name).join(',')}
-      </output>
-      <For each={props.attachments}>
-        {(attachment) => (
-          <button onClick={() => props.onRemoveAttachment(attachment)}>
-            Remove {attachment.name}
-          </button>
-        )}
-      </For>
-      <div
-        data-testid="drawer"
-        data-placement={props.settingsPlacement}
-        hidden={!props.drawerOpen}
-      >
-        {props.drawer}
-      </div>
-      <input
-        aria-label="Draft"
-        value={props.draft}
-        onInput={(event) => props.onDraftChange(event.currentTarget.value)}
-      />
-      <input
-        aria-label="Mention"
-        onChange={(event) => props.onMentionUser?.(event.currentTarget.value)}
-      />
-      <button
-        onClick={() =>
-          props.onSend(
-            props.draft || (mocks.attachments.length ? '' : 'Prompt'),
-            mocks.attachments
-          )
-        }
-      >
-        Send
-      </button>
-    </>
-  ),
+  ChatComposer: (props: ComposerProps) => {
+    if (mocks.renderRealComposer) return mocks.renderRealComposer(props);
+    return (
+      <>
+        {props.corner}
+        {props.selector}
+        <output data-testid="attachments">
+          {props.attachments.map((a) => a.name).join(',')}
+        </output>
+        <For each={props.attachments}>
+          {(attachment) => (
+            <button onClick={() => props.onRemoveAttachment(attachment)}>
+              Remove {attachment.name}
+            </button>
+          )}
+        </For>
+        <div
+          data-testid="drawer"
+          data-placement={props.settingsPlacement}
+          hidden={!props.drawerOpen}
+        >
+          {props.drawer}
+        </div>
+        <input
+          aria-label="Draft"
+          value={props.draft}
+          onInput={(event) => props.onDraftChange(event.currentTarget.value)}
+        />
+        <input
+          aria-label="Mention"
+          onChange={(event) => props.onMentionUser?.(event.currentTarget.value)}
+        />
+        <button
+          onClick={() =>
+            props.onSend(
+              props.draft || (mocks.attachments.length ? '' : 'Prompt'),
+              mocks.attachments
+            )
+          }
+        >
+          Send
+        </button>
+      </>
+    );
+  },
 }));
 
 /** Most cases exercise an explicit Chat or Code choice; Auto has its own. */
@@ -283,6 +365,7 @@ let startInChat = true;
 beforeEach(() => {
   localStorage.clear();
   startInChat = true;
+  mocks.renderRealComposer = undefined;
   mocks.userId = () => 'user';
   mocks.chooseAgentMode.mockClear();
   mocks.autoEnabled = true;
@@ -1619,6 +1702,10 @@ describe('agent-led new conversation', () => {
       if (touch) search.focus({ preventScroll: true });
       else await waitFor(() => expect(document.activeElement).toBe(search));
       fireEvent.input(search, { target: { value: 'no-such-choice' } });
+      const selectionPage = search.closest<HTMLElement>('.min-h-0.flex-col')!;
+      expect(selectionPage.classList.contains(touch ? 'gap-4' : 'gap-6')).toBe(
+        true
+      );
       const menu = within(search.closest('[role="dialog"]')!);
       expect(menu.getByRole('status').textContent).toBe(
         'No matches for “no-such-choice”'
@@ -1630,6 +1717,97 @@ describe('agent-led new conversation', () => {
       await waitFor(() => expect((search as HTMLInputElement).value).toBe(''));
       await waitFor(() => expect(document.activeElement).toBe(search));
       expect(menu.queryByRole('status')).toBeNull();
+    }
+  );
+
+  it.each([false, true])(
+    'keeps nonstandard speed neutral while preserving its glyph (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      const [speed, setSpeed] = createSignal('standard');
+      const user = userEvent.setup();
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            model: 'openai/gpt-5.6',
+            models: [{ id: 'openai/gpt-5.6', label: 'GPT-5.6' }],
+            suggestedModels: [{ id: 'openai/gpt-5.6', label: 'GPT-5.6' }],
+            speeds: ['standard', 'priority', 'ultrafast'],
+            get speedValue() {
+              return speed();
+            },
+            onModel: () => {},
+            onEffort: () => {},
+            onSpeed: setSpeed,
+          }}
+        />
+      ));
+      await user.click(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+      );
+      let trigger = await screen.findByRole('button', { name: 'Speed' });
+      const padding = [...trigger.classList].filter((name) =>
+        name.startsWith('pl-')
+      );
+      for (const name of ['Fast', 'Ultrafast']) {
+        await user.click(trigger);
+        await user.click(
+          await screen.findByRole('menuitemradio', {
+            name: new RegExp(`^${name}`),
+          })
+        );
+        trigger = screen.getByRole('button', { name: 'Speed' });
+        expect(trigger.classList.contains('bg-selected')).toBe(false);
+        expect(
+          [...trigger.classList].filter((name) => name.startsWith('pl-'))
+        ).toEqual(padding);
+        expect(trigger.querySelectorAll('svg')).toHaveLength(2);
+      }
+    }
+  );
+
+  it.each([false, true])(
+    'opens the model menu from the full new-conversation card with the real composer (touch: %s)',
+    async (touch) => {
+      const { ChatComposer } = await vi.importActual<
+        typeof import('../components/ChatComposer')
+      >('../components/ChatComposer');
+      mocks.renderRealComposer = (props) => <ChatComposer {...props} />;
+      mocks.touch = touch;
+      const user = userEvent.setup();
+      render(() => (
+        <NewChatPage
+          mode="chat"
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          availabilityLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      ));
+      screen.getByRole('textbox', { name: 'Message the agent' }).focus();
+      await user.click(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+      );
+      const card = await screen.findByRole('dialog');
+      await user.click(
+        within(card).getByRole('button', { name: 'Chat Default' })
+      );
+      const search = await screen.findByRole('textbox', {
+        name: 'Search agents and models',
+      });
+      await user.click(search);
+      await waitFor(() => expect(document.activeElement).toBe(search));
+      await user.type(search, 'Sonnet');
+      expect(screen.getByRole('button', { name: 'Sonnet 4' })).toBeTruthy();
+      expect(search.isConnected).toBe(true);
     }
   );
 

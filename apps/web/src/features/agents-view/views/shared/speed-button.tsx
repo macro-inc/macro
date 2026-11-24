@@ -55,10 +55,8 @@ export function SpeedButton(props: { mobile?: boolean }) {
           aria-label={t('agentControls.speed')}
           class={cn(
             'h-6 min-h-6 gap-1 rounded-full pl-2.5 pr-1.5 text-xs text-ink-muted',
-            tier() !== 'standard' && 'bg-selected pl-2 text-ink',
             props.mobile &&
-              'h-8 min-h-8 touch:min-h-8 pl-3.5 pr-2 text-sm leading-5',
-            props.mobile && tier() !== 'standard' && 'pl-2.5'
+              'h-8 min-h-8 touch:min-h-8 pl-3.5 pr-2 text-sm leading-5'
           )}
         >
           <Show when={tier() !== 'standard'}>
