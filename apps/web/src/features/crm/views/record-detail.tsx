@@ -107,15 +107,15 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
       current().type === 'contact' ? contactSection() : companySection(),
     onChange: (section) => props.onSectionChange(section),
   });
-  const returnTo = (index: number) => {
+  const returnTo = (index: number, options?: CrmRecordOpenOptions) => {
     if (index === trail().length - 1) return;
-    props.onOpen(trail().slice(0, index + 1));
+    props.onOpen(trail().slice(0, index + 1), options);
   };
   const open = (record: CrmRecordRef, options?: CrmRecordOpenOptions) => {
     const index = trail().findIndex(
       (entry) => recordKey(entry) === recordKey(record)
     );
-    if (index !== -1) return returnTo(index);
+    if (index !== -1) return returnTo(index, options);
     props.onOpen([...trail(), record], options);
   };
   const back = () =>
