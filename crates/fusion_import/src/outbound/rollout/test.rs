@@ -9,10 +9,10 @@ fn person() -> MacroUserIdStr<'static> {
         .into_owned()
 }
 
-fn flags_for(result: Result<FlagSnapshot, String>) -> FlaggedFusionImport<FakeFeatureFlags> {
+fn flags_for(result: Result<FlagSnapshot, String>) -> FusionImportRollout<FakeFeatureFlags> {
     let mut flags = FakeFeatureFlags::default();
     flags.set(person(), result);
-    FlaggedFusionImport(flags)
+    FusionImportRollout::Flagged(flags)
 }
 
 #[tokio::test]
@@ -42,4 +42,13 @@ async fn a_flag_load_that_fails_keeps_the_import_off() {
     let rollout = flags_for(Err("flag service unavailable".to_string()));
 
     assert!(!rollout.enabled_for(&person()).await);
+}
+
+#[tokio::test]
+async fn a_local_stack_has_the_import_on_and_a_host_without_flags_off() {
+    let everyone: FusionImportRollout<FakeFeatureFlags> = FusionImportRollout::Everyone;
+    let nobody: FusionImportRollout<FakeFeatureFlags> = FusionImportRollout::Nobody;
+
+    assert!(everyone.enabled_for(&person()).await);
+    assert!(!nobody.enabled_for(&person()).await);
 }
