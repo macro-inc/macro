@@ -57,6 +57,46 @@ fn decoder_splits_a_byte_at_a_time() {
 }
 
 #[test]
+fn decoder_rejects_a_line_over_the_limit_that_arrives_in_one_chunk() {
+    let mut stream = vec![b'a'; MAX_SYNC_LINE_BYTES + 1];
+    stream.push(b'\n');
+    let mut decoder = NdjsonDecoder::default();
+    assert!(matches!(
+        decoder.push(&stream),
+        Err(SyncStreamError::Stream(message)) if message.contains("exceeds")
+    ));
+}
+
+#[test]
+fn decoder_rejects_a_line_over_the_limit_split_across_chunks() {
+    // The unfinished part fits; the newline completes a line one byte over.
+    let mut decoder = NdjsonDecoder::default();
+    assert!(
+        decoder
+            .push(&vec![b'a'; MAX_SYNC_LINE_BYTES])
+            .unwrap()
+            .is_empty()
+    );
+    assert!(decoder.push(b"a\n").is_err());
+
+    // An unfinished line past the limit fails before its newline arrives.
+    let mut decoder = NdjsonDecoder::default();
+    decoder.push(&vec![b'a'; MAX_SYNC_LINE_BYTES]).unwrap();
+    assert!(decoder.push(b"a").is_err());
+}
+
+#[test]
+fn decoder_accepts_a_line_exactly_at_the_limit() {
+    let mut stream = vec![b'a'; MAX_SYNC_LINE_BYTES];
+    stream.extend_from_slice(b"\n{}\n");
+    let mut decoder = NdjsonDecoder::default();
+    let lines = decoder.push(&stream).unwrap();
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0].len(), MAX_SYNC_LINE_BYTES);
+    assert_eq!(lines[1], b"{}");
+}
+
+#[test]
 fn run_decodes_every_frame_type_and_counts_bytes() {
     let mut run = run();
     let stream = concat!(

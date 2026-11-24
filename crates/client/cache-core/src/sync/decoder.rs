@@ -27,6 +27,11 @@ impl NdjsonDecoder {
             if let Some(stripped) = line.strip_suffix(b"\r") {
                 line = stripped;
             }
+            // A line that arrived whole in one chunk never sat in the buffer
+            // long enough for the check below, so check it before copying it.
+            if line.len() > MAX_SYNC_LINE_BYTES {
+                return Err(too_long());
+            }
             if !line.iter().all(u8::is_ascii_whitespace) {
                 lines.push(line.to_vec());
             }
@@ -35,10 +40,10 @@ impl NdjsonDecoder {
         }
         self.buffer.drain(..start);
         self.scanned = self.buffer.len();
+        // The unfinished line already exceeds the limit: fail before the
+        // rest of it arrives.
         if self.buffer.len() > MAX_SYNC_LINE_BYTES {
-            return Err(SyncStreamError::Stream(format!(
-                "a line exceeds {MAX_SYNC_LINE_BYTES} bytes"
-            )));
+            return Err(too_long());
         }
         Ok(lines)
     }
@@ -53,4 +58,8 @@ impl NdjsonDecoder {
             ))
         }
     }
+}
+
+fn too_long() -> SyncStreamError {
+    SyncStreamError::Stream(format!("a line exceeds {MAX_SYNC_LINE_BYTES} bytes"))
 }
