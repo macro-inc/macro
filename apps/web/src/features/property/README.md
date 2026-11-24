@@ -144,6 +144,17 @@ unless a search typed meanwhile found a match: the first row may be **Clear
 all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
 editor takes them from the property's definition.
 
+## Select option names
+
+A select's value is option IDs. The GraphQL read of an item's properties
+carries only those IDs; Status and Priority get their options where they are
+mapped (`soupPropertyToProperty`), and the REST read carries every select's
+options. For the rest, `useEntityPropertiesQuery` adds each custom select's
+options from the definitions list Add property reads (`withDefinitionOptions`),
+and holds its answer until that list first loads, so the side panel, Record
+details, title pills and their cards never show an option ID. A failed list
+read shows the values as they are.
+
 ## Adding a property
 
 Picking a property, or creating one, adds it to the item empty and opens its

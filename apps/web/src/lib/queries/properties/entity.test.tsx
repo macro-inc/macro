@@ -6,7 +6,13 @@ import {
 } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
 import { err, ok } from 'neverthrow';
-import { type Accessor, createMemo, createSignal, type JSX } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type JSX,
+  untrack,
+} from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, onEnd, pipe } from 'wonka';
@@ -90,11 +96,17 @@ vi.mock('@property/utils', () => ({
   isInstantiatedProperty: isInstantiatedPropertyMock,
 }));
 
+const listPropertiesMock = vi.hoisted(() => vi.fn());
 vi.mock('../../service-clients/service-properties/client', () => ({
   propertiesServiceClient: {
     getEntityProperties: getRestEntityPropertiesMock,
     deleteEntityProperty: deleteEntityPropertyMock,
+    listProperties: listPropertiesMock,
   },
+}));
+
+vi.mock('@core/context/user', () => ({
+  useIsAuthenticated: () => () => true,
 }));
 
 vi.mock('./graphql/entity', () => ({
@@ -196,7 +208,8 @@ function renderWithQueryClient(factory: () => void): void {
     () => (
       <QueryClientProvider client={testQueryClient}>
         {(() => {
-          factory();
+          // A component body runs untracked.
+          untrack(factory);
           return null as unknown as JSX.Element;
         })()}
       </QueryClientProvider>
@@ -457,6 +470,116 @@ describe('useEntityPropertiesQuery transport', () => {
       entity_type: 'USER',
       entity_id: 'user-1',
       query: { include_metadata: true },
+    });
+  });
+
+  describe('a custom select', () => {
+    const PHASE_OPTIONS = ['Alpha phase', 'Beta phase'].map((label, index) => ({
+      id: `phase-${index}`,
+      property_definition_id: 'phase',
+      display_order: index,
+      value: { type: 'string' as const, value: label },
+      color: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }));
+    const phase = {
+      propertyId: 'phase-on-document',
+      propertyDefinitionId: 'phase',
+      displayName: 'Phase',
+      valueType: 'SELECT_STRING',
+      isMultiSelect: false,
+      owner: { scope: 'user', user_id: 'macro|viewer@example.com' },
+      value: ['phase-0'],
+    } as unknown as Property;
+    const definitions = [
+      {
+        definition: { id: 'phase', display_name: 'Phase' },
+        property_options: PHASE_OPTIONS,
+      },
+      {
+        definition: { id: 'other', display_name: 'Other' },
+        property_options: [],
+      },
+    ];
+
+    function deliver(properties: Property[]) {
+      graphqlExecutions[0]?.next({
+        data: {
+          user: {
+            soup: {
+              items: [
+                {
+                  id: 'document-1',
+                  properties: properties.map((mapped) => ({ mapped })),
+                },
+              ],
+            },
+          },
+        },
+      });
+    }
+
+    it('takes its option names from its definition, showing nothing until they load', async () => {
+      let answer: (value: unknown) => void = () => {};
+      listPropertiesMock.mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+      );
+      renderEntityQuery(false);
+
+      deliver([property, phase]);
+
+      await vi.waitFor(() =>
+        expect(listPropertiesMock).toHaveBeenCalledWith({
+          scope: 'all',
+          include_options: true,
+          for_entity_type: 'DOCUMENT',
+        })
+      );
+      expect(entityQuery.data).toBeUndefined();
+      expect(entityQuery.isLoading).toBe(true);
+
+      answer(ok(definitions));
+
+      await vi.waitFor(() =>
+        expect(entityQuery.data).toEqual([
+          property,
+          { ...phase, options: PHASE_OPTIONS },
+        ])
+      );
+      expect(entityQuery.isLoading).toBe(false);
+    });
+
+    it('reads no definitions when every select already has its options', async () => {
+      const status = {
+        ...phase,
+        propertyDefinitionId: 'status',
+        options: PHASE_OPTIONS,
+      } as Property;
+      renderEntityQuery(false);
+
+      deliver([property, status]);
+
+      await vi.waitFor(() =>
+        expect(entityQuery.data).toEqual([property, status])
+      );
+      expect(entityQuery.isLoading).toBe(false);
+      expect(listPropertiesMock).not.toHaveBeenCalled();
+    });
+
+    it('still shows its values when the definitions fail to load', async () => {
+      listPropertiesMock.mockResolvedValue(
+        err([{ code: 'UNKNOWN', message: 'failed' }])
+      );
+      renderEntityQuery(false);
+
+      deliver([phase]);
+
+      await vi.waitFor(() => expect(entityQuery.data).toEqual([phase]));
+      expect(entityQuery.isLoading).toBe(false);
+      expect(listPropertiesMock).toHaveBeenCalledOnce();
     });
   });
 });

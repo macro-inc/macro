@@ -9,8 +9,13 @@ import type {
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
+  PropertyOption,
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
+import {
+  needsDefinitionOptions,
+  withDefinitionOptions,
+} from '@property/utils/select-options';
 import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { DeleteEntityPropertyDocument } from '@service-storage/graphql/generated/graphql';
@@ -19,7 +24,7 @@ import {
   hasGraphqlCacheHost,
 } from '@service-storage/graphql-soup';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
-import { type Accessor, batch } from 'solid-js';
+import { type Accessor, batch, createMemo } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { PropertyTargetEntityType } from '../../service-clients/service-properties/generated/schemas/propertyTargetEntityType';
@@ -35,6 +40,7 @@ import {
 } from '../soup/cache';
 import { refreshPropertyQueries } from '../soup/property-queries';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { useListPropertiesQuery } from './definitions';
 import {
   type AddEntityPropertyInput,
   type BulkSaveEntityPropertiesInput,
@@ -150,6 +156,38 @@ export function useEntityPropertiesQuery(
     () => queryClient
   );
 
+  // GraphQL properties carry a select's option IDs only, and REST ones carry
+  // its options. Custom selects take theirs from the definitions list Add
+  // property reads, held back until its first answer so no ID shows meanwhile.
+  const needsOptions = createMemo(() =>
+    (graphqlQuery.result.data ?? []).some(needsDefinitionOptions)
+  );
+  const definitionsQuery = useListPropertiesQuery(
+    () => ({
+      scope: 'all',
+      includeOptions: true,
+      forEntityType: entityType(),
+    }),
+    () => usesGraphql() && needsOptions()
+  );
+  const optionsByDefinition = createMemo(() => {
+    const options = new Map<string, PropertyOption[]>();
+    if (!definitionsQuery.isSuccess) return options;
+    for (const item of definitionsQuery.data) {
+      if ('definition' in item) {
+        options.set(item.definition.id, item.property_options);
+      }
+    }
+    return options;
+  });
+  const graphqlProperties = createMemo(() => {
+    const properties = graphqlQuery.result.data;
+    return (
+      properties && withDefinitionOptions(properties, optionsByDefinition())
+    );
+  });
+  const awaitsOptions = () => needsOptions() && definitionsQuery.isLoading;
+
   return {
     get data() {
       if (
@@ -161,14 +199,15 @@ export function useEntityPropertiesQuery(
         )
       )
         return [];
-      return usesGraphql() ? graphqlQuery.result.data : restQuery.data;
+      if (!usesGraphql()) return restQuery.data;
+      return awaitsOptions() ? undefined : graphqlProperties();
     },
     get error() {
       return usesGraphql() ? graphqlQuery.result.error : restQuery.error;
     },
     get isLoading() {
       return usesGraphql()
-        ? graphqlQuery.result.isLoading
+        ? graphqlQuery.result.isLoading || awaitsOptions()
         : restQuery.isLoading;
     },
     get isFetching() {
