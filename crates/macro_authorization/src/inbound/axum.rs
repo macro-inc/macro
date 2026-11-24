@@ -232,8 +232,10 @@ pub(super) fn record_verified_bot(bot: &crate::BotAuthentication) {
 
     match &bot.acting_user {
         Some(acting) => record_verified_user(credential_kind(&acting.origin), &acting.user_context),
-        None => tracing::Span::current()
-            .set_attribute(CREDENTIAL_ATTRIBUTE, credential_kind(&CredentialOrigin::Bot)),
+        None => tracing::Span::current().set_attribute(
+            CREDENTIAL_ATTRIBUTE,
+            credential_kind(&CredentialOrigin::Bot),
+        ),
     }
     tracing::Span::current().set_attribute(BOT_ATTRIBUTE, bot.bot_id.to_string());
 }
