@@ -1,0 +1,21 @@
+services/agent_harness_service/AGENTS.md
+  s_8631497025cd75::t_6af0cd2a2feb59 25-27
+crates/connectors/AGENTS.md
+  s_8631497025cd75::t_6af0cd2a2feb59 9-10,39-40,45-56,60-61,101-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "98f58d2c4453418cef34666c14bdc874ca517ca8",
+  "prompts": {},
+  "sessions": {
+    "s_8631497025cd75": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "98447833-e739-47e2-9551-6c274bcec5ff",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
