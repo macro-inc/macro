@@ -169,10 +169,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   return (
     <>
       {/* Phones own one combined task menu in their one-page workspace.
-          Tablets still need creation from Overview, outside the task list. */}
-      <Show
-        when={isTouchDevice() && !isMobile() && shownSection() === 'overview'}
-      >
+          Tablets still need creation from Overview and Time, outside the
+          task list. */}
+      <Show when={isTouchDevice() && !isMobile() && shownSection() !== 'tasks'}>
         <NewProjectTaskPill
           onCreateTask={canCreateTask() ? createTask : undefined}
         />

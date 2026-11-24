@@ -10,13 +10,15 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import type { Client } from '@urql/core';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../context/time-tracking-context';
 import type { RunningTimerState } from '../primitives/running-timer';
 import { ProjectTimeDesktop } from './project-time';
 
 const inputs = vi.hoisted(() => [] as TimeSummaryInput[]);
+/** Periods whose read fails; a failed read keeps the last answer, as urql does. */
+const failing = vi.hoisted(() => new Set<string>());
 const readTimeExport = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => ({ alert: vi.fn(), failure: vi.fn() }));
 
@@ -102,22 +104,27 @@ function summaryFor(input: TimeSummaryInput): TimeSummaryFieldsFragment {
 }
 
 vi.mock('../queries/time-summary', () => ({
-  createTimeSummaryQuery: (input: () => TimeSummaryInput | undefined) => ({
-    summary: () => {
-      const value = input();
-      if (!value) return undefined;
-      inputs.push(value);
-      return summaryFor(value);
-    },
-    pending: () => false,
-    failed: () => false,
-    refetch: vi.fn(),
-  }),
+  createTimeSummaryQuery: (input: () => TimeSummaryInput | undefined) => {
+    let last: TimeSummaryFieldsFragment | undefined;
+    return {
+      summary: () => {
+        const value = input();
+        if (!value) return undefined;
+        inputs.push(value);
+        if (failing.has(value.from)) return last;
+        last = summaryFor(value);
+        return last;
+      },
+      error: () => failing.has(input()?.from ?? ''),
+      refetch: vi.fn(),
+    };
+  },
 }));
 
 afterEach(() => {
   cleanup();
   inputs.length = 0;
+  failing.clear();
   readTimeExport.mockReset();
   toast.alert.mockReset();
   toast.failure.mockReset();
@@ -190,9 +197,9 @@ it('reads the breakdown again by task, with the people under each task', () => {
   fireEvent.click(screen.getByRole('radio', { name: 'Task' }));
 
   expect(inputs.at(-1)).toMatchObject({ groupBy: 'TASK', thenBy: 'PERSON' });
-  fireEvent.click(screen.getByRole('button', { name: /Draft the plan/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Draft the plan/ }));
   expect(screen.getByText('bob')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Open task' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Draft the plan' }));
   expect(onOpenTask).toHaveBeenCalledWith('task-a', {
     event: expect.any(MouseEvent),
   });
@@ -217,12 +224,46 @@ it('exports the period as CSV and says when entries were left out', async () => 
     expect.any(AbortSignal)
   );
   expect(save).toHaveBeenCalledWith(
-    '﻿Date,Person\n',
+    '\uFEFFDate,Person\n',
     'macro-time-launch-plans-2026-11-01-to-2026-11-30.csv'
   );
   expect(toast.alert).toHaveBeenCalledWith(
-    'Exported the first 10,000 entries. Choose a shorter period for the rest.'
+    'Exported 10,000 entries and left the rest out: there are more than one export holds.'
   );
+});
+
+it('says when the export failed', async () => {
+  readTimeExport.mockResolvedValue(err({ kind: 'failed' }));
+  const { save } = renderTime();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+  await waitFor(() =>
+    expect(toast.failure).toHaveBeenCalledWith(
+      'Could not export the time. Try again.'
+    )
+  );
+  expect(save).not.toHaveBeenCalled();
+});
+
+it('never shows the last period under the name of a new one whose read failed', async () => {
+  failing.add('2026-10-01');
+  renderTime();
+  expect(screen.getByText('2h 15m')).toBeTruthy();
+
+  fireEvent.keyDown(screen.getByRole('button', { name: /^Period:/ }), {
+    key: 'Enter',
+  });
+  fireEvent.keyDown(
+    await screen.findByRole('menuitem', { name: 'Last month' }),
+    { key: 'Enter' }
+  );
+
+  await screen.findByText('Logged in October');
+  expect(screen.queryByText('2h 15m')).toBeNull();
+  expect(screen.queryByText('alice')).toBeNull();
+  expect(screen.getByText('Could not load the time logged')).toBeTruthy();
+  expect(screen.getByText('Try again')).toBeTruthy();
 });
 
 it('changes the period and says when the project held more tasks than a report counts', async () => {

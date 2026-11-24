@@ -12,7 +12,11 @@ import {
   weekRange,
 } from '../core/time-period';
 import { readTimeExport } from '../queries/time-export';
-import { createTimeSummaryQuery } from '../queries/time-summary';
+import {
+  createTimeSummaryQuery,
+  type TimeSummary,
+  type TimeSummaryRead,
+} from '../queries/time-summary';
 import { refreshOnTimeTrackingChanges } from '../queries/time-tracking-changes';
 
 /** What opens under each row of a project's breakdown. */
@@ -48,6 +52,28 @@ function exportFilename(projectName: string, days: DayRange): string {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '') || 'project';
   return `macro-time-${slug}-${days.from}-to-${days.to}.csv`;
+}
+
+/**
+ * The read's summary only once it covers `days`: while another period loads,
+ * or after it failed, the last summary is not this period's.
+ */
+function summaryFor(read: TimeSummaryRead, days: () => DayRange) {
+  const summary = (): TimeSummary | undefined => {
+    const shown = read.summary();
+    const range = days();
+    return shown && shown.from === range.from && shown.to === range.to
+      ? shown
+      : undefined;
+  };
+  return {
+    summary,
+    /** Nothing to show for this period yet. */
+    pending: () => !read.error() && summary() === undefined,
+    /** This period's read failed with nothing to show; a failed refetch keeps it. */
+    failed: () => read.error() && summary() === undefined,
+    refetch: read.refetch,
+  };
 }
 
 /** Re-read summaries when the viewer's own time changes elsewhere. */
@@ -92,7 +118,7 @@ export function createProjectTime(
     grouping: () => choice.grouping,
     setGrouping: (grouping: TimeGrouping) => setChoice('grouping', grouping),
     days,
-    ...read,
+    ...summaryFor(read, days),
   };
 }
 
@@ -104,20 +130,22 @@ export function createProjectWeekTime(
   clock: ProjectTimeClock
 ) {
   const { client } = useTimeTracking();
-  const read = createTimeSummaryQuery(() => {
-    const week = weekRange(clock.today(), clock.weekStartsOn());
-    return {
+  const week = () => weekRange(clock.today(), clock.weekStartsOn());
+  const read = createTimeSummaryQuery(
+    () => ({
       scope: 'PROJECT',
       projectId: projectId(),
-      from: week.from,
-      to: week.to,
+      from: week().from,
+      to: week().to,
       groupBy: 'DAY',
-    };
-  }, client);
+    }),
+    client
+  );
   refreshOnChanges(read.refetch);
+  const shown = summaryFor(read, week);
   return {
-    minutes: (): number | undefined => read.summary()?.totalMinutes,
-    pending: read.pending,
+    minutes: (): number | undefined => shown.summary()?.totalMinutes,
+    failed: shown.failed,
   };
 }
 
@@ -141,15 +169,20 @@ export function createProjectTimeExport(
       attributes: { 'project.id': id },
     });
     setPending(true);
-    controller = new AbortController();
+    const abort = new AbortController();
+    controller = abort;
     try {
       const read = await readTimeExport(
         { scope: 'project', projectId: id, from: range.from, to: range.to },
-        controller.signal
+        abort.signal
       );
-      if (read.isErr()) return { kind: 'failed' };
+      // Leaving the tab mid-export aborts it; that is not a failure to report.
+      if (read.isErr())
+        return abort.signal.aborted
+          ? { kind: 'cancelled' }
+          : { kind: 'failed' };
       const { saved } = await save(
-        `﻿${read.value.csv}`,
+        `\uFEFF${read.value.csv}`,
         exportFilename(name, range)
       );
       if (!saved) return { kind: 'cancelled' };

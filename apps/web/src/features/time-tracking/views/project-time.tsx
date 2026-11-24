@@ -1,4 +1,4 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
@@ -24,6 +24,8 @@ import {
 } from './shared/project-time-parts';
 import type { ProjectTimeViewProps } from './shared/project-time-props';
 
+const UNAVAILABLE = '–';
+
 /**
  * A project's Time tab: the period, its three figures, and the breakdown by
  * person, task or day with what each row holds; export for the period.
@@ -39,12 +41,16 @@ export function ProjectTimeDesktop(props: ProjectTimeViewProps): JSX.Element {
   );
   usePending('time.summary', time.pending, { 'project.id': props.project.id });
   const exportCsv = async () => reportExport(await exporter.run());
-  const minutes = (value: number | undefined) =>
-    value === undefined ? undefined : formatLength(value);
+  // A figure whose read failed reads as a dash, not a placeholder that never ends.
+  const minutes = (value: number | undefined, failed: boolean) => {
+    if (value !== undefined) return formatLength(value);
+    return failed ? UNAVAILABLE : undefined;
+  };
   const tasksWithTime = () => {
     const summary = time.summary();
-    if (!summary) return undefined;
-    if (summary.scopeTaskCount == null) return String(summary.taskCount);
+    if (!summary) return time.failed() ? UNAVAILABLE : undefined;
+    if (summary.scopeTaskCount == null)
+      return new Intl.NumberFormat(formatLocale()).format(summary.taskCount);
     return t('timeTracking.tasksWithTimeOf', {
       count: summary.taskCount,
       total: summary.scopeTaskCount,
@@ -87,11 +93,11 @@ export function ProjectTimeDesktop(props: ProjectTimeViewProps): JSX.Element {
           <div class="grid grid-cols-3 gap-6">
             <TimeFigure
               label={loggedInLabel(time, props.clock)}
-              value={minutes(time.summary()?.totalMinutes)}
+              value={minutes(time.summary()?.totalMinutes, time.failed())}
             />
             <TimeFigure
               label={t('timeTracking.periodThisWeek')}
-              value={minutes(week.minutes())}
+              value={minutes(week.minutes(), week.failed())}
             />
             <TimeFigure
               label={t('timeTracking.tasksWithTime')}

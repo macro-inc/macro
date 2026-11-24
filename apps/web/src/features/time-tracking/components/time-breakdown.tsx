@@ -29,6 +29,12 @@ function groupingName(grouping: TimeGrouping): string {
   return t('timeTracking.byDay');
 }
 
+function breakdownLabel(grouping: TimeGrouping): string {
+  if (grouping === 'PERSON') return t('timeTracking.timeByPerson');
+  if (grouping === 'TASK') return t('timeTracking.timeByTask');
+  return t('timeTracking.timeByDay');
+}
+
 /** The length, right-aligned in the time column. */
 function Length(props: { minutes: number }): JSX.Element {
   return (
@@ -122,7 +128,10 @@ function BreakdownGroup(props: {
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={t('timeTracking.openTask')}
+              aria-label={t('timeTracking.openTaskNamed', {
+                task:
+                  props.group.key.task?.name || t('timeTracking.untitledTask'),
+              })}
               tooltip={t('timeTracking.openTask')}
               onClick={(event) => props.onOpenTask(id(), { event })}
             >
@@ -183,11 +192,7 @@ export function BreakdownList(props: {
  */
 export function TimeBreakdown(props: BreakdownProps): JSX.Element {
   return (
-    <section
-      aria-label={t('timeTracking.breakdownLabel', {
-        grouping: groupingName(props.grouping),
-      })}
-    >
+    <section aria-label={breakdownLabel(props.grouping)}>
       <div class="flex h-8 items-center gap-2 border-b border-edge-muted px-2 text-xs text-ink-muted">
         <span class="flex-1 pl-5.5">{groupingName(props.grouping)}</span>
         <span>{t('timeTracking.timeColumn')}</span>

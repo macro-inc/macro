@@ -69,10 +69,11 @@ function reportProps(props: ProjectTimeProps) {
 
 /** A project's Time tab on desktop and tablets, with the CSV export. */
 export function ProjectTimeTab(props: ProjectTimeProps): JSX.Element {
+  const view = reportProps(props);
   return (
     <Suspense>
       <TimeTrackingProvider>
-        <ProjectTimeDesktop {...reportProps(props)} save={saveCsv} />
+        <ProjectTimeDesktop {...view} save={saveCsv} />
       </TimeTrackingProvider>
     </Suspense>
   );
@@ -81,11 +82,12 @@ export function ProjectTimeTab(props: ProjectTimeProps): JSX.Element {
 /** A project's time on a phone's one-page project, behind `enable-time-tracking`. */
 export function ProjectTimeEntry(props: ProjectTimeProps): JSX.Element {
   const flag = useFeatureFlag(enableTimeTracking);
+  const view = reportProps(props);
   return (
     <Show when={flag().enabled}>
       <Suspense>
         <TimeTrackingProvider>
-          <MobileProjectTime {...reportProps(props)} />
+          <MobileProjectTime {...view} />
         </TimeTrackingProvider>
       </Suspense>
     </Show>

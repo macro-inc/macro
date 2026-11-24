@@ -69,7 +69,8 @@ export function MobileProjectTime(
   usePending('time.summary', time.pending, { 'project.id': props.project.id });
   const total = () => {
     const summary = time.summary();
-    return summary ? formatLength(summary.totalMinutes) : undefined;
+    if (summary) return formatLength(summary.totalMinutes);
+    return time.failed() ? '–' : undefined;
   };
   const tasks = () =>
     (time.summary()?.thenTotals ?? []).filter((task) => task.minutes > 0);

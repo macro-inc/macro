@@ -502,7 +502,7 @@ Open task button) opens the task, beside the project or, with Shift, in a new
 split. Totals are summed on the server (`GraphqlUser.timeSummary`, which reads
 the primary) and read again after the viewer logs time anywhere. Export
 downloads the period's entries as the server's CSV (`GET /time/export`), and
-says so when it stopped at its row limit. A project past the report's task
+says so when it left entries out. A project past the report's task
 cap says its totals leave some tasks out. Phones keep the one-page project: a
 Time row under Discussion opens a sheet with the period, its total, people
 (each opening to their tasks) and the tasks with the most time; no export.

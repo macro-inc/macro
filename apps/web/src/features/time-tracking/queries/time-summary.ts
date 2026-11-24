@@ -16,8 +16,8 @@ function summaryOf(data: TimeSummaryQuery): TimeSummary {
 
 /**
  * A summary of logged time, read from the primary so it shows a write just
- * made. Changing the period or grouping keeps the last summary on screen
- * until the next one arrives.
+ * made. After the input changes, `summary` keeps the last answer until the
+ * next one arrives: compare its period before showing it as the new one.
  */
 export function createTimeSummaryQuery(
   input: Accessor<TimeSummaryInput | undefined>,
@@ -38,10 +38,8 @@ export function createTimeSummaryQuery(
   return {
     summary: (): TimeSummary | undefined =>
       query.isPending ? undefined : query.data,
-    /** No summary yet, so nothing can be shown for it. */
-    pending: () => query.isPending,
-    /** The read failed with nothing to show; a failed refetch keeps the last one. */
-    failed: () => query.isError && query.data === undefined,
+    /** The latest read failed. */
+    error: () => query.isError,
     refetch: () => query.refetch({ requestPolicy: 'network-only' }),
   };
 }

@@ -87,6 +87,10 @@ export const canDiscussProject = (project: ProjectDetail) =>
 
 export type ProjectSection = 'overview' | 'tasks' | 'time';
 
+export function isProjectSection(value: unknown): value is ProjectSection {
+  return value === 'overview' || value === 'tasks' || value === 'time';
+}
+
 /** A project's sections: Time only while time tracking is on. */
 export function projectSections(
   timeTracking: boolean

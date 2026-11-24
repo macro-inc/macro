@@ -78,7 +78,10 @@ export default {
   byPerson: 'Person',
   byTask: 'Task',
   byDay: 'Day',
-  breakdownLabel: 'Time by {{grouping}}',
+  timeByPerson: 'Time by person',
+  timeByTask: 'Time by task',
+  timeByDay: 'Time by day',
+  openTaskNamed: 'Open {{task}}',
   timeColumn: 'Time',
   loggedIn: 'Logged in {{period}}',
   tasksWithTime: 'Tasks with time',
@@ -93,8 +96,8 @@ export default {
   exportCsv: 'Export CSV',
   exportFailed: 'Could not export the time. Try again.',
   exportIncomplete: {
-    one: 'Exported the first {{count}} entry. Choose a shorter period for the rest.',
+    one: 'Exported {{count}} entry and left the rest out: there are more than one export holds.',
     other:
-      'Exported the first {{count}} entries. Choose a shorter period for the rest.',
+      'Exported {{count}} entries and left the rest out: there are more than one export holds.',
   },
 };
