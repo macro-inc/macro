@@ -358,14 +358,17 @@ Four vocabularies must agree:
 
 ## 12. Search (optional)
 
-Initiatives, forms, and databases are not in OpenSearch; Cmd+K finds them through
-Quick Access (section 15) and agents through their list tools. That is the
-minimum.
+Initiatives, forms, and databases themselves are not in OpenSearch; Cmd+K finds
+them through Quick Access (section 15) and agents through their list tools.
+That is the minimum. Database rows are indexed (`database_rows`), as candidates
+that search re-checks in Postgres before showing.
 
 For full-text search, follow the `AGENTS.md` recipes in
 `crates/opensearch_client` (index shapes), `crates/models_search`,
 `crates/search_service` (queries), and `services/search_processing_service`
-(Kafka consumer and backfill). Agent sessions are the newest example.
+(Kafka consumer and backfill). Agent sessions and database rows are the newest
+examples; database rows also show catching up from a change journal with
+`external_gte` versions.
 `crates/name_search` covers name-only search from Postgres. **Deploys never
 create OpenSearch indices or aliases**; that is a manual step for a person, and
 upserts must not create an index by accident.
