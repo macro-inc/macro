@@ -62,9 +62,11 @@ where
                     .remove_roles_from_user(user_id, &other_tiers)
                     .await
             }
+            // Stripe keeps retrying a past-due payment and cancels the
+            // subscription when retries run out, so access stays until then.
+            SubscriptionStatus::PastDue => Ok(()),
             SubscriptionStatus::Canceled
             | SubscriptionStatus::IncompleteExpired
-            | SubscriptionStatus::PastDue
             | SubscriptionStatus::Paused
             | SubscriptionStatus::Unpaid => {
                 self.user_roles_and_permissions_repository

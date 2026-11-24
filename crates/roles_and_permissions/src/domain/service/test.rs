@@ -90,8 +90,30 @@ async fn assert_payment_failure_status_removes_subscription_roles(
 }
 
 #[tokio::test]
-async fn test_payment_failure_statuses_past_due_removes_roles() -> anyhow::Result<()> {
-    assert_payment_failure_status_removes_subscription_roles(SubscriptionStatus::PastDue).await
+async fn past_due_keeps_roles_while_stripe_retries() -> anyhow::Result<()> {
+    let mock_user_roles_and_permissions_repository =
+        MockUserRolesAndPermissionsRepository::default();
+
+    let user_service =
+        UserRolesAndPermissionsServiceImpl::new(mock_user_roles_and_permissions_repository.clone());
+
+    user_service
+        .update_user_roles_and_permissions_for_subscription(
+            &MacroUserIdStr::parse_from_str("macro|user@example.com")?,
+            SubscriptionStatus::PastDue,
+            ProductTier::Opus,
+        )
+        .await?;
+
+    assert!(mock_user_roles_and_permissions_repository
+        .get_removed_roles_from_user_calls()
+        .is_empty());
+    assert_eq!(
+        mock_user_roles_and_permissions_repository.get_add_roles_to_user_calls(),
+        0
+    );
+
+    Ok(())
 }
 
 #[tokio::test]
