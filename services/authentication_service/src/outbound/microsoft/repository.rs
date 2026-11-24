@@ -377,8 +377,8 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
         grant: &StoredGrant,
         lease: Uuid,
         revoke: bool,
-    ) -> Result<(), MicrosoftAuthError> {
-        sqlx::query!(
+    ) -> Result<bool, MicrosoftAuthError> {
+        let result = sqlx::query!(
             r#"
             UPDATE microsoft_oauth_grant_versions SET refresh_lease_id = NULL, refresh_lease_until = NULL,
                 revoked_at = CASE WHEN $5 THEN now() ELSE revoked_at END
@@ -393,6 +393,6 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
         .execute(&self.db)
         .await
         .map_err(database_error)?;
-        Ok(())
+        Ok(result.rows_affected() == 1)
     }
 }
