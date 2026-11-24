@@ -265,9 +265,15 @@ async function whileWaitHolds<T>(
 }
 
 /**
+ * How long a write the queue no longer holds waits for its settlement. A host
+ * may deliver a settlement after the queue answer that followed it.
+ */
+const SETTLEMENT_GRACE_MS = 500;
+
+/**
  * Waits for a write the cache may have queued although its enqueue lost its
- * reply. Its settlement decides; a queue that answers without it, before any
- * settlement of it, never took it.
+ * reply. Its settlement decides; a queue that answers without it, with no
+ * settlement of it soon after, never took it.
  */
 async function commitOfUncertain(
   settlements: Settlements,
@@ -286,11 +292,23 @@ async function commitOfUncertain(
     }
   })();
   const reported = (async () => {
-    await settled;
+    try {
+      await settled;
+    } catch {
+      // The caller reads the failure from `settled`.
+    }
     return 'settled' as const;
   })();
+  const graceEnded = () =>
+    new Promise<'absent'>((resolve) => {
+      setTimeout(() => resolve('absent'), SETTLEMENT_GRACE_MS);
+    });
   const first = await Promise.race([reported, queued]);
-  if (first === false && !settlements.reported(uuid)) {
+  if (
+    first === false &&
+    !settlements.reported(uuid) &&
+    (await Promise.race([reported, graceEnded()])) === 'absent'
+  ) {
     throw new CatalogMutationError(
       'The change was not saved. Try again.',
       'NOT_SAVED'
@@ -766,6 +784,10 @@ export async function addPropertyOption(
           'Another login took over while the add read the cache',
           'ACCOUNT_CHANGED'
         );
+      // The client of a cache that stopped or was replaced meanwhile would
+      // send the add past the writes the cache still holds.
+      if (graphqlDraftQueueBlocked() || getGraphqlSoupCacheHost() !== cacheHost)
+        throw writesPaused();
       return parent.run(() =>
         executeOptimisticMutation(
           client,

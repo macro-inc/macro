@@ -349,6 +349,32 @@ describe('adding an option', () => {
     expect(soup.optimistic).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      'stops',
+      () => {
+        soup.blocked = true;
+        soup.host = undefined;
+      },
+    ],
+    [
+      'is replaced',
+      () => {
+        soup.host = { ...soup.host } as typeof soup.host;
+      },
+    ],
+  ])(
+    'refuses an add whose cache %s while it reads the cache',
+    async (_, change) => {
+      queueingHost();
+      soup.duringRead = change;
+      const added = await outcomeOf(addPropertyOption('def-1', TAG));
+      expect(isCatalogErrorCode(added, 'WRITES_PAUSED')).toBe(true);
+      expect(soup.optimistic).not.toHaveBeenCalled();
+      expect(soup.mutation).not.toHaveBeenCalled();
+    }
+  );
+
   it('stamps an add with the cache generation its links were read under', async () => {
     const settle = queueingHost();
     soup.duringRead = () => {
@@ -1360,6 +1386,39 @@ describe('a write whose enqueue lost its reply', () => {
     queueHolds(() => []);
     const added = await outcomeOf(addPropertyOption('def-1', TAG));
     expect(isCatalogErrorCode(added, 'NOT_SAVED')).toBe(true);
+  });
+
+  it('keeps an add whose commit is reported just after the queue answers without it', async () => {
+    const reader = optionsReader();
+    try {
+      const settle = queueingHost();
+      soup.optimistic.mockImplementation(() => ({
+        toPromise: async () => uncertain(),
+      }));
+      const sent = () =>
+        soup.optimistic.mock.calls.map(([, , , , options]) => options.uuid);
+      const host = soup.host;
+      if (!host) throw new Error('no host');
+      // Sent and committed already; its settlement is still on its way.
+      host.inspectMutations = async () => {
+        setTimeout(
+          () =>
+            settle({
+              transactionId: 'tx-9',
+              status: 'committed',
+              mutationUuid: sent()[0],
+            }),
+          30
+        );
+        return [];
+      };
+      expect(await outcomeOf(addPropertyOption('def-1', TAG))).toMatchObject({
+        id: sent()[0],
+      });
+      await vi.waitFor(() => expect(reader.refresh).toHaveBeenCalled());
+    } finally {
+      reader.dispose();
+    }
   });
 
   it('runs a predicted write on when its commit arrives, reporting no failure', async () => {
