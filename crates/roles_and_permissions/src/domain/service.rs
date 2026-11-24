@@ -51,8 +51,9 @@ where
                 self.user_roles_and_permissions_repository
                     .add_roles_to_user(user_id, &roles)
                     .await?;
-                // A plan change (Premium <-> Max) arrives as an activation of the
-                // new tier; drop the other tier roles so exactly one tier remains.
+                // A plan change (between Premium, Business and Max) arrives as an
+                // activation of the new tier; drop the other tier roles so exactly
+                // one tier remains.
                 let other_tiers: Vec<RoleId> = ProductTier::ALL
                     .iter()
                     .map(ProductTier::role)

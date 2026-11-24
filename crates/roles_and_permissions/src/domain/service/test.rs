@@ -162,6 +162,7 @@ async fn activating_a_tier_removes_the_other_tier_roles() -> anyhow::Result<()> 
     assert!(removed[0].contains(&RoleId::SubOpus));
     assert!(removed[0].contains(&RoleId::SubSonnet));
     assert!(removed[0].contains(&RoleId::SubHaiku));
+    assert!(removed[0].contains(&RoleId::SubBusiness));
     assert!(!removed[0].contains(&RoleId::SubMax));
     assert!(!removed[0].contains(&RoleId::ProfessionalSubscriber));
     Ok(())
