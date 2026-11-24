@@ -261,7 +261,7 @@ pub(crate) fn scope_query(scope: DatabaseRowScope) -> serde_json::Value {
 }
 
 /// Delete every document `scope` matches, a page at a time, each by id
-/// with its own version as an `external_gte` version.
+/// with an `external_gte` version (see [`delete_version`]).
 ///
 /// Not a delete-by-query: that deletes with internal versioning, which bumps
 /// the version the tombstone keeps, so the index would refuse the same row
@@ -304,7 +304,7 @@ pub(crate) async fn delete_rows(
             .iter()
             .map(|row| DatabaseRowWrite::Delete {
                 row_id: row.row_id,
-                table_version: row.table_version,
+                table_version: delete_version(scope, row),
             })
             .collect();
         deleted += write_rows(client, index, &deletes).await?.applied;
@@ -313,6 +313,20 @@ pub(crate) async fn delete_rows(
 }
 
 const DELETE_PAGE_SIZE: usize = 500;
+
+/// The version a scoped delete removes a document at.
+///
+/// A whole database or table goes at each document's own version, so the
+/// same rows written again at their unchanged version (a restore) land. The
+/// rows of a table below a version are rows a full pass found gone at that
+/// version, so they go at it: a pass that read one of them earlier and
+/// writes it late is refused instead of bringing it back.
+fn delete_version(scope: DatabaseRowScope, row: &IndexedDatabaseRow) -> i64 {
+    match scope {
+        DatabaseRowScope::Database(_) | DatabaseRowScope::Table(_) => row.table_version,
+        DatabaseRowScope::TableOlderThan { version, .. } => version,
+    }
+}
 
 pub(crate) async fn page_rows(
     client: &opensearch::OpenSearch,

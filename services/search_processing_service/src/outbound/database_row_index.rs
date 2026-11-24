@@ -132,6 +132,18 @@ impl DatabaseRowSource for PgDatabaseRows {
         Ok(index::delete_database_watermarks(&self.db, database_id).await?)
     }
 
+    async fn lagging_tables(&self, after: Option<Uuid>, page: usize) -> Result<Vec<Uuid>, Report> {
+        Ok(index::read_lagging_tables(&self.db, after, limit(page)).await?)
+    }
+
+    async fn relabelled_tables(
+        &self,
+        since: chrono::DateTime<chrono::Utc>,
+        page: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        Ok(index::read_relabelled_tables(&self.db, since, limit(page)).await?)
+    }
+
     async fn gone_tables(&self, page: usize) -> Result<Vec<Uuid>, Report> {
         Ok(index::read_watermarks_of_gone_tables(&self.db, limit(page)).await?)
     }

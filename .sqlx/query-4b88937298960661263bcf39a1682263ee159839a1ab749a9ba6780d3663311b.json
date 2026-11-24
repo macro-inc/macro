@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT t.id\n                FROM database_tables t\n                JOIN database_entities de ON de.database_id = t.database_id\n                LEFT JOIN database_row_search_watermarks w ON w.table_id = t.id\n                WHERE de.trashed_at IS NULL\n                    AND (w.table_id IS NULL OR t.version > w.indexed_version)\n                ORDER BY t.id\n                LIMIT $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4b88937298960661263bcf39a1682263ee159839a1ab749a9ba6780d3663311b"
+}

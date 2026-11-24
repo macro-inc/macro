@@ -262,6 +262,91 @@ where
     }
 }
 
+/// One page, in id order after `after`, of the searchable tables the index
+/// is behind on: no watermark, or a watermark below the table's version.
+/// This catches a table whose event was lost.
+#[tracing::instrument(skip(executor), err)]
+pub async fn read_lagging_tables<'e, Executor>(
+    executor: Executor,
+    after: Option<Uuid>,
+    limit: i64,
+) -> sqlx::Result<Vec<Uuid>>
+where
+    Executor: sqlx::PgExecutor<'e>,
+{
+    // Two statements, not `$1 IS NULL OR ...`, so the cached generic plan
+    // keeps the cursor as an index condition.
+    match after {
+        None => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT t.id
+                FROM database_tables t
+                JOIN database_entities de ON de.database_id = t.database_id
+                LEFT JOIN database_row_search_watermarks w ON w.table_id = t.id
+                WHERE de.trashed_at IS NULL
+                    AND (w.table_id IS NULL OR t.version > w.indexed_version)
+                ORDER BY t.id
+                LIMIT $1
+                "#,
+                limit,
+            )
+            .fetch_all(executor)
+            .await
+        }
+        Some(after) => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT t.id
+                FROM database_tables t
+                JOIN database_entities de ON de.database_id = t.database_id
+                LEFT JOIN database_row_search_watermarks w ON w.table_id = t.id
+                WHERE t.id > $1
+                    AND de.trashed_at IS NULL
+                    AND (w.table_id IS NULL OR t.version > w.indexed_version)
+                ORDER BY t.id
+                LIMIT $2
+                "#,
+                after,
+                limit,
+            )
+            .fetch_all(executor)
+            .await
+        }
+    }
+}
+
+/// Tables with a watermark that place a definition one of whose options
+/// changed after `since` and after the table's watermark last moved: a tag
+/// set relabelled outside any database leaves no trace in the table's
+/// journal or version. A minute of slack covers a relabel that committed
+/// just after a pass read the old label.
+#[tracing::instrument(skip(executor), err)]
+pub async fn read_relabelled_tables<'e, Executor>(
+    executor: Executor,
+    since: chrono::DateTime<chrono::Utc>,
+    limit: i64,
+) -> sqlx::Result<Vec<Uuid>>
+where
+    Executor: sqlx::PgExecutor<'e>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT c.table_id AS "table_id!"
+        FROM property_options po
+        JOIN database_columns c ON c.property_definition_id = po.property_definition_id
+        JOIN database_row_search_watermarks w ON w.table_id = c.table_id
+        WHERE po.updated_at > $1
+            AND po.updated_at > w.updated_at - INTERVAL '1 minute'
+        LIMIT $2
+        "#,
+        since,
+        limit,
+    )
+    .fetch_all(executor)
+    .await
+}
+
 /// Which of `row_ids` exist in a database whose rows belong in the index.
 #[tracing::instrument(skip_all, fields(requested = row_ids.len()), err)]
 pub async fn read_searchable_row_ids<'e, Executor>(
@@ -303,7 +388,8 @@ where
 }
 
 /// Record that the index holds the table up to `version`. A mark never moves
-/// back, so a slower pass that finishes later cannot undo a faster one.
+/// back, so a slower pass that finishes later cannot undo a faster one; its
+/// `updated_at` always moves, recording when the table's text was last read.
 #[tracing::instrument(skip(executor), err)]
 pub async fn raise_watermark<'e, Executor>(
     executor: Executor,

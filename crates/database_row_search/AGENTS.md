@@ -17,8 +17,9 @@ database before exposing a hit.
 
 ## Scope
 
-- Owns: the searchable-text rules (title = first column; text, link, select,
-  number select and tag labels; nothing else) and the reads behind them.
+- Owns: the searchable-text rules (title = first column; text, links without
+  query string or fragment, select, number select and tag labels of the
+  column's own definition; nothing else) and the reads behind them.
 - Not here: the index document and mapping → `crates/models_opensearch`,
   `infra/stacks/opensearch/helpers`; writing the index →
   `services/search_processing_service`; authorizing hits → `crates/search_service`.
@@ -26,7 +27,8 @@ database before exposing a hit.
 ## Boundaries
 
 - Depends on: `mention_utils` only, besides sqlx. Keep it light: `search_service`
-  depends on it, so it never takes the `databases` crate.
+  depends on it, so it never takes the `databases` crate (a dev-dependency
+  only, for the column change kind test).
 
 ## Checks
 
@@ -37,5 +39,7 @@ database before exposing a hit.
 - A database without a `database_entities` row (CRM, forms) and a trashed one
   read as no rows. Entity and relation cells are never read as text: their
   targets' names could name things the viewer cannot open.
+- `TEXT_RESHAPING_COLUMN_CHANGES` mirrors `databases`' `ColumnChangeKind`; a
+  test matches every kind exhaustively, so a new kind needs a decision there.
 - A change to the text rules changes what search matches and shows; it needs a
   full backfill of the index to take effect for rows already indexed.

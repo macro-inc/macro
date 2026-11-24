@@ -9,7 +9,9 @@
 //! write carries the table version its text was read at, so the index keeps
 //! the newest state whatever order writes land in.
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Instant};
+
+use chrono::{DateTime, Utc};
 
 use database_row_search::{
     RowSearchText,
@@ -112,6 +114,22 @@ pub trait DatabaseRowSource: Send + Sync + 'static {
     /// Forget every watermark of the database.
     fn forget_database(&self, database_id: Uuid)
     -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// One page, in id order, of searchable tables with no watermark or one
+    /// below their version.
+    fn lagging_tables(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Tables placing a definition whose options changed after `since` and
+    /// after the table's watermark last moved.
+    fn relabelled_tables(
+        &self,
+        since: DateTime<Utc>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Tables with a watermark that no longer exist, at most `limit`.
     fn gone_tables(&self, limit: usize) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
@@ -224,7 +242,20 @@ pub struct StaleRemoval {
     pub gone_tables: usize,
 }
 
+/// What a catch-up round did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CatchUp {
+    /// Lagging tables passed over.
+    pub lagging: usize,
+    /// Tables reindexed for a relabelled option.
+    pub relabelled: usize,
+    /// Passes that failed, retried next round.
+    pub failed: usize,
+}
+
 const DATABASES_PER_PAGE: usize = 100;
+const LAGGING_TABLES_PER_PAGE: usize = 100;
+const RELABELLED_TABLES_PER_ROUND: usize = 500;
 const GONE_TABLES_PER_ROUND: usize = 100;
 
 pub struct DatabaseRowIndexService<S, I> {
@@ -359,12 +390,44 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         span.record("rows_deleted", counts.deleted);
         span.record("rows_superseded", counts.superseded);
 
-        if outcome != TableOutcome::UpToDate {
-            self.source
-                .raise_watermark(table_id, state.database_id, state.version)
-                .await?;
+        if outcome == TableOutcome::UpToDate {
+            return Ok(outcome);
         }
+
+        // A trash, purge or table delete that committed while this pass
+        // wrote does not bump the table version, so its deletes and these
+        // writes can carry the same version and the writes can land last.
+        // Read the table again: if it went, remove what this pass wrote and
+        // leave the watermark forgotten.
+        if !self.still_searchable(table_id).await? {
+            self.remove_table(table_id).await?;
+            return Ok(TableOutcome::Removed);
+        }
+        self.source
+            .raise_watermark(table_id, state.database_id, state.version)
+            .await?;
         Ok(outcome)
+    }
+
+    /// Whether the table still exists in a searchable database.
+    async fn still_searchable(&self, table_id: Uuid) -> Result<bool, Report> {
+        Ok(self
+            .source
+            .table_state(table_id)
+            .await?
+            .is_some_and(|state| state.searchable))
+    }
+
+    /// Remove the documents of a table that is gone or no longer searchable,
+    /// with its database's when the database itself went.
+    async fn remove_table(&self, table_id: Uuid) -> Result<(), Report> {
+        match self.source.table_state(table_id).await? {
+            Some(state) => self.remove_database(state.database_id).await,
+            None => {
+                self.index.delete(RowIndexScope::Table(table_id)).await?;
+                self.source.forget_table(table_id).await
+            }
+        }
     }
 
     /// Rewrite every row of the table, then remove the documents left below
@@ -384,6 +447,12 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             };
             counts += self.rewrite_rows(&row_ids, state.version).await?;
             after = Some(last);
+
+            // A long pass stops writing once its database is trashed or the
+            // table is gone; the caller removes what it wrote.
+            if !self.still_searchable(table_id).await? {
+                return Ok(counts);
+            }
         }
 
         let swept = self
@@ -447,9 +516,15 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     /// documents and watermarks of tables that are gone. Each delete carries
     /// the version the document holds, so a row written again meanwhile
     /// keeps its newer document.
-    #[tracing::instrument(err, skip_all, fields(checked, removed, gone_tables))]
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(checked, removed, gone_tables, pages, duration_ms)
+    )]
     pub async fn remove_stale(&self, cancel: &CancellationToken) -> Result<StaleRemoval, Report> {
+        let started = Instant::now();
         let mut removal = StaleRemoval::default();
+        let mut pages = 0_usize;
         let mut after = None;
         while !cancel.is_cancelled() {
             let page = self.index.page(after, ROWS_PER_BATCH).await?;
@@ -457,6 +532,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 break;
             };
             after = Some(last.row_id);
+            pages += 1;
             removal.checked += page.len();
 
             let row_ids: Vec<Uuid> = page.iter().map(|row| row.row_id).collect();
@@ -495,16 +571,93 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         span.record("checked", removal.checked);
         span.record("removed", removal.removed);
         span.record("gone_tables", removal.gone_tables);
+        span.record("pages", pages);
+        span.record("duration_ms", elapsed_ms(started));
         Ok(removal)
     }
 
-    /// Run [`Self::remove_stale`] unless another task is running it.
-    #[tracing::instrument(err, skip_all, fields(led))]
-    pub async fn sweep_stale_once(&self, cancel: &CancellationToken) -> Result<(), Report> {
+    /// Catch up tables whose events were lost (a watermark missing or below
+    /// the table's version), and reindex tables whose options were
+    /// relabelled since `relabelled_since` without a databases event (a tag
+    /// set changed through the properties service). One table failing does
+    /// not stop the others; the next round retries it.
+    #[tracing::instrument(err, skip_all, fields(lagging, relabelled, failed, duration_ms))]
+    pub async fn catch_up(
+        &self,
+        relabelled_since: DateTime<Utc>,
+        cancel: &CancellationToken,
+    ) -> Result<CatchUp, Report> {
+        let started = Instant::now();
+        let mut catch_up = CatchUp::default();
+
+        let mut after = None;
+        while !cancel.is_cancelled() {
+            let tables = self
+                .source
+                .lagging_tables(after, LAGGING_TABLES_PER_PAGE)
+                .await?;
+            let Some(last) = tables.last().copied() else {
+                break;
+            };
+            after = Some(last);
+            for table_id in tables {
+                catch_up.lagging += 1;
+                if self
+                    .reconcile_table(table_id, PassKind::CatchUp)
+                    .await
+                    .is_err()
+                {
+                    catch_up.failed += 1;
+                }
+            }
+        }
+
+        if !cancel.is_cancelled() {
+            let relabelled = self
+                .source
+                .relabelled_tables(relabelled_since, RELABELLED_TABLES_PER_ROUND)
+                .await?;
+            for table_id in relabelled {
+                catch_up.relabelled += 1;
+                // The table's version did not move, so only a full pass
+                // rereads it.
+                if self
+                    .reconcile_table(table_id, PassKind::Full)
+                    .await
+                    .is_err()
+                {
+                    catch_up.failed += 1;
+                }
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("lagging", catch_up.lagging);
+        span.record("relabelled", catch_up.relabelled);
+        span.record("failed", catch_up.failed);
+        span.record("duration_ms", elapsed_ms(started));
+        Ok(catch_up)
+    }
+
+    /// One sweep round, unless another task is running one: [`Self::catch_up`],
+    /// then [`Self::remove_stale`] when `scan_index` (it walks the whole
+    /// index, so it runs less often).
+    #[tracing::instrument(err, skip_all, fields(led, scan_index))]
+    pub async fn sweep_once(
+        &self,
+        relabelled_since: DateTime<Utc>,
+        scan_index: bool,
+        cancel: &CancellationToken,
+    ) -> Result<(), Report> {
+        let span = tracing::Span::current();
+        span.record("scan_index", scan_index);
         let lease = self.source.lead_stale_sweep().await?;
-        tracing::Span::current().record("led", lease.is_some());
+        span.record("led", lease.is_some());
         if lease.is_some() {
-            self.remove_stale(cancel).await?;
+            self.catch_up(relabelled_since, cancel).await?;
+            if scan_index {
+                self.remove_stale(cancel).await?;
+            }
         }
         drop(lease);
         Ok(())
@@ -591,6 +744,10 @@ fn replayable(changes: &TableChanges, watermark: i64, version: i64) -> bool {
         .copied()
         .eq((watermark + 1)..=version);
     contiguous && !changes.reshapes_text
+}
+
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 fn document(text: RowSearchText) -> DatabaseRowDocument {

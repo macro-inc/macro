@@ -6382,10 +6382,12 @@ name = "database_row_search"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "databases",
  "macro_db_migrator",
  "mention_utils",
  "serde_json",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tracing",
  "uuid",

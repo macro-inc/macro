@@ -116,8 +116,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   search's exposure gate uses) and raises the table's watermark only after
   every write succeeded. Never index from event payloads, and never raise a
   watermark before the writes for it landed (README "Database rows").
-  A tag relabelled outside a database reaches the index only through the
-  backfill route (known missed-hit window).
+  Trash does not bump the table version: a pass rereads the table after
+  writing and removes what it wrote if the table went. The 15-minute sweep
+  (`inbound/database_row_sweep.rs`) is the safety net for lost events and
+  tag relabels outside databases; keep it cheap, and keep the whole-index
+  scan on its slower cadence.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those. Chat messages deleted
   without their delete reaching the index are removed by

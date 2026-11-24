@@ -417,9 +417,9 @@ async fn main() -> anyhow::Result<()> {
             ),
             shutdown_token.clone(),
         ));
-        stale_sweep_tracker.spawn(inbound::database_row_sweep::run_stale_sweeps(
+        stale_sweep_tracker.spawn(inbound::database_row_sweep::run_sweeps(
             database_row_indexer.clone(),
-            inbound::database_row_sweep::STALE_SWEEP_INTERVAL,
+            inbound::database_row_sweep::SWEEP_INTERVAL,
             shutdown_token.clone(),
         ));
         stale_sweep_tracker.close();

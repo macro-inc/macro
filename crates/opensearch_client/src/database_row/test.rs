@@ -222,6 +222,22 @@ async fn an_older_state_never_overwrites_a_newer_one() {
         )
         .await?;
         assert_eq!(removed, 1);
+
+        // Removed at the sweep's version, so a late write of the old state
+        // stays out.
+        let late = write_rows(
+            &client.inner,
+            &alias,
+            &[DatabaseRowWrite::Upsert(document("Newer", 9))],
+        )
+        .await?;
+        assert_eq!(
+            late,
+            DatabaseRowWrites {
+                applied: 0,
+                superseded: 1
+            }
+        );
         Ok(())
     }
     .await;

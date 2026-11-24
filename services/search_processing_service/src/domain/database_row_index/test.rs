@@ -30,6 +30,10 @@ struct SourceState {
     rows: BTreeMap<Uuid, String>,
     journal: Vec<(i64, Vec<Uuid>, bool)>,
     watermarks: HashMap<Uuid, (Uuid, i64)>,
+    /// Tables the properties service relabelled an option of.
+    relabelled: Vec<Uuid>,
+    /// Trash the database once this many more table reads have happened.
+    trash_after_reads: Option<usize>,
 }
 
 impl FakeSource {
@@ -79,7 +83,14 @@ impl DatabaseRowSource for FakeSource {
     }
 
     async fn table_state(&self, table_id: Uuid) -> Result<Option<TableState>, Report> {
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
+        if let Some(reads) = state.trash_after_reads.as_mut() {
+            if *reads == 0 {
+                state.database_searchable = Some(false);
+            } else {
+                *reads -= 1;
+            }
+        }
         Ok(state
             .table
             .filter(|_| table_id == TABLE)
@@ -212,6 +223,30 @@ impl DatabaseRowSource for FakeSource {
             .watermarks
             .retain(|_, (database, _)| *database != database_id);
         Ok(())
+    }
+
+    async fn lagging_tables(
+        &self,
+        after: Option<Uuid>,
+        _limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        let state = self.state.lock().unwrap();
+        let lagging = state.table.is_some_and(|table| {
+            let mark = state.watermarks.get(&TABLE).map(|(_, version)| *version);
+            state.searchable() && mark.is_none_or(|mark| mark < table.version)
+        });
+        Ok((lagging && after.is_none())
+            .then_some(TABLE)
+            .into_iter()
+            .collect())
+    }
+
+    async fn relabelled_tables(
+        &self,
+        _since: DateTime<Utc>,
+        _limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        Ok(std::mem::take(&mut self.state.lock().unwrap().relabelled))
     }
 
     async fn gone_tables(&self, _limit: usize) -> Result<Vec<Uuid>, Report> {
@@ -603,4 +638,76 @@ async fn the_stale_sweep_removes_documents_of_gone_rows_and_tables() {
         vec![(ROW_A, "A at 6".to_owned(), 6)]
     );
     assert_eq!(service.source.watermark_of(gone_table), None);
+}
+
+#[tokio::test]
+async fn a_trash_that_lands_during_a_pass_leaves_nothing_indexed() {
+    // The pass reads the table as searchable, then the database is trashed
+    // before its writes land; the trash's deletes carry the same version.
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6"), (ROW_B, "B at 6")]);
+    source.edit(|state| state.trash_after_reads = Some(1));
+    let service = DatabaseRowIndexService::new(source, FakeIndex::default());
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::Removed);
+    assert_eq!(service.index.contents(), Vec::new());
+    assert_eq!(service.source.watermark_of(TABLE), None);
+}
+
+#[tokio::test]
+async fn a_sweep_catches_up_a_table_whose_event_was_lost() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(6, vec![ROW_A], false)];
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 5", 5)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let catch_up = service
+        .catch_up(Utc::now(), &CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        catch_up,
+        CatchUp {
+            lagging: 1,
+            relabelled: 0,
+            failed: 0,
+        }
+    );
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
+    assert_eq!(service.source.watermark_of(TABLE), Some(6));
+}
+
+#[tokio::test]
+async fn a_sweep_reindexes_a_table_whose_tag_was_relabelled_elsewhere() {
+    // The table's version did not move: a tag set's option was relabelled
+    // through the properties service.
+    let source = FakeSource::new(6, &[(ROW_A, "critical")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+        state.relabelled = vec![TABLE];
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "urgent", 6)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let catch_up = service
+        .catch_up(Utc::now(), &CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert_eq!(catch_up.relabelled, 1);
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "critical".to_owned(), 6)]
+    );
 }

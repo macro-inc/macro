@@ -185,6 +185,7 @@ pub enum RowChangeKind {
     utoipa::ToSchema,
     strum::EnumString,
     strum::IntoStaticStr,
+    strum::EnumIter,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
