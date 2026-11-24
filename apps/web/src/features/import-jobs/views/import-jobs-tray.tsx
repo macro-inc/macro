@@ -102,8 +102,9 @@ export function ImportJobsRailView(props: { onEmptied?: () => void }) {
 
 /** The corner pill for touch layouts without the rail (tablets). */
 export function ImportJobsCornerView() {
-  const imports = useImportJobsActions(() => undefined);
   const [expanded, setExpanded] = createSignal(true);
+  // Opening a chat collapses the rows, as the rail closes its list.
+  const imports = useImportJobsActions(() => setExpanded(false));
   return (
     <ImportJobsCornerTray
       jobs={imports.jobs()}

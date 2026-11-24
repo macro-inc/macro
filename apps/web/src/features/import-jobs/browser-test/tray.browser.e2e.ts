@@ -147,6 +147,28 @@ test('keeps the corner pill on tablets, where the rail is not shown', async ({
   await expect(tray).toHaveCount(0);
 });
 
+test('collapses the corner rows when a chat opens, as the rail closes its list', async ({
+  page,
+}) => {
+  await page.goto(`${fixture}?layout=corner`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.getByRole('button', { name: 'Write Notion' }).click();
+  const tray = page.getByRole('region', { name: 'Imports' });
+  await tray
+    .getByRole('listitem', { name: 'Notion' })
+    .getByRole('button', { name: 'Open the chat that ran the Notion import' })
+    .click();
+  await expect(page.getByLabel('Opened session')).toHaveText('notion-session');
+  await expect(tray.getByRole('listitem')).toHaveCount(0);
+  await tray.getByRole('button', { name: 'Show imports' }).click();
+  await expect(
+    tray
+      .getByRole('listitem', { name: 'Notion' })
+      .getByRole('button', { name: 'You’re in this chat' })
+  ).toBeVisible();
+});
+
 test('keeps the rail button readable: no tooltip over its list, a focus ring after Escape, one-line rows', async ({
   page,
 }) => {
