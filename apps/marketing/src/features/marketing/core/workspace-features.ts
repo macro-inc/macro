@@ -31,7 +31,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Spreadsheets',
     title: 'Sheets @linked to your work.',
     description:
-      'Fast collaborative spreadsheets with live agent editing, workspace @mentions, and clean Excel, Sheets, and CSV import/export.',
+      'Fast collaborative spreadsheets with live agent editing, workspace @mentions, and clean Excel and CSV sync.',
     heading: '@mention anything in a cell.',
     detail:
       'It’s a normal spreadsheet: formulas, number formats, fill down, everything you’d expect from Excel or Google Sheets. The difference is it’s linked to everything else. Type @ in a cell to mention a person, a document from Macro Docs, an email from Macro Mail, or a task from Macro Tasks.',
@@ -75,7 +75,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Databases',
     title: 'Dear Notion, meet big data.',
     description:
-      'Typed tables, boards, and timelines built for teams and agents—linked straight to your emails, docs, tasks, and forms.',
+      'Typed tables, boards, and timelines for teams and agents—linked right to emails, docs, and tasks.',
     heading: '@mention anything in a column.',
     detail:
       'Every row is a record and every column is typed—text, numbers, formulas, dropdowns, or live @mentions of people, Macro Tasks, Macro Docs, Macro Mail, and Macro CRM companies. Link tables together and pipe Macro Forms responses straight in as rows.',
@@ -196,7 +196,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Calendar',
     title: 'A really fast calendar with agents that do the scheduling.',
     description:
-      'Calendar unifies your Google and Microsoft schedules in one fast week view with instant keyboard navigation and built-in scheduling links.',
+      'Calendar unifies your Google and Microsoft schedules in one fast week view with shortcuts and booking links.',
     heading: 'All your accounts in one view.',
     detail:
       'Connect multiple Google and Microsoft accounts. See your work, personal, and shared calendars together and choose which ones to show.',

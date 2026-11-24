@@ -86,7 +86,7 @@ export function RouteCrm() {
       <ProductHero
         product="CRM"
         title="CRM that keeps itself up to date."
-        description="CRM automatically tracks your companies, contacts, owners, and deal stages so you never have to manually log updates in a separate tool."
+        description="CRM automatically tracks your companies, contacts, owners, and deal stages so you never have to log updates by hand."
         cta="crm_hero_get_started"
         tutorial="crm"
       />

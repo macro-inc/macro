@@ -70,7 +70,7 @@ export function RouteCalls() {
           tutorial="calls"
           product="Calls"
           title="Calls that feed into team memory."
-          description="Calls lets you start instant video meetings in any channel or invite external guests with a link—with recordings and transcripts included."
+          description="Calls lets you start instant video meetings in any channel or invite external guests with recordings and transcripts."
         />
         <FeaturePageSection
           id="call-default"

@@ -45,7 +45,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
     tutorial: 'company-graph',
     title: 'Everything links both ways.',
     description:
-      'Type @ anywhere to link emails, chats, docs, tasks, calls, and PRs. Every connection works in both directions.',
+      'Type @ anywhere to link emails, chats, docs, tasks, and PRs. Every link works in both directions.',
     accent: '#8caaf4',
     sections: [
       {
@@ -83,7 +83,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
     tutorial: 'ai-tagging',
     title: 'Let agents organize your work.',
     description:
-      'One shared tag system across email, tasks, docs, and files—kept organized automatically by agents.',
+      'One shared tag system across email, tasks, docs, and files—kept organized automatically by your team’s agents.',
     accent: '#bba0e8',
     sections: [
       {
@@ -121,7 +121,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
     tutorial: 'automatic-permissions',
     title: 'Share it. They can open it.',
     description:
-      'Stop fielding “can you grant me access?” pings. Share work in a channel and access follows membership automatically.',
+      'Stop fielding “can you grant me access?” pings. Share work in a channel and everyone can open it.',
     accent: '#79c6ba',
     sections: [
       {
@@ -183,7 +183,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
     tutorial: 'unified-search',
     title: 'One search for your whole workspace.',
     description:
-      'Search every email, channel, doc, task, file, and call transcript in one box—for both your team and your agents.',
+      'Search every email, channel, doc, task, file, and call transcript in one fast workspace index built for your team and agents.',
     accent: '#90bcd8',
     sections: [
       {

@@ -72,7 +72,7 @@ export function RouteDocuments() {
         <ProductHero
           product="Docs"
           title="High speed agentic documents."
-          description="Docs gives you collaborative plain markdown with full version history, real-time multiplayer cursors, and live editing alongside AI agents."
+          description="Docs gives you collaborative plain markdown with version history, multiplayer cursors, and live AI agent editing."
           cta="documents_hero_get_started"
           tutorial="docs"
         />

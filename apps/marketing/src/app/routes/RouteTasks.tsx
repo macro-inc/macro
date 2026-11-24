@@ -100,7 +100,7 @@ export function RouteTasks() {
           tutorial="tasks"
           product="Tasks"
           title="Turn conversations into tasks."
-          description="Create tasks from email and team chat. Assign people or agents and keep task status in sync with linked pull requests."
+          description="Create tasks from email and team chat. Assign people or agents and keep task status synced with linked PRs."
         />
         <FeaturePageSection
           id="from-a-message"

@@ -119,8 +119,7 @@ export function RouteEmail() {
         <h1>Organized and prioritized email.</h1>
         <p class="email-page-hero-description">
           Mail brings your Google and Microsoft accounts into one inbox with
-          Superhuman shortcuts, AI prioritization, autotagging, and team
-          collaboration.
+          Superhuman shortcuts, AI prioritization, and autotagging.
         </p>
         <div class="email-page-provider-actions">
           <a

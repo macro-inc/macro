@@ -75,7 +75,7 @@ export function RouteAgents() {
         <ProductHero
           product="Agents"
           title="Agents with omniscient context."
-          description="Agents work inside your workspace with shared team memory, live editing tools, and your choice of built-in models or external coding agents."
+          description="Agents work inside your workspace with shared team memory, live editing tools, and your choice of models or external agents."
           cta="agents_hero_get_started"
           tutorial="agents"
         />
