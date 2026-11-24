@@ -404,6 +404,33 @@ describe('createMagicChipModel', () => {
     }
   );
 
+  it.each([
+    ['in-memory', 'GPT-6.2 Sol'],
+    ['macrod', 'GPT-5.6'],
+  ])(
+    'names the model of a %s session last run on GPT-5.6 %s',
+    async (harness, shown) => {
+      serviceClient.get.mockResolvedValue({
+        isOk: () => true,
+        isErr: () => false,
+        value: {
+          status: { kind: 'disconnected' },
+          harness,
+          model: 'openai/gpt-5.6',
+          canEdit: true,
+        },
+      });
+      let model!: ReturnType<typeof createMagicChipModel>;
+      const dispose = createRoot((dispose) => {
+        model = createModel(props);
+        return dispose;
+      });
+      await settle();
+      expect(model.header()?.model).toBe(shown);
+      dispose();
+    }
+  );
+
   it.each(['in-memory', 'macro-inmem', 'sandbox'])(
     'names the %s session Macro Agent, not Macro Agent Agent',
     async (harness) => {

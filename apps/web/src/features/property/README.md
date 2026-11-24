@@ -127,9 +127,22 @@ pick a link, and every save closes the editor (Shift does not keep it open, as
 the listed links would be stale until the save lands). It validates and saves
 exactly as the property row's link editor does (`utils/linkValues.ts`). With
 several items selected no links are listed, and a URL replaces each item's
-value. Opened on a property definition for one saved item, a property that
-holds several links waits for that item's properties before it adds anything,
-since adding to links it hasn't read would drop them.
+value.
+
+Opened on a property definition for one saved item (a list row's shortcut or
+menu, the command menu), the editor does not know the value the item already
+holds until its properties are read. A property that holds several values
+(select, entity or Link) lists nothing and changes nothing until then: a save
+sends the whole value, so a pick would drop the values it hasn't read. A
+property that holds one value is replaced either way and stays editable.
+`SavedValueStatus` shows "Loading …" or, when the read fails, "Couldn't load
+this item's …" in place of the rows. Tag assignment waits only while the tags
+load, since unread tags would all look unapplied; a failed read still allows
+tagging, as its saves are additions and removals the server merges. Rows that
+arrive after a wait start with none highlighted (`createUnhighlightedArrival`),
+unless a search typed meanwhile found a match: the first row may be **Clear
+all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
+editor takes them from the property's definition.
 
 ## Creating a property
 

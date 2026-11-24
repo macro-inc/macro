@@ -35,6 +35,12 @@ function toKind(suggestion: WireSuggestion): SuggestionKind | undefined {
               run: {
                 sessionId: suggestion.run.sessionId,
                 startedAt: suggestion.run.startedAt,
+                stopping: match(suggestion.run.state)
+                  .with('stopping', 'cancelling', () => true)
+                  .otherwise(() => false),
+                ...(suggestion.run.report
+                  ? { report: suggestion.run.report }
+                  : {}),
               },
             }
           : {}),

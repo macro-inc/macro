@@ -44,6 +44,7 @@ import {
   effortConfigOption,
   selectConfigOption,
 } from '../state/session-config';
+import { shownSessionModel, shownSessionModels } from '../state/session-model';
 import {
   AgentInput,
   type AgentInputProps,
@@ -168,8 +169,17 @@ export function AgentComposer(props: {
     return option ? changingConfig(messages(), option.id) : undefined;
   };
 
+  const sessionModel = (): string | undefined => {
+    const model = metadata()?.model ?? undefined;
+    return model && shownSessionModel(model, session()?.harness);
+  };
+
+  const runtimeModels = createMemo(() =>
+    shownSessionModels(metadata()?.supportedModels ?? [], session()?.harness)
+  );
+
   const catalog = createMemo(() =>
-    (metadata()?.supportedModels ?? []).map((option) => ({
+    runtimeModels().map((option) => ({
       id: option.id,
       label: modelLabel(option.id, option.name, option.description),
       group: option.group ?? undefined,
@@ -369,14 +379,10 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        modelName={catalogModelLabel(
-          metadata()?.model ?? undefined,
-          metadata()?.supportedModels ?? []
-        )}
+        modelName={catalogModelLabel(sessionModel(), runtimeModels())}
         supportsImages={
-          metadata()?.supportedModels.find(
-            (model) => model.id === metadata()?.model
-          )?.supportsImages
+          runtimeModels().find((model) => model.id === sessionModel())
+            ?.supportsImages
         }
         attachments={attachmentTracker.attachments()}
         onAttachFiles={attachFiles}
@@ -399,8 +405,7 @@ export function AgentComposer(props: {
             state={{
               model:
                 changingModel(messages(), metadata()?.model ?? null) ??
-                metadata()?.model ??
-                undefined,
+                sessionModel(),
               models: catalog(),
               suggestedModels: catalog(),
               effort: effort(),
@@ -426,7 +431,7 @@ export function AgentComposer(props: {
                   undefined
                 )
                   return;
-                const model = metadata()?.model;
+                const model = sessionModel();
                 if (model) return chooseModel(model, choice);
               },
               onSpeed: setPreferredSpeed,

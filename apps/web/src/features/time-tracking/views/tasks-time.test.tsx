@@ -259,7 +259,19 @@ it('reads My week by task and day, Monday to Friday with weekends hidden', () =>
     thenBy: 'DAY',
   });
   const grid = screen.getByRole('table', { name: 'My week' });
-  expect(within(grid).getAllByRole('columnheader')).toHaveLength(7);
+  expect(
+    within(grid)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+  ).toEqual([
+    'Task',
+    'Mon 23',
+    'Tue 24',
+    'Wed 25',
+    'Thu 26',
+    'Fri 27',
+    'Total',
+  ]);
   const row = within(grid).getByRole('row', { name: /Draft the plan/ });
   const cells = within(row).getAllByRole('cell');
   expect(cells.map((cell) => cell.textContent)).toEqual([
@@ -346,6 +358,7 @@ it('lists a view-only task’s entries without a length to log', async () => {
 it('steps a week at a time and comes back to this week', () => {
   renderWeek('week');
 
+  expect(screen.getByText(/^Nov 23\s–\s29$/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Previous week' }));
   expect(inputs.at(-1)).toMatchObject({
     from: '2026-11-16',
@@ -476,4 +489,13 @@ it('says when a cell’s entries could not be read and reads them again on Try a
   ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   expect(taskTime.refetch).toHaveBeenCalled();
+});
+
+it('names a week in another year with its year', () => {
+  renderWeek('week');
+
+  for (let step = 0; step < 6; step += 1)
+    fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+
+  expect(screen.getByText(/^Jan 4\s–\s10, 2027$/)).toBeTruthy();
 });

@@ -40,3 +40,30 @@ async fn admission_rejects_before_database_discovery_or_model_calls(pool: sqlx::
         assert_eq!(admission.calls.lock().unwrap().len(), 1);
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_retired_model_is_answered_as_its_replacement(pool: sqlx::PgPool) {
+    let state = (*test_api_context(pool).await).clone();
+    let router = Router::new()
+        .route("/database-query", post(generate_database_query))
+        .with_state(state);
+    let response = router
+        .oneshot(authorized_request(
+            "/database-query",
+            json!({
+                "model": "openai/gpt-6.1-sol", "prompt": "Count books",
+                "sql": "", "schema": {"name": "Automatic", "tables": []}
+            }),
+        ))
+        .await
+        .unwrap();
+    // This caller's plan has neither model; the refusal names the one it would run on.
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&bytes).contains("openai/gpt-6.2-sol"),
+        "{bytes:?}"
+    );
+}

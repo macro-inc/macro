@@ -43,6 +43,7 @@ use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
 use async_trait::async_trait;
+use chat::domain::models::current_model;
 use model_owner::Owner;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
@@ -865,21 +866,20 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     };
                     match request.config_id.to_string().as_str() {
                         MODEL_CONFIG_ID => {
-                            if !state
-                                .engine
-                                .supported_models()
-                                .contains(&value.to_string().as_str())
-                            {
+                            // A composer opened before a model retired still names it.
+                            let value = value.to_string();
+                            let value = current_model(&value);
+                            if !state.engine.supported_models().contains(&value) {
                                 return responder.respond_with_error(
                                     AcpError::invalid_params().data("unsupported model"),
                                 );
                             }
-                            if !access.allows(&value.to_string()) {
+                            if !access.allows(value) {
                                 return responder.respond_with_error(model_access_error(
                                     ModelAccessError::Forbidden,
                                 ));
                             }
-                            state.set_model(value.to_string());
+                            state.set_model(value.to_owned());
                         }
                         crate::domain::model_options::SPEED_CONFIG_ID => {
                             let speed = ModelSpeed::parse(&value.to_string());

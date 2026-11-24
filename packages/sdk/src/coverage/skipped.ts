@@ -37,6 +37,7 @@ export const agentHarnessExcluded = [
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
   'claudeSignOut', // Computer account credentials are managed in the app.
+  'createComputerScreenTicket', // Browser-only, person-only ticket for a computer's screen.
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'getClaudeMode', // Computer account credentials are managed in the app.
   'startClaudeSignIn', // Computer account credentials are managed in the app.

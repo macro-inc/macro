@@ -296,8 +296,8 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone collection uses one measured floating header. An initial nonshrinking spacer inside the unpadded list scroller reserves the island row; its single 20/26 heading follows the bubbles and sticks at that same measured inset while rows scroll beneath it. Archived shares this layout, with its heading immediately below the islands.
-The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone collection uses one measured floating header and one vertical list scroller. The scroller reserves the island row with top padding. Waiting on you, Favorites, and Conversations each contain their own normal in-flow heading and rows. Headings scroll with their sections instead of sticking over list content. Archived uses the same structure, with its heading immediately below the islands. Section gaps and padding own the spacing; the embedded empty panel does not add another scroller or top inset.
+The phone list shows startable custom agents as bubbles, followed by the Waiting on you and Favorites cards, then the **Conversations** section and its remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the model pill to open its card. Thinking and Speed change there without dismissal; tap the name to open the agent/model sheet. The sheet lists recent agent bubbles, Auto, Recent, Suggested, and More models. Suggested excludes Auto and Recent and appears only for matching frontier models. More models pushes a complete provider catalog in the same sheet. An agent card has a Model row that opens its runtime's models without changing the agent. Picking closes the sheet; Back returns to the card. Search filters all available models and agent names. Unavailable agents retain their existing connection action.
 
@@ -642,11 +642,18 @@ the shimmer.
   Auto has its own heading-free section between the agents and model groups, including on More models, agent-model pages, and matching search results. Every section groups its heading and rows in one container; parent gaps provide 24px from the agents' names to Auto and 16px between model sections, without child layout margins. Each row in More models carries its provider logo; provider headings are text-only. Agent identities reuse the Agents view's circular, surface-1 avatars with muted glyphs. Returning from a phone sheet waits until its closing focus trap retires before showing the card again.
   The in-memory catalog leads with **Auto**, where automatic routing sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
-  Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat
+  Flash**, and the rest on **GPT-6.2 Sol**. It then offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
   open-weight models; and Google's **Gemini 3.8 Flash**. The Anthropic models
-  are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 4.5**; older Claude versions
-  (Sonnet 5, Opus 5, Fable 5.1) are not offered.
+  are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 5.5**, and the OpenAI ones **GPT-6
+  Astra**, **GPT-6.2 Sol**, and **GPT-6 Luna**; older Claude versions (Sonnet 5,
+  Opus 5, Fable 5.1, Haiku 4.5) and GPT versions (GPT-6.1 Sol, GPT-5.6, GPT-5.6
+  mini, GPT-5.5, GPT-5 mini) are not offered. A retired model saved anywhere (an
+  agent, a routine step, a remembered choice, a draft, a chat, or a session
+  resumed after the change) runs on its replacement: Haiku 4.5 on Haiku 5.5,
+  GPT-6.1 Sol, GPT-5.6 and GPT-5.5 on GPT-6.2 Sol, and the minis on GPT-6 Luna
+  (`chat::domain::models::RETIRED_MODELS`, mirrored by the web's
+  `RETIRED_MODELS`).
   Selecting a model here selects
   the default runtime and applies that model to the next send, hiding the repository controls while keeping the mode bar visible.
   A model chosen from that catalog is remembered in local storage as the
@@ -1632,7 +1639,7 @@ existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Gemini 3.8 Flash`). Paid plans list
-  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`,
+  `Sonnet 5.5`, `Opus 5.5`, `Haiku 5.5`, `GPT-6 Astra`, `GPT-6.2 Sol`, `GPT-6 Luna`,
   and `Gemini 3.8 Flash`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
   On the free plan everything but `Gemini 3.8 Flash` is
@@ -2501,7 +2508,7 @@ model triggers use a transparent round pill with a background only on hover,
 matching the production chat composer's proportions.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
-when that model is no longer selectable. For example, `openai/gpt-5.5` retains
+when that model is no longer selectable. For example, `openai/gpt-4o` retains
 the OpenAI logo; an unknown provider shows the standard chat icon instead of
 defaulting to Claude. A recognized per-chat selection takes precedence over the
 server model. New sends record that selection before navigation or a background

@@ -289,17 +289,17 @@ async fn a_routine_suggestion_moves_only_from_the_state_named(pool: PgPool) {
     }
 }
 
-/// Only a suggestion dismissed at or after the window's start comes back, and
+/// Only a suggestion dismissed or done at or after the window's start comes back, and
 /// only from the states the table allows.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn undismissing_follows_the_table_within_its_window(pool: PgPool) {
+async fn undoing_follows_the_table_within_its_window(pool: PgPool) {
     let f = fixture(pool).await;
     for from in SuggestionState::iter() {
         let id = f.prompt_in(from).await;
         let changed = f.suggestion(id).await.state_changed_at;
         let late = f
             .repo
-            .undismiss(
+            .undo(
                 &f.user,
                 id,
                 changed + chrono::Duration::seconds(1),
@@ -309,17 +309,13 @@ async fn undismissing_follows_the_table_within_its_window(pool: PgPool) {
             .unwrap();
         assert!(!late, "from {from:?}");
         assert_eq!(f.state(id).await, from);
-        let moved = f
-            .repo
-            .undismiss(&f.user, id, changed, Utc::now())
-            .await
-            .unwrap();
+        let moved = f.repo.undo(&f.user, id, changed, Utc::now()).await.unwrap();
         assert_eq!(
             moved,
-            transition(from, LifecycleEvent::Undismiss).is_some(),
+            transition(from, LifecycleEvent::Undo).is_some(),
             "from {from:?}"
         );
-        assert_eq!(f.state(id).await, after(from, LifecycleEvent::Undismiss));
+        assert_eq!(f.state(id).await, after(from, LifecycleEvent::Undo));
     }
 }
 
