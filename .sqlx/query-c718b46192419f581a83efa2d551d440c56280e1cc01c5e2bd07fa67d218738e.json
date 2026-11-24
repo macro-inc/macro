@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO api_app_connections (\n                user_id, app, name, access_expires_at,\n                grant_ciphertext, encrypted_data_key, nonce, encryption_version, kms_key_id\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            ON CONFLICT (user_id, app) DO UPDATE SET\n                enabled = TRUE,\n                needs_reauth = FALSE,\n                access_expires_at = EXCLUDED.access_expires_at,\n                grant_ciphertext = EXCLUDED.grant_ciphertext,\n                encrypted_data_key = EXCLUDED.encrypted_data_key,\n                nonce = EXCLUDED.nonce,\n                encryption_version = EXCLUDED.encryption_version,\n                kms_key_id = EXCLUDED.kms_key_id,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Bytea",
+        "Bytea",
+        "Bytea",
+        "Int2",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c718b46192419f581a83efa2d551d440c56280e1cc01c5e2bd07fa67d218738e"
+}

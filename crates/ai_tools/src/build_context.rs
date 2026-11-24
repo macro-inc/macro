@@ -690,6 +690,13 @@ pub async fn build_tool_service_context_from_env(
     } else {
         ToolImportToolContext::unwired()
     };
+    let fusion_tool_context = crate::tool_context::build_fusion_tool_context(
+        pool.clone(),
+        connectors,
+        &document_tool_context,
+        side_effect_clients.environment,
+        side_effect_clients.feature_flags.clone(),
+    );
     Ok(ToolServiceContext {
         memory_tool_context: crate::memory::build_memory_tool_context(
             pool.clone(),
@@ -741,6 +748,7 @@ pub async fn build_tool_service_context_from_env(
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context,
+        fusion_tool_context,
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,

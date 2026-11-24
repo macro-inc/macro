@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE fusion_item\n            SET sync_lease_until = NULL, last_synced_at = now()\n            WHERE user_id = $1 AND item_id = $2 AND sync_lease_until = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc2671b49c33902b49bf44b3a17fb2091bf23976f89e4e3c9677cfe92629fb0e"
+}

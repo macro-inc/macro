@@ -44,6 +44,7 @@ execution, display) that don't belong to a single domain.
   state through their owning domain ports, independently of viewer permissions;
   root-folder reuse separately checks view access. Transient read failures propagate
   so the import domain does not invalidate a live copy on an outage.
+- `src/tool_context/fusion.rs`: `ImportFromFusion`'s composition; `FusionCadDocuments` is `fusion_import`'s `CadDocuments` (file documents as Macro AI for the user via `create_file`, versions via `add_file_version` with an edit receipt, liveness via `DocumentLifecycleReads`).
 - `src/import_workspace/lifecycle.rs`: physical lifecycle dispatch through owning
   ports. PostgreSQL adapter tests cover live targets without grants,
   trash/restore/purge and transient failures; hosts never reach service repos.

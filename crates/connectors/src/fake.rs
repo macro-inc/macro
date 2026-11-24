@@ -7,7 +7,7 @@
 //! for that user. Changes made through the services (connect, disable,
 //! rename, remove) land in the same store and show in the next answer.
 
-use crate::domain::catalog::Overlays;
+use crate::domain::catalog::{self, Overlays};
 use crate::domain::models::{ApiResponse, ConnectorId, ConnectorKey, ServerUrl, Surfaces};
 use crate::domain::ports::{
     GrantState, MacroConnectEnabledFlagReader, OverlayCatalog, Source, SourceKind,
@@ -43,8 +43,10 @@ enum FakeKey {
 impl FakeConnection {
     /// A connection to the catalog app `slug`, held in whichever source the
     /// rules count for its user: Connect for a flagged user when Connect
-    /// serves it, the account link for GitHub, the native server for an
-    /// overlaid app, and Pipedream (with API access) for any other.
+    /// serves it, the account link for GitHub, the native API source (API
+    /// access, no MCP) for an app Macro reaches by REST itself (`autodesk`),
+    /// the native server for an overlaid app, and Pipedream (with API access)
+    /// for any other.
     pub fn app(slug: &str) -> Self {
         Self::new(FakeKey::App(slug.to_owned()))
     }
@@ -206,11 +208,14 @@ impl FakeConnectors {
             .map(|app| (app, Surfaces::new(true, true)))
             .collect();
         let github_supported = HashMap::from([(ConnectorId::github(), Surfaces::new(true, false))]);
+        let native_api_supported =
+            HashMap::from([(app(catalog::AUTODESK_SLUG), Surfaces::new(false, true))]);
         let sources: Vec<Arc<dyn Source>> = vec![
             Arc::new(source(SourceKind::Native, HashMap::new())),
             Arc::new(source(SourceKind::GithubLink, github_supported)),
             Arc::new(source(SourceKind::Pipedream, pipedream_supported)),
             Arc::new(source(SourceKind::Connect, self.connect_apps.clone())),
+            Arc::new(source(SourceKind::NativeApi, native_api_supported)),
         ];
         let servers = Arc::new(source(SourceKind::Native, HashMap::new()));
 
@@ -254,6 +259,9 @@ impl FakeConnectors {
                     }
                     (None, _) if app == ConnectorId::github() => {
                         (SourceKind::GithubLink, ConnectorKey::App(app), false)
+                    }
+                    (None, _) if catalog::is_native_api(&app) => {
+                        (SourceKind::NativeApi, ConnectorKey::App(app), true)
                     }
                     (None, Some((_, url))) => {
                         (SourceKind::Native, ConnectorKey::Server(url.clone()), false)

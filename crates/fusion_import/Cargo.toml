@@ -1,0 +1,39 @@
+[package]
+name = "fusion_import"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset" }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+connectors = { path = "../connectors" }
+feature_flags = { path = "../feature_flags" }
+http = { workspace = true }
+macro_tower_layers = { path = "../macro_tower_layers" }
+macro_user_id = { path = "../macro_user_id" }
+model_file_type = { path = "../model_file_type" }
+nom = { workspace = true }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+upstream_error = { path = "../upstream_error", default-features = false }
+url = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+connectors = { path = "../connectors", features = ["test-fakes"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+macro_env_var = { path = "../macro_env_var" }
+tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
+wiremock = { workspace = true }

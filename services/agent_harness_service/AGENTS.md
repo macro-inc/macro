@@ -22,7 +22,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   routines' required apps, the egress proxy and sandbox listing, imports,
   Granola sync, onboarding, agent app pins and the connector tools.
   `cognition/api.rs` mounts the `/connectors` routes and the public
-  callbacks (MCP OAuth, Connect consent, Pipedream webhook). Nothing here
+  callbacks (MCP OAuth, REST app OAuth for Autodesk, Connect consent,
+  Pipedream webhook). `run()` adds Autodesk's config
+  (`ai_tools::connectors_config::autodesk_config`, optional). Nothing here
   reads the `macro-connect` flag or picks a source.
 - `src/api.rs`: the full agent-session HTTP API (durable metadata/log reads
   plus live in-memory transport operations), composed from each domain
@@ -496,6 +498,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
 - One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `run()` in `lib.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
 - The import service registers read-only Notion, Linear and Jira readers over the connectors' API connections wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
+- `ImportFromFusion` (`crates/fusion_import`) is a separate service built by `ai_tools::build_fusion_tool_context` in `cognition/server.rs` and `ai_tools::build_context`; `autodesk` is in `importable_apps()` as an API import, so the import dialog and Settings offer it once the connection exists.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
 - Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
 - The owner connecting an app a session asked for produces an `app.connected` event (`agent_harness::domain::app_connections`).

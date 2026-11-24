@@ -1,0 +1,12 @@
+{
+  "status": "chunked",
+  "urls": {
+    "0-10747471": "https://oss-bucket.s3.amazonaws.com/ead4b508f5a502b9251d16b640128ad83af7e4ba/bucket/apptestbucket/chunk-uuid/uuid-fcdf6275-8789-472f-b811-5472c9262ffc?response-content-disposition=attachment%3B%20filename%3D%22unmerged.json%22&response-content-type=application%2Fjson&X-Amz-Security-Token=AWS_TOKEN&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20210120T152914Z&X-Amz-SignedHeaders=host&X-Amz-Expires=120&X-Amz-Credential=[AMZ CREDENTIAL]&X-Amz-Signature=6c1abf52e7849asignature",
+    "10747472-19715186": "https://oss-bucket.s3.amazonaws.com/ead4b508f5a502b9251d16b640128ad83af7e4ba/bucket/apptestbucket/chunk-uuid/uuid-cc685997-7afa-4dd3-ada3-71390a973bc5?response-content-disposition=attachment%3B%20filename%3D%22unmerged.json%22&response-content-type=application%2Fjson&X-Amz-Security-Token=AWS_TOKEN&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20210120T152914Z&X-Amz-SignedHeaders=host&X-Amz-Expires=120&X-Amz-Credential=[AMZ CREDENTIAL]&X-Amz-Signature=6c1abf52e7849asignature"
+  },
+  "params" : {
+    "content-type": "application/json",
+    "content-disposition": "attachment; filename=\"unmerged.json\""
+  },
+  "size" : 19715187
+}

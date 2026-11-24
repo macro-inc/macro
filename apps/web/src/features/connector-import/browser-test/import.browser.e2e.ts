@@ -117,3 +117,46 @@ for (const provider of ['Linear', 'Jira']) {
     ).toHaveText(`Import my ${provider} workspace into Macro.`);
   });
 }
+
+for (const viewport of [
+  { name: 'desktop', width: 1280, height: 800 },
+  { name: 'phone', width: 390, height: 844 },
+]) {
+  test(`hands a Fusion import to the agent on ${viewport.name}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page
+      .getByRole('complementary', { name: 'files sidebar' })
+      .getByRole('button', { name: 'Import files', exact: true })
+      .click();
+    const dialog = page.getByRole('dialog');
+    await expect(
+      dialog.getByText('CAD designs and their versions')
+    ).toBeVisible();
+    await dialog
+      .getByRole('button', { name: 'Connect Autodesk Fusion' })
+      .click();
+    await dialog
+      .getByRole('button', { name: 'Import from Autodesk Fusion' })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await expect(
+      page.getByRole('status', { name: 'Agent handoff' })
+    ).toHaveText('Import my Fusion designs into Macro.');
+  });
+
+  test(`leaves Fusion out while its flag is off on ${viewport.name}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto(`${fixture}?flags=off`, { waitUntil: 'domcontentloaded' });
+    await page
+      .getByRole('complementary', { name: 'files sidebar' })
+      .getByRole('button', { name: 'Import files', exact: true })
+      .click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Notion')).toBeVisible();
+    await expect(dialog.getByText('Autodesk Fusion')).toHaveCount(0);
+  });
+}

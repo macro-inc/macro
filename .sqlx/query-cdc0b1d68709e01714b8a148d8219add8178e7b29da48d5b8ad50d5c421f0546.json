@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE api_app_connections SET\n                access_expires_at = $3,\n                grant_ciphertext = $4,\n                encrypted_data_key = $5,\n                nonce = $6,\n                encryption_version = $7,\n                kms_key_id = $8,\n                updated_at = NOW()\n            WHERE user_id = $1 AND app = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Bytea",
+        "Bytea",
+        "Bytea",
+        "Int2",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cdc0b1d68709e01714b8a148d8219add8178e7b29da48d5b8ad50d5c421f0546"
+}

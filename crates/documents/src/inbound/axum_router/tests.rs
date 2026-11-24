@@ -653,6 +653,18 @@ impl DocumentCreationService for FakeDocumentService {
     async fn cleanup_created_document(&self, _document_id: &str) {
         panic!("unexpected cleanup_created_document call")
     }
+
+    async fn begin_file_version(
+        &self,
+        _document_id: &str,
+        _sha: &str,
+    ) -> Result<crate::domain::ports::create::FileVersionUpload, DocumentError> {
+        panic!("unexpected begin_file_version call")
+    }
+
+    async fn discard_file_version(&self, _document_id: &str, _document_version_id: i64) {
+        panic!("unexpected discard_file_version call")
+    }
 }
 
 fn create_document_response(owner: Owner) -> CreateDocumentResponseData {

@@ -144,6 +144,18 @@ impl DocumentCreationService for RecordingService {
         self.cleanups.lock().unwrap().push(id.to_string());
         self.cleanup_finished.notify_one();
     }
+
+    async fn begin_file_version(
+        &self,
+        _document_id: &str,
+        _sha: &str,
+    ) -> Result<crate::domain::ports::create::FileVersionUpload, DocumentError> {
+        panic!("unexpected begin_file_version call")
+    }
+
+    async fn discard_file_version(&self, _document_id: &str, _document_version_id: i64) {
+        panic!("unexpected discard_file_version call")
+    }
 }
 
 #[derive(Default)]

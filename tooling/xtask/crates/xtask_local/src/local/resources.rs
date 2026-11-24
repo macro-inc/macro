@@ -48,6 +48,10 @@ pub const CODEX_OAUTH_KMS_ALIAS: &str = "alias/macro-local-codex-oauth";
 /// Key the public MCP OAuth broker encrypts its authorization codes' tokens with.
 pub const MCP_OAUTH_KMS_ALIAS: &str = "alias/macro-local-mcp-oauth";
 
+/// Key the connectors wrap the grants of REST apps Macro signs in to itself
+/// (Autodesk) with.
+pub const API_APP_GRANT_KMS_ALIAS: &str = "alias/macro-local-api-app-grant";
+
 /// Key the authentication service encrypts Microsoft refresh tokens' data
 /// keys with.
 pub const MICROSOFT_TOKEN_KMS_ALIAS: &str = "alias/macro-local-microsoft-token";

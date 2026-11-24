@@ -24,6 +24,15 @@ pub const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
 pub const NOT_STARTED_STATUS_OPTION_ID: uuid::Uuid =
     uuid::uuid!("00000001-0000-0000-0002-000000000001");
 
+/// A version of a file document that holds the requested bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AddedFileVersion {
+    /// The `DocumentInstance` id of the version.
+    pub document_version_id: i64,
+    /// False when the document's newest version already held these bytes.
+    pub created: bool,
+}
+
 /// Errors that can occur during document operations.
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {

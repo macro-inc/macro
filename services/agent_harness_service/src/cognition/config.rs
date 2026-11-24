@@ -234,6 +234,8 @@ impl Config {
             connect: ai_tools::connectors_config::connect_config(
                 self.connect_customer_key.value(),
             )?,
+            // Read by the caller, which can await its KMS client.
+            autodesk: None,
             feature_flags: ai_tools::connectors_config::feature_flags_config(
                 self.posthog_api_key.value(),
                 self.posthog_host.value(),

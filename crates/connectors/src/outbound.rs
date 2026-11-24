@@ -15,6 +15,8 @@ pub(crate) mod hosted_connections;
 pub(crate) mod macro_connect;
 /// MCP servers users connect to directly by URL.
 pub(crate) mod native;
+/// REST apps Macro signs in to with its own OAuth client (Autodesk).
+pub(crate) mod native_api;
 /// The overlay table, for the domain's catalog.
 pub(crate) mod overlays;
 /// Pipedream as a source of connections.

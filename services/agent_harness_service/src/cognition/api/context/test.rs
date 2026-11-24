@@ -566,6 +566,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
+        fusion_tool_context: ai_tools::build_fusion_tool_context(
+            pool.clone(),
+            Some(&composed),
+            &document_tool_context,
+            macro_env::Environment::Local,
+            None,
+        ),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
@@ -828,6 +835,7 @@ fn test_connectors(pool: sqlx::PgPool) -> connectors::composition::Composed {
             mcp_pre_registered: connectors::composition::PreRegisteredProviders::empty(),
             pipedream: None,
             connect: None,
+            autodesk: None,
             feature_flags: None,
         },
         pool,
@@ -838,4 +846,20 @@ fn test_connectors(pool: sqlx::PgPool) -> connectors::composition::Composed {
         ),
     )
     .expect("the test connectors compose")
+}
+
+/// A host whose connectors can't connect Autodesk (document storage's
+/// channel bot composes them without its credentials) leaves
+/// `ImportFromFusion` unwired, so the tool says it is not available here
+/// instead of telling a connected user to connect Autodesk.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn without_autodesk_in_the_connectors_the_fusion_tool_is_unwired(pool: sqlx::PgPool) {
+    let ctx = test_api_context(pool).await;
+
+    assert!(
+        ctx.tool_service_context
+            .fusion_tool_context
+            .service
+            .is_none()
+    );
 }

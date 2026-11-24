@@ -501,6 +501,7 @@ impl Connectors {
                 let surfaces = match counted {
                     SourceKind::Connect => snapshot.connect.surfaces(app).unwrap_or_default(),
                     SourceKind::Pipedream => Surfaces::new(true, true),
+                    SourceKind::NativeApi => Surfaces::new(false, true),
                     SourceKind::Native | SourceKind::GithubLink => Surfaces::new(true, false),
                 };
                 listed.insert(

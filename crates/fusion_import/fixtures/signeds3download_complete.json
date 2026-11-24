@@ -1,0 +1,10 @@
+{
+  "status": "complete",
+  "url": "https://oss-bucket-name.s3.amazonaws.com/4F/2D/df/a9f898eda7edee1ab9827cfeb57f2ec647/apptestbucket?response-content-disposition=attachment%3B%20filename%3D%22objectKeyFoo%22&response-content-type=application%2Foctet-stream&X-Amz-Security-Token=AWS_TOKEN&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20210120T152914Z&X-Amz-SignedHeaders=host&X-Amz-Expires=120&X-Amz-Credential=[AMZ CREDENTIAL]&X-Amz-Signature=6c1abf52e7849asignature",
+  "params" : {
+    "content-type": "application/octet-stream",
+    "content-disposition": "attachment; filename=\"objectKeyFoo\""
+  },
+  "size" : 221983,
+  "sha1" : "4F2Ddfa9f898eda7edee1ab9827cfeb57f2ec647"
+}

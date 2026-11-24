@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE api_app_connections SET enabled = $3, updated_at = NOW() WHERE user_id = $1 AND app = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "64df5ef3209af67b693166b4a0943a6b30750742d8fcab178720b38df2ab6352"
+}

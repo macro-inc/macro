@@ -526,8 +526,10 @@ pub async fn run() -> anyhow::Result<()> {
     // agent app pins, the connector tools and the `/connectors` routes all
     // read users' connections through it. Native OAuth state shares the
     // Redis cognition's other state lives in.
+    let mut connectors_config = cognition_config.connectors_config()?;
+    connectors_config.autodesk = ai_tools::connectors_config::autodesk_config().await?;
     let connectors = connectors::composition::compose(
-        cognition_config.connectors_config()?,
+        connectors_config,
         pool.clone(),
         Arc::new(
             redis::Client::open(cognition_config.redis_host.as_ref())

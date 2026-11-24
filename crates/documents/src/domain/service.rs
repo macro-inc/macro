@@ -1,6 +1,8 @@
 //! Document service implementation.
 
 mod content_events;
+#[cfg(feature = "document_create")]
+mod file_version;
 mod lifecycle;
 
 #[cfg(test)]
@@ -1086,6 +1088,21 @@ impl<
     #[tracing::instrument(skip(self))]
     async fn cleanup_created_document(&self, document_id: &str) {
         self.cleanup_document(document_id).await;
+    }
+
+    #[tracing::instrument(skip(self, sha), err)]
+    async fn begin_file_version(
+        &self,
+        document_id: &str,
+        sha: &str,
+    ) -> Result<crate::domain::ports::create::FileVersionUpload, DocumentError> {
+        self.reserve_file_version(document_id, sha).await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn discard_file_version(&self, document_id: &str, document_version_id: i64) {
+        self.remove_file_version(document_id, document_version_id)
+            .await;
     }
 }
 

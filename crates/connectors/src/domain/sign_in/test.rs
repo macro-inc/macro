@@ -89,3 +89,45 @@ fn the_metadata_document_comes_from_the_client() {
         "https://macro.test/client"
     );
 }
+
+/// Completes every REST app sign-in as the signer, to Autodesk.
+struct FakeAppAuthorization;
+
+#[async_trait::async_trait]
+impl AppAuthorization for FakeAppAuthorization {
+    async fn complete(
+        &self,
+        _code: &str,
+        _state: &str,
+    ) -> Result<(MacroUserIdStr<'static>, ConnectorId), rootcause::Report> {
+        Ok((
+            MacroUserIdStr::parse_from_str("macro|signer@example.com")
+                .unwrap()
+                .into_owned(),
+            ConnectorId::parse("autodesk").unwrap(),
+        ))
+    }
+}
+
+#[tokio::test]
+async fn a_rest_app_sign_in_is_the_app() {
+    let signed_in = sign_ins("https://mcp.example.com/mcp")
+        .with_apps(Arc::new(FakeAppAuthorization))
+        .complete_app_sign_in("a-code", "a-state")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        signed_in.keys(),
+        [ConnectorKey::App(ConnectorId::parse("autodesk").unwrap())]
+    );
+}
+
+#[tokio::test]
+async fn without_rest_apps_an_app_sign_in_fails() {
+    let result = sign_ins("https://mcp.example.com/mcp")
+        .complete_app_sign_in("a-code", "a-state")
+        .await;
+
+    assert!(result.is_err());
+}

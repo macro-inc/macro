@@ -56,11 +56,27 @@ const NOTION_WORKSPACE_HANDOFF: AgentImportHandoff = {
   ].join(' '),
 };
 
+/**
+ * Fusion runs Macro's Fusion importer: the agent browses the user's hubs,
+ * projects and folders with ImportFromFusion, imports the designs they pick,
+ * and keeps syncing until every version is in.
+ */
+const FUSION_HANDOFF: AgentImportHandoff = {
+  input: 'Import my Fusion designs into Macro.',
+  instructions: [
+    "The user started this from Macro's import dialog and has just connected Autodesk.",
+    'Use ImportFromFusion: browse to show their hubs, projects and folders, and ask which designs to bring over.',
+    'Import the ones they pick, then keep calling sync as each report says (with its nextCursor, or the same itemIds while remaining is above 0) until nothing is left.',
+    'Never recreate Fusion files with other tools, and never edit or delete anything in Autodesk.',
+  ].join(' '),
+};
+
 export function agentImportHandoff(
   config: ImportCategoryConfig,
   provider: ImportProvider
 ): AgentImportHandoff {
   if (provider.ledger === 'notion') return NOTION_WORKSPACE_HANDOFF;
+  if (provider.importer === 'fusion') return FUSION_HANDOFF;
   if (provider.ledger === 'linear' || provider.ledger === 'jira') {
     return {
       input: `Import my ${provider.name} workspace into Macro.`,

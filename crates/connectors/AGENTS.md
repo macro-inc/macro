@@ -6,7 +6,8 @@ Part of agent sessions / AI tooling. Owns Macro's integrations: the apps and
 MCP servers a user connects, which connection counts for each app, and how
 chat, agents, the sandbox proxy, imports, Granola sync and the web reach them.
 No other crate can name a source (native servers, the GitHub account link,
-Pipedream, Macro Connect) or tell which one holds a connection.
+Pipedream, Macro Connect, the native API source) or tell which one holds a
+connection.
 
 ## Start here
 
@@ -35,17 +36,29 @@ Pipedream, Macro Connect) or tell which one holds a connection.
   live in what it returns. It re-exports the config types hosts fill in.
 - `src/inbound/`: `axum_router.rs` (`/connectors`), `callbacks.rs` (the
   fixed-path routes vendors call: MCP OAuth callback and client metadata,
-  Connect consent, Pipedream webhook), `toolset.rs` (`DiscoverConnectors`,
+  the REST app OAuth callback `/connectors/apps/auth/callback`, Connect
+  consent, Pipedream webhook), `toolset.rs` (`DiscoverConnectors`,
   `ConnectMcpServer`; `run` keeps refusals and outages apart for hosts that
   are not an agent loop).
 - `src/outbound/`: one module per source, each one `Source`
   (`domain/ports.rs`): `native/`, `github_link.rs`, `pipedream/`,
-  `macro_connect/`; `hosted_connections.rs` is the table Pipedream and Connect
-  share, each bound to its own `provider`.
+  `macro_connect/`, `native_api/`; `hosted_connections.rs` is the table
+  Pipedream and Connect share, each bound to its own `provider`.
+- `src/outbound/native_api/`: REST apps Macro signs in to with its own OAuth
+  client (Autodesk, `app.rs`; the list is `catalog::NATIVE_API_APPS`).
+  `source.rs` is the `Source`, its `ApiConnection` and the callback's
+  `AppAuthorization`; `oauth.rs` the token endpoint; `cipher.rs` the KMS
+  envelope (CS-72); `repo.rs` `api_app_connections`; `pending.rs` the
+  Redis sign-in state. Composed only with `ConnectorsConfig::autodesk`
+  (`AUTODESK_CLIENT_ID`, `AUTODESK_CLIENT_SECRET`, `API_APP_GRANT_KMS_KEY_ID`,
+  read by `ai_tools::connectors_config::autodesk_config`); without it
+  Autodesk is not connectable. `app_directory::WithNativeApiApps` puts its
+  apps at the head of the catalog.
 
 ## Boundaries
 
-- Depends on: `connect_client` (the only Connect crate; a pinned copy, never
+- Depends on: AWS KMS (`aws-sdk-kms`, native API grants), `connect_client`
+  (the only Connect crate; a pinned copy, never
   edit it, not even its `AGENTS.md`, which still names `pipedream_mcp`; its
   one user is `connectors`, in `src/outbound/macro_connect/`),
   `mcp_toolset`, `ai_toolset`, `feature_flags`,
@@ -85,7 +98,22 @@ Pipedream, Macro Connect) or tell which one holds a connection.
 - GitHub's `mcp_servers` row only stores the link's toggle and name; the
   native source skips it and the link source owns GitHub.
 - OAuth state lives in Redis apart from the server row: a row surviving does
-  not mean its sign-in did.
+  not mean its sign-in did. The native API source keeps its own there
+  (`connectors:api_app_sign_in:`), also ten minutes.
+- A native API call reads the row, opens the envelope (one KMS `Decrypt`)
+  and, within five minutes of expiry, refreshes under `SELECT ... FOR
+  UPDATE`: the vendor rotates the refresh token on every refresh, so two
+  replicas must never spend one. `invalid_grant` marks the row
+  `needs_reauth` (a dead grant); any other token failure leaves it. A call
+  may go only to the app's API origin (`ApiApp::api_url`), and follows no
+  redirect.
+- `AUTODESK_CLIENT_ID` and `AUTODESK_CLIENT_SECRET` are deliberately absent
+  from Doppler and have no `BootStubEnv` placeholder (a CS-18 exception):
+  unset or empty, they are the off switch, so no host composes Autodesk until
+  an APS app is registered. Don't add empty values to "fix" CS-18.
+- A native API app's callback stores the grant; `complete_connect` only
+  finds the row, answering not found while it is missing or needs reauth so
+  the web keeps polling.
 - A server added by URL with no grant is connected (anonymous servers work);
   one whose row shows a dead grant (a sign-in that never finished, an expired
   token with no refresh token) needs reauth, as the proxy would refuse it.

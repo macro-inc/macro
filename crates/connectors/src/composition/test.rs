@@ -30,6 +30,7 @@ fn setup() -> (ConnectorsConfig, Arc<redis::Client>, AuthServiceClient) {
         mcp_pre_registered: PreRegisteredProviders::empty(),
         pipedream: None,
         connect: None,
+        autodesk: None,
         feature_flags: None,
     };
     let redis = Arc::new(redis::Client::open("redis://127.0.0.1:9").unwrap());
@@ -111,4 +112,65 @@ async fn the_routes_get_a_catalog_and_sign_ins_over_the_same_services(pool: PgPo
         )
         .await
         .unwrap();
+}
+
+/// Macro's Autodesk client, over a KMS client that is never called here.
+fn autodesk() -> AutodeskConfig {
+    let kms = aws_sdk_kms::Client::from_conf(
+        aws_sdk_kms::Config::builder()
+            .behavior_version(aws_sdk_kms::config::BehaviorVersion::latest())
+            .region(aws_sdk_kms::config::Region::new("us-east-1"))
+            .build(),
+    );
+    AutodeskConfig {
+        client_id: "client".to_owned(),
+        client_secret: zeroize::Zeroizing::new("secret".to_owned()),
+        redirect_uri: Url::parse("https://cognition.example.com/connectors/apps/auth/callback")
+            .unwrap(),
+        kms,
+        kms_key_id: "alias/autodesk".to_owned(),
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("users"))
+)]
+async fn autodesk_is_connectable_and_listed_only_when_configured(pool: PgPool) {
+    use crate::domain::discovery::ConnectorCatalogService;
+    use crate::domain::models::ConnectorId;
+
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let app = ConnectorId::parse("autodesk").unwrap();
+
+    let (config, redis, auth_service) = setup();
+    let without = compose(config, pool.clone(), redis, auth_service).unwrap();
+    assert!(!without.serves_native_api_app(&app));
+    assert!(!without.connectors.connectable(&app).await.unwrap());
+    assert!(
+        without
+            .catalog
+            .search(&owner, Some("autodesk"), None, None)
+            .await
+            .unwrap()
+            .apps
+            .is_empty()
+    );
+
+    let (mut config, redis, auth_service) = setup();
+    config.autodesk = Some(autodesk());
+    let with = compose(config, pool, redis, auth_service).unwrap();
+    assert!(with.serves_native_api_app(&app));
+    assert!(with.connectors.connectable(&app).await.unwrap());
+    let page = with
+        .catalog
+        .search(&owner, Some("auto"), None, None)
+        .await
+        .unwrap();
+    assert_eq!(page.apps[0].id, app);
+    assert_eq!(page.apps[0].name, "Autodesk");
+    assert!(page.apps[0].icon_url.is_some());
+    let details = with.catalog.inspect(&owner, &app).await.unwrap().unwrap();
+    assert_eq!(details.status, Status::NotConnected);
+    assert!(details.tools.is_empty());
 }

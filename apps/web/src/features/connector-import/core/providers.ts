@@ -1,3 +1,4 @@
+import type { RemoteFlag } from '@core/constant/featureFlags';
 import type { ImportSource } from '@service-cognition/import';
 import type { Component, JSX } from 'solid-js';
 
@@ -18,6 +19,10 @@ export type ImportProvider = {
    * and teammates are never handed a duplicate.
    */
   ledger?: ImportSource;
+  /** Macro's own importer for a source with no import ledger. */
+  importer?: 'fusion';
+  /** Shown only while this flag is on; a flag still loading hides it. */
+  flag?: RemoteFlag;
 };
 
 type ImportCategoryCopy = {

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO fusion_item (user_id, item_id, project_id, document_id)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (user_id, item_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1212324aca0a01d216c378e56b422a47dd5ad2eca54104df9b68877430121c18"
+}

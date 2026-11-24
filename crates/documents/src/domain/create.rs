@@ -8,6 +8,7 @@
 #[cfg(test)]
 mod test;
 
+pub mod file_version;
 pub mod upload;
 
 use anyhow::Context;
@@ -31,6 +32,8 @@ use crate::domain::ports::markdown::{
 };
 use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::CreateDocumentResponseData;
+
+pub use crate::domain::models::AddedFileVersion;
 
 /// Common metadata for a document that has not been created yet.
 #[derive(Debug, Clone)]
@@ -498,6 +501,16 @@ impl CreatedDocument {
             .document_metadata
             .metadata
             .document_id
+    }
+
+    /// The first version (`DocumentInstance` or `DocumentBom` id) the
+    /// creation wrote.
+    pub fn document_version_id(&self) -> i64 {
+        self.response
+            .document_response
+            .document_metadata
+            .metadata
+            .document_version_id
     }
 
     /// Get the underlying create response.
