@@ -155,9 +155,9 @@ impl std::str::FromStr for ClaudeMode {
 pub enum HarnessPermission {
     /// Read the runtime and watch its screen.
     View,
-    /// Run agents or control the runtime screen.
+    /// Run agents on the runtime.
     Use,
-    /// Change runtime settings or revoke it.
+    /// Change runtime settings or revoke it, and drive its screen.
     Manage,
 }
 

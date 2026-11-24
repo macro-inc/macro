@@ -1920,6 +1920,50 @@ describe('Agents', () => {
     ).toBeTruthy();
   });
 
+  it('shows and saves a Macro agent on a retired model as its replacement', async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: 'anthropic/claude-haiku-4-5',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents {...agentsPageProps} />);
+    const list = screen.getByRole('region', { name: 'Your agents' });
+    expect(
+      within(list).getByText('In Macro · Haiku 5.5 · All channels')
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
+      'textContent',
+      'Haiku 5.5'
+    );
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+
+    await waitFor(() =>
+      expect(agentMocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ defaultModel: Model.haiku55 })
+      )
+    );
+  });
+
   it('preselects the bound macrod harness when editing', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
     modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([

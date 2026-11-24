@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readRange, weekAt, weekDays, weekName, weekRows } from './week';
+import { readRange, weekAt, weekDays, weekRows } from './week';
 
 describe('weekAt', () => {
   it('steps whole weeks from the one holding today', () => {
@@ -37,12 +37,6 @@ describe('weekDays', () => {
       '2026-11-26',
       '2026-11-27',
     ]);
-  });
-
-  it('names a week by its days', () => {
-    expect(weekName(weekAt('2026-11-24', 1, 0), 'en')).toMatch(
-      /^Nov 23\s–\s29$/
-    );
   });
 });
 

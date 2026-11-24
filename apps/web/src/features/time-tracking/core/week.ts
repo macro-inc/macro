@@ -34,14 +34,6 @@ export function readRange(week: DayRange, showWeekends: boolean): DayRange {
   return { from: days[0] ?? week.from, to: days.at(-1) ?? week.to };
 }
 
-/** A week's name: its first and last days, `Nov 23 – 29`. */
-export function weekName(week: DayRange, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    month: 'short',
-    day: 'numeric',
-  }).formatRange(parseISO(week.from), parseISO(week.to));
-}
-
 /** One row of a week's grid: minutes by day and the row's total. */
 export type WeekRow<K> = {
   key: K;

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -31,6 +32,7 @@ import {
   removeLinkValue,
 } from '../utils/linkValues';
 import { PropertyDataTypeIcon } from '../utils/PropertyDataTypeIcon';
+import { type SavedValueState, SavedValueStatus } from './saved-value-status';
 
 type LinkPropertyRow =
   | { type: 'set'; url: string; next: Result<string[], LinkValueError> }
@@ -54,7 +56,7 @@ export function LinkPropertyEditor(props: {
   setPlaceholder: Setter<string>;
   selectedEntityCount: number;
   /** Whether the item's saved links have been read; see `PropertyValueEditor`. */
-  savedValueState: 'known' | 'loading' | 'failed';
+  savedValueState: SavedValueState;
 }) {
   // Only one item's links can be listed. For several items a typed link
   // replaces each item's value, as the select and entity editors do.
@@ -160,18 +162,17 @@ export function LinkPropertyEditor(props: {
     <Show
       when={rows().length > 0}
       fallback={
-        <CommandMenuEmptyState>
-          <Switch fallback="Type or paste a URL">
-            <Match
-              when={waitsForLinks() && props.savedValueState === 'loading'}
-            >
-              Loading links…
-            </Match>
-            <Match when={waitsForLinks() && props.savedValueState === 'failed'}>
-              Couldn't load this item's links
-            </Match>
-          </Switch>
-        </CommandMenuEmptyState>
+        <Show
+          when={waitsForLinks()}
+          fallback={
+            <CommandMenuEmptyState>Type or paste a URL</CommandMenuEmptyState>
+          }
+        >
+          <SavedValueStatus
+            state={props.savedValueState}
+            valuesLabel={t('entityActions.propertyLinks')}
+          />
+        </Show>
       }
     >
       <CommandMenuList

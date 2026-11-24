@@ -32,6 +32,47 @@ fn nullable_anthropic_counters_are_absent_but_required_and_malformed_counts_are_
     );
 }
 
+#[test]
+fn gpt_6_cache_write_lifetimes_count_only_at_the_default_lifetime() {
+    // The usage GPT-6 Astra, Sol and Luna stream with response.completed.
+    let usage = |ttl_30m: u64, ttl_12h: u64| {
+        json!({
+            "input_tokens": 100,
+            "input_tokens_details": {
+                "cached_tokens": 40,
+                "cache_write_tokens": ttl_30m + ttl_12h,
+                "cache_write_tokens_details": {"ttl_30m_tokens": ttl_30m, "ttl_12h_tokens": ttl_12h}
+            },
+            "output_tokens": 16,
+            "output_tokens_details": {"reasoning_tokens": 9},
+            "total_tokens": 116
+        })
+    };
+    assert_eq!(
+        normalize(WireProtocol::Responses, &usage(0, 0)),
+        TrustedTokenUsage::from_inclusive_totals(100, 16, 40, 0, 9).ok()
+    );
+    assert_eq!(
+        normalize(WireProtocol::Responses, &usage(20, 0)),
+        TrustedTokenUsage::from_inclusive_totals(100, 16, 40, 20, 9).ok()
+    );
+    assert!(normalize(WireProtocol::Responses, &usage(0, 20)).is_none());
+    // A breakdown that does not sum to the total leaves neither count trusted.
+    for total in [json!(0), json!(19), Value::Null] {
+        let mut mismatched = usage(20, 0);
+        let details = mismatched["input_tokens_details"].as_object_mut().unwrap();
+        if total.is_null() {
+            details.remove("cache_write_tokens");
+        } else {
+            details.insert("cache_write_tokens".to_owned(), total);
+        }
+        assert!(normalize(WireProtocol::Responses, &mismatched).is_none());
+    }
+    let mut malformed = usage(20, 0);
+    malformed["input_tokens_details"]["cache_write_tokens_details"]["ttl_30m_tokens"] = json!("20");
+    assert!(normalize(WireProtocol::Responses, &malformed).is_none());
+}
+
 const SSE: &str = concat!(
     "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":10}}}\n\n",
     "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\n",

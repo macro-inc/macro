@@ -283,7 +283,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/for-you` | For you: the person's suggestions as cards, Suggestions (work Macro can do), To do, Running and Done today (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
+| `/app/for-you` | For you: the person’s suggestions in lists, Today, To do, Suggestions (work Macro can do) and Done, chosen in its sidebar (`sN.forYou.view`) (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -2140,7 +2140,11 @@ Photoshop, Illustrator, Figma, other uploads) and Word documents as `.docx`;
 Markdown documents, canvases, native spreadsheets, and PDFs download from their
 open view instead, since their download needs the loaded editor (a PDF's
 includes its markup). Tasks add **Set status**, **Set priority**, and **Set assignee**,
-which open the property editor like their shortcuts. Agent sessions add
+which open the property editor like their shortcuts. For a property that holds
+several values (assignees, tags), the editor shows "Loading …" and takes no pick
+until that item's own values are read. If the read fails, an assignee list says
+it couldn't be loaded; tags can still be edited, since the server merges tag
+changes. Agent sessions add
 **Archive** / **Unarchive** for their owner. Calls offer **Share**. Pull
 requests offer **Open in new split**, **Copy GitHub Link**, **Open on GitHub**,
 and **Copy Branch Name** when the head branch is stored. Rows inside a Drive

@@ -19,7 +19,6 @@ const channelMessageEvents = new Set([
   'channel_message_send',
   'document_mention',
   'channel_access_requested',
-  'channel_invite',
 ]);
 
 const relationshipQuery = stringifyDocument(ChannelUnreadCacheWriteDocument);

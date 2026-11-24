@@ -372,8 +372,8 @@ function FreeProviderFailureChat() {
   return (
     <ProviderFailureDemo
       label="Provider failure (free) - all shown, only Haiku available"
-      initialModel={Model.haiku45}
-      availableModels={[Model.haiku45]}
+      initialModel={Model.haiku55}
+      availableModels={[Model.haiku55]}
     />
   );
 }

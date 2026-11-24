@@ -9,7 +9,9 @@ export type WeekGridRow = {
   byDay: Readonly<Record<string, number>>;
 };
 
+/** A day's column heading in the calendar's order, weekday then day: `Sun 22`. */
 function DayHeader(props: { day: string; today: boolean }): JSX.Element {
+  const date = () => parseISO(props.day);
   return (
     <th
       scope="col"
@@ -19,10 +21,12 @@ function DayHeader(props: { day: string; today: boolean }): JSX.Element {
         'text-ink': props.today,
       }}
     >
-      {new Intl.DateTimeFormat(formatLocale(), {
-        weekday: 'short',
-        day: 'numeric',
-      }).format(parseISO(props.day))}
+      {new Intl.DateTimeFormat(formatLocale(), { weekday: 'short' }).format(
+        date()
+      )}{' '}
+      {new Intl.DateTimeFormat(formatLocale(), { day: 'numeric' }).format(
+        date()
+      )}
     </th>
   );
 }

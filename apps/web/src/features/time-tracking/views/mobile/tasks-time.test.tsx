@@ -51,6 +51,53 @@ vi.mock('../../queries/time-summary', () => ({
       const value = input();
       if (!value) return undefined;
       inputs.push(value);
+      if (value.scope === 'TEAM')
+        return {
+          from: value.from,
+          to: value.to,
+          totalMinutes: 60,
+          taskCount: 1,
+          scopeTaskCount: null,
+          complete: true,
+          groups: [
+            {
+              key: {
+                by: 'PERSON',
+                userId: 'alice',
+                taskId: null,
+                date: null,
+                task: null,
+              },
+              minutes: 60,
+              taskCount: 1,
+              rows: [
+                {
+                  key: {
+                    by: 'DAY',
+                    userId: null,
+                    taskId: null,
+                    date: '2026-11-23',
+                    task: null,
+                  },
+                  minutes: 60,
+                },
+              ],
+            },
+            {
+              key: {
+                by: 'PERSON',
+                userId: 'bob',
+                taskId: null,
+                date: null,
+                task: null,
+              },
+              minutes: 0,
+              taskCount: 0,
+              rows: [],
+            },
+          ],
+          thenTotals: [],
+        };
       return {
         from: value.from,
         to: value.to,
@@ -160,4 +207,33 @@ it('lists the week by day and logs time on a picked task through its sheet', asy
   expect(
     await screen.findByText('Time sheet for task-b, editable')
   ).toBeTruthy();
+});
+
+it('shows a teammate with no time as a plain row with a dash, not one that opens', () => {
+  render(() => (
+    <TimeTrackingContextProvider
+      value={{
+        client: () => ({}) as Client,
+        cacheHost: () => undefined,
+        viewerId: () => 'alice',
+        runningTimer: {} as RunningTimerState,
+      }}
+    >
+      <TasksTimeMobile
+        view="team"
+        clock={{ today: () => '2026-11-24', weekStartsOn: () => 0 }}
+        showWeekends={() => true}
+        person={(userId) => <span>{userId}</span>}
+        onOpenTask={vi.fn()}
+        editAccess={(_taskId, render) => render(() => true)}
+        pickTask={() => null}
+      />
+    </TimeTrackingContextProvider>
+  ));
+
+  expect(screen.getByRole('button', { name: /alice/ })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /bob/ })).toBeNull();
+  const bob = screen.getByText('bob').closest('li') as HTMLElement;
+  expect(bob.textContent).toContain('–');
+  expect(bob.textContent).not.toContain('0m');
 });

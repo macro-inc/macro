@@ -463,8 +463,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     canSearchEmailTab(state.tab) && state.search.trim() !== '';
   const typedSearch = createMemo(() => parseEmailSearch(state.search));
   // A search covers all mail from any tab; only an `in:` filter narrows it.
-  // Text with no words (an `in:` still being typed, or a view alone) runs no
-  // search of its own, so the last one that had words stays on screen.
+  // Text with no words (an operator still being typed, or a view alone) runs
+  // no search of its own, so the last one that had words stays on screen.
   const parsedSearch = createMemo<ParsedEmailSearch>(
     (onScreen) => {
       const typed = typedSearch();
