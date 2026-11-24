@@ -139,6 +139,10 @@ export const ProjectTaskRouteView = lazyNamed(
   () => import('@app/features/tasks-view/route-views'),
   'ProjectTaskRouteView'
 );
+export const TasksTimeTaskRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'TasksTimeTaskRouteView'
+);
 export const TasksRouteView = lazyNamed(
   () => import('@app/features/tasks-view/route-views'),
   'TasksRouteView'

@@ -508,6 +508,35 @@ Time row under Discussion opens a sheet with the period, its total, people
 (each opening to their tasks) and the tasks with the most time; no export.
 With the flag off there is no tab or row, and a `time` link shows Overview.
 
+### Time in Tasks
+
+With `enable-time-tracking` on, the Tasks sidebar has a **Time** section under
+Projects with **My week** and **Team** (`tasks/time/week`, `tasks/time/team`;
+`features/time-tracking/tasks-time.tsx`). The week starts on the calendar's
+Week starts on preference, Saturday and Sunday hide with its Show weekends
+off, and ‹ › step a week at a time with **This week** to come back. Totals
+count only the days shown.
+
+- Desktop **My week** is a timesheet: the viewer's tasks with time that week
+  down the side, the days across, each task's total on the right and each
+  day's at the bottom. Clicking a cell opens that task's entries for the day
+  and a length field: Enter logs a new entry on that task and day (typing never
+  overwrites the entries already there; edit or delete them from the list, as
+  in a task's Time popover). A task the viewer can only view lists its
+  entries without the length field. **Add task** puts a task on the sheet
+  before it has time; **Start timer** asks for a task and starts the timer on
+  it. A task name opens the task beside the week
+  (`tasks/time/week/task/<id>`); its breadcrumb reads My week and, like
+  closing the task, returns to the week. Shift-click opens it in a new split.
+- **Team** is the same grid by person: every current member of the viewer's
+  team, read-only, counting only tasks the viewer can see.
+- Phones show **My week** as the week's days, each with its total and tasks;
+  **Log time** asks for a task, then opens that task's Time sheet. Team lists
+  each member opening to their days.
+
+The grid reads the primary and reads again after the viewer's own writes (and
+their other sessions'), so a cell just typed shows its new total at once.
+
 ## Import from Linear
 
 Use **Import from Linear** in the Tasks tour/actions menu, or open

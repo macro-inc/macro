@@ -34,6 +34,7 @@ import { TasksDetailView } from './components/TasksDetailView';
 import { projectDetailSearch } from './project-detail-search';
 import { TasksView } from './tasks-view';
 import { TasksViewSkeleton } from './tasks-view-skeleton';
+import { returnToTime, type TasksTimeView } from './time-view';
 
 function TasksLegacyRouteView() {
   const params = useParams<{ taskId?: string; projectId?: string }>();
@@ -115,6 +116,19 @@ export function ProjectTaskRouteView() {
         />
       </ProjectTasksProvider>
     </Projects>
+  );
+}
+
+/** A task opened from My week or Team; closing it returns to that week. */
+export function TasksTimeTaskRouteView() {
+  const params = useParams<{ timeView: TasksTimeView; taskId: string }>();
+  const navigate = useNavigate();
+  return (
+    <TasksDetailView
+      task={{ id: params.taskId }}
+      listNavigation={false}
+      onClose={() => returnToTime(navigate, params.timeView)}
+    />
   );
 }
 
