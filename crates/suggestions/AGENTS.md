@@ -42,8 +42,8 @@ scheduler's spec.
   names one, or null. Which topics
   there are and what belongs to them is the session's call alone. A routine
   suggestion has none. `review` and the feed return the topics of the
-  suggestions they list, in the order those first appear, each with how many
-  are open; a topic is never deleted but with its person, so the key keeps its
+  open suggestions they list (`review`, of its closed ones too), in the order
+  those first appear, each with how many are open; a topic is never deleted but with its person, so the key keeps its
   name when suggestions come back to it. A reason is left out, never reworded,
   when it may no longer hold or the person may not see what it says: once one
   of the topic's suggestions became done or resolved after the topic was last

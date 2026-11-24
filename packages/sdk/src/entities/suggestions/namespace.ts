@@ -60,7 +60,7 @@ export interface SuggestionTopicInput {
 export interface SuggestionTopicReasonInput {
   /** One fact, in one line. Names no one's email address, phone number or street address. */
   text: string;
-  /** The item that states it; the user sees the reason only while they can open it. */
+  /** The item that states it, with the message as its `part` in a channel or an email thread; the user sees the reason only while they can open it. */
   source: SuggestionItem;
 }
 
@@ -237,6 +237,11 @@ export class SuggestionNamespace {
   async nameTopic(
     topic: SuggestionTopicInput,
   ): Promise<SuggestionWriteOutcome> {
+    rejectUnknownOptions('suggestions.nameTopic', topic, {
+      key: true,
+      name: true,
+      reason: true,
+    });
     return outcome(
       this.client,
       unwrap(
