@@ -853,6 +853,73 @@ describe('CoordinatorCore', () => {
     }
   );
 
+  it('refuses only the writes queued long enough, and never one an engine was given', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    const enqueue = (id: number) =>
+      ({
+        id,
+        kind: 'enqueue-optimistic-mutation',
+        uuid: `00000000-0000-4000-8000-00000000000${id}`,
+        query: 'mutation Enqueue { enqueue }',
+        data: { enqueue: true },
+        createdAtMs: 1,
+        owner: 'tab-b',
+        nowMs: 1,
+        leaseExpiresAtMs: 300_001,
+      }) satisfies CacheRequest;
+    ready(core, 'tab-a', 1, 'opened-existing');
+    action(core.request('tab-b', enqueue(1), 0), 'route-request');
+    core.beginGracefulDeparture('tab-a', 1);
+    expect(core.oldestQueuedWriteAt).toBeUndefined();
+
+    core.request('tab-b', { id: 2, kind: 'current-revision' }, 5);
+    core.request('tab-b', { id: 3, kind: 'delete-records', keys: ['A:1'] }, 5);
+    core.request('tab-b', { id: 4, kind: 'clear' }, 5);
+    core.request(
+      'tab-b',
+      {
+        id: 5,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'tab-b',
+        leaseGeneration: '1',
+        error: 'refused by the server',
+      },
+      5
+    );
+    core.request('tab-b', enqueue(6), 10);
+    core.request('tab-b', enqueue(7), 11);
+    expect(core.oldestQueuedWriteAt).toBe(10);
+    expect(core.refuseQueuedWrites(9)).toEqual([]);
+    expect(core.refuseQueuedWrites(10)).toEqual([
+      {
+        kind: 'reject-request',
+        tabId: 'tab-b',
+        requestId: 6,
+        error: 'cache write timeout: no owner took it',
+        errorCode: 'write-not-admitted',
+      },
+    ]);
+    expect(core.oldestQueuedWriteAt).toBe(11);
+
+    // What is left reaches the next owner in order; what was refused does not.
+    core.engineDrained('tab-a', 1);
+    const replacement = ready(core, 'tab-b', 2, 'opened-existing');
+    expect(
+      replacement
+        .filter((next) => next.kind === 'route-request')
+        .map(({ request }) => request.kind)
+    ).toEqual([
+      'current-revision',
+      'delete-records',
+      'clear',
+      'rollback-optimistic-write',
+      'enqueue-optimistic-mutation',
+    ]);
+  });
+
   it.each([false, true])(
     'announces a reset before draining a hidden recovery owner (visible survivor: %s)',
     (visibleSurvivor) => {

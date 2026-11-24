@@ -2370,6 +2370,69 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(nextEngine, 'drain-engine')).toHaveLength(1);
   });
 
+  it('refuses a write no owner took in thirty seconds of some page being visible', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      ownerLockWaitTimeoutMs: 1_000_000,
+      assetLoadTimeoutMs: 1_000_000,
+    });
+    const tabA = new FakePort();
+    await register(router, tabA, 'tab-a');
+    const show = (visible: boolean) =>
+      router.handleTabMessage(tabA as CoordinatorMessagePort, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId: 'tab-a',
+        visible,
+      });
+    const enqueue = (id: number) =>
+      router.handleTabMessage(tabA as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-a',
+        request: {
+          id,
+          kind: 'enqueue-optimistic-mutation',
+          uuid: `00000000-0000-4000-8000-00000000000${id}`,
+          query: 'mutation Enqueue { enqueue }',
+          data: { enqueue: true },
+          createdAtMs: 1,
+          owner: 'tab-a',
+          nowMs: 1,
+          leaseExpiresAtMs: 300_001,
+        },
+      });
+    const refusals = () =>
+      messagesOfKind(tabA, 'cache-message').map(({ message }) => message);
+
+    await enqueue(1);
+    await vi.advanceTimersByTimeAsync(20_000);
+    await enqueue(2);
+    await show(false);
+    // Nobody waits: the write is kept for a visible page.
+    await vi.advanceTimersByTimeAsync(300_000);
+    await show(true);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(refusals()).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    const refusal = {
+      ok: false,
+      error: 'cache write timeout: no owner took it',
+      errorCode: 'write-not-admitted',
+    };
+    expect(refusals()).toEqual([{ id: 1, ...refusal }]);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(refusals()).toEqual([
+      { id: 1, ...refusal },
+      { id: 2, ...refusal },
+    ]);
+    expect(router.snapshot()?.queuedRequestCount).toBe(0);
+  });
+
   describe('when a drain does not end', () => {
     async function drainOwner(
       options: {

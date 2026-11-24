@@ -57,6 +57,7 @@ import {
   OWNER_LOCK_WAIT_TIMEOUT_MS,
   TAKEOVER_REPLY_TIMEOUT_MS,
 } from './startup';
+import { VisibleTime } from './visible-time';
 
 export interface CoordinatorMessagePort {
   onmessage: ((event: MessageEvent<unknown>) => void) | null;
@@ -127,6 +128,8 @@ type DrainWatch = {
   timer: ReturnType<typeof setTimeout> | undefined;
 };
 
+/** How long a write waits for an owner while some page is visible. */
+export const QUEUED_WRITE_TIMEOUT_MS = 30_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 /** How often to look for a silent owner's page when looking fails. */
 const MAX_PAGE_PROBES = 3;
@@ -256,6 +259,8 @@ export class CoordinatorRouter {
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
   private drain: DrainWatch | undefined;
   private hideTimer: ReturnType<typeof setTimeout> | undefined;
+  private queuedWriteTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly visibleTime = new VisibleTime(() => this.now());
   private nextHeartbeatId = 1;
   private pendingHeartbeat:
     | { ownerEpoch: number; heartbeatId: number }
@@ -436,7 +441,9 @@ export class CoordinatorRouter {
         this.applyActions(core.setTabVisibility(tabId, visible));
       })
       .with({ kind: 'cache-request' }, ({ request }) => {
-        this.applyActions(core.request(tabId, request));
+        this.applyActions(
+          core.request(tabId, request, this.visibleTime.elapsedMs)
+        );
       })
       .with({ kind: 'attach-engine-port' }, ({ ownerEpoch, enginePort }) => {
         this.attachEnginePort(tabId, ownerEpoch, enginePort);
@@ -1156,6 +1163,7 @@ export class CoordinatorRouter {
     const core = this.coreValue;
     if (!core) return;
     if (!core.ownerHidden) this.clearHideTimer();
+    this.watchQueuedWrites(core);
     match(core.state)
       .with({ kind: 'parked' }, () =>
         this.handoff.park(core.snapshot().ownerEpoch)
@@ -1778,6 +1786,30 @@ export class CoordinatorRouter {
     // died, or a drain asked of it.
     this.clearHeartbeatTimers();
     this.endUnlockedOwner(route);
+  }
+
+  /** Ends the wait of a write no engine takes. A parked cache keeps its work. */
+  private watchQueuedWrites(core: CoordinatorCore): void {
+    this.visibleTime.setRunning(core.hasVisibleTab);
+    const oldest = core.oldestQueuedWriteAt;
+    if (oldest === undefined || !core.hasVisibleTab) {
+      if (this.queuedWriteTimer !== undefined)
+        this.clearTimeoutFn(this.queuedWriteTimer);
+      this.queuedWriteTimer = undefined;
+      return;
+    }
+    if (this.queuedWriteTimer !== undefined) return;
+    this.queuedWriteTimer = this.setTimeoutFn(
+      () => {
+        this.queuedWriteTimer = undefined;
+        this.applyActions(
+          core.refuseQueuedWrites(
+            this.visibleTime.elapsedMs - QUEUED_WRITE_TIMEOUT_MS
+          )
+        );
+      },
+      Math.max(1, oldest + QUEUED_WRITE_TIMEOUT_MS - this.visibleTime.elapsedMs)
+    );
   }
 
   private drainOnceHiddenLongEnough(ownerEpoch: number): void {

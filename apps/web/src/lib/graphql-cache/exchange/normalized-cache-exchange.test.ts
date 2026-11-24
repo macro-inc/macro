@@ -56,6 +56,7 @@ import {
   parseCacheRevision,
   type QueryUpdate,
   type ReadResult,
+  WRITE_NOT_ADMITTED_ERROR_CODE,
   type WriteResult,
 } from '../protocol';
 import { cacheSessionGeneration } from '../session-generation';
@@ -134,6 +135,13 @@ const SUBSCRIPTION = gql`
     }
   }
 `;
+
+const REMOVE_ITEM = {
+  query: 'query CachedList { cachedList { id } }',
+  variablesJson: '{}',
+  path: [{ field: 'cachedList' }],
+  operation: { kind: 'remove' as const, entityKey: 'Item:1' },
+};
 
 const MUTATION = gql`
   mutation SetEntityProperty($input: SetEntityPropertyInput!) {
@@ -5607,6 +5615,85 @@ describe('normalizedCacheExchange', () => {
       });
       expect(onCacheError).toHaveBeenCalledOnce();
     });
+
+    it.each([
+      {
+        name: 'without link patches',
+        linkPatches: [],
+        refusedAt: 1,
+        storageChanges: false,
+      },
+      {
+        name: 'with link patches',
+        linkPatches: [REMOVE_ITEM],
+        refusedAt: 1,
+        storageChanges: false,
+      },
+      {
+        name: 'as the retry without its link patches',
+        linkPatches: [REMOVE_ITEM],
+        refusedAt: 2,
+        storageChanges: false,
+      },
+      // The write is in neither the old storage nor the new.
+      {
+        name: 'when storage changed while it waited',
+        linkPatches: [],
+        refusedAt: 1,
+        storageChanges: true,
+      },
+      {
+        name: 'when storage changed while the retry waited',
+        linkPatches: [REMOVE_ITEM],
+        refusedAt: 2,
+        storageChanges: true,
+      },
+    ])(
+      'returns the refusal of a write no owner took, and never sends it, $name',
+      async ({ linkPatches, refusedAt, storageChanges }) => {
+        const refusal = Object.assign(new Error('no owner took it'), {
+          errorCode: WRITE_NOT_ADMITTED_ERROR_CODE,
+        });
+        const enqueueAttempts = vi.fn(async () => {
+          if (enqueueAttempts.mock.calls.length < refusedAt)
+            throw new Error('a patch no longer fits');
+          if (storageChanges) host.pushGeneration({ storage: 'reset' });
+          throw refusal;
+        });
+        host.enqueueOptimisticMutation = enqueueAttempts;
+        const warn = vi
+          .spyOn(console, 'warn')
+          .mockImplementation(() => undefined);
+        const onCacheError = vi.fn();
+        const { ops, results, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        const base = makeMutationOp(1, optimistic);
+        ops.next(
+          makeOperation(base.kind, base, {
+            ...base.context,
+            normalizedCacheOptimistic: {
+              uuid: crypto.randomUUID(),
+              optimisticResponse: optimistic,
+              linkPatches,
+              revalidations: [],
+            },
+          })
+        );
+        await tick();
+        warn.mockRestore();
+
+        expect(enqueueAttempts).toHaveBeenCalledTimes(refusedAt);
+        expect(forwarded).toHaveLength(0);
+        expect(results).toHaveLength(1);
+        expect(results[0]?.data).toBeUndefined();
+        expect(results[0]?.error?.networkError).toBe(refusal);
+        expect(onCacheError).toHaveBeenLastCalledWith(
+          refusal,
+          expect.objectContaining({ key: 1 })
+        );
+      }
+    );
 
     it('replays an older returned claim and reports the new caller as queued', async () => {
       host.seedQueued({

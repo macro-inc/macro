@@ -164,6 +164,12 @@ describe('cache worker message validators', () => {
         error: 'enqueue response uncertain',
         errorCode: 'admitted-enqueue-uncertain',
       },
+      {
+        id: 5,
+        ok: false,
+        error: 'no owner took it',
+        errorCode: 'write-not-admitted',
+      },
       { kind: 'ops-affected', opIds: ['client:7'], keys: ['User:1'] },
       { kind: 'cache-changed', revision: INITIAL_CACHE_REVISION },
       {
@@ -211,7 +217,7 @@ describe('cache worker message validators', () => {
 
     expect(values.map(isWorkerMessage)).toEqual(values.map(() => true));
     expect(isCacheResponse(values[0])).toBe(true);
-    expect(isCachePush(values[4])).toBe(true);
+    expect(isCachePush(values[5])).toBe(true);
   });
 
   it.each([

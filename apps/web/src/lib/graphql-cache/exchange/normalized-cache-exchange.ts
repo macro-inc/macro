@@ -85,6 +85,7 @@ import {
   isCacheRevision,
   isOwnerEpochLostError,
   isOwnerLockUnavailableError,
+  isWriteNotAdmittedError,
   type QueryRevalidationWire,
   type ReadResult,
 } from '../protocol';
@@ -436,7 +437,7 @@ function operationCacheEffects(data: unknown): CacheEffect[] {
   );
 }
 
-function uncertainEnqueueResult(op: Operation, error: Error): OperationResult {
+function unsentEnqueueResult(op: Operation, error: Error): OperationResult {
   return {
     operation: op,
     data: undefined,
@@ -1264,9 +1265,16 @@ export function normalizedCacheExchange(
         try {
           enqueue = await host.enqueueOptimisticMutation(args, claim);
         } catch (error) {
+          // Whatever else changed meanwhile, this write is nowhere. Sending it
+          // now would put it ahead of writes its caller has made since.
+          if (isWriteNotAdmittedError(error)) {
+            enqueueTelemetry.failed('not-admitted');
+            options.onCacheError?.(error, op);
+            return unsentEnqueueResult(op, error);
+          }
           if (!mutationQueue.isCurrent(epoch)) {
             enqueueTelemetry.failed('storage-changed');
-            return uncertainEnqueueResult(
+            return unsentEnqueueResult(
               op,
               new Error('cache storage changed during enqueue', {
                 cause: error,
@@ -1278,7 +1286,7 @@ export function normalizedCacheExchange(
             options.onCacheError?.(error, op);
             // Fencing the old engine does not remove a committed queue entry.
             // Never forward or retry an enqueue whose reply was lost.
-            return uncertainEnqueueResult(op, error);
+            return unsentEnqueueResult(op, error);
           }
           // Another context holds the database, so the enqueue never reached
           // an engine. Send it as a disabled cache would.
@@ -1330,9 +1338,14 @@ export function normalizedCacheExchange(
               claim
             );
           } catch (fallbackError) {
+            if (isWriteNotAdmittedError(fallbackError)) {
+              enqueueTelemetry.failed('not-admitted');
+              options.onCacheError?.(fallbackError, op);
+              return unsentEnqueueResult(op, fallbackError);
+            }
             if (!mutationQueue.isCurrent(epoch)) {
               enqueueTelemetry.failed('storage-changed');
-              return uncertainEnqueueResult(
+              return unsentEnqueueResult(
                 op,
                 new Error('cache storage changed during enqueue', {
                   cause: fallbackError,
@@ -1342,7 +1355,7 @@ export function normalizedCacheExchange(
             options.onCacheError?.(fallbackError, op);
             if (isAdmittedEnqueueUncertainError(fallbackError)) {
               enqueueTelemetry.failed('uncertain');
-              return uncertainEnqueueResult(op, fallbackError);
+              return unsentEnqueueResult(op, fallbackError);
             }
             enqueueTelemetry.failed('rejected');
             enqueueForward(op);
@@ -1351,7 +1364,7 @@ export function normalizedCacheExchange(
         }
         if (!mutationQueue.isCurrent(epoch)) {
           enqueueTelemetry.failed('storage-changed');
-          return uncertainEnqueueResult(
+          return unsentEnqueueResult(
             op,
             new Error('cache storage changed during enqueue')
           );

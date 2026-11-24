@@ -1,3 +1,4 @@
+import { cacheRequestStamp } from '../host/read-availability';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   CACHE_SUPERSEDED_ERROR_CODE,
@@ -8,6 +9,7 @@ import {
   isTypedSearch,
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
+  WRITE_NOT_ADMITTED_ERROR_CODE,
 } from '../protocol';
 import type { CacheUnavailableReason } from '../telemetry';
 import {
@@ -66,6 +68,8 @@ export type CoordinatorSnapshot = {
 type QueuedRequest = {
   tabId: string;
   request: CacheRequest;
+  /** On the clock of whoever calls `request` and `refuseQueuedWrites`. */
+  queuedAt: number;
 };
 
 type InFlightRequest = QueuedRequest & {
@@ -173,6 +177,15 @@ function isMutationSettlement(request: CacheRequest): boolean {
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'rollback-optimistic-write' ||
     request.kind === 'defer-optimistic-write'
+  );
+}
+
+/** A write its caller can be told was never made. A removal is not: dropping it
+ * would leave what it removes. */
+function isRefusableWrite(request: CacheRequest): boolean {
+  return (
+    cacheRequestStamp(request.kind) === 'captured' &&
+    !isMutationSettlement(request)
   );
 }
 
@@ -327,7 +340,11 @@ export class CoordinatorCore {
     return this.handoffIfNeeded();
   }
 
-  request(tabId: string, request: CacheRequest): CoordinatorAction[] {
+  request(
+    tabId: string,
+    request: CacheRequest,
+    queuedAt = 0
+  ): CoordinatorAction[] {
     if (!this.tabs.includes(tabId)) {
       return [
         this.reject(tabId, request.id, 'requester tab is not registered'),
@@ -344,12 +361,38 @@ export class CoordinatorCore {
       return [this.rejectUnavailable(tabId, request.id, unavailable)];
     }
 
-    const queued = { tabId, request };
+    const queued = { tabId, request, queuedAt };
     if (this.stateValue.kind !== 'active') {
       this.queuedRequests.push(queued);
       return [];
     }
     return [this.route(queued, this.stateValue)];
+  }
+
+  /** When the oldest write that may still be refused was queued. */
+  get oldestQueuedWriteAt(): number | undefined {
+    return this.queuedRequests.find(({ request }) => isRefusableWrite(request))
+      ?.queuedAt;
+  }
+
+  /** Refuses the writes queued until `queuedUntil`. No engine ever got them. */
+  refuseQueuedWrites(queuedUntil: number): CoordinatorAction[] {
+    const kept: QueuedRequest[] = [];
+    const actions: CoordinatorAction[] = [];
+    for (const queued of this.queuedRequests.splice(0)) {
+      if (queued.queuedAt <= queuedUntil && isRefusableWrite(queued.request))
+        actions.push(
+          this.reject(
+            queued.tabId,
+            queued.request.id,
+            'cache write timeout: no owner took it',
+            WRITE_NOT_ADMITTED_ERROR_CODE
+          )
+        );
+      else kept.push(queued);
+    }
+    this.queuedRequests.push(...kept);
+    return actions;
   }
 
   /** The engine loaded its assets and tries to take the database owner lock.
