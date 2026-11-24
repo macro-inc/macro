@@ -1400,3 +1400,56 @@ it('asks nothing more for in-order frames a clean page carried', async () => {
     test.stop();
   }
 });
+
+it('keeps a repair until a page reaches the frame that overtook an earlier one', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const original = graphqlMessage(6, { content: 'message body written at 6' });
+  const latest = graphqlMessage(6, { content: 'same message edited at 406' });
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('406', latest);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(
+      delta('205', { hasMore: true, messages: [original] })
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    // Only the page after 405 carries the edit at 406, and it fails.
+    test.requests[1].answer(delta('405', { hasMore: true }));
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[2].fail();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+    expect(cursors(test)).toEqual(['5', '205', '405', '405']);
+    test.requests[3].answer(delta('406', { messages: [latest] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.records.get(key)).toBe(latest.content);
+  } finally {
+    test.stop();
+  }
+});
+
+it('repairs a delayed frame at or below the cursor of the page out', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const latest = graphqlMessage(6, { content: 'edit committed at 5' });
+  const stale = graphqlMessage(6, { content: 'snapshot of 4' });
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  try {
+    test.records.set(key, latest.content);
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('4', stale);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('6', { messages: [graphqlMessage(20)] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5', '3']);
+    test.requests[1].answer(
+      delta('6', { messages: [latest, graphqlMessage(20)] })
+    );
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.records.get(key)).toBe(latest.content);
+  } finally {
+    test.stop();
+  }
+});

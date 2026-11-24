@@ -538,9 +538,15 @@ export function createChannelSyncRuntime(
     const covering: bigint[] = [];
     // The lowest repair this catch-up left for an overtaken last page.
     let overtaken: bigint | undefined;
-    // The repair left for the previous page, which had more after it.
+    // The repair left for the previous page, which had more after it, and the
+    // newest frame that overtook it: a later page releases the repair once it
+    // reaches that frame, and raises it to itself before then.
     let pageRepair: bigint | undefined;
+    let pageRepairUntil: bigint | undefined;
     for (let page = 0; page < MAX_CHANGE_PAGES + rereads; page += 1) {
+      // The page carries the records changed after this cursor, as they are
+      // when it is read.
+      const asked = after;
       const out: PageOut = { newestFrame: undefined, frames: [] };
       state.pagesOut.add(out);
       // Interrupted (replaced, the socket dropped, the runtime disposed), the
@@ -605,25 +611,45 @@ export function createChannelSyncRuntime(
       const overtakenPage =
         out.newestFrame !== undefined && out.newestFrame > to;
       const overwritten = !delta.hasMore && overtakenPage;
-      // Frames through the page stored before it landed, while it or an
-      // earlier page was out: it carries their records as they were at the
-      // page or later, so they need no repair.
+      // Frames in the page's range that stored before it landed, while it or
+      // an earlier page was out: the server reads the log before the records,
+      // so it carries theirs as they were at the frame or later, and a newer
+      // edit of them has a later frame of its own.
       covering.push(...out.frames);
-      for (const seq of covering) if (seq <= to) state.covered.add(seq);
-      // This page read every change after the previous one as it is now.
-      if (pageRepair !== undefined && state.repairFrom === pageRepair)
-        state.repairFrom = undefined;
-      pageRepair = undefined;
-      // Left as a repair until a page read again holds, or until the next
-      // page after one with more lands, so a drop or a failure before then
-      // repairs from here.
-      if (
-        overtakenPage &&
-        (state.repairFrom === undefined || to < state.repairFrom)
-      ) {
-        leaveRepair(state, to);
-        if (delta.hasMore) pageRepair = to;
-        else if (overtaken === undefined || to < overtaken) overtaken = to;
+      for (const seq of covering)
+        if (seq > asked && seq <= to) state.covered.add(seq);
+      // This page read the changes after the previous one as they are now:
+      // the repair that one left holds only past this page.
+      if (pageRepair !== undefined && state.repairFrom === pageRepair) {
+        if (pageRepairUntil !== undefined && pageRepairUntil > to) {
+          state.repairFrom = to;
+          pageRepair = to;
+        } else {
+          state.repairFrom = undefined;
+          pageRepair = undefined;
+          pageRepairUntil = undefined;
+        }
+      } else {
+        pageRepair = undefined;
+        pageRepairUntil = undefined;
+      }
+      // Left as a repair until a page read again holds, or until the pages
+      // after one with more reach the frames that overtook it, so a drop or a
+      // failure before then repairs from here.
+      if (overtakenPage) {
+        const lowers = state.repairFrom === undefined || to < state.repairFrom;
+        if (lowers || state.repairFrom === pageRepair) {
+          leaveRepair(state, to);
+          if (delta.hasMore) {
+            pageRepair = to;
+            if (
+              out.newestFrame !== undefined &&
+              (pageRepairUntil === undefined ||
+                out.newestFrame > pageRepairUntil)
+            )
+              pageRepairUntil = out.newestFrame;
+          } else if (overtaken === undefined || to < overtaken) overtaken = to;
+        }
       }
       if (overwritten && rereads < MAX_PAGE_REREADS) {
         rereads += 1;
@@ -764,7 +790,11 @@ export function createChannelSyncRuntime(
     if (known === null) {
       if (stored) {
         yield* state.lock.withPermits(1)(
-          markSweepable(channelId, state, generation)
+          Effect.suspend(() => {
+            // A reset dropped the channel after a page covered this frame.
+            state.covered.delete(seq);
+            return markSweepable(channelId, state, generation);
+          })
         );
       }
       return 'not-held';
@@ -772,7 +802,10 @@ export function createChannelSyncRuntime(
     return yield* state.lock.withPermits(1)(
       Effect.gen(function* () {
         const current = state.seq;
-        if (current === null || current === undefined) return 'not-held';
+        if (current === null || current === undefined) {
+          state.covered.delete(seq);
+          return 'not-held';
+        }
         // Read again by its catch-up after it stored: nothing to repair.
         const covered = state.covered.delete(seq) && !late;
         if (stored && !covered && (late || seq <= current)) {

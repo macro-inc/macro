@@ -28,10 +28,12 @@ TanStack path in `../` runs untouched.
   under an earlier connection never marks a channel current (`epoch`, which
   moves on every drop and connect). A last page out while a newer frame stored records is
   read again (`MAX_PAGE_REREADS`); the repair is left in place until a reread
-  holds (for an earlier page, until the next page lands), so a drop or a
+  holds (for an earlier page, until a later page reaches the frames that
+  overtook it, rising to each page before then), so a drop or a
   failure on the way repairs from it; a channel with a repair left is not
-  current. A frame that stored while a page was out is covered by the first
-  later page that lands through it, and asks for no repair. Only the request
+  current. A frame past a page's cursor that stored while it or an earlier
+  page was out is covered by the first later page that lands through it
+  (the server reads the log before the records), and asks for no repair. Only the request
   can be interrupted: a commit the device takes always records its sequence
   and tells the views, and one it leaves unanswered past `COMMIT_BUDGET_MS`,
   a reset's included, frees the channel and makes the runtime read the
