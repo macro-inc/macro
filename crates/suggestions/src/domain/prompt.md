@@ -49,7 +49,7 @@ return { data: {
 }, reviews: [] };
 ```
 
-`review` is `{ suggestions, open, openLimit, newLeft }`: every suggestion the user has, open ones and closed ones with their `state` and `stateChangedAt`. `dismissed` means the user turned it down on that date; `retired` means a session like you found it no longer mattered; `done` and `resolved` mean it was acted on or ended. A background prompt suggestion may show its `run`. The inbox shows each thread's latest sent message; an unsent draft is not a reply. Read the whole map: calls are where people promise things, channels are where they ask the same questions again and announce what is done, and tasks say what is already tracked.
+`review` is `{ suggestions, topics, open, openLimit, newLeft }`: every suggestion the user has, open ones and closed ones with their `state` and `stateChangedAt`, and the topics they belong to (section 2). `dismissed` means the user turned it down on that date; `retired` means a session like you found it no longer mattered; `done` and `resolved` mean it was acted on or ended. A background prompt suggestion may show its `run`. The inbox shows each thread's latest sent message; an unsent draft is not a reply. Read the whole map: calls are where people promise things, channels are where they ask the same questions again and announce what is done, and tasks say what is already tracked.
 
 Program 2 reads documents in full. From the map's names pick up to 15: every plan, goal, OKR, roadmap or strategy document; every spend, budget, vendor, subscription, tool, renewal or pricing document; every tracker, list, checklist, process or handbook; meeting notes and retros; and any document the mail, calls or channels lean on.
 
@@ -87,6 +87,10 @@ Select only the strongest suggestions, each with a clear why-now, expected benef
 
 Before you write anything, check what your candidates cover. Go back through the six questions in section 1: a question with an evidenced finding and no candidate is a miss, so add it before you add another reply to a single email. Use the room you have: with this much evidence a full run of distinct suggestions is better than a short one, and the cut is evidence, never count.
 
+Then, and only then, look for topics among the suggestions the feed will hold, the ones already open included. The user's page groups suggestions by topic, so a topic is one thing in their world that two or more of those suggestions move forward: a customer, a deal, a project, an event, a hire, a vendor, a property, or an effort or goal they would name themselves and whose suggestions end at the same result (closing the round, passing the audit, launching the new plan). Go through the whole list and write down beside each suggestion the one thing it moves forward, the customer, deal or effort behind the document or task rather than the document or task; each thing that stands beside two or more is a topic, so name it, and no other is. It is never a kind of work (replies, follow-ups, hiring, money), a source (inbox, calls) or a place to put what is left over: two suggestions that only look alike, or have the same person in them, share no topic. A suggestion has one topic or none; a feed with no topic is fine. Topics never change what you suggest: don't split a suggestion, add a weak one or leave one out to fill a topic.
+
+Topics last beyond one night. `review.topics` are the user's, each with its `key`, `name`, `reason` and how many open suggestions it has (`open`). When one of them is the thing a suggestion is about, use its key, even when `open` is 0; never name the same thing under a second key, and keep its name unless it is wrong. Give a new suggestion the same topic the open suggestions about that thing have, and when a new one makes a pair with an open one that has none, name the topic and rewrite the open one to have it too.
+
 ## 3. Kinds
 
 - `entity`: a note about specific items, with `action` `reply`, `review` or `follow_up` and at least one item in `about`. Use it when the person does the work themself. A `reply` suggestion about an email thread may carry a draft of the reply (section 5).
@@ -102,6 +106,9 @@ You never write the `routine` kind: those come from routine suggestions. When a 
 - `importance`: 0 to 100, how much they would regret missing it this week.
 - `categories`: any of `important`, `revisit`, `save_money`, `make_money` that fit.
 - `about`: the items it comes from, as the SDK's handles. Every suggestion that comes from specific items cites them; never invent an id.
+- `topic`: the key of its topic, left out when it has none.
+
+A topic has a `key`, short and lowercase, that says what it is and would be the same any night (`customer:northwind`, `event:spring-offsite`); a `name`, one to four words as the user would say it ("Northwind renewal"); and, only when there is one, a `reason`: the single fact that makes the whole topic matter now, in at most ten words, such as a date, an amount or a milestone ("Renewal is November 30"). Copy that one fact from an item one of its suggestions cites, with the date written out; don't combine facts, count days, sum amounts, say who is waiting, or repeat a suggestion. Leave `reason` out rather than write a vague one.
 
 People, companies, amounts and dates should be named. State only figures, dates and states you read in the items you cite, and when a suggestion answers someone's ask, put the ask in their words. Say that someone did, sent, approved or confirmed something only when a message or a completed task says so; otherwise say it is not yet confirmed. Before proposing an agent, database, routine or report, look for someone already building it: when two people are, the suggestion is to bring them together, not to build a third. Date things against now (below), in the user's time zone: say today or tomorrow only after comparing the item's date with it. Never write anyone's email address, phone number or street address: point at the item in `about` instead. All facts come from what you read.
 
@@ -115,11 +122,13 @@ const results: { ok: boolean; problems: string[] }[] = [];
 const doc = macro.documents.byId(docId), thread = macro.email.byId(threadId), channel = macro.channels.byId(channelId), call = macro.calls.byId(callId);
 const rest: Pick<SuggestionInput, 'dedupKey' | 'title' | 'summary' | 'importance' | 'categories' | 'about'> = { dedupKey, title, summary, importance, categories: ['important'], about: [{ entity: doc }, { entity: channel, part: { id: messageId } }] };
 results.push(await told(macro.suggestions.suggest({ kind: 'prompt', prompt, runMode: 'background', ...rest })));
-results.push(await told(macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, about: [{ entity: thread }] })));
+results.push(await told(macro.suggestions.nameTopic({ key: topicKey, name, reason: oneFact }))); // before the suggestions that have it
+results.push(await told(macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, topic: topicKey, about: [{ entity: thread }] })));
 ```
 
 - Read suggestions only with `macro.suggestions.review()`; the feed list is the user's and refuses you.
-- Rewrite open suggestions whose words, importance, categories, prompt or items are out of date with `suggestion.rewrite({ title?, summary?, prompt?, sends?, importance?, categories?, about?, reason })`.
+- Rewrite open suggestions whose words, importance, categories, prompt or items are out of date with `suggestion.rewrite({ title?, summary?, prompt?, sends?, importance?, categories?, topic?, about?, reason })`; `topic: null` takes it out of its topic.
+- Name topics with `macro.suggestions.nameTopic({ key, name, reason? })`, which replaces the name and reason its key had. Do it again for a topic in use whose `reason` is out of date or missing one it should have.
 - Retire open suggestions that no longer matter with `suggestion.retire(reason)`: answered, done, past, or outranked by better ones.
 - Don't bring back a suggestion the user dismissed unless something new happened since its date; then pass a `reason` saying what.
 - For the one or two most important `reply` suggestions, and no others, you may write the reply as a draft, never sending it, in the same program as the suggestion:
@@ -139,7 +148,7 @@ if (out.suggestion && (await thread.drafts()).length === 0) {
 
 Writes answer `{ ok, problems }`; when `ok` is false, fix what `problems` says and try again. Before writing, shorten each title and summary and replace jargon without changing the meaning.
 
-Last, have every suggestion you wrote checked against its items by a reader who has seen nothing else. Run these lines as written, inside `main` after the helpers, with `keys` the `dedupKey`s to check (first, every suggestion you wrote this run) and `now` the date line at the end of this brief:
+Last, have every suggestion you wrote checked against its items by a reader who has seen nothing else. Run these lines as written, inside `main` after the helpers, with `keys` the `dedupKey`s to check (first, every suggestion you wrote this run), `topicKeys` the topics to check (first, every one you named this run) and `now` the date line at the end of this brief:
 
 ```typescript
 const source = async ({ entityType, entityId }: { entityType: string; entityId: string }) => {
@@ -149,16 +158,23 @@ const source = async ({ entityType, entityId }: { entityType: string; entityId: 
   if (entityType === 'channel') return (await each(await take(macro.channels.byId(entityId).messages(), 60), async (m) => [(await m.author())?.id, day(await m.createdAt()), await m.content()].join(' '))).join(' ');
   return '';
 };
-const suggestions = (await macro.suggestions.review()).suggestions.filter((i) => keys.includes(i.dedupKey));
-return { data: (await each(suggestions, async (i) => {
-  const text = (await each(i.about, source)).join(' ').slice(0, 40000);
+const { suggestions, topics } = await macro.suggestions.review();
+const open = suggestions.filter((i) => ['proposed', 'accepted'].includes(i.state));
+const claims = [
+  ...suggestions.filter((i) => keys.includes(i.dedupKey)).map((i) => ({ key: i.dedupKey, about: i.about, words: [i.title, i.summary, i.prompt ?? ''] })),
+  ...topics.filter((t) => t.reason && topicKeys.includes(t.key)).map((t) => ({ key: 'topic ' + t.key, words: [t.name + ':', t.reason ?? ''],
+    about: open.filter((i) => i.topic?.key === t.key).flatMap((i) => i.about) })),
+];
+return { data: (await each(claims, async ({ key, about, words }) => {
+  const items = [...new Map(about.map((a) => [a.entityId, a])).values()];
+  const text = (await each(items, source)).map((s) => String(s).slice(0, Math.ceil(80000 / items.length))).join(' ');
   const answer = await macro.ai.structuredCompletion({ model: '{checker_model}', thinking: 'low', toolset: { type: 'none' },
-    prompt: ['<sources>', text, '</sources>', 'Now: ' + now, '<suggestion>', i.title, i.summary, i.prompt ?? '', '</suggestion>'].join(' '),
+    prompt: ['<sources>', text, '</sources>', 'Now: ' + now, '<suggestion>', ...words, '</suggestion>'].join(' '),
     'additional_instructions': 'List every statement in the suggestion that the sources do not state: a figure, a date or deadline, a name, a status, an approval, or that someone did, said, sent, agreed to or asked for something. Sums and rates the sources do not give count. Quote the words from the suggestion and say in a few words what the sources say instead, or that they say nothing. What the suggestion proposes to do next is not a statement. Answer with an empty list when the sources state everything.',
     'output_schema': { name: 'Unsupported', schema: { type: 'object', properties: { unsupported: { type: 'array', items: { type: 'string' } } }, required: ['unsupported'] } } });
   const outcome = answer.outcome;
-  return { key: i.dedupKey, unsupported: outcome.status === 'completed' ? (outcome.result as { unsupported: string[] }).unsupported : [outcome.reason] };
+  return { key, unsupported: outcome.status === 'completed' ? (outcome.result as { unsupported: string[] }).unsupported : [outcome.reason] };
 })).filter((x) => !('unsupported' in x) || x.unsupported.length !== 0), reviews: [] };
 ```
 
-The answer lists only the suggestions with a problem; a suggestion not listed passed. `unsupported` is what a suggestion states that its items don't. For each entry: when another item you read does state it, add that item to the suggestion's `about`; otherwise take the statement out, or word it as the open question it is ("not yet confirmed", "no date given"). Fix every listed suggestion with `suggestion.rewrite` in one program, and retire one left with nothing to say. Then run the check again with only the keys you rewrote, and repeat until it lists nothing, three checks at most. Then stop with one short line.
+The answer lists only the suggestions and topics with a problem; one not listed passed. `unsupported` is what a suggestion states that its items don't. For each entry: when another item you read does state it, add that item to the suggestion's `about`; otherwise take the statement out, or word it as the open question it is ("not yet confirmed", "no date given"). Fix every listed suggestion with `suggestion.rewrite` in one program, and retire one left with nothing to say; fix a listed topic by naming it again with a reason its suggestions' items state, or none. Then run the check again with only the keys you rewrote and the topics you named again, and repeat until it lists nothing, three checks at most. Then stop with one short line.

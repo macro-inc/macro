@@ -11,17 +11,17 @@ scheduler's spec.
 
 ## How it works
 
-- A generation session calls `review` (every suggestion, open or not, with limits),
-  then `suggest` (add, or update the suggestion with the same `dedupKey`), `rewrite`
-  and `retire`. Only the person's open `suggestions` session in
+- A generation session calls `review` (every suggestion, open or not, with
+  their topics and the limits), then `nameTopic`, `suggest` (add, or update
+  the suggestion with the same `dedupKey`), `rewrite` and `retire`. Only the person's open `suggestions` session in
   `suggestion_generation_session` (`GenerationSessions`), found from the
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
-- The feed (`GET /suggestions`) is `{ suggestions, done, counts }`: open
+- The feed (`GET /suggestions`) is `{ suggestions, done, counts, topics }`: open
   suggestions best first, then those done in the last day, most recently
   first (a finished run makes its suggestion done in the same write).
-  `?limit` caps the open list and leaves `done` out; `counts` (`open`,
+  `?limit` caps the open list and leaves `done` and `topics` out; `counts` (`open`,
   `running`, `failed`, `done`) counts every suggestion shown either way. Each
   carries its server-computed `status` (`open`, `running` while its latest run
   is unsettled, a restored suggestion's run still being cancelled included,
@@ -34,6 +34,19 @@ scheduler's spec.
   items can't be checked is left out and logged, never failing the feed. Each
   process keeps a person's flag for 60 s and counts them in at most once an
   hour per time zone (`Recent`).
+- Topics: a suggestion belongs to at most one (`suggestion.topic_key`), which the
+  generation session names (`PUT /suggestions/topics`: key, name and an
+  optional reason line; the same key names it again, replacing both, at most 15
+  topics a generation) before a suggestion may carry its key. Which topics
+  there are and what belongs to them is the session's call alone. A routine
+  suggestion has none. `review` and the feed return the topics of the
+  suggestions they list, in the order those first appear, each with how many
+  are open; a topic is never deleted but with its person, so the key keeps its
+  name when suggestions come back to it. A reason states facts about its
+  suggestions' items, so it is left out, never reworded, when it may no longer
+  hold or the person may not see what it says: once one of the topic's
+  suggestions became done or resolved after the topic was last named (taking
+  that back brings it back), and in the feed while one of them is hidden.
 - A reply suggestion carries `waitingSince` and `from` (the sender's name,
   never an address): its email thread's newest message, or its channel
   message, unless the person sent it, read when a session writes it
@@ -119,12 +132,13 @@ scheduler's spec.
 
 - `src/domain/service.rs`: the tools' rules (kind never changes, a dismissed
   suggestion needs a `reason` to come back, 30 open and 12 new per generation).
+- `src/domain/topic.rs`, `src/domain/service/topics.rs`: topics.
 - `src/outbound/pg_suggestion_repo.rs`: base row plus one child table per kind;
   limits are checked under a per-person advisory lock.
 
 ## Scope
 
-- Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
+- Owns: `suggestion`, `suggestion_topic`, `suggestion_prompt`, `suggestion_entity`,
   `suggestion_routine`, `suggestion_target`, `suggestion_run`,
   `suggestion_feed_view`, and its `suggestion_change` rows.
 - Also: the vocabulary every generation's tools share (`GenerationTrigger`,
