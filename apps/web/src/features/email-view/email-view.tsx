@@ -125,6 +125,12 @@ const showsTypedSearchResults = (source: EmailDataSource) =>
   answersTypedSearch(source) &&
   source.items().some((row) => row.kind === 'entity');
 
+const isTypedSearchResult = (source: EmailDataSource, threadId: string) =>
+  !(source.showsPreviousRows?.() ?? false) &&
+  source
+    .items()
+    .some((row) => row.kind === 'entity' && row.entity.id === threadId);
+
 function DesktopEmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
@@ -143,6 +149,7 @@ function DesktopEmailPanes(props: {
     setSearch: (query) => setState('search', query),
     hasResults: () => showsTypedSearchResults(source),
     openThread: () => selectedThread()?.id,
+    isResult: (threadId) => isTypedSearchResult(source, threadId),
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),
     labels: () => searchValues.labels(),
@@ -342,6 +349,7 @@ export function EmailMobileLayout(props: ParentProps) {
     setSearch: (query) => setState('search', query),
     hasResults: () => showsTypedSearchResults(source),
     openThread: () => selectedThread()?.id,
+    isResult: (threadId) => isTypedSearchResult(source, threadId),
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),
     labels: () => searchValues.labels(),

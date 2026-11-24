@@ -46,16 +46,19 @@ const LABELS = [
   { name: 'Arch review', kind: 'tag' as const },
 ];
 
-function setup(initialSearch = '') {
+function setup(initialSearch = '', initialThread?: string) {
   const [search, setSearch] = createSignal(initialSearch);
   const [hasResults, setHasResults] = createSignal(true);
-  const [openThread, setOpenThread] = createSignal<string>();
+  const [openThread, setOpenThread] = createSignal(initialThread);
+  // Threads kept on screen from the search before, not among its results.
+  const keptRows = ['kept-thread'];
   const suggestions = createEmailSearchSuggestions({
     userId: () => 'user-a',
     search,
     setSearch,
     hasResults,
     openThread,
+    isResult: (thread) => !keptRows.includes(thread),
     scopeAvailable: (scope) => scope !== 'focus',
     people: () => PEOPLE,
     labels: () => LABELS,
@@ -166,6 +169,21 @@ it('remembers a search when a thread is opened from it, the field still focused'
   suggestions.setFocused(false);
 
   expect(remembered(setSearch, suggestions)).toEqual(['flights la']);
+  dispose();
+});
+
+it('does not remember a search for a thread it did not find', () => {
+  const { dispose, setSearch, setHasResults, setOpenThread, suggestions } =
+    createRoot((dispose) => ({ dispose, ...setup('budget', 'thread-0') }));
+  setHasResults(false);
+  suggestions.setFocused(true);
+  // The thread open as the view mounts, then a row kept from the search
+  // before while this one loads.
+  setSearch('bef');
+  setOpenThread('kept-thread');
+  suggestions.setFocused(false);
+
+  expect(remembered(setSearch, suggestions)).toEqual([]);
   dispose();
 });
 
@@ -498,6 +516,7 @@ it('keeps the row the keyboard picked out as people arrive around it', () => {
       setSearch,
       hasResults: () => true,
       openThread: () => undefined,
+      isResult: () => true,
       scopeAvailable: () => true,
       people,
     });

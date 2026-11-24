@@ -124,6 +124,11 @@ export function createEmailSearchSuggestions(options: {
   hasResults: Accessor<boolean>;
   /** The thread open from the list, beside it or in its place. */
   openThread: Accessor<string | undefined>;
+  /**
+   * Whether a thread is one of the typed search's own results, not a row
+   * kept on screen from the search before.
+   */
+  isResult: (threadId: string) => boolean;
   /** Whether the person has the view, such as Focus behind its flag. */
   scopeAvailable: (scope: EmailSearchScopeId) => boolean;
   /**
@@ -221,13 +226,13 @@ export function createEmailSearchSuggestions(options: {
   const leftWithResults = () =>
     document.hasFocus() && options.hasResults() && !typesOperatorName();
 
-  // A thread opened from the results settles the search, whether or not the
+  // A thread opened from the search's results settles it, whether or not the
   // field saw a blur first (iOS keeps focus in it for a tap on a row).
   createEffect(
     on(
       options.openThread,
       (thread) => {
-        if (thread !== undefined) remember();
+        if (thread !== undefined && options.isResult(thread)) remember();
       },
       { defer: true }
     )
