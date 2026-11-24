@@ -87,9 +87,9 @@ async fn an_old_id_reads_and_writes_the_company_it_was_merged_into(
     .execute(&pool)
     .await?;
     sqlx::query!(
-        "INSERT INTO crm_company_merges (
-             id, team_id, user_id, request_key, request_fingerprint, survivor_id, source_ids, result
-         ) VALUES ($1, $2, $3, $1, '', $4, ARRAY[$5]::uuid[], '{}')",
+        "INSERT INTO crm_merges (
+             id, team_id, user_id, record_type, request_key, request_fingerprint, survivor_id, source_ids, result
+         ) VALUES ($1, $2, $3, 'company', $1, '', $4, ARRAY[$5]::uuid[], '{}')",
         merge,
         team,
         OWNER,

@@ -9,10 +9,10 @@ async fn insert_alias(pool: &PgPool, retired_id: Uuid, survivor_id: Uuid) -> any
     let merge_id = Uuid::now_v7();
     sqlx::query!(
         r#"
-        INSERT INTO crm_company_merges (
-            id, team_id, user_id, request_key, request_fingerprint, survivor_id, source_ids, result
+        INSERT INTO crm_merges (
+            id, team_id, user_id, record_type, request_key, request_fingerprint, survivor_id, source_ids, result
         )
-        SELECT $1, team_id, 'macro|admin@example.com', $2, 'fingerprint', $3, ARRAY[$4]::uuid[], '{}'
+        SELECT $1, team_id, 'macro|admin@example.com', 'company', $2, 'fingerprint', $3, ARRAY[$4]::uuid[], '{}'
         FROM crm_companies WHERE id = $3
         "#,
         merge_id,

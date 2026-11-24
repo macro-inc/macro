@@ -514,10 +514,10 @@ async fn an_old_id_reaches_the_entries_of_the_company_it_was_merged_into(pool: P
     let merged = Uuid::now_v7();
     let merge = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO crm_company_merges (
-             id, team_id, user_id, request_key, request_fingerprint, survivor_id, source_ids, result
+        "INSERT INTO crm_merges (
+             id, team_id, user_id, record_type, request_key, request_fingerprint, survivor_id, source_ids, result
          )
-         SELECT $1, team_id, $2, $1, '', id, ARRAY[$3]::uuid[], '{}' FROM crm_companies WHERE id = $4",
+         SELECT $1, team_id, $2, 'company', $1, '', id, ARRAY[$3]::uuid[], '{}' FROM crm_companies WHERE id = $4",
         merge,
         OWNER,
         merged,
