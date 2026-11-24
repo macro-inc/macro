@@ -1,4 +1,7 @@
 import { endComposerSession } from '@core/auth/clear-composer-storage';
+import { setAccountSession } from '@queries/auth/account-session';
+import { authKeys } from '@queries/auth/keys';
+import { queryClient } from '@queries/client';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { InputSnapshot } from '../../Input';
@@ -8,8 +11,9 @@ import { ThreadReplyChannelInput } from '../ThreadReplyChannelInput';
 const input = vi.hoisted(() => ({
   onSend: undefined as ((snapshot: InputSnapshot) => void) | undefined,
   send: vi.fn(),
+  userId: 'viewer',
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => input.userId }));
 vi.mock('@queries/messages/mutations', () => ({
   newMessageId: () => 'message-id',
   useSendMessageMutation: () => ({ mutateAsync: input.send }),
@@ -30,7 +34,25 @@ vi.mock('../../Input', () => ({
   }),
 }));
 
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  setAccountSession({ epoch: 0, pending: false });
+  queryClient.clear();
+  input.userId = 'viewer';
+});
+
+/** A sign-in that has not said who signed in yet; returned, says so. */
+function signIn() {
+  endComposerSession();
+  setAccountSession({ epoch: 1, pending: true });
+  return (id: string) => {
+    queryClient.setQueryData(authKeys.userInfo.queryKey, {
+      id,
+      authenticated: true,
+    });
+    setAccountSession({ epoch: 1, pending: false });
+  };
+}
 
 const parent = { type: 'channel' as const, id: 'channel' };
 const snapshot = { value: 'reply', mentions: [], attachments: [] };
@@ -68,5 +90,31 @@ it('does not restore a reply the sign-in ended', async () => {
   answer.reject(new Error('send refused'));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(storedDraft()).toBeUndefined();
+  dispose();
+});
+
+it('restores nothing of the user before a sign-in that says who signed in late', async () => {
+  input.send.mockRejectedValueOnce(new Error('send refused'));
+  const dispose = mountInput();
+  const proven = signIn();
+  input.onSend?.(snapshot);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(storedDraft()).toBeUndefined();
+  // The app shows the user before it until its query publishes the new one.
+  proven('someone-else');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(storedDraft()).toBeUndefined();
+  dispose();
+});
+
+it('restores a failed reply once the sign-in says the same user signed in', async () => {
+  input.send.mockRejectedValueOnce(new Error('send refused'));
+  const dispose = mountInput();
+  const proven = signIn();
+  input.onSend?.(snapshot);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(storedDraft()).toBeUndefined();
+  proven('viewer');
+  await vi.waitFor(() => expect(storedDraft()).toBe('reply'));
   dispose();
 });

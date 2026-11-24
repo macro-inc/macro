@@ -1,6 +1,7 @@
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { resetMacroApiToken } from '@service-auth/fetch';
+import { promiseTimeout, until } from '@solid-primitives/promise';
 import {
   hashKey,
   type MutationFunctionContext,
@@ -79,6 +80,24 @@ export function assertQueryAccount(
   account: QueryAccount | undefined
 ): asserts account is QueryAccount {
   if (!isCurrentQueryAccount(account)) throw new QueryAccountChangedError();
+}
+
+/** How long to wait for a sign-in under way to say who signed in. */
+const IDENTITY_WAIT_MS = 10_000;
+
+/**
+ * Whether a sign-in may have replaced `userId`, who the app keeps showing
+ * until it says who signed in: waits for that, or assumes so after a while.
+ */
+export async function replacedBySignIn(userId: string): Promise<boolean> {
+  if (!accountSession().pending) return false;
+  const proven = until(() => !accountSession().pending);
+  try {
+    await Promise.race([proven, promiseTimeout(IDENTITY_WAIT_MS)]);
+  } finally {
+    proven.dispose();
+  }
+  return currentQueryAccount()?.userId !== userId;
 }
 
 /** MutationFunctionContext.meta is captured by TanStack at execute, unlike live observer options. */

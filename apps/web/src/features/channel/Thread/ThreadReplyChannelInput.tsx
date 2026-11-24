@@ -1,6 +1,7 @@
 import { composerStorageGeneration } from '@core/auth/clear-composer-storage';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { replacedBySignIn } from '@queries/auth/account-scope';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -62,12 +63,12 @@ const UNCERTAIN_REPLIES = createUncertainSends(() => newMessageId());
 /** Sends a reply, handing a failure to `onFailed`; the mutation toasts it. */
 async function sendReply(
   send: () => Promise<unknown>,
-  onFailed: (error: unknown) => void
+  onFailed: (error: unknown) => Promise<void>
 ): Promise<void> {
   try {
     await send();
   } catch (error) {
-    onFailed(error);
+    await onFailed(error);
   }
 }
 
@@ -198,10 +199,11 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
                 optimisticId,
                 ...payload,
               }),
-            (error) => {
+            async (error) => {
               // Through the thread's stored draft, not this view's state: the
               // view may be gone, and another may hold a newer draft. Not for
               // another account.
+              if (await replacedBySignIn(senderId)) return;
               if (userId() !== senderId) return;
               if (!restoreFailedReply(keys, snapshot, storageGeneration))
                 return;

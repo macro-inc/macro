@@ -72,6 +72,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
+import { replacedBySignIn } from '@queries/auth/account-scope';
 import { recordChannelViewWhenIdle } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
 import { useChannelTimelineSource } from '@queries/messages/channel-timeline-source';
@@ -876,9 +877,11 @@ export function Channel(props: ChannelProps) {
         } catch (error) {
           sendUi.finish('error');
           span.error('Channel send failed');
+          const replaced = await replacedBySignIn(senderId);
           const handle = channelInputHandle();
           if (
             !handle ||
+            replaced ||
             sendSurfaceDisposed ||
             props.channelId !== channelId ||
             userId() !== senderId ||
