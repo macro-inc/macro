@@ -52,7 +52,7 @@ type Section = {
 const SECTIONS: readonly Section[] = [
   {
     id: 'home',
-    title: 'One inbox for your work.',
+    title: 'One inbox for everything.',
     description:
       'Home pulls everything that needs your attention into one prioritized feed with keyboard triage, AI summaries, and instant workspace search.',
     caption: [
