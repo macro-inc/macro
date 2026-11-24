@@ -2883,8 +2883,6 @@ describe('normalizedCacheExchange', () => {
   it.each([
     ['read', 'owner-epoch-lost'],
     ['write', 'owner-epoch-lost'],
-    ['read', 'owner-lock-unavailable'],
-    ['write', 'owner-lock-unavailable'],
   ] as const)(
     'recovers an engine lost to a concurrent %s (%s) without another API request',
     async (failureSource, errorCode) => {
@@ -2931,6 +2929,68 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded).toHaveLength(1);
       expect(results).toHaveLength(1);
       expect(client.reexecuteOperation).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['read', 'write'] as const)(
+    'asks again for what it fetched in an outage, seen by a %s',
+    async (failureSource) => {
+      const outage = Object.assign(new Error('nothing can open it'), {
+        errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
+      });
+      host.readQuery = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          throw failureSource === 'read'
+            ? outage
+            : Object.assign(new Error('old owner lost'), {
+                errorCode: 'owner-epoch-lost',
+              });
+        })
+        .mockImplementation(async () => ({ kind: 'miss' }));
+      const originalWrite = host.writeQuery;
+      host.writeQuery = vi
+        .fn()
+        .mockRejectedValueOnce(
+          failureSource === 'write' ? outage : new Error('not ready')
+        )
+        .mockImplementation(originalWrite);
+      const { ops, network, forwarded, client } = controlledQueryHarness(host);
+      ops.next(makeOp(44));
+      await tick();
+      const answer = (from: string) => ({
+        operation: forwarded.at(-1)!,
+        data: { from },
+        error: undefined,
+        extensions: undefined,
+        stale: false,
+        hasNext: false,
+      });
+      network.next(answer('outage'));
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledOnce();
+
+      // Another page was served first, and has written a newer answer.
+      host.pushAffected([44]);
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledOnce();
+      expect(client.reexecuteOperation).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          key: 44,
+          context: expect.objectContaining({ requestPolicy: 'network-only' }),
+        })
+      );
+
+      expect(forwarded).toHaveLength(2);
+      network.next(answer('after'));
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledTimes(2);
+      expect(host.writeQuery).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: { from: 'after' },
+          registerDependencies: true,
+        })
+      );
     }
   );
 

@@ -83,6 +83,7 @@ import {
   type EnqueueOptimisticMutationResult,
   isAdmittedEnqueueUncertainError,
   isCacheRevision,
+  isCacheOutageError,
   isEngineAbsentError,
   isOwnerLockUnavailableError,
   isWriteNotAdmittedError,
@@ -552,6 +553,7 @@ export function normalizedCacheExchange(
     type RetainedReplacementFallback = {
       version: number;
       writeArgs: Parameters<CacheHost['writeQuery']>[0];
+      outage: boolean;
       readyPending: boolean;
       recovering: boolean;
       invalidated: boolean;
@@ -561,7 +563,8 @@ export function normalizedCacheExchange(
       /** Includes background persistence for dependency/replacement ordering. */
       networkBoundQueries: number;
       networkRequestsInFlight: number;
-      replacementFallback: boolean;
+      /** Why the network answers for the cache, until an engine serves it again. */
+      replacementFallback?: 'replacement' | 'outage';
       deferredAffected: boolean;
       completedReplacementFallback: boolean;
       networkRegistrationSatisfied: boolean;
@@ -574,13 +577,19 @@ export function normalizedCacheExchange(
     // that unsubscribe as soon as the early network result reaches toPromise().
     const queryResultTurns = new Map<number, Promise<void>>();
     const queryStates = new Map<number, QueryState>();
+    const fallbackAfter = (
+      error: unknown,
+      state: QueryState
+    ): QueryState['replacementFallback'] =>
+      state.replacementFallback === 'outage' || isCacheOutageError(error)
+        ? 'outage'
+        : 'replacement';
     const queryState = (key: number): QueryState => {
       let state = queryStates.get(key);
       if (!state) {
         state = {
           networkBoundQueries: 0,
           networkRequestsInFlight: 0,
-          replacementFallback: false,
           deferredAffected: false,
           completedReplacementFallback: false,
           networkRegistrationSatisfied: false,
@@ -660,6 +669,20 @@ export function normalizedCacheExchange(
       );
     };
 
+    const refetchAfterOutage = (key: number): void => {
+      const op = activeOps.get(key);
+      if (!op) return;
+      client.reexecuteOperation(
+        makeOperation(op.kind, op, {
+          ...op.context,
+          requestPolicy:
+            op.context.requestPolicy === 'cache-only'
+              ? 'cache-only'
+              : 'network-only',
+        })
+      );
+    };
+
     const recoverRetainedReplacementFallback = (key: number): void => {
       const state = queryStates.get(key);
       const retained = state?.retainedReplacementFallback;
@@ -667,6 +690,14 @@ export function normalizedCacheExchange(
         return;
       retained.readyPending = true;
       if (retained.recovering || state.networkBoundQueries > 0) return;
+      if (retained.outage) {
+        // An outage has no bound, and another page may have served again and
+        // written a newer answer since this one: ask again.
+        retained.invalidated = true;
+        state.retainedReplacementFallback = undefined;
+        refetchAfterOutage(key);
+        return;
+      }
       retained.recovering = true;
       const recovery = (async () => {
         while (
@@ -697,7 +728,7 @@ export function normalizedCacheExchange(
               return;
             }
             state.retainedReplacementFallback = undefined;
-            state.replacementFallback = false;
+            state.replacementFallback = undefined;
             state.deferredAffected = false;
             state.completedReplacementFallback = false;
             state.networkRegistrationSatisfied = false;
@@ -874,7 +905,7 @@ export function normalizedCacheExchange(
           }
           const registrationOnly = state.completedReplacementFallback;
           state.completedReplacementFallback = false;
-          state.replacementFallback = false;
+          state.replacementFallback = undefined;
           if (state.retainedReplacementFallback) {
             recoverRetainedReplacementFallback(key);
             continue;
@@ -955,7 +986,7 @@ export function normalizedCacheExchange(
         const deferred = state.deferredAffected;
         state.deferredAffected = false;
         const replacementFallback = state.replacementFallback;
-        state.replacementFallback = false;
+        state.replacementFallback = undefined;
         if (deferred) {
           state.completedReplacementFallback = false;
           if (!replacementRegistrationSatisfied) {
@@ -1171,7 +1202,7 @@ export function normalizedCacheExchange(
             queryStates.get(op.key) === readState &&
             (readVersion.isCurrent() || readState.networkBoundQueries > 0)
           ) {
-            readState.replacementFallback = true;
+            readState.replacementFallback = fallbackAfter(error, readState);
           }
         }
         if (!readVersion.isCurrent()) {
@@ -1485,6 +1516,7 @@ export function normalizedCacheExchange(
               ? {
                   version: resultVersion,
                   writeArgs,
+                  outage: state.replacementFallback === 'outage',
                   readyPending: false,
                   recovering: false,
                   invalidated: false,
@@ -1572,7 +1604,8 @@ export function normalizedCacheExchange(
               state.networkResultVersion === resultVersion &&
               (state.replacementFallback || isEngineAbsentError(error))
             ) {
-              state.replacementFallback = true;
+              state.replacementFallback = fallbackAfter(error, state);
+              retained.outage = state.replacementFallback === 'outage';
               state.retainedReplacementFallback = retained;
             }
             return undefined;
