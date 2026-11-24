@@ -6,18 +6,22 @@ import {
   type ChannelCoverageWire,
   type ChannelTimelineCacheArgs,
   type ChannelTimelineCommitCacheResult,
+  type RecordSelection,
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
+  type ChannelMessageBaseFieldsFragment,
+  ChannelMessageBaseFieldsFragmentDoc,
   ChannelTimelineDocument,
   ChannelTimelineEntryRecordFragmentDoc,
   type ChannelTimelineInput,
   type ChannelTimelineQuery,
 } from '@service-storage/graphql/generated/graphql';
 import type { MessageTimelineEntry } from '@service-storage/messages';
+import { ResultAsync } from 'neverthrow';
 import { withinCacheHeadStart } from '../../calendar/graphql/readiness';
 import {
   CHANNEL_CACHE_HEAD_START_MS,
@@ -598,18 +602,49 @@ async function storedOutcome(
   }
 }
 
+// A message's own fields, without its thread and call: a reply the device
+// holds only inside its root's thread preview has no more than these.
+let ownFieldsSelection:
+  | RecordSelection<ChannelMessageBaseFieldsFragment>
+  | undefined;
+const messageOwnFieldsSelection = () =>
+  (ownFieldsSelection ??= selectRecords(ChannelMessageBaseFieldsFragmentDoc));
+
+/**
+ * The device's copy of a message's own fields, such as the thread it is in;
+ * undefined when the device does not hold it in that channel or cannot be
+ * read.
+ */
+export async function readStoredMessage(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  channelId: string,
+  messageId: string
+): Promise<ChannelMessageBaseFieldsFragment | undefined> {
+  const read = await ResultAsync.fromPromise(
+    readRecordsByKeys(host, messageOwnFieldsSelection(), [
+      channelMessageKey(messageId),
+    ]),
+    (error) => error
+  );
+  if (read.isErr()) {
+    Telemetry.error(read.error, { surface: 'channel-local-sync' });
+    return undefined;
+  }
+  const record = read.value.records[0]?.record;
+  if (record?.__typename !== CHANNEL_MESSAGE_TYPENAME) return undefined;
+  return record.channelId === channelId ? record : undefined;
+}
+
 /**
  * The thread the device's copy of a message is in: null for a top-level
- * message, undefined when the device does not hold it in that channel.
+ * message, undefined when the device does not hold it in that channel or
+ * cannot be read.
  */
 export async function readStoredThreadId(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
   channelId: string,
   messageId: string
 ): Promise<string | null | undefined> {
-  const [record] =
-    (await readTimelineRecords(host, [channelMessageKey(messageId)])) ?? [];
-  if (record?.__typename !== CHANNEL_MESSAGE_TYPENAME) return undefined;
-  if (record.channelId !== channelId) return undefined;
-  return record.threadId;
+  const message = await readStoredMessage(host, channelId, messageId);
+  return message && (message.threadId ?? null);
 }

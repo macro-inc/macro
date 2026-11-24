@@ -91,7 +91,7 @@ export const keyOf = (
     ? channelMessageKey(record.id)
     : channelActivityKey(record.id);
 
-type FakeHost = Pick<
+export type FakeHost = Pick<
   CacheHost,
   'channelTimeline' | 'channelTimelineCommit' | 'readRecordsByKeys'
 > & {
