@@ -2017,10 +2017,8 @@ impl<S: Storage> Engine<S> {
         let before = effective_records(&bases, &self.optimistic, &candidates);
         let mut staged = StagedRecords::new();
         for (key, update) in &updates {
-            if let Some((record, _)) = admission.merge(key, bases.get(key).cloned(), update.clone())
-            {
-                staged.insert(key.clone(), Some(record));
-            }
+            let (record, _) = admission.merge(key, bases.get(key).cloned(), update.clone());
+            staged.insert(key.clone(), Some(record));
         }
         staged.extend(admission.deleted.iter().map(|key| (key.clone(), None)));
         let queued = self
@@ -2179,7 +2177,6 @@ impl<S: Storage> Engine<S> {
         let mut persisted = Vec::with_capacity(updates.len());
         for (key, update) in updates {
             let (merged, did_change, was_hot) = match staging.remove(&key) {
-                None if admission.only_over_held(&key) => continue,
                 Some((existing, was_hot)) if admission.replaces(&key) => {
                     let did_change = existing != update;
                     if did_change {

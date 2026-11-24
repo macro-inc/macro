@@ -46,36 +46,28 @@ pub(super) struct ChannelAdmission {
     stamped: HashMap<EntityKey<'static>, Admitted>,
     /// Records written whole: nothing they held before is merged into.
     replaced: BTreeSet<EntityKey<'static>>,
-    /// Records of removed entries, written only over one that is held.
-    tombstones: BTreeSet<EntityKey<'static>>,
 }
 
 impl ChannelAdmission {
     /// Merges `update` into what is held of `key`, with whether that changes
-    /// the record. `None` writes nothing.
+    /// the record.
     pub(super) fn merge(
         &self,
         key: &EntityKey<'static>,
         existing: Option<Record>,
         update: Record,
-    ) -> Option<(Record, bool)> {
+    ) -> (Record, bool) {
         match existing {
             Some(existing) if self.replaced.contains(key) => {
                 let changed = existing != update;
-                Some((update, changed))
+                (update, changed)
             }
             Some(mut existing) => {
                 let changed = existing.merge(update);
-                Some((existing, changed))
+                (existing, changed)
             }
-            None if self.tombstones.contains(key) => None,
-            None => Some((update, true)),
+            None => (update, true),
         }
-    }
-
-    /// Whether `key` is written only when a record of it is held.
-    pub(super) fn only_over_held(&self, key: &EntityKey<'static>) -> bool {
-        self.tombstones.contains(key)
     }
 
     /// Whether `key` is written without merging into what is held.
@@ -147,8 +139,9 @@ fn is_deleted(record: &Record) -> bool {
     record.fields.get(DELETED_FIELD) == Some(&CacheValue::Bool(true))
 }
 
-/// The record of a removed entry. List fields leave it out, so a thread that
-/// still names it stays readable.
+/// The record of a removed entry, kept as long as its tombstone, so a queued
+/// write has a removed entry under it. List fields leave it out, and a thread
+/// that still names it stays readable.
 fn tombstone_record(key: &EntityKey<'static>) -> Record {
     let mut record = super::identity_record(key);
     record
@@ -292,9 +285,6 @@ impl<S: Storage> Engine<S> {
                 admission.stamped.remove(&key);
                 updates.insert(key.clone(), tombstone_record(&key));
                 admission.replaced.insert(key.clone());
-                if !pending.contains(&key) {
-                    admission.tombstones.insert(key.clone());
-                }
                 admission.changes_reads |= state.is_some_and(|state| !state.removed);
                 admission.write.tombstones.push(ChannelTombstone {
                     record_key: key,
@@ -378,8 +368,8 @@ impl<S: Storage> Engine<S> {
         Ok(())
     }
 
-    /// The entries queued writes change. Such a write shows its entry without a
-    /// record under it, so the removal of one stays until the write settles.
+    /// The entries queued writes change. Such a write shows its entry when no
+    /// record is under it, so the removal of one stays until the write settles.
     fn pending_channel_entries(&self) -> BTreeSet<EntityKey<'static>> {
         let mut pending = layer_keys(&self.optimistic);
         pending.retain(is_channel_entry);

@@ -489,6 +489,19 @@ fn writes_persist_across_reopen_and_eviction_takes_everything() {
         assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM records"), 1);
         assert_eq!(scalar(&storage, SYNC_COUNT), 1);
         assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM channel_coverage"), 1);
+
+        // A channel only a deletion was stored of.
+        let channel = ChannelWrite {
+            tombstones: vec![tombstone("c3", "m9", 9)],
+            ..ChannelWrite::default()
+        };
+        write(&mut storage, &[deleted(key("m9"))], &channel).await;
+        let evicted = storage
+            .channel_timeline_evict(&eviction, &BTreeSet::new())
+            .await
+            .unwrap();
+        assert_eq!(evicted.channel_ids, ["c3"]);
+        assert_eq!(states(&storage, &["m9"]).await, [None]);
     });
 }
 

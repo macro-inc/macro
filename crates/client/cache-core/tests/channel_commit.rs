@@ -180,8 +180,7 @@ fn a_removal_of_an_entry_not_held_keeps_an_older_answer_out() {
     block_on(async {
         let mut engine = held().await;
         let removal = removing(changes("c1", "10", "12"), &["m9"]);
-        let write = engine.channel_timeline_commit(&removal).await.unwrap();
-        assert!(write.changed.is_empty());
+        engine.channel_timeline_commit(&removal).await.unwrap();
         // Its page lowers the watermark under the removal, and lists it.
         apply(&mut engine, "11", &[root("m9", "90")], &whole("11")).await;
         assert_eq!(roots(&mut engine).await, covered(&["m3", "m2", "m1"]));
@@ -306,7 +305,8 @@ fn removals_are_remembered_as_far_as_the_server_replays() {
         let records = engine.storage().len();
         let far = (12 + TOMBSTONE_REPLAY).to_string();
         apply(&mut engine, &far, &[], &changes("c1", &near, &far)).await;
-        assert_eq!(engine.storage().len(), records - 1);
+        // The id could have named a message or an activity.
+        assert_eq!(engine.storage().len(), records - 2);
         // The watermark keeps the same answers out.
         write_page(&mut engine, "c1", "11", &[root("m2", "20")], None)
             .await
@@ -446,6 +446,18 @@ async fn queue(engine: &mut TestEngine, message: &Value, binds: bool) -> (u64, M
         reference_fields: vec![],
         revalidation_variables: vec![],
     };
+    let bindings = match binds {
+        true => std::slice::from_ref(&binding),
+        false => &[],
+    };
+    enqueue(engine, message, bindings).await
+}
+
+async fn enqueue(
+    engine: &mut TestEngine,
+    message: &Value,
+    bindings: &[IdentityBinding],
+) -> (u64, MutationClaimToken) {
     let queued = engine
         .enqueue_optimistic_mutation(
             None,
@@ -459,11 +471,7 @@ async fn queue(engine: &mut TestEngine, message: &Value, binds: bool) -> (u64, M
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 0,
-                identity_bindings: if binds {
-                    std::slice::from_ref(&binding)
-                } else {
-                    &[]
-                },
+                identity_bindings: bindings,
             },
             MutationClaimRequest {
                 owner: "runner".into(),
@@ -596,6 +604,45 @@ fn a_pending_edit_never_brings_back_an_entry_known_removed() {
             assert_eq!(engine.storage().len(), records - 1, "{queued}");
             assert_eq!(roots(&mut engine).await, covered(&["m1"]), "{queued}");
         }
+    });
+}
+
+#[test]
+fn an_edit_queued_after_the_removal_of_its_entry_shows_nothing_of_it() {
+    block_on(async {
+        let mut engine = held_with_mutations().await;
+        let removal = removing(changes("c1", "10", "11"), &["m9"]);
+        apply(&mut engine, "11", &[], &removal).await;
+        // The device never held it; the edit has all of it.
+        queue(&mut engine, &saying(root("m9", "90"), "pending"), false).await;
+        assert_eq!(roots(&mut engine).await, covered(&["m2", "m1"]));
+        assert_eq!(content(&mut engine, "m9").await, None);
+    });
+}
+
+#[test]
+fn eviction_finds_a_channel_only_a_deletion_was_stored_of() {
+    block_on(async {
+        let mut engine = Engine::with_schema(InMemoryStorage::new(), 100, mutation_schema());
+        let deletion = IdentityBinding {
+            local_key: key("m5"),
+            delete_record: true,
+            response_path: vec![],
+            reference_fields: vec![],
+            revalidation_variables: vec![],
+        };
+        let claim = enqueue(&mut engine, &root("m5", "50"), &[deletion]).await;
+        settle(&mut engine, claim, &sent("12", &root("m5", "50"))).await;
+        let eviction = ChannelEviction {
+            touched_before_ms: 1,
+            max_channels: 5,
+        };
+        let evicted = engine.channel_timeline_evict(&eviction).await.unwrap();
+        assert_eq!(evicted.channel_ids, ["c1"]);
+        assert!(engine.storage().is_empty());
+        // Nothing of the deletion is left to keep the first page's entry out.
+        apply(&mut engine, "5", &[root("m5", "50")], &whole("5")).await;
+        assert_eq!(roots(&mut engine).await, covered(&["m5"]));
     });
 }
 
