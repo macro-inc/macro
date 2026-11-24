@@ -19,6 +19,7 @@ use opensearch::{Error, http::response::Response};
 pub enum OpensearchOperation {
     SearchChannel,
     SearchUnified,
+    SearchDatabaseRows,
     UpsertDocument,
     UpsertParentDocument,
     BulkUpsertSingleChunk,
