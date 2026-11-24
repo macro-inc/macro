@@ -8,7 +8,7 @@
 //! [`vars::WINDOWS_SIGNING_AZURE_TENANT_ID`]) and published only when
 //! [`vars::WINDOWS_DESKTOP_RELEASE`] also allows it. A Windows failure never
 //! holds back the macOS and Linux release, but the release waits for the
-//! Windows job to end, so keep the signing environment free of required
+//! Windows jobs to end, so keep the signing environment free of required
 //! reviewers and wait timers.
 //!
 //! Every build installs the installer silently and checks what it registered;
