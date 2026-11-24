@@ -119,7 +119,10 @@ export type CrmContext = {
     ): void;
     showCompanies(): void;
     /** Open any soup row (email, file, call, ...) in a split. */
-    openEntity(entity: import('@entity').EntityData): void;
+    openEntity(
+      entity: import('@entity').EntityData,
+      options?: { newSplit?: boolean }
+    ): void;
   };
   listsEnabled(): Accessor<boolean>;
 
