@@ -546,6 +546,8 @@ fn agent_screen_browser_tests_run_when_the_viewer_or_dm_header_change() {
         "apps/web/src/features/settings/views/team-agent-dm-status.tsx",
         "apps/web/src/components/app/split-layout/**",
         "apps/web/src/components/ui/components/Dialog.tsx",
+        "apps/web/src/lib/core/component/LexicalMarkdown/component/core/LinkWithPreview.tsx",
+        "apps/web/src/lib/core/signal/unfurl.ts",
     ] {
         assert!(screen.contains(path), "{path} runs the suite: {screen}");
     }
