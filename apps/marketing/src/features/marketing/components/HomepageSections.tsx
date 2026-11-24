@@ -56,7 +56,7 @@ const SECTIONS: readonly Section[] = [
     description:
       'Home pulls everything that needs your attention into one prioritized feed with keyboard triage, AI summaries, and instant workspace search.',
     caption: [
-      'Catch up on Macro Mail, Macro Chat, Macro Tasks, Macro Docs, and Macro Agents in one list, or jump straight into a Macro GitHub pull request.',
+      'Catch up on Macro Mail, Macro Chat, Macro Tasks, Macro Docs, and Macro Agents in one list or jump straight into a Macro GitHub pull request.',
     ],
     tutorial: 'home',
     screen: inboxScreen,
@@ -110,7 +110,7 @@ const SECTIONS: readonly Section[] = [
     description:
       'Docs gives you collaborative plain markdown with full version history, real-time multiplayer cursors, and live editing alongside AI agents.',
     caption: [
-      'Type @ to mention Macro Tasks, Macro Mail, and Macro Calls inline with bidirectional links, and organize specs alongside Macro Spreadsheets in Macro Drive.',
+      'Type @ to mention Macro Tasks, Macro Mail, and Macro Calls inline with bidirectional links and organize specs alongside Macro Spreadsheets in Macro Drive.',
     ],
     tutorial: 'docs',
     screen: docsScreen,
@@ -120,11 +120,11 @@ const SECTIONS: readonly Section[] = [
   },
   {
     id: 'calendar',
-    title: 'A really fast calendar, with agents that do the scheduling.',
+    title: 'A really fast calendar with agents that do the scheduling.',
     description:
       'Calendar unifies your Google and Microsoft schedules in one fast week view with instant keyboard navigation and built-in scheduling links.',
     caption: [
-      'Ask Macro Agents to find a time and send invites, or share Macro Booking Links that connect guest answers straight to Macro CRM and Macro Mail.',
+      'Ask Macro Agents to find a time and send invites or share Macro Booking Links that connect guest answers straight to Macro CRM and Macro Mail.',
     ],
     tutorial: 'calendar',
     screen: calendarScreen,
@@ -135,7 +135,7 @@ const SECTIONS: readonly Section[] = [
     id: 'calls',
     title: 'Calls that feed into team memory.',
     description:
-      'Calls lets you start instant video meetings in any channel or invite external guests with a link, complete with recordings and transcripts.',
+      'Calls lets you start instant video meetings in any channel or invite external guests with a link—with recordings and transcripts included.',
     caption: [
       'Launch a huddle from Macro Chat and let Macro Agents turn the transcript into Macro Tasks, update Macro CRM, and attach notes to Macro Docs.',
     ],
@@ -150,7 +150,7 @@ const SECTIONS: readonly Section[] = [
     description:
       'CRM automatically tracks your companies, contacts, owners, and deal stages so you never have to manually log updates in a separate tool.',
     caption: [
-      'Every company record pulls live threads from Macro Mail, transcripts from Macro Calls, and answers from Macro Booking Links, while Macro Agents update stages.',
+      'Every company record pulls live threads from Macro Mail, transcripts from Macro Calls, and answers from Macro Booking Links while Macro Agents update stages.',
     ],
     tutorial: 'crm',
     screen: crmScreen,
@@ -257,7 +257,7 @@ export function HomepageSections() {
         id="pricing"
         aura="home"
         title="One plan for all your work."
-        description="Start free with every module included, and upgrade anytime for higher AI usage and workspace storage."
+        description="Start free with every module included and upgrade anytime for higher AI usage and workspace storage."
         more={<HomepageFeatureDetails title="pricing" path="/pricing" />}
       >
         <ul class="homepage-modules" aria-label="Included modules">
