@@ -169,10 +169,6 @@ impl ParsedWatermark {
         match (self, held) {
             (Self::Keep, held) => (held, Applied),
             (Self::Reset(seq), _) => (Some(seq), Applied),
-            // What was removed since a page that old is forgotten.
-            (Self::Lower(seq), Some(held)) if seq <= held.saturating_sub(TOMBSTONE_REPLAY) => {
-                (Some(held), Stale)
-            }
             (Self::Lower(seq), held) => (Some(held.map_or(seq, |held| held.min(seq))), Applied),
             (Self::Advance { .. }, None) => (None, Unheld),
             (Self::Advance { to, .. }, Some(held)) if to <= held => (Some(held), Stale),
@@ -211,11 +207,9 @@ fn proven(
 }
 
 /// The coverage `commit` leaves its lists with, over what the guard read.
-/// `listed` has the sort keys of the entries its response carries. A stale
-/// page covers nothing.
+/// `listed` has the sort keys of the entries its response carries.
 pub(crate) fn coverage_writes(
     commit: &ChannelTimelineCommit,
-    status: ChannelCommitStatus,
     guard: &ChannelGuard,
     listed: &BTreeMap<TimelineScope, BTreeSet<String>>,
 ) -> Vec<ChannelCoverageWrite> {
@@ -224,11 +218,7 @@ pub(crate) fn coverage_writes(
         .iter()
         .map(|root_id| (TimelineScope::Thread(root_id.clone()), Vec::new()))
         .collect::<BTreeMap<_, _>>();
-    let fetched = match status {
-        ChannelCommitStatus::Stale => BTreeMap::new(),
-        _ => commit.coverage_by_scope(),
-    };
-    for (scope, spans) in fetched {
+    for (scope, spans) in commit.coverage_by_scope() {
         let fresh = commit.reset || scopes.contains_key(&scope);
         let held = guard
             .coverage

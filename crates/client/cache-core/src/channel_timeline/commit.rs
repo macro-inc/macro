@@ -176,8 +176,7 @@ pub enum ChannelCommitStatus {
     /// The commit took effect as asked.
     Applied,
     /// The watermark already covered the changes. Entries and removals were
-    /// taken where they are newer than what is held. Also a page further behind
-    /// the watermark than removals are remembered, which covers nothing.
+    /// taken where they are newer than what is held.
     Stale,
     /// Changes before the commit's are missing. Entries and removals were
     /// taken, and the watermark stayed.

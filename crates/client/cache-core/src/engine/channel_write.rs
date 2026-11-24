@@ -124,8 +124,13 @@ impl ChannelAdmission {
                 } else {
                     // A list cannot order an entry without its position, so
                     // nothing of its channel is known complete.
-                    let channel_id = entry_channel_id(record).map(str::to_owned);
-                    self.write.uncovered.extend(channel_id);
+                    let committed = self.outcome.as_ref().map(|outcome| &outcome.channel_id);
+                    let named = entry_channel_id(record).map(str::to_owned);
+                    if let Some(channel_id) = named.or(committed.cloned()) {
+                        self.changes_reads = true;
+                        self.note_change(&channel_id, ChannelChangeKind::Changed);
+                        self.write.uncovered.push(channel_id);
+                    }
                     for write in &mut self.write.coverage {
                         write.spans.clear();
                     }
@@ -245,14 +250,8 @@ impl<S: Storage> Engine<S> {
             }
         }
         if let Some((commit, held, after, status)) = moved {
-            self.admit_channel_commit(
-                &mut admission,
-                updates,
-                &guard,
-                commit,
-                (held, after, status),
-            )
-            .await?;
+            self.admit_channel_commit(&mut admission, updates, &guard, commit, (held, after))
+                .await?;
             admission.outcome = Some(ChannelCommitOutcome {
                 channel_id: commit.channel_id.clone(),
                 seq: after.map(|seq| seq.to_string()),
@@ -263,14 +262,14 @@ impl<S: Storage> Engine<S> {
     }
 
     /// Adds what `commit` removes, covers and syncs, with the watermark it
-    /// found, the one it leaves and what that makes of it.
+    /// found and the one it leaves.
     async fn admit_channel_commit(
         &mut self,
         admission: &mut ChannelAdmission,
         updates: &mut RecordUpdates,
         guard: &ChannelGuard,
         commit: &ChannelTimelineCommit,
-        (held, after, status): (Option<i64>, Option<i64>, ChannelCommitStatus),
+        (held, after): (Option<i64>, Option<i64>),
     ) -> Result<(), EngineError<S::Error>> {
         let channel_id = commit.channel_id.as_str();
         let seq = commit.parsed_seq()?;
@@ -349,7 +348,7 @@ impl<S: Storage> Engine<S> {
         }
         admission.write.deleted = doomed.into_iter().collect();
 
-        admission.write.coverage = coverage_writes(commit, status, guard, &admission.listed);
+        admission.write.coverage = coverage_writes(commit, guard, &admission.listed);
         let stored = guard.sync.get(channel_id);
         let touched = stored.map_or(0, |sync| sync.touched_at_ms);
         let sync = ChannelSync {

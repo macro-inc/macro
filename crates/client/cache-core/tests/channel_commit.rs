@@ -312,11 +312,6 @@ fn removals_are_remembered_as_far_as_the_server_replays() {
             .await
             .unwrap();
         assert_eq!(content(&mut engine, "m2").await, None);
-        // A page as old is not taken back to.
-        let late = [root("m3", "30"), root("m2", "20")];
-        let outcome = apply(&mut engine, "11", &late, &whole("11")).await;
-        assert_eq!(outcome, (Some(far), ChannelCommitStatus::Stale));
-        assert_eq!(content(&mut engine, "m2").await, None);
     });
 }
 
@@ -684,6 +679,7 @@ fn nothing_is_covered_beside_an_entry_without_a_position() {
     block_on(async {
         let mut placeless = root("m4", "40");
         placeless["sortKey"] = json!("");
+        placeless["channelId"] = json!("");
         for commit in [whole("11"), changes("c1", "10", "11")] {
             let mut engine = held().await;
             let entries = [placeless.clone()];
