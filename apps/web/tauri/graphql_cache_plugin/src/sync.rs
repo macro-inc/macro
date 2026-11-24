@@ -189,7 +189,9 @@ impl SyncRuns {
 
     /// Runs one stream to its end, its failure, or a stop. The run is its own
     /// task, so it finishes (and keeps publishing) even when the webview that
-    /// started it reloads.
+    /// started it reloads. It takes the slot before it waits for anything, so
+    /// a stop, suspension, clear or shutdown also reaches a run that is still
+    /// reading its saved lane state.
     pub(crate) async fn start(
         &self,
         engine: WeakEngineHandle,
@@ -198,11 +200,6 @@ impl SyncRuns {
     ) -> SyncRunOutcome {
         let Some(opener) = self.opener.get().cloned() else {
             return SyncRunOutcome::failed(SyncFailure::Unsupported);
-        };
-        let hooks = NativeSyncHooks::new();
-        let run = match engine.sync_begin(&args, hooks.monotonic_ms()).await {
-            Ok(run) => run,
-            Err(failure) => return SyncRunOutcome::failed(failure),
         };
         let active = ActiveRun::default();
         {
@@ -220,14 +217,23 @@ impl SyncRuns {
         let publish_interval = self.publish_interval;
         let stall_timeout = self.stall_timeout;
         tauri::async_runtime::spawn(active.tracker.track_future(async move {
-            let stream = Stream {
-                opener: opener.as_ref(),
-                read_ahead_bytes,
-                publish_interval,
-                stall_timeout,
-                cancel: &cancel,
+            let hooks = NativeSyncHooks::new();
+            // Reading the saved state is not interrupted: a stop that comes
+            // meanwhile ends the run before it opens the stream. A failure
+            // here still frees the slot below.
+            let outcome = match engine.sync_begin(&args, hooks.monotonic_ms()).await {
+                Ok(run) => {
+                    let stream = Stream {
+                        opener: opener.as_ref(),
+                        read_ahead_bytes,
+                        publish_interval,
+                        stall_timeout,
+                        cancel: &cancel,
+                    };
+                    drive(&engine, stream, &args, run, &hooks, publish).await
+                }
+                Err(failure) => SyncRunOutcome::failed(failure),
             };
-            let outcome = drive(&engine, stream, &args, run, &hooks, publish).await;
             // Free the slot before reporting, so whoever sees the outcome can start again.
             *slot.lock().unwrap_or_else(PoisonError::into_inner) = None;
             // The webview that started the run may be gone; nobody needs the outcome then.
@@ -425,6 +431,10 @@ async fn read_stream(
     headers.push((CONTENT_TYPE.to_owned(), "application/json".to_owned()));
     headers.push((ACCEPT.to_owned(), NDJSON.to_owned()));
     headers.push((ACCEPT_ENCODING.to_owned(), GZIP.to_owned()));
+    // A stop that came while the run started never opens the stream.
+    if cancel.is_cancelled() {
+        return Err(SyncFailure::Aborted);
+    }
     let request = SyncHttpRequest {
         url: args.url.clone(),
         headers,

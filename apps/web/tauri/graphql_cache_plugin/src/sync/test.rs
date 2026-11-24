@@ -566,6 +566,82 @@ fn stop_ends_a_waiting_run_while_reads_proceed_between_pages() {
 }
 
 #[test]
+fn stop_reaches_a_run_that_is_still_reading_its_saved_state() {
+    let handle = engine();
+    let opener = Arc::new(FakeOpener::default());
+    opener
+        .responses
+        .lock()
+        .unwrap()
+        .push_back((200, vec![Chunk::Bytes(ndjson(&[end()]))]));
+    let runs = runs_with(&opener);
+    let plan = args();
+    // A command holds the engine, so the run waits to read its saved state.
+    let (held_tx, held_rx) = oneshot::channel();
+    let (release_tx, release_rx) = oneshot::channel();
+    let holding = tauri::async_runtime::spawn({
+        let handle = handle.clone();
+        async move { handle.hold(held_tx, release_rx).await }
+    });
+    block_on(held_rx).unwrap();
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    let mut starting = Box::pin(runs.start(handle.downgrade(), plan.clone(), |_| {}));
+    assert!(starting.as_mut().poll(&mut context).is_pending());
+
+    // The starting run already holds the slot.
+    assert_eq!(
+        block_on(runs.start(handle.downgrade(), plan, |_| {})),
+        SyncRunOutcome::Failed {
+            failure: SyncFailure::Busy,
+            partial: None
+        }
+    );
+
+    // A stop reaches it and waits for it to end.
+    let mut stopping = Box::pin(runs.stop());
+    assert!(stopping.as_mut().poll(&mut context).is_pending());
+    release_tx.send(()).unwrap();
+    block_on(stopping);
+    assert!(matches!(
+        block_on(starting),
+        SyncRunOutcome::Failed {
+            failure: SyncFailure::Aborted,
+            ..
+        }
+    ));
+    // It never opened the stream.
+    assert!(opener.requests.lock().unwrap().is_empty());
+    block_on(holding).unwrap();
+}
+
+#[test]
+fn a_run_that_cannot_start_frees_the_slot() {
+    let opener = Arc::new(FakeOpener::default());
+    opener
+        .responses
+        .lock()
+        .unwrap()
+        .push_back((200, vec![Chunk::Bytes(ndjson(&[end()]))]));
+    let runs = runs_with(&opener);
+    // The cache was shut down: the run cannot read its saved state.
+    let closed = engine().downgrade();
+
+    assert_eq!(
+        block_on(runs.start(closed, args(), |_| {})),
+        SyncRunOutcome::Failed {
+            failure: SyncFailure::Aborted,
+            partial: None
+        }
+    );
+
+    let handle = engine();
+    assert!(matches!(
+        block_on(runs.start(handle.downgrade(), args(), |_| {})),
+        SyncRunOutcome::Completed(_)
+    ));
+}
+
+#[test]
 fn the_body_is_read_ahead_while_pages_are_written() {
     let handle = engine();
     let (read_all_tx, read_all_rx) = std::sync::mpsc::channel();

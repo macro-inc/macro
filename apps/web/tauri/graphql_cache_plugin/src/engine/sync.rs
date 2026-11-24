@@ -228,4 +228,17 @@ impl super::EngineHandle {
             .await
             .map_err(|error| error.to_string())
     }
+
+    /// Holds the engine as a long command does: `held` fires once it has
+    /// it, and it gives it back when `release` fires.
+    #[cfg(test)]
+    pub(crate) async fn hold(
+        &self,
+        held: tokio::sync::oneshot::Sender<()>,
+        release: tokio::sync::oneshot::Receiver<()>,
+    ) {
+        let _state = self.inner.lock().await;
+        let _ = held.send(());
+        let _ = release.await;
+    }
 }
