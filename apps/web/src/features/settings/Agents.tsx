@@ -2,6 +2,7 @@ import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import {
   type AgentKind,
   isCoderHarness,
+  isMacroHarness,
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { t } from '@app/lib/i18n';
@@ -575,7 +576,7 @@ function summarizeAgent(
  * replacement, so it is shown and edited as that replacement. */
 function savedModelId(agent: AgentWithHarnessId): string {
   const harness = agent.harness_id ?? agent.harness;
-  return harness === 'in-memory' || harness === 'macro-inmem'
+  return isMacroHarness(harness)
     ? currentModelId(agent.default_model)
     : agent.default_model;
 }
