@@ -351,17 +351,13 @@ describe('buildEmailQuery', () => {
       expect(tree).toContain(serialize({ literal: { owner: 'link-a' } }));
     });
 
-    it('keeps the kind when an admitted row is looked up by id', () => {
-      const args = buildEmailQuery(
-        contextFor({
-          facets: { attachments: ['attachment-pdf'], read: ['unread'] },
-        }),
-        ['thread-a']
-      );
+    it("leaves a tab's rows looked up by id to the client", () => {
+      const ids = ['thread-a'];
+      const facets = { attachments: ['attachment-pdf'] };
 
-      const ef = serialize(args.body.ef);
-      expect(ef).toContain(serialize({ l: { Attachment: 'pdf' } }));
-      expect(ef).not.toContain(serialize({ l: { Read: false } }));
+      expect(buildEmailQuery(contextFor({ facets }), ids).body).toEqual(
+        buildEmailQuery(contextFor(), ids).body
+      );
     });
 
     it.each(['sent', 'drafts', 'spam', 'trash'] as const)(
@@ -435,6 +431,20 @@ describe('buildEmailQuery', () => {
 
       expect(serialize(args.body.ef)).toContain(
         serialize({ l: { ThreadId: NIL } })
+      );
+    });
+
+    it('keeps the attachment kinds when looking up admitted rows by id', () => {
+      const args = buildEmailQuery(
+        contextFor({
+          facets: { attachments: ['attachment-pdf'] },
+          savedView: scope(),
+        }),
+        ['thread-a']
+      );
+
+      expect(serialize(args.body.ef)).toContain(
+        serialize({ l: { Attachment: 'pdf' } })
       );
     });
 

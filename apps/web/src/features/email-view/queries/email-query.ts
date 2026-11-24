@@ -242,7 +242,12 @@ export function buildEmailQuery(
     context.savedView ? savedViewClause(context.savedView) : tabClause(context),
   ];
   const emailView = context.savedView ? 'all' : emailViewForTab(context.tab);
-  const attachments = attachmentsClause(emailView, context.facets);
+  // A tab's rows looked up by id are few and re-checked by the facet's own
+  // predicate; a saved view's are members only with its whole clause.
+  const attachments =
+    admittedIds && !context.savedView
+      ? undefined
+      : attachmentsClause(emailView, context.facets);
   if (attachments) expressions.push(attachments);
   if (admittedIds) {
     expressions.push(threadIdsClause(admittedIds));
