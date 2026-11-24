@@ -339,7 +339,10 @@ and entry state. Preview headers append their own live title and menu after the
 source trail without an extra separator; do not duplicate the selected title in
 the prefix. Modified clicks keep their existing split behavior: a row the
 workspace declines opens through `openEntity`, which takes Shift as a new split,
-as Tasks rows and contact and company links do.
+as Tasks rows and contact and company links do. `openItem` activates the
+Customers split before it navigates, as `openWithSplit` does before a replace:
+when another split already shows the item, the router brings that split up,
+and the focus the click moved into Customers must not take it back.
 It opens notes, tasks, snippets and skills in `MarkdownDetail` and every other
 file (PDF, Word, image, video, canvas, code, CSV) through `EntityDetail`, by
 the shared `entityDetailOpensMarkdown`; `entityDetailHostsSplitHeader` is
