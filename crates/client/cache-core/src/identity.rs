@@ -75,16 +75,27 @@ pub fn validate(bindings: &[IdentityBinding]) -> Result<(), String> {
     Ok(())
 }
 
+/// How [`resolve`] types a response object that states no `__typename`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UntypedObject {
+    /// As normalizing the response under the schema typed it: of the object
+    /// type its field declares, read through the fragments that apply to the
+    /// objects above it. One of an abstract type fails.
+    Normalized,
+    /// Not at all, so it fails: for a response that doesn't normalize, which
+    /// a server on another schema may have sent.
+    Rejected,
+}
+
 /// Extract bindings only from explicitly declared response objects of the same
 /// type. `op`'s selections say each key an object's `__typename` is selected
-/// under. An object that states no type is taken, as normalizing takes it, to
-/// be of the object type `schema` declares for its field, and an object of an
-/// abstract type must state one.
+/// under; `untyped` says how an object that states none is typed.
 pub fn resolve(
     schema: &Schema,
     bindings: &[IdentityBinding],
     op: &Operation,
     data: &Value,
+    untyped: UntypedObject,
 ) -> Result<IdentityMap, String> {
     // A binding's own resolution, its server keeping the ID included, wins
     // over one a reference field infers; those that kept it are dropped last.
@@ -105,8 +116,13 @@ pub fn resolve(
             .ok_or("invalid local identity")?;
         let typename = match response_typename(&op.selection_set, &binding.response_path, object)? {
             Some(typename) => typename,
-            None => declared_object_type(schema, op, &binding.response_path)
-                .ok_or("identity response type is not stated")?,
+            None => match untyped {
+                UntypedObject::Normalized => {
+                    normalized_type(schema, op, &binding.response_path, data)
+                }
+                UntypedObject::Rejected => None,
+            }
+            .ok_or("identity response type is not stated")?,
         };
         let id = object
             .get("id")
@@ -129,64 +145,40 @@ pub fn resolve(
     Ok(result)
 }
 
-/// The type `schema` declares for the response object at `path`, when the
-/// operation's selections reach it through fields that all declare one type,
-/// and that type is an object type.
-fn declared_object_type<'a>(
+/// The type normalizing gives the response object at `path` when it states
+/// none: each object along the path is of the type it states, else of the
+/// object type its field declares, and its fields are those of the fragments
+/// that apply to that type. `None` when the object's type is abstract, or the
+/// path leaves the selections or the schema.
+fn normalized_type<'a>(
     schema: &'a Schema,
     op: &'a Operation,
     path: &[String],
+    data: &'a Value,
 ) -> Option<&'a str> {
-    let root = match op.kind {
+    let mut concrete = match op.kind {
         OperationKind::Query => schema.query_root(),
         OperationKind::Mutation => schema.mutation_root()?,
         OperationKind::Subscription => schema.subscription_root()?,
     };
-    let mut declared = root;
-    let mut parents = vec![(root, &*op.selection_set)];
-    for step in path {
+    let mut selections: Vec<&'a [Selection]> = vec![&op.selection_set];
+    let mut value = data;
+    for (depth, step) in path.iter().enumerate() {
         let mut fields = Vec::new();
-        for (parent, selections) in parents {
-            declared_fields(schema, parent, selections, step, &mut fields)?;
+        for selection_set in selections {
+            crate::normalize::collect_fields(schema, selection_set, concrete, &mut fields);
         }
-        let first = fields.first()?.0;
-        if fields.iter().any(|(named, _)| *named != first) {
-            return None;
-        }
-        declared = first;
-        parents = fields;
+        fields.retain(|field| field.response_key == *step);
+        let declared = schema.field_meta(concrete, &fields.first()?.name)?.ty.name;
+        value = value.get(step)?;
+        concrete = match response_typename(&op.selection_set, &path[..=depth], value).ok()? {
+            Some(stated) => stated,
+            None if schema.type_meta(declared)?.kind == TypeKind::Object => declared,
+            None => return None,
+        };
+        selections = fields.iter().map(|field| &*field.selection_set).collect();
     }
-    (schema.type_meta(declared)?.kind == TypeKind::Object).then_some(declared)
-}
-
-/// Pushes the declared type and selections of each field `selections` select
-/// under `key` on a `parent` object, through fragments, or returns `None` when
-/// `schema` doesn't declare one of them.
-fn declared_fields<'a>(
-    schema: &'a Schema,
-    parent: &'a str,
-    selections: &'a [Selection],
-    key: &str,
-    fields: &mut Vec<(&'a str, &'a [Selection])>,
-) -> Option<()> {
-    for selection in selections {
-        match selection {
-            Selection::Fragment {
-                type_condition,
-                selection_set,
-                ..
-            } => {
-                let parent = type_condition.as_deref().unwrap_or(parent);
-                declared_fields(schema, parent, selection_set, key, fields)?;
-            }
-            Selection::Field(field) if field.response_key == key => {
-                let named = schema.field_meta(parent, &field.name)?.ty.name;
-                fields.push((named, &*field.selection_set));
-            }
-            Selection::Field(_) => {}
-        }
-    }
-    Some(())
+    Some(concrete)
 }
 
 /// The `__typename` of the response object at `path`, under any key
@@ -540,22 +532,41 @@ mod tests {
     }
 
     /// A schema with a field of each kind a binding's response object can sit in.
-    const SDL: &str = "type Query { ok: Boolean } type Mutation { save: SavePayload } \
+    const SDL: &str = "type Query { ok: Boolean } \
+        type Mutation { save: SavePayload result: SaveResult } \
         type SavePayload { draft: Draft message: Message saved: Result other: Other } \
         union Result = Saved | Other \
+        union SaveResult = APayload | BPayload \
+        type APayload { record: Saved } type BPayload { record: Other } \
         type Draft { id: ID! } type Message { id: ID! } \
         type Saved { id: ID! label: String } type Other { id: ID! label: String }";
     const DRAFT: &str = "mutation Save { save { draft { __typename id } } }";
 
-    /// Resolves `bindings` from `data` as the response to `document`.
+    /// Resolves `bindings` from `data` as the response to `document`, which
+    /// normalized.
     fn resolve_in(
         document: &str,
         bindings: &[IdentityBinding],
         data: &Value,
     ) -> Result<IdentityMap, String> {
+        resolve_as(document, bindings, data, UntypedObject::Normalized)
+    }
+
+    fn resolve_as(
+        document: &str,
+        bindings: &[IdentityBinding],
+        data: &Value,
+        untyped: UntypedObject,
+    ) -> Result<IdentityMap, String> {
         let schema = Schema::from_sdl(SDL).unwrap();
         let document = crate::document::Document::parse(document).unwrap();
-        resolve(&schema, bindings, document.operation(None).unwrap(), data)
+        resolve(
+            &schema,
+            bindings,
+            document.operation(None).unwrap(),
+            data,
+            untyped,
+        )
     }
 
     #[test]
@@ -644,6 +655,58 @@ mod tests {
                 &response
             ),
             Err("identity response changed entity type".into())
+        );
+    }
+
+    #[test]
+    fn resolve_reads_a_field_through_the_fragments_of_its_parent_type() {
+        let document = "mutation Save { result { __typename \
+             ... on APayload { record { id } } ... on BPayload { record { id } } } }";
+        let response = json!({ "result": { "__typename": "APayload", "record": { "id": "9" } } });
+        assert_eq!(
+            resolve_in(
+                document,
+                &[binding("Saved:local", &["result", "record"])],
+                &response
+            ),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Saved", &["local"]),
+                EntityKey::entity("Saved", &["9"])
+            )]))
+        );
+        // Without the parent's type, its fragments declare two types.
+        let untyped = json!({ "result": { "record": { "id": "9" } } });
+        assert_eq!(
+            resolve_in(
+                document,
+                &[binding("Saved:local", &["result", "record"])],
+                &untyped
+            ),
+            Err("identity response type is not stated".into())
+        );
+    }
+
+    #[test]
+    fn resolve_of_a_response_that_does_not_normalize_needs_a_stated_type() {
+        let bindings = [binding("Other:local", &["save", "other"])];
+        let unwritable = |data: Value| {
+            resolve_as(
+                "mutation Save { save { other { kind: __typename id } } }",
+                &bindings,
+                &data,
+                UntypedObject::Rejected,
+            )
+        };
+        assert_eq!(
+            unwritable(json!({ "save": { "other": { "id": "9" } } })),
+            Err("identity response type is not stated".into())
+        );
+        assert_eq!(
+            unwritable(json!({ "save": { "other": { "kind": "Other", "id": "9" } } })),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Other", &["local"]),
+                EntityKey::entity("Other", &["9"])
+            )]))
         );
     }
 

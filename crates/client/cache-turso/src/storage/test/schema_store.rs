@@ -1045,10 +1045,10 @@ fn an_id_the_server_kept_counts_as_resolved() {
 }
 
 #[test]
-fn a_settled_write_takes_an_untyped_object_as_its_declared_type() {
+fn a_settled_write_keeps_no_identity_its_response_does_not_type() {
     block_on(async {
-        // The operation selects no type name, so the object is of the type
-        // the new schema declares for its field, as normalizing would take it.
+        // The operation selects no type name, and the response may come from
+        // a server whose schema types the field otherwise.
         let query = "mutation Save { save { id label } }";
         let (engine, outcome) = confirm_across_a_dropped_field(
             query,
@@ -1057,20 +1057,22 @@ fn a_settled_write_takes_an_untyped_object_as_its_declared_type() {
             serde_json::json!({ "save": { "id": "9", "label": "accepted" } }),
         )
         .await;
-        let CommitOptimisticWriteResult::Committed(result) = outcome else {
-            panic!("settles: {outcome:?}");
-        };
-        assert!(result.identity_errors.is_empty(), "{result:?}");
-        assert!(result.unwritable_response.is_some(), "{result:?}");
+        assert!(
+            matches!(outcome, CommitOptimisticWriteResult::Failed(_)),
+            "{outcome:?}"
+        );
         let records = engine
             .storage()
-            .get_batch(&[key("Saved:local")])
+            .get_batch(&[key("Saved:local"), key("Saved:9")])
             .await
             .unwrap();
         assert_eq!(
-            records[0],
-            Some(cache_core::identity::alias_record(&key("Saved:9")))
+            records[0]
+                .as_ref()
+                .and_then(cache_core::identity::alias_target),
+            None
         );
+        assert_eq!(records[1], None);
     });
 }
 

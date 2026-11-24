@@ -3093,15 +3093,25 @@ impl<S: Storage> Engine<S> {
         let mut bindings = self.optimistic[index].identity_bindings.clone();
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
+        let normalized = normalize(&self.schema, op, variables, data);
+        // A response that normalizes is typed by the schema as normalizing
+        // typed it. One that doesn't may come from a server on another
+        // schema, so only the types it states count.
+        let untyped = if normalized.is_ok() {
+            identity::UntypedObject::Normalized
+        } else {
+            identity::UntypedObject::Rejected
+        };
         let mut identity_errors = Vec::new();
-        let identities = match identity::resolve(&self.schema, &bindings, op, data) {
+        let identities = match identity::resolve(&self.schema, &bindings, op, data, untyped) {
             Ok(identities) => identities,
             Err(_) => {
                 // Salvage valid bindings without guessing targets for failed
                 // ones, resolving those left together so a binding's own
                 // identity still outranks one another's reference field infers.
                 bindings.retain(|binding| {
-                    match identity::resolve(&self.schema, std::slice::from_ref(binding), op, data) {
+                    let binding = std::slice::from_ref(binding);
+                    match identity::resolve(&self.schema, binding, op, data, untyped) {
                         Ok(_) => true,
                         Err(error) => {
                             identity_errors.push(error);
@@ -3109,7 +3119,7 @@ impl<S: Storage> Engine<S> {
                         }
                     }
                 });
-                identity::resolve(&self.schema, &bindings, op, data)
+                identity::resolve(&self.schema, &bindings, op, data, untyped)
                     .map_err(EngineError::InvalidOptimisticProjection)?
             }
         };
@@ -3119,7 +3129,7 @@ impl<S: Storage> Engine<S> {
             .iter()
             .any(|binding| !binding.response_path.is_empty());
         let mut unwritable = None;
-        let mut updates = match normalize(&self.schema, op, variables, data) {
+        let mut updates = match normalized {
             Ok(updates) => updates,
             Err(error) if identity_errors.is_empty() || resolved => {
                 // The server accepted the write, but no retry of this response
