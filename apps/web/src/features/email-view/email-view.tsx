@@ -314,8 +314,8 @@ function EmailLayout(props: {
   );
 }
 
-function EmailMobileLayout(props: ParentProps) {
-  const { state, setState } = useEmailView();
+export function EmailMobileLayout(props: ParentProps) {
+  const { state, setState, registerSearchField } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const suggestions = createEmailSearchSuggestions({
@@ -339,6 +339,7 @@ function EmailMobileLayout(props: ParentProps) {
     triggerFocusInput(() => searchInput);
   };
   const closeSearch = mobileSearch.close;
+  registerSearchField({ open: searching, close: closeSearch });
   useAndroidBackNavigation(() => {
     if (!searching()) return false;
 
@@ -410,7 +411,7 @@ function EmailViewRoot() {
   const {
     state,
     setTab,
-    searchOpen,
+    searchHasText,
     selectedThread,
     composing,
     list: listController,
@@ -454,7 +455,7 @@ function EmailViewRoot() {
       return selectedThread() === undefined && !composing();
     },
     hasSelection: () => listController.selection.count() > 0,
-    hasSearch: searchOpen,
+    hasSearch: searchHasText,
   });
 
   const savedViewKind = () => savedViews?.view().kind;

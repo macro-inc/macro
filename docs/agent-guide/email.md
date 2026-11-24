@@ -75,7 +75,7 @@ field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
 search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
 hands the keyboard to the view; a search shows no tabs, so `Tab` and `1`–`3`
-switch them again once it is cleared. Calendar mail
+switch them again once it closes. Calendar mail
 remains available through
 the calendar filter and existing Calendar route. Touch shows the same Inbox
 pills as desktop: Signal and Noise, with Focus first when enabled. Other
@@ -116,15 +116,16 @@ has no view of, end the search, and so does any tab picked before a word is
 typed. While a search runs, the sidebar and the header show the view its `in:`
 filter names (the header says Focus, and the sidebar selects Inbox, for
 `in:focus`); a search with no `in:` selects nothing, and the header says
-Search. The Focus, Signal and Noise tabs never show while the field holds a
-query, whatever it says, on desktop or phone; clearing it brings them back on
-the tab that was open. Text with no words yet (`in:`, `in:se`, or a view alone
-such as `in:focus`) runs no search of its own: the list, header and sidebar
-stay on the last search that had words, or on the open view when there was
-none (the text was pasted). Check from Inbox with a
+Search. The Focus, Signal and Noise tabs never show while the field is open,
+empty or not, on desktop or phone; closing it brings them back on the tab that
+was open. Open and empty, the field leaves that tab's rows on screen, and the
+desktop header names it (Signal). Text with no words yet (`in:`, `in:se`, or a
+view alone such as `in:focus`) runs no search of its own: the list, header and
+sidebar stay on the last search that had words, or on the open view when there
+was none (the text was pasted). Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
 `in:`, then pick Sent and All mail in the sidebar while it runs; then type
-`in`, `in:`, pick Focus and type a word, and clear the field.
+`in`, `in:`, pick Focus and type a word, clear the field, and close it.
 
 ### Wide search (flagged)
 

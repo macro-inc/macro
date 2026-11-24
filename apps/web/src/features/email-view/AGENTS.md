@@ -101,8 +101,11 @@ the Soup-backed thread list, and saved email views.
   sidebar and the header read `shownTab` (the view a search runs in;
   `search`, which selects nothing, without an `in:`), never `state.tab`.
 - The Focus, Signal and Noise tabs read `showsInboxTabs`: they never show
-  while the search field holds a query, an `in:` of the Inbox included, on
-  desktop or phone.
+  while the search field is open, empty or not, on desktop or phone. The field
+  on screen (the desktop header's, or the touch search page) tells the view
+  through `registerSearchField`; `searchHasText` alone is whether it holds a
+  query. Empty, the field leaves the open tab's rows on screen, so `shownTab`
+  still names that tab. Picking a view before a word is typed closes the field.
 - Text with no words (`in:`, `in:se`, `in:sent `, `is:un`) runs no search of its own:
   `parsedSearch` stays on the last search that had words, or empty (the open
   tab's list) when there was none. The list, the header, the sidebar and the

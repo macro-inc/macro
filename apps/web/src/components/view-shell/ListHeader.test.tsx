@@ -539,3 +539,31 @@ it('reports closed and unfocused when it unmounts while open', () => {
   expect(open()).toBe(false);
   expect(focused()).toBe(false);
 });
+
+it('closes for a view that keeps its open state, and reports it unfocused', () => {
+  const [open, setOpen] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const view = render(() => (
+    <ListHeaderSearch
+      label="Search email"
+      value=""
+      onValueChange={() => {}}
+      registerFocus={() => {}}
+      open={open()}
+      onOpenChange={setOpen}
+      onFocusChange={setFocused}
+    />
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Search email' }));
+  view.getByRole('searchbox', { name: 'Search email' }).focus();
+  expect(open()).toBe(true);
+  expect(focused()).toBe(true);
+
+  setOpen(false);
+
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(focused()).toBe(false);
+
+  fireEvent.click(view.getByRole('button', { name: 'Search email' }));
+  expect(open()).toBe(true);
+});

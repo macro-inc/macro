@@ -46,9 +46,6 @@ function typedToken(text: string) {
 }
 
 export type EmailSearchSuggestions = ListSearchSuggestions & {
-  /** The header's search field is open, so it owns the header. */
-  open: Accessor<boolean>;
-  setOpen: (open: boolean) => void;
   /**
    * Rows to list, only while the field has focus: the views an `in:` being
    * typed can name; otherwise the operators that finish the token being
@@ -77,7 +74,6 @@ export function createEmailSearchSuggestions(options: {
   scopeAvailable: (scope: EmailSearchScopeId) => boolean;
 }): EmailSearchSuggestions {
   const recent = createRecentEmailSearches(options.userId);
-  const [open, setOpen] = createSignal(false);
   const [focused, setFocusedState] = createSignal(false);
   // Each edit of the search is a new object, so a row picked out by the
   // keyboard before an edit no longer counts, even when the edit brings the
@@ -137,8 +133,6 @@ export function createEmailSearchSuggestions(options: {
   });
 
   return {
-    open,
-    setOpen,
     listed,
     setFocused: (next) => {
       if (next) setAwaitsPickedResults(false);
