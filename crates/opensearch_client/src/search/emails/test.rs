@@ -117,6 +117,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         cc: vec![],
         bcc: vec![],
         recipients: vec![],
+        label_link_ids: vec![],
         include_labels: vec![],
         exclude_labels: vec![],
         importance: None,
@@ -163,6 +164,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         cc: vec![],
         bcc: vec![],
         recipients: vec![],
+        label_link_ids: vec![],
         include_labels: vec![],
         exclude_labels: vec![],
         importance: None,
@@ -471,6 +473,7 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
         .user_id("user123")
         .collapse(false)
         .importance(Some(true))
+        .label_link_ids(vec!["own-link".to_string()])
         .exclude_labels(vec!["INBOX".to_string()]);
 
     let bool_query = builder.build_bool_query()?;
@@ -482,7 +485,9 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
     assert_eq!(must_not.len(), 3);
 
     // One should be the INBOX term exclusion
-    let has_inbox_exclusion = must_not.iter().any(|q| q["term"]["labels"] == "INBOX");
+    let has_inbox_exclusion = must_not
+        .iter()
+        .any(|q| *q == carrying(&["INBOX"], &["own-link"]));
     assert!(has_inbox_exclusion);
 
     // One should be the nested importance bool
@@ -501,6 +506,7 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
         .user_id("user123")
         .collapse(false)
         .importance(Some(false))
+        .label_link_ids(vec!["own-link".to_string()])
         .exclude_labels(vec!["CATEGORY_SOCIAL".to_string()]);
 
     let bool_query = builder.build_bool_query()?;
@@ -510,7 +516,7 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
     // Should have the explicit CATEGORY_SOCIAL exclusion
     let has_social_exclusion = must_not
         .iter()
-        .any(|q| q["term"]["labels"] == "CATEGORY_SOCIAL");
+        .any(|q| *q == carrying(&["CATEGORY_SOCIAL"], &["own-link"]));
     assert!(has_social_exclusion);
 
     // Should have the importance filter in filter array
@@ -806,6 +812,7 @@ fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
         .match_type("partial")
         .user_id("user123")
+        .label_link_ids(vec!["own-link".to_string()])
         .label_conditions(vec![
             EmailLabelCondition {
                 labels: vec!["Fundraising".to_string()],
@@ -834,7 +841,7 @@ fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
         .find(|filter| filter["bool"]["minimum_should_match"] == 1)
         .expect("the label condition is a filter");
     let should = carries["bool"]["should"].as_array().unwrap();
-    assert_eq!(should[0], json!({ "terms": { "labels": ["Fundraising"] } }));
+    assert_eq!(should[0], carrying(&["Fundraising"], &["own-link"]));
     assert!(should[1]["nested"].is_object());
 
     assert_eq!(
@@ -842,7 +849,7 @@ fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
         json!([
             {
                 "bool": {
-                    "should": [{ "terms": { "labels": ["Updates"] } }],
+                    "should": [carrying(&["Updates"], &["own-link"])],
                     "minimum_should_match": 1
                 }
             },
@@ -1357,5 +1364,36 @@ fn listed_filters_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> {
         &|builder| builder.sender(senders(120)),
         40
     )?);
+    Ok(())
+}
+
+/// Messages carrying any of `labels` in one of `links`.
+fn carrying(labels: &[&str], links: &[&str]) -> serde_json::Value {
+    json!({
+        "bool": {
+            "filter": [
+                { "terms": { "labels": labels } },
+                { "terms": { "link_id": links } }
+            ]
+        }
+    })
+}
+
+#[test]
+fn a_label_matches_only_in_inboxes_whose_labels_the_caller_reads() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .label_link_ids(vec!["own-link".to_string(), "managed-link".to_string()])
+        .include_labels(vec!["travel".to_string()])
+        .exclude_labels(vec!["newsletters".to_string(), "spam-ish".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    let links = ["own-link", "managed-link"];
+    let filter = json["bool"]["filter"].as_array().unwrap();
+    assert!(filter.contains(&carrying(&["travel"], &links)));
+    let must_not = json["bool"]["must_not"].as_array().unwrap();
+    assert!(must_not.contains(&carrying(&["newsletters", "spam-ish"], &links)));
     Ok(())
 }

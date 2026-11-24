@@ -281,6 +281,28 @@ it('pins a newly assigned property and unpins without deleting its value', async
   expect(mocks.properties()[0].value).toBe('Keep this value');
 });
 
+it('pins the assignment once the server names it, not its temporary id', async () => {
+  const editor = setup();
+  mocks.add.mockImplementation(() => new Promise<void>(() => {}));
+  await fireEvent.click(screen.getByRole('button', { name: 'Add property' }));
+  await mocks.open.mock.lastCall?.[3]?.onPropertyAdded?.(['definition']);
+
+  mocks.setProperties?.([
+    {
+      ...property,
+      propertyId: 'optimistic-property:DOCUMENT:doc:definition',
+    },
+  ]);
+  expect(editor.getEditorState().read($getPinnedProperties)).toEqual([]);
+
+  mocks.setProperties?.([property]);
+  await waitFor(() =>
+    expect(editor.getEditorState().read($getPinnedProperties)).toEqual([
+      'assignment',
+    ])
+  );
+});
+
 it('repins an existing property without assigning it a second time', async () => {
   setup([property]);
   await fireEvent.click(screen.getByRole('button', { name: 'Add property' }));

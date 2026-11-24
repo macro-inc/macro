@@ -1538,7 +1538,7 @@ Macro activity triggers by surface:
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
-- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports.
+- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports. Its scope reads **Your inbox**, or **Your inboxes** once the owner reads more than one; **+ Filter** → **Inbox** narrows it (below).
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
@@ -1589,6 +1589,18 @@ owner) is checked against it, and events answered no are skipped. Saving a
 condition fails with "trigger conditions are not enabled" while the
 scheduled-action service has no
 `TYPESAFE_API_KEY`.
+
+A **New email received** trigger can also take an **Inbox** filter. When a
+trigger can take both, **+ Filter** first asks which (**Inbox** or **AI
+check**); once one is set, it opens the other directly. The Inbox panel checks
+the owner's inboxes from the email links list (delegated ones read **Shared
+with you**; at most 25); **Done** saves them and none checked means every
+inbox. The row reads **Only** with the address, or **N inboxes**, and its ×
+(**Watch every inbox**) clears it. An inbox picked and later disconnected
+reads **A disconnected inbox** and stays listed so it can be unchecked; saving
+a changed trigger that still picks it fails with "pick only inboxes you have
+connected or that are shared with you". Changing the trigger to another event
+drops its inboxes.
 
 A routine can combine up to sixteen trigger groups: each schedule is a group,
 and up to thirty-two activity filters share one event group; matching any
@@ -1748,7 +1760,10 @@ MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 Step types are `code` (TypeScript against Macro's SDK, type-checked when saved,
 run with the owner's access) and `agent` (`model`, or `agent.bot_id`
 from **ListAgents**, plus `instructions`). Routine ownership comes from the authenticated caller, never a
-model-supplied user ID.
+model-supplied user ID. These tools can't state a new-email trigger's
+inboxes: **ReadRoutine** returns such a routine without a `configuration`, with
+`notEditableHere` saying why, and **UpdateRoutine** refuses to replace it; it is
+edited on its page or through the SDK.
 
 ## Command menu (Ctrl+K)
 

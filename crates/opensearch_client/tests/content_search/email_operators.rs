@@ -12,6 +12,7 @@ use opensearch_client::{
     date_format::EpochMillis,
     search::{
         emails::{EmailLabelCondition, EmailTextCondition, EmailTextFields},
+        model::SearchGotoContent,
         unified::{UnifiedEmailSearchArgs, UnifiedSearchArgs},
     },
     upsert::{email::UpsertEmailArgs, properties::IndexedProperty},
@@ -22,6 +23,9 @@ use crate::{OTHER, SEARCH_INDICES, VIEWER, count_documents, refresh, test_client
 
 const EMAILS: &str = "emails";
 const LINK: &str = "5ea4c400-0000-4000-8000-00000000e000";
+/// The inbox of the other person's mail, which can reach the viewer only as a
+/// thread shared with them.
+const OTHER_LINK: &str = "5ea4c400-0000-4000-8000-00000000e001";
 const TAG_DEFINITION: &str = "5ea4c400-0000-4000-8000-00000000e0de";
 const TAG_OPTION: &str = "5ea4c400-0000-4000-8000-00000000e0e0";
 
@@ -140,7 +144,12 @@ fn upsert_args(message: &Message) -> anyhow::Result<UpsertEmailArgs> {
         bcc: addresses(&message.bcc),
         bcc_names: names(&message.bcc),
         labels: message.labels.iter().map(|l| l.to_string()).collect(),
-        link_id: LINK.to_string(),
+        link_id: if message.owner == VIEWER {
+            LINK
+        } else {
+            OTHER_LINK
+        }
+        .to_string(),
         user_id: message.owner.to_string(),
         updated_at_millis: EpochMillis::new(message.sent_at_millis.unwrap_or(JUNE_2024))?,
         subject: Some(message.subject.to_string()),
@@ -184,6 +193,9 @@ struct Case {
     args: UnifiedEmailSearchArgs,
     match_type: &'static str,
     expected: &'static [u128],
+    /// The labels each named hit must come back with, when the case checks
+    /// them.
+    labels: &'static [(u128, &'static [&'static str])],
 }
 
 fn case(name: &str, terms: &[&str], expected: &'static [u128]) -> Case {
@@ -192,10 +204,12 @@ fn case(name: &str, terms: &[&str], expected: &'static [u128]) -> Case {
         args: UnifiedEmailSearchArgs {
             terms: terms.iter().map(|t| t.to_string()).collect(),
             user_ids: vec![VIEWER.to_string()],
+            label_link_ids: vec![LINK.to_string()],
             ..Default::default()
         },
         match_type: "partial",
         expected,
+        labels: &[],
     }
 }
 
@@ -249,6 +263,102 @@ fn cases() -> Vec<Case> {
         case("lunch -label:newsletters", &["lunch"], &[1, 2]),
         &|args| {
             args.label_conditions = vec![label(&["newsletters"], false, true)];
+        },
+    );
+    // Thread 5 is the other person's, shared with the viewer. It carries a
+    // label of the same name in its owner's inbox, which is not the viewer's.
+    let shared = || vec![thread(5).to_string()];
+    with(
+        case("a shared thread is searched", &["lunch"], &[1, 2, 3, 5]),
+        &|args| {
+            args.thread_ids = shared();
+        },
+    );
+    with(
+        case(
+            "label:travel leaves out a shared thread's own label",
+            &[],
+            &[1],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_conditions = vec![label(&["travel"], false, false)];
+        },
+    );
+    with(
+        case(
+            "lunch -label:travel keeps a shared thread",
+            &["lunch"],
+            &[2, 3, 5],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_conditions = vec![label(&["travel"], false, true)];
+        },
+    );
+    with(
+        case(
+            "a tag still finds a shared thread beside a label",
+            &[],
+            &[1, 4, 5],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_conditions = vec![label(&["travel"], true, false)];
+        },
+    );
+    with(
+        case("a label of an inbox the viewer manages", &[], &[1, 5]),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_link_ids = vec![LINK.to_string(), OTHER_LINK.to_string()];
+            args.label_conditions = vec![label(&["travel"], false, false)];
+        },
+    );
+    with(
+        case(
+            "no inbox whose labels the viewer reads",
+            &["lunch"],
+            &[1, 2, 3],
+        ),
+        &|args| {
+            args.label_link_ids = Vec::new();
+            args.label_conditions = vec![label(&["newsletters"], false, true)];
+        },
+    );
+    with(
+        case(
+            "include_labels leaves out a shared thread's own label",
+            &[],
+            &[1],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.include_labels = vec!["travel".to_string()];
+        },
+    );
+    with(
+        case(
+            "exclude_labels keeps a shared thread",
+            &["lunch"],
+            &[2, 3, 5],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.exclude_labels = vec!["travel".to_string()];
+        },
+    );
+    with(
+        Case {
+            labels: &[(1, &["INBOX", "travel"]), (5, &[])],
+            ..case(
+                "a shared thread's hit carries no labels",
+                &["lunch"],
+                &[1, 2, 3, 5],
+            )
+        },
+        &|args| {
+            args.thread_ids = shared();
         },
     );
     with(
@@ -800,6 +910,22 @@ async fn seed_and_search(
             ..Default::default()
         };
         let (hits, _) = client.search_unified(args).await?;
+        for (n, expected) in case.labels {
+            let carried: Vec<Vec<String>> = hits
+                .iter()
+                .filter(|hit| hit.entity_id == thread(*n))
+                .filter_map(|hit| match &hit.goto {
+                    Some(SearchGotoContent::Emails(goto)) => Some(goto.labels.clone()),
+                    _ => None,
+                })
+                .collect();
+            if carried.is_empty() || carried.iter().any(|labels| labels != expected) {
+                failures.push(format!(
+                    "{} ({}): thread {n} expected labels {expected:?}, found {carried:?}",
+                    case.name, case.match_type
+                ));
+            }
+        }
         let found: BTreeSet<Uuid> = hits.iter().map(|hit| hit.entity_id).collect();
         let expected: BTreeSet<Uuid> = case.expected.iter().map(|n| thread(*n)).collect();
         if found != expected {

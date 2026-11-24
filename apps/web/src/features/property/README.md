@@ -144,6 +144,27 @@ unless a search typed meanwhile found a match: the first row may be **Clear
 all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
 editor takes them from the property's definition.
 
+## Adding a property
+
+Picking a property, or creating one, adds it to the item empty and opens its
+value field straight away: the host starts the add and does not make the
+editor wait for it. The add writes an empty value, so a save of the same
+property that started before the add was answered could reach the server first
+and be cleared by it. `executeGraphqlEntityPropertyMutation` therefore holds
+such a save until the add is answered, whether it succeeded or failed, up to
+`ADD_HOLD_LIMIT_MS` (`pendingAdds`, in `lib/queries/properties/graphql/entity.ts`).
+A save of another property is not held, but a save of several items goes out
+in order, so a held one delays those after it. Until the save goes out, the
+side panel shows the placeholder, "Not set". The hold lives in the page: a
+value not yet sent is lost if the page is closed.
+
+A value saved straight after the add shows with a temporary id before the
+server names it. The title row pins a property only once it has the server's
+id (`isTemporaryGraphqlProperty`).
+
+The side panel skips an add of a property the item already carries: attaching
+it again would clear its value.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates

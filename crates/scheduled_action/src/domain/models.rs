@@ -294,6 +294,8 @@ pub enum ActionPolicyError {
     ConditionsDisabled,
     #[error("connect GitHub before enabling a GitHub trigger")]
     GithubNotLinked,
+    #[error("pick only inboxes you have connected or that are shared with you")]
+    UnknownInboxes,
     #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
