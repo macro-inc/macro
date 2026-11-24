@@ -36,6 +36,9 @@ account, Docker, sudo, or local backend stack is required.
 Both suites must pass. Both resize the window to 400px wide while online and
 expect every Email list header control, Search included, inside the header,
 then restore the size and expect the view options (the reading pane toggle) back.
+They then open Tasks, narrow the window from 520px to 400px and expect every
+Tasks list header control, New and Search included, inside the header, then
+restore the size and expect Group by back.
 The full suite checks native Soup predicate evaluation via
 `graphql_cache_entity_filter`, including filter combinations never fetched online,
 then reloads the webview with the API still down and expects All mail to render
@@ -63,7 +66,7 @@ hint exists (`user-info-gate.ts`), and reads it once at startup. Unrelated
 app-chrome reads (billing, language, system status, routines, MCP connections,
 calendars, forms, harnesses, saved views, work feed, contacts) return explicit
 empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
-`fixtures/server.ts`. The fixture user joined no channels, so the channel
+`fixtures/server.ts` (time tracking answers with no running timer). The fixture user joined no channels, so the channel
 backfill lane (`SoupChannelDirectoryBackfill`) and the directory's network
 fallback (`ChannelDirectoryPage`) read an empty directory. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
