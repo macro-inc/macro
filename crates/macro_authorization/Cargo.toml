@@ -15,7 +15,7 @@ axum = [
 default = ["axum", "outbound"]
 local_auth = ["dep:macro_env_var"]
 outbound = ["dep:macro_auth"]
-postgres = ["dep:sqlx", "dep:sha2"]
+postgres = ["dep:sqlx"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
@@ -32,14 +32,18 @@ model_user = { path = "../model_user" }
 rootcause = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_credentials = { path = "../agent_credentials" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }

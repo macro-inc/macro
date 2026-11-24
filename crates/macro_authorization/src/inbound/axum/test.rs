@@ -2286,3 +2286,122 @@ async fn user_api_key_wins_over_ambient_cookies() {
         )]
     );
 }
+
+/// The attributes of the one span named `name` that `exporter` received.
+fn exported_attributes(
+    exporter: &opentelemetry_sdk::trace::InMemorySpanExporter,
+    name: &str,
+) -> std::collections::BTreeMap<String, String> {
+    let spans = exporter.get_finished_spans().expect("finished spans");
+    let span = spans
+        .iter()
+        .find(|span| span.name == name)
+        .unwrap_or_else(|| panic!("no {name} span"));
+    span.attributes
+        .iter()
+        .map(|kv| (kv.key.to_string(), kv.value.to_string()))
+        .collect()
+}
+
+#[tokio::test]
+async fn the_request_span_records_the_verified_credential_and_an_opaque_principal() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing::Instrument as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    for (key, kind) in [
+        (VALID_USER_API_KEY, "user_api_key"),
+        (MANAGER_API_KEY, "account_manager"),
+    ] {
+        let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+        let subscriber = tracing_subscriber::registry()
+            .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+        let _guard = tracing::subscriber::set_default(subscriber);
+        let (router, _) = test_router();
+
+        let (status, _) = send(&router, empty_body(user_api_key_request("/user", key)))
+            .instrument(tracing::info_span!("http.request"))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        provider.force_flush().expect("flush");
+
+        let attributes = exported_attributes(&exporter, "http.request");
+        assert_eq!(attributes[CREDENTIAL_ATTRIBUTE], kind, "{key}");
+        assert_eq!(
+            attributes[PRINCIPAL_ATTRIBUTE],
+            agent_credentials::telemetry_id(API_KEY_USER_ID),
+            "the same opaque id an agent's other telemetry uses"
+        );
+        assert!(
+            attributes.values().all(|value| !value.contains('@')),
+            "no attribute carries the account's email: {attributes:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_refused_credential_records_no_principal() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing::Instrument as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let _guard = tracing::subscriber::set_default(subscriber);
+    let (router, _) = test_router();
+
+    let (status, _) = send(
+        &router,
+        empty_body(user_api_key_request("/user", "mak_invalid")),
+    )
+    .instrument(tracing::info_span!("http.request"))
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    provider.force_flush().expect("flush");
+
+    let attributes = exported_attributes(&exporter, "http.request");
+    assert!(!attributes.contains_key(CREDENTIAL_ATTRIBUTE));
+    assert!(!attributes.contains_key(PRINCIPAL_ATTRIBUTE));
+}
+
+#[test]
+fn every_credential_origin_has_a_stable_kind() {
+    let manager = AccountManagerCredential {
+        grant_id: Uuid::nil(),
+        manager_user_id: MacroUserIdStr::parse_from_str("macro|agent@example.com")
+            .expect("valid Macro user id")
+            .into_owned(),
+    };
+    assert_eq!(
+        [
+            crate::CredentialOrigin::Session,
+            crate::CredentialOrigin::MacroApiJwt,
+            crate::CredentialOrigin::ScopedMacroApiJwt,
+            crate::CredentialOrigin::UserApiKey,
+            crate::CredentialOrigin::AccountManager(manager),
+            crate::CredentialOrigin::Bot,
+            crate::CredentialOrigin::Harness,
+            crate::CredentialOrigin::Internal,
+        ]
+        .iter()
+        .map(credential_kind)
+        .collect::<Vec<_>>(),
+        [
+            "session",
+            "macro_api_jwt",
+            "scoped_macro_api_jwt",
+            "user_api_key",
+            "account_manager",
+            "bot",
+            "harness",
+            "internal",
+        ]
+    );
+}

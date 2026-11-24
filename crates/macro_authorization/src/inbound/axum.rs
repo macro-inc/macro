@@ -149,6 +149,7 @@ pub(super) fn authenticated_user(
             rejection("invalid user id")
         })?;
 
+    record_verified_credential(&origin, &user_context.user_id);
     Ok(MacroUserAuthentication {
         origin,
         agent_id: None,
@@ -157,6 +158,44 @@ pub(super) fn authenticated_user(
         macro_user_id,
         user_context,
     })
+}
+
+/// Span attribute naming the kind of credential this service verified.
+pub const CREDENTIAL_ATTRIBUTE: &str = "auth.credential";
+/// Span attribute holding an opaque id of the account the verified credential
+/// acts as: the SHA-256 of its user id, as `agent_credentials::telemetry_id`
+/// computes it (an agent's runtime reports the first 16 digits as
+/// `macro.agent.id`). Never the id itself, which carries an email.
+pub const PRINCIPAL_ATTRIBUTE: &str = "auth.principal_id";
+
+/// The kind of a verified credential, as [`CREDENTIAL_ATTRIBUTE`] names it.
+pub fn credential_kind(origin: &CredentialOrigin) -> &'static str {
+    match origin {
+        CredentialOrigin::Session => "session",
+        CredentialOrigin::MacroApiJwt => "macro_api_jwt",
+        CredentialOrigin::ScopedMacroApiJwt => "scoped_macro_api_jwt",
+        CredentialOrigin::UserApiKey => "user_api_key",
+        CredentialOrigin::AccountManager(_) => "account_manager",
+        CredentialOrigin::Bot => "bot",
+        CredentialOrigin::Harness => "harness",
+        CredentialOrigin::Internal => "internal",
+    }
+}
+
+/// Records who this service verified the request as on the request's span:
+/// the credential's kind and an opaque id of its account. This is the
+/// server's own finding, unlike any trace context the caller sent, which
+/// only says where the caller claims the request belongs.
+fn record_verified_credential(origin: &CredentialOrigin, user_id: &str) {
+    use sha2::{Digest, Sha256};
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    let span = tracing::Span::current();
+    span.set_attribute(CREDENTIAL_ATTRIBUTE, credential_kind(origin));
+    span.set_attribute(
+        PRINCIPAL_ATTRIBUTE,
+        format!("{:x}", Sha256::digest(user_id.as_bytes())),
+    );
 }
 
 /// Logs a failed authorization at a level matching its cause: rejected

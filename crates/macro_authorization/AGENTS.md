@@ -99,6 +99,12 @@ the account, or changes its managers.
 - Locally (`local_auth`), a configured user stands in for an ambient cookie
   or none; an explicit user token is always the one used.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
+- Every user credential the Axum layer verifies (`authenticated_user`) sets
+  `auth.credential` (the `CredentialOrigin` kind) and `auth.principal_id`
+  (SHA-256 of the user id, as `agent_credentials::telemetry_id`) on the
+  current span, the request's. That is the service's own finding; a
+  caller's `traceparent` only says which trace the caller claims. Never
+  record the user id itself: an agent's carries an email.
 - A route whose response carries a new credential's secret refuses
   `is_program_run`, because a program's results reach the model: the
   bot-token, channel-scoped bot and user API key routes do. The header alone
