@@ -24,7 +24,12 @@ import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runti
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
 import { databaseOwnerLockName } from '../worker/coordinator-protocol';
 import { CoordinatorRouter } from '../worker/coordinator-router';
-import { DRAFT_MUTATION, DurableStorage, FakeEngineCore } from './fake-engine';
+import {
+  DRAFT_MUTATION,
+  DurableStorage,
+  draftVariables,
+  FakeEngineCore,
+} from './fake-engine';
 import {
   Sim,
   SimBroadcastChannel,
@@ -33,6 +38,7 @@ import {
   type SimPort,
   type Step,
   summarize,
+  type Timer,
 } from './sim';
 
 const NOOP_TELEMETRY = { record() {}, flush() {} };
@@ -42,7 +48,7 @@ export type CallOutcome = {
   page: string;
   kind: 'read' | 'draft';
   uuid?: string;
-  /** The read the quiet phase makes to see whether the cache is back. */
+  /** Made by the quiet phase, to see whether the cache is back. */
   probe?: boolean;
   issuedAt: number;
   settledAt?: number;
@@ -67,6 +73,24 @@ export function usePlant(next: (() => void) | undefined): void {
 export function currentBuildTime(): number {
   const context = active?.sim.current();
   return context?.buildTime ?? active?.defaultBuild ?? 0;
+}
+
+const DOCUMENT_STATE = ['visibilityState', 'hidden'] as const;
+
+/** Remembers what a world overrides for real; call the result to put it back. */
+function takeDocument(): () => void {
+  const overrides = DOCUMENT_STATE.map(
+    (name) => [name, Object.getOwnPropertyDescriptor(document, name)] as const
+  );
+  const stored = Object.entries({ ...localStorage });
+  return () => {
+    for (const [name, descriptor] of overrides) {
+      if (descriptor) Object.defineProperty(document, name, descriptor);
+      else Reflect.deleteProperty(document, name);
+    }
+    localStorage.clear();
+    for (const [key, value] of stored) localStorage.setItem(key, value);
+  };
 }
 
 class Coordinator {
@@ -132,9 +156,21 @@ class Coordinator {
     }
   }
 
+  private core(): { scope?: string; stateValue?: unknown } | undefined {
+    return (
+      this.router as unknown as {
+        core?: { scope?: string; stateValue?: unknown };
+      }
+    ).core;
+  }
+
+  /** The scope it serves, once a page registered. */
+  scope(): string | undefined {
+    return this.core()?.scope;
+  }
+
   coreState(): string {
-    const core = (this.router as unknown as { core?: { stateValue?: unknown } })
-      .core;
+    const core = this.core();
     const state = core?.stateValue as
       | { kind: string; ownerEpoch?: number; tabId?: string }
       | undefined;
@@ -275,6 +311,25 @@ export class Page {
     }
   }
 
+  /** The app at work: a draft and a read. */
+  work(probe = false): void {
+    this.draft(probe);
+    this.read(probe);
+  }
+
+  /** `setGraphqlSoupSessionActive(true)`: the client is built again, and
+   * nothing but the host itself reports a failed start. */
+  private async signIn(): Promise<void> {
+    this.client();
+    const authority = this.host?.authority;
+    this.work();
+    try {
+      await authority?.current();
+    } catch {
+      // `initializeCrmCacheOwner` has no fallback of its own.
+    }
+  }
+
   /** `fallbackAfterInitializationFailure`. */
   fallback(error: unknown): void {
     const host = this.host;
@@ -318,7 +373,7 @@ export class Page {
     );
   }
 
-  draft(): void {
+  draft(probe = false): void {
     const host = this.host;
     if (!host || host.disabled) return;
     const uuid = this.world.sim.randomUUID();
@@ -327,6 +382,7 @@ export class Page {
       kind: 'draft',
       uuid,
       issuedAt: this.world.sim.now,
+      ...(probe ? { probe } : {}),
     };
     this.world.calls.push(call);
     this.track(call, () =>
@@ -334,7 +390,7 @@ export class Page {
         {
           uuid,
           query: DRAFT_MUTATION,
-          variables: { input: { draftId: uuid } },
+          variables: draftVariables(uuid),
           data: {
             saveEmailDraft: {
               __typename: 'SaveEmailDraftPayload',
@@ -408,7 +464,7 @@ export class Page {
     this.host = undefined;
     host?.dispose();
     this.world.sim.setTimeout(() => {
-      fireAndForget(this.start(), 'handover-checker');
+      fireAndForget(this.signIn(), 'handover-checker');
     }, 1_000);
   }
 }
@@ -418,9 +474,10 @@ export class Page {
  * ends it with no event, as a crash or a discarded tab does. `crash-engine`
  * ends a page's engine worker and tells nobody. `bfcache` navigates away with
  * the page kept, frozen, and `restore` comes back to it. `expire-session` signs
- * a page out for a second. `hold-owner-lock`
- * has another context keep the database's lock for 5 s, and `fail-open` makes
- * the next open of the database fail.
+ * a page out for a second. `hold-owner-lock` has another context keep the
+ * database's lock for 5 s, `hold-files` has one keep its files open for 15 s
+ * without the lock (as a terminated worker does while the browser closes
+ * them), and `fail-open` makes the next open of the database fail.
  */
 export type FaultKind =
   | 'hide'
@@ -435,6 +492,7 @@ export type FaultKind =
   | 'offline'
   | 'online'
   | 'hold-owner-lock'
+  | 'hold-files'
   | 'open-newer'
   | 'bfcache'
   | 'restore'
@@ -463,6 +521,8 @@ type Option = {
   run: () => Promise<void>;
   /** Whether it counts against the bound's delays. */
   delay: boolean;
+  /** The timer it fires. */
+  timer?: Timer;
   /** Whether it delivers out of order. */
   reorders?: boolean;
 };
@@ -481,6 +541,8 @@ export class World {
   readonly consoleLines: string[] = [];
   readonly steps: Step[] = [];
   readonly defaultBuild: number;
+  /** Undoes what `install` did to the document and its storage. */
+  private restore: (() => void) | undefined;
   private readonly pageListeners = new Map<
     SimContext,
     Map<string, Set<EventListenerOrEventListenerObject>>
@@ -501,6 +563,7 @@ export class World {
   install(): void {
     active = this;
     const sim = this.sim;
+    this.restore = takeDocument();
     localStorage.clear();
     vi.stubGlobal(
       'setTimeout',
@@ -650,10 +713,8 @@ export class World {
     if (active === this) active = undefined;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    // `install` put these in front of the ones on Document.prototype.
-    Reflect.deleteProperty(document, 'visibilityState');
-    Reflect.deleteProperty(document, 'hidden');
-    localStorage.clear();
+    this.restore?.();
+    this.restore = undefined;
   }
 
   private listenersOf(page: SimContext, type: string) {
@@ -729,6 +790,10 @@ export class World {
         if (!this.holderRelease) faults.push({ kind });
         continue;
       }
+      if (kind === 'hold-files') {
+        if (!this.storage.filesFreed) faults.push({ kind });
+        continue;
+      }
       if (kind === 'open-newer') {
         if (!this.openedNewer) faults.push({ kind });
         continue;
@@ -763,6 +828,7 @@ export class World {
         .with(
           'restart-coordinator',
           'hold-owner-lock',
+          'hold-files',
           'open-newer',
           'fail-open',
           () => false
@@ -803,6 +869,7 @@ export class World {
           coordinator.restart();
       })
       .with('hold-owner-lock', () => this.holdOwnerLock())
+      .with('hold-files', () => this.holdFiles())
       .with('open-newer', () => this.openNewer())
       .with('fail-open', () => {
         this.storage.failNextOpens += 1;
@@ -865,6 +932,19 @@ export class World {
     );
     const page = this.addPage(newest + 1);
     this.sim.start(page.context, () => page.start());
+    this.sim.runIn(page.context, () => page.work());
+  }
+
+  private holdFiles(): void {
+    const holder = this.sim.context('file-holder', 'holder', undefined, 0);
+    this.sim.runIn(holder, () => {
+      this.storage.filesFreed = new Promise<void>((free) => {
+        this.sim.setTimeout(() => {
+          this.storage.filesFreed = undefined;
+          free();
+        }, 15_000);
+      });
+    });
   }
 
   /** Another context (a closing tab's worker, another build) keeps the lock. */
@@ -920,12 +1000,15 @@ export class World {
       {
         label: `timer ${timer.label}`,
         delay: false,
-        run: async () => {
-          this.steps.push({ kind: 'timer', label: timer.label, at: timer.at });
-          await this.sim.advance(timer);
-        },
+        timer,
+        run: () => this.runTimer(timer),
       },
     ];
+  }
+
+  async runTimer(timer: Timer): Promise<void> {
+    this.steps.push({ kind: 'timer', label: timer.label, at: timer.at });
+    await this.sim.advance(timer);
   }
 
   private lateOptions(channel: string): Option[] {
@@ -951,16 +1034,13 @@ export class World {
       (context) =>
         `${context.id}:${context.history}${context.alive ? '' : 'x'}${context.frozen ? 'f' : ''}`
     );
-    const pending = this.sim
-      .pending()
-      .map((delivery) => `${delivery.channel}=${summarize(delivery.data)}`);
     const storage = [...this.storage.databases].map(
       ([scope, { queue, wipes, openBy }]) =>
         `${scope}:${queue.size}.${wipes}.${openBy ?? ''}`
     );
     const state = [
       contexts.join(),
-      pending.join(),
+      this.sim.pending(),
       this.sim.lateChannel(),
       this.sim.locks.summary(),
       storage.join(),

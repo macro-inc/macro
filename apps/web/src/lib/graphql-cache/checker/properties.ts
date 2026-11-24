@@ -14,7 +14,7 @@
  * S5 a refused request says why, with an error code.
  * S6 nothing throws out of an event handler or a timer.
  * L1 every live page has its cache back, and its host answers a read.
- * L2 an engine is active while any page is live.
+ * L2 an engine of the newest build is active while any page is live.
  * L3 every request a live page made has settled.
  *
  * A frozen page is exempt from the L properties until it thaws; a page that asked to
@@ -115,14 +115,15 @@ function lostWrites(world: World): Violation[] {
 
 function olderOpens(world: World): Violation[] {
   const violations: Violation[] = [];
-  let newest = Number.NEGATIVE_INFINITY;
-  for (const open of world.storage.opens) {
-    if (open.buildTime < newest)
+  const newest = new Map<string, number>();
+  for (const { scope, buildTime, engine } of world.storage.opens) {
+    const before = newest.get(scope) ?? buildTime;
+    if (buildTime < before)
       violations.push({
         symptom: 'S4:older build opened after newer',
-        detail: open.engine,
+        detail: engine,
       });
-    newest = Math.max(newest, open.buildTime);
+    newest.set(scope, Math.max(before, buildTime));
   }
   return violations;
 }
@@ -165,17 +166,18 @@ function cachesNotBack(world: World, live: Page[]): Violation[] {
 }
 
 function missingEngine(world: World, live: Page[]): Violation[] {
+  if (live.length === 0) return [];
   const newest = Math.max(...live.map((page) => page.context.buildTime));
-  const states = [...world.coordinators.values()]
+  const scope = getOrCreateCacheScope();
+  const state = [...world.coordinators.values()]
     .filter(({ buildTime }) => buildTime === newest)
-    .map((coordinator) => coordinator.coreState());
-  const state = states.at(-1);
-  if (state === undefined || states.some((each) => each.startsWith('active')))
-    return [];
+    .findLast((coordinator) => coordinator.scope() === scope)
+    ?.coreState();
+  if (state?.startsWith('active')) return [];
   return [
     {
-      symptom: `L2:no active engine (${state.replace(/[@:/].*/, '')})`,
-      detail: state,
+      symptom: `L2:no active engine (${state?.replace(/[@:/].*/, '') ?? 'no coordinator'})`,
+      detail: state ?? '',
     },
   ];
 }

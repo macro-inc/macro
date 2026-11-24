@@ -54,13 +54,20 @@ describe('handover checker', () => {
       `finds nothing new: ${scenario.name}`,
       async () => {
         const started = Date.now();
-        // The deep run also merges no states where it can afford not to.
-        const prune = !DEEP || bound.maxFaults + bound.maxDelays > 1;
-        const result = await explore(scenario, { ...bound, prune });
+        const result = await explore(scenario, bound);
         report.push({
           ms: Date.now() - started,
           ...result,
         });
+        // Where it can afford to, the deep run checks that merging states
+        // hides nothing.
+        if (DEEP && bound.maxFaults + bound.maxDelays === 1) {
+          const all = await explore(scenario, { ...bound, prune: false });
+          report.push({ unpruned: scenario.name, runs: all.runs });
+          expect(all.findings.map(violationKey).sort()).toEqual(
+            result.findings.map(violationKey).sort()
+          );
+        }
         expect(unknown(result.findings)).toEqual([]);
         expect(result.truncated, 'the bound was explored in full').toBe(false);
         expect(result.cutShort, 'runs that hit a step cap').toBe(0);

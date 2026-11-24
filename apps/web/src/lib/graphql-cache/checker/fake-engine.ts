@@ -2,9 +2,9 @@
  * Stands in for the WASM engine (`CacheWorkerCore` over turso-opfs) inside the
  * real engine runtime. It keeps the parts of the engine the handover depends
  * on, and nothing else: it takes the database owner lock without queueing,
- * reports a busy lock, waits for the coordinator's storage grant, wipes the
- * database on a recovery open (as `recovery_wipe` does, mutation queue
- * included), refuses requests once draining with the same untyped message,
+ * reports a busy lock, waits for the coordinator's storage grant and then for
+ * database files another context still has open, wipes the database on a
+ * recovery open (as `recovery_wipe` does, mutation queue included), refuses requests once draining with the same untyped message,
  * and waits for an in-flight open before a drain closes storage.
  *
  * `DurableStorage` is the origin's OPFS: one database per scope that outlives
@@ -22,6 +22,11 @@ import type { Sim, SimContext } from './sim';
 export const DRAFT_MUTATION =
   'mutation SaveDraft($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { draftId } }';
 
+/** `SaveEmailDraftInput`, with the fields the schema requires. */
+export const draftVariables = (draftId: string) => ({
+  input: { draftId, subject: 'Draft' },
+});
+
 export type StoredMutation = { uuid: string; enqueuedBy: string };
 
 type Database = {
@@ -36,6 +41,8 @@ export class DurableStorage {
   readonly openConflicts: string[] = [];
   /** Every mutation that reached a durable queue, with where it went. */
   readonly admitted = new Map<string, string>();
+  /** Settles when the context that has the database files open lets go. */
+  filesFreed: Promise<void> | undefined;
   /** How many of the next opens fail with a storage error. */
   failNextOpens = 0;
   /** Each open, in order: which build opened which database. */
@@ -71,6 +78,9 @@ export class DurableStorage {
     if (database.openBy === engine) database.openBy = undefined;
   }
 }
+
+/** turso-opfs' `BUSY_ENTRY_WAIT_MS`. */
+const BUSY_FILES_WAIT_MS = 10_000;
 
 type Port = { postMessage(message: unknown): void };
 
@@ -164,7 +174,7 @@ export class FakeEngineCore {
       }))
       .with({ kind: 'read' }, () => ({
         kind: 'hit',
-        data: { servedBy: this.context.id },
+        data: { user: { __typename: 'GraphqlUser', id: 'user-1' } },
       }))
       .with({ kind: 'inspect-mutations' }, () =>
         [...this.database().queue.values()].map((mutation) => ({
@@ -172,7 +182,7 @@ export class FakeEngineCore {
           uuid: mutation.uuid,
           superseded: false,
           query: DRAFT_MUTATION,
-          variables: { input: { draftId: mutation.uuid } },
+          variables: draftVariables(mutation.uuid),
           optimisticData: null,
           enqueuedAtMs: 0,
         }))
@@ -209,6 +219,7 @@ export class FakeEngineCore {
       await this.options.onOwnerLockBusy?.(attempt);
     }
     await this.options.onOwnerLockAcquired?.();
+    await this.filesFree();
     if (this.options.recoveryOpen) this.storage.wipe(scope);
     if (this.storage.failNextOpens > 0) {
       this.storage.failNextOpens -= 1;
@@ -220,6 +231,21 @@ export class FakeEngineCore {
     this.options.onInitializationOutcome?.(
       this.options.recoveryOpen ? 'reset-storage-uncertain' : 'opened-existing'
     );
+  }
+
+  /** Like turso-opfs' `retry_busy_entry`: wait a bounded time for files a
+   * predecessor still has open, and change nothing when they stay open. */
+  private async filesFree(): Promise<void> {
+    const freed = this.storage.filesFreed;
+    if (!freed) return;
+    const deadline = new Promise<void>((resolve) => {
+      this.sim.setTimeout(resolve, BUSY_FILES_WAIT_MS);
+    });
+    await Promise.race([freed, deadline]);
+    if (!this.storage.filesFreed) return;
+    this.options.onStorageBusy?.();
+    this.releaseLock?.();
+    throw new Error('storage error: database file is busy');
   }
 
   /** Like turso-opfs: never queue for the lock, and hold it until closed. */

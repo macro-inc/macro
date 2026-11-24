@@ -31,6 +31,8 @@ const HOLDER_KEPT =
   'A tab refused the database because a tab of another build keeps it turns its cache off until reload, however long it waits.';
 const LOCK_TIMEOUT =
   'A coordinator that cannot get the database lock within its retries turns the cache off in its tabs until reload.';
+const FILES_BUSY =
+  "A coordinator whose database files another context keeps open past the engine's wait turns the cache off in its tabs.";
 const STARTUP_TIMEOUT =
   'A startup request that outlives its timer drops a host that could still start, and recovery calls the timeout unrecoverable and stops until reload.';
 const TIMEOUT_WIPE =
@@ -63,6 +65,7 @@ const EPOCH_LOST = 'S2:host retired on CacheResponseError:owner-epoch-lost';
 const STOPPED =
   'L1:cache not back (recovery-required, stopped unrecoverable, probe read not made)';
 const UNSERVED = 'L2:no active engine (waiting-for-tab)';
+const UNSTARTED = 'L2:no active engine (no coordinator)';
 const PARKED = 'L2:no active engine (parked)';
 const READ_DISPOSED =
   'S5:read refused without a code: Error:untyped:cache worker host was abruptly disposed';
@@ -90,6 +93,7 @@ const CONTENDING: InjectedFault[] = [
   'expire-session owner',
   'crash-engine owner',
   'restart-coordinator',
+  'hold-files',
 ];
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
@@ -98,7 +102,7 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(DEPARTURE_RACE, ['close owner'], [WIPED], { reordered: true }),
   ...OWNER_LOST.flatMap((fault) => [
     ...known(STARTUP_LOSS, [fault], [EPOCH_LOST, STOPPED, UNSERVED]),
-    ...known(STARTUP_LOSS, [fault], [READ_DISPOSED]),
+    ...known(STARTUP_LOSS, [fault], [READ_DISPOSED, UNSTARTED]),
     ...known(
       DISPOSE_QUARANTINE,
       [fault],
@@ -124,7 +128,7 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       ]
     )
   ),
-  ...known(BFCACHE_AT_STARTUP, ['bfcache', 'restore'], [STOPPED]),
+  ...known(BFCACHE_AT_STARTUP, ['bfcache', 'restore'], [STOPPED, UNSTARTED]),
   ...known(
     SUPERSEDED_AT_STARTUP,
     [],
@@ -132,16 +136,26 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       'L1:cache not back (recovery-required, stopped superseded, probe read not made)',
     ]
   ),
+  ...known(
+    FILES_BUSY,
+    ['hold-files'],
+    [
+      'S2:host retired on CacheUnavailableError:owner-lock-unavailable:files-busy',
+    ]
+  ),
   ...CONTENDING.flatMap((fault) =>
     known(HOLDER_KEPT, [fault], [HOLDER_KEPT_RETIRED, UNAVAILABLE])
   ),
-  ...known(
-    LOCK_TIMEOUT,
-    ['open-newer'],
-    [
-      'S2:host retired on CacheUnavailableError:owner-lock-unavailable:owner-lock-timeout',
-    ]
+  ...(['open-newer', 'hold-files'] as const).flatMap((fault) =>
+    known(
+      LOCK_TIMEOUT,
+      [fault],
+      [
+        'S2:host retired on CacheUnavailableError:owner-lock-unavailable:owner-lock-timeout',
+      ]
+    )
   ),
+  ...known(STARTUP_LOSS, ['late-message'], [EPOCH_LOST]),
   ...known(
     STARTUP_TIMEOUT,
     ['late-message'],
@@ -187,6 +201,7 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
     [
       'L1:cache not back (ready, probe read CacheResponseError:owner-handoff-blocked)',
       'L2:no active engine (draining)',
+      'L3:draft never settled',
     ]
   ),
   ...known(
@@ -197,7 +212,7 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       `S5:draft refused without a code: ${OPEN_FAILED}`,
       `S5:read refused without a code: ${OPEN_FAILED}`,
       STOPPED,
-      'L2:no active engine (failed)',
+      UNSTARTED,
     ]
   ),
 ];

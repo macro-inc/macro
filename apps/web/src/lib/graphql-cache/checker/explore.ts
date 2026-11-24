@@ -3,12 +3,14 @@
  * `maxFaults` injected faults and at most `maxDelays` delays, within the
  * scenario's horizon. A delay delivers a later channel's message before the
  * oldest one or, where the scenario has late messages, holds the oldest back
- * until one of the armed timers has fired. Runs are replayed from scratch from their choices.
+ * until one of the armed timers is due. Runs are replayed from scratch from
+ * their choices.
  * A branch is skipped when the same state (`World.signature`) was already
  * branched from with at least the same budget left, and the report says how
  * many it pruned.
  */
 import { check, QUIET_MS } from './properties';
+import { isHeartbeat } from './sim';
 import { type Fault, type Scenario, World } from './world';
 
 export type Bound = {
@@ -28,7 +30,8 @@ type StepRecord = {
   faultStart: number;
   /** Options past the first delivery that deliver out of order. */
   delays: number;
-  signature: string;
+  /** Of the state before the step; none on the replayed part of a run. */
+  signature: string | undefined;
 };
 
 export type RunResult = {
@@ -98,6 +101,9 @@ export type ExplorationReport = {
 
 const MAX_STEPS = 600;
 
+/** Steps of heartbeats alone, two rounds of them, that show a steady state. */
+const HEARTBEAT_ROUNDS = 6;
+
 /**
  * Opens the scenario's pages and gives each its workload, a draft and a
  * read, at once, as the app does before its cache is ready. Faults can land
@@ -105,27 +111,40 @@ const MAX_STEPS = 600;
  */
 async function boot(world: World): Promise<void> {
   for (const buildTime of world.scenario.pages) await world.openPage(buildTime);
-  for (const page of world.pages) {
-    world.sim.runIn(page.context, () => {
-      page.draft();
-      page.read();
-    });
-  }
+  for (const page of world.pages)
+    world.sim.runIn(page.context, () => page.work());
   await world.sim.settle();
 }
 
-/** Runs the default schedule for `ms`; false if the step cap ended it first. */
+/** A coordinator's heartbeat timer, the message or its answer. */
+const isHeartbeatStep = (step: World['steps'][number] | undefined): boolean =>
+  step !== undefined &&
+  ((step.kind === 'timer' && isHeartbeat(step.label)) ||
+    (step.kind === 'deliver' && isHeartbeat(step.summary)));
+
+/** Whether heartbeats have gone round, all answered, with nothing else going on. */
+const onlyHeartbeats = (world: World): boolean =>
+  world.steps.slice(-HEARTBEAT_ROUNDS).every(isHeartbeatStep);
+
+/**
+ * Runs the default schedule for `ms`; false if the step cap ended it first.
+ * While nothing but answered heartbeats is going on, time skips to what is next.
+ */
 async function quiesce(world: World, ms: number): Promise<boolean> {
   const until = world.sim.now + ms;
   for (let step = 0; step < 20_000; step += 1) {
     const [next] = world.options();
-    if (
-      !next ||
-      (next.label.startsWith('timer') &&
-        (world.sim.nextTimer()?.at ?? Infinity) > until)
-    ) {
+    const timer = next?.timer;
+    if (!next || (timer && timer.at > until)) {
       world.sim.advanceTo(until);
       return true;
+    }
+    if (timer && isHeartbeat(timer.label) && onlyHeartbeats(world)) {
+      const other = world.sim.nextTimer((each) => !isHeartbeat(each.label));
+      world.sim.advanceTo(Math.min(other?.at ?? until, until));
+      if (!other || other.at > until) return true;
+      await world.runTimer(other);
+      continue;
     }
     await next.run();
   }
@@ -150,7 +169,7 @@ async function quiet(world: World): Promise<boolean> {
   const settled = await quiesce(world, QUIET_MS);
   for (const page of world.livePages()) {
     if (page.closing || page.context.frozen) continue;
-    world.sim.runIn(page.context, () => page.read(true));
+    world.sim.runIn(page.context, () => page.work(true));
   }
   await world.sim.settle();
   return (await quiesce(world, 30_000)) && settled;
@@ -191,8 +210,8 @@ export async function runSchedule(
   prefix: number[]
 ): Promise<RunResult> {
   const world = new World(scenario);
-  world.install();
   try {
+    world.install();
     await boot(world);
     const start = world.sim.now;
     const records: StepRecord[] = [];
@@ -208,7 +227,7 @@ export async function runSchedule(
       // fault always costs a choice of its own.
       const faultStart = Math.max(options.length, 1);
       const choice = prefix[step] ?? 0;
-      const signature = world.signature();
+      const signature = step < prefix.length ? undefined : world.signature();
       const delays = options.filter((option) => option.delay).length;
       records.push({
         choice,
@@ -243,16 +262,35 @@ export async function runSchedule(
   }
 }
 
-function cost(records: StepRecord[], upTo: number) {
-  let faults = 0;
-  let delays = 0;
-  for (let index = 0; index < upTo; index += 1) {
-    const record = records[index];
-    if (!record) continue;
-    if (record.choice >= record.faultStart) faults += 1;
-    else if (record.choice > 0) delays += 1;
+/** What a run's replayed part spent of its bound; what follows it is default. */
+function budgetLeft(bound: Bound, replayed: StepRecord[]): Budget {
+  let { maxFaults: faults, maxDelays: delays } = bound;
+  for (const record of replayed) {
+    if (record.choice >= record.faultStart) faults -= 1;
+    else if (record.choice > 0) delays -= 1;
   }
   return { faults, delays };
+}
+
+const canBranch = (record: StepRecord, left: Budget): boolean =>
+  (left.faults > 0 && record.options > record.faultStart) ||
+  (left.delays > 0 && record.delays > 0);
+
+/** Whether a state was branched from with as much budget; notes it if not. */
+function covered(
+  branched: Map<string, Budget[]>,
+  signature: string,
+  left: Budget
+): boolean {
+  const earlier = branched.get(signature) ?? [];
+  if (
+    earlier.some(
+      ({ faults, delays }) => faults >= left.faults && delays >= left.delays
+    )
+  )
+    return true;
+  branched.set(signature, [...earlier, left]);
+  return false;
 }
 
 export async function explore(
@@ -296,25 +334,13 @@ export async function explore(
           : finding
       );
     }
+    const left = budgetLeft(bound, result.records.slice(0, prefix.length));
     for (let index = prefix.length; index < result.records.length; index += 1) {
       const record = result.records[index];
-      if (!record) continue;
-      const used = cost(result.records, index);
-      const left: Budget = {
-        faults: bound.maxFaults - used.faults,
-        delays: bound.maxDelays - used.delays,
-      };
-      if (bound.prune !== false) {
-        const earlier = branched.get(record.signature) ?? [];
-        const covered = earlier.some(
-          (budget) =>
-            budget.faults >= left.faults && budget.delays >= left.delays
-        );
-        if (covered) {
-          report.pruned += 1;
-          continue;
-        }
-        branched.set(record.signature, [...earlier, left]);
+      if (record?.signature === undefined || !canBranch(record, left)) continue;
+      if (bound.prune !== false && covered(branched, record.signature, left)) {
+        report.pruned += 1;
+        continue;
       }
       const base = result.choices.slice(0, index);
       for (let choice = 1; choice < record.options; choice += 1) {
@@ -340,8 +366,8 @@ export async function runScript(
   script: ScriptStep[]
 ): Promise<RunResult> {
   const world = new World({ name: 'script', pages, faults: [], horizonMs: 0 });
-  world.install();
   try {
+    world.install();
     await boot(world);
     let settled = true;
     for (const step of script) {

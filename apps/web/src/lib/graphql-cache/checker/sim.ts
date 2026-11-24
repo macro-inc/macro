@@ -50,8 +50,8 @@ function hash(text: string, seed: number): number {
 }
 
 /** Heartbeats change nothing that outlives them, so histories leave them out. */
-const isHeartbeat = (label: string): boolean =>
-  label.startsWith('heartbeat') || label.endsWith(':2000ms');
+export const isHeartbeat = (label: string): boolean =>
+  label.startsWith('heartbeat') || /^coordinator-.*:2000ms$/.test(label);
 
 type EventListenerLike =
   | ((event: unknown) => unknown)
@@ -66,7 +66,7 @@ type Delivery = {
   ports: SimPort[];
 };
 
-type Timer = {
+export type Timer = {
   id: number;
   at: number;
   seq: number;
@@ -74,6 +74,8 @@ type Timer = {
   fn: () => void;
   interval?: number;
   label: string;
+  /** `setTimeout(…, 0)`: part of the step that armed it. */
+  immediate: boolean;
 };
 
 export class SimPort {
@@ -570,6 +572,7 @@ export class Sim {
       fn,
       interval,
       label: `${context?.id ?? 'root'}:${ms}ms`,
+      immediate: ms <= 0,
     });
     return id;
   }
@@ -611,7 +614,7 @@ export class Sim {
   private dueZeroTimer(): Timer | undefined {
     let best: Timer | undefined;
     for (const timer of this.timers.values()) {
-      if (timer.at > this.now || timer.context?.frozen) continue;
+      if (!timer.immediate || timer.context?.frozen) continue;
       if (!best || timer.seq < best.seq) best = timer;
     }
     return best;
@@ -644,26 +647,43 @@ export class Sim {
       .sort((a, b) => a.seq - b.seq);
   }
 
-  /** Every message on its way, by channel and then in order. */
-  pending(): Delivery[] {
-    return [...this.deliveries].sort(
-      (a, b) => a.channel.localeCompare(b.channel) || a.seq - b.seq
-    );
+  /** Every message on its way, oldest first. */
+  pending(): string {
+    return this.deliveries
+      .map(({ channel, data }) => {
+        const kind = summarize(data);
+        return `${channel}=${isHeartbeat(kind) ? kind : JSON.stringify(data)}`;
+      })
+      .join();
   }
 
   private late: { channel: string; timer: number } | undefined;
 
-  /** Holds a channel's messages back until a timer has fired. */
-  holdUntil(channel: string, timer: Timer): void {
-    this.late = { channel, timer: timer.id };
+  /**
+   * Holds a channel's messages back until a timer is due and has had its turn,
+   * whether it fires or is cleared first.
+   */
+  holdUntil(channel: string, { at, label }: Timer): void {
+    this.seq += 1;
+    const id = this.timerIds++;
+    this.timers.set(id, {
+      id,
+      at,
+      seq: this.seq,
+      context: undefined,
+      fn: () => this.releaseLate(),
+      label: `late:${channel}:${label}`,
+      immediate: false,
+    });
+    this.late = { channel, timer: id };
   }
 
   releaseLate(): void {
+    if (this.late) this.timers.delete(this.late.timer);
     this.late = undefined;
   }
 
   lateChannel(): string | undefined {
-    if (this.late && !this.timers.has(this.late.timer)) this.late = undefined;
     return this.late?.channel;
   }
 
@@ -716,10 +736,13 @@ export class Sim {
     for (const context of new Set(receivers)) context?.note(event);
   }
 
-  nextTimer(): Timer | undefined {
+  /** The next timer due, of those that match. */
+  nextTimer(
+    matches: (timer: Timer) => boolean = () => true
+  ): Timer | undefined {
     let best: Timer | undefined;
     for (const timer of this.timers.values()) {
-      if (timer.context?.frozen) continue;
+      if (timer.context?.frozen || !matches(timer)) continue;
       if (
         !best ||
         timer.at < best.at ||

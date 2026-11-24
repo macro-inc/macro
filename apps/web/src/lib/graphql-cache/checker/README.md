@@ -26,14 +26,16 @@ its host (`Page` in `world.ts`; keep the two the same).
 Open the pages and give each a draft and a read at once. Deliver messages and
 fire timers for 60 virtual seconds, injecting faults. Then faults stop: every
 page that is not frozen comes online and is shown, six minutes pass (longer than
-any timeout in the cache), and each page makes one more read. The properties are
-checked last.
+any timeout in the cache; stretches of nothing but answered heartbeats are
+skipped), and each page makes one more draft and read. The properties are checked
+last.
 
 ## What a bound covers
 
 `maxFaults` faults, each at any step, startup included, and `maxDelays` delays: a
 message delivered before an older one on another channel or, in a scenario with
-`late`, the oldest one held back until one of the armed timers has fired. Answers
+`late`, the oldest one held back until one of the armed timers is due, whether
+that timer fires or is cleared first. Answers
 to lock requests are messages too. Otherwise the oldest message goes first, and
 timers fire only when no message is waiting.
 
@@ -41,7 +43,8 @@ A schedule is skipped when it reaches a state (`World.signature`) already
 explored with as much budget left: every context has handled the same events in
 the same order, with the same messages, locks, databases and armed timers. The
 time and heartbeats are left out, which is the one approximation; the deep run
-repeats the one-fault scenarios with `prune: false`, and both must find the same.
+repeats the scenarios with a single fault or delay with `prune: false`, and both
+must find the same.
 Reaching `maxRuns` or a step cap fails the test.
 
 ## Run it
@@ -73,7 +76,7 @@ longer matches the code it stands for.
 
 ## What it does not cover
 
-Safari's and Firefox's own timing, the WASM engine and real OPFS, the native
+The account and generation fences around a session, Safari's and Firefox's own timing, the WASM engine and real OPFS, the native
 host, requests the handover does not depend on, and more tabs, faults or
 delays than the bound. A freed lock has its next holder at once, and only the
 news of it can be late; one message at a time is held back.

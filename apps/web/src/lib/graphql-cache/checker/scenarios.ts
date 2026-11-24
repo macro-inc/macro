@@ -20,6 +20,7 @@ export const EVERY_FAULT: FaultKind[] = [
   'offline',
   'online',
   'hold-owner-lock',
+  'hold-files',
   'open-newer',
   'fail-open',
 ];
@@ -231,8 +232,9 @@ export const SCRIPTS: ScriptedScenario[] = [
     pages: [1, 1],
     script: [
       { waitMs: 5_000 },
+      ...repeat(3, [{ kind: 'fail-open' }]),
       { kind: 'crash-engine', page: 'tab1' },
-      ...repeat(6, [{ kind: 'fail-open' }, { waitMs: 20_000 }]),
+      { waitMs: 120_000 },
     ],
   },
   {
