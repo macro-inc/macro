@@ -313,7 +313,10 @@ fn native_api_source_counts_only_for_its_own_apps() {
 fn native_api_app_needing_reauth_offers_no_api() {
     let resolution = run(
         MacroConnectEnabledFlag::Off,
-        vec![unauthorized(held(SourceKind::NativeApi, app_key("autodesk")))],
+        vec![unauthorized(held(
+            SourceKind::NativeApi,
+            app_key("autodesk"),
+        ))],
     );
 
     assert_eq!(

@@ -135,14 +135,14 @@ impl FakeSource {
             // The native API source serves REST only.
             mcp: (row.source != SourceKind::NativeApi).then(|| -> Arc<dyn McpConnection> {
                 Arc::new(FakeMcp {
-                name: row.name.clone(),
-                tools: row.tools.clone(),
-                scope: match (&row.source, &row.key) {
-                    (SourceKind::Pipedream, ConnectorKey::App(app)) => {
-                        Some((row.user.clone(), app.clone()))
-                    }
-                    _ => None,
-                },
+                    name: row.name.clone(),
+                    tools: row.tools.clone(),
+                    scope: match (&row.source, &row.key) {
+                        (SourceKind::Pipedream, ConnectorKey::App(app)) => {
+                            Some((row.user.clone(), app.clone()))
+                        }
+                        _ => None,
+                    },
                 })
             }),
             api,

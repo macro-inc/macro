@@ -1,12 +1,13 @@
-//! Finishing a sign-in to a server by URL, when its authorization server
-//! redirects the browser back to Macro.
+//! Finishing a sign-in when a vendor redirects the browser back to Macro: to
+//! a server by URL, or to an app Macro reaches by REST with its own OAuth
+//! client.
 //!
 //! The answer names what the user connected the way the rules do: a server
 //! at an overlaid app's address is that app (every app overlaid there), and
-//! any other server is itself (rule 5).
+//! any other server is itself (rule 5). A REST app is itself.
 
 use crate::domain::catalog::Overlays;
-use crate::domain::models::{ConnectorKey, Result, ServerUrl};
+use crate::domain::models::{ConnectorId, ConnectorKey, ConnectorsError, Result, ServerUrl};
 use crate::domain::ports::OverlayCatalog;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -52,6 +53,20 @@ pub(crate) trait ServerAuthorization: Send + Sync {
     fn client_metadata(&self) -> serde_json::Value;
 }
 
+/// Macro's OAuth clients at REST apps (the native API source).
+///
+/// Object-safe (`#[async_trait]`) so [`ServerSignIns`] names no adapter type.
+#[async_trait::async_trait]
+pub(crate) trait AppAuthorization: Send + Sync {
+    /// Exchange the code the app's consent page redirected back with, and
+    /// store the grant. Answers whose sign-in it was and the app.
+    async fn complete(
+        &self,
+        code: &str,
+        state: &str,
+    ) -> Result<(MacroUserIdStr<'static>, ConnectorId), rootcause::Report>;
+}
+
 /// [`OverlayCatalog`], object-safe (`#[async_trait]`) so [`ServerSignIns`]
 /// names no adapter type.
 #[async_trait::async_trait]
@@ -66,10 +81,17 @@ impl<O: OverlayCatalog> ReadOverlays for O {
     }
 }
 
-/// Signing in to servers by URL from a vendor's redirect.
+/// Signing in from a vendor's redirect: to servers by URL, and to REST apps.
 pub trait ServerSignInService: Send + Sync + 'static {
-    /// Finish the sign-in the redirect carries.
+    /// Finish the server sign-in the redirect carries.
     fn complete_sign_in(
+        &self,
+        code: &str,
+        state: &str,
+    ) -> impl Future<Output = Result<SignedIn>> + Send;
+
+    /// Finish the REST app sign-in the redirect carries.
+    fn complete_app_sign_in(
         &self,
         code: &str,
         state: &str,
@@ -79,11 +101,12 @@ pub trait ServerSignInService: Send + Sync + 'static {
     fn client_metadata(&self) -> serde_json::Value;
 }
 
-/// [`ServerSignInService`] over the OAuth client and the overlay table.
+/// [`ServerSignInService`] over the OAuth clients and the overlay table.
 #[derive(Clone)]
 pub struct ServerSignIns {
     authorization: Arc<dyn ServerAuthorization>,
     overlays: Arc<dyn ReadOverlays>,
+    apps: Option<Arc<dyn AppAuthorization>>,
 }
 
 impl ServerSignIns {
@@ -95,7 +118,14 @@ impl ServerSignIns {
         Self {
             authorization,
             overlays: Arc::new(overlays),
+            apps: None,
         }
+    }
+
+    /// Also finish REST app sign-ins, through `apps`.
+    pub(crate) fn with_apps(mut self, apps: Arc<dyn AppAuthorization>) -> Self {
+        self.apps = Some(apps);
+        self
     }
 }
 
@@ -115,6 +145,20 @@ impl ServerSignInService for ServerSignIns {
         tracing::Span::current().record("connectors", keys.len());
 
         Ok(SignedIn { user, keys })
+    }
+
+    #[tracing::instrument(name = "connectors.complete_app_sign_in", skip_all, err, fields(app = tracing::field::Empty))]
+    async fn complete_app_sign_in(&self, code: &str, state: &str) -> Result<SignedIn> {
+        let apps = self.apps.as_ref().ok_or_else(|| {
+            ConnectorsError::Internal(rootcause::report!("this process signs in to no REST apps"))
+        })?;
+        let (user, app) = apps.complete(code, state).await?;
+        tracing::Span::current().record("app", app.as_str());
+
+        Ok(SignedIn {
+            user,
+            keys: vec![ConnectorKey::App(app)],
+        })
     }
 
     fn client_metadata(&self) -> serde_json::Value {

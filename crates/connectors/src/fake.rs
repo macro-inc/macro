@@ -208,10 +208,8 @@ impl FakeConnectors {
             .map(|app| (app, Surfaces::new(true, true)))
             .collect();
         let github_supported = HashMap::from([(ConnectorId::github(), Surfaces::new(true, false))]);
-        let native_api_supported = HashMap::from([(
-            app(catalog::AUTODESK_SLUG),
-            Surfaces::new(false, true),
-        )]);
+        let native_api_supported =
+            HashMap::from([(app(catalog::AUTODESK_SLUG), Surfaces::new(false, true))]);
         let sources: Vec<Arc<dyn Source>> = vec![
             Arc::new(source(SourceKind::Native, HashMap::new())),
             Arc::new(source(SourceKind::GithubLink, github_supported)),
