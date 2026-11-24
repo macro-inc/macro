@@ -188,7 +188,11 @@ impl Store {
                 Err(error) => {
                     // A tokio write finishes on the blocking pool after it
                     // returns; flush so the kept bytes are on disk on return.
-                    file.flush().await?;
+                    // The transfer's error is the cause the caller reports.
+                    file.flush()
+                        .await
+                        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not flush a failed native update download"))
+                        .ok();
                     return Err(error.into());
                 }
             }
