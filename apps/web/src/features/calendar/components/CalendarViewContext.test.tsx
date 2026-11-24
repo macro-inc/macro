@@ -8,7 +8,7 @@ import {
   useCalendarFocus,
 } from '@app/features/calendar-view/calendar-focus-target';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarEvent } from '../types';
 import {
@@ -18,12 +18,20 @@ import {
 } from './CalendarViewContext';
 
 const teamReset = vi.hoisted(() => ({ fire: () => {} }));
+const creates = vi.hoisted(() => ({
+  creating: new Set<string>(),
+  landed: new Map<string, string>(),
+}));
 
 vi.mock('@queries/calendar/team-cache', () => ({
   subscribeToTeamCalendarReset: (onReset: () => void) => {
     teamReset.fire = onReset;
     return () => {};
   },
+}));
+vi.mock('@queries/calendar/graphql/mutations', () => ({
+  isCalendarEventCreating: (id: string) => creates.creating.has(id),
+  createdCalendarEventId: (id: string) => creates.landed.get(id),
 }));
 vi.mock('../hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
@@ -52,7 +60,10 @@ function withSelection(
   });
 }
 
-function renderContexts() {
+function renderContexts(
+  onFocusedEventIdChange?: (eventId: string | undefined) => void,
+  focusedEventId?: () => string | undefined
+) {
   let focus!: ReturnType<typeof useCalendarFocus>;
   let view!: ReturnType<typeof useCalendarView>;
   function Probe() {
@@ -62,7 +73,10 @@ function renderContexts() {
   }
   render(() => (
     <CalendarFocusContextProvider>
-      <CalendarViewContextProvider>
+      <CalendarViewContextProvider
+        focusedEventId={focusedEventId?.()}
+        onFocusedEventIdChange={onFocusedEventIdChange}
+      >
         <Probe />
       </CalendarViewContextProvider>
     </CalendarFocusContextProvider>
@@ -142,5 +156,87 @@ describe('CalendarViewContext with a row waiting for its chip', () => {
     view().reanchorSelectedEvent(EVENT, document.createElement('a'));
 
     expect(focus().pendingTarget()).toMatchObject(OCCURRENCE);
+  });
+});
+
+describe('details opened on an event whose create has not landed', () => {
+  const KEY = '2026-11-28T15:00:00+00:00';
+  const occurrence = (eventId: string, title = 'Offsite') =>
+    ({
+      id: JSON.stringify([eventId, KEY]),
+      eventId,
+      occurrenceKey: KEY,
+      title,
+      sourceCalendarIds: ['calendar-1'],
+      calendar: { id: 'calendar-1' },
+    }) as CalendarEvent;
+  const local = occurrence('local-1');
+  const server = occurrence('server-1', 'Offsite (synced)');
+  const page = (...events: CalendarEvent[]) =>
+    new Map(events.map((event) => [event.id, event]));
+
+  beforeEach(() => {
+    creates.creating = new Set(['local-1']);
+    creates.landed = new Map();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('stays open under the local id without naming it as a destination', () => {
+    // The details of another event were open, so the URL named it.
+    const [focused, setFocused] = createSignal<string | undefined>('other-1');
+    const { view } = renderContexts(setFocused, focused);
+    view().selectEvent(occurrence('other-1'), document.createElement('a'));
+
+    view().selectEvent(local, document.createElement('a'));
+    view().refreshSelectedEventFromPage(page(server), true);
+
+    expect(view().selectedEvent()).toBe(local);
+    expect(focused()).toBeUndefined();
+  });
+
+  it('moves to the server id and its chip once the create lands', () => {
+    const focused = vi.fn();
+    const { view } = renderContexts(focused);
+    const chip = document.createElement('a');
+    view().selectEvent(local, document.createElement('a'));
+
+    creates.creating.delete('local-1');
+    creates.landed.set('local-1', 'server-1');
+    view().refreshSelectedEventFromPage(page(server), true, (id) =>
+      id === server.id ? chip : undefined
+    );
+
+    expect(view().selectedEvent()).toBe(server);
+    expect(view().selectedEventAnchor()).toBe(chip);
+    expect(focused).toHaveBeenLastCalledWith('server-1');
+  });
+
+  it('keeps a list selection on its row when the create lands', () => {
+    const { view } = renderContexts();
+    const row = document.createElement('button');
+    view().selectEvent(local, row, 'agenda');
+
+    creates.creating.delete('local-1');
+    creates.landed.set('local-1', 'server-1');
+    view().refreshSelectedEventFromPage(page(server), true, () =>
+      document.createElement('a')
+    );
+
+    expect(view().selectedEvent()).toBe(server);
+    expect(view().selectedEventAnchor()).toBe(row);
+  });
+
+  it('closes when the landed event is not on the page', () => {
+    const { view } = renderContexts();
+    view().selectEvent(local, document.createElement('a'));
+
+    creates.creating.delete('local-1');
+    creates.landed.set('local-1', 'server-1');
+    view().refreshSelectedEventFromPage(page(), true);
+
+    expect(view().selectedEvent()).toBeUndefined();
   });
 });
