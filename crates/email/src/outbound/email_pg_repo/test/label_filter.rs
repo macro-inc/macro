@@ -216,3 +216,60 @@ async fn a_spent_walk_budget_says_where_the_list_goes_on(
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn a_label_follows_changes_made_in_macro_before_the_provider_confirms_them(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let owner = inbox_owner(&pool).await;
+    let owner = owner.as_ref();
+    // Both reads: the label's own rows first, and the inbox walk.
+    let lists = |pool: Pool<Postgres>| async move {
+        let from_label = listed(&pool, OWN_INBOX, owner, label(WORK)).await?;
+        let (walking, _) = walked(&pool, owner, label(WORK), 10, WALK).await?;
+        anyhow::Ok((from_label, walking.into_iter().collect::<HashSet<_>>()))
+    };
+    let command = Uuid::from_u128(0xc0);
+    sqlx::query!(
+        "INSERT INTO email_mailbox_commands (id, link_id, generation, actor_id, intent, status) VALUES ($1, $2, 1, $3, '{}'::jsonb, 'pending')",
+        command,
+        Uuid::parse_str(OWN_INBOX)?,
+        owner,
+    )
+    .execute(&pool)
+    .await?;
+
+    // Put on in Macro: thread 5's message carries Work before Gmail says so.
+    sqlx::query!(
+        "INSERT INTO email_pending_mailbox_state (message_id, attribute, command_id, desired) VALUES ('30000005-0000-0000-0000-000000000005', 'tag:Label_Work', $1, 'true'::jsonb)",
+        command,
+    )
+    .execute(&pool)
+    .await?;
+    let both = HashSet::from([thread(5), thread(6)]);
+    assert_eq!(lists(pool.clone()).await?, (both.clone(), both));
+
+    // Taken off in Macro: thread 6 no longer carries it.
+    sqlx::query!(
+        "INSERT INTO email_pending_mailbox_state (message_id, attribute, command_id, desired) VALUES ('30000006-0000-0000-0000-000000000006', 'tag:Label_Work', $1, 'false'::jsonb)",
+        command,
+    )
+    .execute(&pool)
+    .await?;
+    let five = HashSet::from([thread(5)]);
+    assert_eq!(lists(pool.clone()).await?, (five.clone(), five));
+
+    // A label being deleted matches nothing.
+    sqlx::query!(
+        "INSERT INTO email_mailbox_settings_work (id, link_id, kind, resource_key, revision, completed_revision) VALUES ($1, $2, 'delete_label', 'Label_Work', 2, 1)",
+        Uuid::from_u128(0xd0),
+        Uuid::parse_str(OWN_INBOX)?,
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(lists(pool.clone()).await?, (HashSet::new(), HashSet::new()));
+    Ok(())
+}

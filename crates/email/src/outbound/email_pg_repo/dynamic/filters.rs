@@ -408,18 +408,14 @@ fn build_thread_literal_predicate(
         // from from matching.
         EmailLiteral::Label(id) => {
             let mut f = SqlFragment::raw(format!(
-                "(EXISTS (SELECT 1 FROM email_messages lm JOIN email_effective_message_labels ml ON ml.message_id = lm.id WHERE lm.thread_id = {thread_alias}.id AND ml.label_id = "
+                "(EXISTS (SELECT 1 FROM email_labels l JOIN email_messages lm ON lm.thread_id = {thread_alias}.id AND lm.link_id = l.link_id WHERE l.id = "
             ));
             f.extend(SqlFragment::bind_uuid(*id));
             f.push_raw(format!(
-                ") AND {thread_alias}.link_id IN (SELECT el.id FROM email_links el WHERE el.macro_id = "
+                " AND {LABEL_NOT_BEING_DELETED} AND {MESSAGE_CARRIES_LABEL}) AND {thread_alias}.link_id = "
             ));
-            f.extend(SqlFragment::bind_viewer());
-            f.push_raw(
-                " UNION ALL SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = ",
-            );
-            f.extend(SqlFragment::bind_viewer());
-            f.push_raw("))");
+            f.extend(viewer_links());
+            f.push_raw(")");
             f
         }
         // Denormalized importance flag maintained by update_thread_metadata
@@ -1065,24 +1061,40 @@ pub(super) fn build_label_superset(
     let mut labels = labels.clone();
     labels.sort_unstable();
     labels.dedup();
+    // Two branches a label, its provider rows and the labels just put on in
+    // Macro, each read by the label: the effective-labels view can't take a
+    // label predicate, since its pending side computes the label per row.
+    let scoped = |mut f: SqlFragment| {
+        f.push_raw(format!(
+            " AND {LABEL_NOT_BEING_DELETED} AND lm.link_id = ANY("
+        ));
+        f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+        // As the condition itself: only inboxes the viewer owns or manages.
+        f.push_raw(") AND lm.link_id = ");
+        f.extend(viewer_links());
+        f
+    };
     let branches = labels
         .into_iter()
-        .map(|label| {
-            let mut f = SqlFragment::raw(
-                "SELECT lm.thread_id FROM email_effective_message_labels ml JOIN email_messages lm ON lm.id = ml.message_id WHERE ml.label_id = ",
+        .flat_map(|label| {
+            let mut provider = SqlFragment::raw(
+                "SELECT lm.thread_id FROM email_labels l JOIN email_message_labels ml ON ml.label_id = l.id JOIN email_messages lm ON lm.id = ml.message_id WHERE l.id = ",
             );
-            f.extend(SqlFragment::bind_uuid(label));
-            f.push_raw(" AND lm.link_id = ANY(");
-            f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
-            // As the condition itself: only inboxes the viewer owns or manages.
-            f.push_raw(") AND lm.link_id IN (SELECT el.id FROM email_links el WHERE el.macro_id = ");
-            f.extend(SqlFragment::bind_viewer());
-            f.push_raw(
-                " UNION ALL SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = ",
+            provider.extend(SqlFragment::bind_uuid(label));
+            provider.push_raw(format!(" AND {PENDING_LABEL_NOT_TAKEN_OFF}"));
+            // Pending changes are few and have no index by attribute: read
+            // them first (the fence keeps the planner from walking the
+            // inbox's messages and probing each), then their messages.
+            let mut pending = SqlFragment::raw(
+                "SELECT lm.thread_id FROM (SELECT p.message_id FROM email_pending_mailbox_state p WHERE p.desired = 'true'::jsonb AND p.attribute = 'tag:' || (SELECT pl.provider_label_id FROM email_labels pl WHERE pl.id = ",
             );
-            f.extend(SqlFragment::bind_viewer());
-            f.push_raw(")");
-            f
+            pending.extend(SqlFragment::bind_uuid(label));
+            pending.push_raw(
+                ") OFFSET 0) put_on JOIN email_messages lm ON lm.id = put_on.message_id JOIN email_labels l ON l.link_id = lm.link_id AND l.id = ",
+            );
+            pending.extend(SqlFragment::bind_uuid(label));
+            pending.push_raw(" WHERE TRUE");
+            [scoped(provider), scoped(pending)]
         })
         .collect::<Vec<_>>();
     Some(AddressSuperset {
@@ -1106,4 +1118,29 @@ fn labels_of(expr: &Expr<EmailLiteral>, out: &mut Vec<Uuid>) -> bool {
 
 fn is_label_tree(expr: &Expr<EmailLiteral>) -> bool {
     labels_of(expr, &mut Vec::new())
+}
+
+/// `l` is not a label whose deletion is waiting for the provider, as
+/// `email_effective_message_labels` requires.
+const LABEL_NOT_BEING_DELETED: &str = "NOT EXISTS (SELECT 1 FROM email_mailbox_settings_work w WHERE w.link_id = l.link_id AND w.kind = 'delete_label' AND w.resource_key = l.provider_label_id AND w.completed_revision < w.revision)";
+
+/// `lm` has no pending change taking label `l` off.
+const PENDING_LABEL_NOT_TAKEN_OFF: &str = "NOT EXISTS (SELECT 1 FROM email_pending_mailbox_state p WHERE p.message_id = lm.id AND p.attribute = 'tag:' || l.provider_label_id AND p.desired <> 'true'::jsonb)";
+
+/// Message `lm` carries label `l` as `email_effective_message_labels` says: a
+/// provider row or a pending change putting it on, and no pending change
+/// taking it off.
+const MESSAGE_CARRIES_LABEL: &str = "(EXISTS (SELECT 1 FROM email_message_labels ml WHERE ml.message_id = lm.id AND ml.label_id = l.id) OR EXISTS (SELECT 1 FROM email_pending_mailbox_state p WHERE p.message_id = lm.id AND p.attribute = 'tag:' || l.provider_label_id)) AND NOT EXISTS (SELECT 1 FROM email_pending_mailbox_state p WHERE p.message_id = lm.id AND p.attribute = 'tag:' || l.provider_label_id AND p.desired <> 'true'::jsonb)";
+
+/// `ANY` of the inboxes the viewer owns or manages, read once: as an `IN`
+/// subquery the planner hashes every message of the inbox to match it.
+fn viewer_links() -> SqlFragment {
+    let mut f = SqlFragment::raw("ANY(ARRAY(SELECT el.id FROM email_links el WHERE el.macro_id = ");
+    f.extend(SqlFragment::bind_viewer());
+    f.push_raw(
+        " UNION ALL SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = ",
+    );
+    f.extend(SqlFragment::bind_viewer());
+    f.push_raw("))");
+    f
 }
