@@ -81,6 +81,7 @@ fn call_error(action: &'static str) -> impl FnOnce(CallError) -> ToolCallError {
             CallError::InvalidRequest(message)
             | CallError::Forbidden(message)
             | CallError::Conflict(message) => message.clone(),
+            CallError::Contended(_) => err.to_string(),
             CallError::NotFound(_) => "call not found".to_string(),
             _ => format!("failed to {action}"),
         };

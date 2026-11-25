@@ -19,6 +19,7 @@ impl MessageEventPublisher for Target {
 }
 fn event(change: MessageChange) -> MessageEvent {
     MessageEvent {
+        seq: None,
         parent: MessageParent::parse("document", "doc").unwrap(),
         actor: "macro|author@example.com".into(),
         nonce: None,

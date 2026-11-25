@@ -29,6 +29,8 @@ outbound = [
   "dep:feature_flags",
   "dep:livekit-api",
   "dep:livekit-protocol",
+  "dep:channel_change_db_utils",
+  "dep:message_write_gate",
   "dep:macro_aws_config",
   "dep:pgvector",
   "dep:share_permission_db_utils",
@@ -54,6 +56,8 @@ cloudfront_sign = { workspace = true, optional = true }
 ip_extractor = { path = "../ip_extractor", optional = true }
 rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
+channel_change_db_utils = { path = "../channel_change_db_utils", optional = true }
+message_write_gate = { path = "../message_write_gate", optional = true }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }

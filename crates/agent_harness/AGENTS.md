@@ -79,6 +79,18 @@ without re-prompting. Keep deduplication inside the serialized command worker.
 Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
+Conversation and external reply reconciliation admit the message parent through
+`SessionAnnouncer::with_write_admission` before claiming a journal lease, then
+recheck the durable parent under that lease. That admission limits reply work
+per parent (four at a time) under a key of its own, so the leases, which each
+keep a pool connection, stay bounded; it is not the parent's write admission.
+Reply work can last seconds (a conversation bootstrap starts its session under
+it), and holding write slots that long would turn away people writing in the
+same channel. Each message write inside takes the parent's write permit for its
+own transaction; the database lease still prevents duplicate replies across
+replicas. Either admission failing is `ReplyBusy`, which keeps the durable
+reply or prompt pending for recovery with its reserved IDs rather than marking
+it failed; other parents remain independent.
 
 External runtimes pass container preflight without a managed provider; only
 managed runtimes require provider account setup.
@@ -238,6 +250,8 @@ agent or routine attribution, or the execution header).
 
 ## Gotchas
 
+- A `MessageError::Contended` prompt-context read is retryable like a repository
+  failure; never classify it as a deleted or forbidden origin.
 - A session's first prompt carries static files from the mentioning message
   and the rest of its thread (mention first, then root and replies), capped
   at 8 and deduped by file id; follow-ups carry only their own files.

@@ -20,6 +20,7 @@ macro_queues = { path = "../../crates/macro_queues" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 messages = { path = "../../crates/messages", features = ["outbound"] }
+message_write_gate = { path = "../../crates/message_write_gate" }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 slack_integration = { path = "../../crates/slack_integration", features = ["postgres", "s3", "sqs", "search", "worker"] }

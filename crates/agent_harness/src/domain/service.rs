@@ -869,6 +869,7 @@ fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
         HarnessError::Admission(error) => AgentSessionError::Admission(error),
+        HarnessError::ReplyBusy(error) => AgentSessionError::ReplyBusy(error),
         HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }

@@ -152,6 +152,19 @@ async fn body_patch_is_guarded_silent_and_transactional(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
+    let changes = sqlx::query!(
+        "SELECT seq, kind, message_id FROM channel_change_log WHERE channel_id = $1 ORDER BY seq",
+        channel_id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    // The rolled-back patch and five guarded no-ops consume no sequence.
+    assert_eq!(changes.len(), 2);
+    assert_eq!(changes[0].kind, 3);
+    assert_eq!(changes[1].seq, 2);
+    assert_eq!(changes[1].kind, 1);
+    assert_eq!(changes[1].message_id, Some(rows[0].id));
     assert_eq!(stored.content, "resolved body");
     assert_eq!(stored.created_at, original.created_at);
     assert_eq!(stored.updated_at, original.updated_at);
@@ -574,4 +587,104 @@ fn validates_timestamps_ids_counts_and_byte_limits() {
         message.edited_at = None;
         boundary.validate().unwrap();
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn historical_batch_reset_is_once_per_batch_and_transactional(pool: PgPool) {
+    let channel_id = channel(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let root = message(None, 0);
+    let reply = message(Some(root.id), 1);
+    repo.insert_historical(&HistoricalBatch {
+        channel_id,
+        messages: vec![root.clone(), reply],
+    })
+    .await
+    .unwrap();
+    let changes = sqlx::query!(
+        "SELECT seq, kind, message_id, activity_id FROM channel_change_log WHERE channel_id = $1 ORDER BY seq",
+        channel_id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].seq, 1);
+    assert_eq!(changes[0].kind, 3);
+    assert_eq!(changes[0].message_id, None);
+    assert_eq!(changes[0].activity_id, None);
+
+    let later = message(Some(root.id), 2);
+    let mut tx = pool.begin().await.unwrap();
+    PgMessageRepository::insert_historical_in(
+        &mut tx,
+        &HistoricalBatch {
+            channel_id,
+            messages: vec![later.clone()],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT seq FROM channel_change_counters WHERE channel_id = $1",
+            channel_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap(),
+        2,
+    );
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT seq FROM channel_change_counters WHERE channel_id = $1",
+            channel_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        1,
+    );
+    assert!(
+        repo.get(&MessageParent::Channel(channel_id), later.id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    repo.insert_historical(&HistoricalBatch {
+        channel_id,
+        messages: vec![],
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM channel_change_log WHERE channel_id = $1",
+            channel_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(1),
+    );
+    assert!(
+        repo.insert_historical(&HistoricalBatch {
+            channel_id,
+            messages: vec![root]
+        })
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT seq FROM channel_change_counters WHERE channel_id = $1",
+            channel_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        1,
+    );
 }

@@ -26,7 +26,7 @@ async fn standalone_highlight_remains_unthreaded_until_a_message_attaches_it(poo
     assert_eq!((anchor.page, anchor.red, anchor.alpha), (3, 1, 0.5));
     use messages::domain::{models::*, ports::*};
     let repo = messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone());
-    let root = repo
+    let (root, _) = repo
         .create(CreateMessage {
             kind: messages::domain::models::MessageKind::Message,
             guest_name: None,

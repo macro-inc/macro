@@ -1,6 +1,7 @@
 use super::*;
 use chrono::DateTime;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use messages::domain::ports::MessageError;
 use opentelemetry::trace::{SpanId, TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use rootcause::Report;
@@ -36,6 +37,18 @@ impl CalendarChangeLogPruner for Pruner {
         _batch: usize,
     ) -> Result<usize, Report> {
         Ok(7)
+    }
+}
+
+struct ChannelPruner;
+
+impl ChannelChangeLogPruner for ChannelPruner {
+    async fn prune_channel_change_log(
+        &self,
+        _cutoff: DateTime<Utc>,
+        _batch: usize,
+    ) -> Result<usize, MessageError> {
+        Ok(0)
     }
 }
 
@@ -87,6 +100,7 @@ async fn each_scheduler_round_is_its_own_finished_root_span(db: PgPool) {
         queue.clone(),
         GoogleCalendarSyncScheduler::new(Syncs(token.clone())),
         CalendarChangeLogRetention::new(Pruner),
+        ChannelChangeLogRetention::new(ChannelPruner),
         true,
         token,
     )
@@ -126,4 +140,15 @@ async fn each_scheduler_round_is_its_own_finished_root_span(db: PgPool) {
         pruning.span_context.trace_id()
     );
     assert_eq!(drains[0].parent_span_id, pruning.span_context.span_id());
+}
+
+#[test]
+fn a_channel_prune_backlog_continues_on_the_next_round() {
+    let now = tokio::time::Instant::now();
+
+    assert_eq!(next_channel_prune(now, true), now);
+    assert_eq!(
+        next_channel_prune(now, false),
+        now + CHANGE_LOG_RETENTION_INTERVAL
+    );
 }

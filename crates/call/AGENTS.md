@@ -43,7 +43,7 @@ in-call chat.
 
 ## Boundaries
 
-- Depends on: `channels` (feature `outbound`), `agent`/`ai_usage` (call summarization),
+- Depends on: `channels` and `channel_change_db_utils` (feature `outbound`), `agent`/`ai_usage` (call summarization),
   `entity_access_db_utils`, `livekit-api`/`livekit-protocol`.
 - Used by: `memory`, `ai_tools`, `models_soup`, `agent_trigger`, `crm`, `soup`,
   `calendar_events` (meeting links).
@@ -69,6 +69,8 @@ in-call chat.
 - A call's discussion is stored in `call_entities.discussion` when it is created, and can't be
   inferred from `channel_id`: past channel calls keep `call_chat`. See
   `docs/design/call-chat-in-channel.md`.
+- Archive and delete channel-thread calls with `channel_change_db_utils`'s canonical call-root append as the final SQL statement, capturing the call's own channel and discussion before deletion triggers remove them.
+- Acquire the shared channel message-write permit before the call write transaction; release the discovery lookup's connection before waiting, recheck the discussion in the transaction, and retain the permit through commit. Only typed admission failures become a safe retryable 503.
 - A call id lives in exactly one of `calls`, `call_records`, or an imported
   `call_entities` row: archiving moves it in one transaction. The call list
   takes the first match per granted id, so never let two of them hold the same id.

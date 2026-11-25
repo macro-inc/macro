@@ -18,6 +18,9 @@ pub const TEAM_AGENT_COMPUTER_MESSAGE: &str =
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Message admission is busy; callers may retry without losing queued work.
+    #[error("agent reply is busy; retry the request")]
+    ReplyBusy(rootcause::Report),
     /// Invalid session activity paging input.
     #[error("{0}")]
     InvalidActivityQuery(&'static str),

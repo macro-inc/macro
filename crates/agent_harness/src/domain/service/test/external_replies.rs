@@ -10,6 +10,7 @@ struct ReplyStore {
     rows: Mutex<HashMap<Key, ExternalReply>>,
     lock: Arc<tokio::sync::Mutex<()>>,
     fail_reserve: std::sync::atomic::AtomicBool,
+    claims: std::sync::atomic::AtomicUsize,
 }
 impl ExternalReplyLease for tokio::sync::OwnedMutexGuard<()> {}
 #[async_trait::async_trait]
@@ -76,6 +77,8 @@ impl ExternalReplyStore for ReplyStore {
         _: AgentSessionId,
         _: AgentActionId,
     ) -> agent_session::domain::error::Result<Option<Box<dyn ExternalReplyLease>>> {
+        self.claims
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(self
             .lock
             .clone()
@@ -123,6 +126,83 @@ impl ExternalReplyStore for ReplyStore {
             .cloned()
             .collect())
     }
+}
+
+#[tokio::test]
+async fn rejected_reply_admission_never_claims_a_lease_and_recovery_keeps_the_message_id() {
+    let store = Arc::new(ReplyStore::default());
+    let mut service =
+        harness_sharing_repo(InMemoryAgentSessionRepo::new()).with_external_replies(store.clone());
+    Arc::get_mut(&mut service.inner).unwrap().coding_agents = Box::new(ChosenCodingAgents(false));
+    let session = service
+        .open_external_session(open_external_request("/workspace"))
+        .await
+        .unwrap();
+    let source = macro_uuid::generate_uuid_v7();
+    let action = AgentActionId::from_uuid(source);
+    service
+        .announce_external_prompt(
+            session.id,
+            AnnouncePrompt {
+                bot_id: session.bot_id,
+                origin: AnnounceOrigin {
+                    reuse_origin_message: false,
+                    reply_placement: Default::default(),
+                    parent: MessageParent::Channel(Uuid::from_u128(100)),
+                    thread_id: source,
+                    message_id: source,
+                },
+                content: "hello".into(),
+                sender: sender(),
+            },
+        )
+        .await
+        .unwrap();
+    let original = service.inner.announcer.announced_messages()[0].message_id;
+    store
+        .complete(
+            session.id,
+            action,
+            &ExternalReplyCompletion {
+                turn: TurnId(0),
+                outcome: ReplyOutcome::Cancelled,
+            },
+        )
+        .await
+        .unwrap();
+    let claims = store.claims.load(std::sync::atomic::Ordering::SeqCst);
+    service
+        .inner
+        .announcer
+        .refuses_write_admission("parent is busy");
+    service.recover_external_replies().await.unwrap();
+    assert_eq!(
+        store.claims.load(std::sync::atomic::Ordering::SeqCst),
+        claims
+    );
+    assert!(
+        !store
+            .get(session.id, action)
+            .await
+            .unwrap()
+            .unwrap()
+            .finalized
+    );
+    assert!(service.inner.announcer.resolved().is_empty());
+
+    service.inner.announcer.recovers();
+    service.recover_external_replies().await.unwrap();
+    assert!(
+        store
+            .get(session.id, action)
+            .await
+            .unwrap()
+            .unwrap()
+            .finalized
+    );
+    let replies = service.inner.announcer.resolved();
+    assert_eq!(replies.len(), 1);
+    assert_eq!(replies[0].message_id, original);
 }
 
 #[tokio::test]

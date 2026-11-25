@@ -108,6 +108,13 @@ impl PgMessageRepository {
     }
     async fn hydrate_root_rows(
         &self,
+        rows: Vec<Json<StoredMessage>>,
+    ) -> Result<Vec<MessageListItem>, MessageError> {
+        let mut connection = self.pool.acquire().await.map_err(database_error)?;
+        Self::hydrate_root_rows_in(&mut connection, rows).await
+    }
+    pub(super) async fn hydrate_root_rows_in(
+        connection: &mut sqlx::PgConnection,
         mut rows: Vec<Json<StoredMessage>>,
     ) -> Result<Vec<MessageListItem>, MessageError> {
         let roots: Vec<_> = rows.iter().map(|r| r.id).collect();
@@ -115,14 +122,14 @@ impl PgMessageRepository {
             (SELECT count(*) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS "reply_count!",
             (SELECT max(created_at) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS latest_reply_at
             FROM comms_message_threads t WHERE root_id = ANY($1)"#, &roots)
-            .fetch_all(&self.pool).await.map_err(database_error)?;
+            .fetch_all(&mut *connection).await.map_err(database_error)?;
         let previews = sqlx::query_scalar!(r#"SELECT to_jsonb(preview) AS "message!: Json<StoredMessage>"
             FROM unnest($1::uuid[]) root(id) CROSS JOIN LATERAL (
                 SELECT r.* FROM comms_messages r WHERE r.thread_id = root.id AND r.deleted_at IS NULL
                 ORDER BY r.import_order NULLS LAST, r.created_at, r.id LIMIT 3
-            ) preview"#, &roots).fetch_all(&self.pool).await.map_err(database_error)?;
+            ) preview"#, &roots).fetch_all(&mut *connection).await.map_err(database_error)?;
         rows.extend(previews);
-        let hydrated = self.hydrate(rows).await?;
+        let hydrated = Self::hydrate_in(connection, rows).await?;
         let mut root_messages = HashMap::new();
         let mut replies: HashMap<Uuid, Vec<Message>> = HashMap::new();
         for message in hydrated {
@@ -134,7 +141,7 @@ impl PgMessageRepository {
         }
         let mut states: HashMap<_, _> = states.into_iter().map(|s| (s.root_id, s)).collect();
         Self::resolve_highlight_text(
-            &self.pool,
+            &mut *connection,
             states.values_mut().map(|state| &mut state.state.0),
         )
         .await?;

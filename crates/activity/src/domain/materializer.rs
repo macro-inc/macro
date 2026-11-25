@@ -25,8 +25,10 @@ impl<R: ActivityRepo, P: ActivityRealtimePublisher> ActivityMaterializer<R, P> {
     pub async fn apply(&self, ingest: Ingest) -> Result<(), R::Err> {
         match ingest {
             Ingest::Insert(rows) => {
-                self.repo.insert_activities(&rows).await?;
-                self.realtime.publish_recorded(&rows).await;
+                let receipts = self.repo.insert_activities(&rows).await?;
+                self.realtime
+                    .publish_recorded_with_receipts(&rows, &receipts)
+                    .await;
             }
             Ingest::Purge(entities) => {
                 if !entities.is_empty() {

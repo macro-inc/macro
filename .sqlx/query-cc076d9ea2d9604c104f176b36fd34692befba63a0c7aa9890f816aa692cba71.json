@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT to_jsonb(m) AS \"message!: Json<StoredMessage>\",\n                   (SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.created_at, a.id), '[]')\n                    FROM (\n                        SELECT id, entity_type, entity_id, width, height, created_at\n                        FROM comms_attachments WHERE message_id = m.id\n                    ) a) AS \"attachments!: Json<Vec<MessageAttachment>>\",\n                   (SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY r.emoji), '[]')\n                    FROM (\n                        SELECT emoji, array_agg(user_id ORDER BY user_id) AS users\n                        FROM comms_reactions WHERE message_id = m.id GROUP BY emoji\n                    ) r) AS \"reactions!: Json<Vec<CountedReaction>>\",\n                   (SELECT COALESCE(jsonb_agg(to_jsonb(mention) ORDER BY mention.entity_type, mention.entity_id), '[]')\n                    FROM (\n                        SELECT entity_type, entity_id FROM comms_entity_mentions\n                        WHERE source_entity_type = 'message' AND source_entity_id = m.id::text\n                    ) mention) AS \"mentions!: Json<Vec<SimpleMention>>\"\n            FROM comms_messages m\n            WHERE m.id = $1 AND m.parent_entity_type = 'channel' AND m.parent_entity_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "attachments!: Json<Vec<MessageAttachment>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "reactions!: Json<Vec<CountedReaction>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "mentions!: Json<Vec<SimpleMention>>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "cc076d9ea2d9604c104f176b36fd34692befba63a0c7aa9890f816aa692cba71"
+}

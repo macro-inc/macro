@@ -6,6 +6,23 @@ use entity_access::domain::models::{AccessLevel, EntityPermission};
 
 use super::DeclineCallPermission;
 
+#[tokio::test]
+async fn call_admission_failure_has_a_safe_retry_response() {
+    let response = CallError::Contended(rootcause::report!("private cause")).into_response();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "1");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "message": "channel is busy; retry the request", "code": null
+        })
+    );
+}
+
 #[test]
 fn meeting_join_schema_preserves_optional_sdk_body() {
     use utoipa::OpenApi;

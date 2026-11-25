@@ -7866,6 +7866,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Channel is busy; retry after Retry-After seconds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -16356,6 +16366,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Message storage is busy; retry after Retry-After seconds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -23864,6 +23884,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Channel is busy; retry after Retry-After seconds"
           }
         }
       }
@@ -23963,6 +23986,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Channel is busy; retry after Retry-After seconds"
           }
         }
       },
@@ -24017,6 +24043,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Channel is busy; retry after Retry-After seconds"
           }
         }
       }
@@ -24073,6 +24102,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Channel is busy; retry after Retry-After seconds"
           }
         }
       }
@@ -24227,6 +24259,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Channel is busy; retry after Retry-After seconds"
           }
         }
       },
@@ -24281,6 +24316,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Channel is busy; retry after Retry-After seconds"
           }
         }
       }
@@ -55942,6 +55980,11 @@
           "parent": {
             "$ref": "#/components/schemas/MessageParent",
             "description": "Changed parent, used for subscriptions and cache invalidation."
+          },
+          "seq": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Committed channel change position; absent for other parents and typing."
           }
         }
       },

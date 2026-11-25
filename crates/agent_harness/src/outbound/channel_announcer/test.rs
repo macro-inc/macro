@@ -11,6 +11,21 @@ use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
 use messages::domain::models::Message;
 
+#[test]
+fn contended_message_writes_remain_retryable_with_their_cause() {
+    let error = message_error(MessageError::Contended(rootcause::report!(
+        "admission timeout"
+    )));
+    let HarnessError::ReplyBusy(cause) = error else {
+        panic!("message contention must remain a retryable reply failure");
+    };
+    let Some(MessageError::Contended(cause)) = cause.downcast_current_context::<MessageError>()
+    else {
+        panic!("the retryable reply must retain its typed message error");
+    };
+    assert!(cause.to_string().contains("admission timeout"));
+}
+
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
         reply_message_id: None,
@@ -600,4 +615,29 @@ fn a_stored_step_keeps_the_view_it_presented() {
     };
     assert_eq!(rows[0].card, Some(ActivityCard::View { view }));
     assert_eq!(rows[0].detail, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reply_work_leaves_the_channels_write_slots_free() {
+    let channel = Uuid::now_v7();
+    let parent = MessageParent::Channel(channel);
+    let mut replies = Vec::new();
+    for _ in 0..4 {
+        replies.push(admit_reply(&parent).await.unwrap());
+    }
+
+    // People writing in the channel are admitted while four replies are held.
+    let mut writers = Vec::new();
+    for _ in 0..4 {
+        writers.push(
+            message_write_gate::acquire(parent.entity_type(), &parent.entity_id())
+                .await
+                .unwrap(),
+        );
+    }
+    drop(writers);
+
+    // Reply work itself stays bounded, so its leases cannot drain the pool.
+    let fifth = admit_reply(&parent).await.unwrap_err();
+    assert!(matches!(fifth, HarnessError::ReplyBusy(_)));
 }

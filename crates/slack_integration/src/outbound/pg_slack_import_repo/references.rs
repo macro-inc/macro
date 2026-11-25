@@ -78,6 +78,44 @@ pub struct ReferenceWork {
     pub template: Option<ConvertedText>,
 }
 
+/// Unlocked discovery identity used to obtain message admission before a fence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReferenceIdentity {
+    /// Owning job, rechecked after acquiring its fence.
+    pub job: JobId,
+    /// Pending message, rechecked after acquiring its fence.
+    pub message: Uuid,
+    /// Channel whose message write permit is required.
+    pub channel: Uuid,
+}
+
+/// Discover the first pending identity after one job using the pending index.
+/// This is not authority to write: callers must compare it to `next_for_job_in`.
+pub async fn peek_next(
+    pool: &sqlx::PgPool,
+    after_job: Option<JobId>,
+) -> PortResult<Option<ReferenceIdentity>> {
+    let row = sqlx::query!(
+        r#"SELECT job_id, message_id, channel_id
+           FROM slack_import_message_reference
+           WHERE completed_at IS NULL
+             AND job_id > COALESCE($1::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+           ORDER BY job_id, message_id LIMIT 1"#,
+        after_job.map(Uuid::from),
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(internal)?;
+    row.map(|row| {
+        Ok(ReferenceIdentity {
+            job: row.job_id.try_into().map_err(internal)?,
+            message: row.message_id,
+            channel: row.channel_id,
+        })
+    })
+    .transpose()
+}
+
 /// Unforgeable transaction-scoped fence. No lease can expire mid-patch: the job
 /// lock is held through completion and commit, and no work escapes this transaction.
 pub struct FencedReference<'a, 'c> {
@@ -106,11 +144,45 @@ pub async fn next_in<'a, 'c>(
     let Some(job) = job else {
         return Ok(None);
     };
+    read_work_in(tx, job.id, job.team_id).await
+}
+
+/// Fence one discovered job without waiting for another worker's job lock.
+/// Eligibility is rechecked here; discovery conveys no authority to write.
+pub async fn next_for_job_in<'a, 'c>(
+    tx: &'a mut Transaction<'c, Postgres>,
+    job_id: JobId,
+) -> PortResult<Option<FencedReference<'a, 'c>>> {
+    let job = sqlx::query!(
+        r#"SELECT j.id, j.team_id FROM slack_import_job j
+           WHERE j.id = $1 AND j.registration_closed_at IS NOT NULL
+             AND j.status IN ('uploading', 'processing', 'cancelling')
+             AND NOT EXISTS (SELECT 1 FROM slack_import_conversation c WHERE c.job_id = j.id
+                 AND c.status IN ('awaiting_uploads', 'queued', 'importing'))
+             AND EXISTS (SELECT 1 FROM slack_import_message_reference r
+                 WHERE r.job_id = j.id AND r.completed_at IS NULL)
+           FOR UPDATE OF j SKIP LOCKED"#,
+        Uuid::from(job_id),
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(internal)?;
+    let Some(job) = job else {
+        return Ok(None);
+    };
+    read_work_in(tx, job.id, job.team_id).await
+}
+
+async fn read_work_in<'a, 'c>(
+    tx: &'a mut Transaction<'c, Postgres>,
+    job_id: Uuid,
+    team_id: Uuid,
+) -> PortResult<Option<FencedReference<'a, 'c>>> {
     let row = sqlx::query!(
         r#"SELECT slack_channel_id, message_id, channel_id, importer_version, template
            FROM slack_import_message_reference WHERE job_id = $1 AND completed_at IS NULL
            ORDER BY message_id LIMIT 1"#,
-        job.id,
+        job_id,
     )
     .fetch_optional(&mut **tx)
     .await
@@ -121,8 +193,8 @@ pub async fn next_in<'a, 'c>(
         return Ok(None);
     };
     let work = ReferenceWork {
-        team: job.team_id.try_into().map_err(internal)?,
-        job: job.id.try_into().map_err(internal)?,
+        team: team_id.try_into().map_err(internal)?,
+        job: job_id.try_into().map_err(internal)?,
         conversation: row.slack_channel_id.parse().map_err(internal)?,
         message: row.message_id,
         channel: row.channel_id,
