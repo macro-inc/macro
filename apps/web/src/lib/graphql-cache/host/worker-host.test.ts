@@ -1315,6 +1315,41 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('keeps a hidden page waiting on a lost connection until it can connect again', async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    const adapters: FakePageAdapter[] = [];
+    configureAdapter = (fake) => adapters.push(fake);
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.currentRevision();
+    const [lost] = adapters;
+    lost.ignoredKinds.add('current-authority');
+    lost.ping.mockImplementation(() => true);
+    visibility.mockReturnValue('hidden');
+    await vi.advanceTimersByTimeAsync(1);
+    const settled = vi.fn();
+    const authority = host.authority?.current().finally(settled);
+
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(settled).not.toHaveBeenCalled();
+    expect(adapters).toHaveLength(1);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(adapters).toHaveLength(2);
+    expect(onInitializationError).not.toHaveBeenCalled();
+    visibility.mockRestore();
+    host.dispose();
+  });
+
   it('ends an authority read a ready owner never answers', async () => {
     vi.useFakeTimers();
     const host = createWorkerCacheHost({

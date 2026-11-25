@@ -355,6 +355,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let outage: CacheUnavailableError | undefined;
   let lastHeardAt = 0;
   let stopPing: (() => void) | undefined;
+  /** Settles with the ping in flight, which a hidden page leaves open. */
+  let pinged: Promise<void> | undefined;
   /** An engine opened during the outage, which the host has yet to reach. */
   let outageChange: CacheGenerationChange | undefined;
   let adapter: CacheCoordinatorPageAdapter | undefined;
@@ -1216,15 +1218,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (stopPing || lastHeardAt >= quietSince) return;
     const asked = adapter;
     if (!asked?.ping()) return;
-    const cancel = visibleTimeout(() => {
+    const settled = Promise.withResolvers<void>();
+    pinged = settled.promise;
+    const end = () => {
       stopPing = undefined;
+      pinged = undefined;
+      settled.resolve();
+    };
+    const cancel = visibleTimeout(() => {
+      end();
       if (adapter !== asked || !isServing()) return;
       reconnectCoordinator(
         new WorkerRestartedError('cache coordinator connection lost')
       );
     }, PING_TIMEOUT_MS);
     stopPing = () => {
-      stopPing = undefined;
+      end();
       cancel();
     };
   }
@@ -1718,6 +1727,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           error instanceof CacheNavigationError ||
           error instanceof CacheRequestTimeoutError;
         if (!interrupted || !isServing()) throw error;
+        // Over a connection that is gone, nothing was asked of the owner.
+        await pinged;
+        if (!isServing()) throw error;
         if (error instanceof CacheRequestTimeoutError && state === 'ready')
           unanswered += 1;
         if (unanswered === UNANSWERED_AUTHORITY_READS) throw error;
