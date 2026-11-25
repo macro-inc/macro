@@ -11,7 +11,6 @@ vi.mock('@components/app/mobile/use-mobile-nav', () => ({
   useForegroundMobileView: () => () => 'search',
   useMobileNavNavigate: () => navigate,
 }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 beforeEach(() => {
   vi.stubGlobal(

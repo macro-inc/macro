@@ -75,6 +75,7 @@ impl OperatorNameSource for OperatorNamesPgSource {
                 ChannelNameSearch {
                     viewer_user_id: MacroUserIdStr(user.clone()),
                     patterns: &patterns,
+                    excluded_patterns: &[],
                     regex_patterns: true,
                     channel_ids: &[],
                     channel_types: &NAMED_CHANNEL_TYPES,

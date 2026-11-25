@@ -516,7 +516,7 @@ document-rendering finding; passing the smoke test is not full iOS 26/27 parity.
 nix build --option sandbox false .#tauri-desktop-cef-app
 
 # Linux and Windows desktop bundles (system webview; from this directory)
-cargo tauri build
+cargo tauri build    # on Windows: the per-user NSIS installer, see below
 
 # iOS / Android release artifacts
 cargo tauri ios build
@@ -640,6 +640,10 @@ in an installed macOS bundle before release.
 `threadId` (stacks a conversation's alerts), and `sender` (`id`, `name`,
 `avatarUrl`). A sender makes it a communication notification, as on iOS: the
 downloaded avatar replaces the app icon and group conversations show their name.
+macOS names a group only when its message has more than one recipient, so a
+notification with a subtitle (the channel or document it happened in) carries
+two opaque stand-in recipients; without them a signed build titles it with the
+sender alone.
 The new arguments are optional, so older frontends and native builds keep
 working together. macOS honors this only for an app signed with the restricted
 `com.apple.developer.usernotifications.communication` entitlement and
@@ -677,6 +681,95 @@ or enqueueing mutations. An older binary uses the existing uncached fallback and
 shows an update-required notice; its existing mutation queue stays intact until
 the user installs the native update.
 
+## Windows desktop app
+
+Windows builds this crate on wry, like Linux, so the webview is WebView2
+(Chromium); the CEF build is macOS only. `tauri.windows.conf.json` sets what
+differs from the shared config:
+
+- `useHttpsScheme`: the app is served from `https://tauri.localhost`, the
+  origin `lib.rs` and `tauri_protocol::rewrite_uri` expect on Windows.
+  WebView2's default `http://` origin would not match.
+- `dragDropEnabled: false`, as on macOS: Tauri's native drop handler would
+  swallow the page's HTML5 drag and drop.
+- An NSIS installer only, installed per user (`%LOCALAPPDATA%\Macro`), so
+  neither installing nor updating asks for an administrator. It writes the
+  `macro://` handler that sign-in callbacks return through to HKCU, and installs
+  WebView2 through its bootstrapper on the rare PC without it.
+  `windows/installer-hooks.nsh` stops the bundled `macrod.exe` before the
+  installer replaces or removes it, since Windows cannot replace a running
+  executable.
+
+Not yet on Windows: notification clicks open the app but not the conversation,
+and there are no desktop tabs or app menu. The title bar is the native one.
+
+Release builds come from `Build Desktop on Tag` (`xtask_workflows`'
+`desktop_windows.rs`). A Linux job builds the frontend in Nix
+(`.#tauri-frontend`) and the Tauri release config
+(`desktop-release.mjs tauri-config`); the Namespace Windows runner builds macrod
+and the installer with MSVC and the pinned `tauri-cli`, installs it silently and
+checks the `macro://` handler. WebView2 cannot start there (the runner runs jobs
+elevated in session 0), so a GitHub-hosted `windows-2025` job installs it again,
+launches it, checks that Macro and WebView2 start and stay up for 30 seconds,
+and uninstalls it; only an installer that passed reaches the release. The
+unsigned pull request build (`Desktop Windows smoke`, never published) is the
+only one that opens WebView2's DevTools port, through the window's
+`additionalBrowserArgs` (Tauri's own switches make WebView2 ignore
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`), so its launch job also checks the page
+loaded over the DevTools protocol. A build that may be signed fails if any
+config it merges opens the port, and the release launch check fails if WebView2
+started with it. A Windows failure leaves
+the macOS and Linux release alone; Windows users stay on their version, and
+rerunning the failed Windows jobs adds `windows-x86_64` to that version's feed,
+as for Intel below. The release does wait for the Windows jobs to end, so keep the
+`desktop-windows-signing` environment free of required reviewers and wait
+timers.
+
+Signing uses Azure Artifact Signing (formerly Trusted Signing). The bundler
+signs `Macro.exe`, `macrod.exe`, the uninstaller and the installer through
+`scripts/sign_windows_file.ps1`, which runs SignTool with Microsoft's dlib. CI
+holds no signing secret: the job's GitHub OIDC token, for the
+`desktop-windows-signing` environment, signs in as an Entra app. Setting it up
+takes an Artifact Signing account with a validated organization identity, a
+Public Trust certificate profile, and an Entra app with a federated credential
+for `repo:macro-inc/macro:environment:desktop-windows-signing` and the
+Artifact Signing Certificate Profile Signer role on the profile. Then set the
+repository variables `WINDOWS_SIGNING_AZURE_TENANT_ID`,
+`WINDOWS_SIGNING_AZURE_CLIENT_ID`, `WINDOWS_SIGNING_ENDPOINT`,
+`WINDOWS_SIGNING_ACCOUNT` and `WINDOWS_SIGNING_PROFILE`. While any is empty the
+installer is unsigned and stays a workflow artifact (`windows-installer-<tag>`).
+A signed build also stays one until `WINDOWS_DESKTOP_RELEASE` is `true`: set it
+after a person has tested a signed build on Windows 10 and 11 (sign-in through
+the browser and the `macro://` callback, cold and warm; notifications; calls
+with camera, microphone and screen share; macrod; an update between two signed
+builds). Only then does the installer reach the release as
+`Macro-<version>-x86_64-windows-setup.exe` and the update feed as
+`windows-x86_64`.
+
+Pull requests that change the app run the same build unsigned as
+`Desktop Windows` in `PR CI`, outside `CI gate`. Without a Windows machine,
+check that the Windows code paths compile with
+[cargo-xwin](https://github.com/rust-cross/cargo-xwin) and a rustup toolchain
+that has the `x86_64-pc-windows-msvc` target (the Nix shell's has not):
+
+```sh
+AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true \
+  cargo xwin clippy --manifest-path apps/web/tauri/Cargo.toml -p app --target x86_64-pc-windows-msvc
+```
+
+It needs `clang-cl`, `lld-link` and `llvm-lib` on `PATH` (`nix shell
+nixpkgs#clang nixpkgs#lld nixpkgs#llvm`), an `apps/web/dist/index.html`, and
+`development` in `.macro-tauri-env`.
+
+The same setup builds an unsigned debug installer, which checks the NSIS
+template and `windows/installer-hooks.nsh` (CI's tauri-cli release, plus
+`nixpkgs#nsis` for `makensis`), from `apps/web/tauri/src-tauri`:
+
+```sh
+cargo-tauri build --debug --runner cargo-xwin --target x86_64-pc-windows-msvc \
+  --bundles nsis --config '{"build":{"beforeBuildCommand":""}}'
+```
+
 ## Desktop window state
 
 The desktop window reopens at its last size, position, maximized, and
@@ -693,8 +786,8 @@ it from the startup config if it no longer exists (`src/desktop/main_window.rs`)
 
 ## Desktop native updates
 
-Release builds for macOS (Apple silicon and Intel) and Linux AppImage check for native updates
-after startup and every six hours. The download streams into
+Release builds for macOS (Apple silicon and Intel), Linux AppImage and Windows
+check for native updates after startup and every six hours. The download streams into
 `native-update/` under the app's local data directory (Application Support on
 macOS, never a purgeable cache): `download.partial` while it arrives,
 `download.bin` once complete, and `download.json` naming the version and
@@ -708,7 +801,7 @@ file is verified with Tauri's updater signature (the updater's own
 `minisign-verify` check, `desktop_update/desktop/download.rs`) before it becomes
 eligible for installation, and read and verified again just before installing;
 bytes that fail are deleted, so the next check downloads afresh. A successful
-install deletes them too. Without an app data directory native updates stay
+install (on Windows, starting the installer) deletes them too. Without an app data directory native updates stay
 disabled. The download uses the updater's timeout and proxy settings. While
 the app stays open, the six-hourly check keeps running with an update ready, so
 an app left open for days doesn't install the first update it downloaded and
@@ -725,7 +818,13 @@ work is started during quit. Errors retry with backoff.
 The ready notification and Settings → Desktop App offer **Restart to update**. Explicit
 restart waits for registered canvas/PDF saves and local query persistence, and is
 blocked during calls, uploads and imports. Native installation closes the native
-cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
+cache and excludes concurrent frontend OTA reloads. On Windows the app stops
+macrod, starts the verified NSIS installer in passive mode and quits normally;
+the installer reopens Macro only after **Restart to update**
+(`desktop_update/desktop/windows_installer.rs`). The updater plugin's own
+`install()` is not used there: it exits the process itself, skipping the
+app's exit handling, and always reopens the app, which on Windows would follow
+closing the last window. Neither update channel wipes
 user data.
 
 Before Restart installs, the page checks for the deployed web bundle and waits up to
@@ -744,7 +843,10 @@ work, and neither does a restart that a call, upload or import blocks. Mobile up
 branch, and `--no-default-features` builds do not auto-install native updates.
 
 When an install fails, **Restart to update** relaunches the version still
-installed; a quit stays quit, because the person asked to quit. The common
+installed; a quit stays quit, because the person asked to quit. On Windows the
+app's part ends once the NSIS installer starts, and the installer reopens Macro
+itself, so the app only exits; it relaunches only when the installer could not
+start. The common
 failures (a read-only or translocated bundle, a declined admin prompt, a bad
 archive) leave the old app in place, and the AppImage updater restores its
 backup. On macOS the pinned updater keeps its backup of the old app in a
@@ -765,7 +867,8 @@ restarts to install it.
 `../desktop-release.json` is the public release configuration; its checked-in
 defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
 (run from the repository root) updates this tracked file in CI
-before Nix evaluates either package. Both packages receive the same native version,
+before Nix evaluates either package (and before the Windows frontend job builds
+the Windows release config). Every package receives the same native version,
 OTA compatibility build number, and source commit timestamp for the embedded
 frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
 the same commit (numbered by build time), so the embedded bundle manifest also
@@ -790,8 +893,8 @@ entry for them) and stay on their version until a release includes it; the feed
 has one version for every platform, so an older Intel package can't be carried
 forward. A failed Intel build raises the native-build alert. Rerunning it adds
 `darwin-x86_64` to that version's feed: publication accepts a same-version feed
-that only adds platforms and leaves every listed one unchanged. The Linux AppImage and macOS archive receive updater signatures
-outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+that only adds platforms and leaves every listed one unchanged. The Linux AppImage, the macOS archives and, when
+it is released, the Windows installer receive updater signatures outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 live in Doppler `macos-release/prd`, read using the existing
 `MACOS_RELEASE_DOPPLER_TOKEN` CI secret. Only the corresponding public key is
 committed. Keep this private key: changing the embedded key requires a transition
@@ -859,7 +962,7 @@ never start, wait for a runner or end without uploading.
 
 Bootstrap requires one manual native upgrade: older binaries cannot acquire the
 Rust updater through a frontend OTA. Before promoting the first release, test two
-consecutive signed builds on installed macOS and Linux apps, including offline
+consecutive signed builds on installed macOS, Linux and Windows apps, including offline
 launch, read-only install locations, quit, restart, and preservation of local data.
 Builds run directly from a mounted DMG or the Nix store are not writable installed
 apps. For a broken release, stop promotion and release the last working code under

@@ -8,6 +8,9 @@ import { MACRO_PERSONA_ID } from '../../core/roster';
 export function ModelSelectorIdentity(props: { mobile?: boolean }) {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
+  const modelName = () =>
+    state.models.find((option) => option.id === state.model)?.label ??
+    catalogModelLabel(state.model, state.models);
   return (
     <span class="flex min-w-0 items-center gap-1">
       <Show
@@ -27,9 +30,7 @@ export function ModelSelectorIdentity(props: { mobile?: boolean }) {
         />
       </Show>
       <span class="min-w-0 truncate">
-        {custom()
-          ? state.agent?.name
-          : catalogModelLabel(state.model, state.models)}
+        {custom() ? state.agent?.name : modelName()}
       </span>
     </span>
   );

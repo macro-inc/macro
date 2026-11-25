@@ -34,6 +34,10 @@ import { externalWriteVersion, predatesExternalWrite } from './external-writes';
  *   head receives a synthetic `queued` disposition instead of waiting.
  * - Without one: forwarded normally; successful responses are normalized
  *   through the standard write path so dependent cached queries update.
+ *   The caller receives the result once those writes finish.
+ * - A mutation whose context names a trace (`TRACE_PARENT_CONTEXT_KEY`) is
+ *   enqueued, attempted and sent in that trace. Without optimism, its cache
+ *   writes are that trace's `graphql.mutation.cache_effects` phase.
  *
  * Cache failures normally degrade to the network. An admitted optimistic
  * enqueue with an unknown durable outcome emits an error instead, because
@@ -41,7 +45,11 @@ import { externalWriteVersion, predatesExternalWrite } from './external-writes';
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -75,6 +83,7 @@ import {
   tap,
 } from 'wonka';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
+import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
 import type { CacheHost } from '../host/types';
 import {
   type CacheReadPriority,
@@ -1298,6 +1307,7 @@ export function normalizedCacheExchange(
         const enqueueTelemetry = queueTelemetry.enqueue({
           uuid: args.uuid,
           operationName: args.operationName,
+          parent: mutationTraceParentOf(op),
         });
         let enqueue: EnqueueOptimisticMutationResult;
         let linkPatchesDegraded = false;
@@ -1417,12 +1427,17 @@ export function normalizedCacheExchange(
         return await mutationQueue.admit(op, enqueue, epoch);
       }
 
-      /** Applies operation cache effects serially and isolates every failure. */
+      /**
+       * Applies operation cache effects serially and isolates every failure.
+       * With a span, each effect is a child span named for `phase`, and the
+       * host's own spans for it start inside that child.
+       */
       async function applyOperationCacheEffects(
         op: Operation,
         effects: CacheEffect[],
         isCurrent: () => boolean = () => true,
-        span?: Span
+        span?: Span,
+        phase: 'subscription' | 'mutation' = 'subscription'
       ): Promise<boolean> {
         let applied = true;
         const generation =
@@ -1436,29 +1451,35 @@ export function normalizedCacheExchange(
           if (!current()) return false;
           const effectSpan = span?.span(
             effect.kind === 'write'
-              ? 'graphql.subscription.cache_write'
-              : 'graphql.subscription.cache_delete'
+              ? `graphql.${phase}.cache_write`
+              : `graphql.${phase}.cache_delete`
           );
+          const send = () =>
+            effect.kind === 'write'
+              ? host.writeQuery({
+                  generation,
+                  query: queryText(op),
+                  operationName: operationName(op),
+                  variables: op.variables as
+                    | Record<string, unknown>
+                    | undefined,
+                  data: effect.data,
+                })
+              : host.deleteRecords([effect.key], generation);
+          const failure =
+            phase === 'mutation'
+              ? 'Mutation cache effect failed'
+              : 'Subscription cache effect failed';
           try {
-            if (effect.kind === 'write') {
-              await host.writeQuery({
-                generation,
-                query: queryText(op),
-                operationName: operationName(op),
-                variables: op.variables as Record<string, unknown> | undefined,
-                data: effect.data,
-              });
-            } else {
-              await host.deleteRecords([effect.key], generation);
-            }
+            await (effectSpan ? effectSpan.run(send) : send());
           } catch (error) {
             applied = false;
-            span?.error('Subscription cache effect failed');
+            span?.error(failure);
             span?.setAttr('cache.failure', classifyCacheError(error));
             effectSpan?.setAttr('cache.failure', classifyCacheError(error));
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
-            effectSpan?.error('Subscription cache effect failed');
+            effectSpan?.error(failure);
             options.onCacheError?.(error, op);
           } finally {
             effectSpan?.end();
@@ -1636,25 +1657,68 @@ export function normalizedCacheExchange(
         }
       }
 
-      async function deleteReportedRecords(result: OperationResult) {
+      /** With a span, the host's own spans for the deletion start inside it. */
+      async function deleteReportedRecords(
+        result: OperationResult,
+        span?: Span
+      ) {
         const op = result.operation;
         if (result.error || result.hasNext || result.data == null)
           return { attempted: false, revision: undefined };
         try {
           const keys = options.deletedRecordKeys?.(result) ?? [];
+          span?.setAttr('cache.deleted_record_count', keys.length);
           if (keys.length === 0)
             return { attempted: false, revision: undefined };
-          const deletion = await host.deleteRecords(
-            keys,
-            typeof op.context.cacheSessionGeneration === 'string'
-              ? op.context.cacheSessionGeneration
-              : UNKNOWN_CACHE_GENERATION
-          );
+          const send = () =>
+            host.deleteRecords(
+              keys,
+              typeof op.context.cacheSessionGeneration === 'string'
+                ? op.context.cacheSessionGeneration
+                : UNKNOWN_CACHE_GENERATION
+            );
+          const deletion = await (span ? span.run(send) : send());
           return { ...deletion, attempted: true };
         } catch (error) {
+          span?.error('Mutation cache deletion failed');
+          span?.setAttr('cache.failure', classifyCacheError(error));
           options.onCacheError?.(error, op);
         }
         return { attempted: true, revision: undefined };
+      }
+
+      /**
+       * A successful unqueued mutation's cache effects and reported
+       * deletions, as one `graphql.mutation.cache_effects` phase of the trace
+       * its caller named, so a trace shows how long the caller waited on the
+       * cache after the server answered.
+       */
+      async function applyTracedMutationCacheEffects(
+        result: OperationResult,
+        parent: TraceContext
+      ): Promise<void> {
+        const op = result.operation;
+        const effects = operationCacheEffects(result.data);
+        await parent.run(() =>
+          Telemetry.span('graphql.mutation.cache_effects', async (span) => {
+            span.setAttr(
+              'graphql.operation.name',
+              operationName(op) ?? 'unknown'
+            );
+            const applied = await applyOperationCacheEffects(
+              op,
+              effects,
+              undefined,
+              span,
+              'mutation'
+            );
+            const deletion = await deleteReportedRecords(result, span);
+            // A failed deletion reports no revision.
+            const deleted =
+              !deletion.attempted || deletion.revision !== undefined;
+            span.setAttr('cache.effects_applied', applied && deleted);
+          })
+        );
       }
 
       function refetchActiveQueries() {
@@ -1874,7 +1938,10 @@ export function normalizedCacheExchange(
           if (attempt) return await mutationQueue.settle(result, attempt);
 
           const optimistic = optimisticContextOf(op);
-          if (result.data != null && !result.error) {
+          const parent = mutationTraceParentOf(op);
+          if (result.data != null && !result.error && parent) {
+            await applyTracedMutationCacheEffects(result, parent);
+          } else if (result.data != null && !result.error) {
             await applyOperationCacheEffects(
               op,
               operationCacheEffects(result.data)
@@ -2005,7 +2072,7 @@ export function normalizedCacheExchange(
         cleanups.push(
           host.onCacheGenerationChanged((change) => {
             cacheGeneration += 1;
-            if (change.storage === 'reset') mutationQueue.resetStorage();
+            if (change.queue === 'reset') mutationQueue.resetStorage();
             liveQueries.clear();
             documentReader.clear();
             mutationQueue.wake();

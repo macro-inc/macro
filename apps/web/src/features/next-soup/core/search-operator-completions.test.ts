@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  completeSearchOperator,
   type SearchOperatorValues,
   searchOperatorCompletions,
 } from './search-operator-completions';
@@ -84,21 +83,5 @@ describe('searchOperatorCompletions', () => {
   it('offers nothing once the operator is whole', () => {
     expect(inserts('type:task')).toEqual([]);
     expect(inserts('assignee:me')).toEqual([]);
-  });
-});
-
-describe('completeSearchOperator', () => {
-  it('writes the row in place of the token being typed', () => {
-    const [row] = searchOperatorCompletions('launch type:ta', VALUES);
-    expect(row && completeSearchOperator('launch type:ta', row)).toBe(
-      'launch type:task'
-    );
-  });
-
-  it('leaves the caret after a name, for its value', () => {
-    const [row] = searchOperatorCompletions('launch ty', VALUES);
-    expect(row && completeSearchOperator('launch ty', row)).toBe(
-      'launch type:'
-    );
   });
 });

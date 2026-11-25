@@ -19,7 +19,11 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import type { CombinedError } from '@urql/core';
 import type { ClaimedMutation } from '../protocol';
 
@@ -93,7 +97,11 @@ export type MutationAttemptDetails = {
 export interface MutationAttemptTelemetry {
   /** Runs the network send so its spans join this attempt's trace. */
   run<T>(send: () => T): T;
-  sent(mode: 'live' | 'replay'): void;
+  /**
+   * A live send's attempt joins the trace its caller named, when the attempt
+   * has not opened its span yet.
+   */
+  sent(mode: 'live' | 'replay', parent?: TraceContext): void;
   /** Ends the attempt; later calls are ignored. */
   finish(
     outcome: MutationAttemptOutcome,
@@ -127,6 +135,8 @@ export interface MutationQueueTelemetry {
   enqueue(item: {
     uuid?: string;
     operationName?: string;
+    /** The trace the mutation's caller named. */
+    parent?: TraceContext;
   }): MutationEnqueueTelemetry;
   attempt(mutation: ClaimedMutation): MutationAttemptTelemetry;
   /**
@@ -585,9 +595,10 @@ export function createMutationQueueTelemetry({
     // Opened on first use: a head whose admission keeps deferring is claimed
     // every second and should only count, not emit a span per claim.
     let openedSpan: Span | undefined;
-    const span = (): Span => {
+    const span = (parent?: TraceContext): Span => {
       if (openedSpan) return openedSpan;
-      openedSpan = Telemetry.span('graphql.mutation_queue.attempt');
+      const open = () => Telemetry.span('graphql.mutation_queue.attempt');
+      openedSpan = parent ? parent.run(open) : open();
       for (const [key, value] of Object.entries(claimAttributes))
         openedSpan.setAttr(key, value);
       return openedSpan;
@@ -596,8 +607,8 @@ export function createMutationQueueTelemetry({
     let finished = false;
     return {
       run: (send) => span().run(send),
-      sent(mode) {
-        span().setAttr('mutation_queue.send_mode', mode);
+      sent(mode, parent) {
+        span(parent).setAttr('mutation_queue.send_mode', mode);
         span().setAttr('mutation_queue.prepare_ms', now() - startedAt);
         span().event('sent');
       },
@@ -679,9 +690,10 @@ export function createMutationQueueTelemetry({
         'graphql-cache-mutation-queue'
       );
     },
-    enqueue({ uuid, operationName }) {
+    enqueue({ uuid, operationName, parent }) {
       const startedAt = now();
-      const span = Telemetry.span('graphql.mutation_queue.enqueue');
+      const open = () => Telemetry.span('graphql.mutation_queue.enqueue');
+      const span = parent ? parent.run(open) : open();
       span.setAttr(
         'graphql.operation.name',
         operationNameAttribute(operationName)
