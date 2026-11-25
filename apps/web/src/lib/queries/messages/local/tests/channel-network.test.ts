@@ -1,7 +1,7 @@
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type { ChannelCommitOutcome } from '@graphql-cache/index';
 import { onlineManager } from '@tanstack/solid-query';
-import { gql, type OperationContext } from '@urql/core';
+import { CombinedError, gql, type OperationContext } from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import { fromValue } from 'wonka';
 import {
@@ -18,6 +18,9 @@ const answer = vi.hoisted(() => ({
 }));
 const sent = vi.hoisted(() => ({
   context: undefined as Partial<OperationContext> | undefined,
+  // What the next requests fail with, each taken once.
+  errors: [] as Error[],
+  requests: 0,
 }));
 
 vi.mock('@graphql-cache/session-generation', async (importOriginal) => {
@@ -48,6 +51,9 @@ vi.mock('@service-storage/graphql-soup', () => ({
       context: Partial<OperationContext>
     ) => {
       sent.context = context;
+      sent.requests += 1;
+      const error = sent.errors.shift();
+      if (error) return fromValue({ error, stale: false, hasNext: false });
       return fromValue({ data: { ok: true }, stale: false, hasNext: false });
     },
   }),
@@ -80,6 +86,22 @@ describe('queryChannelNetwork', () => {
     }
     expect(error).toBeInstanceOf(StaleCacheAuthorityError);
     expect(cacheSessionChanged(error)).toBe(true);
+  });
+
+  it('asks again when the answer came under a session the cache had left', async () => {
+    const refusal = new CombinedError({
+      networkError: new StaleCacheAuthorityError(),
+    });
+    answer.persistence = Promise.resolve('revision-1');
+    sent.errors = [refusal];
+    sent.requests = 0;
+    const { data } = await queryChannelNetwork(QUERY, {});
+    expect(data).toEqual({ ok: true });
+    expect(sent.requests).toBe(2);
+
+    sent.errors = [refusal, refusal, refusal];
+    await expect(queryChannelNetwork(QUERY, {})).rejects.toBe(refusal);
+    expect(sent.requests).toBe(5);
   });
 
   it('fails a read the cache refused under the same session', async () => {

@@ -58,7 +58,7 @@ export async function queryChannelNetwork<
 ): Promise<ChannelAnswer<TData>> {
   signal?.throwIfAborted();
   // The session the read is sent under, to tell a refusal it caused.
-  const sentUnder = cacheSessionGeneration.capture();
+  let sentUnder = cacheSessionGeneration.capture();
   const parent = Telemetry.captureContext();
   let answered = false;
   // urql's own capture joins only the first request; the cache sends a read
@@ -85,7 +85,15 @@ export async function queryChannelNetwork<
       answered = true;
     }
   };
-  const settled = await answer();
+  let settled = await answer();
+  // Refused for the session it was sent under: the new one can take it.
+  for (let again = 0; again < SESSION_CHANGE_RELOADS; again += 1) {
+    if (settled.kind !== 'value') break;
+    if (!cacheSessionChanged(settled.value.error)) break;
+    sentUnder = cacheSessionGeneration.capture();
+    answered = false;
+    settled = await parent.run(answer);
+  }
   if (settled.kind === 'aborted') {
     signal?.throwIfAborted();
     throw new Error('channel query was cancelled');
