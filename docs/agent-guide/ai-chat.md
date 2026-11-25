@@ -297,7 +297,7 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone collection uses one measured floating header and one vertical list scroller. The scroller reserves the island row with top padding. Waiting on you, Favorites, and Conversations each contain their own normal in-flow heading and rows. Headings scroll with their sections instead of sticking over list content. Archived uses the same structure, with its heading immediately below the islands. Section gaps and padding own the spacing; the embedded empty panel does not add another scroller or top inset.
+The phone collection uses one measured floating header and one vertical list scroller. The scroller reserves the island row with top padding. Waiting on you, Favorites, and Conversations each contain their own normal in-flow heading and rows. Headings scroll with their sections instead of sticking over list content. Archived uses the same structure, with its heading immediately below the islands. Section gaps and padding own the spacing; the embedded empty panel does not add another scroller or top inset. All phone list headings and row-leading slots share the 24px line, including Waiting, Favorites, Conversations, and Archived. The rows share a fixed-width leading slot, so their icons and title text align.
 The phone list shows startable custom agents as bubbles, followed by the Waiting on you and Favorites cards, then the **Conversations** section and its remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the model pill to open its card. Thinking and Speed change there without dismissal; tap the name to open the agent/model sheet. The sheet lists recent agent bubbles, Auto, Recent, Suggested, and More models. Suggested excludes Auto and Recent and appears only for matching frontier models. More models pushes a complete provider catalog in the same sheet. An agent card has a Model row that opens its runtime's models without changing the agent. Picking closes the sheet; Back returns to the card. Search filters all available models and agent names. Unavailable agents retain their existing connection action.
@@ -917,9 +917,14 @@ the shimmer.
 
 ## Routine run history
 
-On phones, the Routines list uses the shared hamburger drawer when opened from the Agents drawer, and Back when opened from elsewhere. Search and Create Routine actions remain above its in-page heading and count. Opening a routine replaces them with Back,
+On phones, the Routines list uses one navigation island: the shared hamburger
+when opened from the Agents drawer, and Back when opened from elsewhere. No
+empty title island precedes it. Search and Create Routine actions remain above
+its in-page heading and count. Opening a routine replaces them with Back,
 the routine title, save status, and its action menu. Overview and Runs tabs remain
 in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
+
+Routine lists summarize multiple triggers as the first trigger followed by `+N`, without dot separators. Search still matches every trigger and its condition; desktop tooltips retain the complete descriptions, and opening the routine exposes every trigger.
 
 A routine's **Runs** tab can contain both legacy chats and agent sessions. Each
 row opens the surface created by that run; changing the routine's execution
