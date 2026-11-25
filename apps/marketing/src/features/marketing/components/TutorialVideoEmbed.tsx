@@ -3,10 +3,10 @@ import { analytics } from '../../../app/utils/utilAnalytic';
 import presenterPhoto from '../../../assets/people/tutorial-presenter.jpg';
 import { sitePalette } from '../../setup/sitePalette';
 import {
+  hasLightTutorialPreview,
   TUTORIAL_PRESENTER,
   TUTORIAL_VIDEOS,
   type TutorialVideoId,
-  hasLightTutorialPreview,
   tutorialPosterUrl,
   tutorialPreviewUrl,
   tutorialVideoUrl,

@@ -48,11 +48,11 @@ import Linear from '../../../assets/icons/logo-linear.svg';
 import Notion from '../../../assets/icons/logo-notion.svg';
 import Slack from '../../../assets/icons/logo-slack.svg';
 import Superhuman from '../../../assets/icons/logo-superhuman.svg';
+import { ThemeToggle } from '../../marketing/components/ThemeToggle';
 import {
   FEATURE_PAGES,
   featureHrefForGuide,
 } from '../../marketing/core/navigation';
-import { ThemeToggle } from '../../marketing/components/ThemeToggle';
 import { createPageSearch } from '../core/page-search';
 
 const extraFeaturePaths = new Set([

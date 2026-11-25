@@ -1,8 +1,10 @@
-/* Cream palette for the public website, /start, and the sample workspace.
-   Retained behind WEBSITE_LIGHT_MODE_ENABLED, currently disabled (see sitePalette.ts).
+/* Cream palette for the public website, /start, and the sample workspace: the
+   site's light theme, applied when the visitor picks it (see sitePalette.ts).
    Palette sampled from the cream ad set: page #f5f1e8, with brighter, less saturated
-   raised surfaces; body #54524f, labels #6a6762, near-black ink.
-   Everything is scoped to html[data-palette=cream]; the dark site is unchanged. */
+   raised surfaces; body #54524f, labels #6a6762 (4.5:1 on the page), near-black ink.
+   Everything is scoped to html[data-palette=cream]; the dark site is unchanged.
+   Components draw from tokens; prefer overriding a token here to restyling a
+   component for cream. */
 
 /* ---- One capture per palette -------------------------------------------
    App captures are in the markup once per palette. Only the one for the
@@ -247,6 +249,7 @@ html[data-palette='cream'] .tour-page :is(.tour-hero, .tour-constellation, .tour
   --color-edge-muted: #e6e1d7 !important;
 }
 html[data-palette='cream'] .sales-calc-check svg { color: #f5f1e8; }
+html[data-palette='cream'] .replacement-app-toggle[aria-pressed=true] .replacement-app-check { color: var(--color-surface-0); }
 html[data-palette='cream'] .sales-calc-tools button[aria-pressed=true] .sales-calc-check { color: #f5f1e8; }
 
 /* The main site (App.tsx) runs applyTheme, which writes the b and c color inputs inline

@@ -10,7 +10,6 @@
   border-radius: 50%;
   background: color-mix(in srgb, var(--nav-ink) 5%, transparent);
   color: var(--nav-muted);
-  cursor: pointer;
 }
 
 .site-theme-toggle:hover {

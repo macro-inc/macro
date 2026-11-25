@@ -1,5 +1,6 @@
 import Moon from '@phosphor/moon.svg';
 import Sun from '@phosphor/sun.svg';
+import { createSignal, onMount } from 'solid-js';
 import { choosePalette, sitePalette } from '../../setup/sitePalette';
 import './theme-toggle.css';
 
@@ -9,6 +10,11 @@ import './theme-toggle.css';
  * <html>, so prerendered dark markup needs no change for a light visitor.
  */
 export function ThemeToggle() {
+  // Hydration keeps the prerendered (dark) attributes and skips the first
+  // attribute write, so the label only follows the palette once mounted.
+  const [mounted, setMounted] = createSignal(false);
+  onMount(() => setMounted(true));
+
   const nextPalette = () => (sitePalette() === 'cream' ? 'dark' : 'cream');
 
   return (
@@ -16,9 +22,9 @@ export function ThemeToggle() {
       type="button"
       class="site-theme-toggle"
       aria-label={
-        nextPalette() === 'cream'
-          ? 'Switch to light theme'
-          : 'Switch to dark theme'
+        mounted() && nextPalette() === 'dark'
+          ? 'Switch to dark theme'
+          : 'Switch to light theme'
       }
       onClick={() => choosePalette(nextPalette())}
     >
