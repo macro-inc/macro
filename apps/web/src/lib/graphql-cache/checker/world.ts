@@ -56,6 +56,7 @@ export type CallOutcome = {
   /** Made by the quiet phase, to see whether the cache is back. */
   probe?: boolean;
   issuedAt: number;
+  issuedTick: number;
   settledAt?: number;
   result?: 'ok' | 'error';
   error?: unknown;
@@ -271,8 +272,7 @@ export class Page {
   stops: string[] = [];
   /** Goes up each time the page's session ends. */
   session = 0;
-  /** When its session last began after another had ended. */
-  sessionSince = 0;
+  /** The tick at which its session last began after another had ended. */
   sessionTick = 0;
   /** The tick at which it asked to reload for a newer build. */
   reloadAskedAt: number | undefined;
@@ -400,6 +400,7 @@ export class Page {
       page: this.id,
       kind: 'read',
       issuedAt: this.world.sim.now,
+      issuedTick: this.world.sim.nextTick(),
       ...(probe ? { probe } : {}),
     };
     this.world.calls.push(call);
@@ -417,6 +418,7 @@ export class Page {
       kind: 'draft',
       uuid,
       issuedAt: this.world.sim.now,
+      issuedTick: this.world.sim.nextTick(),
       ...(probe ? { probe } : {}),
     };
     this.world.calls.push(call);
@@ -492,7 +494,6 @@ export class Page {
   /** The session ends (`disposeSessionClients`), and is back a second later. */
   expireSession(): void {
     this.session += 1;
-    this.sessionSince = this.world.sim.now;
     this.sessionTick = this.world.sim.nextTick();
     this.recovery.reset();
     this.stops = [];

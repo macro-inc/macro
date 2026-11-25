@@ -181,6 +181,16 @@ export const SCRIPTS: ScriptedScenario[] = [
     ],
   },
   {
+    name: 'an owner signed out as it writes, its database unreadable',
+    pages: [1, 1],
+    script: [
+      { waitMs: 0 },
+      { kind: 'corrupt-database' },
+      { kind: 'expire-session', page: 'tab1' },
+      { waitMs: 60_000 },
+    ],
+  },
+  {
     name: 'the owner is hidden, then frozen before its drain ends',
     pages: [1, 1],
     script: [

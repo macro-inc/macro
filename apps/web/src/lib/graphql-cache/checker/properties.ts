@@ -147,13 +147,13 @@ function lostWrites(world: World): Violation[] {
  */
 function untold(world: World): Violation[] {
   return world.calls
-    .filter(({ page, uuid, issuedAt, moot }) => {
+    .filter(({ page, uuid, issuedAt, issuedTick, moot }) => {
       const lost = world.storage.unreadable.get(uuid ?? '');
       if (moot || lost === undefined) return false;
       const asked = pageOf(world, page);
       if (!asked || exempt(asked)) return false;
       const signedOut =
-        issuedAt < asked.sessionSince && asked.sessionTick < lost;
+        issuedTick < asked.sessionTick && asked.sessionTick < lost;
       const left =
         asked.reloadAskedAt !== undefined && asked.reloadAskedAt < lost;
       return (
