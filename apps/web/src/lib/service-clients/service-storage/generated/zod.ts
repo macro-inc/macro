@@ -11040,34 +11040,69 @@ export const previewCrmMergeResponse = zod
       .union([
         zod.null(),
         zod
-          .object({
-            kind: zod.enum(['same_address_people']),
-            people: zod
-              .array(
-                zod
-                  .object({
-                    address: zod.string().describe('The address both hold.'),
-                    archived: zod
-                      .boolean()
-                      .describe('Whether the contact is archived.'),
-                    contactId: zod.uuid().describe('Contact id.'),
-                    name: zod
-                      .string()
-                      .nullish()
-                      .describe('Contact name, when it has one.'),
-                    recordId: zod
-                      .uuid()
-                      .describe('The record it is filed under.'),
-                  })
-                  .describe(
-                    'A person blocking the merge: they share an address with someone filed\nunder another of the records.'
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['same_address_people']),
+                people: zod
+                  .array(
+                    zod
+                      .object({
+                        address: zod
+                          .string()
+                          .describe('The address both hold.'),
+                        archived: zod
+                          .boolean()
+                          .describe('Whether the contact is archived.'),
+                        contactId: zod.uuid().describe('Contact id.'),
+                        name: zod
+                          .string()
+                          .nullish()
+                          .describe('Contact name, when it has one.'),
+                        recordId: zod
+                          .uuid()
+                          .describe('The record it is filed under.'),
+                      })
+                      .describe(
+                        'A person blocking the merge: they share an address with someone filed\nunder another of the records.'
+                      )
                   )
-              )
-              .describe('Every person involved, archived ones too.'),
-          })
-          .describe(
-            'People under different records share an address; merging would file\ntwo people with one address under the same record.'
-          )
+                  .describe('Every person involved, archived ones too.'),
+              })
+              .describe(
+                'People under different records share an address; merging would file\ntwo people with one address under the same record.'
+              ),
+            zod
+              .object({
+                kind: zod.enum(['different_companies']),
+                people: zod
+                  .array(
+                    zod
+                      .object({
+                        companyId: zod
+                          .uuid()
+                          .describe('The company it is filed under.'),
+                        companyName: zod
+                          .string()
+                          .describe(
+                            "That company's name, as listings show it."
+                          ),
+                        contactId: zod.uuid().describe('Contact id.'),
+                        name: zod
+                          .string()
+                          .nullish()
+                          .describe('Contact name, when it has one.'),
+                      })
+                      .describe(
+                        'A person a contact merge would move to another company.'
+                      )
+                  )
+                  .describe('The people who would change company.'),
+              })
+              .describe(
+                "People merged away are filed under another company than the contact\nthat stays and hold a work address, or no address, so they can't\nchange company, as a contact edit couldn't move them: merge the\ncompanies first, or keep a contact filed under their company."
+              ),
+          ])
           .describe(
             "Why a merge can't go ahead until someone changes the records."
           ),

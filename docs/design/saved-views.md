@@ -541,7 +541,7 @@ Email is the second consumer (`kind: "email"`, `version: 1`). Its definition is 
   no viewer-relative “Me”, so someone who wants their own mail adds their own
   address. The builder picks people and companies in one field, listing
   companies (the team's CRM companies, then the viewer's contact domains)
-  before people; people, subject and tags show first, and the other conditions sit
+  before people; people, subject, tags and labels show first, and the other conditions sit
   under Advanced settings. Email views are private (no team sharing), so their menus
   omit Copy link. `receivedWithinDays` resolves to a day boundary so the
   query stays stable while open.

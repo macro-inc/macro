@@ -1185,6 +1185,7 @@ export class CoordinatorRouter {
               kind: 'engine-replaced',
               ownerEpoch: action.ownerEpoch,
               openOutcome: action.openOutcome,
+              queue: action.queue,
             })
           );
           // Replacement invalidates host generations and resumes their reads.

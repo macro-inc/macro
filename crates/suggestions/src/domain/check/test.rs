@@ -1,6 +1,7 @@
 use model_entity::EntityType;
 
 use super::*;
+use crate::domain::topic::TopicChange;
 
 #[test]
 fn a_dedup_key_is_a_short_lowercase_slug_naming_no_one() {
@@ -54,6 +55,37 @@ fn targets_are_bounded_and_named_by_id() {
 }
 
 #[test]
+fn a_reason_read_in_a_conversation_names_its_message() {
+    let problems = |entity_type: EntityType, part_id: Option<&str>| {
+        let mut problems = Vec::new();
+        let request = NameTopic {
+            key: "customer:acme".to_owned(),
+            name: "Acme renewal".to_owned(),
+            reason: Some(TopicReason {
+                text: "Renewal is June 2".to_owned(),
+                source: Target {
+                    entity_type,
+                    entity_id: "item".to_owned(),
+                    part_id: part_id.map(str::to_owned),
+                },
+            }),
+        };
+        let named = topic(request, &mut problems);
+        assert_eq!(named.is_some(), problems.is_empty(), "{problems:?}");
+        problems.len()
+    };
+    for conversation in [EntityType::Channel, EntityType::EmailThread] {
+        assert_eq!(problems(conversation, None), 1, "{conversation:?}");
+        assert_eq!(
+            problems(conversation, Some("message")),
+            0,
+            "{conversation:?}"
+        );
+    }
+    assert_eq!(problems(EntityType::Document, None), 0);
+}
+
+#[test]
 fn a_new_suggestions_kind_has_its_own_fields_only() {
     let request = |kind: KindName| NewSuggestion {
         kind,
@@ -62,6 +94,7 @@ fn a_new_suggestions_kind_has_its_own_fields_only() {
         summary: "s".to_owned(),
         importance: 1,
         categories: Vec::new(),
+        topic: TopicChange::Keep,
         about: Vec::new(),
         prompt: None,
         run_mode: None,

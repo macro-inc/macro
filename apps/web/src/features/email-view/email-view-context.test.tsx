@@ -68,6 +68,8 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   useNavigate: () => mocks.navigate,
   useRouteParams: () => mocks.useRouteParams(),
   useMatches: () => () => [],
+  usePane: () => () => 'mail-pane',
+  useSplitRouter: () => ({ entry: () => undefined }),
   createSearchParams: () => [
     {
       get tab() {

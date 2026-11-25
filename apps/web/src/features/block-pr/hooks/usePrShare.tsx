@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ForwardToChannel } from '@core/component/ForwardToChannel';
@@ -74,6 +75,7 @@ function PrShareModal(props: PrShareModalProps) {
       }
     >
       <Dialog onOpenChange={props.onOpenChange} open={props.open}>
+        <DialogClosesOnNavigation />
         <Dialog.Portal>
           <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
           <div class="z-modal fixed inset-0">

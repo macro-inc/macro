@@ -36,6 +36,7 @@ describe('draftOrigin', () => {
   const feed = {
     suggestions: [doneSuggestion, drafted],
     counts: { open: 0, running: 0, failed: 0, done: 2 },
+    topics: [],
   };
 
   it('finds the suggestion that wrote a draft and leaves its thread out of the sources', () => {

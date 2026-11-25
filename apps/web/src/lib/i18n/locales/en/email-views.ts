@@ -34,6 +34,8 @@ export default {
   labels: 'Labels',
   labelsPlaceholder: 'Filter by label...',
   moreLabels: { other: '{{count}} more' },
+  addLabelsPlaceholder: 'Add labels',
+  unavailableLabel: 'Unavailable label',
   addEntry: 'Add “{{entry}}”',
   removeEntry: 'Remove {{entry}}',
   domainContacts: {
@@ -102,10 +104,8 @@ export default {
   searchWordSent: 'In Sent',
   searchWordLastDay: 'In the last day',
   searchWordThisWeek: 'In the last 7 days',
-  searchTips: 'Search tips',
   searchTipSubject: 'Subject contains “{{words}}”',
   searchTipPhrase: 'Contains “{{words}}”',
   searchTipLeaveOut: 'Leaves out “{{words}}”',
-  searchAllOperators: 'All search operators',
   archived: 'Archived',
 };

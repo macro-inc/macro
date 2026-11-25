@@ -1,18 +1,15 @@
 import { SearchOperatorOverlay } from '@app/components/view-shell/search-operator-text';
+import { SearchTipsSheet } from '@app/components/view-shell/search-tips';
+import { EMAIL_SEARCH_DOCS_URL } from '@app/constants/docs-links';
 import { t } from '@app/lib/i18n';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
-import ExternalIcon from '@icon/system/regular/arrow-square-out.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { EmailSearchSuggestionList } from '../../components/EmailSearchSuggestionList';
-import {
-  EmailSearchTipList,
-  openEmailSearchDocs,
-} from '../../components/EmailSearchTips';
+import { emailSearchTips } from '../../components/EmailSearchTips';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 import { emailSearchTextParts } from '../../search/email-search-scope';
 
@@ -123,7 +120,7 @@ export function EmailMobileSearchField(props: {
           when={props.search}
           fallback={
             <Button
-              aria-label={t('emailViews.searchTips')}
+              aria-label={t('searchOperators.tips')}
               variant="ghost"
               size="icon-sm"
               onClick={() => setTipsOpen(true)}
@@ -149,49 +146,13 @@ export function EmailMobileSearchField(props: {
           {t('common.cancel')}
         </Button>
       </MobileHeader.Island>
-      <EmailSearchTipsSheet open={tipsOpen()} onOpenChange={setTipsOpen} />
+      <SearchTipsSheet
+        tips={emailSearchTips()}
+        docsUrl={EMAIL_SEARCH_DOCS_URL}
+        open={tipsOpen()}
+        onOpenChange={setTipsOpen}
+      />
     </div>
-  );
-}
-
-/** The operators Mail's search reads, in a sheet over the search page. */
-function EmailSearchTipsSheet(props: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <MobileDrawer
-      side="bottom"
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    >
-      <MobileDrawer.Portal>
-        <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label={t('emailViews.searchTips')}>
-          <MobileDrawer.Handle class="pb-1" />
-          <MobileDrawer.Title
-            as="h2"
-            class="shrink-0 px-6 pb-4 text-lg font-semibold text-ink"
-          >
-            {t('emailViews.searchTips')}
-          </MobileDrawer.Title>
-          <MobileDrawer.ScrollBody
-            data-corvu-no-drag
-            class="touch-pan-y gap-3 overscroll-contain pb-6"
-          >
-            <MobileDrawer.Section>
-              <EmailSearchTipList class="gap-y-4 p-3 text-base" />
-            </MobileDrawer.Section>
-            <MobileDrawer.Section>
-              <MobileDrawer.Item onClick={openEmailSearchDocs}>
-                <ExternalIcon aria-hidden="true" class="size-5 shrink-0" />
-                {t('emailViews.searchAllOperators')}
-              </MobileDrawer.Item>
-            </MobileDrawer.Section>
-          </MobileDrawer.ScrollBody>
-        </MobileDrawer.Content>
-      </MobileDrawer.Portal>
-    </MobileDrawer>
   );
 }
 

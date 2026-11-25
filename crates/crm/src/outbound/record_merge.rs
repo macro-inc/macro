@@ -30,7 +30,12 @@ use serde_json::{Value, json};
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::companies_repo::{CompaniesRepositoryImpl, MemberRules, merge::CompanyMergeState};
+use messages::outbound::record_merge::MergedParent;
+
+use super::companies_repo::{
+    CompaniesRepositoryImpl, MemberRules, contact_merge::ContactMergeState,
+    merge::CompanyMergeState,
+};
 use crate::domain::{
     auth::CrmMemberAccess,
     email_rules::EmailRuleSet,
@@ -130,93 +135,164 @@ impl From<&PipelineCell> for StoredCell {
     }
 }
 
-/// Everything a company merge's review is built from.
-struct CompanyFacts {
-    state: CompanyMergeState,
+/// The rows of a merge's owners that name the merged records, whichever
+/// kind they are: property values, references, cells and discussions.
+struct OwnedFacts {
     values: Vec<MergeEntityValue>,
     references: Vec<ReferenceHolder>,
     cells: Vec<PipelineCell>,
     discussion_messages: i64,
+}
+
+/// Everything a company merge's review is built from.
+struct CompanyFacts {
+    state: CompanyMergeState,
+    owned: OwnedFacts,
+    sharing: Vec<MemberRules>,
+}
+
+/// Everything a contact merge's review is built from.
+struct ContactFacts {
+    state: ContactMergeState,
+    owned: OwnedFacts,
     sharing: Vec<MemberRules>,
 }
 
 /// A review and what the commit would write for it.
-struct CompanyReview {
+struct Review {
     preview: MergePreview,
     values: ValuePlan,
 }
 
-impl<Databases> PgRecordMergeRepository<Databases>
-where
-    Databases: DatabaseStorageTransactions<Transaction = Transaction<'static, Postgres>>,
-{
-    async fn company_facts(
-        conn: &mut PgConnection,
-        team: Uuid,
-        targets: &MergeTargets,
-        state: CompanyMergeState,
-        lock: bool,
-    ) -> Result<CompanyFacts, MergeError> {
-        let all: Vec<Uuid> = targets.all_sorted();
-        let sources = targets.sources();
-        let source_text: Vec<String> = sources.iter().map(Uuid::to_string).collect();
-        let all_text: Vec<String> = all.iter().map(Uuid::to_string).collect();
-
-        let cells = if lock {
-            lock_pipelines_holding(conn, sources, &all).await?
-        } else {
-            pipeline_cells(conn, &all).await?
-        };
-        let values = if lock {
-            property_merge::lock_entity_values_in(
-                conn,
-                PropertyEntityType::Company,
-                &all_text,
-                &targets.survivor().to_string(),
-            )
-            .await
-            .map_err(db)?
-        } else {
-            property_merge::read_entity_values_in(conn, PropertyEntityType::Company, &all_text)
-                .await
-                .map_err(db)?
-        };
-        let references =
-            property_merge::referencing_rows_in(conn, PropertyEntityType::Company, &source_text)
-                .await
-                .map_err(db)?
-                .into_iter()
-                .map(|row| ReferenceHolder {
-                    entity_type: row.entity_type,
-                    entity_id: row.entity_id,
-                    owner: row.owner,
-                })
-                .collect();
-        let discussion_messages = messages::outbound::record_merge::count_discussion_messages_in(
-            conn,
-            messages::outbound::record_merge::MergedParent::CrmCompany,
-            sources,
-        )
-        .await
-        .map_err(db)?;
-        let sharing =
-            CompaniesRepositoryImpl::rules_naming_companies(conn, team, sources, lock).await?;
-        Ok(CompanyFacts {
-            state,
-            values,
-            references,
-            cells,
-            discussion_messages,
-            sharing,
-        })
+/// The property owner's name for the merged records.
+fn property_type(record_type: MergeRecordType) -> PropertyEntityType {
+    match record_type {
+        MergeRecordType::Company => PropertyEntityType::Company,
+        MergeRecordType::Contact => PropertyEntityType::Contact,
     }
 }
 
-/// The review of a company merge, and the value plan behind it.
-fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview {
-    let state = &facts.state;
-    let record_values: Vec<RecordValue> = facts
-        .values
+/// The databases' name for the merged records, in reference cells.
+fn entity_kind(record_type: MergeRecordType) -> EntityKind {
+    match record_type {
+        MergeRecordType::Company => EntityKind::Company,
+        MergeRecordType::Contact => EntityKind::Contact,
+    }
+}
+
+/// The favorites' name for the merged records.
+fn favorite_type(record_type: MergeRecordType) -> FavoriteEntityType {
+    match record_type {
+        MergeRecordType::Company => FavoriteEntityType::CrmCompany,
+        MergeRecordType::Contact => FavoriteEntityType::CrmContact,
+    }
+}
+
+/// The parent a merged record's discussion hangs from.
+fn discussion_parent(record_type: MergeRecordType) -> MergedParent {
+    match record_type {
+        MergeRecordType::Company => MergedParent::CrmCompany,
+        MergeRecordType::Contact => MergedParent::CrmContact,
+    }
+}
+
+/// The owners' rows naming the merged records. With `lock`, as the commit
+/// reads them: the pipelines holding their entries and the tables writing
+/// their cells, then their property values.
+async fn owned_facts(
+    conn: &mut PgConnection,
+    record_type: MergeRecordType,
+    targets: &MergeTargets,
+    lock: bool,
+) -> Result<OwnedFacts, MergeError> {
+    let all: Vec<Uuid> = targets.all_sorted();
+    let sources = targets.sources();
+    let source_text: Vec<String> = sources.iter().map(Uuid::to_string).collect();
+    let all_text: Vec<String> = all.iter().map(Uuid::to_string).collect();
+    let property = property_type(record_type);
+
+    let cells = if lock {
+        lock_pipelines_holding(conn, entity_kind(record_type), sources, &all).await?
+    } else {
+        pipeline_cells(conn, &all).await?
+    };
+    let values = if lock {
+        property_merge::lock_entity_values_in(
+            conn,
+            property,
+            &all_text,
+            &targets.survivor().to_string(),
+        )
+        .await
+        .map_err(db)?
+    } else {
+        property_merge::read_entity_values_in(conn, property, &all_text)
+            .await
+            .map_err(db)?
+    };
+    let references = property_merge::referencing_rows_in(conn, property, &source_text)
+        .await
+        .map_err(db)?
+        .into_iter()
+        .map(|row| ReferenceHolder {
+            entity_type: row.entity_type,
+            entity_id: row.entity_id,
+            owner: row.owner,
+        })
+        .collect();
+    let discussion_messages = messages::outbound::record_merge::count_discussion_messages_in(
+        conn,
+        discussion_parent(record_type),
+        sources,
+    )
+    .await
+    .map_err(db)?;
+    Ok(OwnedFacts {
+        values,
+        references,
+        cells,
+        discussion_messages,
+    })
+}
+
+async fn company_facts(
+    conn: &mut PgConnection,
+    team: Uuid,
+    targets: &MergeTargets,
+    state: CompanyMergeState,
+    lock: bool,
+) -> Result<CompanyFacts, MergeError> {
+    let owned = owned_facts(conn, MergeRecordType::Company, targets, lock).await?;
+    let sharing =
+        CompaniesRepositoryImpl::rules_naming_companies(conn, team, targets.sources(), lock)
+            .await?;
+    Ok(CompanyFacts {
+        state,
+        owned,
+        sharing,
+    })
+}
+
+async fn contact_facts(
+    conn: &mut PgConnection,
+    team: Uuid,
+    targets: &MergeTargets,
+    state: ContactMergeState,
+    lock: bool,
+) -> Result<ContactFacts, MergeError> {
+    let owned = owned_facts(conn, MergeRecordType::Contact, targets, lock).await?;
+    let sharing =
+        CompaniesRepositoryImpl::rules_naming_contacts(conn, team, targets.sources(), lock).await?;
+    Ok(ContactFacts {
+        state,
+        owned,
+        sharing,
+    })
+}
+
+/// The records' own values, as the value plan reads them.
+fn record_values(values: &[MergeEntityValue]) -> Vec<RecordValue> {
+    values
         .iter()
         .filter_map(|value| {
             let stored: PropertyValue = serde_json::from_value(value.values.clone()?).ok()?;
@@ -231,8 +307,90 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
                 value: stored,
             })
         })
+        .collect()
+}
+
+/// What the review says about pipelines.
+struct PipelineReview {
+    moves: Vec<PipelineMoves>,
+    entries: u32,
+    shared: Vec<SharedPipeline>,
+}
+
+/// Entries are rows whose primary cell names one of the records; a row
+/// counts once, as a source's when any of its cells names a source.
+fn pipeline_review(cells: &[PipelineCell], kind: EntityKind, sources: &[Uuid]) -> PipelineReview {
+    let mut entries: BTreeMap<Uuid, (String, HashMap<Uuid, bool>)> = BTreeMap::new();
+    for cell in cells.iter().filter(|cell| cell.primary && !cell.trashed) {
+        let from_source = names_any(&cell.values, kind, sources);
+        let rows = &mut entries
+            .entry(cell.pipeline_id)
+            .or_insert_with(|| (cell.pipeline_name.clone(), HashMap::new()))
+            .1;
+        *rows.entry(cell.row_id).or_default() |= from_source;
+    }
+    let moves: Vec<PipelineMoves> = entries
+        .iter()
+        .map(|(pipeline_id, (_, rows))| PipelineMoves {
+            pipeline_id: *pipeline_id,
+            entries: u32::try_from(rows.values().filter(|from_source| **from_source).count())
+                .unwrap_or(u32::MAX),
+        })
+        .filter(|moves| moves.entries > 0)
         .collect();
-    let values = plan::plan_values(targets, &record_values);
+    let count = moves
+        .iter()
+        .map(|moves| moves.entries)
+        .fold(0u32, u32::saturating_add);
+    let shared = entries
+        .iter()
+        .filter(|(_, (_, rows))| rows.len() > 1 && rows.values().any(|source| *source))
+        .map(|(pipeline_id, (name, rows))| SharedPipeline {
+            pipeline_id: *pipeline_id,
+            name: name.clone(),
+            entries_after: u32::try_from(rows.len()).unwrap_or(u32::MAX),
+        })
+        .collect();
+    PipelineReview {
+        moves,
+        entries: count,
+        shared,
+    }
+}
+
+/// How many teammates' rules name a merged record, and whether keeping them
+/// fits the rule limits.
+fn sharing_preview(
+    sharing: &[MemberRules],
+    record_type: MergeRecordType,
+    merged: &HashMap<Uuid, Vec<String>>,
+) -> Option<SharingRulesPreview> {
+    (!sharing.is_empty()).then(|| SharingRulesPreview {
+        teammates: u32::try_from(sharing.len()).unwrap_or(u32::MAX),
+        keep_fits: sharing.iter().all(|member| {
+            plan::rewrite_sharing_rules(
+                &member.rules,
+                record_type,
+                merged,
+                SharingRulesChoice::Keep,
+            )
+            .is_ok()
+        }),
+    })
+}
+
+/// Whose rules change and at which revision: not shown, but a change makes
+/// the commit write something else.
+fn sharing_revisions(sharing: &[MemberRules]) -> impl Iterator<Item = String> + '_ {
+    sharing
+        .iter()
+        .map(|member| format!("{}:{}", member.user_id, member.revision))
+}
+
+/// The review of a company merge, and the value plan behind it.
+fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> Review {
+    let state = &facts.state;
+    let values = plan::plan_values(targets, &record_values(&facts.owned.values));
 
     let mut identifiers: Vec<String> = Vec::new();
     for company in std::iter::once(&state.survivor).chain(&state.sources) {
@@ -242,58 +400,7 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
             }
         }
     }
-
-    // Entries are rows whose primary cell names one of the records; a row
-    // counts once, as a source's when any of its cells names a source.
-    let mut entries: BTreeMap<Uuid, (String, HashMap<Uuid, bool>)> = BTreeMap::new();
-    for cell in facts
-        .cells
-        .iter()
-        .filter(|cell| cell.primary && !cell.trashed)
-    {
-        let from_source = names_any(&cell.values, EntityKind::Company, targets.sources());
-        let rows = &mut entries
-            .entry(cell.pipeline_id)
-            .or_insert_with(|| (cell.pipeline_name.clone(), HashMap::new()))
-            .1;
-        *rows.entry(cell.row_id).or_default() |= from_source;
-    }
-    let pipeline_moves: Vec<PipelineMoves> = entries
-        .iter()
-        .map(|(pipeline_id, (_, rows))| PipelineMoves {
-            pipeline_id: *pipeline_id,
-            entries: u32::try_from(rows.values().filter(|from_source| **from_source).count())
-                .unwrap_or(u32::MAX),
-        })
-        .filter(|moves| moves.entries > 0)
-        .collect();
-    let pipeline_entries = pipeline_moves
-        .iter()
-        .map(|moves| moves.entries)
-        .fold(0u32, u32::saturating_add);
-    let shared_pipelines = entries
-        .iter()
-        .filter(|(_, (_, rows))| rows.len() > 1 && rows.values().any(|source| *source))
-        .map(|(pipeline_id, (name, rows))| SharedPipeline {
-            pipeline_id: *pipeline_id,
-            name: name.clone(),
-            entries_after: u32::try_from(rows.len()).unwrap_or(u32::MAX),
-        })
-        .collect();
-
-    let source_domains = state.source_domains();
-    let sharing_rules = (!facts.sharing.is_empty()).then(|| SharingRulesPreview {
-        teammates: u32::try_from(facts.sharing.len()).unwrap_or(u32::MAX),
-        keep_fits: facts.sharing.iter().all(|member| {
-            plan::rewrite_sharing_rules(
-                &member.rules,
-                MergeRecordType::Company,
-                &source_domains,
-                SharingRulesChoice::Keep,
-            )
-            .is_ok()
-        }),
-    });
+    let pipelines = pipeline_review(&facts.owned.cells, EntityKind::Company, targets.sources());
 
     let mut preview = MergePreview {
         revision: String::new(),
@@ -313,28 +420,27 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
         identifiers,
         moves: MergeMoves {
             contacts: u32::try_from(state.moving_people()).unwrap_or(u32::MAX),
-            pipeline_entries,
-            references: u32::try_from(facts.references.len()).unwrap_or(u32::MAX),
-            discussion_messages: u32::try_from(facts.discussion_messages).unwrap_or(u32::MAX),
+            pipeline_entries: pipelines.entries,
+            references: u32::try_from(facts.owned.references.len()).unwrap_or(u32::MAX),
+            discussion_messages: u32::try_from(facts.owned.discussion_messages).unwrap_or(u32::MAX),
         },
-        shared_pipelines,
+        shared_pipelines: pipelines.shared,
         conflicts: values.conflicts.clone(),
         email_sync: MergeEmailSync {
             survivor_syncs: state.survivor.email_sync,
             kept_out: state.kept_out(),
         },
-        sharing_rules,
+        sharing_rules: sharing_preview(
+            &facts.sharing,
+            MergeRecordType::Company,
+            &state.source_domains(),
+        ),
         blocked: plan::same_address_block(&state.people),
-        pipeline_moves,
-        reference_holders: facts.references.clone(),
+        pipeline_moves: pipelines.moves,
+        reference_holders: facts.owned.references.clone(),
     };
-    // Whose rules change and at which revision, and which company holds each
-    // domain, are not shown, but a change to any makes the commit write
-    // something else.
-    let unshown: Vec<String> = facts
-        .sharing
-        .iter()
-        .map(|member| format!("{}:{}", member.user_id, member.revision))
+    // Which company holds each domain is not shown either.
+    let unshown: Vec<String> = sharing_revisions(&facts.sharing)
         .chain(
             std::iter::once(&state.survivor)
                 .chain(&state.sources)
@@ -347,7 +453,74 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
         )
         .collect();
     preview.revision = plan::revision(&preview, &unshown);
-    CompanyReview { preview, values }
+    Review { preview, values }
+}
+
+/// The review of a contact merge, and the value plan behind it. People are
+/// the records merged, so none move as a side effect, and no address becomes
+/// someone else's: the merge is how two people holding one address become one.
+fn contact_review(targets: &MergeTargets, facts: &ContactFacts) -> Review {
+    let state = &facts.state;
+    let values = plan::plan_values(targets, &record_values(&facts.owned.values));
+    let pipelines = pipeline_review(&facts.owned.cells, EntityKind::Contact, targets.sources());
+    let (survivor, sources) = state.merging();
+
+    let mut preview = MergePreview {
+        revision: String::new(),
+        record_type: MergeRecordType::Contact,
+        survivor: MergedRecord {
+            id: state.survivor.id,
+            name: state.survivor.name.clone(),
+        },
+        sources: state
+            .sources
+            .iter()
+            .map(|contact| MergedRecord {
+                id: contact.id,
+                name: contact.name.clone(),
+            })
+            .collect(),
+        identifiers: state.addresses_after(),
+        moves: MergeMoves {
+            contacts: 0,
+            pipeline_entries: pipelines.entries,
+            references: u32::try_from(facts.owned.references.len()).unwrap_or(u32::MAX),
+            discussion_messages: u32::try_from(facts.owned.discussion_messages).unwrap_or(u32::MAX),
+        },
+        shared_pipelines: pipelines.shared,
+        conflicts: values.conflicts.clone(),
+        // Mail from every address follows the company of the contact that
+        // stays, as mail from its own addresses does.
+        email_sync: MergeEmailSync {
+            survivor_syncs: state.survivor.syncs,
+            kept_out: Vec::new(),
+        },
+        sharing_rules: sharing_preview(
+            &facts.sharing,
+            MergeRecordType::Contact,
+            &state.source_addresses(),
+        ),
+        blocked: plan::different_companies_block(&survivor, &sources),
+        pipeline_moves: pipelines.moves,
+        reference_holders: facts.owned.references.clone(),
+    };
+    // Which contact holds each address, and under which company, is not
+    // shown either.
+    let unshown: Vec<String> = sharing_revisions(&facts.sharing)
+        .chain(
+            std::iter::once(&state.survivor)
+                .chain(&state.sources)
+                .map(|contact| {
+                    let company = contact
+                        .company
+                        .as_ref()
+                        .map_or_else(String::new, |(id, _)| id.to_string());
+                    format!("{}:{}:{}", contact.id, company, contact.addresses.join(","))
+                }),
+        )
+        .collect();
+    preview.revision = plan::revision(&preview, &unshown);
+    Review { preview, values }
 }
 
 /// Each id as stored references may spell it: lowercase, as Macro writes
@@ -567,6 +740,7 @@ async fn lock_database_cells(
 /// is locked on the next round.
 async fn lock_pipelines_holding(
     conn: &mut PgConnection,
+    kind: EntityKind,
     sources: &[Uuid],
     records: &[Uuid],
 ) -> Result<Vec<PipelineCell>, MergeError> {
@@ -584,7 +758,7 @@ async fn lock_pipelines_holding(
             .collect();
         let mut tables: Vec<Uuid> = cells
             .iter()
-            .filter(|cell| names_any(&cell.values, EntityKind::Company, sources))
+            .filter(|cell| names_any(&cell.values, kind, sources))
             .map(|cell| cell.table_id)
             .filter(|id| !locked_tables.contains(id))
             .collect();
@@ -730,9 +904,9 @@ async fn replayed(
     }
 }
 
-/// The merge's entry on the record that stays.
+/// The merge's entry on the company that stays.
 struct CompanyMerged {
-    company_id: String,
+    record_id: String,
     merge: RecordMerge,
 }
 
@@ -740,7 +914,25 @@ impl DomainActivity for CompanyMerged {
     const ENTITY_TYPE: activity::EntityType = activity::EntityType::CrmCompany;
 
     fn entity_id(&self) -> &str {
-        &self.company_id
+        &self.record_id
+    }
+
+    fn into_action(self) -> Action {
+        Action::RecordMerged(self.merge)
+    }
+}
+
+/// The merge's entry on the contact that stays.
+struct ContactMerged {
+    record_id: String,
+    merge: RecordMerge,
+}
+
+impl DomainActivity for ContactMerged {
+    const ENTITY_TYPE: activity::EntityType = activity::EntityType::CrmContact;
+
+    fn entity_id(&self) -> &str {
+        &self.record_id
     }
 
     fn into_action(self) -> Action {
@@ -752,12 +944,13 @@ impl<Databases> PgRecordMergeRepository<Databases>
 where
     Databases: DatabaseStorageTransactions<Transaction = Transaction<'static, Postgres>>,
 {
-    /// Rewrite the pipeline cells naming a merged company, one batch per
-    /// database, through the databases write path in the merge's transaction.
+    /// Rewrite the cells naming a merged record, one batch per database,
+    /// through the databases write path in the merge's transaction.
     async fn retarget_database_cells(
         &self,
         tx: &mut Transaction<'static, Postgres>,
         scope: &MergeScope,
+        kind: EntityKind,
         targets: &MergeTargets,
         cells: &[StoredCell],
     ) -> Result<Vec<MergeChange>, MergeError> {
@@ -765,15 +958,10 @@ where
             BTreeMap::new();
         let mut changes = Vec::new();
         for cell in cells {
-            if !names_any(&cell.values, EntityKind::Company, targets.sources()) {
+            if !names_any(&cell.values, kind, targets.sources()) {
                 continue;
             }
-            let refs = retargeted(
-                &cell.values,
-                EntityKind::Company,
-                targets.sources(),
-                targets.survivor(),
-            );
+            let refs = retargeted(&cell.values, kind, targets.sources(), targets.survivor());
             by_database
                 .entry(cell.database_id)
                 .or_default()
@@ -826,60 +1014,30 @@ where
         Ok(changes)
     }
 
-    async fn commit_company(
+    /// Move what the owners hold for the merged records to the one that
+    /// stays, whichever kind they are: property values the value plan moves
+    /// or drops, references, pipeline and database cells, discussions and
+    /// favorites. Returns the changed rows as they were, and the properties
+    /// written.
+    async fn move_owned_rows(
         &self,
         tx: &mut Transaction<'static, Postgres>,
         scope: &MergeScope,
-        command: &MergeCommand,
-        merge_id: Uuid,
-    ) -> Result<(MergeOutcome, Vec<ChangedEntityProperty>, Vec<String>), MergeError> {
-        let team = scope.team_id;
-        let targets = &command.targets;
-        let state = CompaniesRepositoryImpl::lock_company_merge(&mut *tx, team, targets).await?;
-        let facts = Self::company_facts(&mut *tx, team, targets, state, true).await?;
-        let review = company_review(targets, &facts);
-        if review.preview.revision != command.revision {
-            return Err(MergeError::PreviewStale);
-        }
-        if let Some(block) = review.preview.blocked.clone() {
-            return Err(MergeError::Conflict(block));
-        }
-        let source_domains = facts.state.source_domains();
-        let mut rewrites: Vec<(MemberRules, EmailRuleSet)> = Vec::new();
-        for member in &facts.sharing {
-            if let Some(rules) = plan::rewrite_sharing_rules(
-                &member.rules,
-                MergeRecordType::Company,
-                &source_domains,
-                command.sharing_rules,
-            )? {
-                rewrites.push((member.clone(), rules));
-            }
-        }
-
+        record_type: MergeRecordType,
+        targets: &MergeTargets,
+        owned: &OwnedFacts,
+        plan: &ValuePlan,
+    ) -> Result<(Vec<MergeChange>, Vec<ChangedEntityProperty>), MergeError> {
+        let property = property_type(record_type);
         let survivor = targets.survivor();
         let sources: Vec<String> = targets.sources().iter().map(Uuid::to_string).collect();
-        let mut changes =
-            CompaniesRepositoryImpl::fold_companies(&mut *tx, team, merge_id, &facts.state).await?;
-        let details = json!({
-            "merge_id": merge_id,
-            "survivor_id": survivor,
-            "merged_ids": targets.sources(),
-            "choice": command.sharing_rules,
-        });
-        changes.extend(
-            CompaniesRepositoryImpl::rewrite_merged_rules(
-                &mut *tx, team, merge_id, &rewrites, &details,
-            )
-            .await?,
-        );
+        let mut changes = Vec::new();
 
-        let moves: Vec<Uuid> = review
-            .values
+        let moves: Vec<Uuid> = plan
             .moved
             .iter()
             .filter_map(|(record, property)| {
-                facts
+                owned
                     .values
                     .iter()
                     .find(|value| {
@@ -891,10 +1049,10 @@ where
             .collect();
         let values = property_merge::merge_entity_values_in(
             &mut *tx,
-            PropertyEntityType::Company,
+            property,
             &survivor.to_string(),
             &sources,
-            &facts.values,
+            &owned.values,
             &moves,
         )
         .await
@@ -918,7 +1076,7 @@ where
         }
         let references = property_merge::retarget_references_in(
             &mut *tx,
-            PropertyEntityType::Company,
+            property,
             &sources,
             &survivor.to_string(),
         )
@@ -962,21 +1120,21 @@ where
         }));
 
         // Pipelines, trashed ones too so a restore names the survivor, and
-        // company columns of ordinary databases, through one write path.
-        let mut cells: Vec<StoredCell> = facts.cells.iter().map(StoredCell::from).collect();
-        // Only tables holding a merged company's cells: the merge rewrites
+        // record columns of ordinary databases, through one write path.
+        let mut cells: Vec<StoredCell> = owned.cells.iter().map(StoredCell::from).collect();
+        // Only tables holding a merged record's cells: the merge rewrites
         // nothing else there, so it doesn't wait on a writer that it
         // wouldn't touch. One committed elsewhere meanwhile is caught by the
         // final check.
         cells.extend(lock_database_cells(&mut *tx, targets.sources()).await?);
         changes.extend(
-            self.retarget_database_cells(tx, scope, targets, &cells)
+            self.retarget_database_cells(tx, scope, entity_kind(record_type), targets, &cells)
                 .await?,
         );
 
         let discussions = messages::outbound::record_merge::merge_discussions_in(
             &mut *tx,
-            messages::outbound::record_merge::MergedParent::CrmCompany,
+            discussion_parent(record_type),
             targets.sources(),
             survivor,
         )
@@ -1007,20 +1165,25 @@ where
             )
         }));
 
+        let favorite = favorite_type(record_type);
         let favorites = favorites::outbound::merge::retarget_favorites_in(
             &mut *tx,
-            FavoriteEntityType::CrmCompany,
+            favorite,
             &sources,
             &survivor.to_string(),
         )
         .await
         .map_err(db)?;
-        changes.extend(favorites.moved.into_iter().map(|favorite| {
+        let favorite_tag = match record_type {
+            MergeRecordType::Company => "crm_company",
+            MergeRecordType::Contact => "crm_contact",
+        };
+        changes.extend(favorites.moved.into_iter().map(|moved| {
             MergeChange::new(
                 "favorites",
                 "favorite",
-                json!({ "user_id": favorite.user_id, "entity_type": "crm_company", "entity_id": favorite.entity_id }),
-                json!({ "sort_order": favorite.sort_order, "created_at": favorite.created_at, "updated_at": favorite.updated_at }),
+                json!({ "user_id": moved.user_id, "entity_type": favorite_tag, "entity_id": moved.entity_id }),
+                json!({ "sort_order": moved.sort_order, "created_at": moved.created_at, "updated_at": moved.updated_at }),
             )
         }));
         // A favorite the merge gave someone, so undoing it removes only that.
@@ -1028,10 +1191,165 @@ where
             MergeChange::new(
                 "favorites",
                 "favorite",
-                json!({ "user_id": user_id, "entity_type": "crm_company", "entity_id": survivor }),
+                json!({ "user_id": user_id, "entity_type": favorite_tag, "entity_id": survivor }),
                 Value::Null,
             )
         }));
+        Ok((changes, written))
+    }
+
+    /// Write the merge's activity entry on the record that stays and its log,
+    /// and say what it committed.
+    async fn conclude(
+        tx: &mut Transaction<'static, Postgres>,
+        scope: &MergeScope,
+        targets: &MergeTargets,
+        merge_id: Uuid,
+        review: &Review,
+        mut changes: Vec<MergeChange>,
+    ) -> Result<MergeOutcome, MergeError> {
+        let committed_at = chrono::Utc::now();
+        let dropped = review
+            .preview
+            .conflicts
+            .iter()
+            .flat_map(|conflict| {
+                conflict
+                    .dropped
+                    .iter()
+                    .map(move |dropped| DroppedPropertyValue {
+                        property: conflict.property_id.to_string(),
+                        record: dropped.record_id.to_string(),
+                        value: serde_json::to_value(&dropped.value).unwrap_or(Value::Null),
+                    })
+            })
+            .collect();
+        let merge = RecordMerge {
+            merge_id,
+            merged: review
+                .preview
+                .sources
+                .iter()
+                .map(|source| MergedRecordName {
+                    id: source.id.to_string(),
+                    name: Some(source.name.clone()),
+                })
+                .collect(),
+            dropped,
+        };
+        let record_id = targets.survivor().to_string();
+        let actor = Actor::new_from_user(scope.actor.clone());
+        let entry = match targets.record_type() {
+            MergeRecordType::Company => Activity::from_domain(
+                merge_id,
+                0,
+                actor,
+                None,
+                CompanyMerged { record_id, merge },
+                committed_at,
+            ),
+            MergeRecordType::Contact => Activity::from_domain(
+                merge_id,
+                0,
+                actor,
+                None,
+                ContactMerged { record_id, merge },
+                committed_at,
+            ),
+        };
+        activity::outbound::pg_activity_repo::insert_activities(&mut **tx, &[entry])
+            .await
+            .map_err(db)?;
+
+        // Private values a merge drops are kept only here.
+        for dropped in review.values.dropped.iter() {
+            changes.push(MergeChange::new(
+                "properties",
+                "dropped_value",
+                json!({ "record_id": dropped.record_id, "property_definition_id": dropped.property_id }),
+                serde_json::to_value(&dropped.value).unwrap_or(Value::Null),
+            ));
+        }
+        record_changes(&mut *tx, merge_id, &changes).await?;
+
+        Ok(MergeOutcome {
+            merge_id,
+            record_type: targets.record_type(),
+            survivor_id: targets.survivor(),
+            merged_ids: targets.sources().to_vec(),
+            committed_at,
+        })
+    }
+
+    /// The sharing rules to rewrite, as the admin chose.
+    fn sharing_rewrites(
+        sharing: &[MemberRules],
+        record_type: MergeRecordType,
+        merged: &HashMap<Uuid, Vec<String>>,
+        choice: SharingRulesChoice,
+    ) -> Result<Vec<(MemberRules, EmailRuleSet)>, MergeError> {
+        let mut rewrites = Vec::new();
+        for member in sharing {
+            if let Some(rules) =
+                plan::rewrite_sharing_rules(&member.rules, record_type, merged, choice)?
+            {
+                rewrites.push((member.clone(), rules));
+            }
+        }
+        Ok(rewrites)
+    }
+
+    async fn commit_company(
+        &self,
+        tx: &mut Transaction<'static, Postgres>,
+        scope: &MergeScope,
+        command: &MergeCommand,
+        merge_id: Uuid,
+    ) -> Result<(MergeOutcome, Vec<ChangedEntityProperty>, Vec<String>), MergeError> {
+        let team = scope.team_id;
+        let targets = &command.targets;
+        let state = CompaniesRepositoryImpl::lock_company_merge(&mut *tx, team, targets).await?;
+        let facts = company_facts(&mut *tx, team, targets, state, true).await?;
+        let review = company_review(targets, &facts);
+        if review.preview.revision != command.revision {
+            return Err(MergeError::PreviewStale);
+        }
+        if let Some(block) = review.preview.blocked.clone() {
+            return Err(MergeError::Conflict(block));
+        }
+        let rewrites = Self::sharing_rewrites(
+            &facts.sharing,
+            MergeRecordType::Company,
+            &facts.state.source_domains(),
+            command.sharing_rules,
+        )?;
+
+        let survivor = targets.survivor();
+        let mut changes =
+            CompaniesRepositoryImpl::fold_companies(&mut *tx, team, merge_id, &facts.state).await?;
+        let details = json!({
+            "merge_id": merge_id,
+            "survivor_id": survivor,
+            "merged_ids": targets.sources(),
+            "choice": command.sharing_rules,
+        });
+        changes.extend(
+            CompaniesRepositoryImpl::rewrite_merged_rules(
+                &mut *tx, team, merge_id, &rewrites, &details,
+            )
+            .await?,
+        );
+        let (owned, written) = self
+            .move_owned_rows(
+                tx,
+                scope,
+                MergeRecordType::Company,
+                targets,
+                &facts.owned,
+                &review.values,
+            )
+            .await?;
+        changes.extend(owned);
 
         let members = sqlx::query_scalar!(
             "SELECT user_id FROM team_user WHERE team_id = $1 ORDER BY user_id",
@@ -1062,68 +1380,76 @@ where
             CompaniesRepositoryImpl::delete_merged_companies(&mut *tx, team, targets.sources())
                 .await?,
         );
-
-        let committed_at = chrono::Utc::now();
-        let dropped = review
-            .preview
-            .conflicts
+        let outcome = Self::conclude(tx, scope, targets, merge_id, &review, changes).await?;
+        let sharing_owners = rewrites
             .iter()
-            .flat_map(|conflict| {
-                conflict
-                    .dropped
-                    .iter()
-                    .map(move |dropped| DroppedPropertyValue {
-                        property: conflict.property_id.to_string(),
-                        record: dropped.record_id.to_string(),
-                        value: serde_json::to_value(&dropped.value).unwrap_or(Value::Null),
-                    })
-            })
+            .map(|(member, _)| member.user_id.clone())
             .collect();
-        let entry = Activity::from_domain(
-            merge_id,
-            0,
-            Actor::new_from_user(scope.actor.clone()),
-            None,
-            CompanyMerged {
-                company_id: survivor.to_string(),
-                merge: RecordMerge {
-                    merge_id,
-                    merged: review
-                        .preview
-                        .sources
-                        .iter()
-                        .map(|source| MergedRecordName {
-                            id: source.id.to_string(),
-                            name: Some(source.name.clone()),
-                        })
-                        .collect(),
-                    dropped,
-                },
-            },
-            committed_at,
-        );
-        activity::outbound::pg_activity_repo::insert_activities(&mut **tx, &[entry])
-            .await
-            .map_err(db)?;
+        Ok((outcome, written, sharing_owners))
+    }
 
-        // Private values a merge drops are kept only here.
-        for dropped in review.values.dropped.iter() {
-            changes.push(MergeChange::new(
-                "properties",
-                "dropped_value",
-                json!({ "record_id": dropped.record_id, "property_definition_id": dropped.property_id }),
-                serde_json::to_value(&dropped.value).unwrap_or(Value::Null),
-            ));
+    /// CRM lists hold companies only, so a contact merge leaves them alone.
+    async fn commit_contact(
+        &self,
+        tx: &mut Transaction<'static, Postgres>,
+        scope: &MergeScope,
+        command: &MergeCommand,
+        merge_id: Uuid,
+    ) -> Result<(MergeOutcome, Vec<ChangedEntityProperty>, Vec<String>), MergeError> {
+        let team = scope.team_id;
+        let targets = &command.targets;
+        let state = CompaniesRepositoryImpl::lock_contact_merge(&mut *tx, team, targets).await?;
+        let facts = contact_facts(&mut *tx, team, targets, state, true).await?;
+        let review = contact_review(targets, &facts);
+        if review.preview.revision != command.revision {
+            return Err(MergeError::PreviewStale);
         }
-        record_changes(&mut *tx, merge_id, &changes).await?;
+        if let Some(block) = review.preview.blocked.clone() {
+            return Err(MergeError::Conflict(block));
+        }
+        let rewrites = Self::sharing_rewrites(
+            &facts.sharing,
+            MergeRecordType::Contact,
+            &facts.state.source_addresses(),
+            command.sharing_rules,
+        )?;
 
-        let outcome = MergeOutcome {
-            merge_id,
-            record_type: MergeRecordType::Company,
-            survivor_id: survivor,
-            merged_ids: targets.sources().to_vec(),
-            committed_at,
-        };
+        let survivor = targets.survivor();
+        let mut changes =
+            CompaniesRepositoryImpl::fold_contacts(&mut *tx, team, merge_id, &facts.state).await?;
+        let details = json!({
+            "merge_id": merge_id,
+            "survivor_id": survivor,
+            "merged_ids": targets.sources(),
+            "choice": command.sharing_rules,
+        });
+        changes.extend(
+            CompaniesRepositoryImpl::rewrite_merged_rules(
+                &mut *tx, team, merge_id, &rewrites, &details,
+            )
+            .await?,
+        );
+        let (owned, written) = self
+            .move_owned_rows(
+                tx,
+                scope,
+                MergeRecordType::Contact,
+                targets,
+                &facts.owned,
+                &review.values,
+            )
+            .await?;
+        changes.extend(owned);
+        changes.extend(
+            CompaniesRepositoryImpl::delete_merged_contacts(
+                &mut *tx,
+                team,
+                survivor,
+                targets.sources(),
+            )
+            .await?,
+        );
+        let outcome = Self::conclude(tx, scope, targets, merge_id, &review, changes).await?;
         let sharing_owners = rewrites
             .iter()
             .map(|(member, _)| member.user_id.clone())
@@ -1142,9 +1468,6 @@ where
         scope: &MergeScope,
         targets: &MergeTargets,
     ) -> Result<MergePreview, MergeError> {
-        if targets.record_type() != MergeRecordType::Company {
-            return Err(MergeError::Invalid("contacts can't be merged yet".into()));
-        }
         let mut tx = self.pool.begin().await.map_err(db)?;
         // One snapshot for every read, without taking a commit's locks.
         sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
@@ -1153,11 +1476,27 @@ where
             .map_err(db)?;
         // A demotion after the receipt was made still hides the review.
         still_admin(&mut tx, scope, false).await?;
-        let state =
-            CompaniesRepositoryImpl::company_merge_state(&mut tx, scope.team_id, targets).await?;
-        let facts = Self::company_facts(&mut tx, scope.team_id, targets, state, false).await?;
+        let team = scope.team_id;
+        let review = match targets.record_type() {
+            MergeRecordType::Company => {
+                let state =
+                    CompaniesRepositoryImpl::company_merge_state(&mut tx, team, targets).await?;
+                company_review(
+                    targets,
+                    &company_facts(&mut tx, team, targets, state, false).await?,
+                )
+            }
+            MergeRecordType::Contact => {
+                let state =
+                    CompaniesRepositoryImpl::contact_merge_state(&mut tx, team, targets).await?;
+                contact_review(
+                    targets,
+                    &contact_facts(&mut tx, team, targets, state, false).await?,
+                )
+            }
+        };
         tx.rollback().await.map_err(db)?;
-        Ok(company_review(targets, &facts).preview)
+        Ok(review.preview)
     }
 
     #[tracing::instrument(name = "crm.merge.commit_write", skip_all, fields(team_id = %scope.team_id), err)]
@@ -1166,9 +1505,7 @@ where
         scope: &MergeScope,
         command: &MergeCommand,
     ) -> Result<MergeCommitted, MergeError> {
-        if command.targets.record_type() != MergeRecordType::Company {
-            return Err(MergeError::Invalid("contacts can't be merged yet".into()));
-        }
+        let record_type = command.targets.record_type();
         let fingerprint =
             plan::request_fingerprint(&command.targets, &command.revision, command.sharing_rules);
         let mut tx = self.pool.begin().await.map_err(db)?;
@@ -1216,9 +1553,16 @@ where
         .await
         .map_err(db)?;
 
-        let (outcome, changed_properties, sharing_owners) = self
-            .commit_company(&mut tx, scope, command, merge_id)
-            .await?;
+        let (outcome, changed_properties, sharing_owners) = match record_type {
+            MergeRecordType::Company => {
+                self.commit_company(&mut tx, scope, command, merge_id)
+                    .await?
+            }
+            MergeRecordType::Contact => {
+                self.commit_contact(&mut tx, scope, command, merge_id)
+                    .await?
+            }
+        };
         sqlx::query!(
             "UPDATE crm_merges SET result = $2 WHERE id = $1",
             merge_id,
@@ -1229,26 +1573,26 @@ where
         .await
         .map_err(db)?;
         // Last, so a value attached while the merge ran is refused rather
-        // than left on an id that no longer names a company.
+        // than left on an id that no longer names a record.
         let sources: Vec<String> = command
             .targets
             .sources()
             .iter()
             .map(Uuid::to_string)
             .collect();
-        if property_merge::values_remain_in(&mut tx, PropertyEntityType::Company, &sources)
+        let property = property_type(record_type);
+        if property_merge::values_remain_in(&mut tx, property, &sources)
             .await
             .map_err(db)?
         {
             return Err(MergeError::PreviewStale);
         }
         // A reference or cell attached since the merge read them would keep
-        // a deleted company's id, so the merge refuses instead.
-        let referenced =
-            !property_merge::referencing_rows_in(&mut tx, PropertyEntityType::Company, &sources)
-                .await
-                .map_err(db)?
-                .is_empty();
+        // a deleted record's id, so the merge refuses instead.
+        let referenced = !property_merge::referencing_rows_in(&mut tx, property, &sources)
+            .await
+            .map_err(db)?
+            .is_empty();
         let named = !pipeline_cells(&mut tx, command.targets.sources())
             .await?
             .is_empty()
