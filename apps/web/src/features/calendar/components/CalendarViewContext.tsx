@@ -3,6 +3,7 @@ import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import {
   createdCalendarEventId,
+  createdCalendarOccurrences,
   isCalendarEventCreating,
 } from '@queries/calendar/graphql/mutations';
 import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
@@ -22,6 +23,7 @@ import {
   type CalendarTimeFormat,
   type CalendarWeekStart,
   isCalendarEventVisible,
+  mapCalendarOccurrence,
 } from '../types';
 import { useCalendarPreferences } from '../utils/preferences';
 
@@ -70,7 +72,7 @@ export function createCalendarEventSelection(
     onFocusedEventIdChange?.(
       nextEvent.teamProjection || isCalendarEventCreating(nextEvent.eventId)
         ? undefined
-        : nextEvent.eventId
+        : serverEventId(nextEvent.eventId)
     );
   };
   const refresh = (nextEvent: CalendarEvent) => {
@@ -88,26 +90,69 @@ export function createCalendarEventSelection(
   // A grid selection follows its chip when the grid replaces it. A list
   // selection stays on its row, so a chip mounting late never moves it.
   const reanchor = (nextEvent: CalendarEvent, nextAnchor: HTMLElement) => {
-    if (origin() === 'grid') select(nextEvent, nextAnchor);
+    if (origin() !== 'grid') return;
+    // The grid can still draw a landed create's local copy for the server's
+    // copy the details already show.
+    if (createdCalendarEventId(nextEvent.eventId) === event()?.eventId)
+      setAnchor(nextAnchor);
+    else select(nextEvent, nextAnchor);
   };
 
   return { anchor, close, event, land, origin, reanchor, refresh, select };
 }
 
-/** The event a selected create became once it landed under the server's id. */
+/** The id the server issued for `eventId`, a created event's local id or its own. */
+function serverEventId(eventId: string): string {
+  return createdCalendarEventId(eventId) ?? eventId;
+}
+
+/** The one of `events` that stands for `selected`'s occurrence. */
+function sameOccurrence(
+  selected: CalendarEvent,
+  events: readonly CalendarEvent[]
+): CalendarEvent | undefined {
+  return (
+    events.find((event) => event.occurrenceKey === selected.occurrenceKey) ??
+    (events.length === 1 ? events[0] : undefined)
+  );
+}
+
+/**
+ * The event a selected create became once it landed under the server's id:
+ * the page's copy, or until the page's reads catch up, the server's copy from
+ * the create's own answer.
+ */
 function landedEvent(
   selected: CalendarEvent,
-  eventsById: ReadonlyMap<string, CalendarEvent>
+  eventsById: ReadonlyMap<string, CalendarEvent>,
+  answered: (localId: string) => CalendarEvent[]
 ): CalendarEvent | undefined {
   const serverId = createdCalendarEventId(selected.eventId);
   if (!serverId) return undefined;
-  const occurrences = [...eventsById.values()].filter(
-    (event) => event.eventId === serverId
-  );
   return (
-    occurrences.find(
-      (event) => event.occurrenceKey === selected.occurrenceKey
-    ) ?? (occurrences.length === 1 ? occurrences[0] : undefined)
+    sameOccurrence(
+      selected,
+      [...eventsById.values()].filter((event) => event.eventId === serverId)
+    ) ?? sameOccurrence(selected, answered(selected.eventId))
+  );
+}
+
+/**
+ * The page's event for the selection: its own, or the local copy of a
+ * landed create whose details already show the server's.
+ */
+export function selectionOnPage(
+  selected: CalendarEvent,
+  eventsById: ReadonlyMap<string, CalendarEvent>
+): CalendarEvent | undefined {
+  return (
+    eventsById.get(selected.id) ??
+    sameOccurrence(
+      selected,
+      [...eventsById.values()].filter(
+        (event) => createdCalendarEventId(event.eventId) === selected.eventId
+      )
+    )
   );
 }
 
@@ -176,7 +221,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
               selectedEvent &&
               !selectedEvent.teamProjection &&
               !isCalendarEventCreating(selectedEvent.eventId) &&
-              selectedEvent.eventId !== focusedEventId
+              serverEventId(selectedEvent.eventId) !== focusedEventId
             ) {
               selection.close(false);
             }
@@ -199,6 +244,13 @@ export const [CalendarViewContextProvider, useCalendarView] =
       };
 
       const closeEventDetails = () => selection.close();
+      const answeredEvents = (localId: string) =>
+        createdCalendarOccurrences(localId).map((item) =>
+          mapCalendarOccurrence(item, {
+            sourceById: sourceById(),
+            isSourceVisible,
+          })
+        );
 
       const refreshSelectedEventFromPage = (
         eventsById: ReadonlyMap<string, CalendarEvent>,
@@ -207,19 +259,23 @@ export const [CalendarViewContextProvider, useCalendarView] =
       ) => {
         const selected = selection.event();
         if (!selected) return;
-        const event = eventsById.get(selected.id);
-        const landed = event ? undefined : landedEvent(selected, eventsById);
-        if (event) {
-          if (isCalendarEventVisible(event, isSourceVisible))
-            selection.refresh(event);
-          else closeEventDetails();
-        } else if (landed) {
+        const landed = landedEvent(selected, eventsById, answeredEvents);
+        const event = landed ? undefined : eventsById.get(selected.id);
+        if (landed) {
           if (isCalendarEventVisible(landed, isSourceVisible))
             selection.land(landed, chipFor?.(landed.id));
           else closeEventDetails();
-        } else if (isCalendarEventCreating(selected.eventId)) {
+        } else if (event) {
+          if (isCalendarEventVisible(event, isSourceVisible))
+            selection.refresh(event);
+          else closeEventDetails();
+        } else if (
+          isCalendarEventCreating(selected.eventId) ||
+          selectionOnPage(selected, eventsById)
+        ) {
           // The server's copy replaces a created event's local one; its
-          // details stay open until the server's id is known.
+          // details stay open until the server's id is known, and then
+          // until the page draws the server's copy.
           return;
         } else if (
           (rangeIsCurrent || selected.teamProjection) &&

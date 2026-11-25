@@ -7,6 +7,7 @@ import {
   OCCURRENCE_FOCUS_TIMEOUT_MS,
   useCalendarFocus,
 } from '@app/features/calendar-view/calendar-focus-target';
+import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,7 @@ import type { CalendarEvent } from '../types';
 import {
   CalendarViewContextProvider,
   createCalendarEventSelection,
+  selectionOnPage,
   useCalendarView,
 } from './CalendarViewContext';
 
@@ -21,6 +23,7 @@ const teamReset = vi.hoisted(() => ({ fire: () => {} }));
 const creates = vi.hoisted(() => ({
   creating: new Set<string>(),
   landed: new Map<string, string>(),
+  answered: new Map<string, CalendarOccurrenceItem[]>(),
 }));
 
 vi.mock('@queries/calendar/team-cache', () => ({
@@ -32,6 +35,7 @@ vi.mock('@queries/calendar/team-cache', () => ({
 vi.mock('@queries/calendar/graphql/mutations', () => ({
   isCalendarEventCreating: (id: string) => creates.creating.has(id),
   createdCalendarEventId: (id: string) => creates.landed.get(id),
+  createdCalendarOccurrences: (id: string) => creates.answered.get(id) ?? [],
 }));
 vi.mock('../hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
@@ -178,6 +182,7 @@ describe('details opened on an event whose create has not landed', () => {
   beforeEach(() => {
     creates.creating = new Set(['local-1']);
     creates.landed = new Map();
+    creates.answered = new Map();
   });
 
   afterEach(() => {
@@ -238,5 +243,140 @@ describe('details opened on an event whose create has not landed', () => {
     view().refreshSelectedEventFromPage(page(), true);
 
     expect(view().selectedEvent()).toBeUndefined();
+  });
+
+  describe('when the create’s answer carries the server’s copy', () => {
+    // The server's copy as the create's answer carries it: the organizer,
+    // the viewer's own guest row and a join link the local copy lacks.
+    const answer = {
+      event: {
+        id: 'server-1',
+        calendarId: 'calendar-1',
+        title: 'Offsite',
+        time: {
+          kind: 'timed',
+          startsAt: KEY,
+          endsAt: '2026-11-28T16:00:00+00:00',
+          timeZone: 'America/New_York',
+        },
+        status: 'confirmed',
+        isReadOnly: false,
+        isSnapshot: false,
+        recurrenceLines: [],
+        organizerEmail: 'me@example.com',
+        conferenceUrl: 'https://meet.google.com/abc-defg-hij',
+        conferenceProvider: 'google_meet',
+        attendees: [
+          {
+            email: 'me@example.com',
+            isOrganizer: true,
+            isSelf: true,
+            isOptional: false,
+            responseStatus: 'accepted',
+          },
+        ],
+        viewerCan: {
+          editDetails: true,
+          inviteGuests: true,
+          removeGuests: true,
+          setGuestPolicy: true,
+          rsvp: true,
+          organize: true,
+        },
+      },
+      occurrence: {
+        eventId: 'server-1',
+        occurrenceKey: KEY,
+        recurrenceId: null,
+        time: {
+          kind: 'timed',
+          startsAt: KEY,
+          endsAt: '2026-11-28T16:00:00+00:00',
+          timeZone: null,
+        },
+        isCancelled: false,
+      },
+    } as unknown as CalendarOccurrenceItem;
+    const land = () => {
+      creates.creating.delete('local-1');
+      creates.landed.set('local-1', 'server-1');
+      creates.answered.set('local-1', [answer]);
+    };
+
+    it('moves the details and the destination to it while the page still draws the local copy', () => {
+      const focused = vi.fn();
+      const { view } = renderContexts(focused);
+      const chip = document.createElement('a');
+      view().selectEvent(local, chip);
+
+      land();
+      view().refreshSelectedEventFromPage(page(local), true, () => undefined);
+
+      expect(view().selectedEvent()).toMatchObject({
+        id: server.id,
+        eventId: 'server-1',
+        conferenceUrl: 'https://meet.google.com/abc-defg-hij',
+        organizerEmail: 'me@example.com',
+        attendees: [expect.objectContaining({ isSelf: true })],
+        viewerCan: expect.objectContaining({ rsvp: true }),
+      });
+      expect(view().selectedEvent()?.timeZone).toBeUndefined();
+      expect(view().selectedEventAnchor()).toBe(chip);
+      expect(focused).toHaveBeenLastCalledWith('server-1');
+    });
+
+    it('stays open until the page draws the server’s copy, then follows it', () => {
+      const { view } = renderContexts();
+      view().selectEvent(local, document.createElement('a'));
+      land();
+      view().refreshSelectedEventFromPage(page(local), true);
+
+      view().refreshSelectedEventFromPage(page(local), true);
+      expect(view().selectedEvent()?.eventId).toBe('server-1');
+
+      view().refreshSelectedEventFromPage(page(server), true);
+      expect(view().selectedEvent()).toBe(server);
+    });
+
+    it('closes when the page drops the local copy without drawing the server’s', () => {
+      const { view } = renderContexts();
+      view().selectEvent(local, document.createElement('a'));
+      land();
+      view().refreshSelectedEventFromPage(page(local), true);
+
+      view().refreshSelectedEventFromPage(page(), true);
+
+      expect(view().selectedEvent()).toBeUndefined();
+    });
+
+    it('keeps the local chip as the selected one without moving the details back to it', () => {
+      const { view } = renderContexts();
+      view().selectEvent(local, document.createElement('a'));
+      land();
+      view().refreshSelectedEventFromPage(page(local), true);
+      const selected = view().selectedEvent();
+      if (!selected) throw new Error('the details closed');
+
+      expect(selectionOnPage(selected, page(local))).toBe(local);
+      const remounted = document.createElement('a');
+      view().reanchorSelectedEvent(local, remounted);
+
+      expect(view().selectedEvent()?.eventId).toBe('server-1');
+      expect(view().selectedEventAnchor()).toBe(remounted);
+    });
+
+    it('names the server id when the local chip is opened again', () => {
+      const [focused, setFocused] = createSignal<string | undefined>();
+      const { view } = renderContexts(setFocused, focused);
+      view().selectEvent(local, document.createElement('a'));
+      land();
+      view().refreshSelectedEventFromPage(page(local), true);
+
+      view().closeEventDetails();
+      view().selectEvent(local, document.createElement('a'));
+
+      expect(focused()).toBe('server-1');
+      expect(view().selectedEvent()).toBe(local);
+    });
   });
 });
