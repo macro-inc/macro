@@ -227,9 +227,24 @@ where
         mut transaction: Transaction<'static, Postgres>,
         writes: &Writes,
     ) -> Result<WritesOutcome, PgCellStoreError> {
+        let outcome = self.apply_within(&mut transaction, writes).await?;
+        if matches!(outcome, WritesOutcome::Applied { .. }) {
+            transaction.commit().await?;
+        }
+        Ok(outcome)
+    }
+
+    /// Apply a core storage batch in the caller's transaction. Any outcome
+    /// other than `Applied` may leave some of the batch's writes in it, so the
+    /// caller must roll back instead of committing.
+    pub(super) async fn apply_within(
+        &self,
+        transaction: &mut Transaction<'static, Postgres>,
+        writes: &Writes,
+    ) -> Result<WritesOutcome, PgCellStoreError> {
         // Parent locks precede table locks, as every writer takes them.
         if !schema::lock_database(
-            &mut transaction,
+            &mut *transaction,
             writes.database_id,
             writes.changes_tables(),
         )
@@ -284,7 +299,7 @@ where
             .filter(|table| !required.contains(table) && !created.contains(table))
             .collect();
         let locked: Vec<TableId> = required.iter().chain(&related).copied().collect();
-        let live = schema::lock_table_versions(&mut transaction, &locked).await?;
+        let live = schema::lock_table_versions(&mut *transaction, &locked).await?;
         if let Some(gone) = required.iter().find(|table| !live.contains_key(table)) {
             return Ok(WritesOutcome::TableNotFound(*gone));
         }
@@ -311,7 +326,7 @@ where
                 return Ok(WritesOutcome::SchemaMoved(table));
             }
         }
-        let before = self.before_image(&mut transaction, writes).await?;
+        let before = self.before_image(&mut *transaction, writes).await?;
 
         let mut minted: Vec<(usize, OptionId)> = Vec::new();
         for (index, write) in writes.writes.iter().enumerate() {
@@ -328,7 +343,7 @@ where
         let existing = self
             .properties
             .existing_option_ids_in(
-                &mut transaction,
+                &mut *transaction,
                 &minted
                     .iter()
                     .map(|(_, id)| id.into_uuid())
@@ -349,7 +364,7 @@ where
         let mut inserted = Vec::with_capacity(writes.writes.len());
         for (index, write) in writes.writes.iter().enumerate() {
             let outcome = self
-                .apply_write(&mut transaction, writes, index, write)
+                .apply_write(&mut *transaction, writes, index, write)
                 .await?;
             match outcome {
                 Applied::Rows(rows) => inserted.push(rows),
@@ -361,14 +376,14 @@ where
         // its version, unless another write changed it.
         let mut rederived = Vec::new();
         for derivation in &writes.derivations {
-            let rows = journal::table_rows(&mut *transaction, derivation.table_id()).await?;
-            if self.derive(&mut transaction, derivation, &rows).await? {
+            let rows = journal::table_rows(&mut **transaction, derivation.table_id()).await?;
+            if self.derive(&mut *transaction, derivation, &rows).await? {
                 rederived.push(derivation.table_id());
             }
         }
 
         if let Some(missing) = self
-            .check_required_cells(&mut transaction, writes, &inserted)
+            .check_required_cells(&mut *transaction, writes, &inserted)
             .await?
         {
             return Ok(missing);
@@ -382,7 +397,7 @@ where
             }
         }
         for (table, named) in &grouped {
-            let held = rows::hold_rows(&mut *transaction, *table, named).await?;
+            let held = rows::hold_rows(&mut **transaction, *table, named).await?;
             if let Some(row) = named.iter().find(|row| !held.contains(row)) {
                 return Ok(WritesOutcome::MissingRelatedRow(*row));
             }
@@ -407,7 +422,7 @@ where
         changed.dedup();
         let mut table_versions = HashMap::new();
         for table in changed {
-            let version = rows::bump_table_version(&mut *transaction, table).await?;
+            let version = rows::bump_table_version(&mut **transaction, table).await?;
             table_versions.insert(table, version);
         }
         let mut stamped: Vec<RowId> = inserted.iter().flatten().copied().collect();
@@ -418,10 +433,10 @@ where
         }));
         stamped.sort();
         stamped.dedup();
-        journal::stamp_rows(&mut *transaction, &stamped, writes.created_by.as_ref()).await?;
+        journal::stamp_rows(&mut **transaction, &stamped, writes.created_by.as_ref()).await?;
         let entries = crate::domain::journal::entries(writes, &before, &inserted, &table_versions);
         let changes = journal::record(
-            &mut transaction,
+            &mut *transaction,
             &JournalActor {
                 user: Some(writes.created_by.to_string()),
                 acting_bot: writes.journal.acting_bot,
@@ -429,7 +444,6 @@ where
             &entries,
         )
         .await?;
-        transaction.commit().await?;
         Ok(WritesOutcome::Applied {
             inserted,
             table_versions,
