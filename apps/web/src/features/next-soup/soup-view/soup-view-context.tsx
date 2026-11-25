@@ -883,8 +883,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     if (!parts || parts.read.operators === 0 || !lookup) return undefined;
     return searchOperatorFilters(parts.read, lookup());
   });
+  // The feed can't check channel senders or call speakers, the only senders
+  // `from:` names here, so a sender alone waits for a word rather than
+  // listing every channel.
   const listsOperators = () =>
-    searchParts()?.serviceText === '' && operatorFilters() !== undefined;
+    searchParts()?.serviceText === '' &&
+    operatorFilters() !== undefined &&
+    !searchParts()?.read.groups.some((group) => group.name === 'from');
   // Bound tokens are left out of the service's text and go with the request
   // as filters by id, which it joins with the operators it reads.
   const boundFilters = createMemo(() => {

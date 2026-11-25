@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { NO_SEARCH_OPERATOR_NAMES } from '../core/search-operator-filters';
 import { SoupViewContextProvider, useSoupView } from './soup-view-context';
 
 // The provider builds its query options during setup. solid-query evaluates an
@@ -190,6 +191,42 @@ describe('SoupViewContextProvider setup', () => {
       view?.setSearchText('type:');
       expect(view?.searchAwaitingInput()).toBe(true);
       view?.setSearchText('launch');
+      expect(view?.searchAwaitingInput()).toBe(false);
+    } finally {
+      mocks.view = 'home';
+    }
+  });
+
+  it('waits for a word in Search when a sender is all the operators set', () => {
+    mocks.view = 'search';
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let view: ReturnType<typeof useSoupView> | undefined;
+    const Probe = () => {
+      view = useSoupView();
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <SoupViewContextProvider>
+          <Probe />
+        </SoupViewContextProvider>
+      </QueryClientProvider>
+    ));
+
+    try {
+      view?.initialize();
+      view?.provideOperatorLookup(() => ({
+        ...NO_SEARCH_OPERATOR_NAMES,
+        userId: 'macro|viewer@example.com',
+      }));
+      view?.setSearchText('type:channel');
+      expect(view?.searchAwaitingInput()).toBe(false);
+      // The feed can't check who sent a channel's messages.
+      view?.setSearchText('type:channel from:me');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('type:channel from:me launch');
       expect(view?.searchAwaitingInput()).toBe(false);
     } finally {
       mocks.view = 'home';
