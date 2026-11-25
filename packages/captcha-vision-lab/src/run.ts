@@ -145,11 +145,10 @@ type LabResponse = {
 };
 
 /**
- * One request straight to the lab origin over `node:http`. Not `fetch`:
- * Bun's fetch sends even loopback requests through HTTP_PROXY, and this one
- * carries the capability. `node:http` neither uses a proxy nor follows
- * redirects nor decodes the body, so the headers it returns
- * (content-encoding included) describe the bytes as they are.
+ * One request to the lab origin over `node:http`. The CLI rejects proxy
+ * variables before startup because this request may carry the capability.
+ * `node:http` preserves the response bytes and headers and leaves redirects
+ * for the caller to reject.
  */
 const labRequest = (
   url: string,

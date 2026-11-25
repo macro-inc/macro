@@ -27,11 +27,12 @@ change with the same rules.
 
 ## Flow
 
-Use the [lab runbook](../../packages/captcha-vision-lab/README.md#runbook) to
-select the pinned Bun runtime.
+Use the repository dev shell's Bun as described in the
+[lab runbook](../../packages/captcha-vision-lab/README.md#runbook).
 
 ```text
 bun run lab:smoke -- --lab-run [--provider mock|kimi]
+  └ refuse startup if HTTP_PROXY, HTTPS_PROXY or ALL_PROXY is present in any case
   └ lab service starts on 127.0.0.1:47831 (fresh HMAC secret)
   └ per challenge:
       issue(sessionNonce) → runId, challengeId, signed one-time capability
@@ -57,6 +58,10 @@ bun run lab:smoke -- --lab-run [--provider mock|kimi]
 
 ## Trust boundaries
 
+- **CLI startup** (`src/cli.ts`). Refuses proxy-configured runs before
+  creating a lab or planner or starting Chromium. Some Bun versions apply
+  proxy variables to loopback HTTP, which could expose a capability header.
+  A `NO_PROXY` exception leaves the refusal in effect.
 - **Lab service** (`src/server.ts`). Generates the quiz from `crypto`
   randomness, renders options as metadata-free PNGs at opaque URLs, keeps
   which option is right in memory. Serves only the registered origin. The
@@ -97,8 +102,9 @@ asset; WebSocket; delayed popup; expiry between planner and action), each
 asserting zero planner calls, zero actions and zero submissions, a popup or
 foreign request set off by the click voiding the scored attempt, a failed
 click recording no markup, and the Kimi adapter against the stand-in
-(request shape, malformed output → closed failure). CI runs them in the
-Browser Tests job.
+(request shape, malformed output → closed failure). The CLI proxy test
+asserts refusal with zero requests to the lab or the counting proxy. CI
+runs them in the Browser Tests job.
 
 ## Live result
 

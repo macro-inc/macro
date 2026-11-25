@@ -1544,8 +1544,7 @@ jobs:
         run: |-
           bun install --frozen-lockfile
           ./node_modules/.bin/playwright install --with-deps chromium
-          lab_bun_dir=$(nix build --no-link --print-out-paths ../..#bun-captcha-lab)/bin
-          env -u LD_LIBRARY_PATH -u BASH_ENV PATH="$lab_bun_dir:$PATH" "$lab_bun_dir/bun" run check
+          env -u LD_LIBRARY_PATH -u BASH_ENV bun run check
         working-directory: packages/captcha-vision-lab
       - name: Teardown Nix
         if: always()

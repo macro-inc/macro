@@ -16,22 +16,28 @@ stealth or evasion. The lab answers only its own quiz, only at
 
 ## Runbook
 
-From this directory, install with the repo dev shell's Bun 1.3.13 so the
-lockfile stays compatible with CI.
+From this directory, use the repository dev shell in each lab terminal so
+installation and execution both use the same Bun as CI.
 
 ```sh
-nix develop ../.. -c bun install --frozen-lockfile
+nix develop ../..
+bun install --frozen-lockfile
 ```
 
-In each terminal running the lab, select the same hash-pinned Bun 1.4.2 that
-CI uses and put it first on `PATH` for child scripts. The lab's `node:http`
-client requires this version to bypass `HTTP_PROXY` on loopback requests.
+The CLI exits before starting the lab, Chromium, or the planner when
+`HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is present in any letter case,
+including empty values. Unset the proxy variables before running the lab.
+`NO_PROXY` exceptions do not override the startup check.
 
 ```sh
-lab_bun_dir=$(nix build --no-link --print-out-paths ../..#bun-captcha-lab)/bin
-export PATH="$lab_bun_dir:$PATH"
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+```
+
+Clear the dev shell's library overrides before running the lab with
+Playwright's downloaded Chromium.
+
+```sh
 unset BASH_ENV LD_LIBRARY_PATH
-"$lab_bun_dir/bun" --version  # 1.4.2
 ```
 
 On NixOS, point `LAB_CHROMIUM_PATH` at a Nix-built Chromium or Chrome.
@@ -49,7 +55,7 @@ On Ubuntu, install Chromium from the locked Playwright package.
 Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
-"$lab_bun_dir/bun" run check
+bun run check
 # … 51 pass, 0 fail
 ```
 
@@ -58,7 +64,7 @@ is `solved`; the run passes when every challenge reaches a server-scored
 outcome:
 
 ```sh
-"$lab_bun_dir/bun" run lab:smoke -- --lab-run --challenges 3
+bun run lab:smoke -- --lab-run --challenges 3
 # incorrect  planner_calls=1  actions=1  planner_ms=0  tokens=-  lab-records/<run>.json
 ```
 
@@ -68,13 +74,13 @@ Kimi adapter against the loopback stand-in (no provider call). In one
 terminal:
 
 ```sh
-"$lab_bun_dir/bun" run lab:kimi-stand-in -- --port 47840 --choice B --log /tmp/stand-in.jsonl
+bun run lab:kimi-stand-in -- --port 47840 --choice B --log /tmp/stand-in.jsonl
 ```
 
 In another:
 
 ```sh
-"$lab_bun_dir/bun" run lab:smoke -- --lab-run --provider kimi \
+bun run lab:smoke -- --lab-run --provider kimi \
   --kimi-base-url http://127.0.0.1:47840/v1 --challenges 3
 wc -l /tmp/stand-in.jsonl   # 3: one request per challenge
 ```
@@ -85,7 +91,7 @@ the records:
 
 ```sh
 doppler run -p shared_ai -c lcl --only-secrets FIREWORK_API_KEY -- \
-  "$lab_bun_dir/bun" run lab:smoke -- --lab-run --provider kimi --allow-remote-provider --challenges 5
+  bun run lab:smoke -- --lab-run --provider kimi --allow-remote-provider --challenges 5
 # solved  planner_calls=1  actions=1  planner_ms=1019  tokens=734  lab-records/<run>.json
 ```
 

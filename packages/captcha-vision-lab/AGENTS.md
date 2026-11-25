@@ -21,9 +21,8 @@ in production imports it, and it solves nothing but its own fixture. Design:
 
 ## Checks
 
-- Follow the [runbook](README.md#runbook) to install with the dev shell's Bun
-  and run the package check with the hash-pinned lab Bun. CI runs the same
-  check in Browser Tests.
+- Follow the [runbook](README.md#runbook) to install and check with the dev
+  shell's Bun. CI runs the same check in Browser Tests.
 
 ## Gotchas
 
@@ -35,6 +34,8 @@ in production imports it, and it solves nothing but its own fixture. Design:
   `main`/`exports`/`bin`: the isolation tests enforce both.
 - The registered origin is fixed (`127.0.0.1:47831`); tests bind it, so they
   run one file at a time (Bun's default).
+- Keep the CLI proxy check before server or planner startup. It rejects
+  `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` in any letter case.
 - The planner gets a PNG and the visible prompt only, and answers a visible
   label. Never widen it to coordinates, DOM or generic actions.
 - A non-loopback `--kimi-base-url` is a paid call: it needs
