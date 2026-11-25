@@ -86,13 +86,10 @@ function DomainBlocklist(props: {
     props.onOpenCompany?.();
     navigation.openWithSplit({ type: 'company', id }, { activate: true });
   };
-  const rowDescription = (domain: string) => {
-    if (!archivedCompany(domain))
-      return domainWarningText(warnings()?.[domain]);
-    return canRemove()
-      ? t('crm.privacyArchivedCompanyDomainAdmin')
-      : t('crm.privacyArchivedCompanyDomain');
-  };
+  const rowDescription = (domain: string) =>
+    archivedCompany(domain)
+      ? t('crm.privacyArchivedCompanyDomain')
+      : domainWarningText(warnings()?.[domain]);
   // An archived company's domain can't be removed until the company is
   // restored, so admins get the company instead. No action returns undefined:
   // SettingsRow renders its control column for any truthy child.

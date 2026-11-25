@@ -15,7 +15,8 @@ import type { EmailPrivacySettingsTeamDomainWarnings } from './emailPrivacySetti
  */
 export interface EmailPrivacySettings {
   /** Team domains listed because their company is archived, mapped to that
-company. They can't be removed until the company is restored. */
+company. They can't be removed until the company is restored. Empty for
+members, who can't see archived companies. */
   archived_team_domains: EmailPrivacySettingsArchivedTeamDomains;
   /** Whether the caller can remove a team exclusion. */
   can_remove_team_domains: boolean;

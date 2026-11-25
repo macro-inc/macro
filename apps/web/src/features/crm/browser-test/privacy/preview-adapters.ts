@@ -33,8 +33,9 @@ function fixtureDomains(guarded: string, usual: string) {
     return ['regional-sales-office.north-america.example.com', usual];
   return [usual];
 }
-// archived-domain lists an archived company's domain; stale-archived lists it
-// as a plain row, as a list read before the company was archived would.
+// archived-domain lists an archived company's domain, named as such only to
+// admins like the server does; stale-archived lists it as a plain row, as a
+// list read before the company was archived would.
 const archivedDomain = 'archived.example.com';
 const archivedCompanyId = '00000000-0000-4000-8000-000000000060';
 const listsArchivedDomain =
@@ -47,9 +48,10 @@ const [state, setState] = createSignal<EmailPrivacy>({
     ...(listsArchivedDomain ? [archivedDomain] : []),
     ...fixtureDomains('example.com', 'team.example.com'),
   ],
-  archivedTeamDomains: params.has('archived-domain')
-    ? { [archivedDomain]: archivedCompanyId }
-    : {},
+  archivedTeamDomains:
+    params.has('archived-domain') && params.has('admin')
+      ? { [archivedDomain]: archivedCompanyId }
+      : {},
   personalDomains: fixtureDomains('gmail.com', 'personal.example.com'),
   teamDomainWarnings: params.has('mailbox-guard')
     ? { 'example.com': 'company' }

@@ -365,18 +365,6 @@ test('an archived company’s team domain points an admin at the company instead
   await expect(page.getByTestId('last-change')).toHaveText('');
 });
 
-test('a member sees why an archived company’s team domain stays', async ({
-  page,
-}) => {
-  const { team } = await openTeamBlacklist(page, '/?archived-domain');
-  await expect(
-    team.getByText('Its company is archived.', { exact: true })
-  ).toBeVisible();
-  await expect(
-    team.getByRole('button', { name: /archived\.example\.com/ })
-  ).toHaveCount(0);
-});
-
 test('a refused removal from a stale list says to restore the company', async ({
   page,
 }) => {

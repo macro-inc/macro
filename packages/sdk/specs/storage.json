@@ -47856,7 +47856,7 @@
         "properties": {
           "archived_team_domains": {
             "type": "object",
-            "description": "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored.",
+            "description": "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored. Empty for\nmembers, who can't see archived companies.",
             "additionalProperties": {
               "type": "string",
               "format": "uuid"
