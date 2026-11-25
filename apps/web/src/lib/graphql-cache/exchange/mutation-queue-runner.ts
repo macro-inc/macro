@@ -143,6 +143,22 @@ export type QueueAttemptContext = AttemptToken & {
   /** Transport-only metadata; urql drops the response on error-free payloads. */
   response?: Response;
   telemetry?: MutationAttemptTelemetry;
+  /** Set once a settlement of its answer was never acknowledged. */
+  again?: SettledAgain;
+};
+
+/** An answer's settlements under one claim, and what is decided of it once. */
+type SettledAgain = {
+  unacknowledged: number;
+  /** Whether the retry policy sends the mutation again. */
+  retry: boolean;
+};
+
+/** An answered attempt that may still hold the head, to settle again then. */
+type UnsettledAttempt = {
+  attempt: QueueAttemptContext;
+  result: OperationResult;
+  retryAt: number;
 };
 
 function claimOf(token: AttemptToken): MutationClaim {
@@ -446,6 +462,7 @@ export function createMutationQueueRunner(
   const watchedOwners = new Set<string>();
   // When a drain last inspected the queue for a held head.
   let headInspectedAt: number | undefined;
+  let unsettled: UnsettledAttempt | undefined;
 
   function isNewClaim(claim: ClaimedMutation): boolean {
     if (!latestClaim) return true;
@@ -824,6 +841,7 @@ export function createMutationQueueRunner(
       // Finish that handshake before tagging a claim or starting its lease.
       await host.currentRevision();
       if (options.prepareMutationQueue) await prepareQueueRecovery();
+      if (await settleAgain()) return;
       const now = Date.now();
       // A wakeup probes immediately, but must retain a future retry
       // deadline if the durable head is not eligible yet. Consume expired
@@ -845,8 +863,8 @@ export function createMutationQueueRunner(
         // Not this runner's backoff: another runner may hold the head.
         if (deferredUntil === undefined)
           fireAndForget(watchHeadLease(), 'graphql-cache-mutation-queue');
-        // Short retries keep their deadline; uncertain five-minute lease
-        // backoffs must not prevent regular polling after a wakeup.
+        // A retry keeps its deadline, but a longer one must not prevent
+        // regular polling after a wakeup.
         scheduleDrain(
           deferredUntil === undefined
             ? EMPTY_QUEUE_POLL_MS
@@ -869,6 +887,46 @@ export function createMutationQueueRunner(
       drainRunning = false;
       if (drainRequested) scheduleDrain();
     }
+  }
+
+  /**
+   * A page that reloads takes the engine with it, and what another page was
+   * settling goes unacknowledged. Settles that answer again while its claim
+   * still holds the head, so the queue doesn't wait out the lease and nothing
+   * is sent twice. Says whether it did.
+   */
+  async function settleAgain(): Promise<boolean> {
+    const again = unsettled;
+    if (!again || Date.now() < again.retryAt) return false;
+    const held = await inspectHeadClaim();
+    if (unsettled !== again || isActive(head)) return false;
+    unsettled = undefined;
+    const { attempt } = again;
+    const { mutation } = attempt;
+    if (
+      !mutation ||
+      held?.transactionId !== attempt.transactionId ||
+      held.itemId !== mutation.uuid ||
+      held.lease.owner !== attempt.leaseOwner ||
+      held.lease.generation !== attempt.leaseGeneration
+    )
+      return false;
+    if (
+      !transition(attempt, (unacknowledged) => ({
+        kind: 'settling',
+        confirmed: confirmedOf(unacknowledged),
+      }))
+    )
+      return false;
+    await writeThrough({
+      ...again.result,
+      operation: withQueueAttempt(again.result.operation, {
+        ...attempt,
+        telemetry: telemetry.attempt(mutation, attempt.telemetry),
+      }),
+    });
+    resolveLiveOperationsAsQueued();
+    return true;
   }
 
   /**
@@ -1008,6 +1066,7 @@ export function createMutationQueueRunner(
     retry: boolean
   ): Promise<void> {
     if (!attempt.mutation || !options.onMutationAttemptResult) return;
+    if (attempt.again) return;
     try {
       await boundedMutationLifecycle(() =>
         options.onMutationAttemptResult!(attempt.mutation!, result, retry)
@@ -1127,6 +1186,9 @@ export function createMutationQueueRunner(
     const claim = claimOf(attempt);
     let retryAt: number | undefined;
     let settled = false;
+    // A policy counts what it is asked about, and the report of a result may
+    // too: an answer settled again is neither asked about nor reported again.
+    let policyRetries = attempt.again?.retry ?? false;
     let replacementTransactionId: string | undefined;
     let disposition:
       | 'committed'
@@ -1154,10 +1216,9 @@ export function createMutationQueueRunner(
       }
       if (result.error || result.data == null) {
         details = failureDetails(result.error, response);
-        let retry = false;
-        if (result.error && options.shouldRetryMutation) {
+        if (!attempt.again && result.error && options.shouldRetryMutation) {
           try {
-            retry = await options.shouldRetryMutation(
+            policyRetries = await options.shouldRetryMutation(
               result.error,
               attempt.mutation
             );
@@ -1166,6 +1227,7 @@ export function createMutationQueueRunner(
           }
         }
         if (!isCurrent(attempt)) return detachedResult();
+        let retry = policyRetries;
         // urql represents HTTP 5xx as networkError too. Count actual
         // server responses, never connection failures or timeouts.
         const serverFailure =
@@ -1344,9 +1406,19 @@ export function createMutationQueueRunner(
         // Reporting cannot discard the retained response or stop retries.
       }
       if (!settled && isCurrent(attempt)) {
-        retryAt = Date.now() + QUEUE_LEASE_MS;
         // A lost acknowledgement may hide a completed transaction.
-        // Preserve optimism and let a fresh durable claim decide.
+        // Preserve optimism and let the durable claim decide.
+        const unacknowledged = (attempt.again?.unacknowledged ?? 0) + 1;
+        const delayMs = retryDelayMs(attempt.attemptCount + unacknowledged - 1);
+        retryAt = Date.now() + delayMs;
+        unsettled = {
+          attempt: {
+            ...attempt,
+            again: { unacknowledged, retry: policyRetries },
+          },
+          result: networkResult,
+          retryAt,
+        };
         disposition = 'queued';
         outcome = 'ack-lost';
         if (
@@ -1358,7 +1430,7 @@ export function createMutationQueueRunner(
           )
         )
           confirmedData = result.data;
-        details = { ...details, retryDelayMs: QUEUE_LEASE_MS };
+        details = { ...details, retryDelayMs: delayMs };
       }
     } finally {
       if (transition(attempt, release)) {
@@ -1394,6 +1466,7 @@ export function createMutationQueueRunner(
     latestClaim = undefined;
     head = IDLE;
     deferredUntil = undefined;
+    unsettled = undefined;
     telemetry.storageReset();
     resolveLiveOperationsAsQueued();
   }

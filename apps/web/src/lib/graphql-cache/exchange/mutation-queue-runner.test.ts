@@ -8,7 +8,7 @@ import {
   stringifyDocument,
 } from '@urql/core';
 import { getOperationAST, parse } from 'graphql';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
 import type { CacheHost } from '../host/types';
 import {
@@ -33,6 +33,7 @@ import {
   type MutationQueueTelemetry,
   NOOP_MUTATION_QUEUE_TELEMETRY,
 } from './mutation-queue-telemetry';
+import { optimisticMutationDispositionOf } from './optimistic';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -777,6 +778,234 @@ it('reports a release that failed while its claim still held the head, and tries
   expect(releases).toEqual(['failed', 'released']);
   // The release woke the queue at once.
   expect(claim).toHaveBeenCalledTimes(3);
+});
+
+describe('a settlement that is never acknowledged', () => {
+  const HERE = 'exchange-live:here';
+  const OWN_CLAIM = { owner: HERE, generation: '1' };
+  const LOST = new Error('owner epoch 1 departed for navigation');
+  const OFFLINE = new CombinedError({ networkError: new Error('offline') });
+
+  /** A durable head this page claimed at generation 1 and sent. */
+  async function sent(options: MutationQueueRunnerDeps['options'] = {}) {
+    let head: MutationInspection | undefined = headLeasedBy(
+      HERE,
+      Date.now() + 300_000,
+      '1'
+    );
+    const fixed = fixture(
+      options,
+      liveOwner(() => new Promise<void>(() => {}))
+    );
+    const { runner, host, forwarded } = fixed;
+    host.inspectMutations = vi.fn(async () => (head ? [head] : []));
+    const op = operation();
+    await runner.admit(op, enqueue(op, '1'), runner.epoch());
+    expect(forwarded).toHaveLength(1);
+    const attempt = queueAttemptOf(forwarded[0]!)!;
+    return {
+      ...fixed,
+      answer: (answer: { data?: unknown; error?: CombinedError }) =>
+        runner.settle(
+          {
+            operation: forwarded[0]!,
+            data: answer.data,
+            error: answer.error,
+            stale: false,
+            hasNext: false,
+          },
+          attempt
+        ),
+      headBecomes: (next: MutationInspection | undefined) => {
+        head = next;
+      },
+    };
+  }
+
+  it('settles the same answer again under the same claim, and sends nothing', async () => {
+    const { commit, forwarded, host, answer } = await sent();
+    const claim = vi.spyOn(host, 'claimNextMutation');
+    commit.mockRejectedValueOnce(LOST);
+    expect(
+      optimisticMutationDispositionOf(await answer({ data: savedDraft }))
+    ).toMatchObject({ kind: 'queued', confirmed: savedDraft });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(commit).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(2);
+    expect(
+      commit.mock.calls.map(([id, token, args]) => [id, token, args.data])
+    ).toEqual([
+      ['1', OWN_CLAIM, savedDraft],
+      ['1', OWN_CLAIM, savedDraft],
+    ]);
+    expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+    expect(forwarded).toHaveLength(1);
+    // Nothing was claimed before the head was settled, and then at once.
+    expect(claim.mock.invocationCallOrder[0]).toBeGreaterThan(
+      commit.mock.invocationCallOrder[1]!
+    );
+  });
+
+  it('defers again what failed, and sends it only once claimed again', async () => {
+    const { forwarded, host, answer, headBecomes } = await sent({
+      shouldRetryMutation: async () => true,
+    });
+    const defer = vi.mocked(host.deferOptimisticWrite);
+    defer.mockRejectedValueOnce(LOST);
+    vi.spyOn(host, 'claimNextMutation').mockImplementation(async () => {
+      headBecomes(headLeasedBy(HERE, Date.now() + 300_000, '2'));
+      return claimOf(enqueue(operation(), '2'));
+    });
+    await answer({ error: OFFLINE });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(defer.mock.calls.map(([id, token]) => [id, token])).toEqual([
+      ['1', OWN_CLAIM],
+      ['1', OWN_CLAIM],
+    ]);
+    expect(forwarded).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(forwarded).toHaveLength(2);
+    expect(queueAttemptOf(forwarded[1]!)?.leaseGeneration).toBe('2');
+  });
+
+  it('rolls back again what the server refused', async () => {
+    const { forwarded, host, answer } = await sent();
+    const rollback = vi.mocked(host.rollbackOptimisticWrite);
+    rollback.mockRejectedValueOnce(LOST);
+    await answer({
+      error: new CombinedError({ graphQLErrors: [{ message: 'No access' }] }),
+    });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(rollback.mock.calls.map(([id, token]) => [id, token])).toEqual([
+      ['1', OWN_CLAIM],
+      ['1', OWN_CLAIM],
+    ]);
+    expect(forwarded).toHaveLength(1);
+  });
+
+  it.each([
+    { retry: true, settlement: 'deferOptimisticWrite' },
+    { retry: false, settlement: 'rollbackOptimisticWrite' },
+  ] as const)(
+    'decides once whether a failed answer is sent again: $retry',
+    async ({ retry, settlement }) => {
+      // As a policy that counts the failures it is asked about.
+      const shouldRetryMutation = vi
+        .fn(async () => !retry)
+        .mockResolvedValueOnce(retry);
+      const onMutationAttemptResult = vi.fn(async () => {});
+      const { host, answer } = await sent({
+        shouldRetryMutation,
+        onMutationAttemptResult,
+      });
+      const settle = vi.mocked(host[settlement]);
+      settle.mockRejectedValueOnce(LOST).mockRejectedValueOnce(LOST);
+      await answer({
+        error: new CombinedError({ graphQLErrors: [{ message: 'Busy' }] }),
+      });
+      await vi.advanceTimersByTimeAsync(3_010);
+      expect(settle).toHaveBeenCalledTimes(3);
+      expect(shouldRetryMutation).toHaveBeenCalledOnce();
+      expect(onMutationAttemptResult).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('keeps to its backoff however often it is woken', async () => {
+    const { runner, commit, answer } = await sent();
+    commit.mockRejectedValueOnce(LOST);
+    await answer({ data: savedDraft });
+    for (let wake = 0; wake < 9; wake += 1) {
+      await vi.advanceTimersByTimeAsync(100);
+      runner.wake();
+    }
+    expect(commit).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(101);
+    expect(commit).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits twice as long each time', async () => {
+    const { commit, answer } = await sent();
+    commit.mockRejectedValue(LOST);
+    await answer({ data: savedDraft });
+    for (const [afterMs, commits] of [
+      [1_001, 2],
+      [1_990, 2],
+      [20, 3],
+      [3_970, 3],
+      [40, 4],
+    ] as const) {
+      await vi.advanceTimersByTimeAsync(afterMs);
+      expect(commit).toHaveBeenCalledTimes(commits);
+    }
+  });
+
+  it.each([
+    ['was settled after all', undefined],
+    ['ran out', headLeasedBy(HERE, 0, '1')],
+    ['was claimed by another page', headLeasedBy(GONE, Infinity, '2')],
+    ['was claimed again by this page', headLeasedBy(HERE, Infinity, '2')],
+    [
+      'belonged to a queue since rebuilt',
+      { ...headLeasedBy(HERE, Infinity, '1'), uuid: 'another-attempt' },
+    ],
+  ])('settles nothing again when its claim %s', async (_case, head) => {
+    const { commit, forwarded, answer, headBecomes } = await sent();
+    commit.mockRejectedValueOnce(LOST);
+    await answer({ data: savedDraft });
+    headBecomes(head);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(commit).toHaveBeenCalledOnce();
+    expect(forwarded).toHaveLength(1);
+  });
+
+  it('tries again at the next poll when the queue cannot be read', async () => {
+    const { commit, host, answer } = await sent();
+    commit.mockRejectedValueOnce(LOST);
+    await answer({ data: savedDraft });
+    vi.mocked(host.inspectMutations!).mockRejectedValueOnce(LOST);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(commit).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(commit).toHaveBeenCalledTimes(2);
+  });
+
+  it('forgets the answer when storage is reset', async () => {
+    const { runner, commit, answer } = await sent();
+    commit.mockRejectedValueOnce(LOST);
+    await answer({ data: savedDraft });
+    runner.resetStorage();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it('repeats the settlement in the attempt it repeats', async () => {
+    const attempts: unknown[] = [];
+    const telemetry: MutationQueueTelemetry = {
+      ...NOOP_MUTATION_QUEUE_TELEMETRY,
+      attempt: (_mutation, unacknowledged) => {
+        const attempt: MutationAttemptTelemetry = {
+          run: (send) => send(),
+          sent: (mode) => attempts.push(['sent', mode]),
+          finish: (outcome) =>
+            attempts.push([outcome, unacknowledged === first]),
+        };
+        first ??= attempt;
+        return attempt;
+      },
+    };
+    let first: MutationAttemptTelemetry | undefined;
+    const { commit, answer } = await sent({
+      mutationQueueTelemetry: telemetry,
+    });
+    commit.mockRejectedValueOnce(LOST);
+    await answer({ data: savedDraft });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(attempts).toEqual([
+      ['sent', 'live'],
+      ['ack-lost', false],
+      ['committed', true],
+    ]);
+  });
 });
 
 it('hands back a claim whose owner the page let go while it waited for admission', async () => {

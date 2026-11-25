@@ -128,7 +128,14 @@ export interface MutationQueueTelemetry {
     uuid?: string;
     operationName?: string;
   }): MutationEnqueueTelemetry;
-  attempt(mutation: ClaimedMutation): MutationAttemptTelemetry;
+  /**
+   * A claim of a head. `unacknowledged` is the attempt whose settlement this
+   * one repeats, sending nothing; it joins that attempt's trace.
+   */
+  attempt(
+    mutation: ClaimedMutation,
+    unacknowledged?: MutationAttemptTelemetry
+  ): MutationAttemptTelemetry;
   /**
    * Releases a claim whose page has gone, so its head runs now instead of
    * when the lease runs out. `release` says how that went, and so does the
@@ -548,7 +555,10 @@ export function createMutationQueueTelemetry({
     Telemetry.warn('graphql.mutation_queue.summary', attributes);
   }
 
-  function attempt(mutation: ClaimedMutation): MutationAttemptTelemetry {
+  function attempt(
+    mutation: ClaimedMutation,
+    unacknowledged?: MutationAttemptTelemetry
+  ): MutationAttemptTelemetry {
     const startedAt = now();
     let item = items.get(mutation.uuid);
     if (!item) {
@@ -592,6 +602,9 @@ export function createMutationQueueTelemetry({
         openedSpan.setAttr(key, value);
       return openedSpan;
     };
+    unacknowledged?.run(() =>
+      span().setAttr('mutation_queue.send_mode', 'none')
+    );
     count('attempt.started');
     let finished = false;
     return {

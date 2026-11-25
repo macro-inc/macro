@@ -5744,8 +5744,9 @@ describe('normalizedCacheExchange', () => {
         ops.next(makeMutationOp(1, optimistic));
         await vi.advanceTimersByTimeAsync(1);
         ops.next(makeMutationOp(2, optimistic));
-        // The confirmed head is reclaimed once its lease expires.
-        await vi.advanceTimersByTimeAsync(300_000);
+        // This host does not say whose claim the head is, so the confirmed head
+        // is reclaimed at the first poll after its lease expires.
+        await vi.advanceTimersByTimeAsync(330_000);
 
         expect(events).toEqual([
           'admit 1',

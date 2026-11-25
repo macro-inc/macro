@@ -2014,9 +2014,10 @@ a read falls back to the network, and every request waits behind init. Writes,
 hydration, queue claims and settlements, deletes, invalidations, teardown and
 clear wait for the engine's answer. A timeout would report a failure for a
 commit that still lands, and callers act on it: the mutation queue runner holds
-later edits for its five-minute lease after an unconfirmed commit, and a failed
-logout clear rotates the cache scope, which the running native engine refuses
-with `graphql cache scope mismatch`.
+later edits after an unconfirmed commit until it settled it again under the same
+claim, or that claim's five-minute lease ran out, and a failed logout clear
+rotates the cache scope, which the running native engine refuses with
+`graphql cache scope mismatch`.
 
 The deadline counts only time the page runs on time. When the page itself
 stalls (an occluded or napping macOS window, a long task), the overdue timer

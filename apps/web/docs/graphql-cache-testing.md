@@ -104,9 +104,10 @@ reconciliation reserves those names. This preserves correctness but gives up
 field-level reconciliation for those response shapes.
 
 A surviving exchange retains a successful server response while retrying failed
-local settlement under a fresh lease. It discards that response on a storage
-reset and fences late replies from the old storage generation. This is **not
-exactly-once network execution**: process loss, another runner taking over, or a
+local settlement, under its own claim while that still holds the head and a
+fresh one after. It discards that response on a storage reset and fences late
+replies from the old storage generation. This is **not exactly-once network
+execution**: process loss, another runner taking over, or a
 lost network response can still make the outcome unknown. Non-idempotent server
 mutations need server-supported idempotency keys or reconciliation before replay.
 
