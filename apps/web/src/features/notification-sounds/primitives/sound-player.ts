@@ -71,7 +71,7 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     }
   }
 
-  async function syncOutput(): Promise<void> {
+  async function routeSerialized(): Promise<void> {
     if (routing) return routing;
     routing = routeOutput();
     try {
@@ -81,16 +81,32 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     }
   }
 
+  /** Start or stop the chosen speaker's element to match the selection. */
+  async function syncOutput(): Promise<void> {
+    if (disposed) return;
+    if (!chosenOutput()) {
+      // Hand the audio session back as soon as no speaker is chosen, even
+      // while an earlier switch is still settling.
+      output?.pause();
+      return;
+    }
+
+    // A speaker chosen after audio was unlocked starts its element now, so
+    // the call's first cue is not dropped while the element starts.
+    const element = context ? routedOutput(context) : undefined;
+    const play = element?.paused ? element.play() : undefined;
+    await Promise.all([play, routeSerialized()]);
+  }
+
   /** Call synchronously inside the gesture, before any network/media awaits. */
   async function unlock(): Promise<void> {
     const current = audioContext();
     if (!current || current.state === 'closed') return;
-    const element = chosenOutput() ? routedOutput(current) : undefined;
-    // Start both gated APIs before awaiting either. "interrupted" also needs
-    // resume on Safari after the OS temporarily takes the audio device.
+    // Start both gated APIs before awaiting either: syncOutput starts the
+    // chosen speaker's element synchronously. "interrupted" also needs resume
+    // on Safari after the OS temporarily takes the audio device.
     const resume = current.state === 'running' ? undefined : current.resume();
-    const play = element?.paused ? element.play() : undefined;
-    await Promise.all([resume, play, syncOutput()]);
+    await Promise.all([resume, syncOutput()]);
   }
 
   async function play(

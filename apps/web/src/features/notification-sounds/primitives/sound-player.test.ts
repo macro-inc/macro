@@ -77,3 +77,15 @@ it('routes to the chosen speaker and stops once the call clears it', async () =>
 
   expect(pause).toHaveBeenCalledTimes(1);
 });
+
+it('starts the speaker a call chooses after audio was unlocked', async () => {
+  let speaker: string | null = null;
+  const player = createSoundPlayer(() => speaker);
+  await player.unlock();
+
+  speaker = 'speaker-1';
+  await player.syncOutput();
+
+  expect(play).toHaveBeenCalledTimes(1);
+  expect(setSinkId).toHaveBeenCalledWith('speaker-1');
+});
