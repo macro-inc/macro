@@ -690,6 +690,34 @@ async fn a_torn_database_is_not_opened_while_its_side_file_is_busy() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_torn_database_is_not_opened_when_its_side_file_turns_busy() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-turns-busy";
+    closed_with_queue(SCOPE).await;
+    remove_opfs_file(&format!("{}-wal", database_identity(SCOPE))).await;
+    write_side_file(SCOPE, &SalvageFile::read_attempt()).await;
+    run_js(
+        "const files = FileSystemFileHandle.prototype;
+         const create = files.createSyncAccessHandle;
+         self.restoreFiles = () => { files.createSyncAccessHandle = create; };
+         let reads = 0;
+         files.createSyncAccessHandle = async function (...options) {
+           if (this.name.endsWith('-salvage') && ++reads > 1)
+             throw new DOMException('busy', 'NoModificationAllowedError');
+           return await create.apply(this, options);
+         };
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    let busy = open_cache_inner(SCOPE.into(), None, false, None, false).await;
+    run_js("self.restoreFiles(); return Promise.resolve();", "").await;
+    assert!(busy.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn a_torn_database_says_so_after_a_wipe_that_found_it_busy() {
     const SCOPE: &str = "cache-wasm-salvage-torn-wal-busy";
     closed_with_queue(SCOPE).await;
@@ -723,6 +751,19 @@ async fn a_torn_database_says_so_when_its_doubt_does_not_fit() {
         assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]), "{recovery}");
         close_and_destroy(&engine, SCOPE).await;
     }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_nobody_was_told_of_outlives_a_wipe_with_no_room_for_newer_writes() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-full";
+    closed_with_queue(SCOPE).await;
+    write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+    refuse_queue_frames(true).await;
+    let (engine, _, queue) = open(SCOPE, true).await;
+    refuse_queue_frames(false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
 }
 
 #[wasm_bindgen_test(async)]
