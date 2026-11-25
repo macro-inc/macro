@@ -587,4 +587,20 @@ describe('leaving Mail', () => {
     expect(() => setOnMail(false)).not.toThrow();
     expect(screen.getByText('Elsewhere')).toBeTruthy();
   });
+
+  it('leaves for another page with the search field open', () => {
+    const [onMail, setOnMail] = createSignal(true);
+    render(() => (
+      <Show when={onMail()} fallback={<p>Elsewhere</p>}>
+        <EmailViewProvider initialState={{}}>
+          <Mail />
+        </EmailViewProvider>
+      </Show>
+    ));
+    openSearch();
+    expect(searchField()).toBeTruthy();
+
+    expect(() => setOnMail(false)).not.toThrow();
+    expect(screen.getByText('Elsewhere')).toBeTruthy();
+  });
 });
