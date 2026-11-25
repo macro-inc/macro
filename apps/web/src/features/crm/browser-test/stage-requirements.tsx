@@ -56,6 +56,7 @@ const context: CrmContext = {
   RecordActivity: () => null,
   createMergeCommands: unused,
   createContactSearch: unused,
+  createCompanySearch: unused,
   createPropertyValueLabel: unused,
   createPropertyCommands: unused,
   hydrateCompany: unused,

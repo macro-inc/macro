@@ -151,8 +151,8 @@ Team admins and owners merge duplicate companies while `enable-crm-merge` is
 on for them. Select two or more companies in a Companies list and press Merge
 in the selection toolbar, or choose Merge companies (several selected) or Merge
 with… (one) from a row's menu; on a phone, long-press a row for Merge with….
-Merge with… first asks for the other companies (search by name or domain, tick
-them). Then choose the company to keep and review: its domains, what moves to
+Merge with… first asks for the other companies of the current team (search by
+name or domain, which reaches past the recent companies; tick them). Then choose the company to keep and review: its domains, what moves to
 it, pipelines where it ends up with several entries (kept separate), values
 that differ (the kept company's win), what email sync does, and, when a
 teammate's email sharing names a merged company, Keep sharing the same mail or
@@ -168,8 +168,8 @@ Verify with two throwaway companies on desktop and at phone width.
 
 Duplicate people merge the same way from a People list: Merge in the selection
 toolbar, Merge people (several selected) or Merge with… (one) in a row's menu,
-or a long-press on a phone. Merge with… searches people by name, address or
-company. The review lists the person's addresses after the merge (its primary
+or a long-press on a phone. Merge with… searches the current team's people by
+name, address or company. The review lists the person's addresses after the merge (its primary
 first), what moves, pipelines, values that differ, email sync and teammates'
 sharing, as for companies. Someone under another company with a work address,
 or no address, blocks it; the block lists each of them with their company.
