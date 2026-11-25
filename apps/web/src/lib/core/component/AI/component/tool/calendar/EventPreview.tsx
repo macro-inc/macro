@@ -26,6 +26,7 @@ import './EventPreview.css';
 import {
   buildCalendarToolPreviewEvent,
   type CalendarToolPreviewWindow,
+  calendarToolPreviewEvents,
   calendarToolPreviewStartDate,
   calendarToolPreviewWindow,
   expandCalendarToolPreviewEvents,
@@ -164,6 +165,8 @@ interface CalendarToolEventPreviewProps {
   /** Optional controls aligned to the right in place of built-in navigation. */
   navigationControls?: JSX.Element;
   class?: string;
+  /** The Macro event the draft became, shown in the draft's place once loaded. */
+  createdEventId?: string;
 }
 
 /** Live day-grid preview for a deferred calendar event tool call. */
@@ -226,9 +229,6 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
     sourceById,
     sourcesReady,
   });
-  const existingEvents = createMemo(() =>
-    occurrenceData.visibleEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
-  );
   const previewEvents = createMemo(() => {
     const event = previewEvent();
     const window = visibleWindow();
@@ -236,10 +236,16 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
       ? expandCalendarToolPreviewEvents(event, window)
       : [];
   });
-  const events = createMemo(() => [...existingEvents(), ...previewEvents()]);
-  const emphasizedEventIds = createMemo(
-    () => new Set(previewEvents().map((event) => event.id))
+  const shownEvents = createMemo(() =>
+    calendarToolPreviewEvents({
+      existing: occurrenceData.visibleEvents(),
+      draft: previewEvents(),
+      createdEventId: props.createdEventId,
+      limit: MAX_EXISTING_PREVIEW_EVENTS,
+    })
   );
+  const events = () => shownEvents().events;
+  const emphasizedEventIds = () => shownEvents().emphasizedIds;
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );
@@ -278,6 +284,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
     <div
       role="region"
       aria-label="Calendar event preview"
+      data-event-created={shownEvents().showsCreated ? '' : undefined}
       class={cn(
         'calendar-tool-preview relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-sm',
         props.class
