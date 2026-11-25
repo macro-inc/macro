@@ -137,6 +137,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   readonly schema: S;
 
   private _initialized = false;
+  private _disposed = false;
   private _doc: LoroDoc = createLoroDoc();
   private _mirror?: Mirror<S>;
   private _state?: StateUpdate<S>;
@@ -197,6 +198,10 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   get initialized(): boolean {
     return this._initialized;
   }
+  /** Whether the manager has been disposed and its underlying LoroDoc freed. */
+  get disposed(): boolean {
+    return this._disposed;
+  }
   get documentId(): string {
     return this.options.documentId;
   }
@@ -251,9 +256,21 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     await Promise.resolve();
   }
 
+  private disposedError(): ResultError<LoroManagerError>[] {
+    return [
+      {
+        code: LoroManagerError.Disposed,
+        message: 'LoroManager has been disposed',
+      },
+    ];
+  }
+
   importUpdate(
     update: LoroRawUpdate
   ): Result<boolean, ResultError<LoroManagerError>[]> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     let importStatus: ImportStatus;
 
     try {
@@ -279,6 +296,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   importBatchUpdates(
     updates: LoroRawUpdate[]
   ): Result<boolean, ResultError<LoroManagerError>[]> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     let importStatus: ImportStatus;
 
     try {
@@ -304,6 +324,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   async initializeFromSnapshot(
     snapshot: LoroRawUpdate
   ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     const importResult = this.importUpdate(snapshot);
 
     if (importResult.isErr()) {
@@ -312,6 +335,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     }
 
     if (this.options.mirror === false) {
+      if (this._disposed) {
+        return err(this.disposedError());
+      }
       this.emitState({
         state: {} as InferType<S>,
         metadata: {
@@ -327,6 +353,10 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
 
     try {
       await this.awaitMirrorSync();
+      if (this._disposed) {
+        mirror.dispose();
+        return err(this.disposedError());
+      }
       const mirrorState = mirror.getState();
       this.emitState({
         state: mirrorState,
@@ -336,6 +366,10 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         },
       });
     } catch (e) {
+      mirror.dispose();
+      if (this._disposed) {
+        return err(this.disposedError());
+      }
       logSyncService({
         documentId: this.options.documentId,
         level: 'error',
@@ -350,6 +384,10 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       ]);
     }
 
+    if (this._disposed) {
+      mirror.dispose();
+      return err(this.disposedError());
+    }
     this.setInitialized(true);
     this.subscribeMirror(mirror);
 
@@ -359,6 +397,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   getUpdateSince(
     lastVersionVector: VersionVector
   ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     if (!this._initialized) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
@@ -410,6 +451,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 
   getAllContainerIds(): Result<ContainerID[], ResultError<LoroManagerError>[]> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     if (!this._initialized || !this._mirror) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
@@ -422,6 +466,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   async syncToLoro(
     state: InferType<S>
   ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     if (!this._initialized || !this._mirror) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
@@ -434,7 +481,13 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       });
 
       await this.awaitMirrorSync();
+      if (this._disposed) {
+        return err(this.disposedError());
+      }
     } catch (e) {
+      if (this._disposed) {
+        return err(this.disposedError());
+      }
       logSyncService({
         documentId: this.options.documentId,
         level: 'error',
@@ -455,9 +508,13 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   async reset(
     snapshot: LoroRawUpdate
   ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     this.mirrorUnsub?.();
     this.mirrorUnsub = undefined;
     this._mirror?.dispose();
+    this._mirror = undefined;
     this._doc.free();
 
     const newDoc = createLoroDoc();
@@ -488,6 +545,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     }
 
     if (this.options.mirror === false) {
+      if (this._disposed) {
+        return err(this.disposedError());
+      }
       this.emitState({
         state: {} as InferType<S>,
         metadata: {
@@ -503,6 +563,10 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     this.subscribeMirror(newMirror);
 
     await this.awaitMirrorSync();
+    if (this._disposed) {
+      newMirror.dispose();
+      return err(this.disposedError());
+    }
 
     const state = newMirror.getState();
     this.emitState({
@@ -521,6 +585,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   getContainerById(
     id: ContainerID
   ): Result<Container | undefined, ResultError<LoroManagerError>[]> {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     let container: Container | undefined;
 
     try {
@@ -548,6 +615,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     },
     ResultError<LoroManagerError>[]
   > {
+    if (this._disposed) {
+      return err(this.disposedError());
+    }
     let pos: { update?: Cursor; offset: number; side: Side } | undefined;
     try {
       pos = this._doc.getCursorPos(cursor);
@@ -579,7 +649,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
    * ignored. Returns whether this snapshot became the seed.
    */
   async ingest(input: SnapshotIngest): Promise<boolean> {
-    if (this._initialized) return false;
+    if (this._initialized || this._disposed) return false;
 
     // The winner of the snapshot race seeds the doc; its kind, size, and
     // resulting version are the anchor every later sync question ("since
@@ -591,6 +661,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         span.setAttr('seed.kind', input.kind);
         span.setAttr('snapshot.bytes', input.snapshot.length);
         const initResult = await this.initializeFromSnapshot(input.snapshot);
+        if (this._disposed) {
+          return false;
+        }
         if (initResult.isErr()) {
           logSyncService({
             documentId: this.options.documentId,
@@ -607,6 +680,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         if (input.kind === 'local' && input.walUpdates?.length) {
           span.setAttr('wal.replayed', input.walUpdates.length);
           const replayResult = this.importBatchUpdates(input.walUpdates);
+          if (this._disposed) {
+            return false;
+          }
           if (replayResult.isErr()) {
             logSyncService({
               documentId: this.options.documentId,
@@ -618,6 +694,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
           }
         }
 
+        if (this._disposed) {
+          return false;
+        }
         span.setAttr('version.after', frontiersAttr(this._doc));
         return true;
       },
@@ -627,11 +706,14 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
 
   /** Tear down subscriptions and free the underlying doc. */
   dispose() {
+    if (this._disposed) return;
+    this._disposed = true;
     this.mirrorUnsub?.();
     this.mirrorUnsub = undefined;
     this.stateListeners.clear();
     this.initListeners.clear();
     this._mirror?.dispose();
+    this._mirror = undefined;
     this._doc.free();
     if (this.options.ownsTelemetry !== false) {
       disposeTelemetryFor(this.options.documentId);

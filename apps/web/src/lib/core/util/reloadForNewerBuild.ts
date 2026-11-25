@@ -38,19 +38,22 @@ const [pendingWebUpdate, setPendingWebUpdate] =
 /** The newer web build waiting for a reload, which the rail's update button offers. */
 export { pendingWebUpdate };
 
+/** Whether focus is in a text field that holds non-empty text a reload would lose. */
+export function isEditingText(): boolean {
+  const focused = document.activeElement;
+  if (!isEditableInput(focused)) return false;
+  const text =
+    focused instanceof HTMLInputElement ||
+    focused instanceof HTMLTextAreaElement
+      ? focused.value
+      : focused?.textContent;
+  return Boolean(text?.trim());
+}
+
 const browserPage: ReloadPage = {
   isHidden: () => document.visibilityState === 'hidden',
   isOffline: deviceLooksOffline,
-  isEditingText() {
-    const focused = document.activeElement;
-    if (!isEditableInput(focused)) return false;
-    const text =
-      focused instanceof HTMLInputElement ||
-      focused instanceof HTMLTextAreaElement
-        ? focused.value
-        : focused?.textContent;
-    return Boolean(text?.trim());
-  },
+  isEditingText,
   reload: reloadApp,
   onHiddenOrOnline(callback) {
     // Run a task later: a page being unloaded also turns hidden, and its

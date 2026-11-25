@@ -236,4 +236,51 @@ describe('LoroManager seed + converge — two-client merge', () => {
       dispose();
     });
   });
+
+  it('guards WASM doc operations when disposed before or during snapshot ingest', async () => {
+    const errorLog = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+    try {
+      const snapshot = await buildSnapshot([{ id: 'p1', text: 'hello' }]);
+
+      // Case 1: disposed before ingest / importUpdate / repeated dispose.
+      const disposedBefore = createLoroManager(TEST_SCHEMA, {
+        documentId: 'test-doc-disposed-before',
+      });
+      disposedBefore.dispose();
+      expect(() => disposedBefore.dispose()).not.toThrow();
+
+      await expect(
+        disposedBefore.ingest({ kind: 'local', snapshot })
+      ).resolves.toBe(false);
+      expect(disposedBefore.importUpdate(snapshot).isErr()).toBe(true);
+      expect(disposedBefore.importBatchUpdates([snapshot]).isErr()).toBe(true);
+      expect((await disposedBefore.reset(snapshot)).isErr()).toBe(true);
+
+      // Case 2: disposed while initializeFromSnapshot is awaiting mirror sync.
+      const disposedMidIngest = createLoroManager(TEST_SCHEMA, {
+        documentId: 'test-doc-disposed-mid',
+      });
+      const onState = vi.fn();
+      disposedMidIngest.onStateChange(onState);
+      const pendingIngest = disposedMidIngest.ingest({
+        kind: 'local',
+        snapshot,
+        walUpdates: [snapshot],
+      });
+      disposedMidIngest.dispose();
+
+      await expect(pendingIngest).resolves.toBe(false);
+      expect(onState).not.toHaveBeenCalled();
+
+      // Never trigger WASM use-after-free ("null pointer passed to rust").
+      const errorMessages = errorLog.mock.calls.map((call) =>
+        String(call[0] ?? '')
+      );
+      expect(
+        errorMessages.some((msg) => msg.includes('null pointer passed to rust'))
+      ).toBe(false);
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
 });

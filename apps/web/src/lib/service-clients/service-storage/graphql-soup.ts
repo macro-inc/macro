@@ -11,7 +11,7 @@ import { firstOrAborted } from '@core/util/abort-signal';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isTauri } from '@core/util/platform';
+import { isPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { reloadForSupersededCache } from '@core/util/reloadForNewerBuild';
 import { timeResponseBody } from '@core/util/responseBodyTiming';
@@ -1123,6 +1123,13 @@ export function getGraphqlSoupClient(): Client {
     };
     try {
       const scope = getOrCreateCacheScope();
+      // Match BROWSER_HOT_CAPACITY (2,500 vs desktop's 10,000): 10,000 decoded
+      // records hold ~50 MB in the native host process under iOS Jetsam limits,
+      // while cache misses fall back to Turso's page cache. Passing it here
+      // ships over the air to deployed mobile binaries immediately.
+      const mobileHotCapacity = isPlatform(['ios', 'android'])
+        ? 2_500
+        : undefined;
       // Cleanup recovery is bound to this exact backend/scope, independent of
       // user-info boot. It never creates a client or starts its mutation queue.
       const createHost = (reportInitialization: boolean) =>
@@ -1130,6 +1137,9 @@ export function getGraphqlSoupClient(): Client {
           native
             ? createTauriCacheHost({
                 scope,
+                ...(mobileHotCapacity !== undefined
+                  ? { hotCapacity: mobileHotCapacity }
+                  : {}),
                 onInitializationError: reportInitialization
                   ? onInitializationError
                   : undefined,

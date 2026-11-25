@@ -4,6 +4,7 @@ export enum LoroManagerError {
    *  applies it automatically once the gap fills — not a failure. */
   ImportPending = 'IMPORT_PENDING',
   NotInitialized = 'NOT_INITIALIZED',
+  Disposed = 'DISPOSED',
   InitializeFailed = 'INITIALIZE_FAILED',
   SyncFailed = 'SYNC_FAILED',
   ExportFailed = 'EXPORT_FAILED',
