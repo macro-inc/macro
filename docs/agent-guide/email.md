@@ -159,6 +159,14 @@ operator's name list that operator above the recent searches (`su` gives
 found and ranked as the composer's recipient picker finds them, and finish
 with their address; `label:` lists the person's tags and their inboxes' own
 labels (not system labels such as Inbox), quoting a name with a space.
+A plain word that stands for a filter offers it as the first row
+(`unread`, `starred`, `attachment`, `sent`, `today`, `this week`), and a
+word of two or more letters that starts part of someone's name offers mail
+from them and to them; picking either replaces the word with the operator,
+and `Enter` still searches the word as typed. While the field is open, an
+info button beside the **Search** title lists nine operators with what each
+finds when hovered, and **All search operators** (or pressing the button)
+opens the operator list on the docs site's Search page.
 People and labels are read only while the field has focus and such an
 operator is typed. Picking one finishes it the same way. A row is the
 filter's text, drawn as an operator, with a few words beside it only when
@@ -190,7 +198,9 @@ menu and keeps the keyboard up, and the list
 below shows the results as ordinary email rows, updating as you type and
 keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
-keeps the keyboard; Cancel (or Android Back) clears the search and returns to
+keeps the keyboard, and while the field is empty an info button in its place
+opens a **Search tips** sheet with the same operator list; Cancel (or Android
+Back) clears the search and returns to
 the mailbox. Opening a result and coming back returns to the search page with
 its results. If the flag turns off, the tab changes to one that cannot be
 searched, or a view is picked before a word is typed while the page is open,

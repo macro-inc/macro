@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   createEmailSearchSuggestions,
   type EmailSearchSuggestions,
+  emailSearchNameBeingTyped,
 } from './create-email-search-suggestions';
 import { emailSearchCompletionText } from './email-search-operators';
 
@@ -28,6 +29,7 @@ const recentListed = (suggestions: EmailSearchSuggestions) =>
         { kind: 'value' },
         { kind: 'person' },
         { kind: 'label' },
+        { kind: 'word' },
         (completion) => emailSearchCompletionText(completion)
       )
       .exhaustive()
@@ -208,6 +210,57 @@ it('puts a picked recent search first', () => {
     expect(remembered(setSearch, suggestions)).toEqual(['invoice', 'budget']);
     dispose();
   });
+});
+
+it('offers the filter a plain word stands for, and picking it replaces the words', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('invoice attachment');
+    expect(recentListed(suggestions)).toEqual(['has:attachment ']);
+    // Enter still searches the word: no row is picked out until an arrow is.
+    expect(suggestions.active()).toBe(-1);
+    expect(suggestions.editsQuery?.(0)).toBe(true);
+    suggestions.pick(0);
+    expect(search()).toBe('invoice has:attachment ');
+
+    setSearch('budget this week');
+    expect(recentListed(suggestions)[0]).toBe('newer_than:7d ');
+    suggestions.pick(0);
+    expect(search()).toBe('budget newer_than:7d ');
+    dispose();
+  });
+});
+
+it('offers mail from and to someone a plain word names', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('budget ana');
+    expect(recentListed(suggestions)).toEqual([
+      'from:ana@example.com ',
+      'to:ana@example.com ',
+    ]);
+    suggestions.pick(1);
+    expect(search()).toBe('budget to:ana@example.com ');
+
+    // Someone known only by address, or a word starting none of a name.
+    for (const typed of ['budget bo', 'budget xyz']) {
+      setSearch(typed);
+      expect(recentListed(suggestions)).toEqual([]);
+    }
+    dispose();
+  });
+});
+
+it('reads a plain word of two letters or more as a name being typed', () => {
+  expect(emailSearchNameBeingTyped('budget ana')).toBe('ana');
+  expect(emailSearchNameBeingTyped("o'neil")).toBe("o'neil");
+  for (const text of ['a', 'ana ', 'from:an', '-ana', '"ana', 'q3']) {
+    expect(emailSearchNameBeingTyped(text)).toBeUndefined();
+  }
 });
 
 it('lists recent searches only while the field has focus', () => {

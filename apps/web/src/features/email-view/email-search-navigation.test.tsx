@@ -342,6 +342,17 @@ describe('desktop header and sidebar', () => {
       openSearch();
     };
 
+    it('offers search tips beside the title only while the wide field is open', () => {
+      desktop(wide);
+      const tips = () => screen.queryByRole('button', { name: 'Search tips' });
+      expect(tips()).toBeNull();
+
+      openSearch();
+      expect(tips() !== null).toBe(wide);
+      press('Close search');
+      expect(tips()).toBeNull();
+    });
+
     it('hides the Inbox tabs as it opens, and says Search while it is empty', () => {
       openEmptyFromNoise();
       expect(searchField()?.value).toBe('');

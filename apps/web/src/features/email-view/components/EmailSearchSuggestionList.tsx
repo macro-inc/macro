@@ -18,6 +18,7 @@ import {
   type EmailSearchLabel,
   type EmailSearchOperatorCompletion,
   type EmailSearchPerson,
+  type EmailSearchWordFilter,
   emailSearchCompletionText,
 } from '../search/email-search-operators';
 import { emailSearchTextParts } from '../search/email-search-scope';
@@ -86,20 +87,77 @@ function FilterRow(props: { text: string; description?: string }) {
   );
 }
 
+/** What the filter a plain word stands for finds. */
+const wordFilterLabel = (filter: EmailSearchWordFilter) =>
+  match(filter)
+    .with('is:unread', () => t('emailViews.searchWordUnread'))
+    .with('is:starred', () => t('emailViews.searchWordStarred'))
+    .with('has:attachment', () => t('emailViews.searchWordAttachment'))
+    .with('in:sent', () => t('emailViews.searchWordSent'))
+    .with('newer_than:1d', () => t('emailViews.searchWordToday'))
+    .with('newer_than:7d', () => t('emailViews.searchWordThisWeek'))
+    .exhaustive();
+
+/** The operator a row puts in the field, to learn it by. */
+function OperatorHint(props: { text: string }) {
+  return (
+    <span class="min-w-0 shrink truncate font-mono text-xs text-ink-extra-muted">
+      {props.text}
+    </span>
+  );
+}
+
+/** The filter a plain word stands for, named, with its operator. */
+function WordFilterRow(props: { filter: EmailSearchWordFilter }) {
+  return (
+    <>
+      <FunnelIcon aria-hidden="true" class="size-4 shrink-0 text-ink-muted" />
+      <span class="min-w-0 flex-1 truncate">
+        {wordFilterLabel(props.filter)}
+      </span>
+      <OperatorHint text={props.filter} />
+    </>
+  );
+}
+
+function PersonIcon(props: { person: EmailSearchPerson }) {
+  return (
+    <span aria-hidden="true" class="flex shrink-0">
+      <UserIcon
+        id={props.person.id}
+        name={props.person.name ?? props.person.email}
+        size="sm"
+        isDeleted={false}
+        suppressClick
+        showTooltip={false}
+      />
+    </span>
+  );
+}
+
+/** Mail from or to someone a plain word names, with its operator. */
+function NamedPersonRow(props: {
+  row: Extract<EmailSearchOperatorCompletion, { kind: 'person' }>;
+}) {
+  const name = () => props.row.person.name ?? props.row.person.email;
+  return (
+    <>
+      <PersonIcon person={props.row.person} />
+      <span class="min-w-0 flex-1 truncate">
+        {props.row.key === 'to'
+          ? t('emailViews.searchToPerson', { name: name() })
+          : t('emailViews.searchFromPerson', { name: name() })}
+      </span>
+      <OperatorHint text={emailSearchCompletionText(props.row).trim()} />
+    </>
+  );
+}
+
 /** Someone to name after `from:` or another person filter. */
 function PersonRow(props: { person: EmailSearchPerson }) {
   return (
     <>
-      <span aria-hidden="true" class="flex shrink-0">
-        <UserIcon
-          id={props.person.id}
-          name={props.person.name ?? props.person.email}
-          size="sm"
-          isDeleted={false}
-          suppressClick
-          showTooltip={false}
-        />
-      </span>
+      <PersonIcon person={props.person} />
       <span class="min-w-0 flex-1 truncate">
         {props.person.name ?? props.person.email}
       </span>
@@ -140,7 +198,7 @@ const listLabel = (first: EmailSearchSuggestion | undefined) =>
         ? t('emailViews.searchViewsLeftOut')
         : t('emailViews.searchViews')
     )
-    .with('operator', 'value', () => t('emailViews.searchFilters'))
+    .with('operator', 'value', 'word', () => t('emailViews.searchFilters'))
     .with('person', () => t('emailViews.searchPeople'))
     .with('label', () => t('emailViews.searchLabels'))
     .with('recent', undefined, () => t('emailViews.recentSearches'))
@@ -201,8 +259,20 @@ export function EmailSearchSuggestionList(props: {
                     />
                   )}
                 </Match>
+                <Match
+                  when={
+                    suggestion.kind === 'person' &&
+                    suggestion.byName &&
+                    suggestion
+                  }
+                >
+                  {(row) => <NamedPersonRow row={row()} />}
+                </Match>
                 <Match when={suggestion.kind === 'person' && suggestion}>
                   {(row) => <PersonRow person={row().person} />}
+                </Match>
+                <Match when={suggestion.kind === 'word' && suggestion}>
+                  {(row) => <WordFilterRow filter={row().filter} />}
                 </Match>
                 <Match when={suggestion.kind === 'label' && suggestion}>
                   {(row) => <LabelRow label={row().label} />}

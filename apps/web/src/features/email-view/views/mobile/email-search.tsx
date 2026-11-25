@@ -1,11 +1,18 @@
 import { SearchOperatorOverlay } from '@app/components/view-shell/search-operator-text';
 import { t } from '@app/lib/i18n';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
+import ExternalIcon from '@icon/system/regular/arrow-square-out.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { EmailSearchSuggestionList } from '../../components/EmailSearchSuggestionList';
+import {
+  EmailSearchTipList,
+  openEmailSearchDocs,
+} from '../../components/EmailSearchTips';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 import { emailSearchTextParts } from '../../search/email-search-scope';
 
@@ -23,6 +30,7 @@ export function EmailMobileSearchField(props: {
   ref: (input: HTMLInputElement) => void;
 }) {
   let input: HTMLInputElement | undefined;
+  const [tipsOpen, setTipsOpen] = createSignal(false);
 
   // Escape leaves the page, as Cancel does, from the field and after Search
   // has dropped its focus, since a hardware keyboard can still press it.
@@ -110,7 +118,20 @@ export function EmailMobileSearchField(props: {
             }}
           />
         </div>
-        <Show when={props.search}>
+        {/* The empty field offers its tips where the X clears typed text. */}
+        <Show
+          when={props.search}
+          fallback={
+            <Button
+              aria-label={t('emailViews.searchTips')}
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTipsOpen(true)}
+            >
+              <InfoIcon class="size-4" />
+            </Button>
+          }
+        >
           <Button
             aria-label={t('emailViews.clearSearch')}
             variant="ghost"
@@ -128,7 +149,61 @@ export function EmailMobileSearchField(props: {
           {t('common.cancel')}
         </Button>
       </MobileHeader.Island>
+      <EmailSearchTipsSheet open={tipsOpen()} onOpenChange={setTipsOpen} />
     </div>
+  );
+}
+
+/** The operators Mail's search reads, in a sheet over the search page. */
+function EmailSearchTipsSheet(props: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <MobileDrawer
+      side="bottom"
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+    >
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content aria-label={t('emailViews.searchTips')}>
+          <MobileDrawer.Handle class="pb-1" />
+          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
+            <MobileDrawer.Title
+              as="h2"
+              class="min-w-0 text-lg font-semibold text-ink"
+            >
+              {t('emailViews.searchTips')}
+            </MobileDrawer.Title>
+            <Button
+              aria-label={t('common.close')}
+              tooltip={{ content: t('common.close'), disabled: true }}
+              variant="ghost"
+              size="icon-sm"
+              class="shrink-0 rounded-full bg-ink/6"
+              onClick={() => props.onOpenChange(false)}
+            >
+              <XIcon class="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+          <MobileDrawer.ScrollBody
+            data-corvu-no-drag
+            class="touch-pan-y gap-3 overscroll-contain pb-6"
+          >
+            <MobileDrawer.Section>
+              <EmailSearchTipList class="gap-y-4 p-3 text-base" />
+            </MobileDrawer.Section>
+            <MobileDrawer.Section>
+              <MobileDrawer.Item onClick={openEmailSearchDocs}>
+                <ExternalIcon aria-hidden="true" class="size-5 shrink-0" />
+                {t('emailViews.searchAllOperators')}
+              </MobileDrawer.Item>
+            </MobileDrawer.Section>
+          </MobileDrawer.ScrollBody>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
   );
 }
 
