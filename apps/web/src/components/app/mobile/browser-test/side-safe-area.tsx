@@ -11,6 +11,7 @@ import {
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../../features/theme/themes/macro-light';
+import { FloatRegionScope } from '../float-regions/FloatRegionScope';
 import { MobileTopEdgeFade } from '../MobileEdgeFade';
 
 for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
@@ -19,10 +20,14 @@ for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
 document.documentElement.dataset.themeLight = 'true';
 document.documentElement.dataset.touchDevice = 'true';
 const params = new URLSearchParams(location.search);
-document.documentElement.style.setProperty(
-  '--safe-right',
-  `${Number(params.get('safeRight') ?? 0)}px`
-);
+for (const side of ['left', 'right']) {
+  document.documentElement.style.setProperty(
+    `--safe-${side}`,
+    `${Number(params.get(`safe${side === 'left' ? 'Left' : 'Right'}`) ?? 0)}px`
+  );
+}
+/** A list parked, hidden, under the pane, as a narrow collection stacks them. */
+const stacked = params.has('stacked');
 
 /** Floating header and bottom chrome heights the list scrolls beneath. */
 const HEADER = 56;
@@ -30,14 +35,39 @@ const BOTTOM_CHROME = 90;
 
 const keys = Array.from({ length: 120 }, (_, index) => `message-${index}`);
 
+const [parked, setParked] = createSignal(true);
+declare global {
+  interface Window {
+    /** Parks the stacked pane under the channel, or brings it back. */
+    setParked?: (parked: boolean) => void;
+  }
+}
+window.setParked = setParked;
+
 function Fixture() {
+  const [parkedPane, setParkedPane] = createSignal<HTMLElement>();
   const [state, setState] = createSignal<ThreadListScrollState>();
   let scroller: HTMLElement | undefined;
   return (
-    <div class="flex h-dvh w-dvw bg-panel pr-(--safe-right)">
+    <div class="relative flex h-dvh w-dvw bg-panel pr-(--safe-right) pl-(--safe-left)">
+      {stacked && (
+        <div
+          ref={setParkedPane}
+          data-parked-pane
+          class="absolute inset-y-0 right-(--safe-right) left-(--safe-left) overflow-hidden"
+          classList={{ invisible: parked() }}
+          style={{ '--mobile-content-inset-top': `${HEADER}px` }}
+        >
+          <FloatRegionScope anchor={parkedPane} active={() => !parked()}>
+            <MobileTopEdgeFade />
+          </FloatRegionScope>
+        </div>
+      )}
       <div
         data-pane
-        class="relative size-full overflow-hidden"
+        // A split pane is a size container, which also holds its `fixed`
+        // descendants, and clips.
+        class="@container relative size-full overflow-hidden"
         style={{ '--mobile-content-inset-top': `${HEADER}px` }}
       >
         <ThreadList

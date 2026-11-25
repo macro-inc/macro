@@ -492,7 +492,9 @@ ever pressed.
 without a right safe area (the folded iPhone Duo's clock column): the top fade
 continues across the column in the same colour, the jump-to-latest button sits
 one gutter in from the pane, and the channel scroll bar runs between the
-floating header and the bottom chrome.
+floating header and the bottom chrome. It also parks a hidden pane under the
+channel, as a stacked collection does, and turns the phone over: only the
+visible pane's fade continues, on the side the column moved to.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,

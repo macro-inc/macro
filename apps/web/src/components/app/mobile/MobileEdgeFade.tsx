@@ -1,9 +1,19 @@
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
-import { type Accessor, createSignal, For, Show } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { useFloatRegionAnchor } from './float-regions/FloatRegionScope';
 
 /**
  * Edge scrims for full-frame mobile: content dissolves into the page surface
@@ -50,27 +60,41 @@ export function MobileTopEdgeFade() {
 /**
  * A pane that reaches a side safe area (the iPhone Duo's clock and camera
  * column) continues its top fade across that column, which the app frame
- * otherwise paints flat. Panes clip their content, so the column part is
- * drawn outside them, at the fade's measured position.
+ * otherwise paints flat. Panes clip their content, and split panes contain
+ * `fixed` descendants, so the column part is portaled to the app root at the
+ * fade's measured position. That keeps it under sheets and menus, which
+ * portal to the body.
+ *
+ * A portaled column does not hide with its pane, so it follows the pane's
+ * activity the way floating chrome does: a list parked under its detail, a
+ * pane swiped into the background, or a parked split draws none.
  */
 function SafeAreaColumnFades(props: {
   fade: Accessor<HTMLElement | undefined>;
 }) {
+  const panel = useSplitPanel();
+  const region = useFloatRegionAnchor();
+  const active = () =>
+    (panel?.isPanelActive() ?? true) && (region?.isActive() ?? true);
   const [placement, setPlacement] = createSignal<ColumnPlacement>();
-  const measure = () => setPlacement(columnPlacement(props.fade()));
-  // Folding, rotating, or a side safe area appearing all resize the pane, and
-  // with it the fade.
+  const measure = () =>
+    setPlacement(active() ? columnPlacement(props.fade()) : undefined);
+  createEffect(on(active, measure));
+  // Folding or a side safe area appearing resize the pane, and with it the
+  // fade. Turning the phone over moves the safe area without a resize.
   createResizeObserver(props.fade, measure);
+  makeEventListener(window, 'resize', measure, { passive: true });
+  makeEventListener(window, 'orientationchange', measure, { passive: true });
   return (
     <Show when={placement()}>
       {(columns) => (
-        <Portal>
+        <Portal mount={document.getElementById('root') ?? document.body}>
           <Layer depth={0}>
             <For each={columns().sides}>
               {(side) => (
                 <div
                   data-mobile-top-edge-fade-column
-                  class="pointer-events-none fixed"
+                  class="pointer-events-none fixed z-0"
                   style={{
                     top: `${columns().top}px`,
                     left: `${side.left}px`,
@@ -88,19 +112,17 @@ function SafeAreaColumnFades(props: {
   );
 }
 
-/** The side safe areas a visible fade reaches, if any. */
+/** The side safe areas a shown fade reaches, if any. */
 function columnPlacement(
   fade: HTMLElement | undefined
 ): ColumnPlacement | undefined {
   if (!fade?.isConnected) return undefined;
-  if (
-    !fade.checkVisibility({ opacityProperty: true, visibilityProperty: true })
-  )
-    return undefined;
-  const rect = fade.getBoundingClientRect();
-  if (rect.height === 0) return undefined;
   const left = getSafeAreaInset('left');
   const right = getSafeAreaInset('right');
+  if (left === 0 && right === 0) return undefined;
+  const rect = fade.getBoundingClientRect();
+  if (rect.height === 0) return undefined;
+  if (getComputedStyle(fade).visibility !== 'visible') return undefined;
   const sides: SafeColumn[] = [];
   if (left > 0 && rect.left <= left + 1) sides.push({ left: 0, width: left });
   if (right > 0 && rect.right >= window.innerWidth - right - 1)

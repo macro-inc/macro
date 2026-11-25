@@ -102,3 +102,47 @@ test('a pane with no side safe area draws no column fade', async ({ page }) => {
     0
   );
 });
+
+test('a pane parked under another draws no column fade of its own', async ({
+  page,
+}) => {
+  await page.goto(`/side-safe-area.html?safeRight=${SAFE_RIGHT}&stacked`);
+  await scrollUp(page);
+  const visibleColumns = page.locator('[data-mobile-top-edge-fade-column]');
+  const park = (parked: boolean) =>
+    page.evaluate((parked) => window.setParked?.(parked), parked);
+  await expect(visibleColumns).toHaveCount(1);
+  // Opening and closing a detail over a list hides and shows the list without
+  // resizing it.
+  await park(false);
+  await expect(visibleColumns).toHaveCount(2);
+  await park(true);
+  await expect(visibleColumns).toHaveCount(1);
+  const column = await rect(page, '[data-mobile-top-edge-fade-column]');
+  const fade = await rect(page, '[data-pane] [data-mobile-top-edge-fade]');
+  expect(column?.left).toBe(page.viewportSize()!.width - SAFE_RIGHT);
+  expect(column?.top).toBe(fade?.top);
+});
+
+test('turning the phone over moves the column fade to the other side', async ({
+  page,
+}) => {
+  await page.goto(`/side-safe-area.html?safeRight=${SAFE_RIGHT}`);
+  await scrollUp(page);
+  await expect(page.locator('[data-mobile-top-edge-fade-column]')).toHaveCount(
+    1
+  );
+  // The pane keeps its size and only moves, so nothing resizes.
+  await page.evaluate((inset) => {
+    const style = document.documentElement.style;
+    style.setProperty('--safe-right', '0px');
+    style.setProperty('--safe-left', `${inset}px`);
+    window.dispatchEvent(new Event('orientationchange'));
+  }, SAFE_RIGHT);
+  await expect(page.locator('[data-mobile-top-edge-fade-column]')).toHaveCount(
+    1
+  );
+  const column = await rect(page, '[data-mobile-top-edge-fade-column]');
+  expect(column?.left).toBe(0);
+  expect(column?.width).toBe(SAFE_RIGHT);
+});
