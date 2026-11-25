@@ -19,7 +19,11 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getNativeMobilePlatform } from '@core/util/platform';
-import { type Params, useNavigate, useSearchParams } from '@solidjs/router';
+import {
+  type SearchParams,
+  useNavigate,
+  useSearchParams,
+} from '@solidjs/router';
 import { ResultAsync } from 'neverthrow';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -88,7 +92,7 @@ async function startAppSignupSignedOut(onDone: () => void) {
 }
 
 function LoginView(props: {
-  params: Partial<Params>;
+  params: Partial<SearchParams>;
   signupMode: boolean | undefined;
   webSignup: boolean;
 }) {
