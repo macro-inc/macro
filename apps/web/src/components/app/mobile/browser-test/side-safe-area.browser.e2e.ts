@@ -138,12 +138,13 @@ test('turning the phone over moves the column fade to the other side', async ({
     style.setProperty('--safe-right', '0px');
     style.setProperty('--safe-left', `${inset}px`);
   }, SAFE_RIGHT);
+  // The column re-measures on the move, after the style change.
+  await expect
+    .poll(() => rect(page, '[data-mobile-top-edge-fade-column]'))
+    .toMatchObject({ left: 0, width: SAFE_RIGHT });
   await expect(page.locator('[data-mobile-top-edge-fade-column]')).toHaveCount(
     1
   );
-  const column = await rect(page, '[data-mobile-top-edge-fade-column]');
-  expect(column?.left).toBe(0);
-  expect(column?.width).toBe(SAFE_RIGHT);
 });
 
 test('a pane sliding back into place picks the column fade back up', async ({

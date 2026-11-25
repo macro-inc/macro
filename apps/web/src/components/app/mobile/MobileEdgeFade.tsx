@@ -84,14 +84,21 @@ function SafeAreaColumnFades(props: {
     }
     // Re-measure whenever the fade resizes or moves: folding, a side safe
     // area appearing, a pane sliding back into place after a swipe, or the
-    // frame's padding swapping sides when the phone turns over.
+    // frame's padding swapping sides when the phone turns over. autoUpdate
+    // watches moves (layout shift, where IntersectionObserver exists) and
+    // window resizes; its element resize handling expects a separate
+    // floating element, so the fade's own size is observed here.
+    const measure = () => setPlacement(columnPlacement(fade));
     onCleanup(
-      // Its defaults watch resizes and moves (layout shift) wherever the
-      // observers exist.
-      autoUpdate(fade, fade, () => setPlacement(columnPlacement(fade)), {
+      autoUpdate(fade, fade, measure, {
         ancestorScroll: false,
+        elementResize: false,
       })
     );
+    if (typeof ResizeObserver !== 'function') return;
+    const resizes = new ResizeObserver(measure);
+    resizes.observe(fade);
+    onCleanup(() => resizes.disconnect());
   });
   return (
     <Show when={placement()}>
