@@ -48,6 +48,26 @@ const DATE_VALUE = 'yyyy-MM-dd';
 /** `<input type="datetime-local">` value. */
 const DATETIME_VALUE = "yyyy-MM-dd'T'HH:mm";
 
+/** Shared feedback for incomplete or unparseable composer dates. */
+export function eventDateValidationError(
+  state: Pick<EventEditorInitialValues, 'allDay' | 'start' | 'end'>
+): string | undefined {
+  for (const endpoint of ['start', 'end'] as const) {
+    const value = state[endpoint];
+    if (!value)
+      return endpoint === 'start'
+        ? 'Enter a start date.'
+        : 'Enter an end date.';
+    const valid = state.allDay
+      ? parseLocalDate(value) !== undefined
+      : !Number.isNaN(new Date(value).getTime());
+    if (!valid)
+      return endpoint === 'start'
+        ? 'Enter a valid start date.'
+        : 'Enter a valid end date.';
+  }
+  return undefined;
+}
 const isDateOnly = (value: string) => parseLocalDate(value) !== undefined;
 
 /** Option displayed by an event editor recurrence selector. */
@@ -314,7 +334,7 @@ export function buildEventTime(
   state: EventEditorInitialValues
 ): EventTime | undefined {
   if (state.allDay) {
-    if (!state.start || !state.end || state.end < state.start) {
+    if (eventDateValidationError(state) || state.end < state.start) {
       return undefined;
     }
     // Google has no date-based out-of-office event, so encode an all-day one as

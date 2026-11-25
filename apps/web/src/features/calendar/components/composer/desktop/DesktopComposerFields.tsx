@@ -1,5 +1,4 @@
 import { formatLocale, t } from '@app/lib/i18n';
-import { parseLocalDate } from '@core/util/local-date';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
@@ -13,7 +12,9 @@ import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
+import { composerGuestName } from '../../../core/composer-guests';
 import { whenSummary } from '../../../core/when-summary';
+import { withComposerTimeZone } from '../../../primitives/composer-time-zone';
 import { DEFAULT_CALENDAR_SOURCE } from '../../../types';
 import { formatReminderOffset } from '../../../utils/event-reminders';
 import { CalendarSwatch } from '../../CalendarSwatch';
@@ -32,6 +33,7 @@ import { ComposerVisibility } from '../parts/ComposerVisibility';
 import { CalendarComposerIdentity } from './CalendarComposerIdentity';
 import { ComposerBusy } from './ComposerBusy';
 import { ComposerGuestSelect } from './ComposerGuestSelect';
+import { ComposerGuestStack } from './ComposerGuestStack';
 import { ComposerReminderSelect } from './ComposerReminderSelect';
 import { DesktopDateGroup } from './DesktopDateGroup';
 
@@ -55,7 +57,7 @@ function Summary(props: {
       onClick={() => props.onOpen(props.group)}
     >
       <span
-        class="min-h-5 text-sm"
+        class="min-h-5 min-w-0 max-w-full text-sm"
         classList={{ 'text-ink-extra-muted': props.empty }}
       >
         {props.title}
@@ -86,20 +88,26 @@ export function DesktopComposerFields(props: {
       formatLocale(),
       ', '
     );
-  const dateDetail = () =>
-    desktopSummaryDetails(
-      model.state().allDay
-        ? undefined
-        : new Intl.DateTimeFormat(formatLocale(), {
+  const dateDetail = () => {
+    const time = controller.eventTime();
+    const zonedTime =
+      time?.kind === 'timed'
+        ? withComposerTimeZone(time, model.state(), model.timeZone())
+        : undefined;
+    const instant =
+      zonedTime?.kind === 'timed' ? new Date(zonedTime.startsAt) : undefined;
+    return desktopSummaryDetails(
+      instant
+        ? new Intl.DateTimeFormat(formatLocale(), {
             timeZone: model.timeZone(),
             timeZoneName: 'short',
           })
-            .formatToParts(
-              parseLocalDate(model.state().start.slice(0, 10)) ?? new Date()
-            )
-            .find((part) => part.type === 'timeZoneName')?.value,
+            .formatToParts(instant)
+            .find((part) => part.type === 'timeZoneName')?.value
+        : undefined,
       controller.selectedRecurrenceOption().label.toLowerCase()
     );
+  };
   const guestDetail = () =>
     desktopSummaryDetails(
       model.guestPolicy.value.canInviteOthers
@@ -136,7 +144,7 @@ export function DesktopComposerFields(props: {
       />
     );
   return (
-    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-3">
+    <div class="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-6 pt-1 pb-3">
       <div class="flex flex-col gap-1">
         <Switch>
           <Match when={model.isEdit()}>
@@ -160,7 +168,7 @@ export function DesktopComposerFields(props: {
           </Match>
         </Switch>
       </div>
-      <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-2.5">
         <Show when={!model.isEdit()}>
           <ComposerFieldRow size="md" icon={<ClockIcon class="size-4.5" />}>
             {date()}
@@ -194,11 +202,16 @@ export function DesktopComposerFields(props: {
                   <Summary
                     group="guests"
                     title={
-                      model.guests.selected.length
-                        ? t('calendar.searchGuests', {
-                            count: model.guests.selected.length,
-                          })
-                        : t('calendar.guestSummaryEmpty')
+                      <span class="flex w-full min-w-0 items-center gap-2">
+                        <ComposerGuestStack guests={model.guests.selected} />
+                        <span class="min-w-0 truncate">
+                          {model.guests.selected.length
+                            ? model.guests.selected
+                                .map(composerGuestName)
+                                .join(', ')
+                            : t('calendar.guestSummaryEmpty')}
+                        </span>
+                      </span>
                     }
                     detail={guestDetail()}
                     empty={model.guests.selected.length === 0}

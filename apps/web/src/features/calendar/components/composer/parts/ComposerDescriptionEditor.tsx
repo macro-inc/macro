@@ -27,7 +27,7 @@ export function ComposerDescriptionEditor(
     <TextField.Surface
       class={
         props.plain
-          ? 'min-h-0 max-h-32 overflow-y-auto rounded-lg border-0 bg-transparent px-3 py-1 shadow-none hover:bg-hover focus-within:bg-active'
+          ? 'min-h-0 max-h-32 overflow-y-auto [scrollbar-width:thin] [scrollbar-gutter:stable] rounded-lg border-0 bg-transparent px-3 py-1 shadow-none hover:bg-hover focus-within:bg-active'
           : 'focus-within:border-accent focus-within:ring-[1.5px] focus-within:ring-accent'
       }
       style={{

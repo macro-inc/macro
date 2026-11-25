@@ -8,6 +8,7 @@ import { useCalendarComposer } from '../../../context/calendar-composer-context'
 import { composerGuestName } from '../../../core/composer-guests';
 import { createComposerGuestSelection } from '../../../primitives/create-composer-guest-additions';
 import { ComposerGuestPicker } from '../guests/ComposerGuestPicker';
+import { ComposerGuestStack } from './ComposerGuestStack';
 
 /** Full-width guest selector for the desktop composer. */
 export function ComposerGuestSelect() {
@@ -38,10 +39,13 @@ export function ComposerGuestSelect() {
           disabled={disabled()}
           aria-label={t('calendar.guests')}
         >
-          <span class="min-w-0 flex-1 truncate text-left">
-            {model.guests.selected.length
-              ? model.guests.selected.map(composerGuestName).join(', ')
-              : t('calendar.addGuests')}
+          <span class="flex min-w-0 flex-1 items-center gap-2 text-left">
+            <ComposerGuestStack guests={model.guests.selected} />
+            <span class="min-w-0 truncate">
+              {model.guests.selected.length
+                ? model.guests.selected.map(composerGuestName).join(', ')
+                : t('calendar.addGuests')}
+            </span>
           </span>
           <CaretDownIcon class="size-3.5" />
         </Popover.Trigger>

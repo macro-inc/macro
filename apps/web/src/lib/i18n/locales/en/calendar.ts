@@ -146,6 +146,8 @@ export default {
   wheelYear: 'Year',
   invalidTimeZoneRange:
     'These times do not form a valid range in the selected time zone.',
+  previewMissingTitle: 'Enter a title to preview this event.',
+  previewUnavailable: 'Calendar event preview unavailable.',
   closeComposer: 'Close event composer',
   moreOptions: 'More options',
   fewerOptions: 'Fewer options',

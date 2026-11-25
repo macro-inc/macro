@@ -130,7 +130,8 @@ including meetings in progress, rather than a separate unanswered-invitation lis
 ## Create, edit, and pin
 
 Desktop creation/editing uses one floating composer. Pinning moves the same draft
-into the left sidebar. The agent tool retains its independent desktop composition.
+into the left sidebar. The agent tool shares desktop fields and footer, while its
+review/apply actions and phone composition remain separate.
 The legacy split route opens the active composer; old forms remain unwired references.
 
 Drag an empty header toward the sidebar target to pin, or away to float. Editing
@@ -147,6 +148,12 @@ comma. The date group contains All day, Time zone, and Repeat, without Duration 
 More/Fewer. Guest/reminder multiselects preserve protected guests and non-popup
 reminders; Custom accepts minutes. Long Description/Location fields scroll inside.
 The footer contains Cancel, Create event/Save, and recurring scope when applicable.
+Desktop field groups use a 10px gap (`gap-2.5`). Capped descriptions expose a thin
+native scrollbar. Guest summaries and selectors show neutral avatar stacks before
+selected names. The agent draft and preview share equal columns once their container
+reaches 48rem; below that width they stack. Invalid preview drafts show composer
+date/range/zone feedback, missing-title feedback, or the calendar/conference reason;
+other rendering failures show preview unavailable.
 
 New drafts default to the next half hour for thirty minutes. Supplied ranges stay
 intact. Desktop start changes preserve duration until an end is chosen; crossing

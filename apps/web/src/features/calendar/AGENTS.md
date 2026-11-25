@@ -32,7 +32,7 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Keep Agenda on the navigation contract, never a FullCalendar view.
 - Use semantic colors, shared type scales, and standard control props; group related content with container gap/padding.
 - Share date/time arithmetic and parsing through `../../components/date-time-range/`; pass clock preferences from hosts.
-- Keep one composer model/context; leave replaced desktop and agent compositions independent.
+- Keep one composer model/context; share desktop fields and footer between the normal and agent composers while preserving agent review and phone composition.
 - Retain main's unwired reference forms and Pager; remove superseded branch-only implementations.
 - Let callers own `TraceFlow`; start interactions at actions and keep asynchronous work attached to its flow.
 

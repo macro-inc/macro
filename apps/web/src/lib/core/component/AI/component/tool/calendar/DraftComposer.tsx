@@ -9,7 +9,10 @@
  */
 
 import type { CreateCalendarEventFormControllerOptions } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
-import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
+import {
+  type EventEditorSubmitValues,
+  eventDateValidationError,
+} from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
 import { ComposerRoot } from '@app/features/calendar/components/composer/parts/ComposerRoot';
 import type { ComposerMetadataChanges } from '@app/features/calendar/core/composer-metadata';
@@ -23,6 +26,7 @@ import {
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { AgentComposer } from '@app/features/calendar/views/composer/AgentComposer';
 import { MobileAgentComposer } from '@app/features/calendar/views/composer/mobile/MobileAgentComposer';
+import { t } from '@app/lib/i18n';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -258,6 +262,21 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       ? (original.timeZone ?? undefined)
       : undefined;
   };
+  const previewValidationError = () => {
+    const state = controller.state();
+    return (
+      eventDateValidationError(state) ??
+      controller.dateRangeError() ??
+      (agent.model.timeZoneRangeInvalid()
+        ? t('calendar.invalidTimeZoneRange')
+        : undefined) ??
+      (state.title.trim() ? undefined : t('calendar.previewMissingTitle')) ??
+      controller.conferenceError() ??
+      (controller.selectedCalendarOption()
+        ? undefined
+        : t('calendar.chooseCalendar'))
+    );
+  };
 
   props.registerDraftReader?.(currentArgs);
   props.registerSubmitReader?.(async () => currentArgs());
@@ -340,56 +359,69 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
 
   return (
     <Layer depth={2}>
-      <div class="flex min-h-0 w-full flex-col gap-4">
-        <Show
-          when={isTouchDevice()}
-          fallback={
-            <div
-              data-calendar-tool-composer
-              class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
-            >
-              {status()}
-              <ComposerRoot model={agent.model} class="min-h-0 flex-1">
-                <AgentComposer
-                  onCancel={() =>
-                    fireAndForget(agent.cancel(), 'ai-calendar-compose')
-                  }
-                  resolveAppLink={resolveAppLink}
-                />
-              </ComposerRoot>
-            </div>
-          }
+      <div class="@container w-full">
+        <div
+          class="flex min-h-0 w-full flex-col gap-4"
+          classList={{
+            '@3xl:grid @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]':
+              !isTouchDevice() && props.showPreview !== false,
+          }}
         >
-          <MobileAgentComposer
-            model={agent.model}
-            resolveAppLink={resolveAppLink}
-            onCancel={() =>
-              fireAndForget(agent.cancel(), 'ai-calendar-compose')
-            }
-          >
-            {status()}
-          </MobileAgentComposer>
-        </Show>
-        <Show when={props.showPreview !== false}>
-          <ErrorBoundary
+          <Show
+            when={isTouchDevice()}
             fallback={
-              <div class="flex h-96 items-center justify-center rounded-xl border border-edge-muted bg-surface p-4 text-center text-xs text-ink-muted shadow-sm">
-                Calendar preview unavailable.
+              <div
+                data-calendar-tool-composer
+                class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
+              >
+                {status()}
+                <ComposerRoot model={agent.model} class="min-h-0 flex-1">
+                  <AgentComposer
+                    onCancel={() =>
+                      fireAndForget(agent.cancel(), 'ai-calendar-compose')
+                    }
+                    resolveAppLink={resolveAppLink}
+                  />
+                </ComposerRoot>
               </div>
             }
           >
-            <CalendarToolEventPreview
-              controller={controller}
-              eventId={`calendar-tool-preview:${props.previewKey}`}
-              submission={() => previewSubmission()?.values}
-              showPeriodLabel
-              showNavigationControls
-              timeZone={previewTimeZone()}
-              class="h-96 shrink-0"
-              createdEventId={props.createdEventId}
-            />
-          </ErrorBoundary>
-        </Show>
+            <MobileAgentComposer
+              model={agent.model}
+              resolveAppLink={resolveAppLink}
+              onCancel={() =>
+                fireAndForget(agent.cancel(), 'ai-calendar-compose')
+              }
+            >
+              {status()}
+            </MobileAgentComposer>
+          </Show>
+          <Show when={props.showPreview !== false}>
+            <ErrorBoundary
+              fallback={
+                <div class="flex h-96 items-center justify-center rounded-xl border border-edge-muted bg-surface p-4 text-center text-xs text-ink-muted shadow-sm">
+                  Calendar preview unavailable.
+                </div>
+              }
+            >
+              <CalendarToolEventPreview
+                controller={controller}
+                eventId={`calendar-tool-preview:${props.previewKey}`}
+                submission={() => previewSubmission()?.values}
+                validationError={previewValidationError}
+                showPeriodLabel
+                showNavigationControls
+                timeZone={previewTimeZone()}
+                class={
+                  isTouchDevice()
+                    ? 'h-96 min-w-0 shrink-0'
+                    : 'h-96 min-w-0 shrink-0 @3xl:h-full'
+                }
+                createdEventId={props.createdEventId}
+              />
+            </ErrorBoundary>
+          </Show>
+        </div>
       </div>
     </Layer>
   );

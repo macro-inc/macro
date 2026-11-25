@@ -12,6 +12,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import type { EventEditorDisabledFields } from '../components/composer/event-form-model';
+import { eventDateValidationError } from '../components/composer/event-form-model';
 import { outOfOfficeNoticeFor } from '../components/composer/out-of-office';
 import type { CalendarComposerOptions } from '../core/composer';
 import { DEFAULT_CALENDAR_SOURCE } from '../types';
@@ -47,11 +48,17 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
   };
   const detailsLocked = () => options.detailsReadOnlyReason !== undefined;
   const pastEventWarning = () =>
-    controller.dateRangeError() || timeZoneRangeInvalid()
+    eventDateValidationError(state()) ||
+    controller.dateRangeError() ||
+    timeZoneRangeInvalid()
       ? undefined
       : controller.pastEventWarning();
   const dateRangeDescribedBy = () => {
-    if (controller.dateRangeError() || timeZoneRangeInvalid())
+    if (
+      eventDateValidationError(state()) ||
+      controller.dateRangeError() ||
+      timeZoneRangeInvalid()
+    )
       return ids.dateRangeError;
     return pastEventWarning() ? ids.pastEventWarning : undefined;
   };
@@ -156,7 +163,9 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     },
     get invalid() {
       return (
-        controller.dateRangeError() !== undefined || timeZoneRangeInvalid()
+        eventDateValidationError(state()) !== undefined ||
+        controller.dateRangeError() !== undefined ||
+        timeZoneRangeInvalid()
       );
     },
     get describedBy() {

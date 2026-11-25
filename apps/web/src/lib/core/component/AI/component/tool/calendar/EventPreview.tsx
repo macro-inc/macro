@@ -6,6 +6,7 @@ import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-cale
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import type { CalendarGridPeriodView } from '@app/features/calendar/types';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import { t } from '@app/lib/i18n';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { formatLocalDate } from '@core/util/local-date';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -162,6 +163,8 @@ interface CalendarToolEventPreviewProps {
   timeZone?: string;
   /** Optional validated draft snapshot, including explicit zone and recurrence edits. */
   submission?: Accessor<EventEditorSubmitValues | undefined>;
+  /** The same field validation reported by the composer. */
+  validationError?: Accessor<string | undefined>;
   /** Whether to display the preview date's month and year above the grid. */
   showPeriodLabel?: boolean;
   /** Whether to show previous/next controls in week and month views. */
@@ -427,7 +430,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
           </Show>
           <Show when={previewEvent() === undefined}>
             <div class="pointer-events-none absolute inset-x-2 top-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-center text-xs text-ink-muted shadow-sm">
-              Enter an end time after the start time to preview this event.
+              {props.validationError?.() ?? t('calendar.previewUnavailable')}
             </div>
           </Show>
           <Show when={occurrenceData.isLoading()}>

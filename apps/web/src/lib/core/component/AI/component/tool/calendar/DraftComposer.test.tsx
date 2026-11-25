@@ -88,12 +88,16 @@ vi.mock('@ui', async () => {
 vi.mock('./EventPreview', () => ({
   CalendarToolEventPreview: (props: {
     timeZone?: string;
+    validationError?: () => string | undefined;
     submission?: () =>
       | { time: { kind: string; startsAt?: string } }
       | undefined;
   }) => (
     <>
       <output aria-label="Preview zone">{props.timeZone}</output>
+      <output aria-label="Preview validation">
+        {props.validationError?.()}
+      </output>
       <output aria-label="Preview start">
         {props.submission?.()?.time.startsAt}
       </output>
@@ -272,6 +276,93 @@ it('previews the same explicit time zone and instant that a review submits', asy
   }
 });
 
+it.each([
+  ['', '2030-01-01T13:00:00Z', 'Enter a start date.'],
+  ['2030-01-01T12:00:00Z', '', 'Enter an end date.'],
+])('reports an incomplete range (%s, %s)', (startsAt, endsAt, message) => {
+  mocks.touch = true;
+  showDraft(
+    undefined,
+    { time: { kind: 'timed', startsAt, endsAt } },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toBe(message);
+});
+
+it('reports the selected-zone DST gap rather than an end-time error', () => {
+  mocks.touch = true;
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: '2030-03-10T02:30:00Z',
+        endsAt: '2030-03-10T03:30:00Z',
+        timeZone: 'UTC',
+      },
+    },
+    undefined,
+    true
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select zone' }));
+  expect(screen.getByLabelText('Preview validation').textContent).toBe(
+    'These times do not form a valid range in the selected time zone.'
+  );
+});
+
+it('reports the blocking draft field to the preview without changing review actions', () => {
+  mocks.touch = true;
+  showDraft(undefined, { title: '' }, undefined, true);
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'title'
+  );
+  cleanup();
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: '2030-01-01T13:00:00Z',
+        endsAt: '2030-01-01T12:00:00Z',
+      },
+    },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'End time'
+  );
+  cleanup();
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: 'invalid',
+        endsAt: '2030-01-01T12:00:00Z',
+      },
+    },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'start date'
+  );
+  cleanup();
+  showDraft(
+    undefined,
+    {
+      time: { kind: 'allDay', startDate: '2030-01-03', endDate: '2030-01-01' },
+    },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'End date'
+  );
+  expect(mocks.execute).not.toHaveBeenCalled();
+});
 describe('AI calendar draft account selection', () => {
   it.each([
     { calendarError: true, linksError: false },
