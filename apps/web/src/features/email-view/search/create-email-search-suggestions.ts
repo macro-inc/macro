@@ -1,6 +1,12 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   completeEmailSearchOperator,
@@ -90,6 +96,8 @@ export type EmailSearchSuggestions = ListSearchSuggestions & {
   listed: Accessor<EmailSearchSuggestion[]>;
   focused: Accessor<boolean>;
   setFocused: (focused: boolean) => void;
+  /** Enter in the field runs the typed search, so it is remembered. */
+  commit: () => void;
   /**
    * A picked search has no results yet when the keyboard moves to the list,
    * so the list takes its first row once they arrive. Typing again cancels.
@@ -99,14 +107,28 @@ export type EmailSearchSuggestions = ListSearchSuggestions & {
 };
 
 /**
- * The rows offered under Email's search field. A search is remembered once
- * the field is left with words in it, not on every keystroke, and with its
- * `in:` filter.
+ * The rows offered under Email's search field. A search is remembered, with
+ * its `in:` filter, once the person settles on it: Enter, a picked recent
+ * search, opening a thread while it is on screen, or leaving the field with
+ * its own results on screen. Not on every keystroke, nor when another window
+ * or app takes the focus.
  */
 export function createEmailSearchSuggestions(options: {
   userId: Accessor<string | undefined>;
   search: Accessor<string>;
   setSearch: (search: string) => void;
+  /**
+   * The list shows the typed search's own results, at least one, not rows
+   * kept on screen from the search before.
+   */
+  hasResults: Accessor<boolean>;
+  /** The thread the list last opened, a new value each time. */
+  openedThread: Accessor<{ id: string } | undefined>;
+  /**
+   * Whether a thread is one of the typed search's own results, not a row
+   * kept on screen from the search before.
+   */
+  isResult: (threadId: string) => boolean;
   /** Whether the person has the view, such as Focus behind its flag. */
   scopeAvailable: (scope: EmailSearchScopeId) => boolean;
   /**
@@ -183,6 +205,39 @@ export function createEmailSearchSuggestions(options: {
     return completeEmailSearchOperator(token);
   };
 
+  // Remembered as it searched, without an operator still being typed.
+  const remember = () => {
+    if (parseEmailSearch(options.search()).query)
+      recent.add(completeEmailSearch(options.search()));
+  };
+
+  // A last word the rows offer to finish as an operator's name (`bef` for
+  // `before:`) is most likely on its way to one, not the word searched for.
+  const typesOperatorName = () => {
+    const token = typedToken(options.search())?.token;
+    return (
+      token !== undefined &&
+      completeEmailSearchOperator(token).some((row) => row.kind === 'operator')
+    );
+  };
+
+  // Another window or app taking the focus blurs the field too, but the
+  // page then has no focus: the person comes back to the field as it was.
+  const leftWithResults = () =>
+    document.hasFocus() && options.hasResults() && !typesOperatorName();
+
+  // A thread opened from the search's results settles it, whether or not the
+  // field saw a blur first (iOS keeps focus in it for a tap on a row).
+  createEffect(
+    on(
+      options.openedThread,
+      (thread) => {
+        if (thread !== undefined && options.isResult(thread.id)) remember();
+      },
+      { defer: true }
+    )
+  );
+
   const listed = createMemo((): EmailSearchSuggestion[] => {
     if (!focused()) return [];
 
@@ -221,13 +276,12 @@ export function createEmailSearchSuggestions(options: {
     focused,
     setFocused: (next) => {
       if (next) setAwaitsPickedResults(false);
-      // Remembered as it searched, without an `in:` still being typed.
-      else if (parseEmailSearch(options.search()).query)
-        recent.add(completeEmailSearch(options.search()));
+      else if (leftWithResults()) remember();
 
       setActive(-1);
       setFocusedState(next);
     },
+    commit: remember,
     listId: SEARCH_SUGGESTIONS_LIST_ID,
     activeId: () => {
       const index = active();
@@ -247,6 +301,7 @@ export function createEmailSearchSuggestions(options: {
       match(suggestion)
         .with({ kind: 'recent' }, ({ search }) => {
           options.setSearch(search);
+          recent.add(search);
           setAwaitsPickedResults(true);
         })
         // The view replaces the `in:` being typed, where it was typed.

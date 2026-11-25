@@ -1,13 +1,19 @@
 import { createRoot, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
-import { beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   createEmailSearchSuggestions,
   type EmailSearchSuggestions,
 } from './create-email-search-suggestions';
 import { emailSearchCompletionText } from './email-search-operators';
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  // jsdom calls the page unfocused whenever no element has focus, as during
+  // a blur; a browser does only while another window or app has the focus.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+});
+afterEach(() => vi.restoreAllMocks());
 
 const recentListed = (suggestions: EmailSearchSuggestions) =>
   suggestions.listed().map((row) =>
@@ -42,15 +48,34 @@ const LABELS = [
 
 function setup(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
+  const [hasResults, setHasResults] = createSignal(true);
+  const [openedThread, setOpenedThread] = createSignal<{ id: string }>();
+  // Threads kept on screen from the search before, not among its results.
+  const keptRows = ['kept-thread'];
   const suggestions = createEmailSearchSuggestions({
     userId: () => 'user-a',
     search,
     setSearch,
+    hasResults,
+    openedThread,
+    isResult: (thread) => !keptRows.includes(thread),
     scopeAvailable: (scope) => scope !== 'focus',
     people: () => PEOPLE,
     labels: () => LABELS,
   });
-  return { search, setSearch, suggestions };
+  /** The list opens a thread. */
+  const openThread = (id: string) => setOpenedThread({ id });
+  return { search, setSearch, setHasResults, openThread, suggestions };
+}
+
+/** The recent searches the empty field lists. */
+function remembered(
+  setSearch: (search: string) => void,
+  suggestions: EmailSearchSuggestions
+) {
+  setSearch('');
+  suggestions.setFocused(true);
+  return recentListed(suggestions);
 }
 
 it('remembers a search once the field is left with it', () => {
@@ -65,6 +90,122 @@ it('remembers a search once the field is left with it', () => {
     setSearch('');
     suggestions.setFocused(true);
     expect(recentListed(suggestions)).toEqual(['budget']);
+    dispose();
+  });
+});
+
+it('remembers a search left with its results on screen, not one left before they arrive', () => {
+  createRoot((dispose) => {
+    const { setSearch, setHasResults, suggestions } = setup();
+    setHasResults(false);
+    suggestions.setFocused(true);
+    setSearch('budg');
+    suggestions.setFocused(false);
+    expect(remembered(setSearch, suggestions)).toEqual([]);
+
+    setSearch('budget');
+    setHasResults(true);
+    suggestions.setFocused(false);
+    expect(remembered(setSearch, suggestions)).toEqual(['budget']);
+    dispose();
+  });
+});
+
+it('does not remember a search when another window takes the focus from the page', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+    setSearch('budg');
+    vi.mocked(document.hasFocus).mockReturnValue(false);
+    suggestions.setFocused(false);
+
+    vi.mocked(document.hasFocus).mockReturnValue(true);
+    expect(remembered(setSearch, suggestions)).toEqual([]);
+    dispose();
+  });
+});
+
+it('remembers a search on Enter, before its results arrive', () => {
+  createRoot((dispose) => {
+    const { setSearch, setHasResults, suggestions } = setup();
+    setHasResults(false);
+    suggestions.setFocused(true);
+    setSearch('budget before:2026/1');
+    suggestions.commit();
+
+    expect(remembered(setSearch, suggestions)).toEqual(['budget']);
+    dispose();
+  });
+});
+
+it('leaves a word on its way to an operator unremembered, unless Enter runs it', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    for (const typed of ['bef', 'befo', 'invoice ne', '-sub']) {
+      suggestions.setFocused(true);
+      setSearch(typed);
+      suggestions.setFocused(false);
+    }
+    expect(remembered(setSearch, suggestions)).toEqual([]);
+
+    // A space after the word, or Enter, says it is the word searched for.
+    setSearch('invoice new ');
+    suggestions.setFocused(false);
+    suggestions.setFocused(true);
+    setSearch('new');
+    suggestions.commit();
+    expect(remembered(setSearch, suggestions)).toEqual(['new', 'invoice new']);
+    dispose();
+  });
+});
+
+it('remembers a search when the list opens a thread from it, the field still focused', () => {
+  // Mounted first, as the view is, so its effects run before the person acts.
+  const { dispose, setSearch, setHasResults, openThread, suggestions } =
+    createRoot((dispose) => ({ dispose, ...setup() }));
+  setHasResults(false);
+  suggestions.setFocused(true);
+  // A word the field offers to finish as an operator still counts here.
+  setSearch('flights la');
+  openThread('thread-1');
+  suggestions.setFocused(false);
+  expect(remembered(setSearch, suggestions)).toEqual(['flights la']);
+
+  // The same thread opened again from another search counts again.
+  setSearch('lisbon');
+  openThread('thread-1');
+  expect(remembered(setSearch, suggestions)).toEqual(['lisbon', 'flights la']);
+  dispose();
+});
+
+it('does not remember a search for a thread it did not find', () => {
+  const { dispose, setSearch, setHasResults, openThread, suggestions } =
+    createRoot((dispose) => ({ dispose, ...setup() }));
+  setHasResults(false);
+  suggestions.setFocused(true);
+  // A row kept on screen from the search before, while this one loads.
+  setSearch('bef');
+  openThread('kept-thread');
+  suggestions.setFocused(false);
+
+  expect(remembered(setSearch, suggestions)).toEqual([]);
+  dispose();
+});
+
+it('puts a picked recent search first', () => {
+  localStorage.setItem(
+    'macro:email:recent-searches:v1:user-a',
+    JSON.stringify(['budget', 'invoice'])
+  );
+  createRoot((dispose) => {
+    const { search, setSearch, setHasResults, suggestions } = setup();
+    setHasResults(false);
+    suggestions.setFocused(true);
+    suggestions.pick(1);
+    expect(search()).toBe('invoice');
+    suggestions.setFocused(false);
+
+    expect(remembered(setSearch, suggestions)).toEqual(['invoice', 'budget']);
     dispose();
   });
 });
@@ -378,6 +519,9 @@ it('keeps the row the keyboard picked out as people arrive around it', () => {
       userId: () => 'user-a',
       search,
       setSearch,
+      hasResults: () => true,
+      openedThread: () => undefined,
+      isResult: () => true,
       scopeAvailable: () => true,
       people,
     });
