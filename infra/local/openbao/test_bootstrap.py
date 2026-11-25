@@ -11,7 +11,7 @@ import unittest
 from uuid import uuid4
 
 from bootstrap import LocalOpenBao
-from openbao_provisioning import OpenBaoRequestError, configure_kv, provision_team as bootstrap
+from openbao_provisioning import OpenBaoRequestError, bootstrap_root, configure_kv, provision_team
 
 
 def encoded(value):
@@ -36,7 +36,8 @@ class BootstrapIntegration(unittest.TestCase):
                 "openssl", "pkey", "-in", str(private_key), "-pubout",
             ]).decode()
             for team in (first_team, second_team):
-                bootstrap(root, team, public_key, "local-integration")
+                bootstrap_root(root, [public_key], "local-integration", ["RS256"])
+                provision_team(root, team, [public_key], "local-integration", ["RS256"], overwrite=True)
             auditing = root.request("GET", "sys/config/auditing/request-headers/x-macro-audit-id")
             self.assertFalse(auditing["x-macro-audit-id"]["hmac"])
 
@@ -101,7 +102,8 @@ class BootstrapIntegration(unittest.TestCase):
                     service.request(method, path, body, first_namespace)
             history = service.request("GET", "passwords/data/item?version=1", namespace=first_namespace)
             self.assertEqual(history["data"]["data"]["password"], "synthetic-version-one")
-            bootstrap(root, first_team, public_key, "local-integration")
+            bootstrap_root(root, [public_key], "local-integration", ["RS256"])
+            provision_team(root, first_team, [public_key], "local-integration", ["RS256"], overwrite=True)
             current = service.request("GET", "passwords/data/item", namespace=first_namespace)
             self.assertEqual(current["data"]["metadata"]["version"], 2)
             service.request("POST", "totp/keys/item", {

@@ -19,7 +19,7 @@ import sys
 from urllib.request import HTTPSHandler, ProxyHandler, build_opener
 from uuid import UUID
 
-from openbao_provisioning import NoRedirect, OpenBaoClient, provision_team
+from openbao_provisioning import NoRedirect, OpenBaoClient, bootstrap_root, provision_team
 
 HOSTNAME = "openbao-dev.macro-internal.com"
 ORIGIN = f"https://{HOSTNAME}"
@@ -75,17 +75,20 @@ def main():
     parser.add_argument("--jwt-public-key", required=True, type=Path)
     parser.add_argument("--jwt-issuer", required=True)
     parser.add_argument("--connect", type=parse_connect, help="loopback host:port of the operator tunnel")
+    parser.add_argument("--provisioner-public-key", type=Path,
+                        help="the scoped provisioner's PEM public key; re-renders its pinned policy")
+    parser.add_argument("--provisioner-issuer", help="the scoped provisioner's JWT issuer")
     arguments = parser.parse_args()
     token = os.environ.get("BAO_TOKEN")
     if not token:
         parser.error("BAO_TOKEN is required (read it from Doppler openbao/dev; never pass it as an argument)")
-    namespace = provision_team(
-        HostedOpenBao(token, arguments.connect),
-        arguments.team_id,
-        arguments.jwt_public_key.read_text(),
-        arguments.jwt_issuer,
-    )
-    print(f"Provisioned hosted Passwords namespace {namespace}")
+    client = HostedOpenBao(token, arguments.connect)
+    public_keys = [arguments.jwt_public_key.read_text()]
+    provisioner_key = arguments.provisioner_public_key and arguments.provisioner_public_key.read_text()
+    bootstrap_root(client, public_keys, arguments.jwt_issuer, ["RS256"], provisioner_key, arguments.provisioner_issuer)
+    # Operators re-apply config (key rotation); the scoped provisioner never overwrites.
+    result = provision_team(client, arguments.team_id, public_keys, arguments.jwt_issuer, ["RS256"], overwrite=True)
+    print(f"Provisioned hosted Passwords namespace {result.namespace}")
 
 
 if __name__ == "__main__":
