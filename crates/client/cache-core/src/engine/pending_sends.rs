@@ -1,10 +1,13 @@
-//! Queued sends whose message the device already has.
+//! What a queued write shows of messages the device has, and of those it lacks.
 
 use super::channel_write::ChannelAdmission;
-use super::{Engine, EngineError, Storage};
-use crate::channel_timeline::{ChannelGuardQuery, MESSAGE_TYPENAME, project_channel_timeline};
+use super::{Engine, EngineError, OptimisticLayer, Storage};
+use crate::channel_timeline::{
+    ChannelGuardQuery, MESSAGE_TYPENAME, is_channel_entry, project_channel_timeline,
+};
+use crate::identity::DELETED_FIELD;
 use crate::normalize::RecordUpdates;
-use crate::value::{EntityKey, Record};
+use crate::value::{CacheValue, EntityKey, Record};
 use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 
@@ -12,6 +15,26 @@ use uuid::Uuid;
 /// message's id.
 pub(super) fn sent_message(uuid: Uuid) -> EntityKey<'static> {
     EntityKey::entity(MESSAGE_TYPENAME, &[&uuid.to_string()])
+}
+
+/// Makes an entry `updates` only name, with nothing under it, read as deleted: a
+/// list that names it leaves it out, instead of not being readable.
+pub(super) fn leave_out_unheld(
+    updates: &mut RecordUpdates,
+    bases: &HashMap<EntityKey<'static>, Record>,
+    earlier: &[OptimisticLayer],
+) {
+    for (key, update) in updates {
+        let mut fields = update.fields.keys();
+        let only_named = fields.all(|field| field == "id" || field == "__typename");
+        let held =
+            bases.contains_key(key) || earlier.iter().any(|layer| layer.updates.contains_key(key));
+        if only_named && !held && is_channel_entry(key) {
+            update
+                .fields
+                .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
+        }
+    }
 }
 
 /// What the device has of an entry a timeline lists or knows removed.

@@ -632,16 +632,21 @@ export function predictedRoot(
 }
 
 /**
- * What a write of a reply changes of its root: the rest of it stays the
- * server's while the write is queued. The replies of the preview are predicted
- * whole: the device may lose one, and one it only knows by name would leave the
- * root unreadable.
+ * What a write of a reply changes of its root: the thread, which names the
+ * replies of its preview. What else is known of the messages stays the
+ * server's while the write is queued.
  */
 function threadOnly(root: ChannelMessageFieldsFragment) {
   return {
     __typename: CHANNEL_MESSAGE_TYPENAME,
     id: root.id,
-    thread: root.thread,
+    thread: root.thread && {
+      ...root.thread,
+      preview: root.thread.preview.map(({ id }) => ({
+        __typename: CHANNEL_MESSAGE_TYPENAME,
+        id,
+      })),
+    },
   };
 }
 

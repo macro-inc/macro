@@ -21,6 +21,7 @@ use channels::{
 
 const SENT: &str = "11111111-1111-4111-8111-111111111111";
 const EDIT: &str = "22222222-2222-4222-8222-222222222222";
+const FIRST: &str = "44444444-4444-4444-8444-444444444444";
 const REPLY: &str = "33333333-3333-4333-8333-333333333333";
 /// Past every position the server gives.
 const UNPLACED: &str = "90";
@@ -159,9 +160,10 @@ async fn queue_edit(engine: &mut TestEngine, content: &str) {
     queue(engine, EDIT, "editChannelMessage", None, &edited).await;
 }
 
-/// What a reply predicts of its root: the thread alone.
+/// What a reply predicts of its root: the thread alone, naming its replies.
 fn threaded(id: &str, replies: &[Value]) -> Value {
-    let previews = replies.iter().cloned().map(previewed).collect::<Vec<_>>();
+    let named = |reply: &Value| json!({ "__typename": "GraphqlChannelMessage", "id": reply["id"] });
+    let previews = replies.iter().map(named).collect::<Vec<_>>();
     let thread = with_preview(json!({}), &previews)["thread"].take();
     json!({ "__typename": "GraphqlChannelMessage", "id": id, "thread": thread })
 }
@@ -249,14 +251,14 @@ fn a_queued_reply_still_shows_on_a_queued_root() {
         let mut engine = held().await;
         queue_send(&mut engine).await;
         let own = reply(REPLY, "~91", SENT);
-        let replied = threaded(SENT, std::slice::from_ref(&own));
-        queue_reply(&mut engine, &replied, &own).await;
+        let root_thread = threaded(SENT, std::slice::from_ref(&own));
+        queue_reply(&mut engine, &root_thread, &own).await;
 
         let unanswered = with_preview(saying(root(SENT, "20"), "sent"), &[]);
         push(&mut engine, "11", &[unanswered], &changes("c1", "10", "11")).await;
         let shown = shown(&mut engine, SENT).await;
         assert_eq!(shown["sortKey"], "20");
-        assert_eq!(shown["thread"], replied["thread"]);
+        assert_eq!(shown["thread"]["preview"], json!([previewed(own)]));
     });
 }
 
@@ -546,5 +548,120 @@ fn a_dropped_thread_takes_the_arrived_reply_with_it() {
         let count = reply_count(&mut engine).await;
         engine.refresh_optimistic_queue().await.unwrap();
         assert_eq!(reply_count(&mut engine).await, count);
+    });
+}
+
+/// m1 and its thread read whole at 11, with `replies`.
+async fn threaded_channel(replies: &[Value]) -> TestEngine {
+    let mut engine = held().await;
+    let spans = [None, Some("m1")];
+    let read = page(
+        "c1",
+        "11",
+        spans
+            .map(|thread| coverage(thread, TIMELINE_START, TIMELINE_HEAD))
+            .into(),
+    );
+    let entries = [&[replied(replies)], replies].concat();
+    push(&mut engine, "11", &entries, &read).await;
+    engine
+}
+
+async fn thread(engine: &mut TestEngine) -> Vec<String> {
+    listed(engine, &channels::replies("c1", "m1"))
+        .await
+        .unwrap()
+}
+
+#[test]
+fn a_reset_that_drops_a_previewed_reply_leaves_its_root_readable() {
+    block_on(async {
+        let r2 = reply("r2", "~21", "m1");
+        let mut engine = threaded_channel(std::slice::from_ref(&r2)).await;
+        let own = reply(REPLY, "~91", "m1");
+        queue_reply(&mut engine, &threaded("m1", &[r2, own.clone()]), &own).await;
+
+        let reset = ChannelTimelineCommit {
+            reset: true,
+            ..whole("20")
+        };
+        push(&mut engine, "20", &[replied(&[])], &reset).await;
+        let preview = shown(&mut engine, "m1").await["thread"]["preview"].take();
+        assert_eq!(preview, json!([previewed(own)]));
+    });
+}
+
+#[test]
+fn a_previewed_reply_edited_meanwhile_shows_the_edit() {
+    block_on(async {
+        let r2 = reply("r2", "~21", "m1");
+        let mut engine = threaded_channel(std::slice::from_ref(&r2)).await;
+        let own = reply(REPLY, "~91", "m1");
+        queue_reply(
+            &mut engine,
+            &threaded("m1", &[r2.clone(), own.clone()]),
+            &own,
+        )
+        .await;
+
+        let edited = saying(r2, "edited");
+        let entries = [replied(std::slice::from_ref(&edited)), edited];
+        push(&mut engine, "12", &entries, &changes("c1", "11", "12")).await;
+        assert_eq!(shown(&mut engine, "r2").await["content"], "edited");
+    });
+}
+
+#[test]
+fn a_previewed_reply_deleted_meanwhile_stays_deleted() {
+    block_on(async {
+        let r2 = reply("r2", "~21", "m1");
+        let mut engine = threaded_channel(std::slice::from_ref(&r2)).await;
+        let own = reply(REPLY, "~91", "m1");
+        queue_reply(
+            &mut engine,
+            &threaded("m1", &[r2.clone(), own.clone()]),
+            &own,
+        )
+        .await;
+
+        let mut deleted = r2;
+        deleted["deletedAt"] = json!("2026-10-15T00:00:00Z");
+        let entries = [replied(&[]), deleted];
+        push(&mut engine, "12", &entries, &changes("c1", "11", "12")).await;
+        assert_eq!(thread(&mut engine).await, [REPLY]);
+
+        let sent = reply(REPLY, "~31", "m1");
+        let root = replied(std::slice::from_ref(&sent));
+        let entries = [root.clone(), sent];
+        push(&mut engine, "13", &entries, &changes("c1", "12", "13")).await;
+        assert_eq!(shown(&mut engine, "m1").await["thread"], root["thread"]);
+        assert_eq!(thread(&mut engine).await, [REPLY]);
+    });
+}
+
+#[test]
+fn a_reply_rolled_back_leaves_the_preview_a_later_one_predicted() {
+    block_on(async {
+        let mut engine = threaded_channel(&[]).await;
+        let first = reply(FIRST, "~91", "m1");
+        let one = threaded("m1", std::slice::from_ref(&first));
+        let claim = queue(&mut engine, FIRST, "sendChannelMessage", Some(&one), &first).await;
+        let own = reply(REPLY, "~92", "m1");
+        queue_reply(&mut engine, &threaded("m1", &[first, own.clone()]), &own).await;
+        assert_eq!(thread(&mut engine).await, [REPLY, FIRST]);
+
+        let (transaction, token) = claim.unwrap();
+        let rolled_back = engine.rollback_optimistic_write(transaction, token).await;
+        rolled_back.unwrap();
+        assert_eq!(thread(&mut engine).await, [REPLY]);
+        let preview = shown(&mut engine, "m1").await["thread"]["preview"].take();
+        assert_eq!(preview, json!([previewed(own)]));
+
+        let sent = reply(REPLY, "~31", "m1");
+        let root = replied(std::slice::from_ref(&sent));
+        let entries = [root.clone(), sent];
+        push(&mut engine, "12", &entries, &changes("c1", "11", "12")).await;
+        assert_eq!(shown(&mut engine, "m1").await["thread"], root["thread"]);
+        assert_eq!(thread(&mut engine).await, [REPLY]);
     });
 }
