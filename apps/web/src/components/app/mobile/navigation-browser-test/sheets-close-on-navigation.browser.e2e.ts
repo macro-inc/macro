@@ -127,6 +127,8 @@ const PAGE_OVERLAYS: {
   name: string;
   open: (page: Page) => Promise<void>;
   overlay: (page: Page) => Locator;
+  /** A sheet on phones (where `settled` applies) and a dialog on tablets. */
+  sheetOnPhone?: boolean;
 }[] = [
   {
     name: 'the photo viewer',
@@ -147,6 +149,7 @@ const PAGE_OVERLAYS: {
     name: 'the share dialog',
     open: (page) => page.getByRole('button', { name: 'Share' }).tap(),
     overlay: (page) => page.getByRole('heading', { name: 'Share document' }),
+    sheetOnPhone: true,
   },
   {
     name: 'the create menu',
@@ -160,7 +163,7 @@ for (const overlay of PAGE_OVERLAYS) {
     await overlay.open(page);
     await expect(overlay.overlay(page)).toBeVisible();
     // On phones the share dialog is a sheet: let its opening slide end.
-    await expect(page.locator('[data-transitioning]')).toHaveCount(0);
+    if (overlay.sheetOnPhone) await settled(page.getByRole('dialog'));
 
     await page.evaluate(
       (channel) => window.navigationFixture.tapNotification(channel),
