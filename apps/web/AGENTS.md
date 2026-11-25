@@ -580,7 +580,13 @@ container scan per node.
 Collaborative Markdown editing across several peers has a fast-check fuzzer and
 the fixed scenarios it found; see
 `src/lib/core/component/LexicalMarkdown/fuzz/README.md` before changing
-`CollabProvider`, caret mapping, or Loro undo.
+`CollabProvider`, caret mapping, or Loro undo. Its `focus.browser.e2e.ts`
+checks that focus never leaves another pane's field while collaborators edit a
+document holding every decorator type. Lexical is patched so an editor never
+writes its selection while focus is in another text field unless
+`editor.focus()` asks; the Markdown core suite's `focus-guard.browser.e2e.ts`
+covers that, and that toolbar buttons, menus, closing prompts and the title's
+Enter and Tab still move the caret into the document.
 
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and

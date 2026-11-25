@@ -708,6 +708,7 @@
   ],
   "patchedDependencies": {
     "@kobalte/utils@0.9.2": "apps/web/patches/@kobalte%2Futils@0.9.2.patch",
+    "lexical@0.45.0": "apps/web/patches/lexical-0.45.0.patch",
     "@lexical/table@0.45.0": "apps/web/patches/@lexical%2Ftable@0.45.0.patch",
     "@tanstack/virtual-core@3.17.8": "apps/web/patches/@tanstack%2Fvirtual-core@3.17.8.patch",
     "@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",

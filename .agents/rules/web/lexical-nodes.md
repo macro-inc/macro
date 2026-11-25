@@ -40,6 +40,15 @@ A decorator or plugin that writes on its own (saving a size it measured, a URL
 it resolved, data it loaded) tags the update with `BACKGROUND_UPDATE_TAGS` from
 `@macro-inc/lexical-core` and writes only when the value changed, never just
 because it mounted. Lexical keeps a blurred editor's selection, and an untagged
-update writes it back into the page, which pulls focus out of whatever the
-person is typing in (a composer in another split) whenever a collaborator's edit
-remounts the decorator.
+update writes it back into the page. Our Lexical patch stops that while focus
+is in another text field, but from a button, a menu or the page body the write
+still moves focus into the editor.
+
+## Move focus before moving the caret between fields
+
+Lexical is patched (`apps/web/patches/lexical-0.45.0.patch`) so an editor
+never writes its selection into the page while focus is in another text field
+(an input, a textarea, another contenteditable), unless `editor.focus()` asks.
+Code that moves the caret from one field into an editor (the document title's
+Enter and Tab) focuses the editor's root, or calls `editor.focus()`, before or
+with the update.

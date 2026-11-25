@@ -9,41 +9,23 @@ import {
   singleLinePlugin,
   tagsPlugin,
 } from '@core/component/LexicalMarkdown/plugins/';
-import { $selectDocumentStart } from '@core/component/LexicalMarkdown/plugins/block-decorator-navigation';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
-  $getCaretRect,
   forceSetTextContent,
   initializeEditorEmpty,
-  isRectFlushWith,
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { createRenameDssEntityMutation } from '@entity';
-import { mergeRegister } from '@lexical/utils';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQueryClient } from '@tanstack/solid-query';
-import {
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  COMMAND_PRIORITY_NORMAL,
-  KEY_ARROW_DOWN_COMMAND,
-  KEY_ARROW_RIGHT_COMMAND,
-  KEY_ENTER_COMMAND,
-  KEY_ESCAPE_COMMAND,
-  KEY_TAB_COMMAND,
-  type LexicalEditor,
-} from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_NORMAL, KEY_ESCAPE_COMMAND } from 'lexical';
 import { ResultAsync } from 'neverthrow';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -55,6 +37,7 @@ import {
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 import { shouldAutofocusDocument } from './should-autofocus-document';
+import { titleNavigationPlugin } from './title-navigation';
 
 type TitleRename = {
   newName: string;
@@ -69,99 +52,6 @@ type TitleRenameVariables = {
 
 /** What a title rename mutation returns. */
 type TitleRenameResult = { success: boolean };
-
-/**
- * Use the plugin architecture to set up command handlers on both the
- * title editor and the main editor. Pressing enter or the arrows can
- * trigger navigation between the two editors if certain conditions are met.
- * TODO (seamus): Consider making more robust if we get into a situation
- *     where there are three or more editors on one page.
- */
-function titleNavigationPlugin(
-  documentEditor: LexicalEditor,
-  ignoreArrows: Accessor<boolean>
-) {
-  return (titleEditor: LexicalEditor) =>
-    mergeRegister(
-      // Press enter in the title editor.
-      titleEditor.registerCommand(
-        KEY_ENTER_COMMAND,
-        (event) => {
-          if (!event) return false;
-          if (ignoreArrows()) return true;
-          event?.preventDefault();
-          // Prepend a new paragraph to the main editor.
-          documentEditor.update(() => {
-            const root = $getRoot();
-            const firstChild = root.getFirstChild();
-            const paragraph = $createParagraphNode();
-            paragraph.append($createTextNode(''));
-            firstChild
-              ? firstChild.insertBefore(paragraph)
-              : root.append(paragraph);
-            paragraph.selectEnd();
-          });
-          return true;
-        },
-        COMMAND_PRIORITY_NORMAL
-      ),
-      // Press arrow down in the title editor.
-      titleEditor.registerCommand(
-        KEY_ARROW_DOWN_COMMAND,
-        (event: KeyboardEvent) => {
-          if (ignoreArrows()) return true;
-          const rect = titleEditor.getRootElement()?.getBoundingClientRect();
-          if (!rect) return false;
-          const caret = $getCaretRect() ?? rect;
-          if (!isRectFlushWith(caret, rect, 'bottom', 5)) return false;
-
-          event?.preventDefault();
-          // A node selection places no DOM caret, so focus the body first.
-          documentEditor.getRootElement()?.focus({ preventScroll: true });
-          documentEditor.update($selectDocumentStart);
-          return true;
-        },
-        COMMAND_PRIORITY_NORMAL
-      ),
-      // Press right from the end of the title.
-      titleEditor.registerCommand(
-        KEY_ARROW_RIGHT_COMMAND,
-        (event: KeyboardEvent) => {
-          if (ignoreArrows()) return true;
-          const selection = $getSelection();
-          if (!$isRangeSelection(selection) || !selection.isCollapsed())
-            return false;
-          const anchorNode = selection.anchor.getNode();
-          const len = anchorNode.getTextContent().length;
-          if (selection.anchor.offset !== len) return false;
-          if (anchorNode.getParent()?.getLastChild() !== anchorNode)
-            return false;
-
-          event?.preventDefault();
-          // A node selection places no DOM caret, so focus the body first.
-          documentEditor.getRootElement()?.focus({ preventScroll: true });
-          documentEditor.update($selectDocumentStart);
-          return true;
-        },
-        COMMAND_PRIORITY_NORMAL
-      ),
-      // Press tab in the title. Without this the browser moves focus to the
-      // tag controls below the title instead of the body.
-      titleEditor.registerCommand(
-        KEY_TAB_COMMAND,
-        (event: KeyboardEvent) => {
-          if (ignoreArrows()) return true;
-          if (event.shiftKey) return false;
-
-          event.preventDefault();
-          documentEditor.getRootElement()?.focus({ preventScroll: true });
-          documentEditor.update($selectDocumentStart);
-          return true;
-        },
-        COMMAND_PRIORITY_NORMAL
-      )
-    );
-}
 
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const {
