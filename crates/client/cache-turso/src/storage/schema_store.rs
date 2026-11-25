@@ -123,14 +123,8 @@ const RECORD_COUNT: &str = "SELECT COUNT(*) FROM records";
 /// Every record but the cache's own, with its value.
 const RECORD_VALUES: &str =
     "SELECT __typename, id, value FROM records WHERE __typename <> '__meta'";
-/// Every record but the cache's own, with its first `?1` bytes.
-const RECORD_PROBES: &str =
-    "SELECT __typename, id, substr(value, 1, ?1) FROM records WHERE __typename <> '__meta'";
-/// The records of type `?2`, with their first `?1` bytes.
-const TYPE_RECORD_PROBES: &str =
-    "SELECT __typename, id, substr(value, 1, ?1) FROM records WHERE __typename = ?2";
-/// One record's value.
-const RECORD_VALUE: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
+/// One type's records, with their values.
+const TYPE_RECORD_VALUES: &str = "SELECT __typename, id, value FROM records WHERE __typename = ?1";
 /// Puts back a record a tier dropped, but never over one it kept.
 const RECORD_RESTORE: &str =
     "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING";
@@ -298,9 +292,9 @@ pub(super) fn adopt(
         )
     });
     match sorted {
-        // The tier rolled back. Dropping every record reads only the first
-        // bytes of each, and frees the pages they held for what the cache
-        // writes next.
+        // The tier rolled back. Dropping every record reads each once,
+        // decoding only those that may hold identity metadata, and frees the
+        // pages they held for what the cache writes next.
         Err(error) if resets_after(error) => driver::write_transaction(connection, || {
             let reset = SchemaChange {
                 tier: Tier::Reset(ResetReason::Failed),
@@ -690,56 +684,37 @@ fn queue_aliases(
 /// tier drops them. A write made later through a created record's local key,
 /// its settlement and a stale response read it whether or not a queued write
 /// names the record when the tier runs, so it stays for every record, as the
-/// engine's own snapshot retirement keeps it. Most records hold none, which
-/// their first bytes show ([`identity::holds_no_identity_metadata`]); only
-/// the others are read whole and decoded. A record that does not decode holds
-/// nothing to keep.
+/// engine's own snapshot retirement keeps it. Each record is read once, and
+/// most hold none, which their first key shows
+/// ([`identity::holds_no_identity_metadata`]); only the others are decoded. A
+/// record that does not decode holds nothing to keep.
 fn dropped_identity(
     connection: &Db,
     typenames: Option<&BTreeSet<String>>,
 ) -> Result<Vec<(RecordKey, Record)>, TursoStorageError> {
-    let probe = Value::from_i64(
-        i64::try_from(cache_core::codec::RECORD_PROBE_BYTES).map_err(|_| invariant())?,
-    );
-    let mut candidates = Vec::new();
+    let mut kept = Vec::new();
     let mut visit = |row: &Row| {
-        let (typename, id, prefix) = record_row(row)?;
-        if prefix.is_some_and(|prefix| !identity::holds_no_identity_metadata(prefix)) {
-            candidates.push(record_key(typename, id));
+        let (typename, id, bytes) = record_row(row)?;
+        if let Some(record) = bytes
+            .filter(|bytes| !identity::holds_no_identity_metadata(bytes))
+            .and_then(|bytes| decode_record(bytes).ok())
+            .and_then(identity::identity_metadata)
+        {
+            kept.push((record_key(typename, id), record));
         }
         Ok(())
     };
     match typenames {
-        None => driver::query_each(connection, RECORD_PROBES, vec![probe], &mut visit)?,
+        None => driver::query_each(connection, RECORD_VALUES, Vec::new(), &mut visit)?,
         Some(typenames) => {
             for typename in typenames {
                 driver::query_each(
                     connection,
-                    TYPE_RECORD_PROBES,
-                    vec![probe.clone(), text(typename)],
+                    TYPE_RECORD_VALUES,
+                    vec![text(typename)],
                     &mut visit,
                 )?;
             }
-        }
-    }
-    let mut kept = Vec::new();
-    for key in candidates {
-        let rows = driver::query(
-            connection,
-            RECORD_VALUE,
-            vec![text(&key.typename), text(&key.id)],
-        )?;
-        let [row] = rows.as_slice() else {
-            return Err(invariant());
-        };
-        let Value::Blob(bytes) = required_value(row, 0)? else {
-            continue;
-        };
-        if let Some(record) = decode_record(bytes)
-            .ok()
-            .and_then(identity::identity_metadata)
-        {
-            kept.push((key, record));
         }
     }
     Ok(kept)

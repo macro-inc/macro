@@ -202,12 +202,11 @@ pub fn identity_metadata(mut record: Record) -> Option<Record> {
     Some(record)
 }
 
-/// Whether the stored record whose leading bytes are `prefix` (its first
-/// [`codec::RECORD_PROBE_BYTES`] are enough) holds no identity metadata,
-/// read without decoding it; false when that cannot be told without
-/// decoding it.
-pub fn holds_no_identity_metadata(prefix: &[u8]) -> bool {
-    codec::record_keys_sort_after(prefix, &IDENTITY_METADATA_FIELDS)
+/// Whether the stored record `bytes` ([`codec::encode_record`]'s output)
+/// holds no identity metadata, read without decoding it; false when that
+/// cannot be told without decoding it.
+pub fn holds_no_identity_metadata(bytes: &[u8]) -> bool {
+    codec::record_keys_sort_after(bytes, &IDENTITY_METADATA_FIELDS)
 }
 
 /// Rebase normalized records and their links; arbitrary text is never rewritten.
@@ -632,17 +631,12 @@ mod tests {
             .fields
             .insert("body".into(), CacheValue::String("text ".repeat(400)));
         let bytes = crate::codec::encode_record(&record);
-        assert!(holds_no_identity_metadata(
-            &bytes[..bytes.len().min(codec::RECORD_PROBE_BYTES)]
-        ));
+        assert!(holds_no_identity_metadata(&bytes));
         for field in IDENTITY_METADATA_FIELDS {
             let mut marked = record.clone();
             marked.fields.insert(field.into(), CacheValue::Bool(true));
             let bytes = crate::codec::encode_record(&marked);
-            assert!(
-                !holds_no_identity_metadata(&bytes[..bytes.len().min(codec::RECORD_PROBE_BYTES)]),
-                "{field}"
-            );
+            assert!(!holds_no_identity_metadata(&bytes), "{field}");
         }
     }
 }

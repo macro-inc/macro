@@ -166,10 +166,6 @@ pub fn decode_record(bytes: &[u8]) -> Result<Record, CodecError> {
     }
 }
 
-/// Leading bytes of a stored record that [`record_keys_sort_after`] needs:
-/// enough to inflate a deflated record's first field key.
-pub const RECORD_PROBE_BYTES: usize = 512;
-
 /// Inflated bytes [`record_keys_sort_after`] reads a first field key from.
 const PROBE_INFLATE_BYTES: usize = 256;
 
@@ -237,10 +233,11 @@ fn inflate_record<T>(
 }
 
 /// Whether every field key of the stored record whose leading bytes are
-/// `prefix` ([`encode_record`]'s output, or its first [`RECORD_PROBE_BYTES`])
-/// sorts after each of `keys`, read without decoding the record. A record's
-/// fields are encoded in key order, so only its first key is read. False
-/// when `prefix` is too short to show that key or does not read as a record.
+/// `prefix` ([`encode_record`]'s output, or its start) sorts after each of
+/// `keys`, read without decoding the record. [`encode_record`] writes the
+/// fields in key order, so only the first key is read, and a deflated record
+/// is inflated only that far. False when `prefix` is too short to show that
+/// key or does not read as a record.
 pub fn record_keys_sort_after(prefix: &[u8], keys: &[&str]) -> bool {
     let Some((encoding, payload)) = prefix.split_first() else {
         return false;
@@ -689,6 +686,8 @@ mod tests {
             .fields
             .insert("__cacheIdentityDeleted".into(), CacheValue::Bool(true));
         let keys = ["__cacheIdentityDeleted", "__cacheIdentityTarget"];
+        // A start of a record that holds its first key.
+        const PREFIX: usize = 512;
         for (record, after) in [
             (Record::default(), true),
             (fields, true),
@@ -699,13 +698,13 @@ mod tests {
             (long_marked, false),
         ] {
             let bytes = encode_record(&record);
-            let prefix = &bytes[..bytes.len().min(RECORD_PROBE_BYTES)];
+            let prefix = &bytes[..bytes.len().min(PREFIX)];
             assert_eq!(record_keys_sort_after(prefix, &keys), after, "{record:?}");
             assert_eq!(record_keys_sort_after(&bytes, &keys), after, "{record:?}");
         }
         let long = encode_record(&record_with_body(&body));
         assert_eq!(long.first(), Some(&RECORD_ENCODING_DEFLATE));
-        assert!(long.len() > 4 * RECORD_PROBE_BYTES);
+        assert!(long.len() > 4 * PREFIX);
         // Too little of a record to show its first key, or bytes no record
         // starts with, may hold anything.
         assert!(!record_keys_sort_after(&long[..3], &keys));
