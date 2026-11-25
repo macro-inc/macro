@@ -75,7 +75,14 @@ function SafeAreaColumnFades(props: {
   const region = useFloatRegionAnchor();
   const active = () =>
     (panel?.isPanelActive() ?? true) && (region?.isActive() ?? true);
-  const [placement, setPlacement] = createSignal<ColumnPlacement>();
+  // A gesture re-measures every frame; the columns change only when the
+  // resting placement does.
+  const [placement, setPlacement] = createSignal<ColumnPlacement | undefined>(
+    undefined,
+    {
+      equals: samePlacement,
+    }
+  );
   createEffect(() => {
     const fade = props.fade();
     if (!fade || !active()) {
@@ -138,32 +145,50 @@ function columnPlacement(
   const rect = fade.getBoundingClientRect();
   if (rect.height === 0) return undefined;
   if (getComputedStyle(fade).visibility !== 'visible') return undefined;
-  // Where the pane rests: a swipe moves panes with transforms, and the one it
-  // reveals turns active (and is measured) before its transform is cleared,
-  // which nothing would report.
-  const shift = ancestorTranslation(fade);
-  const restingLeft = rect.left - shift.x;
-  const restingRight = rect.right - shift.x;
+  // Where the pane rests across: a swipe slides panes sideways with
+  // transforms, and the one it reveals turns active (and is measured) before
+  // its transform is cleared, which nothing would report. Only that
+  // sideways slide is undone; vertical transforms (a sheet) stay measured.
+  const shift = horizontalTranslation(fade);
+  const restingLeft = rect.left - shift;
+  const restingRight = rect.right - shift;
   const sides: SafeColumn[] = [];
   if (left > 0 && restingLeft <= left + 1) sides.push({ left: 0, width: left });
   if (right > 0 && restingRight >= window.innerWidth - right - 1)
     sides.push({ left: window.innerWidth - right, width: right });
   if (sides.length === 0) return undefined;
-  return { top: rect.top - shift.y, height: rect.height, sides };
+  return { top: rect.top, height: rect.height, sides };
 }
 
-/** The translation the element and its ancestors' transforms add. */
-function ancestorTranslation(element: HTMLElement) {
+/**
+ * The sideways translation the element's and its ancestors' transforms add.
+ * Pane gestures only translate, so scale and rotation are not unwound.
+ */
+function horizontalTranslation(element: HTMLElement) {
   let x = 0;
-  let y = 0;
   for (let node: Element | null = element; node; node = node.parentElement) {
     const transform = getComputedStyle(node).transform;
     if (!transform || transform === 'none') continue;
-    const matrix = new DOMMatrixReadOnly(transform);
-    x += matrix.e;
-    y += matrix.f;
+    x += new DOMMatrixReadOnly(transform).e;
   }
-  return { x, y };
+  return x;
+}
+
+function samePlacement(
+  a: ColumnPlacement | undefined,
+  b: ColumnPlacement | undefined
+) {
+  if (!a || !b) return a === b;
+  return (
+    a.top === b.top &&
+    a.height === b.height &&
+    a.sides.length === b.sides.length &&
+    a.sides.every(
+      (side, index) =>
+        side.left === b.sides[index]?.left &&
+        side.width === b.sides[index]?.width
+    )
+  );
 }
 
 /** Spans the bottom-chrome host plus a falloff above it. */
