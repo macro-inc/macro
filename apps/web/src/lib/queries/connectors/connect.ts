@@ -130,7 +130,7 @@ async function followStep(
       assignOauthUrl(popup, page.url);
       return await span.span(
         'connector.consent',
-        async () => await pollCompletion(args.key, popup, userId)
+        async () => await pollCompletion(args.key, popup, userId, span)
       );
     })
     .with({ type: 'embeddedDialog' }, async (dialog) => {
@@ -152,7 +152,8 @@ async function followStep(
 async function pollCompletion(
   key: string,
   tab: Window | null,
-  userId: string | undefined
+  userId: string | undefined,
+  span: Span
 ): Promise<ConnectOutcome> {
   const deadline = Date.now() + COMPLETE_TIMEOUT_MS;
   let closedRetries = CLOSED_RETRIES;
@@ -164,7 +165,7 @@ async function pollCompletion(
     });
     if (result.isOk()) {
       if (currentUserId() !== userId) return 'closed';
-      finishTab(tab, 'connected');
+      finishTab(tab, 'connected', span);
       return await recordConnected(result.value);
     }
     failure = result.error.some((error) => error.code === 'NOT_FOUND')
@@ -173,7 +174,7 @@ async function pollCompletion(
     if (closed && (!failure || closedRetries-- <= 0)) break;
     await sleep(COMPLETE_POLL_MS);
   }
-  finishTab(tab, 'error');
+  finishTab(tab, 'error', span);
   if (failure && currentUserId() === userId)
     throw new ThrownResultError(failure);
   return 'closed';
@@ -185,13 +186,18 @@ async function pollCompletion(
  * only while this tab is the consent tab's opener, so a server's tab, whose
  * opener was cut, stays where it is once it has left Macro's origins.
  */
-function finishTab(tab: Window | null, status: 'connected' | 'error') {
+function finishTab(
+  tab: Window | null,
+  status: 'connected' | 'error',
+  span: Span
+) {
   if (!tab || tab.closed) return;
   // A refusal throws a SecurityError, which must not fail the connect.
-  navigateTab(
+  const retired = navigateTab(
     tab,
     `${SERVER_HOSTS['cognition-service']}/pipedream/mcp/connect/callback?status=${status}`
   );
+  span.setAttr('connector.tab_retired', retired.isOk());
 }
 
 const navigateTab = Result.fromThrowable(
