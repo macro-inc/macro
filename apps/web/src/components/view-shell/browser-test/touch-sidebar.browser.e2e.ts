@@ -738,8 +738,21 @@ for (const second of ['none', 'during close', 'after close'] as const) {
         [x, y]
       )
     ).toBe(true);
+    if (second === 'during close') {
+      // Hold the sheet's slide out long enough that the second tap is sure
+      // to land while it is still closing.
+      await page.addStyleTag({
+        content:
+          '[data-corvu-drawer-content][data-transitioning] { transition-duration: 2s !important; }',
+      });
+    }
     await page.touchscreen.tap(x, y);
-    if (second === 'during close') await page.touchscreen.tap(x - 24, y + 4);
+    if (second === 'during close') {
+      await page.touchscreen.tap(x - 24, y + 4);
+      await expect(
+        page.locator('[data-corvu-drawer-content][data-closing]')
+      ).toHaveCount(1);
+    }
     await expect(sheet).toBeHidden();
     if (second === 'after close') await page.touchscreen.tap(x - 24, y + 4);
     await expect(page.getByTestId('workspace-inbox')).toHaveText('work inbox');
