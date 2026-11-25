@@ -1,0 +1,19 @@
+apps/web/tests/native/runner.ts
+  s_53c101bec30602::t_7b55821e369ccf 407-411
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "94a67514a193f7f784dddf4a8bb98bb62fe8e5f9",
+  "prompts": {},
+  "sessions": {
+    "s_53c101bec30602": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c316a801-4f83-4300-952e-dc578fbbfb82",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
