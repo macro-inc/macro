@@ -398,7 +398,8 @@ export function searchFiltersOperatorText(
   const person = (id: string) => {
     if (names.userId && id.toLowerCase() === names.userId.toLowerCase())
       return 'me';
-    return id.startsWith('macro|') ? id.slice('macro|'.length) : id;
+    // A name no one was matched to is written as typed, quoted if spaced.
+    return id.startsWith('macro|') ? id.slice('macro|'.length) : shownValue(id);
   };
   const bindings: SearchOperatorBinding[] = [];
   const written = new Set<string>();

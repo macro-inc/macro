@@ -29,11 +29,10 @@ import { CommandState } from '../../command/state';
 import type { CommandMenuItem } from '../../command/useCommandItems';
 import { CommandResults } from '../../command/views/command-results';
 import { ComposeSubjectField } from '../../email-compose/components/compose-subject-field';
-import { searchNeedsKeywords } from '../../next-soup/core/search-filters';
 import { SearchbarInput } from '../../next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { parsePropertyDraft } from '../../property/utils/parse-property-draft';
 import type { InputLayoutParts } from '../context/capabilities';
-import { resolveSearchFilters } from '../core/search';
+import { searchDraftText, searchNeedsWord } from '../core/search';
 import { SearchDraft } from '../views/search-draft';
 import { globalSearchRequests } from './global-search-service-fixture';
 import {
@@ -501,6 +500,21 @@ export function UniversalInputFixture(
     },
   ];
   const actions: InputDisplay = {
+    search: (fields) =>
+      searchDraftText(fields, {
+        people: actions.person,
+        channels: actions.searchChannels(),
+        inboxes: actions.inboxes(),
+        names: {
+          userId: 'macro|viewer@example.com',
+          tag: () => undefined,
+          channel: (id) =>
+            actions.searchChannels().find((channel) => channel.id === id)
+              ?.label,
+          inbox: (id) =>
+            actions.inboxes().find((inbox) => inbox.id === id)?.email_address,
+        },
+      }),
     person: (term) =>
       params.has('person-references') ? inputPeople()?.lookup(term) : people,
     createRecipientSource: useContactRecipientSource,
@@ -685,15 +699,10 @@ export function UniversalInputFixture(
           return 'Choose an unambiguous assignee';
       }
       if (input.intent === 'search') {
-        const filters = resolveSearchFilters(
-          input.fields.searchFilters,
-          actions.person,
-          actions.searchChannels(),
-          actions.inboxes()
-        );
-        if (filters.unresolved.length)
-          return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
-        if (searchNeedsKeywords(filters.state, input.fields.query))
+        const draft = actions.search(input.fields);
+        if (draft.unresolved.length)
+          return `Choose a specific person or channel for ${draft.unresolved.join(', ')}`;
+        if (searchNeedsWord(draft.text, draft.bindings))
           return 'Add search text to search by sender or speaker.';
       }
       if (params.has('person-references')) {

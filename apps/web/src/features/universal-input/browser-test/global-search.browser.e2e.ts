@@ -12,62 +12,46 @@ async function compose(page: Page, text: string) {
   return page.getByRole('dialog');
 }
 
-test('search messages from Julia prepopulates the global Channels and From facets, including a filter-only search', async ({
+test('search messages from Julia writes its kind and sender into Search for, and waits for a word', async ({
   page,
 }) => {
   const dialog = await compose(page, 'search all recent messages from julia');
-  await expect(
-    dialog.getByLabel('Search filters').getByText('Channels', { exact: true })
-  ).toBeVisible();
-  await expect(
-    dialog
-      .getByLabel('Search filters')
-      .getByText('Julia Jones', { exact: true })
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole('textbox', { name: 'Search for', exact: true })
-  ).toHaveText('');
+  const query = dialog.getByRole('textbox', {
+    name: 'Search for',
+    exact: true,
+  });
+  await expect(query).toHaveText('type:channel from:julia@macro.com');
+  await expect(dialog.getByLabel('Search filters')).toHaveCount(0);
   await expect(page.getByTestId('global-search-requests')).toHaveText('[]');
   await expect(
     dialog.getByText('Add search text to search by sender or speaker.')
   ).toBeVisible();
-  await dialog
-    .getByRole('textbox', { name: 'Search for', exact: true })
-    .fill('budget');
+  await query.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' budget');
   await expect(page.getByTestId('global-search-requests')).toContainText(
-    '"sender_ids":["macro|julia@macro.com"]'
+    '"query":"type:channel from:julia@macro.com budget"'
   );
 });
 
-test('task search applies status, priority, assignee and creator facets without repeating them as keywords', async ({
+test('task search writes its status, priority, assignee and creator as operators before its words', async ({
   page,
 }) => {
   const dialog = await compose(
     page,
     'search in progress high priority tasks assigned to julia created by john about android'
   );
-  const filters = dialog.getByLabel('Search filters');
-  await expect(filters.getByText('Tasks', { exact: true })).toBeVisible();
-  await expect(filters.getByText('In Progress', { exact: true })).toBeVisible();
-  await expect(filters.getByText('High', { exact: true })).toBeVisible();
-  // The assignee is named by the auth name service, which this fixture
-  // doesn't serve, so the chip may show Julia's address instead.
-  await expect(
-    filters.getByRole('button', { name: 'Change Assignee filter' })
-  ).toContainText(/julia/i);
-  await expect(filters.getByText('John Adams', { exact: true })).toBeVisible();
+  const operators =
+    'type:task status:in_progress priority:high assignee:julia@macro.com author:john@example.com android';
   await expect(
     dialog.getByRole('textbox', { name: 'Search for', exact: true })
-  ).toHaveText('android');
+  ).toHaveText(operators);
   await expect(page.getByTestId('global-search-requests')).toContainText(
-    'macro|julia@macro.com'
-  );
-  await expect(page.getByTestId('global-search-requests')).toContainText(
-    'macro|john@example.com'
+    `"query":"${operators}"`
   );
 });
 
-test('global Search requests enforce sender and channel filters and render actual message snippets', async ({
+test('global Search requests carry the sender and the bound channel and render actual message snippets', async ({
   page,
 }) => {
   const dialog = await compose(
@@ -78,12 +62,16 @@ test('global Search requests enforce sender and channel filters and render actua
     name: 'Search results',
     exact: true,
   });
+  await expect(
+    dialog.getByRole('textbox', { name: 'Search for', exact: true })
+  ).toHaveText('type:channel in:#sales from:julia@macro.com budget');
   await expect(results).toContainText('Julia shared the budget');
   await expect(results).not.toContainText('John reviewed');
   await expect(results.getByRole('option')).toHaveCount(1);
   await expect(results.locator('.soup-list-entity')).toHaveCount(1);
+  // The channel goes by id; the sender is read from the text by the service.
   await expect(page.getByTestId('global-search-requests')).toContainText(
-    '"sender_ids":["macro|julia@macro.com"]'
+    '"query":"type:channel from:julia@macro.com budget"'
   );
   await expect(page.getByTestId('global-search-requests')).toContainText(
     '"channel_ids":["sales-channel"]'
@@ -99,23 +87,16 @@ test('global Search requests enforce sender and channel filters and render actua
   await expect(input.locator('p')).toHaveCount(2);
 });
 
-test('manual sender choices override later predictions while the search query continues updating', async ({
+test('an edited Search for keeps its sender while later predictions change the draft', async ({
   page,
 }) => {
   const dialog = await compose(page, 'search messages from julia about budget');
-  await expect(dialog.getByText('Julia Jones', { exact: true })).toBeVisible();
-  await dialog
-    .getByRole('button', { name: 'Clear From filter', exact: true })
-    .click();
-  await dialog
-    .getByRole('button', { name: 'Change From filter', exact: true })
-    .click();
-  await page.getByRole('option', { name: 'John Adams', exact: true }).click();
-  // The From picker toggles people and stays open until it is closed.
-  await page.keyboard.press('Escape');
-  await expect(
-    page.getByRole('option', { name: 'John Adams', exact: true })
-  ).toHaveCount(0);
+  const query = dialog.getByRole('textbox', {
+    name: 'Search for',
+    exact: true,
+  });
+  await expect(query).toHaveText('type:channel from:julia@macro.com budget');
+  await query.fill('type:channel from:john@example.com forecast');
   await dialog
     .getByRole('textbox', { name: 'Your input', exact: true })
     .fill('search messages from julia about forecast');
@@ -123,40 +104,36 @@ test('manual sender choices override later predictions while the search query co
     name: 'Search results',
     exact: true,
   });
-  await expect(
-    dialog.getByRole('textbox', { name: 'Search for', exact: true })
-  ).toHaveText('forecast');
+  await expect(query).toHaveText('type:channel from:john@example.com forecast');
   await expect(results).toContainText('John reviewed the budget forecast');
   await expect(results).not.toContainText('Julia shared');
-  await expect(
-    dialog.getByLabel('Search filters').getByText('John Adams', { exact: true })
-  ).toBeVisible();
 });
 
-test('unresolved people do not issue an unfiltered search and can be corrected with the From picker', async ({
+test('unresolved people do not issue an unfiltered search and can be corrected in Search for', async ({
   page,
 }) => {
   const dialog = await compose(page, 'search messages from Pat about budget');
+  const query = dialog.getByRole('textbox', {
+    name: 'Search for',
+    exact: true,
+  });
+  await expect(query).toHaveText('type:channel from:Pat budget');
   await expect(
     dialog.getByText('Choose a specific person or channel for Pat').first()
   ).toBeVisible();
   await expect(page.getByTestId('global-search-requests')).toHaveText('[]');
-  await dialog
-    .getByRole('button', { name: 'Change From filter', exact: true })
-    .click();
-  await page.getByRole('option', { name: 'Julia Jones', exact: true }).hover();
-  await page
-    .getByRole('button', { name: 'Select only Julia Jones', exact: true })
-    .click();
-  await page.keyboard.press('Escape');
+  // An edit that still names no one keeps holding the search.
+  await query.fill('type:channel from:Pat budget plan');
   await expect(
-    page.getByRole('option', { name: 'Julia Jones', exact: true })
-  ).toHaveCount(0);
+    dialog.getByText('Choose a specific person or channel for Pat').first()
+  ).toBeVisible();
+  await expect(page.getByTestId('global-search-requests')).toHaveText('[]');
+  await query.fill('type:channel from:julia@macro.com budget');
   await expect(
     dialog.getByRole('listbox', { name: 'Search results', exact: true })
   ).toContainText('Julia shared the budget');
   await expect(page.getByTestId('global-search-requests')).toContainText(
-    '"sender_ids":["macro|julia@macro.com"]'
+    '"query":"type:channel from:julia@macro.com budget"'
   );
 });
 
@@ -174,13 +151,12 @@ test('formatted main-input queries keep updating and search DMs use the full cha
   });
   await expect(query).toContainText('budget');
   await input.fill('search messages about forecast');
-  await expect(query).toHaveText('forecast');
+  await expect(query).toHaveText('type:channel forecast');
   await input.fill('search messages in "Julia direct message" about budget');
-  await expect(
-    dialog
-      .getByLabel('Search filters')
-      .getByText('Julia direct message', { exact: true })
-  ).toBeVisible();
+  // The DM is bound to its id, so the name it is written with reaches it.
+  await expect(query).toHaveText(
+    'type:channel in:#"Julia direct message" budget'
+  );
   await expect(page.getByTestId('global-search-requests')).toContainText(
     '"channel_ids":["julia-dm"]'
   );
@@ -233,61 +209,6 @@ test('the shared global Search input keeps mention nodes when the host acknowled
   );
 });
 
-test('keeps Search facet text centered and unclipped inside each segment', async ({
-  page,
-}) => {
-  const dialog = await compose(
-    page,
-    'search in progress high priority tasks assigned to julia created by john about android'
-  );
-  const filters = dialog.getByLabel('Search filters');
-  await expect(filters.getByText('Tasks', { exact: true })).toBeVisible();
-  await expect(filters.getByText('High', { exact: true })).toBeVisible();
-  const bounds = await filters.locator('button').evaluateAll((buttons) =>
-    buttons.map((button) => {
-      const frame = button.closest('[role="group"]')!.getBoundingClientRect();
-      const segment = button.getBoundingClientRect();
-      const range = document.createRange();
-      range.selectNodeContents(button);
-      const text = range.getBoundingClientRect();
-      return {
-        label: button.textContent || button.getAttribute('aria-label'),
-        segmentTop: segment.top,
-        segmentBottom: segment.bottom,
-        textTop: text.top,
-        textBottom: text.bottom,
-        frameTop: frame.top,
-        frameBottom: frame.bottom,
-        centerOffset: Math.abs(
-          segment.top + segment.height / 2 - frame.top - frame.height / 2
-        ),
-      };
-    })
-  );
-  expect(bounds.length).toBeGreaterThan(0);
-  for (const bound of bounds) {
-    expect(bound.segmentTop, String(bound.label)).toBeGreaterThanOrEqual(
-      bound.frameTop
-    );
-    expect(bound.segmentBottom, String(bound.label)).toBeLessThanOrEqual(
-      bound.frameBottom
-    );
-    expect(bound.textTop, String(bound.label)).toBeGreaterThanOrEqual(
-      bound.frameTop
-    );
-    expect(bound.textBottom, String(bound.label)).toBeLessThanOrEqual(
-      bound.frameBottom
-    );
-    expect(bound.centerOffset, String(bound.label)).toBeLessThanOrEqual(1);
-  }
-  await filters
-    .getByRole('button', { name: 'Clear Priority filter', exact: true })
-    .click();
-  await expect(
-    filters.getByText('Any priority', { exact: true })
-  ).toBeVisible();
-});
-
 test('keeps typing in Search for in place while a sender is unresolved', async ({
   page,
 }) => {
@@ -299,9 +220,9 @@ test('keeps typing in Search for in place while a sender is unresolved', async (
     name: 'Search for',
     exact: true,
   });
-  await expect(query).toHaveText('budget');
+  await expect(query).toHaveText('type:channel from:Pat budget');
   await query.click();
   await page.keyboard.press('End');
   await page.keyboard.type(' plan', { delay: 80 });
-  await expect(query).toHaveText('budget plan');
+  await expect(query).toHaveText('type:channel from:Pat budget plan');
 });

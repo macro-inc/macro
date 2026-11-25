@@ -257,8 +257,9 @@ and distinct icons, keyboard focus staying on a status as the tabs switch, and
 list/board switches:
 `bunx playwright test --config src/features/reviews-view/browser-test/playwright.config.ts`.
 
-Search facet chip sizing, text alignment, and filter interactions have a backend-free
-regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
+The universal input's search (operators written into **Search for**, unresolved
+people holding the search, typing in place) has a backend-free regression:
+`bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
 Agent image attachments preserve external and inline image URLs; only configured
 static-file endpoints receive thumbnail sizing. The backend-free regression is

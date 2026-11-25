@@ -76,6 +76,14 @@ const variantStyles: Record<SearchbarVariant, string> = {
 export const searchTextOf = (markdown: string) =>
   markdownToSearchText(markdown).replace(/\\([!-/:-@[-`{-~])/g, '$1');
 
+/**
+ * A plain query as the editor's markdown. Its addresses stay text: imported,
+ * `from:ana@example.com` would become a mail link that swallows the space
+ * typed after it.
+ */
+const queryMarkdown = (query: string) =>
+  query.replace(/<[^>]*>|@/g, (match) => (match === '@' ? '\\@' : match));
+
 /** Split-owned history, focus shortcuts and navigation around the shared search input. */
 export function SoupSearchbar(props: SoupSearchbarProps) {
   const {
@@ -120,7 +128,7 @@ export function SoupSearchbar(props: SoupSearchbarProps) {
         applyOverrides: ({ query, bindings, filters, clientFilters }) => {
           batch(() => {
             setSearchBindings(bindings ?? []);
-            controls?.setMarkdown(query);
+            controls?.setMarkdown(queryMarkdown(query));
             controls?.getLexical().update(() => $getRoot().selectEnd());
             controls?.blur();
             setSearchText(query);
@@ -170,7 +178,7 @@ export function SearchbarInput(
 ) {
   // Keep rich editor markup separate from the plain query acknowledged by the host.
   const [markdown, setMarkdown] = createSignal(
-    untrack(() => props.initialValue ?? props.value)
+    untrack(() => queryMarkdown(props.initialValue ?? props.value))
   );
   let acknowledgedQuery = searchTextOf(props.value).trim();
 
@@ -219,7 +227,7 @@ export function SearchbarInput(
         const query = searchTextOf(value).trim();
         if (query === acknowledgedQuery) return;
         acknowledgedQuery = query;
-        setMarkdown(value);
+        setMarkdown(queryMarkdown(value));
       }
     )
   );
