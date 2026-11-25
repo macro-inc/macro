@@ -1,10 +1,17 @@
 // Real production worker/WASM/OPFS and mutation queue with a scripted server:
 // a calendar create is saved locally before the server answers, lands under
 // the server's id, or leaves the calendar when the server refuses it.
-import { createClient, fetchExchange } from '@urql/core';
+import { CalendarOccurrenceItemFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
+import {
+  createClient,
+  fetchExchange,
+  getOperationName,
+  mapExchange,
+} from '@urql/core';
 import {
   CalendarMutationError,
   createdCalendarEventId,
+  createdCalendarOccurrence,
   executeGraphqlCreate,
   isCalendarEventCreating,
   trackCalendarCreateSettlements,
@@ -15,13 +22,20 @@ import {
 } from '../../../queries/calendar/graphql/tests/fixtures';
 import { normalizedCacheExchange } from '../../exchange/normalized-cache-exchange';
 import { createWorkerCacheHost } from '../../host/worker-host';
+import { readRecordsByKeys, selectRecords } from '../../index';
 import { cacheSessionGeneration } from '../../session-generation';
 
 type Answer = 'create' | 'refuse';
+interface RunOptions {
+  /** Hand the create the calendar, as the event dialog does. */
+  knownCalendar?: boolean;
+}
 
 declare global {
   interface Window {
-    calendarCreate: { run: (answer: Answer) => Promise<unknown> };
+    calendarCreate: {
+      run: (answer: Answer, options?: RunOptions) => Promise<unknown>;
+    };
   }
 }
 
@@ -101,11 +115,34 @@ async function server(_input: RequestInfo | URL, init?: RequestInit) {
   });
 }
 
+/** Every query the create sends through the client, by operation name. */
+const queries: string[] = [];
 const client = createClient({
   url: 'http://calendar-create.test/graphql',
   fetch: server,
-  exchanges: [normalizedCacheExchange(host), fetchExchange],
+  exchanges: [
+    mapExchange({
+      onOperation(operation) {
+        if (operation.kind === 'query')
+          queries.push(getOperationName(operation.query) ?? 'unnamed');
+      },
+    }),
+    normalizedCacheExchange(host),
+    fetchExchange,
+  ],
 });
+const occurrenceSelection = selectRecords(
+  CalendarOccurrenceItemFieldsFragmentDoc
+);
+
+/** The time zone of an occurrence the calendar holds. */
+async function occurrenceTimeZone(key: string) {
+  const { records } = await readRecordsByKeys(host, occurrenceSelection, [key]);
+  const time = records[0]?.record.time;
+  return time?.__typename === 'GraphqlTimedEventTime'
+    ? time.timeZone
+    : undefined;
+}
 
 /** The events the calendar shows on the test's day, by event id. */
 async function eventsOnTheDay(): Promise<string[]> {
@@ -141,10 +178,11 @@ async function coverTheDay() {
   );
 }
 
-async function run(next: Answer) {
+async function run(next: Answer, options: RunOptions = {}) {
   await coverTheDay();
   answer = next;
   release = undefined;
+  queries.length = 0;
   let acceptedId: string | undefined;
   let settled = false;
   const created = (async () => {
@@ -153,14 +191,32 @@ async function run(next: Answer) {
         value: await executeGraphqlCreate(
           {
             title: `Offsite ${next}`,
-            // The engine draws no occurrence without its inbox link.
             calendarId: 'calendar-1',
-            emailLinkId: 'link-1',
+            // The engine draws no occurrence without its inbox link, which
+            // the dialog's calendar carries.
+            ...(options.knownCalendar
+              ? {
+                  calendar: {
+                    id: 'calendar-1',
+                    emailLinkId: 'link-1',
+                    emailAddress: 'me@example.com',
+                    capabilities: {
+                      autoDecline: true,
+                      customRecurrence: true,
+                      emailReminders: true,
+                      removeConference: true,
+                      resetRsvp: true,
+                      guestPolicy: true,
+                    },
+                  },
+                }
+              : { emailLinkId: 'link-1' }),
+            // The editor names the browser's own time zone.
             time: {
               kind: 'timed',
               startsAt: TIME.startsAt,
               endsAt: TIME.endsAt,
-              timeZone: 'UTC',
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             },
             onAccepted: (event) => {
               acceptedId = event.id;
@@ -186,9 +242,14 @@ async function run(next: Answer) {
     'the local event on the calendar'
   );
   await until(async () => requestArrived(), 'the request');
+  const localKey = (await eventsOnTheDay()).find((key) =>
+    key.startsWith(`GraphqlCalendarOccurrence:${localId}:`)
+  );
   const beforeAnswer = {
     settled,
     creating: isCalendarEventCreating(localId),
+    calendarListReads: queries.filter((name) => name === 'Calendars').length,
+    localTimeZone: localKey ? await occurrenceTimeZone(localKey) : 'none',
   };
 
   answerRequest();
@@ -208,6 +269,9 @@ async function run(next: Answer) {
     };
   }
   const serverId = outcome.value.event?.id;
+  // The details move to the server's copy from the answer, before the
+  // calendar's own reads catch up with it.
+  const answered = createdCalendarOccurrence(localId)?.occurrence.eventId;
   await until(async () => {
     const keys = await eventsOnTheDay();
     return !shows(keys, localId) && shows(keys, serverId ?? '');
@@ -215,6 +279,7 @@ async function run(next: Answer) {
   return {
     beforeAnswer,
     landedUnder: createdCalendarEventId(localId) === serverId,
+    answeredWithServerCopy: answered !== undefined && answered === serverId,
     creating: isCalendarEventCreating(localId),
   };
 }

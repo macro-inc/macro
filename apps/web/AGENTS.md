@@ -387,7 +387,11 @@ The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
 real row: Minimalist unchanged, and Classic's shared line between rows (plus
 the one above each date group's first row), lifted unread fill, weights and
 always-visible checkbox on desktop and tablet, with phones kept on Minimalist,
-and the Settings → Email sample following the Row style tabs.
+and the Settings → Email sample following the Row style tabs. Its
+`row-labels.browser.e2e.ts` checks the labels people made on wide rows (each
+nested label by its own name, its whole name on hover, three items and then a
+count, none of Gmail's system or hidden labels) and none on narrow or phone
+rows; `ROW_LABELS_SCREENSHOT_DIR` saves its screenshots.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -1334,7 +1338,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
-  keyboard in the field); `operators` marks search operators (`in:sent`) in
+  keyboard in the field, and `commit` hears the Enter that runs the typed
+  search, which Email remembers); `operators` marks search operators (`in:sent`) in
   the text, which `search-operator-text.tsx` draws as tokens behind the input
   while the text stays ordinary editable text; future operators reuse it.
   Email's wide search uses all of them. It registers the
