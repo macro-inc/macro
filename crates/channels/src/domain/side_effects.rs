@@ -982,7 +982,11 @@ where
         context
             .recipients_without_sender_and_mentions
             .retain(|id| existing_user_ids.contains(id.as_ref()));
-        if !context.recipients_without_sender_and_mentions.is_empty() {
+        // A mentioned member who has turned mentions off still hears of the
+        // message through this notification's fallback.
+        if !context.recipients_without_sender_and_mentions.is_empty()
+            || !context.mentioned_members.is_empty()
+        {
             self.send_channel_message_notification(channel_id, message, has_attachments, &context)
                 .await;
         }
