@@ -1019,6 +1019,16 @@ async fn an_admin_demoted_after_the_review_cannot_commit_it(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
+    assert!(
+        matches!(
+            world
+                .merges
+                .preview(&world.scope(), &targets(stays, &[merged]))
+                .await,
+            Err(MergeError::PermissionRequired)
+        ),
+        "nor can they review it again"
+    );
     let command = MergeCommand {
         targets: merge,
         revision: preview.revision,
@@ -1244,6 +1254,12 @@ async fn a_company_column_of_an_ordinary_database_names_the_company_that_stays(p
         named_in(&pool, &database).await,
         vec![vec![merged.to_string()], vec![other.to_string()]]
     );
+    let version_before: i64 = world
+        .scalar(
+            "SELECT version FROM database_tables WHERE id = $1",
+            database.table_id.into_uuid(),
+        )
+        .await;
 
     let outcome = world
         .merge(&targets(stays, &[merged]), SharingRulesChoice::Keep)
@@ -1256,16 +1272,22 @@ async fn a_company_column_of_an_ordinary_database_names_the_company_that_stays(p
         vec![vec![stays.to_string()], vec![other.to_string()]]
     );
     assert_eq!(logged_cells(&pool, outcome.merge_id).await, 1);
-    let journaled: i64 = world
+    // One journaled write through the database write path, at the version
+    // the merge's own write made.
+    let version_after: i64 = world
         .scalar(
-            "SELECT count(*) FROM database_changes WHERE table_id = $1",
+            "SELECT version FROM database_tables WHERE id = $1",
             database.table_id.into_uuid(),
         )
         .await;
-    assert!(
-        journaled >= 1,
-        "the write went through the database write path"
-    );
+    assert_eq!(version_after, version_before + 1);
+    let journaled: i64 = world
+        .scalar(
+            "SELECT count(*) FROM database_changes WHERE table_id = $1 AND version = (SELECT version FROM database_tables WHERE id = $1)",
+            database.table_id.into_uuid(),
+        )
+        .await;
+    assert_eq!(journaled, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1295,5 +1317,61 @@ async fn a_commit_names_each_teammate_whose_rules_it_rewrote_to_tell_them(pool: 
     assert!(
         again.sharing_owners.is_empty(),
         "a retry tells no one again"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_database_cell_edited_while_the_merge_waits_keeps_the_edit(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let other = world.company("Other", true, &["other.example.com"]).await;
+    let database = company_pipeline(&world, "Accounts", &[merged]).await;
+    let mut detach = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL session_replication_role = replica")
+        .execute(&mut *detach)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM crm_pipeline_entities WHERE id = $1")
+        .bind(database.id)
+        .execute(&mut *detach)
+        .await
+        .unwrap();
+    detach.commit().await.unwrap();
+
+    // A writer holds the table's version row, as every batch does until it
+    // commits, and points the cell at another company.
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query("SELECT version FROM database_tables WHERE id = $1 FOR UPDATE")
+        .bind(database.table_id.into_uuid())
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE entity_properties ep SET values = $3
+         FROM database_rows r, database_columns c
+         WHERE r.id::text = ep.entity_id AND r.table_id = $1
+           AND c.table_id = r.table_id AND c.id = $2
+           AND c.property_definition_id = ep.property_definition_id",
+    )
+    .bind(database.table_id.into_uuid())
+    .bind(database.primary_column_id.into_uuid())
+    .bind(refs(&[other]))
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+
+    let release = async move {
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        writer.commit().await.unwrap();
+    };
+    let merge = targets(stays, &[merged]);
+    let (merging, ()) = tokio::join!(world.merge(&merge, SharingRulesChoice::Keep), release);
+    merging.unwrap();
+
+    assert_eq!(
+        named_in(&pool, &database).await,
+        vec![vec![other.to_string()]],
+        "the merge read the writer's value, not the one before it"
     );
 }

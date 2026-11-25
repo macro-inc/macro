@@ -350,6 +350,18 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
     CompanyReview { preview, values }
 }
 
+/// Each id as stored references may spell it: lowercase, as Macro writes
+/// them, and uppercase, as a client may send them.
+fn spellings(ids: &[Uuid]) -> Vec<String> {
+    ids.iter()
+        .flat_map(|id| {
+            let lower = id.to_string();
+            let upper = lower.to_uppercase();
+            [lower, upper]
+        })
+        .collect()
+}
+
 /// Whether a stored reference value names one of `ids` of `kind`.
 fn names_any(values: &Value, kind: EntityKind, ids: &[Uuid]) -> bool {
     let tag: &str = kind.into();
@@ -425,11 +437,11 @@ async fn pipeline_cells(
     let rows = sqlx::query!(
         r#"WITH reference AS MATERIALIZED (
                SELECT DISTINCT r.id AS row_id, r.table_id, ep.property_definition_id, ep.values
-               FROM UNNEST($2::uuid[]) AS record(id)
+               FROM UNNEST($2::text[]) AS record(id)
                JOIN entity_properties ep
                  ON ep.entity_type = 'DATABASE_ROW'
                 AND ep.values ->> 'type' = 'EntityReference'
-                AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id::text))
+                AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id))
                JOIN database_rows r
                  ON r.id = (CASE
                      WHEN ep.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -448,7 +460,7 @@ async fn pipeline_cells(
            WHERE p.team_id = $1
            ORDER BY p.id, reference.row_id, c.id"#,
         team,
-        records,
+        &spellings(records),
     )
     .fetch_all(conn)
     .await
@@ -479,11 +491,11 @@ async fn database_cells(
     let rows = sqlx::query!(
         r#"WITH reference AS MATERIALIZED (
                SELECT DISTINCT r.id AS row_id, r.table_id, ep.property_definition_id, ep.values
-               FROM UNNEST($1::uuid[]) AS record(id)
+               FROM UNNEST($1::text[]) AS record(id)
                JOIN entity_properties ep
                  ON ep.entity_type = 'DATABASE_ROW'
                 AND ep.values ->> 'type' = 'EntityReference'
-                AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id::text))
+                AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id))
                JOIN database_rows r
                  ON r.id = (CASE
                      WHEN ep.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -499,7 +511,7 @@ async fn database_cells(
             AND c.property_definition_id = reference.property_definition_id
            WHERE NOT EXISTS (SELECT 1 FROM crm_pipeline_entities p WHERE p.table_id = reference.table_id)
            ORDER BY t.database_id, reference.row_id, c.id"#,
-        records,
+        &spellings(records),
     )
     .fetch_all(conn)
     .await
@@ -514,6 +526,42 @@ async fn database_cells(
             values: row.values,
         })
         .collect())
+}
+
+/// Read the ordinary-database cells naming `records` under their tables'
+/// version rows, which every batch writing a table holds `FOR UPDATE` until
+/// it commits: a writer then waits for the merge, and the merge rewrites and
+/// logs the values it read, never stale ones. A table that gained such a
+/// cell between the reads is locked on the next round.
+async fn lock_database_cells(
+    conn: &mut PgConnection,
+    records: &[Uuid],
+) -> Result<Vec<StoredCell>, MergeError> {
+    let mut locked: Vec<Uuid> = Vec::new();
+    for _ in 0..3 {
+        let cells = database_cells(conn, records).await?;
+        let mut wanted: Vec<Uuid> = cells.iter().map(|cell| cell.table_id).collect();
+        wanted.sort_unstable();
+        wanted.dedup();
+        let missing: Vec<Uuid> = wanted
+            .iter()
+            .copied()
+            .filter(|id| !locked.contains(id))
+            .collect();
+        if missing.is_empty() {
+            return Ok(cells);
+        }
+        sqlx::query_scalar!(
+            "SELECT id FROM database_tables WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+            &missing,
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db)?;
+        locked.extend(missing);
+        locked.sort_unstable();
+    }
+    Err(CrmError::Contended.into())
 }
 
 /// Hold the pipelines that reference `records` as their lifecycle readers
@@ -549,6 +597,42 @@ async fn lock_pipelines_holding(
         locked.sort_unstable();
     }
     Err(CrmError::Contended.into())
+}
+
+/// Whether `scope`'s actor is still an admin or owner of the team, read in
+/// the caller's snapshot rather than trusted from the request's receipt.
+/// `lock` holds the row so a demotion waits for a commit.
+async fn still_admin(
+    conn: &mut PgConnection,
+    scope: &MergeScope,
+    lock: bool,
+) -> Result<(), MergeError> {
+    let admin = if lock {
+        sqlx::query_scalar!(
+            r#"SELECT team_role IN ('admin','owner') AS "admin!" FROM team_user
+               WHERE team_id = $1 AND user_id = $2 FOR SHARE"#,
+            scope.team_id,
+            scope.actor.as_ref(),
+        )
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db)?
+    } else {
+        sqlx::query_scalar!(
+            r#"SELECT team_role IN ('admin','owner') AS "admin!" FROM team_user
+               WHERE team_id = $1 AND user_id = $2"#,
+            scope.team_id,
+            scope.actor.as_ref(),
+        )
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db)?
+    };
+    if admin == Some(true) {
+        Ok(())
+    } else {
+        Err(MergeError::PermissionRequired)
+    }
 }
 
 /// Write the merge's log rows in one statement.
@@ -846,7 +930,7 @@ where
         // Pipelines, trashed ones too so a restore names the survivor, and
         // company columns of ordinary databases, through one write path.
         let mut cells: Vec<StoredCell> = facts.cells.iter().map(StoredCell::from).collect();
-        cells.extend(database_cells(&mut *tx, &targets.all_sorted()).await?);
+        cells.extend(lock_database_cells(&mut *tx, &targets.all_sorted()).await?);
         changes.extend(
             self.retarget_database_cells(tx, scope, targets, &cells)
                 .await?,
@@ -1029,6 +1113,8 @@ where
             .execute(&mut *tx)
             .await
             .map_err(db)?;
+        // A demotion after the receipt was made still hides the review.
+        still_admin(&mut tx, scope, false).await?;
         let state =
             CompaniesRepositoryImpl::company_merge_state(&mut tx, scope.team_id, targets).await?;
         let facts = Self::company_facts(&mut tx, scope.team_id, targets, state, false).await?;
@@ -1072,18 +1158,7 @@ where
 
         // The receipt's role can be gone by now: a demotion committed before
         // this read stops the merge, and the row lock holds off a later one.
-        let admin = sqlx::query_scalar!(
-            r#"SELECT team_role IN ('admin','owner') AS "admin!" FROM team_user
-               WHERE team_id = $1 AND user_id = $2 FOR SHARE"#,
-            scope.team_id,
-            scope.actor.as_ref(),
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db)?;
-        if admin != Some(true) {
-            return Err(MergeError::PermissionRequired);
-        }
+        still_admin(&mut tx, scope, true).await?;
 
         let merge_id = Uuid::now_v7();
         sqlx::query!(
@@ -1127,6 +1202,22 @@ where
             .await
             .map_err(db)?
         {
+            return Err(MergeError::PreviewStale);
+        }
+        // A reference or cell attached since the merge read them would keep
+        // a deleted company's id, so the merge refuses instead.
+        let referenced =
+            !property_merge::referencing_rows_in(&mut tx, PropertyEntityType::Company, &sources)
+                .await
+                .map_err(db)?
+                .is_empty();
+        let named = !pipeline_cells(&mut tx, scope.team_id, command.targets.sources())
+            .await?
+            .is_empty()
+            || !database_cells(&mut tx, command.targets.sources())
+                .await?
+                .is_empty();
+        if referenced || named {
             return Err(MergeError::PreviewStale);
         }
         tx.commit().await.map_err(db)?;

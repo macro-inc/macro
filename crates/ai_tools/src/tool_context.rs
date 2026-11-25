@@ -715,8 +715,8 @@ pub fn merge_sharing_notices<I: notification::domain::service::NotificationIngre
 }
 
 /// Build the merge tools over the database tools' service and access. Without
-/// a feature flag client, merging stays off; without `notices`, members whose
-/// sharing rules a merge rewrites see it only in their sharing history.
+/// a feature flag client, or without `notices` to tell members whose sharing
+/// rules a merge rewrites, merging stays off.
 pub fn build_merge_tool_context(
     pool: sqlx::PgPool,
     databases: &ToolDatabasesToolContext,
@@ -740,11 +740,10 @@ pub fn build_merge_tool_context(
         pool,
         databases.entity_access_service.clone(),
     )));
-    if let Some(flags) = feature_flags {
-        merges = merges.with_gate(Arc::new(crm::outbound::record_merge::FlaggedMerge(flags)));
-    }
-    if let Some(notices) = notices {
-        merges = merges.with_notices(notices);
+    if let (Some(flags), Some(notices)) = (feature_flags, notices) {
+        merges = merges
+            .with_gate(Arc::new(crm::outbound::record_merge::FlaggedMerge(flags)))
+            .with_notices(notices);
     }
     crm::inbound::toolset::merge::MergeToolContext {
         merges: Arc::new(merges),

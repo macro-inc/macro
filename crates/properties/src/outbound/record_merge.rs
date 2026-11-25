@@ -302,6 +302,18 @@ pub async fn values_remain_in(
     .await
 }
 
+/// Each id as stored references may spell it: as given, lowercase, and
+/// uppercase, since a client may send either and the value is kept as sent.
+fn spellings(ids: &[String]) -> Vec<String> {
+    let mut all: Vec<String> = ids
+        .iter()
+        .flat_map(|id| [id.clone(), id.to_lowercase(), id.to_uppercase()])
+        .collect();
+    all.sort();
+    all.dedup();
+    all
+}
+
 /// A row outside databases whose entity reference names a merged record.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReferencingRow {
@@ -326,8 +338,9 @@ pub async fn referencing_rows_in(
     sources: &[String],
 ) -> Result<Vec<ReferencingRow>, sqlx::Error> {
     let (system, type_tag) = reference_property(referenced);
+    let sources = spellings(sources);
     // Each arm repeats its index's predicate literally and probes it once per
-    // source, so the cost follows the references, not the table.
+    // source spelling, so the cost follows the references, not the table.
     sqlx::query_as!(
         ReferencingRow,
         r#"SELECT r.id AS "id!", e.entity_type AS "entity_type!: EntityType", e.entity_id AS "entity_id!",
@@ -358,7 +371,7 @@ pub async fn referencing_rows_in(
            JOIN entity_properties e ON e.id = r.id
            JOIN property_definitions pd ON pd.id = e.property_definition_id
            ORDER BY r.id"#,
-        sources,
+        &sources,
         system,
         type_tag,
     )
@@ -388,6 +401,7 @@ pub async fn retarget_references_in(
     // writer lock per row would hold one lock-table slot per reference.
 
     let (_, type_tag) = reference_property(referenced);
+    let lowered: Vec<String> = sources.iter().map(|id| id.to_lowercase()).collect();
     let rows = sqlx::query!(
         r#"WITH old AS MATERIALIZED (
                SELECT id, values FROM entity_properties
@@ -400,7 +414,7 @@ pub async fn retarget_references_in(
                        SELECT COALESCE(jsonb_agg(element ORDER BY first_seen), '[]'::jsonb)
                        FROM (
                            SELECT CASE
-                                      WHEN reference->>'entity_type' = $2 AND reference->>'entity_id' = ANY($3)
+                                      WHEN reference->>'entity_type' = $2 AND lower(reference->>'entity_id') = ANY($3)
                                       THEN jsonb_set(reference, '{entity_id}', to_jsonb($4::text))
                                       ELSE reference
                                   END AS element,
@@ -420,7 +434,7 @@ pub async fn retarget_references_in(
            ORDER BY updated.id"#,
         &ids,
         type_tag,
-        sources,
+        &lowered,
         survivor,
     )
     .fetch_all(&mut *conn)

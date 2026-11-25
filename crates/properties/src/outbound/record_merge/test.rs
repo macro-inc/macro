@@ -396,3 +396,37 @@ async fn a_moved_value_replaces_the_survivors_empty_row(pool: PgPool) {
     assert_eq!(owner, survivor);
     assert_eq!(kept["value"], "Gold");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reference_spelled_in_uppercase_still_names_the_survivor(pool: PgPool) {
+    setup(&pool).await;
+    let [survivor, source] = [Uuid::now_v7(), Uuid::now_v7()].map(|id| id.to_string());
+    let shouting = source.to_uppercase();
+    let task = value(
+        &pool,
+        "task-1",
+        "DOCUMENT",
+        COMPANIES,
+        refs(&[("COMPANY", &shouting)]),
+    )
+    .await;
+
+    let mut tx = pool.begin().await.unwrap();
+    let sources = [source.clone()];
+    let found = referencing_rows_in(&mut tx, EntityType::Company, &sources)
+        .await
+        .unwrap();
+    assert_eq!(
+        found.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![task]
+    );
+    retarget_references_in(&mut tx, EntityType::Company, &sources, &survivor)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    assert_eq!(
+        stored(&pool, task).await.unwrap().1,
+        refs(&[("COMPANY", &survivor)])
+    );
+}

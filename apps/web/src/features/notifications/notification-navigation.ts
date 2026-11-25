@@ -847,22 +847,29 @@ function getSupportedHandler(
       })
       .with('inbox_reauth_required', () => null)
       // Opens where the recipient reviews their CRM email sharing rules.
-      .with(
-        'crm_email_sharing_changed',
-        () =>
-          async (lm: SplitManager, newSplit: boolean = false) =>
-            openContent(
-              lm,
-              {
-                type: 'component',
-                id: 'settings',
-                entryMetadata: {
-                  route: paneRoute({ id: 'settings', params: { tab: 'crm' } }),
-                },
-              },
-              { newSplit, sourceHandle, onApplied }
-            )
-      )
+      .with('crm_email_sharing_changed', () => {
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          const content: SplitContent = {
+            type: 'component',
+            id: 'settings',
+            entryMetadata: {
+              route: paneRoute({ id: 'settings', params: { tab: 'crm' } }),
+            },
+          };
+          const result = openContentWithResult(lm, content, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+          // Reuse only activates open Settings; move it to the CRM tab.
+          if (result?.status === 'reused')
+            result.split?.replace({
+              next: content,
+              mergeHistory: true,
+              referredFrom: null,
+            });
+        };
+      })
       .with('routine_run_finished', () => {
         return async (lm: SplitManager, newSplit: boolean = false) =>
           openContent(lm, routineContent(notification.entity_id), {

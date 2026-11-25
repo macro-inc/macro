@@ -107,7 +107,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false,
 messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
 activity = { path = "../activity", default-features = false, features = ["outbound"], optional = true }
 favorites = { path = "../favorites", optional = true }
-model-entity = { path = "../model-entity", optional = true }
+model-entity = { workspace = true, optional = true }
 saved_views = { path = "../saved_views", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
 notification = { path = "../notification", optional = true }
