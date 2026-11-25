@@ -41,6 +41,15 @@ enum Resumed {
     Yes,
 }
 
+/// Whether a rollback is sent for the first time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Send {
+    /// Right after the computer was marked rolling back.
+    First,
+    /// Again, from a later pass.
+    Repeat,
+}
+
 /// Another replica holds the upgrade now; this pass stops.
 fn lease_lost() -> ComputerError {
     ComputerError::Internal(rootcause::report!(
@@ -296,13 +305,7 @@ where
                 }
                 ComputerUpgradeState::Verifying => {
                     if computer.reconnected() {
-                        self.repo
-                            .record_image(computer.computer_id, &computer.new_image)
-                            .await
-                            .map_err(internal)?;
-                        computer.state = ComputerUpgradeState::Upgraded;
-                        tracing::info!(computer_id = %computer.computer_id, old_image = ?computer.old_image.as_ref().map(GuestImage::as_str), new_image = %computer.new_image, "computer upgraded");
-                        self.save_computer(computer).await?;
+                        self.upgraded(computer).await?;
                     } else if computer.timed_out(upgrade.reconnect_timeout, now) {
                         let reason = "macrod did not connect after the boot".to_owned();
                         self.roll_back(computer, reason).await?;
@@ -315,7 +318,7 @@ where
                         // A rollback cut short (a dead pass, a lost lease, a
                         // call that timed out) is sent again until its host
                         // has the computer running on its old disk.
-                        self.ensure_rolled_back(computer).await?;
+                        self.ensure_rolled_back(computer, Send::Repeat).await?;
                         continue;
                     }
                     if computer.reconnected() {
@@ -502,14 +505,15 @@ where
             }
         };
         if disk.image == computer.new_image && disk.running {
-            computer.state = ComputerUpgradeState::Verifying;
-            match resumed {
-                // Only a connection after the boot counts.
-                Resumed::No => computer.phase_started_at = Some(self.clock.now()),
-                // The boot may have come (and macrod with it) before the
-                // pass that asked died: count from when it asked.
-                Resumed::Yes => {}
+            if resumed == Resumed::Yes && computer.reconnected() {
+                // The pass that asked died after the boot, and macrod
+                // connected after it asked: done.
+                return self.upgraded(computer).await;
             }
+            computer.state = ComputerUpgradeState::Verifying;
+            // Only a connection after the host's answer counts, and the
+            // reconnect timeout runs from it.
+            computer.phase_started_at = Some(self.clock.now());
             return self.save_computer(computer).await;
         }
         if disk.image == computer.new_image {
@@ -545,16 +549,19 @@ where
         computer.phase_started_at = Some(self.clock.now());
         computer.error = Some(reason);
         self.save_computer(computer).await?;
-        self.ensure_rolled_back(computer).await
+        self.ensure_rolled_back(computer, Send::First).await
     }
 
     /// Unless its host has the computer running on its old disk, send the
-    /// rollback (back to the old disk, then start). Once sent, macrod counts
-    /// from the host's answer; a failed send is tried again next pass until
-    /// the reconnect timeout.
+    /// rollback (back to the old disk, then start). After the first send,
+    /// macrod and the reconnect timeout count from the host's answer; a
+    /// repeat (a send that failed or was cut short, or a computer that
+    /// crashes on its old disk) keeps that time, so a computer that never
+    /// comes back reaches the timeout instead of restarting every pass.
     async fn ensure_rolled_back(
         &self,
         computer: &mut ComputerUpgrade,
+        send: Send,
     ) -> Result<(), ComputerError> {
         let Some(old_image) = computer.old_image.clone() else {
             computer.state = ComputerUpgradeState::RollbackFailed;
@@ -595,16 +602,30 @@ where
         .instrument(tracing::info_span!("computer.image_upgrade.roll_back", computer_id = %computer.computer_id))
         .await;
         match sent {
-            Ok(()) => {
-                // Only a connection after the boot on the old disk counts.
-                computer.phase_started_at = Some(self.clock.now());
-                self.save_computer(computer).await
-            }
+            Ok(()) => match send {
+                Send::First => {
+                    // Only a connection after the boot on the old disk counts.
+                    computer.phase_started_at = Some(self.clock.now());
+                    self.save_computer(computer).await
+                }
+                Send::Repeat => Ok(()),
+            },
             Err(error) => {
                 tracing::warn!(computer_id = %computer.computer_id, error, "sending a rollback failed; trying again next pass");
                 Ok(())
             }
         }
+    }
+
+    /// macrod connected on the new image: record it.
+    async fn upgraded(&self, computer: &mut ComputerUpgrade) -> Result<(), ComputerError> {
+        self.repo
+            .record_image(computer.computer_id, &computer.new_image)
+            .await
+            .map_err(internal)?;
+        computer.state = ComputerUpgradeState::Upgraded;
+        tracing::info!(computer_id = %computer.computer_id, old_image = ?computer.old_image.as_ref().map(GuestImage::as_str), new_image = %computer.new_image, "computer upgraded");
+        self.save_computer(computer).await
     }
 
     /// The computer, if it exists and is healthy.

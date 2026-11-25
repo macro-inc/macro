@@ -678,9 +678,73 @@ async fn a_replacement_resumed_after_the_boot_counts_macrod_from_when_it_was_ask
     });
 
     operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Upgraded);
+    assert_eq!(image_of(&operator, id), NEW_IMAGE);
+}
+
+#[tokio::test]
+async fn a_late_boot_after_a_resumed_replacement_gets_its_whole_reconnect_timeout() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    // Asked long ago; the host boots it only now, and macrod has not come.
+    set_row(&operator, id, |row| {
+        row.state = ComputerUpgradeState::Replacing;
+        row.phase_started_at = Some(now() - Duration::minutes(30));
+        row.reconnected_at = None;
+    });
+
+    operator.advance_image_upgrade().await.unwrap();
     assert_eq!(state_of(&operator, id), ComputerUpgradeState::Verifying);
     operator.advance_image_upgrade().await.unwrap();
-    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Upgraded);
+    // Not rolled back: the timeout runs from the host's answer.
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Verifying);
+    assert_eq!(
+        operator
+            .fleet
+            .home
+            .logged(&format!("replace {id} {BASE_IMAGE}")),
+        0
+    );
+}
+
+#[tokio::test]
+async fn a_computer_crashing_on_its_old_disk_is_not_restarted_past_the_reconnect_timeout() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    // Rolled back once, long ago; it keeps going down on its old disk.
+    operator.fleet.home.system_disks.lock().unwrap().insert(
+        id,
+        (BASE_IMAGE.to_owned(), Some(NEW_IMAGE.to_owned()), false),
+    );
+    set_row(&operator, id, |row| {
+        row.state = ComputerUpgradeState::RollingBack;
+        row.phase_started_at = Some(now() - Duration::minutes(9));
+    });
+
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(operator.fleet.home.logged(&format!("start {id}")), 1);
+    // The repeat kept the first send's time: the timeout still comes.
+    set_row(&operator, id, |row| {
+        assert_eq!(row.phase_started_at, Some(now() - Duration::minutes(9)));
+        row.phase_started_at = Some(now() - Duration::minutes(11));
+    });
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(
+        state_of(&operator, id),
+        ComputerUpgradeState::RollbackFailed
+    );
 }
 
 #[tokio::test]
