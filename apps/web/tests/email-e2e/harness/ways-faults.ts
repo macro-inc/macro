@@ -89,24 +89,35 @@ export function unreadable(
   return page.getByRole('alert').filter({ hasText: text });
 }
 
-/** The composer's banner asking for a reload to recover local storage. */
-export function reloadBanner(page: Page): Locator {
+/** The composer's banner that its edits wait on this device. */
+export function waitingNotice(page: Page): Locator {
   return page
     .getByRole('alert')
-    .filter({ hasText: 'Update or reload Macro to recover local storage.' });
+    .or(page.getByRole('status'))
+    .filter({ hasText: 'Saved on this device; waiting to sync' });
 }
 
 /**
  * Keeps the app's local cache from starting on the page's next load: the
  * worker that opens it cannot load, as when its script fails to download.
  * (A page route, so it runs before `loadAppSteadily`'s.) Returns what lets
- * it load again.
+ * it load again, and how many times it has loaded since.
  */
 export async function cacheWorkerUnloadable(
   page: Page
-): Promise<{ lift: () => Promise<void> }> {
+): Promise<{ lift: () => void; loads: () => number }> {
   const coordinator = /\/cache\.coordinator\.shared-worker-[^/]*\.js$/;
-  const refuse = (route: Route) => route.abort();
-  await page.route(coordinator, refuse);
-  return { lift: () => page.unroute(coordinator, refuse) };
+  let refused = true;
+  let loads = 0;
+  await page.route(coordinator, (route: Route) => {
+    if (refused) return route.abort();
+    loads += 1;
+    return route.continue();
+  });
+  return {
+    lift: () => {
+      refused = false;
+    },
+    loads: () => loads,
+  };
 }
