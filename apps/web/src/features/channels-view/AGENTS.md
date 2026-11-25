@@ -8,6 +8,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 
 - `queries.ts` owns the bounded list sources; `channels-view.tsx` composes the shared local channel pool and views.
 - `components/rail/ChannelsRail.tsx` composes section membership, favorites, and referenced-channel hydration.
+- `redesign/` holds the flagged Chat sidebar redesign (`enable-channel-sidebar-redesign`): pure placement, DM smart-window, Support Desk, Focus triage, Quick Switch, and Jev classifier logic under `redesign/core/`, desktop workspace under `redesign/views/`, touch-first phone/tablet view under `redesign/views/mobile/`, and backend-free Playwright coverage under `redesign/browser-test/`.
 - `queries/channel-list-search-pool.ts` adapts the joined channels of the channel directory (`useChannelDirectory`, `lib/queries/channel/directory.ts`) for initial display, search, and mobile pins.
 
 ## Data and loading

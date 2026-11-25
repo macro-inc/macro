@@ -255,6 +255,11 @@ vi.mock('./redesign/views/ChannelSidebarDesktop', () => ({
     <div data-testid="channel-sidebar-redesign-desktop" />
   ),
 }));
+vi.mock('./redesign/views/mobile/ChannelSidebarMobile', () => ({
+  ChannelSidebarMobile: () => (
+    <div data-testid="channel-sidebar-redesign-mobile" />
+  ),
+}));
 vi.mock('@channel/Channel/channel-entity', () => ({
   useChannelByIdQuery: mocks.selectedQuery,
 }));
@@ -1008,5 +1013,14 @@ describe('channel selection loading and recovery', () => {
     render(() => <ChannelsView />);
     expect(screen.getByTestId('channel-sidebar-redesign-desktop')).toBeTruthy();
     expect(screen.queryByTestId('desktop-rail')).toBeNull();
+  });
+
+  it('mounts the redesigned mobile sidebar on touch when enableChannelSidebarRedesign is active', () => {
+    mocks.redesignEnabled = () => true;
+    mocks.touch = () => true;
+    mocks.mobileLayout = () => true;
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('channel-sidebar-redesign-mobile')).toBeTruthy();
+    expect(screen.queryByTestId('mobile-channels')).toBeNull();
   });
 });

@@ -2177,3 +2177,38 @@ To exercise it, register a session as the agent account through the SDK
 (`session.registerAsWork()`), share it with the viewer, and watch the DM update
 live. `session.unregisterAsWork()` removes it. A registered session the viewer
 can't open stays hidden.
+
+## Redesigned Chat sidebar
+
+Behind `enable-channel-sidebar-redesign`, the Chat sidebar separates **triage**
+from **navigation** and **personal organization** from **shared team structure**:
+
+- **Top lenses (`All` / `Focus` / `Support` / `Threads`)**: `All` is a
+  deduplicated spatial map where every joined channel appears once (Personal
+  sections win over Team sections, and Ungrouped `Channels` lists only channels
+  not already placed in a section). `Focus` surfaces what needs you (`Direct &
+  @mentions`, `Support waiting`, `Active unreads`, and collapsed `Automated &
+  FYI`) with one-click `Mark read` and `Mark all read`. `Support` auto-activates
+  when the workspace has customer support channels (smart rule or `Macro Support
+  x ` prefix), strips the repeated prefix, and groups channels operationally into
+  `Needs reply` (Urgent first), `Agent handling`, `Waiting on customer`, and
+  collapsed `Quiet & resolved`.
+- **Bounded Direct messages**: expanding DMs never dumps dozens of stale rows at
+  once. By default the window shows every unread/mentioned/active-call/selected
+  DM plus the most recent 7, with `All · People · Agents` filter chips, an inline
+  filter, and a `Show N more DMs` disclosure.
+- **Personal overlay over shared team sections**: individuals can hide any shared
+  team section from their own sidebar (`Hide from my sidebar`) and restore it at
+  any time without mutating or deleting the section for teammates.
+- **Optional Jev triage and Smart Organize**: deterministic local rules render
+  immediately at zero cost; when enabled, `cognition-service` `POST /decisions`
+  (Jev yes/no classifier) progressively refines urgency, resolution, and FYI
+  noise on changed messages, cached per `(channelId, latestMessageId)` with
+  bounded concurrency and automatic fallback when offline or unavailable.
+- **Quick Switch (`⌘J`)**: fuzzy-matches channels (including stripped customer
+  names), DMs, and sections, ranking `Unread & mentions` → `Your conversations`
+  → `Sections & views` → `Join team channels` with inline Join.
+
+Verify both desktop and 390px touch layouts with the backend-free Playwright
+suite from `apps/web`:
+`bunx playwright test --config src/features/channels-view/redesign/browser-test/playwright.config.ts`.

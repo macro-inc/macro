@@ -72,6 +72,7 @@ import { createChannelDetailSource } from './queries/channel-detail-source';
 import { useChannelListSearchPool } from './queries/channel-list-search-pool';
 import { createChannelSearchSource } from './queries/channel-search-source';
 import { ChannelSidebarDesktop } from './redesign/views/ChannelSidebarDesktop';
+import { ChannelSidebarMobile } from './redesign/views/mobile/ChannelSidebarMobile';
 import { channelsTour } from './tour';
 
 const ChannelSourcesContext =
@@ -95,7 +96,11 @@ function MobileChannelsList(props: {
     setSelectedChannel,
     sectionsEnabled,
     sectionsLoading,
+    redesignEnabled,
+    redesignLoading,
   } = useChannelsView();
+  const isRedesign = () => redesignEnabled?.() ?? false;
+  const isRedesignLoading = () => redesignLoading?.() ?? false;
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
@@ -166,23 +171,34 @@ function MobileChannelsList(props: {
       .flatMap((favorite) => channelsById.get(favorite.entityId) ?? []);
   });
   return (
-    <Show when={!sectionsLoading()}>
+    <Show when={!sectionsLoading() && !isRedesignLoading()}>
       <Show
-        when={sectionsEnabled()}
+        when={isRedesign()}
         fallback={
-          <ChannelsMobileView
-            source={mobileSearchSource}
-            pinned={pinned().slice(0, MAX_PINNED_CHANNELS)}
-            searchQuery={mobileSearchText()}
-            onClearSearch={() => SearchState.setQuery('')}
-            openPreview={mobileLayout() ? undefined : openPreview}
-          />
+          <Show
+            when={sectionsEnabled()}
+            fallback={
+              <ChannelsMobileView
+                source={mobileSearchSource}
+                pinned={pinned().slice(0, MAX_PINNED_CHANNELS)}
+                searchQuery={mobileSearchText()}
+                onClearSearch={() => SearchState.setQuery('')}
+                openPreview={mobileLayout() ? undefined : openPreview}
+              />
+            }
+          >
+            <MobileSectionsView
+              sources={props.sources}
+              localChannels={listChannels}
+              pinned={pinned()}
+              openPreview={mobileLayout() ? undefined : openPreview}
+            />
+          </Show>
         }
       >
-        <MobileSectionsView
+        <ChannelSidebarMobile
           sources={props.sources}
           localChannels={listChannels}
-          pinned={pinned()}
           openPreview={mobileLayout() ? undefined : openPreview}
         />
       </Show>
