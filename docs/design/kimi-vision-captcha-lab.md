@@ -37,7 +37,7 @@ only.
 | count | Pick the tile with a different number of shapes from the other three. | one of A–D | clicks that option |
 | order | Click the shapes from smallest to largest. | all of A–D, once each | clicks each option in that order |
 | transcription | Type the digits in the image. | exactly five digits | fills the quiz's input, presses its submit button |
-| rotation | How many degrees clockwise must the arrow turn to point up? | one of 0, 90, 180, 270 | clicks that option |
+| rotation | Which listed clockwise turn brings the arrow closest to pointing up? | one of 0, 90, 180, 270 | clicks that option |
 
 None takes coordinates, keys or any other element. The server scores the
 response kind it expects and refuses any other kind without using the

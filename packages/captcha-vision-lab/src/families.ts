@@ -264,7 +264,6 @@ export const transcription = (random: Random): TextChallenge => {
 };
 
 /**
- * Rotation: "How many degrees clockwise must the arrow turn to point up?"
  * The arrow points up, right, down or left, a few degrees off, with
  * distractor shapes around it; the options are the four quarter turns.
  */
@@ -292,11 +291,12 @@ export const rotation = (random: Random): ChoiceChallenge => {
     between(random, 90, 120),
     heading + between(random, -10, 10)
   );
-  // Turning clockwise by (360 - heading) brings the arrow back to up.
+  // This turn leaves only the jitter between the arrow and up.
   const answer = (360 - heading) % 360;
   return {
     kind: 'choice',
-    prompt: 'How many degrees clockwise must the arrow turn to point up?',
+    prompt:
+      'Which listed clockwise turn brings the arrow closest to pointing up?',
     figure: canvas.png(random),
     options: headings.map((turn) => ({
       label: String(turn),
