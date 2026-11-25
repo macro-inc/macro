@@ -314,6 +314,24 @@ describe('details opened on an event whose create has not landed', () => {
       creates.answered.set('local-1', answer);
     };
 
+    it('lands on it rather than the only other occurrence of the series the page draws', () => {
+      const { view } = renderContexts();
+      view().selectEvent(local, document.createElement('a'));
+      land();
+      const nextDay = {
+        ...server,
+        id: JSON.stringify(['server-1', '2026-11-29T15:00:00+00:00']),
+        occurrenceKey: '2026-11-29T15:00:00+00:00',
+      };
+
+      view().refreshSelectedEventFromPage(page(nextDay), true);
+
+      expect(view().selectedEvent()).toMatchObject({
+        id: server.id,
+        occurrenceKey: KEY,
+      });
+    });
+
     it('moves the details and the destination to it while the page still draws the local copy', () => {
       const focused = vi.fn();
       const { view } = renderContexts(focused);

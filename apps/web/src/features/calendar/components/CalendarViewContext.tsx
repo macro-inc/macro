@@ -135,11 +135,15 @@ function landedEvent(
 ): CalendarEvent | undefined {
   const serverId = createdCalendarEventId(selected.eventId);
   if (!serverId) return undefined;
+  const onPage = [...eventsById.values()].filter(
+    (event) => event.eventId === serverId
+  );
+  // The answer's copy is this occurrence, so it beats a lone page occurrence
+  // of the same event on another date.
   return (
-    sameOccurrence(
-      selected,
-      [...eventsById.values()].filter((event) => event.eventId === serverId)
-    ) ?? answered(selected.eventId)
+    onPage.find((event) => event.occurrenceKey === selected.occurrenceKey) ??
+    answered(selected.eventId) ??
+    sameOccurrence(selected, onPage)
   );
 }
 
