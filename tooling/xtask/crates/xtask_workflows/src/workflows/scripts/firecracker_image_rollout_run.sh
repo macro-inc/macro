@@ -18,6 +18,9 @@ region=${BASH_REMATCH[3]}
 prefix="firecracker-images/$IMAGE_VERSION"
 files="$FILES_DIR/files.json"
 [ -s "$files" ] || fail "the build job's digests are missing"
+# shellcheck disable=SC2016 # $source_sha is jq's, not the shell's
+jq -e --arg source_sha "$SOURCE_SHA" '.source_sha == $source_sha' "$files" >/dev/null \
+  || fail "files.json has a different source commit"
 
 # The runner's own temp directory: emptied at the start of every job, so a
 # job killed before its trap still leaves nothing for the next one.
@@ -31,12 +34,12 @@ sources='[]'
 for name in vmlinux rootfs.ext4 boot_args; do
   # Named by its contents, as the build job uploaded it.
   # shellcheck disable=SC2016 # $name is jq's, not the shell's
-  sha256=$(jq -r --arg name "$name" '.[] | select(.name == $name) | .sha256' "$files")
+  sha256=$(jq -r --arg name "$name" '.files[] | select(.name == $name) | .sha256' "$files")
   [[ $sha256 =~ ^[0-9a-f]{64}$ ]] || fail "files.json has no SHA-256 for $name"
   url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 21600 "s3://$bucket/$prefix/$sha256-$name.zst")
   echo "::add-mask::$url"
   sources=$(jq --arg name "$name" --arg url "$url" --slurpfile files "$files" \
-    '. + [{file: ($files[0][] | select(.name == $name)), url: $url}]' <<<"$sources")
+    '. + [{file: ($files[0].files[] | select(.name == $name)), url: $url}]' <<<"$sources")
 done
 jq -n --arg image "$IMAGE_VERSION" --argjson sources "$sources" \
   '{image: $image, sources: $sources}' >"$secrets/manifest.json"
