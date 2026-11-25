@@ -89,7 +89,7 @@ impl ScheduledActionRepo for FakeRepo {
     async fn create_action(
         &self,
         _: ScheduledAction,
-        _max_active_sub_routines: i64,
+        _: Option<RoutineLimit>,
     ) -> Result<ScheduledAction> {
         unreachable!()
     }
@@ -99,7 +99,11 @@ impl ScheduledActionRepo for FakeRepo {
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unreachable!()
     }
-    async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unreachable!()
     }
     async fn claim_action(

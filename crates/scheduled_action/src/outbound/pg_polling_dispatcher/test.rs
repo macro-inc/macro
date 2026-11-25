@@ -69,7 +69,7 @@ impl ScheduledActionRepo for FakeRepository {
     async fn create_action(
         &self,
         action: ScheduledAction,
-        _max_active_sub_routines: i64,
+        _activation: Option<crate::domain::routine_limit::RoutineLimit>,
     ) -> Result<ScheduledAction> {
         Ok(action)
     }
@@ -97,7 +97,11 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(self.candidates.lock().unwrap().clone())
     }
 
-    async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        action: ScheduledAction,
+        _activation: Option<crate::domain::routine_limit::RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         Ok(action)
     }
 

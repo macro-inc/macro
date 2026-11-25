@@ -20,10 +20,7 @@ async fn routine(pool: &PgPool) -> ScheduledAction {
         "sdk": "0.2.0+old",
     });
     test_repo(pool.clone())
-        .create_action(
-            action,
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(action, None)
         .await
         .unwrap()
 }
@@ -118,7 +115,10 @@ async fn a_saved_rewrite_replaces_the_task_unless_the_owner_changed_it(pool: PgP
     let mut edited = saved.clone();
     edited.configuration_revision = edited.configuration_revision.next().unwrap();
     edited.task = json!({ "steps": [{ "type": "code", "title": "File", "source": "owner" }] });
-    let edited = test_repo(pool.clone()).update_action(edited).await.unwrap();
+    let edited = test_repo(pool.clone())
+        .update_action(edited, None)
+        .await
+        .unwrap();
     let newer = sdk("0.4.0+newer");
     upgrades.claim_rewrite(&saved, &newer).await.unwrap();
     upgrades
@@ -239,7 +239,7 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
             ], "sdk": "0.2.0+old" }),
                 true,
             ),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            None,
         )
         .await
         .unwrap();
@@ -249,7 +249,7 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
                 json!({ "steps": [{ "type": "code", "title": "File", "source": "old" }] }),
                 true,
             ),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            None,
         )
         .await
         .unwrap();
@@ -257,14 +257,14 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
         .create_action(create(
             json!({ "steps": [{ "type": "code", "title": "File", "source": "new" }], "sdk": "0.3.0+new" }),
             true,
-        ), crate::domain::models::RoutineLimits::STANDARD.active_sub_routines)
+        ), None)
         .await
         .unwrap();
     let paused = repo
         .create_action(create(
             json!({ "steps": [{ "type": "code", "title": "File", "source": "old" }], "sdk": "0.2.0+old" }),
             false,
-        ), crate::domain::models::RoutineLimits::STANDARD.active_sub_routines)
+        ), None)
         .await
         .unwrap();
     let no_code = repo
@@ -273,7 +273,7 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
                 json!({ "steps": [{ "type": "agent", "model": "m", "instructions": "Go" }] }),
                 true,
             ),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            None,
         )
         .await
         .unwrap();

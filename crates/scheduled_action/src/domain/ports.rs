@@ -4,11 +4,12 @@ use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, CreatedRoutine,
-    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester,
-    RoutineLimits, RunCaller, RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate,
-    SubRoutineKey,
+    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester, RunCaller,
+    RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
 };
+use super::routine_limit::RoutineLimit;
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
+use ai_billing::PlanTier;
 use anyhow::Result;
 use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
@@ -92,12 +93,15 @@ pub trait LiveItems: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionRepo: Send + Sync + 'static {
-    /// Save a new routine. A sub-routine is refused with `TooManySubRoutines`
-    /// when its parent already has `max_active_sub_routines` active ones.
+    /// Insert `action`. `activation` is set when the new routine is active
+    /// ([`ScheduledAction::is_active`]): the insert is then refused with
+    /// `RoutineLimitReached` when its owner already has the limit's number of
+    /// active routines, counted under a per-owner lock so concurrent
+    /// activations can't both take the last slot.
     fn create_action(
         &self,
         action: ScheduledAction,
-        max_active_sub_routines: i64,
+        activation: Option<RoutineLimit>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Account cleanup only: `WHERE owner = $1`. Never the HTTP list.
@@ -128,10 +132,12 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     /// predecessor, plus the claim fence. No owner predicate. While claimed,
     /// only disabling with otherwise identical configuration is allowed.
     /// `UpdateConflict` on a stale revision or a concurrent claim; never
-    /// overwrite execution state.
+    /// overwrite execution state. `activation` is set when the update makes
+    /// an inactive routine active, and is checked as in `create_action`.
     fn update_action(
         &self,
         action: ScheduledAction,
+        activation: Option<RoutineLimit>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Atomically replace presentation and record the actual change in entity
@@ -467,23 +473,13 @@ pub struct SuggestionOrigin {
     pub surface: Option<&'static str>,
 }
 
-/// The routine limits an owner's plan gives. Object-safe, so the services
-/// need not know the billing source's type. Never fails: an owner whose plan
-/// can't be read gets [`RoutineLimits::STANDARD`].
-#[async_trait::async_trait]
+/// The plan whose [`RoutineLimit`] applies to a routine owner.
 pub trait RoutinePlans: Send + Sync + 'static {
-    /// The limits `owner`'s plan gives.
-    async fn limits(&self, owner: &MacroUserIdStr<'_>) -> RoutineLimits;
-}
-
-/// Everyone on [`RoutineLimits::STANDARD`]: a composition without billing.
-pub struct StandardRoutinePlans;
-
-#[async_trait::async_trait]
-impl RoutinePlans for StandardRoutinePlans {
-    async fn limits(&self, _owner: &MacroUserIdStr<'_>) -> RoutineLimits {
-        RoutineLimits::STANDARD
-    }
+    /// `owner`'s plan. Enterprise teams count as Max.
+    fn plan(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<PlanTier>> + Send;
 }
 
 /// The inboxes (email link ids) an owner receives mail in: their own and those

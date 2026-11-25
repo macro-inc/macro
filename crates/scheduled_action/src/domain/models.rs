@@ -18,6 +18,7 @@ use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
+use super::routine_limit::RoutineLimit;
 
 #[cfg(test)]
 mod test;
@@ -300,12 +301,17 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error(
+        "You've reached your plan's limit of {} active routines. Pause or delete a routine to activate another.",
+        .0.max_active()
+    )]
+    RoutineLimitReached(RoutineLimit),
     #[error("{0}")]
     InvalidAppearance(String),
     #[error("only a routine suggestion session may suggest routines")]
     NotSuggesting,
     #[error(
-        "this routine already has as many active sub-routines as its owner's plan allows; \
+        "this routine already has {MAX_ACTIVE_SUB_ROUTINES} active sub-routines; \
          delete or finish some before creating another"
     )]
     TooManySubRoutines,
@@ -327,29 +333,9 @@ pub enum ActionPolicyError {
     OwnerIdentityNeedsPerson,
 }
 
-/// How much routine work an owner may have going at once. Business and Max
-/// plans raise the standard limits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RoutineLimits {
-    /// Routines one person may have drafting at once.
-    pub drafting: u32,
-    /// Most active sub-routines one routine can have; finished one-time ones
-    /// don't count.
-    pub active_sub_routines: i64,
-}
-
-impl RoutineLimits {
-    /// Free and Pro, and any owner whose plan can't be read.
-    pub const STANDARD: Self = Self {
-        drafting: 3,
-        active_sub_routines: 50,
-    };
-    /// Business, Max and enterprise teams.
-    pub const RAISED: Self = Self {
-        drafting: 10,
-        active_sub_routines: 200,
-    };
-}
+/// Most active sub-routines one routine can have; finished one-time ones
+/// don't count.
+pub const MAX_ACTIVE_SUB_ROUTINES: i64 = 50;
 
 /// Longest key a run can name a sub-routine by.
 pub const MAX_KEY_CHARS: usize = 200;

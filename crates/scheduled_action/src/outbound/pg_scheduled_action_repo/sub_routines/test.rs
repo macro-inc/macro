@@ -55,41 +55,26 @@ async fn the_cap_counts_active_sub_routines_and_not_finished_one_time_ones(pool:
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(
-            sample_action(user_owner(USER_A), "parent"),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     for index in 0..49 {
-        repo.create_action(
-            child_of(&parent, &format!("child {index}"), None),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
-        .await
-        .unwrap();
+        repo.create_action(child_of(&parent, &format!("child {index}"), None), None)
+            .await
+            .unwrap();
     }
     // Finished one-time sub-routines take no room.
     for index in 0..3 {
-        repo.create_action(
-            finished_once(&parent, &format!("done {index}")),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
-        .await
-        .unwrap();
+        repo.create_action(finished_once(&parent, &format!("done {index}")), None)
+            .await
+            .unwrap();
     }
 
-    repo.create_action(
-        child_of(&parent, "the fiftieth", None),
-        crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-    )
-    .await
-    .unwrap();
+    repo.create_action(child_of(&parent, "the fiftieth", None), None)
+        .await
+        .unwrap();
     let refused = repo
-        .create_action(
-            child_of(&parent, "one too many", None),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(child_of(&parent, "one too many", None), None)
         .await
         .unwrap_err();
 
@@ -101,87 +86,30 @@ async fn the_cap_counts_active_sub_routines_and_not_finished_one_time_ones(pool:
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_raised_cap_admits_sub_routines_past_the_standard_one(pool: PgPool) {
-    use crate::domain::models::RoutineLimits;
-
-    insert_user(&pool, USER_A).await;
-    let repo = test_repo(pool.clone());
-    let parent = repo
-        .create_action(
-            sample_action(user_owner(USER_A), "parent"),
-            RoutineLimits::STANDARD.active_sub_routines,
-        )
-        .await
-        .unwrap();
-    for index in 0..RoutineLimits::STANDARD.active_sub_routines {
-        repo.create_action(
-            child_of(&parent, &format!("child {index}"), None),
-            RoutineLimits::STANDARD.active_sub_routines,
-        )
-        .await
-        .unwrap();
-    }
-
-    let standard = repo
-        .create_action(
-            child_of(&parent, "past standard", None),
-            RoutineLimits::STANDARD.active_sub_routines,
-        )
-        .await
-        .unwrap_err();
-    repo.create_action(
-        child_of(&parent, "past standard", None),
-        RoutineLimits::RAISED.active_sub_routines,
-    )
-    .await
-    .unwrap();
-
-    assert!(matches!(
-        policy(&standard),
-        Some(ActionPolicyError::TooManySubRoutines)
-    ));
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_parent_has_one_sub_routine_per_key(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(
-            sample_action(user_owner(USER_A), "parent"),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let other = repo
-        .create_action(
-            sample_action(user_owner(USER_A), "other parent"),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(sample_action(user_owner(USER_A), "other parent"), None)
         .await
         .unwrap();
     let first = repo
-        .create_action(
-            child_of(&parent, "first", Some("task-1")),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(child_of(&parent, "first", Some("task-1")), None)
         .await
         .unwrap();
 
     let taken = repo
-        .create_action(
-            child_of(&parent, "second", Some("task-1")),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(child_of(&parent, "second", Some("task-1")), None)
         .await
         .unwrap_err();
     // The same key under another parent names another routine.
-    repo.create_action(
-        child_of(&other, "elsewhere", Some("task-1")),
-        crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-    )
-    .await
-    .unwrap();
+    repo.create_action(child_of(&other, "elsewhere", Some("task-1")), None)
+        .await
+        .unwrap();
 
     assert!(matches!(
         policy(&taken),
@@ -202,17 +130,11 @@ async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(
-            sample_action(user_owner(USER_A), "parent"),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let child = repo
-        .create_action(
-            child_of(&parent, "child", None),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(child_of(&parent, "child", None), None)
         .await
         .unwrap();
     let appearance = EntityAppearance {
@@ -227,7 +149,7 @@ async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool
                 appearance: appearance.clone(),
                 ..child_of(&parent, "kept", Some("kept"))
             },
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            None,
         )
         .await
         .unwrap();
@@ -294,10 +216,7 @@ async fn a_run_in_progress_is_found_by_its_routine_and_by_its_session(pool: PgPo
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(
-            sample_action(user_owner(USER_A), "parent"),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let id = parent.id.unwrap();
@@ -332,7 +251,7 @@ async fn a_run_in_progress_is_found_by_its_routine_and_by_its_session(pool: PgPo
                 }),
                 ..sample_action(user_owner(USER_A), "child")
             },
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            None,
         )
         .await
         .unwrap();
@@ -377,23 +296,14 @@ async fn a_sub_routine_created_off_with_its_parent_keeps_that_mark(pool: PgPool)
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(
-            sample_action(user_owner(USER_A), "parent"),
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let mut waiting = child_of(&parent, "waits for its parent", None);
     waiting.enabled = false;
     waiting.sub_routine.as_mut().unwrap().paused_by_parent = true;
 
-    let created = repo
-        .create_action(
-            waiting,
-            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
-        )
-        .await
-        .unwrap();
+    let created = repo.create_action(waiting, None).await.unwrap();
 
     assert!(created.sub_routine.as_ref().unwrap().paused_by_parent);
     let stored = repo

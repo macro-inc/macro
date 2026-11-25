@@ -78,6 +78,7 @@ use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_run_stops::{PgStopRelay, listen_for_stops};
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
+use scheduled_action::outbound::routine_plans::EntitlementRoutinePlans;
 use scheduled_action::swagger::ApiDoc;
 use suggestion_generation::domain::audience::PaidAudience;
 use suggestion_generation::domain::model::GenerationAgent;
@@ -204,36 +205,6 @@ impl suggestion_generation::domain::ports::Plans for EntitlementPlans {
             .await
             .map_err(|error| rootcause::report!("{error:?}"))?;
         Ok(entitlement.unlimited || entitlement.tier.is_paid())
-    }
-}
-
-/// Routine limits by plan: Business and Max seats and enterprise teams get the
-/// raised ones. A plan that can't be read keeps the standard ones, so a
-/// billing outage never blocks routines.
-struct EntitlementRoutinePlans(ai_billing::composition::PgEntitlementSource);
-
-#[async_trait::async_trait]
-impl scheduled_action::domain::ports::RoutinePlans for EntitlementRoutinePlans {
-    #[tracing::instrument(name = "routine.plan_limits", skip_all, fields(raised))]
-    async fn limits(
-        &self,
-        owner: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> scheduled_action::domain::models::RoutineLimits {
-        use ai_billing::domain::EntitlementSource as _;
-        use scheduled_action::domain::models::RoutineLimits;
-        let raised = match self.0.entitlement(owner).await {
-            Ok(entitlement) => entitlement.unlimited || entitlement.tier.is_above_premium(),
-            Err(error) => {
-                tracing::warn!(error = ?error, "reading the owner's plan failed; using standard routine limits");
-                false
-            }
-        };
-        tracing::Span::current().record("raised", raised);
-        if raised {
-            RoutineLimits::RAISED
-        } else {
-            RoutineLimits::STANDARD
-        }
     }
 }
 
@@ -864,9 +835,6 @@ where
     ));
     let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
     let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
-    let routine_plans: Arc<dyn scheduled_action::domain::ports::RoutinePlans> = Arc::new(
-        EntitlementRoutinePlans(ai_billing::composition::pg_entitlement_source(db.clone())),
-    );
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -876,7 +844,9 @@ where
         )
         .with_event_routines(event_routines)
         .with_run_stops(run_stops)
-        .with_routine_plans(Arc::clone(&routine_plans))
+        .with_routine_plans(EntitlementRoutinePlans::new(
+            ai_billing::composition::pg_entitlement_source(db.clone()),
+        ))
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(
             TargetValidation::new(Arc::clone(&sessions)).with_knob_entities(knob_entities),
@@ -935,16 +905,13 @@ where
     // Background drafts run here, on the replica they were started on, and
     // keep their state on the same row, so a reload or any replica reads
     // it. Shutdown fails the ones still drafting as interrupted.
-    let draft_jobs = Arc::new(
-        DraftJobs::new(
-            Arc::clone(&drafts),
-            draft_rows as Arc<dyn DraftJobStore>,
-            draft_updates,
-            lifecycle.workers.clone(),
-            lifecycle.stop_workers.clone(),
-        )
-        .with_routine_plans(routine_plans),
-    );
+    let draft_jobs = Arc::new(DraftJobs::new(
+        Arc::clone(&drafts),
+        draft_rows as Arc<dyn DraftJobStore>,
+        draft_updates,
+        lifecycle.workers.clone(),
+        lifecycle.stop_workers.clone(),
+    ));
     // Drafts a stopped process left behind lose their session and row, and
     // background drafts whose drafter stopped fail. Each sweep has a worker
     // of its own, so one that stalls holds up no other. Logged by the sweeps'

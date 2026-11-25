@@ -32,8 +32,7 @@ use super::{
     RoutineDrafts, SWEEP_BATCH, TIMED_OUT, draft_span, failed, finish, stale_action,
 };
 use crate::domain::ports::{
-    DraftJobStore, RoutineCode, RoutineDraftJobService, RoutineDraftUpdates, RoutinePlans,
-    StaleDraft, StandardRoutinePlans,
+    DraftJobStore, RoutineCode, RoutineDraftJobService, RoutineDraftUpdates, StaleDraft,
 };
 
 #[cfg(test)]
@@ -41,6 +40,8 @@ mod test;
 
 /// The live message a background draft's progress reaches its owner in.
 pub const ROUTINE_DRAFT_UPDATE_MESSAGE_TYPE: &str = "routine_draft_update";
+/// Jobs one person may have drafting at once.
+pub const MAX_DRAFTING: u32 = 3;
 /// Jobs a list shows.
 pub const LISTED: u16 = 20;
 /// How long a job's drafter may run: its draft takes [`DRAFT_TIMEOUT`], and
@@ -64,9 +65,8 @@ pub enum DraftJobError {
     /// No such job of the caller's.
     #[error("no such routine draft")]
     NotFound,
-    /// The caller has as many jobs drafting as their plan allows
-    /// ([`RoutineLimits::drafting`]).
-    #[error("your plan's limit of routines are drafting already; wait for one to finish")]
+    /// The caller has [`MAX_DRAFTING`] jobs drafting already.
+    #[error("{MAX_DRAFTING} routines are drafting already; wait for one to finish")]
     TooMany,
 }
 
@@ -319,8 +319,6 @@ impl DraftUpdateState {
 pub struct DraftJobs<Code, Sessions, Updates> {
     drafts: Arc<RoutineDrafts<Code, Sessions>>,
     store: Arc<dyn DraftJobStore>,
-    /// How many jobs each owner's plan lets them have drafting.
-    plans: Arc<dyn RoutinePlans>,
     updates: Arc<Updates>,
     tasks: TaskTracker,
     shutdown: CancellationToken,
@@ -331,7 +329,6 @@ impl<Code, Sessions, Updates> Clone for DraftJobs<Code, Sessions, Updates> {
         Self {
             drafts: Arc::clone(&self.drafts),
             store: Arc::clone(&self.store),
-            plans: Arc::clone(&self.plans),
             updates: Arc::clone(&self.updates),
             tasks: self.tasks.clone(),
             shutdown: self.shutdown.clone(),
@@ -352,18 +349,10 @@ impl<Code, Sessions, Updates> DraftJobs<Code, Sessions, Updates> {
         Self {
             drafts,
             store,
-            plans: Arc::new(StandardRoutinePlans),
             updates,
             tasks,
             shutdown,
         }
-    }
-
-    /// Read each owner's drafting limit from their plan through `plans`
-    /// instead of giving everyone the standard one.
-    pub fn with_routine_plans(mut self, plans: Arc<dyn RoutinePlans>) -> Self {
-        self.plans = plans;
-        self
     }
 }
 
@@ -723,8 +712,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         let started = tracing::Span::current();
         let session = AgentSessionId::new();
         let id = session.as_uuid();
-        // Read the plan first, so the row's start time is when it is written.
-        let limits = self.plans.limits(&owner).await;
         let job = NewDraftJob {
             session: id,
             owner: owner.clone(),
@@ -738,7 +725,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         // Jobs drafting longer than this have lost their drafter, and
         // don't count against the limit.
         let since = job.created_at - chrono::Duration::from_std(INTERRUPTED_AFTER)?;
-        match self.store.begin_job(&job, limits.drafting, since).await? {
+        match self.store.begin_job(&job, MAX_DRAFTING, since).await? {
             Begun::Started => {}
             Begun::Repeated => {
                 // A start sent again, as a client does when its connection

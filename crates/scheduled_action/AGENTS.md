@@ -167,7 +167,7 @@ each run.
   /scheduled-actions/draft-jobs` validates the request and waits only for
   its usage to be admitted (the find call's admission, or a session's
   prompt; the blocking route's 400/402/503,
-  plus 409 past the owner's `RoutineLimits::drafting` drafting at once), then answers 202 with the
+  plus 409 past `MAX_DRAFTING` (3) drafting at once), then answers 202 with the
   job. The body carries a client-made `clientId`; a start sent again with
   it (the client resends when its connection drops) answers with the live
   job that start began and creates no session (`client_id` and a unique
@@ -337,7 +337,7 @@ each run.
   run creates siblings under the same top-level parent, each recording its
   own creating run. `?key=` on create upserts within the parent (a unique
   index decides races; a key outside a run is 400 `KeyOutsideRun`). At most
-  the owner's `RoutineLimits::active_sub_routines` active ones per parent, counted under a lock
+  `MAX_ACTIVE_SUB_ROUTINES` (50) active ones per parent, counted under a lock
   on the parent row; a finished one-time one (`is_finished_once`: a `once`
   trigger with no next run) doesn't count, and the refusal is 409
   `TooManySubRoutines`. Switching a parent off switches its enabled
@@ -452,12 +452,21 @@ each run.
 - Change dispatch behavior: `src/outbound/pg_polling_dispatcher.rs` /
   `src/outbound/tokio_dispatcher.rs` → `src/domain/execution.rs`.
 
-- Routine limits follow the owner's plan through the `RoutinePlans` port
-  (`with_routine_plans` on the service and on `DraftJobs`):
-  `RoutineLimits::STANDARD` (3 drafting, 50 active sub-routines) for Free and
-  Pro, `RAISED` (10 and 200) for Business, Max and enterprise teams. The
-  harness reads the plan from AI billing's entitlement and keeps the standard
-  limits when it can't. Only a sub-routine create reads the plan.
+- Active routines are capped by the owner's plan (`domain/routine_limit.rs`):
+  Free 10, Pro 1,000, Business 3,000, Max 10,000, enterprise teams as Max.
+  Active means `ScheduledAction::is_active`: enabled, and watching events or
+  holding a next run. Only a write that makes a routine active is checked
+  (create, enable, or rescheduling a finished one-off), through the
+  `RoutinePlans` port (`outbound/routine_plans.rs` calls
+  `EntitlementSource::user_plan`, so it does a single-row team-seat check
+  without loading a team's roster; defaults to `FreePlans` so an unwired host
+  fails closed). `PgScheduledActionRepo` takes a transaction-scoped advisory
+  lock per owner and runs a bounded count (`LIMIT limit`) backed by the
+  partial index `scheduled_action_active_owner_idx` so concurrent activations
+  cannot pass the cap and finished one-time routines are never scanned.
+  Refusal is 402 with `RoutineLimitErrorBody` (`code: "routine_limit_reached"`,
+  distinct from AI allowance codes). Paused saves, edits to already-active
+  routines, pauses, and deletes never look up a plan or hit the cap.
 
 ## Checks
 
