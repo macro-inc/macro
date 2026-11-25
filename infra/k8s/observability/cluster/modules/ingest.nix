@@ -1,8 +1,8 @@
 # Alloy ingest: the OTLP receiver behind the edge. It runs the host's own
 # infra/stacks/observability/nixos/ingest.alloy with the cluster's addresses
 # swapped in: it checks the bearer token (the secret's `otlp_token`), then
-# sends logs to Loki, traces to Tempo and metrics to Mimir. Two replicas in
-# different zones; the edge reaches them through their Service.
+# sends logs to Loki, traces to the sampler (./sampler) and metrics to Mimir.
+# Two replicas in different zones; the edge reaches them through their Service.
 #
 # It also forwards the spans that metrics are derived from to the
 # `derived-metrics` application (`macro.derivedMetrics.ingestTap`).
@@ -35,9 +35,10 @@ let
       from = ''"http://127.0.0.1:3100/otlp"'';
       to = ''"${endpoints.loki.otlp}"'';
     }
+    # The sampler's headless Service.
     {
-      from = ''endpoint = "127.0.0.1:4317"'';
-      to = ''endpoint = "${endpoints.tempo.otlpGrpc}"'';
+      from = ''hostname = "127.0.0.1"'';
+      to = ''hostname = "alloy-sampler.${namespace}.svc.cluster.local"'';
     }
     {
       from = ''"http://127.0.0.1:9090/api/v1/write"'';
@@ -45,8 +46,8 @@ let
     }
     # The cluster's own: every span also goes to the derived-metrics tap.
     {
-      from = "traces = [otelcol.exporter.otlp.tempo.input]";
-      to = "traces = [otelcol.exporter.otlp.tempo.input, otelcol.processor.filter.derived.input]";
+      from = "traces = [otelcol.exporter.loadbalancing.sampler.input]";
+      to = "traces = [otelcol.exporter.loadbalancing.sampler.input, otelcol.processor.filter.derived.input]";
     }
   ];
   hostConfig = builtins.readFile ../../../../stacks/observability/nixos/ingest.alloy;
@@ -171,7 +172,7 @@ in
         }
         workload.scrapedByNodeAlloy
       ];
-      # Loki OTLP, Mimir remote write, Tempo OTLP gRPC.
+      # Loki OTLP, Mimir remote write, the sampler's OTLP gRPC.
       egress = [
         {
           to = [ workload.anyPod ];

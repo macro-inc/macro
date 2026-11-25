@@ -15,13 +15,12 @@
 # blocklist before /ready answers, which outlasted the chart's liveness
 # probe (60s delay, three misses), so its probe waits longer.
 #
-# The metrics generator turns spans into span metrics and service graphs
-# and writes them to Mimir, and keeps recent blocks for TraceQL metrics.
-# Retention, processors and their limits are the host's (lib.nix `host`).
+# The metrics generator only keeps recent blocks for TraceQL metrics: span
+# metrics and service graphs come from the sampler (../sampler), before it
+# drops anything. Retention and processors are the host's (lib.nix `host`).
 {
   charts,
   config,
-  lib,
   ...
 }:
 let
@@ -66,7 +65,11 @@ in
       values = {
         reportingEnabled = false;
         traces.otlp = {
-          grpc.enabled = true;
+          grpc = {
+            enabled = true;
+            # The default is 4 MiB, which a batch of 1024 spans can exceed.
+            receiverConfig.max_recv_msg_size_mib = 16;
+          };
           http.enabled = true;
         };
 
@@ -137,22 +140,7 @@ in
           kind = "StatefulSet";
           persistence = volume;
           config = {
-            # The host's processors with Tempo's default histogram buckets
-            # (the chart sets its own, which changes the `le` labels).
-            processor = lib.recursiveUpdate {
-              service_graphs.histogram_buckets = null;
-              span_metrics.histogram_buckets = null;
-            } host.tempo.metrics_generator.processor;
-            storage = {
-              remote_write = [
-                {
-                  url = shared.endpoints.mimir.push;
-                  send_exemplars = true;
-                }
-              ];
-              # Mimir runs without tenants.
-              remote_write_add_org_id_header = false;
-            };
+            inherit (host.tempo.metrics_generator) metrics_ingestion_time_range_slack processor;
           };
         };
       };
@@ -166,13 +154,6 @@ in
           {
             from = [ shared.nodeAlloy ];
             ports = shared.tcp [ 3200 ];
-          }
-        ];
-        # The metrics generator's remote write.
-        egress = [
-          {
-            to = [ (shared.pods { "app.kubernetes.io/name" = "mimir"; }) ];
-            ports = shared.tcp [ 8080 ];
           }
         ];
       };
