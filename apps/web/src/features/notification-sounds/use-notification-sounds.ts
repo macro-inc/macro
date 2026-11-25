@@ -2,17 +2,20 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { NotificationSource } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { type Accessor, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import {
   NOTIFICATION_SOUND_MIN_GAP_MS,
   soundForNotification,
 } from './core/settings';
 import type { NotificationSoundId } from './core/sounds';
 import {
+  NOTIFICATION_SOUND_PLAYER,
   playNotificationSound,
-  unlockNotificationSounds,
 } from './primitives/sound-player';
-import { readNotificationSoundSettings } from './primitives/sound-settings';
+import {
+  createSavedNotificationSoundSettings,
+  readNotificationSoundSettings,
+} from './primitives/sound-settings';
 import {
   claimNotificationSoundTab,
   isNotificationSoundTab,
@@ -44,7 +47,10 @@ export function useNotificationSounds(
 ) {
   let lastPlayedAt = Number.NEGATIVE_INFINITY;
 
-  createSoundUnlock(unlockNotificationSounds);
+  // Audio unlocks only for someone who turned notification sounds on here.
+  const saved = createSavedNotificationSoundSettings(userId);
+  const enabled = createMemo(() => saved()?.enabled === true);
+  createSoundUnlock(NOTIFICATION_SOUND_PLAYER, enabled);
 
   if (document.hasFocus()) claimNotificationSoundTab();
   makeEventListener(window, 'focus', claimNotificationSoundTab);

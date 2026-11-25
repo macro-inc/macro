@@ -4,23 +4,51 @@ import { notificationSound } from '../core/sounds';
 declare global {
   interface Window {
     tonesPlayed: number;
+    audioContexts: AudioContext[];
   }
 }
 
-/** Counts scheduled tones, so a test can tell which sound played. */
+/**
+ * Counts scheduled tones, so a test can tell which sound played, and keeps
+ * every audio context the page creates.
+ */
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     window.tonesPlayed = 0;
+    window.audioContexts = [];
     const createOscillator = AudioContext.prototype.createOscillator;
     AudioContext.prototype.createOscillator = function (this: AudioContext) {
       window.tonesPlayed += 1;
       return createOscillator.call(this);
+    };
+    const NativeAudioContext = AudioContext;
+    window.AudioContext = class extends NativeAudioContext {
+      constructor(options?: AudioContextOptions) {
+        super(options);
+        window.audioContexts.push(this);
+      }
     };
   });
   await page.goto('/');
 });
 
 const tonesPlayed = (page: Page) => page.evaluate(() => window.tonesPlayed);
+const contextStates = (page: Page) =>
+  page.evaluate(() => window.audioContexts.map((context) => context.state));
+
+/** Hides or shows the page as switching apps or tabs would. */
+async function setVisibility(page: Page, state: 'hidden' | 'visible') {
+  await page.evaluate((state) => {
+    Object.defineProperty(document, 'visibilityState', {
+      value: state,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+}
+
+const tap = (page: Page) =>
+  page.getByRole('heading', { name: 'Notifications' }).click();
 
 /** Switch inputs are visually hidden behind their track, so use the keyboard. */
 async function toggle(page: Page, name: string) {
@@ -190,4 +218,82 @@ test('quiet hours persist and silence sounds without stopping a preview', async 
   expect(await tonesPlayed(page)).toBe(0);
   await page.getByRole('button', { name: 'Play Mentions sound' }).click();
   await expect.poll(() => tonesPlayed(page)).toBe(2);
+});
+
+test('taps start no audio while sounds are off and no call is running', async ({
+  page,
+}) => {
+  await tap(page);
+  await page.keyboard.press('Enter');
+  await tap(page);
+  expect(await contextStates(page)).toEqual([]);
+});
+
+test('turning sounds on starts audio within that tap, and hiding the page suspends it', async ({
+  page,
+}) => {
+  await toggle(page, 'Notification sounds');
+  await expect.poll(() => contextStates(page)).toEqual(['running']);
+  await page.evaluate(() => window.deliverNotification('channel_mention'));
+  await expect.poll(() => tonesPlayed(page)).toBe(2);
+
+  await setVisibility(page, 'hidden');
+  await expect.poll(() => contextStates(page)).toEqual(['suspended']);
+
+  // A sound arriving while hidden plays, then lets the context suspend again.
+  await page.waitForTimeout(1_600);
+  await page.evaluate(() => window.deliverNotification('channel_mention'));
+  await expect.poll(() => tonesPlayed(page)).toBe(4);
+  await expect.poll(() => contextStates(page)).toEqual(['suspended']);
+
+  // Back in view, the next tap resumes it.
+  await setVisibility(page, 'visible');
+  expect(await contextStates(page)).toEqual(['suspended']);
+  await tap(page);
+  await expect.poll(() => contextStates(page)).toEqual(['running']);
+
+  await toggle(page, 'Notification sounds');
+  await expect.poll(() => contextStates(page)).toEqual(['suspended']);
+  await tap(page);
+  expect(await contextStates(page)).toEqual(['suspended']);
+});
+
+test('a preview with sounds off plays, then lets audio suspend', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Preview join', exact: true }).click();
+  await expect
+    .poll(() => tonesPlayed(page))
+    .toBe(notificationSound('call-join').tones.length);
+  await expect.poll(() => contextStates(page)).toEqual(['suspended']);
+});
+
+test('call audio starts only while a call runs and plays its chimes', async ({
+  page,
+}) => {
+  await tap(page);
+  expect(await contextStates(page)).toEqual([]);
+
+  await page.evaluate(() => window.setCallActive(true));
+  await tap(page);
+  await expect.poll(() => contextStates(page)).toEqual(['running']);
+  await page.evaluate(() => window.playCallSound('join'));
+  await expect
+    .poll(() => tonesPlayed(page))
+    .toBe(notificationSound('call-join').tones.length);
+
+  // The leave chime plays as the call ends, then audio suspends.
+  await page.evaluate(() => {
+    window.playCallSound('leave');
+    window.setCallActive(false);
+  });
+  await expect
+    .poll(() => tonesPlayed(page))
+    .toBe(
+      notificationSound('call-join').tones.length +
+        notificationSound('call-leave').tones.length
+    );
+  await expect.poll(() => contextStates(page)).toEqual(['suspended']);
+  await tap(page);
+  expect(await contextStates(page)).toEqual(['suspended']);
 });

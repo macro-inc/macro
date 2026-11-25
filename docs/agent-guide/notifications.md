@@ -591,10 +591,15 @@ their own ring and never use these sounds. Only unseen notifications play,
 notifications within 1.5 s of a sound share it, and only the Macro tab the
 person last focused or touched plays, so several tabs ding once. Closing that
 tab hands sound back to the others until one is focused. Mouse, touch, Enter,
-and Space activation unlock audio even while sounds are off, so enabling a
-sound setting also unlocks playback. A cue that cannot resume audio within
-250 ms stays silent rather than playing on a later gesture. Notification sounds
-use the system-default output; call cues follow the selected call speaker.
+and Space activation unlock audio only while notification sounds are on for
+this person on this device; turning them on unlocks within that tap, and a
+change saved in another tab applies here too. With sounds off, taps start no
+audio at all; a preview plays, then lets audio suspend. Audio also suspends
+while the page is hidden (another app or tab, the iOS app in the background)
+once the last cue ends, and resumes for the next sound or tap. A cue that
+cannot resume audio within 250 ms stays silent rather than playing on a later
+gesture. Notification sounds use the system-default output; call cues follow
+the selected call speaker.
 
 When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the
@@ -615,7 +620,9 @@ Mobile push sent while the app is not open is unchanged.
 The backend-free desktop/phone regression drives the real settings section,
 persistence, previews, and delivery through a stand-in notification feed:
 `bunx playwright test --config src/features/notification-sounds/browser-test/playwright.config.ts`
-(from `apps/web`). To check real delivery, turn sounds on, click anywhere in
+(from `apps/web`). It also checks that taps start no `AudioContext` while
+sounds are off, that one runs once they are on, and that it suspends while
+the page is hidden and when a stand-in call ends. To check real delivery, turn sounds on, click anywhere in
 Macro, and trigger a mention from another session; then turn Mentions off and
 check that the next mention is quiet.
 
