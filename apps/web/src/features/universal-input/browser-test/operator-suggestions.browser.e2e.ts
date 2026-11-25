@@ -58,6 +58,39 @@ test('ArrowDown moves through rows that are on screen, and Enter picks one', asy
   await expect(page.getByTestId('opened-results')).toHaveText('0');
 });
 
+test('a word typed right after a picked value starts a new term', async ({
+  page,
+}) => {
+  await openField(page);
+  await page.getByRole('option', { name: 'type:task' }).click();
+  await page.keyboard.type('budget');
+  await expect(page.getByTestId('operator-query')).toHaveText(
+    'type:task budget'
+  );
+
+  await page.keyboard.type(' status:in');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('plan');
+  await expect(page.getByTestId('operator-query')).toHaveText(
+    'type:task budget status:in_progress plan'
+  );
+});
+
+test('a picked operator name takes its value with no space between', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/?operator-searchbar', { waitUntil: 'networkidle' });
+  if (errors.length) throw new Error(errors.join('\n'));
+  await page.getByRole('textbox', { name: 'Operator search' }).click();
+  await page.keyboard.type('stat');
+  await page.getByRole('option', { name: /^status:/ }).click();
+  await page.keyboard.type('in');
+  await expect(page.getByTestId('operator-query')).toHaveText('status:in');
+});
+
 test('a plain word offers the filter it stands for, on screen', async ({
   page,
 }) => {
@@ -75,6 +108,10 @@ test('a plain word offers the filter it stands for, on screen', async ({
     'budget type:task'
   );
   await expect(page.getByTestId('opened-results')).toHaveText('0');
+  await page.keyboard.type('q3');
+  await expect(page.getByTestId('operator-query')).toHaveText(
+    'budget type:task q3'
+  );
 });
 
 test('keeps the rows clickable inside the Cmd+K dialog', async ({ page }) => {
@@ -103,4 +140,7 @@ test('keeps the rows clickable inside the Cmd+K dialog', async ({ page }) => {
   await row.click();
   await expect(dialog).toBeVisible();
   await expect(query).toHaveText('type:task');
+  // Search for is the same field: the next word starts a new term.
+  await page.keyboard.type('budget');
+  await expect(query).toHaveText('type:task budget');
 });
