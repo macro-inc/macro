@@ -28,6 +28,8 @@ in production imports it, and it solves nothing but its own fixture. Design:
 
 ## Gotchas
 
+- Update `bun.lock` with the dev shell's Bun (`nix develop -c bun install`):
+  a newer Bun writes a lockfile version CI's Bun can't read.
 - Outside the root workspace on purpose: its own `bun.lock`, and
   `test/isolation.test.ts` fails if any code outside it names it.
 - Never import starter-agent, muppet, harness or CapSolver code, and never add
