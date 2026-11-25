@@ -995,6 +995,11 @@ the thread open. Its envelope then offers **Mark as read**, including after
 the unread write reaches the mailbox. Mark as not done and Mark as read stay
 on the current thread.
 
+Opening a thread marks it read unless **Settings → Email → Reading → Mark as
+read when opened** is off (a per-device preference). With it off, neither the
+list row nor the opened thread marks it read, and an unread thread's envelope
+offers **Mark as read** from the start.
+
 On desktop, Mail returns to the list immediately and shows the unread
 write's success or failure once the mailbox answers. An unread write
 queued behind the opening read also reports its eventual result.

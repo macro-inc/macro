@@ -85,6 +85,12 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Email',
+    title: 'Mark email as read when opened',
+    target: 'Reading',
+    keywords: 'read unread open click automatically manually mark seen',
+  },
+  {
+    tab: 'Email',
     title: 'Email signatures',
     target: 'Signatures',
     keywords: 'signature footer signoff formatting image replies forwards',

@@ -1,3 +1,4 @@
+import { markEmailReadOnOpen } from '@app/features/email-view/primitives/email-read-on-open';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -22,9 +23,13 @@ export function createThreadReadAdapter(
 > {
   const markSeenMutation = useMarkThreadAsSeenMutation();
 
-  // Viewing a thread marks it read (EmailReadMarker), so each thread
-  // starts with the toggle offering Mark Unread.
-  const [threadMarkedUnread, setThreadMarkedUnread] = createSignal(false);
+  // Viewing a thread marks it read (EmailReadMarker), so each thread starts
+  // with the toggle offering Mark Unread. With that setting off, an unread
+  // thread stays unread and starts offering Mark Read; a toggle overrides it.
+  const [unreadToggle, setThreadMarkedUnread] = createSignal<boolean>();
+  const threadMarkedUnread = () =>
+    unreadToggle() ??
+    (!markEmailReadOnOpen() && threadSource()?.is_read === false);
   const [threadMarkedRead, setThreadMarkedRead] = createSignal(false);
 
   // A queued refusal can arrive after a later toggle.
@@ -35,7 +40,7 @@ export function createThreadReadAdapter(
   createEffect(
     on(currentThreadId, () => {
       readToggleVersion += 1;
-      setThreadMarkedUnread(false);
+      setThreadMarkedUnread(undefined);
       setThreadMarkedRead(false);
     })
   );

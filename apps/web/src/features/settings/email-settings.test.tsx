@@ -84,7 +84,9 @@ describe('EmailSettings read receipts', () => {
     render(() => <EmailSettings displayOptions={false} />);
 
     expect(screen.getByText("Couldn't load accounts")).toBeTruthy();
-    expect(screen.queryByRole('switch')).toBeNull();
+    expect(
+      screen.queryByRole('switch', { name: /^Read receipts for / })
+    ).toBeNull();
   });
 });
 

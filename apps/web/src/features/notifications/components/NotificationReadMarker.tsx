@@ -1,4 +1,5 @@
 import { useReadsHeldByAgentArrival } from '@app/features/agent-navigation/context/agent-arrivals';
+import { markEmailReadOnOpen } from '@app/features/email-view/primitives/email-read-on-open';
 import type { Entity } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
@@ -165,9 +166,10 @@ function EmailSeenOnMount(props: EmailReadMarkerProps) {
       />
       <DebouncedMarker
         debounceTime={props.debounceTime ?? 0}
-        debouncedFn={() =>
-          markSeenMutation.mutate({ threadId: props.threadId })
-        }
+        debouncedFn={() => {
+          if (!markEmailReadOnOpen()) return;
+          markSeenMutation.mutate({ threadId: props.threadId });
+        }}
       />
     </>
   );

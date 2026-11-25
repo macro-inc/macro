@@ -1,6 +1,11 @@
 export default {
   displayOptions: 'Display options',
   displayOptionsDescription: 'Choose how your email list looks.',
+  reading: 'Reading',
+  readingDescription: 'Choose what happens when you open an email.',
+  markReadOnOpen: 'Mark as read when opened',
+  markReadOnOpenDescription:
+    'Turn this off to keep emails unread until you mark them read yourself.',
   rowStyle: 'Row style',
   minimalist: 'Minimalist',
   classic: 'Classic',

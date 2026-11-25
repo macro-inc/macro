@@ -144,6 +144,13 @@ entry are absent there. The backend-free desktop, tablet and phone
 regression, which also covers the sample (`?view=settings` in the fixture), is
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts row-styles.browser.e2e.ts`.
 
+### Mark email as read when opened
+
+**Settings → Email → Reading → Mark as read when opened** is on by default and
+saves immediately on this device, on desktop and phone. Turned off, opening a
+thread leaves it unread until **Mark as read** is chosen; see
+[reading a thread](email.md).
+
 ### Notification permission prompt
 
 After onboarding, eligible desktop, Android, and web users see **Enable

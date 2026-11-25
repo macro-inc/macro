@@ -1,3 +1,4 @@
+import { markEmailReadOnOpen } from '@app/features/email-view/primitives/email-read-on-open';
 import {
   type EntityWithRawNotifications,
   getEntityNotifications,
@@ -39,7 +40,7 @@ export function markRowNotificationsSeenOnOpen(
   if (!READ_ON_OPEN_TYPES.has(entity.type)) return;
   if (entity.type === 'foreign' && !isGithubPrEntity(entity)) return;
 
-  if (entity.type === 'email' && !entity.isRead) {
+  if (entity.type === 'email' && !entity.isRead && markEmailReadOnOpen()) {
     fireAndForget(markEmailThreadSeen({ threadId: entity.id }), 'email-read');
   }
 
