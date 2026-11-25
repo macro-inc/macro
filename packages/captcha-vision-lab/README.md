@@ -29,7 +29,7 @@ Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
 bun run check
-# … 48 pass, 0 fail
+# … 51 pass, 0 fail
 ```
 
 Mock smoke run. The mock always answers `--mock-choice`, so about one in four
@@ -84,4 +84,5 @@ ignored by git): run id, capability id, origin, gate decisions, provider,
 requested and returned model, planner calls, the action taken, the server's
 outcome, token usage and timings. No answer, option id or seed.
 Outcomes: `solved`, `incorrect`, `expired` (server-scored), and
-`provenance_rejected`, `model_error`, `aborted`, `action_error` (no score).
+`provenance_rejected`, `model_error`, `aborted`, `action_error`, `timeout`
+(no score; `timeout` after three minutes of wall clock per challenge).

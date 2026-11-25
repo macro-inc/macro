@@ -39,7 +39,8 @@ const recordingPlanner = (label: string) => {
 const run = (
   lab: Lab,
   planner: ReturnType<typeof mockPlanner>,
-  overrides: { capability?: string | undefined; targetUrl?: string } = {}
+  overrides: { capability?: string | undefined; targetUrl?: string } = {},
+  deadlineMs?: number
 ) => {
   const sessionNonce = crypto.randomUUID();
   const issued = lab.issue(sessionNonce);
@@ -54,6 +55,7 @@ const run = (
     sessionNonce,
     targetUrl: overrides.targetUrl ?? LAB_URL,
     executablePath: process.env.LAB_CHROMIUM_PATH,
+    deadlineMs,
   });
 };
 
@@ -375,4 +377,58 @@ describe('the provenance gate fails closed', () => {
     expect(record.actions).toHaveLength(0);
     expect(lab.stats().submissions).toBe(0);
   });
+});
+
+describe('the per-challenge deadline', () => {
+  test('a planner that never answers ends in a kept timeout, no action', async () => {
+    const lab = createLab();
+    handler = lab.fetch;
+    let plannerSignal: AbortSignal | undefined;
+    const planner = {
+      provider: 'mock' as const,
+      model: 'mock',
+      plan: (_input: PlannerInput, signal: AbortSignal) => {
+        plannerSignal = signal;
+        return new Promise<never>(() => {});
+      },
+    };
+    const sessionNonce = crypto.randomUUID();
+    const issued = lab.issue(sessionNonce);
+
+    const record = await runChallenge({
+      lab,
+      planner,
+      ...issued,
+      sessionNonce,
+      targetUrl: LAB_URL,
+      executablePath: process.env.LAB_CHROMIUM_PATH,
+      deadlineMs: 3_000,
+    });
+
+    expect(record.outcome).toBe('timeout');
+    expect(record.detail).toBe('challenge_deadline');
+    expect(record.plannerCalls).toBe(1);
+    expect(record.actions).toHaveLength(0);
+    expect(record.timings.totalMs).toBeGreaterThanOrEqual(3_000);
+    expect(plannerSignal?.aborted).toBe(true);
+    expect(lab.stats().submissions).toBe(0);
+  }, 30_000);
+
+  test('a page that never loads ends in a kept timeout, no planner call', async () => {
+    const lab = createLab();
+    handler = async (request) => {
+      if (new URL(request.url).pathname === LAB_PATH) {
+        return new Promise<Response>(() => {});
+      }
+      return lab.fetch(request);
+    };
+    const { planner, inputs } = recordingPlanner('A');
+
+    const record = await run(lab, planner, {}, 3_000);
+
+    expect(record.outcome).toBe('timeout');
+    expect(record.plannerCalls).toBe(0);
+    expect(inputs).toHaveLength(0);
+    expect(record.actions).toHaveLength(0);
+  }, 30_000);
 });

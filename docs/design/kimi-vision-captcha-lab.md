@@ -68,6 +68,11 @@ bun run lab:smoke -- --lab-run [--provider mock|kimi]
   messages, which can quote page markup or model output. The gate sees what
   happened up to its last check; anything a page does later is still blocked
   by the allowlist, it just no longer changes a recorded verdict.
+  Each challenge has a three-minute wall-clock deadline (spec §11): past it
+  the planner call is aborted, no action is taken, the browser is closed
+  (giving up after 10 s) and the record is kept with outcome `timeout`.
+  Each request the runner forwards to the lab has a 10 s bound and a fresh
+  connection.
 - **Planner** (`src/planner.ts`). Input: a PNG of the quiz region, the
   visible prompt, the visible labels. Output: one visible label, or abort.
   The Kimi adapter sends the prompt, the image and a strict JSON schema

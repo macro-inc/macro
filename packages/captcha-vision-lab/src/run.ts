@@ -46,7 +46,8 @@ export type Outcome =
   | 'provenance_rejected'
   | 'model_error'
   | 'aborted'
-  | 'action_error';
+  | 'action_error'
+  | 'timeout';
 
 /** The per-challenge record. It never holds option ids, the answer or a seed. */
 export type RunRecord = {
@@ -91,7 +92,16 @@ export type RunInput = {
   targetUrl: string;
   /** A Chromium binary; Playwright's own build when unset. */
   executablePath?: string;
+  /** The whole attempt's wall-clock budget; three minutes when unset. */
+  deadlineMs?: number;
 };
+
+/** Spec §11: at most three minutes of wall clock per challenge. */
+const CHALLENGE_DEADLINE_MS = 180_000;
+/** How long closing the browser may take before the attempt moves on. */
+const CLOSE_TIMEOUT_MS = 10_000;
+/** How long one request to the lab may take. */
+const LAB_REQUEST_TIMEOUT_MS = 10_000;
 
 const QUIZ_SELECTOR = '#quiz';
 const PROMPT_SELECTOR = '#prompt';
@@ -148,25 +158,34 @@ const labRequest = (
   body: Buffer | null
 ): Promise<LabResponse> =>
   new Promise((resolve, reject) => {
-    const outgoing = httpRequest(url, { method, headers }, (incoming) => {
-      const chunks: Buffer[] = [];
-      incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
-      incoming.on('error', reject);
-      incoming.on('end', () => {
-        const flat: Record<string, string> = {};
-        for (const [name, value] of Object.entries(incoming.headers)) {
-          if (value !== undefined) {
-            flat[name] = Array.isArray(value) ? value.join(', ') : value;
+    // A fresh connection per request, and a bound on it: a request that
+    // stalls fails the route instead of leaving the browser waiting on it.
+    const outgoing = httpRequest(
+      url,
+      { method, headers, agent: false },
+      (incoming) => {
+        const chunks: Buffer[] = [];
+        incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+        incoming.on('error', reject);
+        incoming.on('end', () => {
+          const flat: Record<string, string> = {};
+          for (const [name, value] of Object.entries(incoming.headers)) {
+            if (value !== undefined) {
+              flat[name] = Array.isArray(value) ? value.join(', ') : value;
+            }
           }
-        }
-        resolve({
-          status: incoming.statusCode ?? 502,
-          headers: flat,
-          body: Buffer.concat(chunks),
+          resolve({
+            status: incoming.statusCode ?? 502,
+            headers: flat,
+            body: Buffer.concat(chunks),
+          });
         });
-      });
-    });
+      }
+    );
     outgoing.on('error', reject);
+    outgoing.setTimeout(LAB_REQUEST_TIMEOUT_MS, () =>
+      outgoing.destroy(new Error('lab request timed out'))
+    );
     outgoing.end(body ?? undefined);
   });
 
@@ -181,18 +200,36 @@ const forward = async (
   observed: Observations
 ) => {
   const request = route.request();
-  const response = await labRequest(
-    request.url(),
-    request.method(),
-    headers,
-    request.postDataBuffer()
-  );
+  let response: LabResponse;
+  try {
+    response = await labRequest(
+      request.url(),
+      request.method(),
+      headers,
+      request.postDataBuffer()
+    );
+  } catch {
+    await route.abort('failed');
+    return;
+  }
   if (response.status >= 300 && response.status < 400) {
     observed.redirects += 1;
     await route.abort('blockedbyclient');
     return;
   }
   await route.fulfill(response);
+};
+
+/**
+ * Closes the run's browser, giving up after a bound: a browser that will
+ * not close is left to Playwright, which kills it when the process exits.
+ */
+const closeSession = async (session: Session | undefined) => {
+  if (session === undefined) return;
+  await Promise.race([
+    session.context.close().catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, CLOSE_TIMEOUT_MS)),
+  ]);
 };
 
 type Session = {
@@ -327,7 +364,12 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
       plannerMs: undefined,
     },
   };
+  // The first outcome stands: once the deadline has finished the record, a
+  // late step of the attempt cannot change it.
+  let finished = false;
   const finish = (outcome: Outcome, detail?: string): RunRecord => {
+    if (finished) return record;
+    finished = true;
     record.outcome = outcome;
     record.detail = detail;
     record.timings.totalMs = Math.round(performance.now() - started);
@@ -347,11 +389,19 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
   );
   if (targetRejection !== undefined) return targetRejection;
 
+  const deadline = AbortSignal.timeout(
+    input.deadlineMs ?? CHALLENGE_DEADLINE_MS
+  );
   const profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-'));
   let session: Session | undefined;
-  try {
-    session = await openSession(input, profile);
-    const { page, observed } = session;
+
+  // The attempt itself. Every await in it is bounded on its own, but only
+  // the deadline below bounds them together; past it, nothing more happens.
+  const attempt = async (): Promise<RunRecord> => {
+    const opened = await openSession(input, profile);
+    session = opened;
+    if (deadline.aborted) return record;
+    const { page, observed } = opened;
 
     try {
       await load(session, input.targetUrl);
@@ -391,7 +441,10 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     const plannerStarted = performance.now();
     let planned: PlannerResult;
     try {
-      planned = await input.planner.plan({ screenshot, prompt, labels });
+      planned = await input.planner.plan(
+        { screenshot, prompt, labels },
+        deadline
+      );
     } catch (error) {
       record.timings.plannerMs = Math.round(performance.now() - plannerStarted);
       return finish('model_error', failureCode(error));
@@ -419,6 +472,8 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
       checkPage('before_action', observed, attestation())
     );
     if (actionRejection !== undefined) return actionRejection;
+    // No action once the deadline has passed.
+    if (deadline.aborted) return record;
 
     // Exactly one action: click the chosen option's registered control,
     // which submits it once.
@@ -455,8 +510,26 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
       return finish(verdict);
     }
     return finish('action_error', `challenge is ${verdict ?? 'unknown'}`);
+  };
+
+  // Whichever comes first: the attempt's own outcome, or the deadline's
+  // `timeout`. Either way the record is returned and kept.
+  const timedOut = new Promise<RunRecord>((resolve) => {
+    deadline.addEventListener(
+      'abort',
+      () => resolve(finish('timeout', 'challenge_deadline')),
+      { once: true }
+    );
+  });
+  try {
+    return await Promise.race([
+      attempt().catch((error: unknown) =>
+        finish('action_error', failureCode(error))
+      ),
+      timedOut,
+    ]);
   } finally {
-    await session?.context.close();
+    await closeSession(session);
     await rm(profile, { recursive: true, force: true });
   }
 };

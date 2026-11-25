@@ -49,7 +49,7 @@ describe('the Kimi adapter', () => {
       apiKey: 'stand-in-key',
     });
 
-    const result = await planner.plan(INPUT);
+    const result = await planner.plan(INPUT, new AbortController().signal);
 
     expect(result.decision).toEqual({ kind: 'choice', label: 'C' });
     expect(result.usage).toEqual({
@@ -124,7 +124,9 @@ describe('the Kimi adapter', () => {
         apiKey: 'stand-in-key',
       });
 
-      await expect(planner.plan(INPUT)).rejects.toThrow();
+      await expect(
+        planner.plan(INPUT, new AbortController().signal)
+      ).rejects.toThrow();
     });
   }
 
@@ -135,7 +137,9 @@ describe('the Kimi adapter', () => {
       apiKey: 'stand-in-key',
     });
 
-    expect((await planner.plan(INPUT)).decision).toEqual({
+    expect(
+      (await planner.plan(INPUT, new AbortController().signal)).decision
+    ).toEqual({
       kind: 'abort',
       reason: 'cannot tell',
     });
