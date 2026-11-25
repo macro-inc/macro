@@ -11,8 +11,9 @@ import { trackOpen } from './track-open';
  * nothing counts as a new open. Inside a block BlockLoader already records the
  * open (or the block is an embed, which is not an open), so this records
  * nothing there. `ownBlock` records it in the item's own block too, when that
- * block's definition leaves the open to its view (`openTrackingEnabled:
- * false`), as a block whose id can name a record merged into another does.
+ * block's definition leaves the history row to its view
+ * (`openHistoryFromView`), as a block whose id can name a record merged into
+ * another does.
  */
 export function createOpenTracker(
   blockName: BlockName,

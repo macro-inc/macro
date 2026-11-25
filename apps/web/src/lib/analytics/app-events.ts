@@ -212,10 +212,9 @@ export type AppEvents = {
    * notifications); nested blocks are excluded.
    * Route-owned detail views fire it themselves: documents from
    * FileDetailLoadGate, channels from ChannelDetail, calls and PRs from their
-   * detail views. Blocks whose loader records no open history fire it only
-   * when they set `openAnalyticsEnabled`: database, and company and contact,
-   * whose views record the open; calendar does not, since it loads one fixed
-   * id and `open_view` already counts it.
+   * detail views. Blocks without an open history row fire it only when they
+   * set `openAnalyticsEnabled` (database); calendar does not, since it loads
+   * one fixed id and `open_view` already counts it.
    */
   open_entity: EntityEventPayload;
   /**

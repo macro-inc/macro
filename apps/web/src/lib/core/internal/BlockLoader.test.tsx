@@ -694,7 +694,7 @@ it('reports an open for a block without open history that asks for it', async ()
   expect(trackBlockOpened).not.toHaveBeenCalled();
 });
 
-it('leaves the open of a company or contact to its view, which knows the id it answers for', async () => {
+it("leaves a company's or contact's history row to its view, which knows the id it answers for", async () => {
   nested = false;
   // The id can name a record merged into another, which has no history row.
   for (const definition of [contactDefinition, companyDefinition]) {
@@ -711,6 +711,7 @@ it('leaves the open of a company or contact to its view, which knows the id it a
         entityId: 'merged-record',
       })
     );
+    expect(analytics.pageView).toHaveBeenCalledWith(definition.name);
     cleanup();
   }
   expect(trackBlockOpened).not.toHaveBeenCalled();
