@@ -208,27 +208,6 @@ function SectionCaption(props: { sentences: readonly string[] }) {
   );
 }
 
-function Shortcuts() {
-  return (
-    <ul class="homepage-shortcuts" aria-label="Keyboard shortcuts">
-      <li>
-        <kbd>J</kbd>
-        <kbd>K</kbd>
-        Move
-      </li>
-      <li>
-        <kbd>E</kbd>
-        Done
-      </li>
-      <li>
-        <kbd>⌘</kbd>
-        <kbd>K</kbd>
-        Search
-      </li>
-    </ul>
-  );
-}
-
 /** Everything below the homepage introduction: one section per product. */
 export function HomepageSections() {
   return (
@@ -249,7 +228,6 @@ export function HomepageSections() {
               page={section.page}
             />
             <SectionCaption sentences={section.caption} />
-            {section.id === 'home' && <Shortcuts />}
           </FeaturePageSection>
         )}
       </For>
