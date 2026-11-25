@@ -9,10 +9,10 @@ export function HomepageFounderLetter() {
     >
       <div class="homepage-founder-letter-body">
         <p>
-          At our last startup things started breaking right around twenty
-          people. Engineering, sales, and marketing each picked their own tools,
-          so our context ended up scattered across Slack, email, docs, meetings,
-          and a dozen SaaS apps held together with glue and MCP.
+          At our last company, engineering, sales, and marketing each picked
+          their own tools, so our context ended up scattered across Slack,
+          email, docs, meetings, and a dozen SaaS apps held together with glue
+          and MCP.
         </p>
         <p>
           We built Macro to be one open source system for our whole company, to
