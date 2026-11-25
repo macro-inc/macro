@@ -144,7 +144,7 @@ only, behind `enable-suggestions`.
   while the person works through it. Rows outside the shown topics come last
   under "Everything else", or with no heading when there is no topic: then
   Today is one flat list. The sidebar lists the same topics with how many of
-  their rows wait; choosing one (`?topic=`, which replaces `?view=`) shows its
+  their rows wait; choosing one (`forYou.topic` in the URL, which replaces `forYou.view`) shows its
   rows alone, its name as the page's and its reason in place of the date. One
   that groups nothing shows Today for as long as that holds: the URL keeps it,
   since a cached feed may lack a new topic. A reason is shown as

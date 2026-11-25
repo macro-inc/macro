@@ -337,7 +337,7 @@ rows that share a topic (a customer, an event, a project) when two or more do:
 each group has the topic's name and, when there is one, a line saying why it
 matters now, and the rest come last under **Everything else**. The sidebar's
 **Topics** lists the same topics with how many of their rows wait; choosing one
-shows its rows alone (`?topic=`; one that groups nothing shows Today), and
+shows its rows alone (`sN.forYou.topic`; one that groups nothing shows Today), and
 tiles are tinted by topic instead of kind. With no such topic, Today is one flat list. The other lists are always
 flat. A row's age sits
 on the right; pointing at the row or focusing in it swaps the age for its
