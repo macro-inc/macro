@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     AgentMailboxId, EncryptedMailboxKey, LocalPart, MailMessage, MailboxKey, MailboxProvider,
-    MessageDirection, OwnerApproval, ProviderGrantId, TeamId,
+    MessageDirection, ProviderGrantId, TeamId,
 };
 use crate::domain::ports::LeaseToken;
 
@@ -1432,22 +1432,12 @@ async fn repeating_a_send_with_the_same_key_sends_once() {
 
     let first = world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            key,
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), key, outgoing("Hi"))
         .await
         .unwrap();
     let second = world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            key,
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), key, outgoing("Hi"))
         .await
         .unwrap();
 
@@ -1467,23 +1457,13 @@ async fn sends_stop_at_the_hourly_cap() {
     for number in 0..10 {
         world
             .service
-            .send(
-                &user(ADA),
-                OwnerApproval(Some("Send it.".to_owned())),
-                Uuid::from_u128(100 + number),
-                outgoing("Hi"),
-            )
+            .send(&user(ADA), Uuid::from_u128(100 + number), outgoing("Hi"))
             .await
             .unwrap();
     }
     let eleventh = world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            Uuid::from_u128(200),
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), Uuid::from_u128(200), outgoing("Hi"))
         .await;
 
     assert!(matches!(eleventh, Err(AgentMailboxError::SendLimit { .. })));
@@ -1503,30 +1483,15 @@ async fn a_refused_send_frees_its_slot_and_an_unknown_one_is_retried_once() {
 
     let refused = world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            Uuid::from_u128(1),
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), Uuid::from_u128(1), outgoing("Hi"))
         .await;
     let unknown = world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            Uuid::from_u128(2),
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), Uuid::from_u128(2), outgoing("Hi"))
         .await;
     let retried = world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            Uuid::from_u128(2),
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), Uuid::from_u128(2), outgoing("Hi"))
         .await;
 
     assert!(matches!(refused, Err(AgentMailboxError::Rejected)));
@@ -1565,7 +1530,6 @@ async fn a_reply_to_another_mailboxs_message_sends_nothing() {
         .service
         .reply(
             &user(BEN),
-            OwnerApproval(Some("Send it.".to_owned())),
             &ProviderMessageId("m-ada".to_owned()),
             Uuid::from_u128(1),
             reply.clone(),
@@ -1575,7 +1539,6 @@ async fn a_reply_to_another_mailboxs_message_sends_nothing() {
         .service
         .reply(
             &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
             &ProviderMessageId("m-ada".to_owned()),
             Uuid::from_u128(2),
             reply,
@@ -1605,12 +1568,7 @@ async fn malformed_sends_are_refused_before_the_provider() {
     for message in [no_recipient, bad_address, header_injection] {
         let result = world
             .service
-            .send(
-                &user(ADA),
-                OwnerApproval(Some("Send it.".to_owned())),
-                Uuid::now_v7(),
-                message,
-            )
+            .send(&user(ADA), Uuid::now_v7(), message)
             .await;
         assert!(matches!(result, Err(AgentMailboxError::Invalid(_))));
     }
@@ -1940,7 +1898,7 @@ async fn a_release_the_provider_keeps_failing_steps_aside_for_the_rest() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn every_send_must_quote_the_owners_approval() {
+async fn an_agent_sends_from_its_own_mailbox_without_an_approval() {
     let world = world();
     world
         .service
@@ -1948,43 +1906,12 @@ async fn every_send_must_quote_the_owners_approval() {
         .await
         .unwrap();
 
-    let unconfirmed = world
+    let sent = world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(None),
-            Uuid::from_u128(1),
-            outgoing("Hi"),
-        )
-        .await;
-    let blank = world
-        .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("  ".to_owned())),
-            Uuid::from_u128(2),
-            outgoing("Hi"),
-        )
-        .await;
-    let confirmed = world
-        .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("yes, send it".to_owned())),
-            Uuid::from_u128(3),
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), Uuid::from_u128(1), outgoing("Hi"))
         .await;
 
-    assert!(matches!(
-        unconfirmed,
-        Err(AgentMailboxError::ConfirmationRequired)
-    ));
-    assert!(matches!(
-        blank,
-        Err(AgentMailboxError::ConfirmationRequired)
-    ));
-    assert!(confirmed.is_ok());
+    assert!(sent.is_ok(), "{sent:?}");
     assert_eq!(world.vendor.0.lock().unwrap().send_calls, 1);
 }
 
@@ -1999,26 +1926,10 @@ async fn an_unknown_send_is_not_retried_once_the_provider_stops_deduplicating() 
     world.vendor.fail_next("send", ProviderError::Unavailable);
     world.vendor.fail_next("send", ProviderError::Unavailable);
     let key = Uuid::from_u128(9);
-    let first = world
-        .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            key,
-            outgoing("Hi"),
-        )
-        .await;
+    let first = world.service.send(&user(ADA), key, outgoing("Hi")).await;
     assert!(matches!(first, Err(AgentMailboxError::Unavailable)));
 
-    let within_window = world
-        .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            key,
-            outgoing("Hi"),
-        )
-        .await;
+    let within_window = world.service.send(&user(ADA), key, outgoing("Hi")).await;
     assert!(
         matches!(within_window, Err(AgentMailboxError::Unavailable)),
         "retried under the same key"
@@ -2027,15 +1938,7 @@ async fn an_unknown_send_is_not_retried_once_the_provider_stops_deduplicating() 
     for send in &mut world.repository.0.lock().unwrap().sends {
         send.at -= Duration::minutes(61);
     }
-    let after_window = world
-        .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            key,
-            outgoing("Hi"),
-        )
-        .await;
+    let after_window = world.service.send(&user(ADA), key, outgoing("Hi")).await;
 
     assert!(matches!(
         after_window,
@@ -2146,22 +2049,12 @@ async fn every_provider_operation_gets_its_own_idempotency_key() {
     let agent_key = Uuid::from_u128(42);
     world
         .service
-        .send(
-            &user(ADA),
-            OwnerApproval(Some("Send it.".to_owned())),
-            agent_key,
-            outgoing("Hi"),
-        )
+        .send(&user(ADA), agent_key, outgoing("Hi"))
         .await
         .unwrap();
     world
         .service
-        .send(
-            &user(BEN),
-            OwnerApproval(Some("Send it.".to_owned())),
-            agent_key,
-            outgoing("Hi"),
-        )
+        .send(&user(BEN), agent_key, outgoing("Hi"))
         .await
         .unwrap();
 
@@ -2188,10 +2081,6 @@ async fn every_provider_operation_gets_its_own_idempotency_key() {
     );
 }
 
-fn approved() -> OwnerApproval {
-    OwnerApproval(Some("Send it.".to_owned()))
-}
-
 #[tokio::test]
 async fn a_send_key_reused_for_a_different_message_is_refused_and_sends_nothing() {
     let world = world();
@@ -2203,18 +2092,15 @@ async fn a_send_key_reused_for_a_different_message_is_refused_and_sends_nothing(
     let key = Uuid::from_u128(7);
     world
         .service
-        .send(&user(ADA), approved(), key, outgoing("First"))
+        .send(&user(ADA), key, outgoing("First"))
         .await
         .unwrap();
 
     let reused = world
         .service
-        .send(&user(ADA), approved(), key, outgoing("Second"))
+        .send(&user(ADA), key, outgoing("Second"))
         .await;
-    let replayed = world
-        .service
-        .send(&user(ADA), approved(), key, outgoing("First"))
-        .await;
+    let replayed = world.service.send(&user(ADA), key, outgoing("First")).await;
 
     assert!(
         matches!(reused, Err(AgentMailboxError::Invalid(_))),
@@ -2239,14 +2125,8 @@ async fn a_refused_retry_of_an_unknown_send_keeps_its_reservation() {
     world.vendor.fail_next("send", ProviderError::Unavailable);
     world.vendor.fail_next("send", ProviderError::Rejected);
 
-    let unknown = world
-        .service
-        .send(&user(ADA), approved(), key, outgoing("Hi"))
-        .await;
-    let refused_retry = world
-        .service
-        .send(&user(ADA), approved(), key, outgoing("Hi"))
-        .await;
+    let unknown = world.service.send(&user(ADA), key, outgoing("Hi")).await;
+    let refused_retry = world.service.send(&user(ADA), key, outgoing("Hi")).await;
 
     assert!(matches!(unknown, Err(AgentMailboxError::Unavailable)));
     assert!(matches!(refused_retry, Err(AgentMailboxError::Rejected)));
@@ -2274,11 +2154,11 @@ async fn every_send_leaves_an_audit_record_of_counts_and_times() {
 
     let _ = world
         .service
-        .send(&user(ADA), approved(), Uuid::from_u128(1), outgoing("Hi"))
+        .send(&user(ADA), Uuid::from_u128(1), outgoing("Hi"))
         .await;
     world
         .service
-        .send(&user(ADA), approved(), Uuid::from_u128(2), two_recipients)
+        .send(&user(ADA), Uuid::from_u128(2), two_recipients)
         .await
         .unwrap();
 
@@ -2328,7 +2208,7 @@ async fn sends_stop_at_the_teams_daily_recipient_cap_across_its_mailboxes() {
         outcomes.push(
             world
                 .service
-                .send(&user(agent), approved(), key, wide.clone())
+                .send(&user(agent), key, wide.clone())
                 .await
                 .is_ok(),
         );
@@ -2354,7 +2234,7 @@ async fn a_mailbox_stops_at_its_own_daily_recipient_cap() {
     for key in 0..6 {
         if world
             .service
-            .send(&user(ADA), approved(), Uuid::from_u128(key), wide.clone())
+            .send(&user(ADA), Uuid::from_u128(key), wide.clone())
             .await
             .is_ok()
         {
@@ -2626,7 +2506,7 @@ async fn a_reply_counts_the_recipients_it_goes_to() {
     wide.cc = vec!["three@example.com".to_owned()];
     let sent = world
         .service
-        .send(&user(ADA), approved(), Uuid::from_u128(1), wide)
+        .send(&user(ADA), Uuid::from_u128(1), wide)
         .await
         .unwrap();
 
@@ -2634,7 +2514,6 @@ async fn a_reply_counts_the_recipients_it_goes_to() {
         .service
         .reply(
             &user(ADA),
-            approved(),
             &sent.id,
             Uuid::from_u128(2),
             ReplyMessage {

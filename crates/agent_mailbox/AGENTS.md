@@ -62,9 +62,6 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
   could leave a lost create behind.
 - Provider idempotency keys come from `provider_key(mailbox, operation)`;
   never send the agent's key or a mailbox id raw.
-- Every send and reply needs the owner's quoted approval (`OwnerApproval`),
-  decided in the domain: the caller is always an agent account, whatever
-  credential it uses.
 - Provider content (headers, injection scores, webhooks) never authorizes anything.
 - A `402` from the provider is `NotConfigured`; the adapter never pays. A `409`
   on create is `AddressTaken` only for a code in `ADDRESS_TAKEN_CODES`

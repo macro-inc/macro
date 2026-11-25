@@ -32,8 +32,6 @@ pub enum AgentMailboxErrorCode {
     SendLimit,
     /// A malformed request. `400`.
     Invalid,
-    /// A send or reply without the owner's quoted approval. `403`.
-    ConfirmationRequired,
     /// No provider is configured. `503`.
     NotConfigured,
     /// An earlier send with this key may have gone out and can no longer be
@@ -62,7 +60,6 @@ impl AgentMailboxErrorCode {
             AgentMailboxError::NotReady(_) => Self::NotReady,
             AgentMailboxError::SendLimit { .. } => Self::SendLimit,
             AgentMailboxError::Invalid(_) => Self::Invalid,
-            AgentMailboxError::ConfirmationRequired => Self::ConfirmationRequired,
             AgentMailboxError::SendOutcomeUnknown => Self::SendOutcomeUnknown,
             AgentMailboxError::Busy => Self::Busy,
             AgentMailboxError::NotConfigured => Self::NotConfigured,
@@ -126,9 +123,6 @@ pub struct SendAgentMessageRequest {
     pub subject: String,
     /// Plain-text body.
     pub text_body: String,
-    /// The owner's approval, quoted. Required on every send and reply.
-    #[serde(default)]
-    pub confirmation: Option<String>,
 }
 
 /// A reply from the agent's mailbox.
@@ -140,9 +134,6 @@ pub struct ReplyAgentMessageRequest {
     pub idempotency_key: Uuid,
     /// Plain-text body.
     pub text_body: String,
-    /// The owner's approval, quoted. Required on every send and reply.
-    #[serde(default)]
-    pub confirmation: Option<String>,
 }
 
 /// A request to give an agent a mailbox.

@@ -10,8 +10,6 @@ import { MacroEntity } from '../entity';
 export type AgentMailReplyOptions = {
   /** Plain-text body. */
   textBody: string;
-  /** The owner's approving reply, quoted. Required on every send and reply. */
-  userConfirmation: string;
   /**
    * One key per reply, the same on every attempt: the server sends a key at
    * most once. Derive it with `macro.agentMailbox.sendKey` from what the reply
@@ -82,8 +80,7 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
   readonly textBody = this.field('textBody');
 
   /**
-   * Reply to this message from the agent's mailbox, after the owner approved
-   * the reply; quote their approval in `userConfirmation`, and pass the same
+   * Reply to this message from the agent's mailbox. Pass the same
    * `idempotencyKey` (from `macro.agentMailbox.sendKey`) on every attempt.
    *
    * @send
@@ -97,7 +94,6 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
         body: {
           idempotencyKey: options.idempotencyKey,
           textBody: options.textBody,
-          confirmation: options.userConfirmation,
         },
       }),
     );

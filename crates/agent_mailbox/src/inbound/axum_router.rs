@@ -28,7 +28,7 @@ use serde::Deserialize;
 
 use crate::domain::models::{
     AgentMailboxError, LocalPart, MailMessage, MessageList, MessagePage, OutgoingMessage,
-    OwnerApproval, ProviderMessageId, ProvisionRequest, ReplyMessage, SentMessage,
+    ProviderMessageId, ProvisionRequest, ReplyMessage, SentMessage,
 };
 use crate::domain::service::AgentMailboxUseCases;
 use crate::wire::{
@@ -88,9 +88,7 @@ impl IntoResponse for AgentMailboxHttpError {
         let code = AgentMailboxErrorCode::of(&error);
         let status = match code {
             AgentMailboxErrorCode::NotFound => StatusCode::NOT_FOUND,
-            AgentMailboxErrorCode::NotAnAgent | AgentMailboxErrorCode::ConfirmationRequired => {
-                StatusCode::FORBIDDEN
-            }
+            AgentMailboxErrorCode::NotAnAgent => StatusCode::FORBIDDEN,
             AgentMailboxErrorCode::AlreadyProvisioned
             | AgentMailboxErrorCode::TeamLimit
             | AgentMailboxErrorCode::Paused
@@ -296,7 +294,6 @@ pub async fn read_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     responses(
         (status = 201, body = SentMessage),
         (status = 400, body = AgentMailboxErrorBody),
-        (status = 403, body = AgentMailboxErrorBody, description = "A program sent without the owner's quoted approval"),
         (status = 404, body = AgentMailboxErrorBody),
         (status = 409, body = AgentMailboxErrorBody),
         (status = 429, body = AgentMailboxErrorBody, description = "A send cap is full; see `retryAt`"),
@@ -309,7 +306,6 @@ pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     State(state): State<AgentMailboxRouterState<Service, Auth>>,
     Json(body): Json<SendAgentMessageRequest>,
 ) -> Result<(StatusCode, Json<SentMessage>), AgentMailboxHttpError> {
-    let approval = OwnerApproval(body.confirmation);
     let agent = &authorization.authorization.user.macro_user_id;
     let message = OutgoingMessage {
         to: body.to,
@@ -319,7 +315,7 @@ pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     };
     let sent = state
         .service
-        .send(agent, approval, body.idempotency_key, message)
+        .send(agent, body.idempotency_key, message)
         .await?;
     Ok((StatusCode::CREATED, Json(sent)))
 }
@@ -335,7 +331,6 @@ pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     responses(
         (status = 201, body = SentMessage),
         (status = 400, body = AgentMailboxErrorBody),
-        (status = 403, body = AgentMailboxErrorBody, description = "A program replied without the owner's quoted approval"),
         (status = 404, body = AgentMailboxErrorBody, description = "Not in the caller's mailbox"),
         (status = 429, body = AgentMailboxErrorBody),
         (status = 503, body = AgentMailboxErrorBody),
@@ -348,7 +343,6 @@ pub async fn reply_to_message<Service: AgentMailboxUseCases, Auth: MacroAuthoriz
     Path(message_id): Path<String>,
     Json(body): Json<ReplyAgentMessageRequest>,
 ) -> Result<(StatusCode, Json<SentMessage>), AgentMailboxHttpError> {
-    let approval = OwnerApproval(body.confirmation);
     let message = message_path(&message_id)?;
     let agent = &authorization.authorization.user.macro_user_id;
     let reply = ReplyMessage {
@@ -356,7 +350,7 @@ pub async fn reply_to_message<Service: AgentMailboxUseCases, Auth: MacroAuthoriz
     };
     let sent = state
         .service
-        .reply(agent, approval, &message, body.idempotency_key, reply)
+        .reply(agent, &message, body.idempotency_key, reply)
         .await?;
     Ok((StatusCode::CREATED, Json(sent)))
 }

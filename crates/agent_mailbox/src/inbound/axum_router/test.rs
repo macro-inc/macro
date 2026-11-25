@@ -9,7 +9,7 @@ use tower::ServiceExt;
 
 use super::*;
 use crate::domain::models::{
-    AgentMailboxId, AgentMailboxView, MailboxProvider, MailboxState, OwnerApproval, VendorMode,
+    AgentMailboxId, AgentMailboxView, MailboxProvider, MailboxState, VendorMode,
 };
 use crate::wire::FAKE_VENDOR_NOTICE;
 use uuid::Uuid;
@@ -113,14 +113,10 @@ impl AgentMailboxUseCases for Recording {
     async fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
-        approval: OwnerApproval,
-        _: Uuid,
+        key: Uuid,
         _: OutgoingMessage,
     ) -> Result<SentMessage, AgentMailboxError> {
-        self.record(format!("send {agent} {approval:?}"));
-        if approval == OwnerApproval(None) {
-            return Err(AgentMailboxError::ConfirmationRequired);
-        }
+        self.record(format!("send {agent} {key}"));
         if self.send_limit {
             return Err(AgentMailboxError::SendLimit {
                 retry_at: Utc::now() + chrono::Duration::minutes(10),
@@ -131,7 +127,6 @@ impl AgentMailboxUseCases for Recording {
     async fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
-        _: OwnerApproval,
         message: &ProviderMessageId,
         _: Uuid,
         _: ReplyMessage,
@@ -197,13 +192,12 @@ fn internal_router_for(service: Arc<Recording>) -> Router {
     internal_agent_mailbox_router(state(service))
 }
 
-fn send_request(bearer: &str, confirmation: Option<&str>) -> Request<Body> {
+fn send_request(bearer: &str) -> Request<Body> {
     let body = serde_json::json!({
         "idempotencyKey": Uuid::from_u128(5),
         "to": ["person@example.com"],
         "subject": "Hi",
         "textBody": "Hello",
-        "confirmation": confirmation,
     });
     Request::post("/messages")
         .header(header::AUTHORIZATION, format!("Bearer {bearer}"))
@@ -242,27 +236,18 @@ async fn the_agent_sees_its_own_mailbox_labelled_as_a_fake_vendor() {
 }
 
 #[tokio::test]
-async fn every_send_carries_its_quoted_approval_to_the_service() {
+async fn a_send_reaches_the_service_with_its_key() {
     let service = Arc::new(Recording::default());
 
-    let refused = agent_router_for(service.clone())
-        .oneshot(send_request("agent-key", None))
-        .await
-        .unwrap();
-    let confirmed = agent_router_for(service.clone())
-        .oneshot(send_request("agent-run", Some("yes, send it")))
+    let response = agent_router_for(service.clone())
+        .oneshot(send_request("agent-key"))
         .await
         .unwrap();
 
-    assert_eq!(refused.status(), StatusCode::FORBIDDEN);
-    assert_eq!(json_body(refused).await["code"], "confirmation_required");
-    assert_eq!(confirmed.status(), StatusCode::CREATED);
+    assert_eq!(response.status(), StatusCode::CREATED);
     assert_eq!(
         service.calls(),
-        vec![
-            format!("send {AGENT} OwnerApproval(None)"),
-            format!("send {AGENT} OwnerApproval(Some(\"yes, send it\"))"),
-        ]
+        vec![format!("send {AGENT} {}", Uuid::from_u128(5))]
     );
 }
 
@@ -292,7 +277,7 @@ async fn a_full_send_cap_answers_429_with_retry_after() {
     });
 
     let response = agent_router_for(service)
-        .oneshot(send_request("agent-key", Some("yes")))
+        .oneshot(send_request("agent-key"))
         .await
         .unwrap();
 
