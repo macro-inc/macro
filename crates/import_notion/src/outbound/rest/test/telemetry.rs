@@ -74,7 +74,25 @@ impl Captured {
     }
 }
 
-impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S> for Captured {
+thread_local! {
+    /// Where this test thread's spans and events go, while it captures.
+    static SINK: std::cell::RefCell<Option<Captured>> = const { std::cell::RefCell::new(None) };
+}
+
+fn sink(record: impl FnOnce(&Captured)) {
+    SINK.with(|sink| {
+        if let Some(captured) = sink.borrow().as_ref() {
+            record(captured);
+        }
+    });
+}
+
+/// One process-wide subscriber that hands each thread's spans and events to
+/// that thread's capture. A per-test default subscriber races other test
+/// threads over callsite interest and can miss spans.
+struct Router;
+
+impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S> for Router {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
         let mut fields = Visitor::default();
         attrs.record(&mut fields);
@@ -92,7 +110,7 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
     fn on_event(&self, event: &tracing::Event<'_>, _: Context<'_, S>) {
         let mut fields = Visitor::default();
         event.record(&mut fields);
-        self.events.lock().unwrap().push(fields.0);
+        sink(|captured| captured.events.lock().unwrap().push(fields.0));
     }
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
         if let Some(span) = ctx.span(&id) {
@@ -100,19 +118,29 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
                 .extensions_mut()
                 .remove::<Visitor>()
                 .unwrap_or_default();
-            self.spans.lock().unwrap().push((span.name(), fields.0));
+            sink(|captured| captured.spans.lock().unwrap().push((span.name(), fields.0)));
         }
     }
 }
 
-fn capture() -> (Captured, tracing::subscriber::DefaultGuard) {
+/// Stops this thread's capture when dropped.
+struct Capturing;
+
+impl Drop for Capturing {
+    fn drop(&mut self) {
+        SINK.with(|sink| sink.borrow_mut().take());
+    }
+}
+
+fn capture() -> (Captured, Capturing) {
+    static ROUTER: std::sync::Once = std::sync::Once::new();
+    ROUTER.call_once(|| {
+        tracing::subscriber::set_global_default(tracing_subscriber::registry().with(Router))
+            .expect("no other test in this crate installs a subscriber");
+    });
     let captured = Captured::default();
-    let guard =
-        tracing::subscriber::set_default(tracing_subscriber::registry().with(captured.clone()));
-    // A callsite another test thread registered first can keep a cached
-    // "never" interest; recompute it for this subscriber.
-    tracing::callsite::rebuild_interest_cache();
-    (captured, guard)
+    SINK.with(|sink| *sink.borrow_mut() = Some(captured.clone()));
+    (captured, Capturing)
 }
 
 fn client(steps: Vec<Step>) -> NotionRestClient<Arc<ScriptedTransport>> {
