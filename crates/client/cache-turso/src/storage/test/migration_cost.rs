@@ -157,6 +157,10 @@ fn upgrade_cost_on_a_retained_cache() {
     rewrite(&older, &|storage| {
         test_hooks::rewrite_as_storage_11(storage).unwrap();
     });
+    let at_12 = directory.path().join("at-12.turso");
+    rewrite(&at_12, &|storage| {
+        test_hooks::rewrite_as_storage_12(storage).unwrap();
+    });
     // The same derived state at storage 12, all of it and one part at a time,
     // so each rebuild's cost is its open's difference from a reopen.
     let derived = directory.path().join("derived.turso");
@@ -182,12 +186,15 @@ fn upgrade_cost_on_a_retained_cache() {
     for run in 1..=runs {
         copy_pair(&current, &live);
         let reopen = timed_open(&database);
+        copy_pair(&at_12, &live);
+        let step = timed_open(&database);
         copy_pair(&older, &live);
         let upgrade = timed_open(&database);
         let after = timed_open(&database);
         eprintln!(
-            "run {run}: reopen at 12 {reopen}; open at 11 with upgrade {upgrade}; \
-             reopen after upgrade {after}; file after upgrade {} B",
+            "run {run}: reopen at {STORAGE_SCHEMA_VERSION} {reopen}; open at 12 with its step \
+             {step}; open at 11 with upgrade {upgrade}; reopen after upgrade {after}; file \
+             after upgrade {} B",
             file_bytes(&live),
         );
         copy_pair(&derived, &live);
