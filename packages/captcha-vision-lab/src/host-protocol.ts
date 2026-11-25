@@ -39,7 +39,12 @@ export const HostRequest = z.discriminatedUnion('type', [
   }),
   z.strictObject({ type: z.literal('observe') }),
   z.strictObject({ type: z.literal('capture') }),
-  z.strictObject({ type: z.literal('act'), action: Action }),
+  z.strictObject({
+    type: z.literal('act'),
+    action: Action,
+    /** The observations the runner gated on; the host acts only if unchanged. */
+    observations: Observations,
+  }),
   z.strictObject({ type: z.literal('close') }),
 ]);
 export type HostRequest = z.infer<typeof HostRequest>;
@@ -68,7 +73,12 @@ export const HostReply = z.union([
   z.strictObject({ type: z.literal('captured'), result: z.literal('failed') }),
   z.strictObject({
     type: z.literal('acted'),
-    result: z.enum(['ok', 'no_single_control', 'failed']),
+    result: z.enum([
+      'ok',
+      'no_single_control',
+      'observations_changed',
+      'failed',
+    ]),
     /** A fixed failure code, never an error message. */
     code: z.string().optional(),
     observations: Observations,

@@ -18,9 +18,17 @@ const HOST_SCRIPT = join(import.meta.dir, 'browser-host.ts');
 
 export type BrowserHost = {
   request: (message: HostRequest) => Promise<HostReply>;
-  /** Kills the host (and with its pipes, its Chromium) at once. */
-  kill: () => void;
+  /**
+   * Ends the host: SIGTERM first, which Playwright answers by closing its
+   * Chromium, then SIGKILL if the host has not exited within the bound.
+   */
+  stop: () => Promise<void>;
+  /** The host's exit code, once it has exited. */
+  exited: Promise<number>;
 };
+
+/** How long the host has to exit after SIGTERM before it is killed. */
+const STOP_TIMEOUT_MS = 5_000;
 
 /** Starts a host, or undefined when there is no `node` to run it. */
 export const startBrowserHost = (): BrowserHost | undefined => {
@@ -61,6 +69,19 @@ export const startBrowserHost = (): BrowserHost | undefined => {
       if (!reply.success) throw new Error('malformed host reply');
       return reply.data;
     },
-    kill: () => child.kill('SIGKILL'),
+    exited: child.exited,
+    stop: async () => {
+      child.kill('SIGTERM');
+      const exited = await Promise.race([
+        child.exited.then(() => true),
+        new Promise<false>((resolve) =>
+          setTimeout(() => resolve(false), STOP_TIMEOUT_MS)
+        ),
+      ]);
+      if (!exited) {
+        child.kill('SIGKILL');
+        await child.exited;
+      }
+    },
   };
 };

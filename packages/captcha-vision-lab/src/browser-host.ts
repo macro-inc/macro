@@ -17,7 +17,7 @@ import {
   type Request,
   type Route,
 } from 'playwright';
-import { isolatedBrowser } from './browser-options.ts';
+import { executableOk, isolatedBrowser } from './browser-options.ts';
 import { emptyObservations, type Observations } from './gate.ts';
 import { type Action, type HostReply, HostRequest } from './host-protocol.ts';
 import {
@@ -185,7 +185,8 @@ const open = async (
   });
   // The profile's initial about:blank is not a navigation of the run.
   page.on('framenavigated', (frame) => {
-    if (frame !== page.mainFrame() || frame.url() === 'about:blank') return;
+    if (frame !== page.mainFrame()) return;
+    if (frame.url() === 'about:blank' && observed.mainNavigations === 0) return;
     observed.mainNavigations += 1;
     observed.mainFrameUrl = frame.url();
   });
@@ -350,10 +351,34 @@ const act = async (page: Page, action: Action): Promise<HostReply> => {
   return { type: 'acted', result: 'ok', observations: snapshot() };
 };
 
+type ObservationsLike = Omit<Observations, 'mainFrameUrl'> & {
+  mainFrameUrl?: string | undefined;
+};
+
+/** Whether nothing was observed between two snapshots. */
+const sameObservations = (first: ObservationsLike, second: ObservationsLike) =>
+  first.mainFrameUrl === second.mainFrameUrl &&
+  first.mainNavigations === second.mainNavigations &&
+  first.redirects === second.redirects &&
+  first.popups === second.popups &&
+  first.extraFrames === second.extraFrames &&
+  first.blockedNavigations === second.blockedNavigations &&
+  first.blockedOrigins.join('\n') === second.blockedOrigins.join('\n');
+
+let openRequested = false;
+let actRequested = false;
+
 const handle = async (request: HostRequest): Promise<HostReply> => {
   if (request.type === 'open') {
-    // Only the registered lab URL, only once.
-    if (request.targetUrl !== LAB_URL || session !== undefined) return quit(2);
+    // Only the registered lab URL, only once, only a real browser binary.
+    if (
+      request.targetUrl !== LAB_URL ||
+      openRequested ||
+      !executableOk(request.executablePath)
+    ) {
+      return quit(2);
+    }
+    openRequested = true;
     return open(request);
   }
   if (request.type === 'observe') {
@@ -366,6 +391,17 @@ const handle = async (request: HostRequest): Promise<HostReply> => {
 
   if (session === undefined) return quit(2);
   if (request.type === 'capture') return capture(session.page);
+
+  // One action per challenge, and only on the page the runner gated.
+  if (actRequested) return quit(2);
+  actRequested = true;
+  if (!sameObservations(request.observations, snapshot())) {
+    return {
+      type: 'acted',
+      result: 'observations_changed',
+      observations: snapshot(),
+    };
+  }
   return act(session.page, request.action);
 };
 

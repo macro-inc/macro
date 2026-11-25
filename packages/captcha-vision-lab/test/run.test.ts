@@ -4,6 +4,8 @@
  * negative case still holds a genuine, consumed capability where it can.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { relation } from '../src/families.ts';
 import { mockPlanner, type PlannerInput } from '../src/planner.ts';
 import { seededRandom } from '../src/random.ts';
@@ -206,6 +208,16 @@ describe('the provenance gate fails closed', () => {
         injecting(lab, `<script>location.href = '/lab/elsewhere';</script>`),
       {},
       'blocked_navigation',
+    ],
+    [
+      'a navigation to about:blank',
+      (lab) =>
+        injecting(
+          lab,
+          `<script>setTimeout(() => { location.href = 'about:blank'; }, 100);</script>`
+        ),
+      {},
+      'main_frame_url',
     ],
     [
       'a popup',
@@ -431,7 +443,16 @@ describe('the per-challenge deadline', () => {
     expect(record.plannerCalls).toBe(0);
     expect(inputs).toHaveLength(0);
     expect(record.actions).toHaveLength(0);
-  }, 30_000);
+    // The record is final, and no Chromium of the attempt outlives it.
+    expect(Object.isFrozen(record)).toBe(true);
+    expect(Object.isFrozen(record.actions)).toBe(true);
+    const left = Bun.spawnSync([
+      'pgrep',
+      '-f',
+      `--user-data-dir=${join(tmpdir(), 'captcha-vision-lab-')}`,
+    ]);
+    expect(left.stdout.toString()).toBe('');
+  }, 60_000);
 });
 
 test('a browser that cannot start is a kept browser_error, no planner call', async () => {

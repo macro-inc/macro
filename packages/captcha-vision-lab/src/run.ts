@@ -8,6 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type BrowserHost, startBrowserHost } from './browser.ts';
+import { executableOk } from './browser-options.ts';
 import { FAMILIES, type FamilyName } from './families.ts';
 import {
   checkObservations,
@@ -103,16 +104,38 @@ const observationsOf = (
 });
 
 /**
- * Closes the host's browser, giving up after a bound, then kills the host:
- * with its pipes gone, its Chromium goes too.
+ * Ends the attempt's browser: asks the host to close it (bounded), stops
+ * the host (SIGTERM, then SIGKILL), and finally kills any process still
+ * running on the attempt's profile, so no Chromium outlives its attempt.
  */
-const closeHost = async (host: BrowserHost | undefined) => {
-  if (host === undefined) return;
-  await Promise.race([
-    host.request({ type: 'close' }).catch(() => undefined),
-    new Promise((resolve) => setTimeout(resolve, CLOSE_TIMEOUT_MS)),
-  ]);
-  host.kill();
+const closeHost = async (
+  host: BrowserHost | undefined,
+  profile: string | undefined
+) => {
+  if (host !== undefined) {
+    await Promise.race([
+      host.request({ type: 'close' }).catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, CLOSE_TIMEOUT_MS)),
+    ]);
+    await host.stop();
+  }
+  if (profile !== undefined) {
+    // The profile path is unique to this attempt; Chromium has it on its
+    // command line. pkill exits 1 when nothing matched.
+    Bun.spawnSync(['pkill', '-KILL', '-f', '--', `--user-data-dir=${profile}`]);
+  }
+};
+
+/** A deep copy that cannot change, so a record is final once returned. */
+const frozenCopy = <Value>(value: Value): Value => {
+  const copy = structuredClone(value);
+  const freeze = (item: unknown) => {
+    if (item === null || typeof item !== 'object') return;
+    Object.freeze(item);
+    for (const child of Object.values(item)) freeze(child);
+  };
+  freeze(copy);
+  return copy;
 };
 
 /** What the planner may answer, from the family and the captured controls. */
@@ -174,16 +197,16 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
       plannerMs: undefined,
     },
   };
-  // The first outcome stands: once the deadline has finished the record, a
-  // late step of the attempt cannot change it.
-  let finished = false;
+  // The first outcome stands: finishing returns a frozen copy, so a late
+  // step of the attempt (after the deadline, say) cannot change it.
+  let final: RunRecord | undefined;
   const finish = (outcome: Outcome, detail?: string): RunRecord => {
-    if (finished) return record;
-    finished = true;
+    if (final !== undefined) return final;
     record.outcome = outcome;
     record.detail = detail;
     record.timings.totalMs = Math.round(performance.now() - started);
-    return record;
+    final = frozenCopy(record);
+    return final;
   };
   // Records a gate decision; a rejection ends the attempt.
   const rejectedBy = (decision: GateDecision): RunRecord | undefined => {
@@ -216,6 +239,11 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
   // The attempt itself. Every await in it is bounded on its own, but only
   // the deadline below bounds them together; past it, nothing more happens.
   const attempt = async (): Promise<RunRecord> => {
+    // The host refuses a browser path that is not an absolute executable;
+    // refusing it here keeps that a recorded launch failure.
+    if (!executableOk(input.executablePath)) {
+      return finish('browser_error', 'browser_launch_failed');
+    }
     host = startBrowserHost();
     if (host === undefined) return finish('browser_error', 'node_missing');
     profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-'));
@@ -235,7 +263,7 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     if (opened.result === 'launch_failed') {
       return finish('browser_error', 'browser_launch_failed');
     }
-    if (deadline.aborted) return record;
+    if (deadline.aborted) return finish('timeout', 'challenge_deadline');
     if (opened.result === 'load_failed') {
       // Name what the browser saw (a redirect, say) when it explains the
       // failure; otherwise the load itself failed.
@@ -314,17 +342,27 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     );
     if (actionRejection !== undefined) return actionRejection;
     // No action once the deadline has passed.
-    if (deadline.aborted) return record;
+    if (deadline.aborted) return finish('timeout', 'challenge_deadline');
 
     // Exactly one action through the quiz's own controls, which submit
     // once.
     const action = actionFor(decision);
-    const acted = await host.request({ type: 'act', action });
+    const acted = await host.request({
+      type: 'act',
+      action,
+      observations: observationsOf(beforeAction),
+    });
     if (acted.type !== 'acted') {
       return finish('browser_error', 'unexpected_host_reply');
     }
     if (acted.result === 'no_single_control') {
       return finish('action_error', 'no_single_control');
+    }
+    // Something happened between the gate and the action: no action.
+    if (acted.result === 'observations_changed') {
+      const reason = 'observations_changed';
+      record.gate.push({ stage: 'before_action', allowed: false, reason });
+      return finish('provenance_rejected', reason);
     }
     record.actions.push(action);
     if (acted.result === 'failed') {
@@ -370,7 +408,7 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
       timedOut,
     ]);
   } finally {
-    await closeHost(host);
+    await closeHost(host, profile);
     if (profile !== undefined) {
       await rm(profile, { recursive: true, force: true });
     }

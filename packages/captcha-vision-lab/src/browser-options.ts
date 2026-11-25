@@ -5,6 +5,8 @@
  * local ports are out of reach), WebRTC may not go around the proxy, and
  * there is no DNS prefetching.
  */
+import { accessSync, constants } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { LAB_HOST, LAB_PORT } from './registry.ts';
 
 export const isolatedBrowser = () => ({
@@ -41,3 +43,15 @@ export const hostEnvironment = (): Record<string, string> =>
       return value === undefined ? [] : [[name, value]];
     })
   );
+
+/** A browser binary must be an absolute path to an executable file. */
+export const executableOk = (path: string | undefined): boolean => {
+  if (path === undefined) return true;
+  if (!isAbsolute(path)) return false;
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
