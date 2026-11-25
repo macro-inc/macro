@@ -129,9 +129,9 @@ for (const provider of PROVIDERS) {
 
       // Retry shows only between the cache's own attempts, and one can be
       // due within seconds when it first shows. Once the next of them has
-      // failed, the one after is at least six seconds away. Retry starts an
-      // attempt at once, so the worker then loads within seconds of the
-      // press only because of it.
+      // failed, the one after is more than six seconds away, so a load
+      // sooner than that after the refusal can only be the attempt Retry
+      // starts.
       const retry = notice.getByRole('button', { name: 'Retry', exact: true });
       await expect(retry).toBeVisible({ timeout: 90_000 });
       const refusals = fault.refusals();
@@ -140,10 +140,10 @@ for (const provider of PROVIDERS) {
         .toBeGreaterThan(refusals);
       await expect(retry).toBeVisible();
       fault.lift();
-      const loads = fault.loads();
       await retry.click({ timeout: 5_000 });
       did('AC-064');
-      await expect.poll(fault.loads, { timeout: 3_000 }).toBeGreaterThan(loads);
+      await expect.poll(fault.loads, { timeout: 5_000 }).toBeGreaterThan(0);
+      expect(fault.msFromRefusalToLoad()).toBeLessThan(6_000);
       await expect(notice).toHaveCount(0);
       await expect(body(page)).toHaveText('The numbers are in. Final.');
       await expect
