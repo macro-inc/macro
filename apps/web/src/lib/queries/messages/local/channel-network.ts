@@ -115,6 +115,19 @@ export async function queryChannelNetwork<
   return { data: result.data, cached: stored() };
 }
 
+/** The code the server refused a query with. */
+export function graphqlErrorCode(error: unknown): string | undefined {
+  if (!(error instanceof CombinedError)) return undefined;
+  const code = error.graphQLErrors[0]?.extensions?.code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/** Whether the server said that the message read, or read around, is gone. */
+export function isMissingMessage(error: unknown): boolean {
+  const code = graphqlErrorCode(error);
+  return code === 'NOT_FOUND' || code === 'GONE';
+}
+
 /**
  * Whether a read failed to store because the cache session changed under it
  * (startup's first owner proof, a permission change). Read again: the new

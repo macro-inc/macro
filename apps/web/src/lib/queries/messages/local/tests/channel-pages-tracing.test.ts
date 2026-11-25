@@ -289,7 +289,7 @@ async function readPageAgain(
     noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
-    epoch: () => 3,
+    mark: () => ({ epoch: 3, seq: null }),
   };
   let dispose = () => {};
   const timeline = createRoot((disposeRoot) => {

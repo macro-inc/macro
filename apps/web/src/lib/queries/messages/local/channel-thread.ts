@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError } from '@core/util/result';
 import {
   type CacheHost,
   CHANNEL_TIMELINE_HEAD,
@@ -28,7 +29,9 @@ import {
 import {
   type ChannelAnswer,
   type ChannelQueryOptions,
+  type ChannelStoreResult,
   cacheSessionChanged,
+  isMissingMessage,
   queryChannelNetwork,
   type ReconnectWatch,
   SESSION_CHANGE_RELOADS,
@@ -123,7 +126,7 @@ async function readMessages(
 
 type DeviceThread =
   | { kind: 'thread'; thread: MessageThread; seq: string | null }
-  | { kind: 'miss' }
+  | { kind: 'miss'; seq?: string | null }
   | { kind: 'unsupported' };
 
 /** The whole thread from the device, when it holds every reply. */
@@ -143,8 +146,8 @@ export async function readDeviceThread(
       ...(before !== undefined && { before }),
     });
     if (result.kind === 'unsupported') return { kind: 'unsupported' };
-    if (!result.covered) return { kind: 'miss' };
     if (page === 0) seq = result.seq;
+    if (!result.covered) return { kind: 'miss', seq };
     newestFirst.push(...result.keys);
     if (result.olderCursor === null) {
       const [roots, replies] = await Promise.all([
@@ -152,13 +155,12 @@ export async function readDeviceThread(
         readMessages(host, newestFirst.reverse()),
       ]);
       const root = roots?.[0];
-      if (!root || !replies) return { kind: 'miss' };
-      const thread = threadOf(root, replies);
-      return thread ? { kind: 'thread', thread, seq } : { kind: 'miss' };
+      const thread = root && replies && threadOf(root, replies);
+      return thread ? { kind: 'thread', thread, seq } : { kind: 'miss', seq };
     }
     before = result.olderCursor;
   }
-  return { kind: 'miss' };
+  return { kind: 'miss', seq };
 }
 
 /**
@@ -263,19 +265,36 @@ async function fetchServerThread(
     .flatMap((key) => replies.get(key) ?? []);
   const thread = threadOf(first.page.root, ordered);
   if (!thread) return undefined;
-  const stored = await Promise.all(stores);
-  const failed = stored.flatMap((store) => (store.stored ? [] : [store.error]));
-  const loaded = { thread, readSeq: seq };
+  const stored = await span.span('channel.thread.store', async (child) =>
+    threadStored(await Promise.all(stores), child)
+  );
+  return { thread, readSeq: seq, ...stored };
+}
+
+/** How storing a thread's pages ended. Failures other than a session change are reported here. */
+function threadStored(
+  stores: readonly ChannelStoreResult[],
+  span: Span
+): Pick<ServerThread, 'seq' | 'sessionChanged'> {
+  span.setAttr('thread.pages', stores.length);
+  const failed = stores.flatMap((store) => (store.stored ? [] : [store.error]));
   // The cache session changed before the device stored the thread; the
   // caller reads it again under the new one.
-  if (failed.some(cacheSessionChanged))
-    return { ...loaded, seq: null, sessionChanged: true };
+  if (failed.some(cacheSessionChanged)) {
+    span.setAttr('thread.stored', 'session-changed');
+    return { seq: null, sessionChanged: true };
+  }
   // The thread still shows; it is read from the server again next time.
-  if (failed.length > 0)
+  if (failed.length > 0) {
+    span.setAttr('thread.stored', 'failed');
+    span.error(failed[0]);
     Telemetry.error(failed[0], { surface: 'channel-thread' });
-  const outcomes = stored.map((store) => store.stored && store.outcome?.seq);
+    return { seq: null };
+  }
+  const outcomes = stores.map((store) => store.stored && store.outcome?.seq);
   const held = outcomes.every((outcome) => typeof outcome === 'string');
-  return { ...loaded, seq: held ? outcomes.at(-1) || null : null };
+  span.setAttr('thread.stored', held ? 'held' : 'unheld');
+  return { seq: held ? outcomes.at(-1) || null : null };
 }
 
 interface ServerThread {
@@ -339,7 +358,7 @@ export interface ChannelThreadDeps {
     | 'noteStoredSeq'
     | 'noteServerRead'
     | 'ensureCurrent'
-    | 'epoch'
+    | 'mark'
   >;
   fetchPage?: FetchChannelThreadPage;
   /**
@@ -371,7 +390,17 @@ function withUnstored(
   return missing.length === 0 ? stored : [...stored, ...missing];
 }
 
+/** A read's error, as the code the app's readers know it by. */
+function readError(error: unknown): unknown {
+  if (!isMissingMessage(error)) return error;
+  return new ThrownResultError([
+    { code: 'NOT_FOUND', message: 'The thread is gone' },
+  ]);
+}
+
 type ThreadState = {
+  /** The root `thread` and `error` are of. */
+  root: string | undefined;
   thread: MessageThread | undefined;
   error: unknown;
 };
@@ -390,6 +419,7 @@ export function createLocalChannelThread(
   onUnsupported: () => void
 ): LocalChannelThread {
   const [state, setState] = createStore<ThreadState>({
+    root: undefined,
     thread: undefined,
     error: undefined,
   });
@@ -412,6 +442,8 @@ export function createLocalChannelThread(
 
   const load = async (root: string, reloads = 0): Promise<void> => {
     const current = ++token;
+    if (untrack(() => state.root) !== root)
+      setState({ root, thread: undefined, error: undefined });
     held = false;
     changed = false;
     abort?.abort();
@@ -422,7 +454,7 @@ export function createLocalChannelThread(
     const signal = abort.signal;
     // Taken before any await: the catch-up joins the open's trace.
     const trace = Telemetry.captureContext();
-    const epoch = deps.runtime.epoch();
+    const mark = deps.runtime.mark(channelId);
     try {
       const loaded = await loadChannelThread(deps.host, channelId, root, {
         fetchPage: deps.fetchPage,
@@ -437,7 +469,7 @@ export function createLocalChannelThread(
       setState('error', undefined);
       show(loaded.thread);
       if (loaded.source === 'device') {
-        deps.runtime.noteStoredSeq(channelId, loaded.seq);
+        deps.runtime.noteStoredSeq(channelId, loaded.seq, mark);
         misses = 0;
         follow(root);
         fireAndForget(
@@ -455,7 +487,7 @@ export function createLocalChannelThread(
       deps.runtime.noteServerRead(channelId, {
         seq: loaded.seq,
         readSeq: loaded.readSeq,
-        epoch,
+        mark,
       });
       if (loaded.seq === null) return;
       follow(root);
@@ -466,7 +498,11 @@ export function createLocalChannelThread(
       );
     } catch (error) {
       if (current !== token) return;
-      setState('error', error);
+      // A thread that is gone shows no more; any other failure keeps it.
+      setState({
+        error: readError(error),
+        ...(isMissingMessage(error) && { thread: undefined }),
+      });
       watch.failed(() => fireAndForget(load(root), 'channel-thread'));
     }
   };
@@ -481,53 +517,68 @@ export function createLocalChannelThread(
     if (changed) fireAndForget(reread(root), 'channel-thread');
   };
 
-  // One reread at a time; changes during it read once more after it.
-  let rereading = false;
+  // One reread of a load at a time; changes during it read once more after it.
+  let rereading: number | undefined;
   let rereadAgain = false;
   const reread = async (root: string) => {
     if (!held) {
       changed = true;
       return;
     }
-    if (rereading) {
+    const current = token;
+    if (rereading === current) {
       rereadAgain = true;
       return;
     }
-    rereading = true;
+    rereading = current;
+    let kind: DeviceThread['kind'] | 'stale' | undefined;
     try {
       do {
         rereadAgain = false;
-        const current = token;
-        let device: Awaited<ReturnType<typeof readDeviceThread>>;
-        try {
-          device = await readDeviceThread(deps.host, channelId, root);
-        } catch (error) {
-          // Asked for again meanwhile, it may answer now.
-          if (current === token && rereadAgain) continue;
-          throw error;
-        }
-        if (current !== token) return;
-        if (device.kind === 'unsupported') {
-          onUnsupported();
-          return;
-        }
-        if (device.kind === 'miss') {
-          // Reset or evicted meanwhile: load it again, from the server. The
-          // replies shown stay until the new ones replace them. A device that
-          // keeps missing what it stored is not asked for ever: every load's
-          // own store reports a change.
-          misses += 1;
-          held = false;
-          if (misses <= SESSION_CHANGE_RELOADS) await load(root);
-          return;
-        }
+        kind = await readAgain(root, current);
+      } while (kind === 'thread' ? rereadAgain : kind === undefined);
+    } finally {
+      if (rereading === current) rereading = undefined;
+    }
+    if (kind !== 'miss' || current !== token) return;
+    // Reset or evicted meanwhile: load it again, from the server. The
+    // replies shown stay until the new ones replace them. A device that
+    // keeps missing what it stored is not asked for ever: every load's
+    // own store reports a change.
+    misses += 1;
+    held = false;
+    if (misses <= SESSION_CHANGE_RELOADS) await load(root);
+  };
+
+  /**
+   * Shows the device's copy, unless a load began since. Undefined when the
+   * device failed but was asked for again meanwhile, so it may answer now.
+   */
+  const readAgain = (root: string, current: number) =>
+    Telemetry.span('channel.thread_reread', async (span) => {
+      span.setAttr('channel.id', channelId);
+      span.setAttr('thread.root_id', root);
+      const mark = deps.runtime.mark(channelId);
+      let device: DeviceThread;
+      try {
+        device = await readDeviceThread(deps.host, channelId, root);
+      } catch (error) {
+        span.setAttr('thread.device_error', deviceErrorCode(error));
+        if (current === token && rereadAgain) return undefined;
+        throw error;
+      }
+      span.setAttr('thread.source', device.kind);
+      // Another tab may have lowered what the device holds.
+      if (device.kind !== 'unsupported' && device.seq !== undefined)
+        deps.runtime.noteStoredSeq(channelId, device.seq, mark);
+      if (current !== token) return 'stale' as const;
+      if (device.kind === 'unsupported') onUnsupported();
+      if (device.kind === 'thread') {
         misses = 0;
         show(device.thread);
-      } while (rereadAgain);
-    } finally {
-      rereading = false;
-    }
-  };
+      }
+      return device.kind;
+    });
 
   createEffect(
     on([rootId, enabled], ([root, on]) => {
@@ -551,22 +602,28 @@ export function createLocalChannelThread(
     })
   );
 
-  const replies = () =>
-    state.thread &&
-    withUnstored(
-      state.thread.replies,
-      deps.unstored?.(channelId, rootId()) ?? []
+  // Nothing is shown of a root the thread was on before.
+  const loadedThread = () =>
+    state.root === rootId() ? state.thread : undefined;
+  const loadError = () => (state.root === rootId() ? state.error : undefined);
+
+  const replies = () => {
+    const thread = loadedThread();
+    return (
+      thread &&
+      withUnstored(thread.replies, deps.unstored?.(channelId, rootId()) ?? [])
     );
+  };
 
   return {
     thread() {
-      const thread = state.thread;
+      const thread = loadedThread();
       const shown = replies();
       return thread && shown && { ...thread, replies: shown };
     },
     replies,
-    isPending: () => state.thread === undefined && state.error === undefined,
-    error: () => state.error,
+    isPending: () => loadedThread() === undefined && loadError() === undefined,
+    error: loadError,
     retry: () => loadAfresh(untrack(rootId)),
   };
 }

@@ -41,11 +41,15 @@ with the watermark after it.
   channel's watermark and whether the channel is `current`: the device holds
   every change announced while the socket stayed connected. A gap or a
   reconnect makes a channel not current; one on screen then catches up through
-  `channelChanges` after a jittered debounce, one off screen when it is opened.
-  A failed catch-up, or one that keeps ending behind, is tried again after a
-  wait that doubles (`CATCH_UP_RETRY_MS` to `CATCH_UP_RETRY_MAX_MS`). Only an
+  `channelChanges` after a jittered debounce, one off screen when it is opened
+  or prewarmed. A failed catch-up, or one that keeps ending behind, is tried
+  again after a wait that doubles (`CATCH_UP_RETRY_MS` to
+  `CATCH_UP_RETRY_MAX_MS`), which a frame or a reconnect cuts short. Only an
   acknowledgement that fits what was known may set `current`; a watermark known
   too high costs one request, which the engine answers `gap` with its own.
+  Take `mark()` before each read and report its sequence with it: a read begun
+  before the device was found to hold less (another tab's older page or reset,
+  an eviction) proves nothing.
 - Views read again when the host reports a change of the channel
   (`onChannelChanged`, every tab's, through the runtime's `onChanged`). A view's
   own store is reported to it too, so a device that keeps losing what a view
@@ -54,7 +58,8 @@ with the watermark after it.
   durable cache mutation queue and waits for their settlement. The hooks in
   `../mutations.ts` and `../reactions.ts` pick the path for each write
   (`../device-writes.ts`): one the device takes runs no TanStack mutation and
-  writes no TanStack cache, and a REST one keeps the app's defaults. A channel a
+  writes no TanStack message cache (the channel lists in Soup's cache are still
+  stamped), and a REST one keeps the app's defaults. A channel a
   view on screen reads over REST keeps its writes on REST (`keepChannelOnRest`),
   as does a message with an anchor.
 - Outage: while the host is `paused` (or being proven readable again after it
@@ -78,7 +83,8 @@ asked for in its channel (`takeTurn`), under the sign-in it was asked for under.
 | Never reached the queue, or the queue refused it (`NOT_QUEUED`) | fails as not sent, draft restored | fails |
 | Its sign-in ended before its turn, or no sign-in said who it is | `CACHE_RETIRED` | `CACHE_RETIRED` |
 | The host retired, or its storage was reset, with the write in the queue | `DELIVERY_UNKNOWN` | `CACHE_RETIRED`, `CACHE_RESET` |
-| The answer was lost, or the enqueue's acknowledgement was | device copy, then the server's (`ChannelMessage`), else `DELIVERY_UNKNOWN` | applied if the device shows it, else `NOT_APPLIED` |
+| The enqueue's acknowledgement was lost | still queued: its settlement; settled: device copy, then the server's (`ChannelMessage`), else `DELIVERY_UNKNOWN` | still queued: its settlement; settled: applied if the device shows it, else `NOT_APPLIED` |
+| The answer was lost | the server's copy (`ChannelMessage`), else `DELIVERY_UNKNOWN` | fails |
 | The server answered, the device could not store it | the server's copy | the server's copy; never rejects |
 
 An absent server copy proves nothing while a request may still commit, so a
@@ -87,8 +93,9 @@ uncertain send again under the same id
 (`features/channel/Input/utils/uncertain-sends.ts`), in memory only and until
 the session ends. Recovery runs as `channel.write.recover` in the write's
 trace. A write is its transaction id and its mutation id: transaction ids
-restart when the queue is rebuilt. The queue replays only sends and deletes the
-server answered `SERVICE_UNAVAILABLE` (`graphql-mutation-retry.ts`).
+restart when the queue is rebuilt. The queue replays every write the network
+lost; of those the server refused, only sends and deletes answered
+`SERVICE_UNAVAILABLE` (`graphql-mutation-retry.ts`).
 
 ## Start here
 
@@ -109,17 +116,18 @@ server answered `SERVICE_UNAVAILABLE` (`graphql-mutation-retry.ts`).
 
 ## Gotchas
 
-- Every selection of a message under a `seq` uses `ChannelMessageFields`: a
-  partial one would raise the record's stamp over fields it left old. Read a
-  page and a thread in separate operations.
-- A query's answer is shown before the device stores it. `cached`, `stored` and
-  thread stores say how that ended; `stored` never rejects, since a loader that
-  moved on leaves it unawaited.
+- Every selection of a message under a `seq` uses `ChannelMessageFields` (a
+  reply preview `ChannelMessageBaseFields`, all it has): a partial one would
+  raise the record's stamp over fields it left old. Read a page and a thread in
+  separate operations.
+- A timeline page is shown before the device stores it, and `stored` says how
+  that ended: it never rejects, since a loader that moved on leaves it
+  unawaited. A thread is shown once its pages are stored or were refused.
 - When the cache refuses a read because the session changed after it was sent,
   the view reads again under the new one (`cacheSessionChanged`). A bare commit
   (`channelTimelineCommit`, the touch) takes the `cacheSessionGeneration`
   captured before its read.
-- A read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),
+- A timeline read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),
   and a prewarm counts as a touch: `touched_at_ms` defaults to 0, which the
   30-day eviction would take at once. A touch counts only once the device
   stored it (`settled`), and only in the cache session it was sent in.

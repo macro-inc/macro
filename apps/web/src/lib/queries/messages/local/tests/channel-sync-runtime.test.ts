@@ -8,6 +8,7 @@ import {
   CATCH_UP_RETRY_MAX_MS,
   CATCH_UP_RETRY_MS,
   type ChannelChangesPage,
+  type ChannelReadMark,
   type ChannelSyncRuntime,
   createChannelSyncRuntime,
   MAX_CHANGE_PAGES,
@@ -104,14 +105,20 @@ function setup(
     return outcome;
   };
   /** A page the server read at `readSeq`, stored by the device. */
-  const read = (readSeq: string, epoch = runtime.epoch()) => {
+  const read = (
+    readSeq: string,
+    mark: ChannelReadMark = runtime.mark(CHANNEL_ID)
+  ) => {
     const { seq } = engine.apply({
       channelId: CHANNEL_ID,
       seq: readSeq,
       watermark: { kind: 'lower' },
     });
-    runtime.noteServerRead(CHANNEL_ID, { seq, readSeq, epoch });
+    runtime.noteServerRead(CHANNEL_ID, { seq, readSeq, mark });
   };
+  /** A read of the device, begun and answered at once. */
+  const deviceRead = (seq: string | null) =>
+    runtime.noteStoredSeq(CHANNEL_ID, seq, runtime.mark(CHANNEL_ID));
   return {
     engine,
     runtime,
@@ -122,6 +129,7 @@ function setup(
     changed,
     frame,
     read,
+    deviceRead,
   };
 }
 
@@ -158,10 +166,12 @@ describe('frames', () => {
   });
 
   it('catches up a channel on screen past a gap', async () => {
-    const { engine, runtime, asked, frame } = setup('5', () => changes(9));
+    const { engine, runtime, asked, frame, deviceRead } = setup('5', () =>
+      changes(9)
+    );
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
-    runtime.noteStoredSeq(CHANNEL_ID, '5');
+    deviceRead('5');
 
     expect(frame(9).outcome).toBe('gap');
     await debounced();
@@ -276,10 +286,10 @@ describe('server reads', () => {
   it('does not trust a read sent before the connection', async () => {
     const { runtime, asked, read } = setup(null, () => changes(8));
     runtime.onConnected();
-    const epoch = runtime.epoch();
+    const mark = runtime.mark(CHANNEL_ID);
     runtime.onDisconnected();
     runtime.onConnected();
-    read('8', epoch);
+    read('8', mark);
     await runtime.ensureCurrent(CHANNEL_ID);
     expect(asked()).toEqual(['8']);
   });
@@ -312,19 +322,94 @@ describe('server reads', () => {
   });
 
   it("catches up when a device read finds another tab's page lowered it", async () => {
-    const { runtime, asked, engine } = setup('8', () => changes(8));
+    const { runtime, asked, engine, deviceRead } = setup('8', () => changes(8));
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
     await runtime.ensureCurrent(CHANNEL_ID);
 
     // Ahead is a frame stored but not yet told: still current.
-    runtime.noteStoredSeq(CHANNEL_ID, '9');
+    deviceRead('9');
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
 
     engine.setSeq('6');
-    runtime.noteStoredSeq(CHANNEL_ID, '6');
+    deviceRead('6');
     await debounced();
     expect(asked()).toEqual(['8', '6']);
+  });
+
+  it('asks nothing for a device read a frame overtook', async () => {
+    const { runtime, asked, frame } = setup('8');
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    const mark = runtime.mark(CHANNEL_ID);
+    frame(9);
+    runtime.noteStoredSeq(CHANNEL_ID, '8', mark);
+    await debounced();
+    expect(asked()).toEqual(['8']);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+
+  it('catches up an open channel another tab replaced with an older page', async () => {
+    const { engine, runtime, asked } = setup('10', () => changes(10));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    // Requested before 10, and stored after it.
+    engine.apply({ channelId: CHANNEL_ID, seq: '9', reset: true });
+    await debounced();
+    expect(asked()).toEqual(['10', '9']);
+    expect(engine.seq()).toBe('10');
+  });
+
+  it.each(['reset', 'evicted'] as const)(
+    'does not trust a read the device was %s under',
+    async (kind) => {
+      const { engine, runtime, asked, read } = setup('8', () => changes(8));
+      runtime.onConnected();
+      const mark = runtime.mark(CHANNEL_ID);
+      engine.push(kind);
+      read('8', mark);
+      await runtime.ensureCurrent(CHANNEL_ID);
+      expect(asked()).toEqual(['8']);
+    }
+  );
+
+  it('does not trust a catch-up the device was reset under', async () => {
+    const answer = Promise.withResolvers<ChannelChangesPage>();
+    const { engine, runtime, asked } = setup('10', () =>
+      asked().length === 1 ? answer.promise : changes(10)
+    );
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    const first = runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(0);
+    engine.apply({ channelId: CHANNEL_ID, seq: '9', reset: true });
+    answer.resolve(changes(10));
+    await first;
+    await debounced();
+    expect(asked()).toEqual(['10', '9']);
+    expect(engine.seq()).toBe('10');
+  });
+
+  it('believes a gap below the sequence it remembers', async () => {
+    const { engine, runtime, asked, read } = setup('12', () => changes(12));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    // An acknowledgement from before the device was lowered arrives after.
+    read('12');
+    engine.setSeq('10');
+    const outcome = engine.apply({
+      channelId: CHANNEL_ID,
+      seq: '12',
+      watermark: { kind: 'advance', from: '11' },
+    });
+    expect(outcome.outcome).toBe('gap');
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '12' }, outcome);
+    await debounced();
+    expect(asked()).toEqual(['12', '10']);
+    expect(engine.seq()).toBe('12');
   });
 });
 
@@ -539,10 +624,10 @@ describe('catch-up', () => {
 
 describe('connections', () => {
   it('catches up the channels on screen after a reconnect', async () => {
-    const { runtime, asked } = setup('5', () => changes(8));
+    const { runtime, asked, deviceRead } = setup('5', () => changes(8));
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
-    runtime.noteStoredSeq(CHANNEL_ID, '5');
+    deviceRead('5');
     runtime.onDisconnected();
     runtime.onConnected();
     await debounced();

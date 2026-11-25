@@ -83,6 +83,7 @@ export function channelEngine(initial: string | null) {
       }
       for (const id of args.removedIds ?? []) {
         if ((records.get(id)?.stamp ?? seq) > seq) continue;
+        if ((removed.get(id) ?? seq) > seq) continue;
         records.delete(id);
         removed.set(id, seq);
       }

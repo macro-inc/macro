@@ -1,3 +1,4 @@
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import {
   CHANNEL_TIMELINE_HEAD,
@@ -6,6 +7,7 @@ import {
 import type { Message } from '@service-storage/messages';
 import { until } from '@solid-primitives/promise';
 import { onlineManager } from '@tanstack/solid-query';
+import { CombinedError } from '@urql/core';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
@@ -25,6 +27,13 @@ import {
 
 const trace = vi.hoisted(() => ({ depth: 0 }));
 
+const span = vi.hoisted(() => ({
+  setAttr: () => undefined,
+  error: () => undefined,
+  run: <T>(operation: () => T) => operation(),
+  span: async (_name: string, run: (child: unknown) => unknown) => run(span),
+}));
+
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: {
@@ -40,8 +49,7 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
         }
       },
     }),
-    span: async (_name: string, run: (span: unknown) => unknown) =>
-      run({ setAttr: () => undefined, run: <T>(op: () => T) => op() }),
+    span: async (_name: string, run: (span: unknown) => unknown) => run(span),
   },
 }));
 
@@ -103,7 +111,7 @@ function runtime() {
       return 'current' as const;
     }),
     inTrace,
-    epoch: () => 0,
+    mark: () => ({ epoch: 0, seq: null }),
     change: () => {
       for (const listener of listeners) listener('changed');
     },
@@ -269,7 +277,10 @@ describe('createLocalChannelThread', () => {
     );
     await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
     expect(sync.open).toHaveBeenCalledWith(CHANNEL_ID);
-    expect(sync.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7');
+    expect(sync.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7', {
+      epoch: 0,
+      seq: null,
+    });
     expect(sync.ensureCurrent).toHaveBeenCalledWith(CHANNEL_ID);
     // The catch-up after the device read is part of the open's trace.
     expect(sync.inTrace).toEqual([true]);
@@ -349,10 +360,136 @@ describe('createLocalChannelThread', () => {
       expect(sync.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
         seq: '12',
         readSeq: '12',
-        epoch: 0,
+        mark: { epoch: 0, seq: null },
       })
     );
     expect(thread.replies()).toHaveLength(2);
+  });
+
+  it('reads a change that came while the device lost the thread and it loaded again', async () => {
+    const third = graphqlMessage(4, { threadId: ROOT_ID });
+    let covered = true;
+    let keys = [channelMessageKey(second.id), channelMessageKey(first.id)];
+    const host = fakeHost(() => devicePage(covered ? keys : [], { covered }), {
+      records: [root, first, second, third],
+    });
+    const sync = runtime();
+    const stored = Promise.withResolvers<ReturnType<typeof applied>>();
+    const server = serverThread();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, options) => ({
+      ...(await server(input, options)),
+      cached: stored.promise,
+    }));
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: sync, fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
+    covered = false;
+    sync.change();
+    await vi.waitFor(() => expect(fetchPage).toHaveBeenCalled());
+
+    // The answer is stored, and another reply, before the store is known of.
+    covered = true;
+    keys = [channelMessageKey(third.id), ...keys];
+    sync.change();
+    stored.resolve(applied('12'));
+    await vi.waitFor(() => expect(thread.replies()).toHaveLength(3));
+    dispose();
+  });
+
+  it('shows no more of a thread the server says is gone', async () => {
+    let covered = true;
+    const host = fakeHost(() => devicePage([], { covered }), {
+      records: [root],
+    });
+    const sync = runtime();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => {
+      throw new CombinedError({
+        graphQLErrors: [{ message: 'gone', extensions: { code: 'NOT_FOUND' } }],
+      });
+    });
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: sync, fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    await vi.waitFor(() => expect(thread.thread()?.root.id).toBe(ROOT_ID));
+    covered = false;
+    sync.change();
+    await vi.waitFor(() => expect(thread.thread()).toBeUndefined());
+    // The code the app's readers know a missing thread by.
+    expect(thrownResultErrorHasCode(thread.error(), 'NOT_FOUND')).toBe(true);
+    dispose();
+  });
+
+  it('shows nothing of the thread it was on before', async () => {
+    const other = graphqlMessage(5);
+    const [rootId, setRootId] = createSignal(ROOT_ID);
+    const host = fakeHost(
+      ({ threadRootId }) =>
+        devicePage([], { covered: threadRootId === ROOT_ID }),
+      { records: [root, other] }
+    );
+    const answer = Promise.withResolvers<never>();
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: runtime(), fetchPage: () => answer.promise },
+        CHANNEL_ID,
+        rootId,
+        () => true,
+        () => undefined
+      ),
+    }));
+    await vi.waitFor(() => expect(thread.thread()?.root.id).toBe(ROOT_ID));
+    setRootId(other.id);
+    expect(thread.thread()).toBeUndefined();
+    expect(thread.isPending()).toBe(true);
+    answer.reject(new Error('refused'));
+    await vi.waitFor(() => expect(thread.error()).toBeDefined());
+    expect(thread.thread()).toBeUndefined();
+    dispose();
+  });
+
+  it('tells the runtime what the device holds each time it reads it', async () => {
+    let seq = '7';
+    const host = fakeHost(
+      () => devicePage([channelMessageKey(first.id)], { seq }),
+      { records: [root, first] }
+    );
+    const sync = runtime();
+    const dispose = createRoot((dispose) => {
+      createLocalChannelThread(
+        { host, runtime: sync, fetchPage: serverThread() },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      );
+      return dispose;
+    });
+    await vi.waitFor(() => expect(sync.noteStoredSeq).toHaveBeenCalled());
+    seq = '5';
+    sync.change();
+    await vi.waitFor(() =>
+      expect(sync.noteStoredSeq).toHaveBeenLastCalledWith(CHANNEL_ID, '5', {
+        epoch: 0,
+        seq: null,
+      })
+    );
+    dispose();
   });
 
   it('stops asking the server for a thread whose device keeps losing what it stores', async () => {

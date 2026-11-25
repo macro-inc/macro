@@ -153,7 +153,7 @@ function fakeRuntime() {
     noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
-    epoch: () => 3,
+    mark: () => ({ epoch: 3, seq: null }),
     changed: () => {
       for (const listener of listeners) listener('changed');
     },
@@ -315,7 +315,10 @@ describe('createLocalChannelTimeline', () => {
     expect(timeline.hasNewer()).toBe(false);
     expect(fetchPage).not.toHaveBeenCalled();
     await waitFor(() => vi.mocked(runtime.ensureCurrent).mock.calls.length > 0);
-    expect(runtime.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7');
+    expect(runtime.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7', {
+      epoch: 3,
+      seq: null,
+    });
     expect(runtime.open).toHaveBeenCalledWith(CHANNEL_ID);
     // One touch, no other write.
     expect(host.commits).toEqual([
@@ -652,7 +655,7 @@ describe('createLocalChannelTimeline', () => {
     expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
       seq: '9',
       readSeq: '9',
-      epoch: 3,
+      mark: { epoch: 3, seq: null },
     });
 
     mounted.addRow(graphqlMessage(3));
@@ -694,7 +697,7 @@ describe('createLocalChannelTimeline', () => {
     expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
       seq: '9',
       readSeq: '9',
-      epoch: 3,
+      mark: { epoch: 3, seq: null },
     });
     // The reload never blanks the window it shows.
     expect(shown.slice(shown.indexOf(2))).not.toContain(0);
@@ -1177,6 +1180,53 @@ describe('createLocalChannelTimeline', () => {
 
     expect(timeline.isMissingTarget()).toBe(true);
     expect(timeline.loadError()).toBe('NOT_FOUND');
+    dispose();
+  });
+
+  it('shows what is left when the message its window is around is deleted', async () => {
+    const rows = messages(120);
+    const gone = rows[60]!;
+    const left = rows.filter((row) => row !== gone);
+    const { fetchPage } = serverOver(() => left);
+    const { timeline, runtime, setHeld, dispose } = mount({
+      rows,
+      fetchPage,
+      around: gone.id,
+    });
+    await waitFor(() => ids(timeline).includes(gone.id));
+    const shown = ids(timeline);
+    expect(timeline.hasNewer()).toBe(true);
+
+    setHeld(false);
+    runtime.changed();
+    await waitFor(() => !ids(timeline).includes(gone.id));
+    await waitFor(() => !timeline.isLoadingOlder());
+    // Everything else it showed is still there.
+    expect(ids(timeline)).toEqual(
+      expect.arrayContaining(shown.filter((id) => id !== gone.id))
+    );
+    expect(timeline.isMissingTarget()).toBe(false);
+    dispose();
+  });
+
+  it('tells the runtime the lowest sequence a reread of its window found', async () => {
+    const { timeline, host, runtime, dispose } = mount({ rows: messages(2) });
+    await waitFor(() => timeline.entries().length === 2);
+    const seqs = ['6', '5'];
+    const read = host.channelTimeline;
+    host.channelTimeline = async (args) => {
+      const result = await read(args);
+      return result.kind === 'page'
+        ? { ...result, seq: seqs.shift() ?? '7' }
+        : result;
+    };
+    runtime.changed();
+    await waitFor(() => seqs.length < 2);
+    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 1);
+    expect(runtime.noteStoredSeq).toHaveBeenLastCalledWith(CHANNEL_ID, '6', {
+      epoch: 3,
+      seq: null,
+    });
     dispose();
   });
 

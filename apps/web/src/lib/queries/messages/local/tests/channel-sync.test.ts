@@ -57,21 +57,20 @@ const opened = () => {
   return { ...fixture, changes };
 };
 
-it('reads the open channels again when the engine is replaced over its storage', () => {
-  const { replace, changes } = opened();
-  replace('preserved');
-  expect(changes).toEqual(['resumed']);
-});
-
-it('leaves them to the reset when the storage went too', () => {
-  const { replace, changes } = opened();
-  replace('reset');
-  expect(changes).not.toContain('resumed');
-});
+// No push, reset notice or reconnect need follow either.
+it.each(['preserved', 'reset'] as const)(
+  'reads the open channels again when the engine is replaced, its storage %s',
+  (storage) => {
+    const { replace, changes } = opened();
+    replace(storage);
+    expect(changes).toEqual(['resumed']);
+  }
+);
 
 it('waits for a paused host to serve again', () => {
   const { replace, changes, availability } = opened();
   availability.paused = true;
   replace('preserved');
+  replace('reset');
   expect(changes).not.toContain('resumed');
 });

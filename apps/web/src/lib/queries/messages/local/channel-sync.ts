@@ -86,10 +86,10 @@ const replaceWithLatest: ChannelSyncDeps['replaceWithLatest'] = async (
 
 /**
  * The sync runtime of a cache host, made on first use. A storage reset or a
- * replaced engine makes it forget what it knew of each channel. With storage
- * kept, the channels on screen catch up: frames and reads can have failed
- * while the engine was away, and no reconnect need follow. While the host is
- * paused its `resumed` does that.
+ * replaced engine makes it forget what it knew of each channel, and the
+ * channels on screen are read and caught up again: the device may hold nothing
+ * of them, or have failed frames and reads while its engine was away, and no
+ * reconnect need follow. While the host is paused its `resumed` does that.
  */
 export function channelSyncRuntime(host: CacheHost): ChannelSyncRuntime {
   const existing = runtimes.get(host);
@@ -99,9 +99,9 @@ export function channelSyncRuntime(host: CacheHost): ChannelSyncRuntime {
     fetchChanges,
     replaceWithLatest,
   });
-  host.onCacheGenerationChanged(({ storage }) => {
+  host.onCacheGenerationChanged(() => {
     runtime.forgetAll();
-    if (storage === 'preserved' && !host.paused) runtime.resumed();
+    if (!host.paused) runtime.resumed();
   });
   runtimes.set(host, runtime);
   return runtime;

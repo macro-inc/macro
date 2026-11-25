@@ -57,7 +57,7 @@ function deps(
     })
   );
   const runtime = {
-    epoch: vi.fn(() => 3),
+    mark: vi.fn(() => ({ epoch: 3, seq: null })),
     noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
@@ -102,9 +102,12 @@ describe('runChannelPrewarmPass', () => {
     expect(runtime.noteServerRead).toHaveBeenCalledWith('fresh', {
       seq: '9',
       readSeq: '9',
-      epoch: 3,
+      mark: { epoch: 3, seq: null },
     });
-    expect(runtime.noteStoredSeq).toHaveBeenCalledWith('held', '4');
+    expect(runtime.noteStoredSeq).toHaveBeenCalledWith('held', '4', {
+      epoch: 3,
+      seq: null,
+    });
     expect(runtime.ensureCurrent).toHaveBeenCalledTimes(1);
     expect(runtime.ensureCurrent).toHaveBeenCalledWith('held');
   });

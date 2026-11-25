@@ -185,7 +185,7 @@ function setup({ retirable = false } = {}) {
   const changed = vi.fn();
   const release = runtime.open(CHANNEL_ID);
   runtime.onChanged(CHANNEL_ID, changed);
-  runtime.noteStoredSeq(CHANNEL_ID, '5');
+  runtime.noteStoredSeq(CHANNEL_ID, '5', runtime.mark(CHANNEL_ID));
   const stream = createChannelStream(network.client, runtime);
   stream.connected();
   return {
@@ -557,13 +557,13 @@ it('keeps the retry wait when reads find the device behind during an outage', ()
     // Three server pages load and store normally; the replay endpoint is down.
     for (let load = 0; load < 3; load += 1) {
       const seen = requests.length;
-      const epoch = runtime.epoch();
+      const mark = runtime.mark(CHANNEL_ID);
       const { seq } = engine.apply({
         channelId: CHANNEL_ID,
         seq: '7',
         watermark: { kind: 'lower' },
       });
-      runtime.noteServerRead(CHANNEL_ID, { seq, readSeq: '7', epoch });
+      runtime.noteServerRead(CHANNEL_ID, { seq, readSeq: '7', mark });
       await debounced();
       for (const request of requests.slice(seen)) request.fail();
       await vi.advanceTimersByTimeAsync(0);
