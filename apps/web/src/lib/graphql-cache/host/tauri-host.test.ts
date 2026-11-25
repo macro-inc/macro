@@ -404,7 +404,10 @@ describe('createTauriCacheHost', () => {
     notify({ payload: { revision: INITIAL_CACHE_REVISION } });
     expect(changed).not.toHaveBeenCalled();
     notify({ payload: { revision: INITIAL_CACHE_REVISION, reset: true } });
-    expect(changed).toHaveBeenCalledExactlyOnceWith({ storage: 'reset' });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({
+      storage: 'reset',
+      queue: 'reset',
+    });
     host.dispose();
   });
 

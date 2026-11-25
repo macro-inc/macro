@@ -381,8 +381,9 @@ pub const UNVERSIONED_STORAGE_VERSIONS: (u32, u32, u32) = (3, 3, 11);
 /// of both stay open after a deploy. Builds with matching versions share one
 /// database: only a healthy, graceful close and reopen preserves its files.
 /// Metadata is still validated on open, and a mismatch or an abrupt/uncertain
-/// owner loss physically resets both files, discarding every row, including
-/// queued mutations and optimistic layers.
+/// owner loss physically resets both files. The browser first copies the
+/// mutation queue out and imports it into the fresh database; every other row
+/// is discarded.
 pub fn cache_database_name(scope: &str, storage_schema_version: u32) -> String {
     let unversioned = legacy_cache_database_name(scope);
     if (

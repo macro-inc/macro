@@ -55697,6 +55697,24 @@
                 "description": "Every person involved, archived ones too."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "People merged away are filed under another company than the contact\nthat stays and hold a work address, or no address, so they can't\nchange company, as a contact edit couldn't move them: merge the\ncompanies first, or keep a contact filed under their company.",
+            "required": ["people", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["different_companies"]
+              },
+              "people": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OtherCompanyPerson"
+                },
+                "description": "The people who would change company."
+              }
+            }
           }
         ],
         "description": "Why a merge can't go ahead until someone changes the records."
@@ -58155,6 +58173,31 @@
           }
         },
         "additionalProperties": false
+      },
+      "OtherCompanyPerson": {
+        "type": "object",
+        "description": "A person a contact merge would move to another company.",
+        "required": ["contactId", "companyId", "companyName"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The company it is filed under."
+          },
+          "companyName": {
+            "type": "string",
+            "description": "That company's name, as listings show it."
+          },
+          "contactId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Contact id."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Contact name, when it has one."
+          }
+        }
       },
       "PairingDetails": {
         "type": "object",

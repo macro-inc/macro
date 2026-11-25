@@ -936,7 +936,7 @@ STL-402	not shown as the row says (selection toolbar with the selected rows; ext
 STL-403	The row shown in the reading pane is no longer passed `current` (so loses aria-current="true") in EmailList.tsx.
 STL-404	not shown as the row says (queued-send status above the Drafts list): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-405	not shown as the row says (active filter count on the drawer trigger): its rendering is switched off or changed in src/features/email-view/components/EmailFilterDrawer.tsx
-STL-406	All mail's title no longer names the selected tags (`tagViewTitle` returns nothing) in email-view-context.tsx, so the header keeps the tab's title.
+STL-406	All mail's title no longer names the selected tags and labels (`filterViewTitle` returns nothing) in email-view-context.tsx, so the header keeps the tab's title.
 STL-408	The toast after Undo in the "Moved to Trash" notice reads "Restored" instead of "Restored from Trash" in make-delete-action.ts.
 STL-500	The short date in an open message's header row is emptied in email-message-top-bar.tsx.
 STL-501	The snippet of a collapsed message row is squeezed into a zero-height box so it does not show, in collapsed-message.tsx.
@@ -1056,6 +1056,7 @@ STL-989	The touch list header in email-view.tsx shows an empty name outside the 
 STL-990	The Mail first-page reconciliation in mail/reconciliation.rs (soup_filter_cache_adapter) skips every thread with a queued write, so a thread trashed while its mark read is on its way stays in the list.
 STL-991	The mutation queue runner in mutation-queue-runner.ts never releases the lease a reloaded page left on the queue head, so Mark done after a reload that cut off a mark read waits behind it and the provider keeps the thread in the inbox.
 STL-996	The shared-thread response omits the reader’s synced reply draft. On reload the editor is missing even though the service holds the reply in the reader’s Drafts.
+STL-997	The title in email-thread-title.tsx has no line limit and no button for the rest, so a long subject shows all its lines and Show full subject is missing.
 STX-001	the text of "Loading accounts…" in the Read receipts list is changed in src/features/settings/email-settings.tsx
 STX-002	The Read receipts section's load error says "Accounts unavailable" instead of "Couldn't load accounts" in email-settings.tsx.
 STX-003	not shown as the row says ("Loading signatures…" / "Loading signature…"): its rendering is switched off or changed in src/features/settings/email-settings.tsx

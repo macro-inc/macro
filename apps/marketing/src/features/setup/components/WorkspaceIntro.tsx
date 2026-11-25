@@ -32,6 +32,10 @@ export function WorkspaceIntro(props: {
     );
   };
   onCleanup(() => burstAnimation?.cancel());
+
+  // The accent swaps in one frame and the burst is the only motion. Easing
+  // `--intro-accent` restyles the slide and repaints the glow, dot grid, icon
+  // and burst on every frame, which made picking a color lag on phones.
   const changeAccent = (color: string) => {
     if (color === accent().name) return;
     select(color);

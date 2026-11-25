@@ -5,6 +5,7 @@ import {
   searchOperatorCompletions,
   searchTokenAtEnd,
 } from '@app/features/next-soup/core/search-operator-completions';
+import type { SearchOperatorBinding } from '@app/features/next-soup/core/search-operators';
 import { SearchOperatorSuggestions } from '@app/features/next-soup/soup-view/filters-bar/search-operator-suggestions';
 import { createSearchOperatorValues } from '@app/features/next-soup/soup-view/filters-bar/search-operator-values';
 import { t } from '@app/lib/i18n';
@@ -42,14 +43,17 @@ function focusSearchAtEnd() {
 export function MobileSearchStarters(props: {
   query: Accessor<string>;
   setQuery: (text: string) => void;
+  /** What the opener's tokens stand for, which only these read as operators. */
+  bindings?: Accessor<readonly SearchOperatorBinding[]>;
 }) {
+  const bindings = () => props.bindings?.() ?? [];
   const items = createMemo(() =>
     // A starter whose operator no kind left can meet is left out (Date and
     // Unread beside `type:task`), rather than written as a word.
     SEARCH_STARTERS.filter((starter) =>
-      searchStarterApplies(props.query(), starter)
+      searchStarterApplies(props.query(), starter, bindings())
     ).map((starter) => {
-      const set = searchStarterValue(props.query(), starter);
+      const set = searchStarterValue(props.query(), starter, bindings());
       return {
         value: starter,
         label: (
@@ -61,7 +65,7 @@ export function MobileSearchStarters(props: {
     })
   );
   const start = (starter: SearchStarter) => {
-    props.setQuery(startSearchOperator(props.query(), starter));
+    props.setQuery(startSearchOperator(props.query(), starter, bindings()));
     focusSearchAtEnd();
   };
   return (

@@ -14973,7 +14973,24 @@ export const MarkNotificationsSeen = z.object({
 });
 
 export const MergeRecords = z.object({
-  recordType: z.literal('company'),
+  recordType: z.any().superRefine((x, ctx) => {
+    const schemas = [z.literal('company'), z.literal('contact')];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
   survivorId: z.string().uuid(),
   sourceIds: z.array(z.string().uuid()),
   revision: z.string(),
@@ -15282,7 +15299,24 @@ export const OpenDirectMessageResponse = z.object({
 });
 
 export const PreviewMerge = z.object({
-  recordType: z.literal('company'),
+  recordType: z.any().superRefine((x, ctx) => {
+    const schemas = [z.literal('company'), z.literal('contact')];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
   survivorId: z.string().uuid(),
   sourceIds: z.array(z.string().uuid()),
 });

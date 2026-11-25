@@ -10,6 +10,12 @@ const entry = vi.hoisted(() => ({
   replace: vi.fn(),
   navigate: vi.fn(),
   comment: undefined as string | undefined,
+  link: { section: '' },
+  setLink: vi.fn(),
+}));
+
+vi.mock('@app/lib/split-router', () => ({
+  createSearchParams: () => [entry.link, entry.setLink],
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -90,6 +96,8 @@ afterEach(() => {
   entry.replace.mockReset();
   entry.navigate.mockReset();
   entry.comment = undefined;
+  entry.link = { section: '' };
+  entry.setLink.mockReset();
 });
 
 it('shows the contact a merged one went into in place of it', () => {
@@ -155,6 +163,29 @@ it('opens another contact previewed in the same entry on its overview', () => {
 });
 
 it('opens a contact on its overview when its entry holds no section', () => {
+  render(() => <ContactBlockAdapter />);
+  expect(screen.getByText('Showing overview')).toBeTruthy();
+});
+
+it('opens on the section a link names, once, then takes it out of the URL', () => {
+  entry.link = { section: 'tasks' };
+  render(() => <ContactBlockAdapter />);
+  expect(screen.getByText('Showing tasks')).toBeTruthy();
+  expect(entry.setLink).toHaveBeenCalledExactlyOnceWith(
+    { section: '' },
+    { history: 'replace' }
+  );
+});
+
+it('opens on its overview when a link names a company-only section', () => {
+  entry.link = { section: 'team' };
+  render(() => <ContactBlockAdapter />);
+  expect(screen.getByText('Showing overview')).toBeTruthy();
+});
+
+it('opens on its overview when a link names a company-only section over a kept one', () => {
+  entry.state = { 'crm.recordSection:contact:contact-1': 'tasks' };
+  entry.link = { section: 'team' };
   render(() => <ContactBlockAdapter />);
   expect(screen.getByText('Showing overview')).toBeTruthy();
 });

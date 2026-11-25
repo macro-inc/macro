@@ -1196,11 +1196,11 @@ Reviews and Scheduling can be moved into the dock when enabled. Scheduling
 opens `/app/scheduling`, highlights while active, and uses header islands for its
 section and Personal/team owner drawers; it does not add a search-scope pill.
 
-Dock navigation, Search, filter pills, and create-menu taps do not trigger
-haptics. Buttons activate on click/release. Holding a button only shows its
-pressed state; cancelling the touch does not navigate. More views also opens on
-release so holding its trigger cannot drag or dismiss the opening sheet. Mouse,
-keyboard, and assistive activation use the normal click behavior.
+No dock, Search, filter pill, or create-menu tap triggers haptics. Buttons
+activate on click/release. Holding a button only shows its pressed state;
+cancelling the touch does not navigate. More views also opens on release so
+holding its trigger cannot drag or dismiss the opening sheet. Mouse, keyboard,
+and assistive activation use the normal click behavior.
 
 The dock's More views menu uses the same rounded glass bottom sheet as filters,
 with a blurred backdrop, drag handle, and an even 8px outer inset. The home
@@ -1299,25 +1299,18 @@ Project opens the native project composer; Folder remains the Files folder actio
 
 ## Mobile glass feedback
 
-In the native iOS app, glass presses animate the enclosing surface over 300ms.
-Round buttons grow by 28%; horizontal and vertical pills and grouped controls
-extend their glass fill and rim by up to 6px per edge, with 18% icon growth around
-each icon's center. The Duo navigation pill keeps this bounded expansion when tall.
-Labels and layout stay fixed; icons remain visually aligned through release.
-Selecting or deselecting a pill updates its fill and text together, including
-during release or a rapid second tap. The fill changes with a radial spotlight
-centered on the touch, brightening the surface in both light and dark themes.
-The spotlight follows the finger while it moves within the surface, updating
-at most once per animation frame.
-These iOS surfaces omit the native tap highlight; the spotlight supplies feedback.
-Release, cancellation, dragging outside, or losing window focus restores the
-surface. Disabled controls stay still; reduced motion keeps only the static
-color feedback. Android and web keep normal tap feedback without this expansion
-or spotlight.
+Glass buttons, inputs, the dock, and header islands look and respond the same
+in the iOS app, the Android app, and a mobile browser. Their edge is an even 1px
+hairline with no bevel or highlight, and a press shows the normal tap feedback:
+surfaces do not grow, spotlight, or trigger haptics. Haptics in the native apps
+confirm only gestures: a long press, a swipe row or pull to refresh crossing its
+threshold, and reordering the dock in Customize dock.
 
 ## Routines
 
-Open **Agents → Routines** for your routines. Opening a routine updates the URL
+Open **Agents → Routines**, or **Go to Routines** in the command menu (no `g`
+letter; always the list, even from an open routine),
+for your routines. Opening a routine updates the URL
 to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
 URL restores that routine; browser Back and Forward restore the list or detail.
 Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.

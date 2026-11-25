@@ -119,14 +119,14 @@ async fn schema_change_cost_on_a_retained_browser_cache() {
             place(&bytes).await;
             RUNTIME_SCHEMA.with(|slot| *slot.borrow_mut() = Some(Arc::clone(schema)));
             let started = js_sys::Date::now();
-            let (engine, outcome, change) =
+            let (engine, outcome, _, change) =
                 open_cache_inner(BENCH_SCOPE.into(), None, false, None, false)
                     .await
                     .expect("open bench cache");
             let open_ms = js_sys::Date::now() - started;
             resolved(engine.close()).await;
             let started = js_sys::Date::now();
-            let (engine, _, again) = open_cache_inner(BENCH_SCOPE.into(), None, false, None, false)
+            let (engine, _, _, again) = open_cache_inner(BENCH_SCOPE.into(), None, false, None, false)
                 .await
                 .expect("reopen bench cache");
             let reopen_ms = js_sys::Date::now() - started;
@@ -151,7 +151,7 @@ async fn schema_change_cost_on_a_retained_browser_cache() {
         destroy_cache(BENCH_SCOPE.into())
             .await
             .expect("reset bench cache");
-        let (engine, _, _) = open_cache_inner(BENCH_SCOPE.into(), None, false, None, false)
+        let (engine, ..) = open_cache_inner(BENCH_SCOPE.into(), None, false, None, false)
             .await
             .expect("open reset cache");
         let reset_ms = js_sys::Date::now() - started;

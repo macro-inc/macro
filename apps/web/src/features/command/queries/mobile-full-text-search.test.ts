@@ -107,3 +107,32 @@ it('keeps listed rows settled while an operator-only search refetches', () => {
     dispose();
   });
 });
+
+it("applies the opener's bound tag by id, beside a word and alone", () => {
+  createRoot((dispose) => {
+    const binding = {
+      token: 'tag:"🎉"',
+      tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+    };
+    const [query, setQuery] = createSignal('tag:"🎉" launch');
+    createMobileFullTextSearch(
+      query,
+      () => LOOKUP,
+      () => [binding]
+    );
+    const options = capture.options!;
+    // The bound token goes with the request by id, not as a word.
+    expect(options.text()).toBe('launch');
+    expect(
+      JSON.stringify(
+        options.buildRequest({ query: 'launch', matchType: 'partial' })
+      )
+    ).toContain('opt-1');
+
+    setQuery('tag:"🎉"');
+    expect(options.enabled?.()).toBe(false);
+    expect(capture.browse?.options().enabled).toBe(true);
+    expect(JSON.stringify(capture.browse?.request().body)).toContain('opt-1');
+    dispose();
+  });
+});

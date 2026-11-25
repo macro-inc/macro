@@ -1,6 +1,7 @@
 import { isUnfinishedEmailSearchOperator } from '@app/features/email-view/search/email-search-operators';
 import {
   isUnfinishedSearchOperator,
+  type SearchOperatorBinding,
   searchOperatorSpans,
   splitSearchTerms,
 } from '@app/features/next-soup/core/search-operators';
@@ -22,13 +23,14 @@ export function shouldUseUniversalInput(text: string, active = false): boolean {
  */
 export function shouldUseUniversalInputForSearch(
   text: string,
-  active = false
+  active = false,
+  bindings: readonly SearchOperatorBinding[] = []
 ): boolean {
   if (!text.trim()) return false;
   if (active) return true;
   let rest = '';
   let at = 0;
-  for (const { start, end } of searchOperatorSpans(text)) {
+  for (const { start, end } of searchOperatorSpans(text, bindings)) {
     rest += text.slice(at, start);
     at = end;
   }

@@ -186,20 +186,26 @@ pub fn alias_target(record: &Record) -> Option<&EntityKey<'static>> {
 /// read: an alias, a coalescing UUID and a deletion tombstone.
 const IDENTITY_METADATA_FIELDS: [&str; 3] = [ALIAS_FIELD, MUTATION_UUID_FIELD, DELETED_FIELD];
 
-/// `record` with only its identity metadata, its `id` and its `__typename`,
-/// or `None` when it holds no identity metadata: what a record whose copied
-/// content is retired keeps.
-pub fn identity_metadata(mut record: Record) -> Option<Record> {
+/// Drop everything from a record but its identity metadata, its `id` and its
+/// `__typename`. Returns false, and changes nothing, when it has none.
+pub fn retain_metadata(record: &mut Record) -> bool {
     if !IDENTITY_METADATA_FIELDS
         .iter()
         .any(|field| record.fields.contains_key(*field))
     {
-        return None;
+        return false;
     }
     record.fields.retain(|field, _| {
-        IDENTITY_METADATA_FIELDS.contains(&field.as_str()) || field == "id" || field == "__typename"
+        IDENTITY_METADATA_FIELDS.contains(&field.as_str())
+            || matches!(field.as_str(), "id" | "__typename")
     });
-    Some(record)
+    true
+}
+
+/// `record` as [`retain_metadata`] leaves it, or `None` when it holds no
+/// identity metadata: what a record whose copied content is retired keeps.
+pub fn identity_metadata(mut record: Record) -> Option<Record> {
+    retain_metadata(&mut record).then_some(record)
 }
 
 /// Whether the stored record `bytes` ([`codec::encode_record`]'s output)

@@ -166,6 +166,15 @@ merge is available through `POST /crm/merges/preview` then `POST /crm/merges`,
 the SDK's `crm.merges`, and the agent's PreviewMerge and MergeRecords tools.
 Verify with two throwaway companies on desktop and at phone width.
 
+Duplicate people (contacts) have no merge screen yet: team admins and owners
+merge them through the same routes with `recordType: "contact"`, the SDK's
+`crm.merges.previewContacts` and `mergeContacts`, or the same tools. Verify
+with two throwaway contacts: the review lists the addresses that join and the
+values that differ, and a contact under another company with a work address,
+or none, blocks the merge (`different_companies`). After the commit, the
+contact that stays has every address, pipeline entry, task reference and
+discussion message, and the merged contact's old link opens it.
+
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
 the field; Close or Escape clears the query and returns to the icon.
@@ -309,6 +318,9 @@ open the shared **Switch view** bottom drawer: every available section
 has an icon and label, with a check beside the current section. Choosing a section
 closes the drawer and updates the header label; Escape, backdrop tap, and drag
 also dismiss it. Focus returns to the section trigger. Contacts do not show Team.
+A Customers record link with a section (`/app/companies/company/<id>/team`)
+opens on a phone on that section of the record's own page; a section the
+record type lacks opens Overview.
 The workspace's scrollable mobile view strip is unchanged. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.

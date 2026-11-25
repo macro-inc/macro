@@ -2005,7 +2005,7 @@ export function normalizedCacheExchange(
         cleanups.push(
           host.onCacheGenerationChanged((change) => {
             cacheGeneration += 1;
-            if (change.storage === 'reset') mutationQueue.resetStorage();
+            if (change.queue === 'reset') mutationQueue.resetStorage();
             liveQueries.clear();
             documentReader.clear();
             mutationQueue.wake();

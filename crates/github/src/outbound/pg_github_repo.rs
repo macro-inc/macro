@@ -70,7 +70,7 @@ impl GithubRepo for PgGithubRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn get_github_link_by_user_id<'a>(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'a>>,

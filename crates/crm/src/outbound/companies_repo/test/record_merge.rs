@@ -1506,3 +1506,778 @@ async fn a_pipeline_cell_another_merge_is_writing_is_read_after_it(pool: PgPool)
         vec![vec![other.to_string()]]
     );
 }
+
+const CONTACTS_PROPERTY: &str = "00000001-0000-0000-0000-000000000013";
+
+/// A consumer provider; no reserved example domain is one.
+const PERSONAL_DOMAIN: &str = "gmail.com";
+
+fn contact_targets(survivor: Uuid, sources: &[Uuid]) -> MergeTargets {
+    MergeTargets::new(MergeRecordType::Contact, survivor, sources.iter().copied()).unwrap()
+}
+
+fn contact_refs(ids: &[Uuid]) -> Value {
+    json!({
+        "type": "EntityReference",
+        "value": ids.iter().map(|id| json!({"entity_type": "CONTACT", "entity_id": id.to_string()})).collect::<Vec<_>>(),
+    })
+}
+
+impl World {
+    /// A contact holding `addresses`, the first as its primary, interacted
+    /// with `days_ago` days back.
+    async fn contact(
+        &self,
+        company: Option<Uuid>,
+        name: Option<&str>,
+        addresses: &[&str],
+        days_ago: i32,
+    ) -> Uuid {
+        let id = Uuid::now_v7();
+        sqlx::query(
+            "INSERT INTO crm_contacts (id, team_id, company_id, name, email, first_interaction, last_interaction)
+             VALUES ($1, $2, $3, $4, $5, now() - make_interval(days => $6), now() - make_interval(days => $6))",
+        )
+        .bind(id)
+        .bind(self.team)
+        .bind(company)
+        .bind(name)
+        .bind(addresses.first().copied())
+        .bind(days_ago)
+        .execute(&self.pool)
+        .await
+        .unwrap();
+        for address in addresses.iter().skip(1) {
+            sqlx::query("INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, $2)")
+                .bind(id)
+                .bind(address)
+                .execute(&self.pool)
+                .await
+                .unwrap();
+        }
+        id
+    }
+
+    async fn mailbox(&self, contact: Uuid, link: Uuid) {
+        sqlx::query("INSERT INTO crm_contact_sources (contact_id, link_id) VALUES ($1, $2)")
+            .bind(contact)
+            .bind(link)
+            .execute(&self.pool)
+            .await
+            .unwrap();
+    }
+
+    async fn addresses(&self, contact: Uuid) -> Vec<String> {
+        let mut addresses: Vec<String> =
+            sqlx::query_scalar("SELECT email FROM crm_contact_emails WHERE contact_id = $1")
+                .bind(contact)
+                .fetch_all(&self.pool)
+                .await
+                .unwrap();
+        addresses.sort();
+        addresses
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_contact_merge_moves_addresses_mailboxes_and_everything_naming_the_merged_people(
+    pool: PgPool,
+) {
+    let world = World::new(pool.clone()).await;
+    let acme = world.company("Acme", true, &["acme.example.com"]).await;
+    let stays = world
+        .contact(
+            Some(acme),
+            Some("Pat Lee"),
+            &["pat@acme.example.com", "shared@acme.example.com"],
+            10,
+        )
+        .await;
+    let merged = world
+        .contact(
+            Some(acme),
+            Some("Pat L."),
+            &[
+                "pat.lee@acme.example.com",
+                "pat@home.example.com",
+                "shared@acme.example.com",
+            ],
+            30,
+        )
+        .await;
+    let unfiled = world
+        .contact(None, None, &["p.lee@mail.example.com"], 1)
+        .await;
+    // The later contact by id holds the oldest address, so the review lists
+    // the addresses joining by date, as the merge places them, not by contact.
+    sqlx::query(
+        "UPDATE crm_contact_emails SET created_at = now() - interval '1 day' WHERE contact_id = $1",
+    )
+    .bind(unfiled)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let link_both = insert_email_link(&pool, OWNER, "owner@acme.example.com")
+        .await
+        .unwrap();
+    let link_merged = insert_email_link(&pool, OWNER, "owner2@acme.example.com")
+        .await
+        .unwrap();
+    world.mailbox(stays, link_both).await;
+    world.mailbox(merged, link_both).await;
+    world.mailbox(merged, link_merged).await;
+    world.mailbox(unfiled, link_merged).await;
+
+    let phone = world.definition("Phone", false).await;
+    let notes = world.definition("My notes", true).await;
+    world
+        .value(&stays.to_string(), "CONTACT", phone, text("555-0100"))
+        .await;
+    world
+        .value(&merged.to_string(), "CONTACT", phone, text("555-0199"))
+        .await;
+    world
+        .value(&stays.to_string(), "CONTACT", notes, text("keep"))
+        .await;
+    world
+        .value(&merged.to_string(), "CONTACT", notes, text("private"))
+        .await;
+    world
+        .value(
+            "task-1",
+            "DOCUMENT",
+            CONTACTS_PROPERTY.parse().unwrap(),
+            contact_refs(&[merged, stays]),
+        )
+        .await;
+
+    let owner = Viewer {
+        user_id: user(OWNER),
+        acting_bot: None,
+    };
+    let pipeline = world
+        .workflows
+        .create(
+            &owner,
+            NewPipeline {
+                name: "Hiring".into(),
+                record_type: Some(PipelineRecordType::Contact),
+                sharing: PipelineSharing::Team,
+                stages: Vec::new(),
+                fields: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline
+        .pipeline;
+    for contact in [stays, merged] {
+        world
+            .workflows
+            .add(
+                &owner,
+                pipeline.id,
+                vec![EntryAddition {
+                    record: Some(RecordTarget::Id(contact)),
+                    set: Vec::new(),
+                }],
+                false,
+            )
+            .await
+            .unwrap();
+    }
+
+    let root = Uuid::now_v7();
+    for (id, thread) in [(root, None), (Uuid::now_v7(), Some(root))] {
+        sqlx::query(
+            "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, thread_id, sender_id, content)
+             VALUES ($1, 'crm_contact', $2, $3, $4, 'note')",
+        )
+        .bind(id)
+        .bind(merged.to_string())
+        .bind(thread)
+        .bind(OWNER)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query(
+        "INSERT INTO favorite (user_id, entity_type, entity_id) VALUES ($1, 'crm_contact', $2)",
+    )
+    .bind(OWNER)
+    .bind(merged.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+    world
+        .sharer(&EmailRuleSet {
+            schema_version: 1,
+            include: vec![EmailInclusionRule::Contact { contact_id: merged }],
+        })
+        .await;
+
+    let merge = contact_targets(stays, &[merged, unfiled]);
+    let preview = world.merges.preview(&world.scope(), &merge).await.unwrap();
+    assert_eq!(preview.record_type, MergeRecordType::Contact);
+    assert_eq!(preview.survivor.name, "Pat Lee");
+    let mut names: Vec<&str> = preview
+        .sources
+        .iter()
+        .map(|source| source.name.as_str())
+        .collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        vec!["Pat L.", "p.lee@mail.example.com"],
+        "a contact without a name is named by its address"
+    );
+    assert_eq!(
+        preview.identifiers,
+        [
+            "pat@acme.example.com",
+            "shared@acme.example.com",
+            "p.lee@mail.example.com",
+            "pat.lee@acme.example.com",
+            "pat@home.example.com",
+        ]
+        .map(String::from),
+        "its own addresses first, its primary first, then the others' by date, a shared one once"
+    );
+    assert_eq!(preview.moves.contacts, 0, "people are the records merged");
+    assert_eq!(preview.moves.pipeline_entries, 1);
+    assert_eq!(preview.moves.references, 1);
+    assert_eq!(preview.moves.discussion_messages, 2);
+    assert_eq!(preview.shared_pipelines.len(), 1);
+    assert_eq!(preview.shared_pipelines[0].entries_after, 2);
+    assert_eq!(
+        preview
+            .conflicts
+            .iter()
+            .map(|conflict| conflict.property_id)
+            .collect::<Vec<_>>(),
+        vec![phone],
+        "only the team-visible difference is shown"
+    );
+    let sharing = preview.sharing_rules.clone().unwrap();
+    assert_eq!((sharing.teammates, sharing.keep_fits), (1, true));
+    assert!(preview.blocked.is_none());
+
+    let sources_before: Vec<(Uuid, Uuid, Uuid)> = sqlx::query_as(
+        "SELECT id, contact_id, link_id FROM crm_contact_sources WHERE contact_id = ANY($1)",
+    )
+    .bind(vec![merged, unfiled])
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let (first_before, last_before): (
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+    ) = sqlx::query_as(
+        "SELECT first_interaction, last_interaction FROM crm_contacts WHERE id = $1",
+    )
+    .bind(stays)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let outcome = world.merge(&merge, SharingRulesChoice::Keep).await.unwrap();
+    assert_eq!(outcome.record_type, MergeRecordType::Contact);
+    assert_eq!(outcome.survivor_id, stays);
+    let saved_order: Vec<String> = sqlx::query_scalar(
+        "SELECT e.email FROM crm_contact_emails e JOIN crm_contacts c ON c.id = e.contact_id
+         WHERE e.contact_id = $1 ORDER BY e.email = c.email DESC, e.created_at, e.email",
+    )
+    .bind(stays)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        saved_order, preview.identifiers,
+        "the review lists the addresses as the merge saves them"
+    );
+
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM crm_contacts WHERE id = ANY($1)")
+        .bind(vec![merged, unfiled])
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 0, "the merged contacts are deleted");
+    let aliases: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT retired_id, contact_id FROM crm_contact_aliases WHERE contact_id = $1 ORDER BY retired_id",
+    )
+    .bind(stays)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let mut expected = vec![(merged, stays), (unfiled, stays)];
+    expected.sort();
+    assert_eq!(aliases, expected, "their ids open the contact that stays");
+
+    assert_eq!(
+        world.addresses(stays).await,
+        [
+            "p.lee@mail.example.com",
+            "pat.lee@acme.example.com",
+            "pat@acme.example.com",
+            "pat@home.example.com",
+            "shared@acme.example.com",
+        ]
+        .map(String::from)
+    );
+    let primary: Option<String> = world
+        .scalar("SELECT email FROM crm_contacts WHERE id = $1", stays)
+        .await;
+    assert_eq!(primary.as_deref(), Some("pat@acme.example.com"));
+    let company: Option<Uuid> = world
+        .scalar("SELECT company_id FROM crm_contacts WHERE id = $1", stays)
+        .await;
+    assert_eq!(
+        company,
+        Some(acme),
+        "the contact that stays keeps its company"
+    );
+    let mut mailboxes: Vec<Uuid> =
+        sqlx::query_scalar("SELECT link_id FROM crm_contact_sources WHERE contact_id = $1")
+            .bind(stays)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    mailboxes.sort();
+    let mut expected_mailboxes = vec![link_both, link_merged];
+    expected_mailboxes.sort();
+    assert_eq!(mailboxes, expected_mailboxes, "each mailbox counts it once");
+    let (first, last, manual): (
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+        bool,
+    ) = sqlx::query_as(
+        "SELECT first_interaction, last_interaction, manually_created FROM crm_contacts WHERE id = $1",
+    )
+    .bind(stays)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(first < chrono::Utc::now() - chrono::Duration::days(29));
+    assert!(last > chrono::Utc::now() - chrono::Duration::days(2));
+    assert!(
+        manual,
+        "email cleanup must not delete the person kept together"
+    );
+
+    let phone_value: Value = sqlx::query_scalar(
+        "SELECT values FROM entity_properties WHERE entity_id = $1 AND property_definition_id = $2",
+    )
+    .bind(stays.to_string())
+    .bind(phone)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(phone_value, text("555-0100"), "the survivor's value wins");
+    let task_refs: Value = sqlx::query_scalar(
+        "SELECT values FROM entity_properties WHERE entity_id = 'task-1' AND property_definition_id = $1",
+    )
+    .bind(CONTACTS_PROPERTY.parse::<Uuid>().unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        task_refs,
+        contact_refs(&[stays]),
+        "the reference names it once"
+    );
+    assert_eq!(
+        named_in(&pool, &pipeline).await,
+        vec![vec![stays.to_string()], vec![stays.to_string()]],
+        "two entries stay two"
+    );
+    let discussion: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM comms_messages WHERE parent_entity_type = 'crm_contact' AND parent_entity_id = $1",
+    )
+    .bind(stays.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(discussion, 2);
+    let favorite: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM favorite WHERE entity_type = 'crm_contact' AND entity_id = $1",
+    )
+    .bind(stays.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(favorite, 1);
+    let activity: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM activity_events WHERE entity_type = 'crm_contact' AND entity_id = $1 AND action = 'record_merged'",
+    )
+    .bind(stays.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        activity, 1,
+        "the merge is one entry on the contact that stays"
+    );
+
+    let (_, rules) = world.active_rules().await;
+    assert_eq!(
+        rules.include,
+        vec![
+            EmailInclusionRule::Address {
+                address: "pat.lee@acme.example.com".into()
+            },
+            EmailInclusionRule::Address {
+                address: "pat@home.example.com".into()
+            },
+            EmailInclusionRule::Address {
+                address: "shared@acme.example.com".into()
+            },
+        ],
+        "keeping shares the merged contact's addresses, never the survivor"
+    );
+    // The log keeps every changed row by its key, with its value before.
+    let log: Vec<(String, String, Value, Value)> = sqlx::query_as(
+        "SELECT owner, table_name, row_key, previous FROM crm_merge_changes WHERE merge_id = $1",
+    )
+    .bind(outcome.merge_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let logged = |table: &str, key: Value| -> Vec<Value> {
+        log.iter()
+            .filter(|(owner, logged_table, row_key, _)| {
+                owner == "crm" && logged_table == table && *row_key == key
+            })
+            .map(|(_, _, _, previous)| previous.clone())
+            .collect()
+    };
+    for (address, from) in [
+        ("p.lee@mail.example.com", unfiled),
+        ("pat.lee@acme.example.com", merged),
+        ("pat@home.example.com", merged),
+    ] {
+        let previous = logged(
+            "crm_contact_emails",
+            json!({ "contact_id": stays, "email": address }),
+        );
+        assert_eq!(previous.len(), 1, "{address} is logged as moved once");
+        assert_eq!(
+            previous[0]["contact_id"],
+            json!(from),
+            "{address} came from its contact"
+        );
+    }
+    assert_eq!(
+        logged(
+            "crm_contact_emails",
+            json!({ "contact_id": merged, "email": "shared@acme.example.com" })
+        )
+        .len(),
+        1,
+        "the address the survivor already held is logged as it was"
+    );
+    assert_eq!(sources_before.len(), 3);
+    for (id, contact, link) in &sources_before {
+        let previous = logged("crm_contact_sources", json!({ "id": id }));
+        assert_eq!(previous.len(), 1, "mailbox source {link} is logged once");
+        assert_eq!(previous[0]["contact_id"], json!(contact));
+    }
+    let survivor_before = logged("crm_contacts", json!({ "id": stays }));
+    assert_eq!(survivor_before.len(), 1);
+    assert_eq!(survivor_before[0]["first_interaction"], json!(first_before));
+    assert_eq!(survivor_before[0]["last_interaction"], json!(last_before));
+    assert_eq!(survivor_before[0]["manually_created"], json!(false));
+    for (contact, primary) in [
+        (merged, json!("pat.lee@acme.example.com")),
+        (unfiled, json!("p.lee@mail.example.com")),
+    ] {
+        let deleted = logged("crm_contacts", json!({ "id": contact }));
+        assert_eq!(deleted.len(), 1, "a merged contact is logged as deleted");
+        assert_eq!(deleted[0]["email"], primary);
+    }
+    for retired in [merged, unfiled] {
+        assert_eq!(
+            logged("crm_contact_aliases", json!({ "retired_id": retired })).len(),
+            1
+        );
+    }
+    for (owner, table) in [
+        ("properties", "entity_properties"),
+        ("properties", "dropped_value"),
+        ("databases", "entity_properties"),
+        ("messages", "comms_messages"),
+        ("favorites", "favorite"),
+    ] {
+        assert!(
+            log.iter().any(|(o, t, _, _)| o == owner && t == table),
+            "{owner}.{table} is logged"
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_person_under_another_company_with_a_work_address_blocks_a_contact_merge(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let acme = world.company("Acme", true, &["acme.example.com"]).await;
+    let globex = world.company("Globex", true, &["globex.example.com"]).await;
+    let stays = world
+        .contact(Some(acme), Some("Pat"), &["pat@acme.example.com"], 1)
+        .await;
+    let at_work = world
+        .contact(Some(globex), Some("Pat G."), &["pat@globex.example.com"], 1)
+        .await;
+
+    let blocked = contact_targets(stays, &[at_work]);
+    let preview = world
+        .merges
+        .preview(&world.scope(), &blocked)
+        .await
+        .unwrap();
+    let Some(MergeBlock::DifferentCompanies { people }) = preview.blocked.clone() else {
+        panic!("expected the different-companies block");
+    };
+    assert_eq!(
+        people
+            .iter()
+            .map(|person| (
+                person.contact_id,
+                person.company_id,
+                person.company_name.as_str()
+            ))
+            .collect::<Vec<_>>(),
+        vec![(at_work, globex, "Globex")]
+    );
+    assert!(matches!(
+        world.merge(&blocked, SharingRulesChoice::Keep).await,
+        Err(MergeError::Conflict(MergeBlock::DifferentCompanies { .. }))
+    ));
+
+    let address = format!("pat@{PERSONAL_DOMAIN}");
+    let personal = world
+        .contact(Some(globex), Some("Pat"), &[address.as_str()], 1)
+        .await;
+    world
+        .merge(
+            &contact_targets(stays, &[personal]),
+            SharingRulesChoice::Keep,
+        )
+        .await
+        .unwrap();
+    let company: Option<Uuid> = world
+        .scalar("SELECT company_id FROM crm_contacts WHERE id = $1", stays)
+        .await;
+    assert_eq!(
+        company,
+        Some(acme),
+        "only personal addresses may join another company"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn archived_foreign_and_merged_contacts_are_refused(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world
+        .contact(None, Some("Pat"), &["pat@home.example.com"], 1)
+        .await;
+    let archived = world
+        .contact(None, Some("Old Pat"), &["old.pat@home.example.com"], 1)
+        .await;
+    sqlx::query("UPDATE crm_contacts SET hidden = TRUE WHERE id = $1")
+        .bind(archived)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        world
+            .merges
+            .preview(&world.scope(), &contact_targets(stays, &[archived]))
+            .await,
+        Err(MergeError::RecordHidden(id)) if id == archived
+    ));
+
+    let archived_company = world.company("Gone Inc", true, &["gone.example.com"]).await;
+    let under_archived = world
+        .contact(Some(archived_company), None, &["pat@gone.example.com"], 1)
+        .await;
+    sqlx::query("UPDATE crm_companies SET hidden = TRUE WHERE id = $1")
+        .bind(archived_company)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        world
+            .merges
+            .preview(&world.scope(), &contact_targets(stays, &[under_archived]))
+            .await,
+        Err(MergeError::RecordHidden(id)) if id == under_archived
+    ));
+
+    let other_team = Uuid::now_v7();
+    seed_team(&pool, other_team, "macro|other-owner@example.com")
+        .await
+        .unwrap();
+    let foreign = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO crm_contacts (id, team_id, email, first_interaction, last_interaction)
+         VALUES ($1, $2, 'pat@other.example.com', now(), now())",
+    )
+    .bind(foreign)
+    .bind(other_team)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        world
+            .merges
+            .preview(&world.scope(), &contact_targets(stays, &[foreign]))
+            .await,
+        Err(MergeError::RecordUnavailable)
+    ));
+
+    let twin = world
+        .contact(None, Some("Pat"), &["pat.twin@home.example.com"], 1)
+        .await;
+    world
+        .merge(&contact_targets(stays, &[twin]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+    let other = world
+        .contact(None, Some("Pat"), &["pat.again@home.example.com"], 1)
+        .await;
+    assert!(matches!(
+        world
+            .merges
+            .preview(&world.scope(), &contact_targets(other, &[twin]))
+            .await,
+        Err(MergeError::AlreadyMerged { record_id, current_id })
+            if record_id == twin && current_id == stays
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_contact_that_stays_without_an_address_takes_the_oldest_it_gains(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.contact(None, Some("Pat"), &[], 1).await;
+    let merged = world
+        .contact(
+            None,
+            None,
+            &["pat@home.example.com", "pat@mail.example.com"],
+            1,
+        )
+        .await;
+    world
+        .merge(&contact_targets(stays, &[merged]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+    let primary: Option<String> = world
+        .scalar("SELECT email FROM crm_contacts WHERE id = $1", stays)
+        .await;
+    assert_eq!(
+        primary.as_deref(),
+        Some("pat@home.example.com"),
+        "the merged contact's primary was its oldest address"
+    );
+    assert_eq!(
+        world.addresses(stays).await,
+        ["pat@home.example.com", "pat@mail.example.com"].map(String::from)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn merging_the_contact_that_stays_again_points_every_old_id_at_the_last_one(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let first = world
+        .contact(None, Some("Pat"), &["a@home.example.com"], 1)
+        .await;
+    let second = world
+        .contact(None, Some("Pat"), &["b@home.example.com"], 1)
+        .await;
+    let last = world
+        .contact(None, Some("Pat"), &["c@home.example.com"], 1)
+        .await;
+    world
+        .merge(&contact_targets(second, &[first]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+    world
+        .merge(&contact_targets(last, &[second]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+    let aliases: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT retired_id, contact_id FROM crm_contact_aliases WHERE retired_id = ANY($1) ORDER BY retired_id",
+    )
+    .bind(vec![first, second])
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(aliases, vec![(first, last), (second, last)]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_contact_merge_retry_returns_the_first_result_and_a_changed_review_is_refused(
+    pool: PgPool,
+) {
+    let world = World::new(pool.clone()).await;
+    let stays = world
+        .contact(None, Some("Pat"), &["pat@home.example.com"], 1)
+        .await;
+    let merged = world
+        .contact(None, Some("Pat"), &["pat2@home.example.com"], 1)
+        .await;
+    let merge = contact_targets(stays, &[merged]);
+    let command = reviewed_command(&world, &merge).await;
+    let first = world.merges.commit(&world.scope(), &command).await.unwrap();
+    let again = world.merges.commit(&world.scope(), &command).await.unwrap();
+    assert!(again.replayed);
+    assert_eq!(again.outcome, first.outcome);
+
+    let later = world
+        .contact(None, Some("Pat"), &["pat3@home.example.com"], 1)
+        .await;
+    let stale = reviewed_command(&world, &contact_targets(stays, &[later])).await;
+    sqlx::query(
+        "INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, 'pat4@home.example.com')",
+    )
+    .bind(later)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        world.merges.commit(&world.scope(), &stale).await,
+        Err(MergeError::PreviewStale)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn stopping_sharing_removes_a_contact_rule_without_pointing_it_at_the_survivor(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world
+        .contact(None, Some("Pat"), &["pat@home.example.com"], 1)
+        .await;
+    let merged = world
+        .contact(None, Some("Pat"), &["pat2@home.example.com"], 1)
+        .await;
+    world
+        .sharer(&EmailRuleSet {
+            schema_version: 1,
+            include: vec![
+                EmailInclusionRule::Contact { contact_id: merged },
+                EmailInclusionRule::Domain {
+                    domain: "partner.example.net".into(),
+                },
+            ],
+        })
+        .await;
+    world
+        .merge(&contact_targets(stays, &[merged]), SharingRulesChoice::Stop)
+        .await
+        .unwrap();
+    let (_, rules) = world.active_rules().await;
+    assert_eq!(
+        rules.include,
+        vec![EmailInclusionRule::Domain {
+            domain: "partner.example.net".into()
+        }]
+    );
+}

@@ -20,9 +20,10 @@ fn set_worker_schema(schema: Option<std::sync::Arc<cache_core::meta::Schema>>) {
 }
 
 async fn open(scope: &str) -> (CacheEngine, CacheOpenOutcome, JsSchemaChange) {
-    open_cache_inner(scope.into(), None, false, None, false)
+    let (engine, outcome, _, change) = open_cache_inner(scope.into(), None, false, None, false)
         .await
-        .expect("open cache")
+        .expect("open cache");
+    (engine, outcome, change)
 }
 
 async fn write_label(engine: &CacheEngine) {

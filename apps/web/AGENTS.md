@@ -392,6 +392,11 @@ and the Settings → Email sample following the Row style tabs. Its
 nested label by its own name, its whole name on hover, three items and then a
 count, none of Gmail's system or hidden labels) and none on narrow or phone
 rows; `ROW_LABELS_SCREENSHOT_DIR` saves its screenshots.
+`sidebar-labels.browser.e2e.ts` checks the sidebar's Labels section on desktop
+and phone (a row per inbox when all show, none for one picked inbox, a nested
+Gmail label under its parent, eight labels then `N more` holding the rest and
+Gmail's hidden ones, the open label marked); `SIDEBAR_LABELS_SCREENSHOT_DIR`
+saves its screenshots.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -438,9 +443,10 @@ and every answer, on desktop and phone, and wraps from the requester name stored
 the event (backend-free):
 `bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
 
-The desktop channel gutter's Mark done checks and notification list (docked in
-a wide pane, a popover in a narrow one, hidden when the gutter has no room)
-have a backend-free regression over the real checks, list and stacking:
+The desktop channel gutter's notification list (what was unread when the
+channel opened, each entry held until its check marks the stack done; docked
+in a wide pane, a popover in a narrow one, hidden when the gutter has no room)
+has a backend-free regression over the real list, snapshot and stacking:
 `bunx playwright test --config src/features/channel-notification-stacks/browser-test/playwright.config.ts`.
 
 Channel history keeps the message being read in place when a split opens or
@@ -453,7 +459,8 @@ Discussion link scrolling has a backend-free browser regression:
 
 Adding an agent teammate from Team → Members (its Invite Agent button,
 behind `enable-agent-teammates`; members see only Invite Human): the dialog waiting until the agent is
-online, falling back to the row after five seconds, a declined card and a size
+online, the fixed Add agent label and live price beside Cancel with a long
+name, falling back to the row after five seconds, a declined card and a size
 with no room in place, its row's Setting up step and failed Retry, the ready and failed notifications (Message, Connect Claude plan for
 admins only, Retry), Connect Claude plan's one-screen sign-in with its
 expired, rejected and unreachable states, its row's Claude sign-in and switch
@@ -1249,6 +1256,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   background work until a visible owner reopens storage, retaining accepted
   mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
+  A reset of storage (`openOutcome`) says nothing of the mutation queue, which a
+  recovery wipe carries over: end a mutation in flight or settle pending writes
+  as lost only on `queue: 'reset'`.
   A typed search held across an engine restart reaches the new engine first, and
   one already sent is not refused when the read budget expires; it has no
   network fallback. It still ends after the ordinary read timeout, Quick
@@ -1318,7 +1328,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep wide touch channel previews on `ChannelDetailLayout` with floating title/menu and call/invite islands, measured message clearance, and interactive navigation controls.
 - Anchor mobile floating page chrome to its owning workspace pane (`ViewShell.Main`, `ViewShell.Detail`, or a `CollectionPanes` frame), including composers and action bars; keep app navigation global and preserve mounted editors while resizing or collapsing navigation.
 - Use `MobileListLayout` for floating touch collection controls and their list-local fade; reserve its measured inset inside the scroller so sidebars stay clear and rows scroll behind the chrome. Give the outer wide-touch collection header twice the standard left chrome gutter to clear the bezel curve; retain the standard right gutter and narrow-touch spacing.
-- Limit whole-surface glass press scaling to nearly square controls; give horizontal and vertical navigation pills the bounded paint expansion in `glassPress.ts`.
+- Keep native mobile apps identical to the mobile browser: touch glass draws a flat hairline edge, with no press animation. Haptics fire only for the gestures the [mobile rule](../../.agents/rules/web/mobile.md#detection-and-input) lists.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Agent-opened panes (`features/agent-navigation`) open with `router.open` beside the agent's pane and never replace one; keep the person's active pane and focused element, the Undo toast, and the read hold (`useReadsHeldByAgentArrival` in read markers) when changing split opening, read markers or `TiledSplits` (its `data-split-pane` attribute drives the arrival motion). Undo keeps the read hold until the pane is gone, and plays the departure back when a leave guard keeps the pane. The tab id (`core/agent-session/ui-client.ts`) lives in sessionStorage, which a duplicated tab copies, so live pages compare ids over a BroadcastChannel and the one that took it later mints its own; the app shell takes it at startup. Agent navigation never runs on mobile: `agentNavigationRunsHere()` there is the one predicate that keeps the tab id off prompts, the id and its channel from starting, and the frame handler idle.
@@ -1346,7 +1356,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   first item" command, so a list on `useListInteractions` lands on its first
   row with no code in the view; when that command finds no row (a search with
   no results), the keys stay in the field. `wide` lets the open field take the rest of
-  the header (the view hides its other actions from `onOpenChange`), `open`
+  the header (the view hides its other actions from `onOpenChange`; left
+  empty, it closes once focus leaves the header), `open`
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
@@ -1374,7 +1385,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   session pane shares the split's hotkey scope. Covered by
   `ViewSidebar.test.tsx` and `AgentsSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
-- Use the unified model selector in every agent composer, including Home, new chats, inline and standalone sessions, and universal-input AI drafts. Reuse it for routine agent/model targets. Keep each host's saved preferences and session mutations; show Reasoning effort and Speed only when that host applies them. Retain the old controls unwired for reference.
+- Use the card-first unified model selector in every agent composer, including Home, new chats, inline and standalone sessions, and universal-input AI drafts. Reuse it for routine agent/model targets. Keep host preference and session mutation ownership; Thinking and Speed edit the card, while the name opens model selection. Retain old pickers and EffortSelector unwired for reference.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
   `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`; the same config's
   `changes-split.browser.e2e.ts` checks that a narrow PR split opens Changes over the PR, never as a split inside it.
