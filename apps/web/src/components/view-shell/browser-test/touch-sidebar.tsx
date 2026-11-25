@@ -33,6 +33,7 @@ import { createAppSplitRouterMiddleware } from '@components/app/split-layout/spl
 import { SplitPanel } from '@components/app/split-panel';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createWindowSize } from '@solid-primitives/resize-observer';
+import { pressHandlers } from '@ui';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { MobileListLayout } from '../MobileListLayout';
@@ -278,6 +279,7 @@ function CollectionWorkspaceFixture(
   const [localSelected, setSelected] = createSignal<string>();
   const selected = props.selected ?? localSelected;
   const [view, setView] = createSignal('all');
+  const [inbox, setInbox] = createSignal('all inboxes');
   const [dockPresses, setDockPresses] = createSignal(0);
   const sheetChrome = new URLSearchParams(location.search).has('sheet-chrome');
   const selectView = (next: string) => {
@@ -327,6 +329,13 @@ function CollectionWorkspaceFixture(
                 >
                   Recent items
                 </ViewSidebar.Item>
+                {/* Mail's inbox rows apply on press, then close on the click. */}
+                <ViewSidebar.Item
+                  active={inbox() === 'work inbox'}
+                  {...pressHandlers(() => setInbox('work inbox'))}
+                >
+                  Work inbox
+                </ViewSidebar.Item>
               </ViewSidebar.Content>
               <ViewSidebar.Footer>
                 <button type="button" class="h-10">
@@ -345,6 +354,12 @@ function CollectionWorkspaceFixture(
                     <ViewSidebar.Toggle action="expand" presentation="pill" />
                     <span class="island flex h-10 items-center rounded-full px-3">
                       {view()}
+                    </span>
+                    <span
+                      class="island flex h-10 items-center rounded-full px-3"
+                      data-testid="workspace-inbox"
+                    >
+                      {inbox()}
                     </span>
                   </div>
                 }
