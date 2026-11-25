@@ -73,10 +73,11 @@ mailbox tab. On All, selected tag names appear in the header and breadcrumb.
 A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag filter
 on any other tab keeps that tab's title.
 
-Gmail labels and Outlook categories that people made show read-only, after a
-row's tags under the same limit of three, with a label icon where a tag has its
-color dot. A nested Gmail label shows its own name on the row and its whole
-name (`Customers / Larkspur`) on hover. Gmail's system labels and labels it hides
+Gmail and IMAP labels and Outlook categories that people made show read-only,
+after a row's tags under the same limit of three, with a label icon where a tag
+has its color dot. A nested Gmail label shows its own name on the row and its whole
+name (`Customers / Larkspur`) on hover. Outlook and IMAP names stay whole.
+Gmail's system labels and labels it hides
 from the message list never show, and phone rows show neither tags nor labels.
 An open thread shows them as one pill after its tags (`3 Labels`, or a sole
 label's name) listing their whole names, and in a Labels section of the side

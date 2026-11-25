@@ -1,4 +1,5 @@
 import type { GraphqlEmailProvider } from '@service-storage/graphql/generated/graphql';
+import { match } from 'ts-pattern';
 
 export type NestedLabel<Label> = {
   label: Label;
@@ -40,15 +41,10 @@ export function nestLabels<Label extends { name: string }>(
 }
 
 function hasNestedLabelNames(provider: GraphqlEmailProvider): boolean {
-  switch (provider) {
-    case 'GMAIL':
-      return true;
-    case 'IMAP':
-    case 'OUTLOOK':
-      return false;
-  }
-  const unsupported: never = provider;
-  throw new Error(`Unsupported email provider: ${unsupported}`);
+  return match(provider)
+    .with('GMAIL', () => true)
+    .with('IMAP', 'OUTLOOK', () => false)
+    .exhaustive(() => false);
 }
 
 /** A label's whole name in words: "Customers / Larkspur". */
