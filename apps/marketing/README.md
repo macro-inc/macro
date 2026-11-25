@@ -23,9 +23,10 @@ maximum desktop frame at 16:9. Each module
 (Home, Mail, Chat, Tasks, Calendar, Docs, CRM, Calls) has a tab showing its
 captured app window on a `TutorialWallpaper`. The tour advances every five
 seconds until the visitor picks a tab, uses the arrow keys or the Next button,
-and never advances under reduced motion. A phone shows the window's left part
-at a readable size, and the tab strip fades at the edge where more tabs
-continue. Below the tour, two faded vertical rules separate the backing, security,
+and never advances under reduced motion. A phone aligns the frame with the hero's
+left inset and bleeds it flush to the right viewport edge, showing the window's
+left part at a readable size with wallpaper visible below it while the wider tab
+strip fades at the edge where more tabs continue. Below the tour, two faded vertical rules separate the backing, security,
 and GitHub badges. The GitHub badge links to the repository and refreshes its
 star count on mount above the August trending caption. `HomepageFounderLetter`
 then introduces Macro in the 640px reading column with a short founder note and signature above the first section divider. `HomepageSections`
