@@ -91,13 +91,18 @@ Browser Tests job.
 
 ## Live result
 
-2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, shapes quiz
-(10 runs, then 5 more after the review fixes to the runner):
+2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, shapes quiz,
+20 attempts in three runs:
 
-| Family | Attempts | Solved | Incorrect | Errors | Planner latency | Tokens per call |
+| Run | Attempts | Solved | Incorrect | `model_error` | Planner latency | Tokens per call |
 | --- | --- | --- | --- | --- | --- | --- |
-| shapes and position | 15 | 15 | 0 | 0 | 0.9–1.9 s (median ≈1.05 s) | 713–756 |
+| 1: default reasoning | 5 | 0 | 0 | 5 | 1.6–2.0 s | 714 (all 64 output tokens spent reasoning) |
+| 2: `reasoning_effort: none` | 10 | 10 | 0 | 0 | 0.9–1.9 s | 713–756 |
+| 3: same, after the review fixes to the runner | 5 | 5 | 0 | 0 | 1.0–1.5 s | 713–756 |
 
-The first attempt, with Kimi's default reasoning on, returned no content
-within the 64-token cap (5 `model_error`, no actions); reasoning is now off.
+In run 1 Kimi K3 reasoned by default and used up the 64-token cap, so every
+reply had no content: five closed failures, no planner retry and no click.
+With reasoning off, 15 of 15 were solved. Run 1's five records were deleted
+when run 2 reused their directory; their outcome is reported here from the
+run's console output.
 Results describe this fixture only, not any third-party CAPTCHA.
