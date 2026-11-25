@@ -47,7 +47,12 @@ with the watermark after it.
   catches up through `channelChanges` after a jittered debounce, one off screen
   when it is opened or prewarmed. A failed catch-up, or one that keeps ending
   behind, is tried again after a wait that doubles (`CATCH_UP_RETRY_MS` to
-  `CATCH_UP_RETRY_MAX_MS`), which a frame or a reconnect cuts short. Take
+  `CATCH_UP_RETRY_MAX_MS`), which a frame or a reconnect cuts short. The
+  server does not say when a new connection receives every change, so
+  `LISTENING_MS` after it nothing heard counts and each channel is asked for
+  once more. An acknowledgement's sequence serves only as the next page's cursor
+  while more pages follow; the last page, a gap and a reset read the device
+  again. Take
   `epoch()` before a server read and report it with the sequence the server
   read at (`noteServerRead`): a read sent over another connection proves
   nothing. `tests/channel-sync-convergence.test.ts` runs all of it in random
@@ -147,10 +152,14 @@ lost; of those the server refused, only sends and deletes answered
 - Start a request that follows an await inside its span with `span.run`, and
   capture a write's trace (`Telemetry.captureContext`) before any await.
 - What failed with no connection loads again when it returns
-  (`watchReconnect`, started before each request); nothing else retries a
-  window. A failed page waits for a scroll, the connection, or a wait that
-  doubles from `PAGE_RETRY_MS` (`olderFailed`), so the call panel, which pages
+  (`watchReconnect`, started before each request), and nothing else retries a
+  window or thread that shows nothing. One that is shown but the device no
+  longer holds follows nothing, so it is also read again after a wait that
+  doubles from `VIEW_RETRY_MS`. A failed page waits for a scroll, the
+  connection, or the same wait (`olderFailed`), so the call panel, which pages
   whenever paging is idle, asks at a bounded rate.
+- The server's copy of a page or thread lacks what this device has queued: once
+  the device holds it, read it from there again, change notice or not.
 - A window is replaced only once all of it is read again
   (`channel.reload_window`): at most `RELOAD_EXTRA_PAGES` more pages than it
   showed, around its middle message when more than that arrived.

@@ -171,13 +171,24 @@ export async function storeResult(
   }
 }
 
+/**
+ * Reads of a view on screen that failed in a row are tried again after this
+ * wait, doubled after each up to the maximum.
+ */
+export const VIEW_RETRY_MS = 2_000;
+export const VIEW_RETRY_MAX_MS = 60_000;
+
+export const viewRetryWait = (failures: number) =>
+  Math.min(VIEW_RETRY_MAX_MS, VIEW_RETRY_MS * 2 ** (failures - 1));
+
 /** The connection, watched from the start of one load. */
 export interface ReconnectWatch {
   /**
    * The load failed: `reload` runs now when the connection came back since
-   * the watch began, else the next time it does; never once stopped.
+   * the watch began, else the next time it does, and after `retryMs` if that
+   * is sooner; never once stopped.
    */
-  failed: (reload: () => void) => void;
+  failed: (reload: () => void, retryMs?: number) => void;
   stop: () => void;
 }
 
@@ -194,6 +205,7 @@ export function watchReconnect(): ReconnectWatch {
   let cameBack = false;
   let stopped = false;
   let reload: (() => void) | undefined;
+  let retry: ReturnType<typeof setTimeout> | undefined;
   const unsubscribe = onlineManager.subscribe((online) => {
     if (!online) {
       offline = true;
@@ -201,24 +213,26 @@ export function watchReconnect(): ReconnectWatch {
     }
     if (!offline) return;
     offline = false;
-    if (!reload) {
-      cameBack = true;
-      return;
-    }
-    const run = reload;
-    stop();
-    run();
+    if (reload) run();
+    else cameBack = true;
   });
+  function run() {
+    const load = reload;
+    stop();
+    load?.();
+  }
   function stop() {
     stopped = true;
     reload = undefined;
+    clearTimeout(retry);
     unsubscribe();
   }
   return {
-    failed: (next) => {
+    failed: (next, retryMs) => {
       if (stopped) return;
       if (!cameBack) {
         reload = next;
+        if (retryMs !== undefined) retry = setTimeout(run, retryMs);
         return;
       }
       stop();

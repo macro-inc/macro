@@ -25,6 +25,7 @@ import {
 import type { Message, MessageThread } from '@service-storage/messages';
 import { type Accessor, createEffect, on, onCleanup, untrack } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { markChannelCacheUnsupported } from './channel-flag';
 import {
   channelMessageKey,
   mapChannelMessage,
@@ -40,6 +41,7 @@ import {
   type ReconnectWatch,
   SESSION_CHANGE_RELOADS,
   storeResult,
+  viewRetryWait,
   watchReconnect,
 } from './channel-network';
 import type { PageStored } from './channel-pages';
@@ -149,7 +151,10 @@ export async function readDeviceThread(
       limit: MAX_CHANNEL_TIMELINE_PAGE,
       ...(before !== undefined && { before }),
     });
-    if (result.kind === 'unsupported') return { kind: 'unsupported' };
+    if (result.kind === 'unsupported') {
+      markChannelCacheUnsupported(host as CacheHost);
+      return { kind: 'unsupported' };
+    }
     if (!result.covered) return { kind: 'miss' };
     newestFirst.push(...result.keys);
     if (result.olderCursor === null) {
@@ -427,11 +432,13 @@ export function createLocalChannelThread(
   let changed = false;
   // Device reads in a row that missed a thread the device was said to hold.
   let misses = 0;
+  // Reads in a row that failed to replace the thread shown.
+  let failedReloads = 0;
   // The load in flight. A reload starts after an await, outside any Solid
   // owner, so closing the thread aborts it through here, not `onCleanup`.
   let abort: AbortController | undefined;
-  // Loads the thread again when the connection returns after a failed load:
-  // nothing on screen retries it.
+  // Loads the thread again when the connection returns after a failed load,
+  // which nothing on screen retries.
   let reconnect: ReconnectWatch | undefined;
 
   const show = (thread: MessageThread) =>
@@ -463,6 +470,7 @@ export function createLocalChannelThread(
         onUnsupported();
         return;
       }
+      failedReloads = 0;
       setState('error', undefined);
       show(loaded.thread);
       if (loaded.source === 'device') {
@@ -485,6 +493,8 @@ export function createLocalChannelThread(
         epoch,
       });
       if (loaded.stored === 'unheld') return;
+      // A server thread lacks what this device has not sent yet.
+      changed = true;
       follow(root);
       // A device that kept an older sequence than the read catches up.
       fireAndForget(
@@ -498,12 +508,20 @@ export function createLocalChannelThread(
         error: readError(error),
         ...(isMissingMessage(error) && { thread: undefined }),
       });
-      watch.failed(() => fireAndForget(load(root), 'channel-thread'));
+      // The device may not hold a thread that stays shown, so it follows
+      // nothing until it is read again: after a wait, too.
+      const shown = untrack(() => state.thread !== undefined);
+      if (shown) failedReloads += 1;
+      watch.failed(
+        () => fireAndForget(load(root), 'channel-thread'),
+        shown ? viewRetryWait(failedReloads) : undefined
+      );
     }
   };
 
   const loadAfresh = (root: string) => {
     misses = 0;
+    failedReloads = 0;
     return load(root);
   };
 

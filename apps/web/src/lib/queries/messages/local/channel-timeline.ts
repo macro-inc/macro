@@ -18,6 +18,7 @@ import {
   isMissingMessage,
   type ReconnectWatch,
   SESSION_CHANGE_RELOADS,
+  viewRetryWait,
   watchReconnect,
 } from './channel-network';
 import {
@@ -37,12 +38,6 @@ import type { ChannelSyncRuntime } from './channel-sync-runtime';
 export const CHANNEL_PAGE_LIMIT = 50;
 /** Entries one device reread asks for while following the window. */
 const REREAD_PAGE_LIMIT = 100;
-/**
- * The first wait before a failed page may be asked for again; it doubles with
- * each failure in a row, up to `PAGE_RETRY_MAX_MS`.
- */
-export const PAGE_RETRY_MS = 2_000;
-export const PAGE_RETRY_MAX_MS = 60_000;
 
 export type ChannelTimelineRuntime = Pick<
   ChannelSyncRuntime,
@@ -321,6 +316,8 @@ export function createLocalChannelTimeline(
   let held = false;
   // Rereads in a row that missed a window the device was said to hold.
   let losses = 0;
+  // Reads in a row that failed to replace the window shown.
+  let failedReloads = 0;
   // Pages of this window merged in whose outcome is not recorded yet: the
   // store has not answered, or a refusal is not yet marked unstored.
   let storing = 0;
@@ -343,12 +340,8 @@ export function createLocalChannelTimeline(
     const retry = pageRetries[direction];
     const wait = new AbortController();
     retry.wait = wait;
-    const ms = Math.min(
-      PAGE_RETRY_MAX_MS,
-      PAGE_RETRY_MS * 2 ** (retry.failures - 1)
-    );
     try {
-      await untilAborted(sleep(ms), wait.signal);
+      await untilAborted(sleep(viewRetryWait(retry.failures)), wait.signal);
     } catch {
       return;
     }
@@ -654,13 +647,14 @@ export function createLocalChannelTimeline(
       }
       // A reload keeps the window it already shows, and pages from it again.
       // The device may not hold that window, so it follows nothing until it
-      // is read again: the connection's return reads it again.
+      // is read again: after a wait, or as the connection returns.
       if (reloads > 0) {
         setState({ loadingOlder: false, loadingNewer: false });
+        failedReloads += 1;
         watch.failed(() => {
           currentLoad = loadWindow(around, 1);
           fireAndForget(currentLoad, 'channel-local-sync');
-        });
+        }, viewRetryWait(failedReloads));
         return;
       }
       setState({ phase: 'failed', error });
@@ -675,6 +669,7 @@ export function createLocalChannelTimeline(
       onUnsupported();
       return;
     }
+    failedReloads = 0;
     setState({
       phase: 'ready',
       entries: mergeEntries(
@@ -702,7 +697,9 @@ export function createLocalChannelTimeline(
     // A page given up meanwhile left the device without what it shows.
     held = settled === 'held' && givenUp === givenUpBefore;
     if (!held) return;
-    if (missedReread) scheduleReread();
+    // A server page lacks what this device has not sent yet.
+    if (missedReread || loaded.some(({ source }) => source === 'server'))
+      scheduleReread();
     // Opening asks the server only when the channel is not proven current.
     fireAndForget(
       trace.run(() => deps.runtime.ensureCurrent(channelId)),
@@ -845,7 +842,10 @@ export function createLocalChannelTimeline(
     );
     // A window loaded since aborts the wait, so paging in it starts at once.
     const settled = await settleUnlessAborted(loaded, epoch, token, signal);
-    return settled === 'aborted' || token !== loadToken ? 'stale' : settled;
+    if (settled === 'aborted' || token !== loadToken) return 'stale';
+    // A server page lacks what this device has not sent yet.
+    if (loaded.source === 'server') missedReread = true;
+    return settled;
   };
 
   /**

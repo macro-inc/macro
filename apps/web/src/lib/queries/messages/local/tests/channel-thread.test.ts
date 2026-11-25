@@ -10,7 +10,9 @@ import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError } from '@urql/core';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import { markChannelCacheUnsupported } from '../channel-flag';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
+import { VIEW_RETRY_MS } from '../channel-network';
 import type { ChannelViewChange } from '../channel-sync-runtime';
 import {
   createLocalChannelThread,
@@ -24,6 +26,11 @@ import {
   fakeHost,
   graphqlMessage,
 } from './fixtures';
+
+vi.mock('../channel-flag', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../channel-flag')>()),
+  markChannelCacheUnsupported: vi.fn(),
+}));
 
 const trace = vi.hoisted(() => ({ depth: 0 }));
 
@@ -485,6 +492,106 @@ describe('createLocalChannelThread', () => {
     dispose();
   });
 
+  it('shows a reply the device has not sent of a thread read from the server', async () => {
+    const unsent = graphqlMessage(4, { threadId: ROOT_ID });
+    let held = false;
+    const host = fakeHost(
+      () =>
+        devicePage(
+          [unsent, second, first].map(({ id }) => channelMessageKey(id)),
+          {
+            covered: held,
+          }
+        ),
+      { records: [root, first, second, unsent] }
+    );
+    const server = serverThread();
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        {
+          host,
+          runtime: runtime(),
+          fetchPage: async (...args) => {
+            const answer = await server(...args);
+            held = true;
+            return answer;
+          },
+        },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    // The device changes nothing that it would report.
+    await vi.waitFor(() =>
+      expect(thread.replies()?.map(({ id }) => id)).toEqual([
+        first.id,
+        second.id,
+        unsent.id,
+      ])
+    );
+    expect(server).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+
+  it('loads a shown thread the device lost again after a wait that doubles', async () => {
+    vi.useFakeTimers();
+    let covered = true;
+    const host = fakeHost(
+      () =>
+        devicePage(
+          [channelMessageKey(second.id), channelMessageKey(first.id)],
+          {
+            covered,
+          }
+        ),
+      { records: [root, first, second] }
+    );
+    const sync = runtime();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => {
+      throw new Error('service unavailable');
+    });
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: sync, fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      covered = false;
+      sync.change();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchPage).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(VIEW_RETRY_MS);
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(2 * VIEW_RETRY_MS - 1);
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      covered = true;
+      await vi.advanceTimersByTimeAsync(1);
+      expect(thread.error()).toBeUndefined();
+      expect(thread.replies()).toHaveLength(2);
+      expect(vi.getTimerCount()).toBe(0);
+
+      // It follows the device again, and closed it waits for nothing.
+      covered = false;
+      sync.change();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+      dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('loads a thread that failed with no connection again once it is back', async () => {
     const host = fakeHost(() => devicePage([], { covered: false }));
     let connected = false;
@@ -525,9 +632,18 @@ describe('createLocalChannelThread', () => {
   });
 
   it('loads a failed thread again once the connection is back after another thread closed', async () => {
-    const host = fakeHost(() => devicePage([], { covered: false }));
     let connected = false;
-    const server = serverThread();
+    const host = fakeHost(
+      () =>
+        devicePage(
+          [channelMessageKey(second.id), channelMessageKey(first.id)],
+          {
+            covered: connected && server.mock.calls.length > 0,
+          }
+        ),
+      { records: [root, first, second] }
+    );
+    const server = vi.mocked(serverThread());
     const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, options) => {
       if (!connected) throw new TypeError('Failed to fetch');
       return server(input, options);
@@ -770,6 +886,8 @@ describe('createLocalChannelThread', () => {
     );
 
     await vi.waitFor(() => expect(onUnsupported).toHaveBeenCalledTimes(1));
+    // Its writes go over REST too.
+    expect(markChannelCacheUnsupported).toHaveBeenCalledWith(host);
   });
 });
 
