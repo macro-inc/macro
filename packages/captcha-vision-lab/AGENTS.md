@@ -10,7 +10,8 @@ in production imports it, and it solves nothing but its own fixture. Design:
 ## Start here
 
 - `src/run.ts`: one challenge end to end (browser, gate, planner, action, verdict).
-- `src/families.ts`: the families and their bounded responses; `src/executor.ts` maps a response to the quiz's own controls.
+- `src/families.ts`: the families and their bounded responses.
+- `src/browser-host.ts`: the Node process that drives Chromium; `src/host-protocol.ts` is everything it accepts, `src/browser.ts` the runner's side.
 - `src/server.ts`: the challenge service; the answer never leaves it.
 - `src/gate.ts`: every provenance check, in one place.
 
@@ -26,6 +27,11 @@ in production imports it, and it solves nothing but its own fixture. Design:
   shell's Bun. CI runs the same check in Browser Tests.
 
 ## Gotchas
+
+- Playwright runs only in `src/browser-host.ts`, under Node (`node` from the
+  dev shell). Don't drive Chromium from Bun: its pipe to Chromium stalls
+  about once in 40–80 sessions. Keep the host protocol fixture-specific:
+  never add script, navigation, coordinate or CDP messages.
 
 - Update `bun.lock` with the dev shell's Bun (`nix develop -c bun install`):
   a newer Bun writes a lockfile version CI's Bun can't read.

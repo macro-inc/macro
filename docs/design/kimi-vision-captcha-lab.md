@@ -55,7 +55,9 @@ bun run lab:smoke -- --lab-run [--family <name>|all] [--provider mock|kimi]
   └ per challenge:
       issue(family, sessionNonce) → runId, challengeId, one-time capability
       gate before_navigation: capability present, target == registered URL
-      own Chromium process, fresh temp profile, one context
+      browser host: a Node child (Playwright's own runtime) with an
+        allowlisted environment, driven over stdio by typed fixture
+        messages only; its own Chromium, fresh temp profile, one context
         route allowlist: only the lab origin, fetched by the runner with no
         redirects followed; the page request alone carries the capability;
         only the first main-frame navigation to the target; every WebSocket
@@ -90,7 +92,18 @@ bun run lab:smoke -- --lab-run [--family <name>|all] [--provider mock|kimi]
   need the bound session; one submission per challenge; status is `pending`,
   `solved`, `incorrect` or `expired`. Issuing, attesting and reading status
   are in-process calls, not routes.
-- **Runner** (`src/run.ts`, `src/gate.ts`). Owns the browser and the gate. The
+- **Browser host** (`src/browser-host.ts`, `src/host-protocol.ts`,
+  `src/browser.ts`). Chromium is driven from a Node child process, because
+  under Bun Playwright's pipe to Chromium sometimes stopped delivering
+  messages (a launch that never settled, a locator call never answered;
+  about one browser session in 40–80). The runner and the host exchange
+  one JSON message per line: open the registered URL (any other URL ends
+  the host), report observations, capture the quiz, act through the quiz's
+  own controls, close. There is no message for script, navigation,
+  coordinates or the browser protocol; anything malformed or unknown ends
+  the host. The host gets only the allowlisted environment, and the runner
+  kills it at the deadline and after every attempt.
+- **Runner** (`src/run.ts`, `src/gate.ts`). Owns the gate. The
   planner never sees or influences a gate decision. Success comes only from
   the service's status. Records hold fixed failure codes, never error
   messages, which can quote page markup or model output. The gate sees what

@@ -3,12 +3,11 @@
  * only the lab origin is reachable.
  */
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
-import { LAB_HOST, LAB_PORT, LAB_URL } from '../src/registry.ts';
-import { isolatedBrowser } from '../src/run.ts';
+import { hostEnvironment } from '../src/browser-options.ts';
+import { LAB_HOST, LAB_PORT } from '../src/registry.ts';
+
+const PROBE = join(import.meta.dir, 'network-probe.ts');
 
 let outsideHits = 0;
 let outside: ReturnType<typeof Bun.serve>;
@@ -36,34 +35,25 @@ afterAll(async () => {
 });
 
 test('only the lab origin is reachable, even with no allowlist', async () => {
-  const profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-test-'));
-  const context = await chromium.launchPersistentContext(profile, {
-    headless: true,
-    executablePath: process.env.LAB_CHROMIUM_PATH,
-    ...isolatedBrowser(),
-  });
-  try {
-    const page = context.pages()[0] ?? (await context.newPage());
-
-    const response = await page.goto(LAB_URL);
-    expect(await response?.text()).toBe('lab');
-
-    // Each in its own page, so one's error page can't interrupt the next.
-    for (const url of [
-      'http://127.0.0.2:47832/',
-      `http://localhost:${LAB_PORT}/`,
-    ]) {
-      const other = await context.newPage();
-      await expect(other.goto(url)).rejects.toThrow();
-      await other.close();
+  const env = hostEnvironment();
+  const probe = Bun.spawn(
+    [Bun.which('node', { PATH: env.PATH ?? '' }) ?? 'node', PROBE],
+    {
+      env: {
+        ...env,
+        ...(process.env.LAB_CHROMIUM_PATH === undefined
+          ? {}
+          : { LAB_CHROMIUM_PATH: process.env.LAB_CHROMIUM_PATH }),
+      },
+      stdout: 'pipe',
     }
+  );
 
-    expect(outsideHits).toBe(0);
-  } finally {
-    await context.close();
-    await rm(profile, { recursive: true, force: true });
-  }
-});
+  expect(await probe.exited).toBe(0);
+  const result = JSON.parse(await new Response(probe.stdout).text());
+  expect(result).toEqual({ lab: 'lab' });
+  expect(outsideHits).toBe(0);
+}, 60_000);
 
 test('the browser gets only an allowlisted environment', () => {
   const saved = {
@@ -73,7 +63,7 @@ test('the browser gets only an allowlisted environment', () => {
   process.env.LD_LIBRARY_PATH = '/nix/store/not-for-chromium/lib';
   process.env.LAB_TEST_SECRET = 'not-for-the-browser';
   try {
-    const { env } = isolatedBrowser();
+    const env = hostEnvironment();
 
     expect(env.LD_LIBRARY_PATH).toBeUndefined();
     expect(env.LAB_TEST_SECRET).toBeUndefined();

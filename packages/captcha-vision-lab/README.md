@@ -18,6 +18,8 @@ stealth or evasion. The lab answers only its own quiz, only at
 
 From this directory, use the repository dev shell in each lab terminal so
 installation and execution both use the same Bun as CI.
+The runner drives Chromium from a Node child process, so `node` (the dev
+shell's) must be on `PATH` too.
 
 ```sh
 nix develop ../..
