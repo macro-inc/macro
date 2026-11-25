@@ -1,6 +1,10 @@
 # What the sampler keeps of each trace, and each service's budget. A budget is
 # spans a second over every sampler; a service over its own loses traces while
 # the others keep theirs. Services not named share `other`.
+#
+# A trace is charged to the service of its root span, so a noisy service never
+# spends the budget of one it calls. One whose root never arrived is charged to
+# every service in it.
 { lib }:
 { replicas }:
 let
@@ -35,7 +39,7 @@ let
     "agent-harness-service"
     "authentication-service"
     "calendar-service"
-    "ci-telemetry"
+    "github-actions"
     "cloud-storage-service"
     "connection-gateway"
     "contacts-service"
@@ -49,10 +53,12 @@ let
     "web-app"
   ];
 
+  rootKey = "macro.sampling.root";
   service = ''resource.attributes["service.name"]'';
-  # Dev, CI and local stacks name their environment; anything that doesn't is
-  # sampled like prod.
-  isNonProd = ''IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")'';
+  isListed = ''IsMatch(${service}, "^(${lib.concatStringsSep "|" services})$")'';
+  # Dev, CI and local stacks name their environment, on the resource or
+  # (Cloudflare workers) on the span; anything that doesn't is sampled like prod.
+  isNonProd = ''(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))'';
   isProd = "not ${isNonProd}";
   # `status.code` and `kind` are the span's. Slow is a served request of 1 s or
   # more: about the 99th percentile of the slowest service.
@@ -71,12 +77,22 @@ let
     ${body}
     }
   '';
-  condition =
-    text:
-    sub "match" "ottl_condition" ''
-      ottl_condition {
-        error_mode = "ignore"
-        span = [`${text}`]
+  ottl = text: ''
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`${text}`]
+    }'';
+  # Some span of the trace.
+  any = name: text: sub name "ottl_condition" (ottl text);
+  # Some span (or, inverted, no span) with one of these values. `and` takes no
+  # `not` policy, so "none" is an inverted string match.
+  values =
+    key: wanted: invert:
+    sub (if invert then "none" else "some") "string_attribute" ''
+      string_attribute {
+        key = "${key}"
+        values = ${builtins.toJSON wanted}
+        invert_match = ${lib.boolToString invert}
       }'';
   probabilistic = sub "tenth" "probabilistic" "  probabilistic { sampling_percentage = 10 }";
   # Last, so only a trace the others keep is charged. The burst admits a whole
@@ -98,38 +114,57 @@ let
     }
   '';
 
+  # sampler.alloy names the root span's service in `rootKey`, `other` for one
+  # not listed.
   perService =
-    group: matches: extra:
+    group: parts:
     map (
       s:
       policy "${group}-${s}" (
-        [ (condition ''${service} == "${s}" and ${matches}'') ]
-        ++ extra
+        [
+          (any "has" ''${service} == "${s}"'')
+          (values rootKey (lib.filter (o: o != s) services ++ [ "other" ]) true)
+        ]
+        ++ parts
         ++ [ (limit (budgets.${group}.${s} or budgets.${group}.other)) ]
       )
     ) services
     ++ [
       (policy "${group}-other" (
+        [ (values rootKey [ "other" ] false) ] ++ parts ++ [ (limit budgets.${group}.other) ]
+      ))
+      # No root and no listed service.
+      (policy "${group}-rootless" (
         [
-          (condition ''not IsMatch(${service}, "^(${lib.concatStringsSep "|" services})$") and ${matches}'')
+          (values rootKey (services ++ [ "other" ]) true)
+          (values "service.name" services true)
         ]
-        ++ extra
+        ++ parts
         ++ [ (limit budgets.${group}.other) ]
       ))
     ];
 in
-lib.concatStrings (
-  perService "important" "${isProd} and (${isError} or ${isSlowRequest})" [ ]
-  ++ [
-    (policy "perf" [
-      (condition isPerf)
-      (limit budgets.perf)
-    ])
-    (policy "outlook" [
-      (condition isOutlook)
-      (limit budgets.outlook)
-    ])
-  ]
-  ++ perService "tenth" isProd [ probabilistic ]
-  ++ perService "nonProd" isNonProd [ ]
-)
+{
+  rootStatements = lib.concatMapStringsSep "\n" (s: "      `${s}`,") [
+    ''set(attributes["${rootKey}"], "other") where IsRootSpan()''
+    ''set(attributes["${rootKey}"], ${service}) where IsRootSpan() and ${isListed}''
+  ];
+  policies = lib.concatStrings (
+    perService "important" [ (any "match" "${isProd} and (${isError} or ${isSlowRequest})") ]
+    ++ [
+      (policy "perf" [
+        (any "match" isPerf)
+        (limit budgets.perf)
+      ])
+      (policy "outlook" [
+        (any "match" isOutlook)
+        (limit budgets.outlook)
+      ])
+    ]
+    ++ perService "tenth" [
+      (any "match" isProd)
+      probabilistic
+    ]
+    ++ perService "nonProd" [ (any "match" isNonProd) ]
+  );
+}

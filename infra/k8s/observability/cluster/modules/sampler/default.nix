@@ -4,11 +4,10 @@
 # keeps its name, and so its series, across restarts. The headless Service is
 # how ingest finds the replicas.
 #
-# A replica that stops hands its traces on: ingest drops it from the routing
-# when its DNS record goes (DNS caching: up to 35s), so preStop keeps
-# it receiving meanwhile, and it decides what it holds before it exits. Traces
-# in flight then split between two replicas, and the second decides on the
-# part it has.
+# When a replica starts or stops, about a third of trace ids move to another
+# one. Ingest learns from DNS (cached up to 35s), so preStop keeps a stopping
+# replica receiving meanwhile, and it decides what it holds before it exits. A
+# trace in flight then is in two parts, each decided on its own.
 {
   charts,
   lib,
@@ -25,6 +24,8 @@ let
   };
   replicas = 3;
 
+  sampling = import ./policies.nix { inherit lib; } { inherit replicas; };
+
   # Spans wait this long for the rest of their trace. Sized with the load
   # test in the README: at 38k spans/s over three replicas each held about
   # 80k traces and 1.5 GiB.
@@ -36,7 +37,8 @@ let
     MEMORY_SPIKE = "512MiB";
     MIMIR_PUSH = endpoints.mimir.push;
     TEMPO = endpoints.tempo.otlpGrpc;
-    POLICIES = import ./policies.nix { inherit lib; } { inherit replicas; };
+    POLICIES = sampling.policies;
+    ROOT_STATEMENTS = sampling.rootStatements;
   };
   configText =
     let
@@ -67,7 +69,12 @@ in
           inherit replicas;
           # All three at once on a first start; updates still go one by one.
           parallelRollout = true;
-          topologySpreadConstraints = workload.spread selector;
+          # Soft, unlike the backends' zones: a drained node's zone stays empty
+          # until it returns, and a replica that can't be placed would hold up
+          # the next drain.
+          topologySpreadConstraints = map (c: c // { whenUnsatisfiable = "ScheduleAnyway"; }) (
+            workload.spread selector
+          );
           podDisruptionBudget = {
             enabled = true;
             maxUnavailable = 1;

@@ -137,7 +137,6 @@ in
           kind = "StatefulSet";
           persistence = volume;
           config = {
-            inherit (host.tempo.metrics_generator) metrics_ingestion_time_range_slack;
             # The host's processors with Tempo's default histogram buckets
             # (the chart sets its own, which changes the `le` labels).
             processor = lib.recursiveUpdate {

@@ -128,7 +128,7 @@ spec:
               app.kubernetes.io/name: alloy
           maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
         - labelSelector:
             matchLabels:
               app.kubernetes.io/instance: alloy-sampler

@@ -20,6 +20,19 @@ data:
       check_interval = "1s"
       limit = "3GiB"
       spike_limit = "512MiB"
+      output { traces = [otelcol.processor.transform.root.input] }
+    }
+
+    // The root span carries its service's name, so a trace is charged to it.
+    otelcol.processor.transform "root" {
+      error_mode = "ignore"
+      trace_statements {
+        context = "span"
+        statements = [
+          `set(attributes["macro.sampling.root"], "other") where IsRootSpan()`,
+          `set(attributes["macro.sampling.root"], resource.attributes["service.name"]) where IsRootSpan() and IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|github-actions|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$")`,
+        ]
+      }
       output {
         traces = [
           otelcol.connector.spanmetrics.all.input,
@@ -87,8 +100,11 @@ data:
         statements = [
           `set(attributes["service"], attributes["service.name"]) where attributes["service.name"] != nil`,
           `delete_key(attributes, "service.name")`,
+          // An edge is the server's environment's. Between two environments it also
+          // names the client's, or both edges would write one series.
           `set(attributes["deployment.environment"], attributes["client_deployment.environment"]) where attributes["client_deployment.environment"] != nil`,
           `set(attributes["deployment.environment"], attributes["server_deployment.environment"]) where attributes["server_deployment.environment"] != nil`,
+          `set(attributes["client_environment"], attributes["client_deployment.environment"]) where attributes["client_deployment.environment"] != nil and attributes["server_deployment.environment"] != nil and attributes["client_deployment.environment"] != attributes["server_deployment.environment"]`,
           `delete_matching_keys(attributes, "^(client|server)_deployment.environment$")`,
         ]
       }
@@ -109,7 +125,7 @@ data:
     // Every replica counts its own share of the traces, so each needs a label of
     // its own; the StatefulSet's pod name stays across restarts.
     prometheus.remote_write "mimir" {
-      external_labels = { sampler = sys.env("HOSTNAME") }
+      external_labels = { sampler = constants.hostname }
       endpoint { url = "http://mimir.observability.svc.cluster.local:8080/api/v1/push" }
     }
 
@@ -131,11 +147,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "agent-harness-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "agent-harness-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -154,11 +187,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "authentication-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "authentication-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -177,11 +227,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "calendar-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "calendar-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -196,15 +263,32 @@ data:
       }
     }
     policy {
-      name = "important-ci-telemetry"
+      name = "important-github-actions"
       type = "and"
       and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "github-actions"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
     and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "ci-telemetry" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -223,11 +307,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "cloud-storage-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "cloud-storage-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -246,11 +347,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "connection-gateway"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "connection-gateway" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -269,11 +387,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "contacts-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "contacts-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -292,11 +427,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "convert-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "convert-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -315,11 +467,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-focus-worker"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "email-focus-worker" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -338,11 +507,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "email-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -361,11 +547,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "notification-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "notification-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -384,11 +587,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-processing-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "search-processing-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -407,11 +627,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "static-file-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "static-file-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -430,11 +667,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "sync-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "sync-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -453,11 +707,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "web-app"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "web-app" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -476,11 +747,61 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "some"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["other"]
+      invert_match = false
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`not IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|ci-telemetry|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$") and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-rootless"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "service.name"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
     }
     }
     and_sub_policy {
@@ -545,11 +866,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "agent-harness-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "agent-harness-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -573,11 +911,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "authentication-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "authentication-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -601,11 +956,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "calendar-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "calendar-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -625,15 +997,32 @@ data:
       }
     }
     policy {
-      name = "tenth-ci-telemetry"
+      name = "tenth-github-actions"
       type = "and"
       and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "github-actions"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
     and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "ci-telemetry" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -657,11 +1046,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "cloud-storage-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "cloud-storage-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -685,11 +1091,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "connection-gateway"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "connection-gateway" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -713,11 +1136,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "contacts-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "contacts-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -741,11 +1181,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "convert-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "convert-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -769,11 +1226,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-focus-worker"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "email-focus-worker" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -797,11 +1271,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "email-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -825,11 +1316,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "notification-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "notification-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -853,11 +1361,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-processing-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "search-processing-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -881,11 +1406,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "static-file-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "static-file-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -909,11 +1451,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "sync-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "sync-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -937,11 +1496,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "web-app"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "web-app" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -965,11 +1541,66 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "some"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["other"]
+      invert_match = false
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`not IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|ci-telemetry|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$") and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-rootless"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "service.name"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -993,11 +1624,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "agent-harness-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "agent-harness-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1016,11 +1664,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "authentication-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "authentication-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1039,11 +1704,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "calendar-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "calendar-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1058,15 +1740,32 @@ data:
       }
     }
     policy {
-      name = "nonProd-ci-telemetry"
+      name = "nonProd-github-actions"
       type = "and"
       and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "github-actions"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
     and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "ci-telemetry" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1085,11 +1784,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "cloud-storage-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "cloud-storage-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1108,11 +1824,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "connection-gateway"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "connection-gateway" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1131,11 +1864,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "contacts-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "contacts-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1154,11 +1904,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "convert-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "convert-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1177,11 +1944,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-focus-worker"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "email-focus-worker" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1200,11 +1984,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "email-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1223,11 +2024,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "notification-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "notification-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1246,11 +2064,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-processing-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "search-processing-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1269,11 +2104,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "static-file-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "static-file-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1292,11 +2144,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "sync-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "sync-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1315,11 +2184,28 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "web-app"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`resource.attributes["service.name"] == "web-app" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1338,11 +2224,61 @@ data:
       type = "and"
       and {
     and_sub_policy {
+      name = "some"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["other"]
+      invert_match = false
+    }
+    }
+    and_sub_policy {
       name = "match"
       type = "ottl_condition"
     ottl_condition {
       error_mode = "ignore"
-      span = [`not IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|ci-telemetry|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$") and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-rootless"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "service.name"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
     }
     }
     and_sub_policy {
@@ -1357,13 +2293,22 @@ data:
       }
     }
 
+      output { traces = [otelcol.processor.transform.unmark.input] }
+    }
+
+    otelcol.processor.transform "unmark" {
+      error_mode = "ignore"
+      trace_statements {
+        context = "span"
+        statements = [`delete_key(attributes, "macro.sampling.root")`]
+      }
       output { traces = [otelcol.processor.batch.kept.input] }
     }
 
     otelcol.processor.batch "kept" {
       timeout = "1s"
-      send_batch_size = 2048
-      send_batch_max_size = 4096
+      send_batch_size = 512
+      send_batch_max_size = 1024
       output { traces = [otelcol.exporter.otlp.tempo.input] }
     }
 

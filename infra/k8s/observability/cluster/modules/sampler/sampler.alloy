@@ -17,6 +17,18 @@ otelcol.processor.memory_limiter "spans" {
   check_interval = "1s"
   limit = "@MEMORY_LIMIT@"
   spike_limit = "@MEMORY_SPIKE@"
+  output { traces = [otelcol.processor.transform.root.input] }
+}
+
+// The root span carries its service's name, so a trace is charged to it.
+otelcol.processor.transform "root" {
+  error_mode = "ignore"
+  trace_statements {
+    context = "span"
+    statements = [
+@ROOT_STATEMENTS@
+    ]
+  }
   output {
     traces = [
       otelcol.connector.spanmetrics.all.input,
@@ -84,8 +96,11 @@ otelcol.processor.transform "series" {
     statements = [
       `set(attributes["service"], attributes["service.name"]) where attributes["service.name"] != nil`,
       `delete_key(attributes, "service.name")`,
+      // An edge is the server's environment's. Between two environments it also
+      // names the client's, or both edges would write one series.
       `set(attributes["deployment.environment"], attributes["client_deployment.environment"]) where attributes["client_deployment.environment"] != nil`,
       `set(attributes["deployment.environment"], attributes["server_deployment.environment"]) where attributes["server_deployment.environment"] != nil`,
+      `set(attributes["client_environment"], attributes["client_deployment.environment"]) where attributes["client_deployment.environment"] != nil and attributes["server_deployment.environment"] != nil and attributes["client_deployment.environment"] != attributes["server_deployment.environment"]`,
       `delete_matching_keys(attributes, "^(client|server)_deployment.environment$")`,
     ]
   }
@@ -106,7 +121,7 @@ otelcol.exporter.prometheus "series" {
 // Every replica counts its own share of the traces, so each needs a label of
 // its own; the StatefulSet's pod name stays across restarts.
 prometheus.remote_write "mimir" {
-  external_labels = { sampler = sys.env("HOSTNAME") }
+  external_labels = { sampler = constants.hostname }
   endpoint { url = "@MIMIR_PUSH@" }
 }
 
@@ -124,13 +139,22 @@ otelcol.processor.tail_sampling "traces" {
   }
 
 @POLICIES@
+  output { traces = [otelcol.processor.transform.unmark.input] }
+}
+
+otelcol.processor.transform "unmark" {
+  error_mode = "ignore"
+  trace_statements {
+    context = "span"
+    statements = [`delete_key(attributes, "macro.sampling.root")`]
+  }
   output { traces = [otelcol.processor.batch.kept.input] }
 }
 
 otelcol.processor.batch "kept" {
   timeout = "1s"
-  send_batch_size = 2048
-  send_batch_max_size = 4096
+  send_batch_size = 512
+  send_batch_max_size = 1024
   output { traces = [otelcol.exporter.otlp.tempo.input] }
 }
 
