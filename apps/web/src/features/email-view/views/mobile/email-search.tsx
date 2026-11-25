@@ -104,7 +104,9 @@ export function EmailMobileSearchField(props: {
                 return;
               }
               // Search drops the keyboard to show the results.
-              if (event.key === 'Enter') input?.blur();
+              if (event.key !== 'Enter') return;
+              props.suggestions.commit();
+              input?.blur();
             }}
           />
         </div>
