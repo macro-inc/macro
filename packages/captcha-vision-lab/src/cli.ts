@@ -68,6 +68,10 @@ const plannerFor = (provider: string): Planner => {
     // The real key never goes to a local process.
     return kimiPlanner({ baseUrl, apiKey: 'stand-in', model: KIMI_MODEL });
   }
+  // The key only ever goes to Fireworks itself.
+  if (baseUrl !== FIREWORKS_BASE_URL) {
+    return fail(`a remote --kimi-base-url must be ${FIREWORKS_BASE_URL}`);
+  }
   const apiKey = process.env.FIREWORK_API_KEY ?? '';
   if (apiKey === '') return fail('FIREWORK_API_KEY is not set');
   return kimiPlanner({ baseUrl, apiKey, model: KIMI_MODEL });
