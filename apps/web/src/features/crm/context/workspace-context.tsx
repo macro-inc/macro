@@ -8,7 +8,11 @@ import {
 import type { EntityActionListState } from '../../next-soup/actions/entity-action-context';
 import type { SoupState } from '../../next-soup/create-soup-state';
 import type { QueryStore } from '../../next-soup/filters/filter-store/query-store';
-import type { CrmRecordRef, CrmRecordSection } from '../core/record';
+import type {
+  CrmMergeSurvivor,
+  CrmRecordRef,
+  CrmRecordSection,
+} from '../core/record';
 
 /** A new `seek` asks to show the same message again. */
 export type CrmCommentTarget = { commentId: string; seek: string };
@@ -29,6 +33,11 @@ export type CrmRecordNavigation = {
    * the split already showing that record instead, as entity links do.
    */
   open(trail: readonly CrmRecordRef[], options?: CrmRecordOpenOptions): void;
+  /**
+   * Shows the company or contact the shown one was merged into in its place,
+   * or brings up the split already showing it.
+   */
+  openMerged(survivor: CrmMergeSurvivor): void;
   setSection(section: CrmRecordSection): void;
   item: Accessor<
     | {

@@ -44,6 +44,9 @@ export type CrmRecordRef = {
   name: string;
 };
 
+/** The record a merged company or contact went into. */
+export type CrmMergeSurvivor = Pick<CrmRecordRef, 'type' | 'id'>;
+
 /** Tabs of a CRM record, in display order per record type. */
 export const COMPANY_SECTIONS = [
   'overview',
@@ -75,5 +78,6 @@ export const RECORD_PANEL_ORDER = {
   properties: 20,
   lists: 30,
   sharing: 40,
+  activity: 45,
   references: 50,
 } as const;

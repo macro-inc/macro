@@ -3,6 +3,7 @@ mod test;
 
 use std::{sync::Arc, time::Duration};
 
+use agent_session::domain::routines::RoutineSessionError;
 use ai_billing::{AiAdmissionError, AiAdmissionService, DisabledAiAdmissionService};
 use ai_usage::AiFeature;
 use anyhow::{Context, Result};
@@ -314,7 +315,8 @@ fn finished_run(
     started_at: DateTime<Utc>,
     result: &Result<()>,
 ) -> Option<FinishedRoutineRun> {
-    let target = match RoutineProgram::from_task(&action.task) {
+    let program = RoutineProgram::from_task(&action.task);
+    let target = match &program {
         Ok(program) => match program.agent_steps().first() {
             Some(step) => match ResolvedTaskTarget::of(step) {
                 Ok(ResolvedTaskTarget::Model { .. }) => RunTarget::Model,
@@ -334,6 +336,21 @@ fn finished_run(
             _ => RunEnd::Failed,
         },
     };
+    let apps_to_connect = match (result, &program) {
+        (Err(error), Ok(program))
+            if error.downcast_ref::<RoutineSessionError>()
+                == Some(&RoutineSessionError::AppNotConnected) =>
+        {
+            let mut names: Vec<String> = Vec::new();
+            for app in &program.mcp_servers {
+                if !names.contains(&app.server_name) {
+                    names.push(app.server_name.clone());
+                }
+            }
+            names
+        }
+        _ => Vec::new(),
+    };
     Some(FinishedRoutineRun {
         owner: action.owner_user().ok()?.clone(),
         routine_id: action.id?,
@@ -343,6 +360,7 @@ fn finished_run(
         target,
         end,
         duration: Utc::now() - started_at,
+        apps_to_connect,
     })
 }
 

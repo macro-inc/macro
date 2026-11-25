@@ -7,11 +7,15 @@ const entry = vi.hoisted(() => ({
   blockId: 'contact-1',
   state: {} as Record<string, unknown>,
   captors: new Map<string, () => unknown>(),
+  replace: vi.fn(),
+  navigate: vi.fn(),
+  comment: undefined as string | undefined,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
     handle: {
+      replace: entry.replace,
       currentEntryState: () => entry.state,
       captureEntryState: () => {
         for (const [key, capture] of entry.captors)
@@ -25,13 +29,28 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
 }));
 vi.mock('@app/features/crm/crm-contact', () => ({
-  Contact: (props: { section: string }) => <p>Showing {props.section}</p>,
+  Contact: (props: {
+    section: string;
+    onMerged?: (survivorId: string) => void;
+  }) => (
+    <>
+      <p>Showing {props.section}</p>
+      <button type="button" onClick={() => props.onMerged?.('contact-9')}>
+        Merged
+      </button>
+    </>
+  ),
   ContactTabs: (props: { onChange: (section: string) => void }) => (
     <button type="button" onClick={() => props.onChange('files')}>
       Files
     </button>
   ),
   ContactVisibilityButton: () => null,
+}));
+vi.mock('@app/features/crm/crm-merged-record', () => ({
+  useOpenMergedRecord: (
+    open: (survivor: { type: string; id: string }) => void
+  ) => open,
 }));
 vi.mock('@app/features/crm/crm-link', () => ({
   CrmCopyLinkButton: () => null,
@@ -53,8 +72,9 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => entry.blockId }));
 vi.mock('@core/component/ParamsProvider', () => ({
-  createParamsState: () => ({ navigate: vi.fn() }),
+  createParamsState: () => ({ navigate: entry.navigate }),
   ParamsProvider: (props: ParentProps) => props.children,
+  useResolvedParam: () => () => entry.comment,
 }));
 vi.mock('@core/orchestrator', () => ({ createMethodRegistration: vi.fn() }));
 vi.mock('@core/signal/load', () => ({ blockHandleSignal: { get: vi.fn() } }));
@@ -67,6 +87,47 @@ afterEach(() => {
   entry.state = {};
   entry.captors.clear();
   entry.blockId = 'contact-1';
+  entry.replace.mockReset();
+  entry.navigate.mockReset();
+  entry.comment = undefined;
+});
+
+it('shows the contact a merged one went into in place of it', () => {
+  render(() => <ContactBlockAdapter />);
+  fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
+  expect(entry.replace).toHaveBeenCalledExactlyOnceWith({
+    next: {
+      type: 'contact',
+      id: 'contact-9',
+      state: { 'crm.recordSection:contact:contact-9': 'overview' },
+    },
+    mergeHistory: true,
+  });
+});
+
+it('opens the contact a merged one went into on its section and Discussion message', () => {
+  const merged = render(() => <ContactBlockAdapter />);
+  fireEvent.click(screen.getByRole('button', { name: 'Files' }));
+  entry.comment = 'message-1';
+  fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
+  expect(entry.replace).toHaveBeenCalledExactlyOnceWith({
+    next: {
+      type: 'contact',
+      id: 'contact-9',
+      state: { 'crm.recordSection:contact:contact-9': 'files' },
+      params: { comment_id: 'message-1' },
+    },
+    mergeHistory: true,
+  });
+
+  // The split mounts the contact that stays with what it was handed.
+  const [{ next }] = entry.replace.mock.calls[0]!;
+  merged.unmount();
+  entry.blockId = 'contact-9';
+  entry.state = next.state;
+  render(() => <ContactBlockAdapter {...next.params} />);
+  expect(screen.getByText('Showing files')).toBeTruthy();
+  expect(entry.navigate).toHaveBeenCalledWith({ comment_id: 'message-1' });
 });
 
 it('returns to the chosen section when Back comes back to the contact', () => {

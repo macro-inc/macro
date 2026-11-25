@@ -304,6 +304,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('calendar_event_join_request', () => 'asked to join')
     .with('password_access_requested', () => 'requested access to')
     .with('inbox_reauth_required', () => 'needs reconnection')
+    .with('crm_email_sharing_changed', () => 'changed')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
     .with('agent_session_mentioned', () => 'mentioned')
@@ -412,6 +413,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
     .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
+    .with({ tag: 'crm_email_sharing_changed' }, () => 'Your CRM email sharing')
     .with(
       { tag: 'agent_session_settled' },
       (m) => m.content.excerpt || m.content.sessionName

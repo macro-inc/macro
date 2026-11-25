@@ -837,6 +837,17 @@ service_url! {
 }
 
 service_url! {
+    /// CapSolver's task API, which the agent harness's CAPTCHA gateway
+    /// calls. CapSolver's host in every environment; override it to run
+    /// against `crates/capsolver_emulator`.
+    pub struct CapsolverApiUrl {
+        local: "https://api.capsolver.com",
+        dev: "https://api.capsolver.com",
+        prod: "https://api.capsolver.com",
+    }
+}
+
+service_url! {
     /// Control and internal MCP surface of the live preview service.
     pub struct PreviewGatewayUrl {
         local: "http://localhost:8101/preview",

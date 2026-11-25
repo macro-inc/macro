@@ -4,6 +4,11 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_credentials::AgentCreators;
+use ai_billing::{AiAdmissionError, AiAdmissionService};
+use ai_usage::AiFeature;
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header::RETRY_AFTER};
+use axum::response::Response;
+use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
 use computer_screen::domain::service::Hold;
 use feature_flags::FeatureFlags;
 
@@ -136,11 +141,97 @@ impl BrainRollout {
         }
     }
 
+    /// Every agent is enabled: only `brain_bench`, which has no flags.
+    #[cfg(feature = "brain-bench")]
+    pub(crate) fn always_on() -> Self {
+        Self {
+            evaluate: Some(Arc::new(|_| Box::pin(async { true }))),
+        }
+    }
+
     pub(crate) async fn enabled(&self, agent: &MacroUserIdStr<'static>) -> bool {
         let Some(evaluate) = &self.evaluate else {
             return false;
         };
         evaluate(agent.clone()).await
+    }
+}
+
+/// What the brain routes outside `/brain/anthropic` check before serving an
+/// agent: its key, `enable-agent-teammates` for its creator, and admission to
+/// spend Macro credits.
+#[derive(Clone)]
+pub(crate) struct BrainAccess {
+    pub(crate) brains: Arc<dyn BrainAuthenticator>,
+    pub(crate) rollout: BrainRollout,
+    pub(crate) admission: Arc<dyn AiAdmissionService>,
+}
+
+/// Why [`BrainAccess::authorize`] turned an agent away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BrainRefusal {
+    /// No key, or not a live agent's: 401.
+    Unauthenticated,
+    /// Agent teammates are off for it, or admission refused: 403.
+    Forbidden,
+    /// A lookup failed: 503.
+    Unavailable,
+    /// A person drives the agent's computer past the hold's bound: 503, to
+    /// retry after `retry_after`.
+    Held { retry_after: std::time::Duration },
+}
+
+impl BrainRefusal {
+    pub(crate) fn status(self) -> StatusCode {
+        match self {
+            Self::Unauthenticated => StatusCode::UNAUTHORIZED,
+            Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Unavailable | Self::Held { .. } => StatusCode::SERVICE_UNAVAILABLE,
+        }
+    }
+
+    /// Adds `Retry-After` to the refusal's response when the agent is held.
+    pub(crate) fn with_retry_after(self, mut response: Response) -> Response {
+        if let Self::Held { retry_after } = self {
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from(retry_after.as_secs()));
+        }
+        response
+    }
+}
+
+impl BrainAccess {
+    /// The agent behind the bearer key. The authenticator is the shared one
+    /// (wrapped by [`HeldBrains`]), so a take-over holds these routes too.
+    pub(crate) async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, BrainRefusal> {
+        let bearer = headers
+            .typed_get::<Authorization<Bearer>>()
+            .ok_or(BrainRefusal::Unauthenticated)?;
+        let brain = self
+            .brains
+            .authenticate(bearer.token())
+            .await
+            .map_err(|error| match error {
+                BrainLookupError::Held { retry_after } => BrainRefusal::Held { retry_after },
+                BrainLookupError::Failed(report) => {
+                    tracing::error!(error = ?report, "could not authenticate a brain");
+                    BrainRefusal::Unavailable
+                }
+            })?
+            .ok_or(BrainRefusal::Unauthenticated)?;
+        if !self.rollout.enabled(&brain.user_id).await {
+            return Err(BrainRefusal::Forbidden);
+        }
+
+        self.admission
+            .admit(&brain.user_id, AiFeature::AgentSession)
+            .await
+            .map_err(|error| match error {
+                AiAdmissionError::Denied(_) => BrainRefusal::Forbidden,
+                AiAdmissionError::Unavailable => BrainRefusal::Unavailable,
+            })?;
+        Ok(brain)
     }
 }
 

@@ -1,6 +1,7 @@
 import ChatCircle from '@icon/system/regular/chat-circle.svg';
 import ClipboardText from '@icon/system/regular/clipboard-text.svg';
 import Eye from '@icon/system/regular/eye.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
 import Minus from '@icon/system/regular/minus.svg';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import PencilSimple from '@icon/system/regular/pencil-simple.svg';
@@ -29,6 +30,7 @@ const GLYPHS = {
   'call-started': Phone,
   responded: ClipboardText,
   'time-logged': Timer,
+  'record-merged': GitMerge,
   unknown: PencilSimple,
 } as const;
 

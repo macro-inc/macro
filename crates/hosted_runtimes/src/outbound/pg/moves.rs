@@ -221,8 +221,13 @@ impl ComputerMoves for PgComputerRepo {
     async fn held_on(&self, host: HostId) -> Result<HashSet<ComputerId>, PgComputerError> {
         Ok(sqlx::query_scalar!(
             r#"
-            SELECT computer_id FROM computer_move
+            SELECT computer_id AS "computer_id!" FROM computer_move
             WHERE stage IN ('cutting_over', 'rolling_back') AND (from_host = $1 OR to_host = $1)
+            UNION
+            SELECT upgrade.computer_id FROM image_upgrade_computer upgrade
+            JOIN hosted_runtime computer ON computer.id = upgrade.computer_id
+            WHERE upgrade.state IN ('replacing', 'verifying', 'rolling_back')
+              AND computer.host_id = $1
             "#,
             host.into_inner(),
         )
@@ -239,6 +244,9 @@ impl ComputerMoves for PgComputerRepo {
             SELECT EXISTS (
                 SELECT 1 FROM computer_move
                 WHERE computer_id = $1 AND stage IN ('cutting_over', 'rolling_back')
+            ) OR EXISTS (
+                SELECT 1 FROM image_upgrade_computer
+                WHERE computer_id = $1 AND state IN ('replacing', 'verifying', 'rolling_back')
             ) AS "held!"
             "#,
             computer_id.as_uuid(),

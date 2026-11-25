@@ -34,6 +34,10 @@ the Soup-backed thread list, and saved email views.
   `components/EmailRowStylePreview.tsx` draws Settings' inert sample of it
   with the real row, restoring Mail's list tokens that the settings card
   overrides.
+- `primitives/create-email-row-labels.ts`: the labels each row shows after its
+  tags (`ListEntity.labels`), named from the viewer's label list once per list
+  through `@queries/email/label-names`, which the open thread's pill and side
+  panel share.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the
@@ -42,7 +46,10 @@ the Soup-backed thread list, and saved email views.
   operators, which are still being typed and left out of the search, and what
   finishes one; its tests and the service's read
   `crates/search_service/src/api/search/email_operators/typed_operators.json`),
-  recent searches (`recent-searches.ts`, per person in browser storage) and
+  recent searches (`recent-searches.ts`, per person in browser storage; a
+  search is remembered on Enter, a picked recent search, a thread opened
+  from it, or leaving the field with its own results on screen, `hasResults`)
+  and
   the rows the search field lists: views (then labels) while `in:` is typed,
   people after `from:`/`to:`/`cc:`/`bcc:`, labels and tags after `label:`,
   otherwise the operators that finish the typed token, then recent searches
@@ -59,6 +66,10 @@ the Soup-backed thread list, and saved email views.
 - `filters/use-email-filters.tsx`: the Filters model shared by the desktop menu
   and the mobile drawer; each group is a field read from and written into the
   list's filters, active once it differs from what Clear returns to.
+  `filters/use-label-filter-group.tsx` is its Labels group (the labels people
+  made, by whole name, each inbox's together, with the inbox's avatar when
+  there are several), stored under the `labels` facet that
+  `filters/email-label-facet.ts` turns into the `Label` condition.
 - `components/EmailFilterFields.tsx`: the builder's People and Subject
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
@@ -76,14 +87,20 @@ the Soup-backed thread list, and saved email views.
 - Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.
 - Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
-  sidebar; filter changes stay on the current tab.
+  sidebar; filter changes stay on the current tab. Labels sit after Tags in
+  both, except on Reminders, whose read has no label filter.
+- A search narrows by a selected label's stored name (`include_labels`), as
+  `label:` does: hits carry no labels to check on the client, and a same-named
+  label in another of the viewer's inboxes matches too. It waits for the label
+  list while labels are ticked; a label it cannot name matches nothing, as its
+  id matches no row of the list.
 - A saveable tab is a built-in view: it starts from its own restrictions
   (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query
   while those restrictions stand; otherwise the list queries as a view. Write
   filters through `setFilters`/`clearFilters`, never by emptying facets.
-- A saved view opens on All. Its Read status, Done, attachment, calendar, tag and
-  inbox filters live in the normal state so the Filters menu, inbox picker,
+- A saved view opens on All. Its Read status, Done, attachment, calendar, tag,
+  label and inbox filters live in the normal state so the Filters menu, inbox picker,
   and read admission keep working; its other conditions live in
   `state.conditions`.
 - Never query while a selected view is loading or unavailable: that lists all
@@ -102,27 +119,47 @@ the Soup-backed thread list, and saved email views.
   Scheduled, Reminders, Spam and Trash, which have no view in the search
   index and end the search, as any tab does while no words are typed; the
   sidebar and the header read `shownTab` (the view a search runs in;
-  `search`, which selects nothing, without an `in:`), never `state.tab`.
+  `search`, which selects nothing, without an `in:` or before the open field
+  has words), never `state.tab`.
 - The Focus, Signal and Noise tabs read `showsInboxTabs`: they never show
   while the search field is open, empty or not, on desktop or phone. The field
   on screen (the desktop header's, or the touch search page) tells the view
   through `registerSearchField`; `searchHasText` alone is whether it holds a
-  query. Empty, the field leaves the open tab's rows on screen, so `shownTab`
-  still names that tab. Picking a view before a word is typed closes the field.
+  query. Empty, the field leaves the open tab's rows on screen under Search.
+  Picking a view before a word is typed closes the field.
 - Text with no words (`in:`, `in:se`, `in:sent `, `is:un`) runs no search of its own:
   `parsedSearch` stays on the last search that had words, or empty (the open
-  tab's list) when there was none. The list, the header, the sidebar and the
-  empty state all read it, so they describe the rows on screen. What works on
+  tab's list, under Search) when there was none. The list, the header, the
+  sidebar and the empty state all read it. What works on
   the typed text (narrowing a search, suggestions) parses that instead.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
+- `buildEmailQuery` sends the Attachments kinds to the server for the Inbox and
+  All mail tabs (Archived, Calendar, Favorites and Shared included) and saved
+  views, so pages come back full. Sent, Drafts, Spam and Trash, whose pages the
+  attachment flags are not indexed for, and the Focus, Reminders and CRM email
+  lists only refine the rows they loaded with the facet's own predicate, which
+  applies the same MIME prefixes as the flags. A list with that clause is server
+  membership, so it refetches when a pushed thread carries attachments and
+  after the Soup socket reconnects (`mail-list-revalidation.ts`).
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - The data source keeps the previous rows while a search loads only when
   asked (`keepRowsWhileSearching`) and reports it as `showsPreviousRows`; they
   never cross a tab change, and `isLoading` stays false while they show, so
   gate "loading" UI on both.
+- A list page can arrive without a row but with a cursor (a label read that
+  walked old mail). `emptyListPages` reads on from the server's own rows
+  (`rawEntities`, so a page the client's filters empty doesn't count) until a
+  row shows or the list ends, at most 50 pages a load, and the list reads as
+  loading meanwhile: never show the empty state for such a page.
 - Unread dots are presence in a small first unread page per view, never a count.
+- The search field also says it was left (`setFocused(false)`) as it
+  unmounts, inside the teardown of the view leaving Mail. Reading the list's
+  data source (`source`) there runs computations being disposed again,
+  which fails the navigation: leaving reads it in a microtask, and a field
+  without the focus has nothing to leave. Releases from a cleanup wait the
+  same way (`registerSearchField`).
 - Cmd+F is registered for the whole desktop view in
   `use-email-search-hotkeys.ts` and focuses the list header's field through
   `registerListSearch`; while a thread or a new email has replaced that

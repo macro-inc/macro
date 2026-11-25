@@ -36,6 +36,11 @@ export type CreateSearchStateOptions = {
   /** Where the search runs (a view id such as 'search' or 'email'), for analytics. */
   surface: Accessor<string>;
   text: Accessor<string>;
+  /**
+   * The words names are matched with, when they differ from `text`: a query's
+   * operators are not part of any name.
+   */
+  nameText?: Accessor<string>;
   buildRequest: (search: SoupSearchRequest) => SearchSoupQueryArgs;
   enabled?: Accessor<boolean>;
   localPool?: Accessor<SoupSearchPoolEntry[]>;
@@ -113,7 +118,10 @@ function trackSettledSearches(
  */
 export function createSearchState(options: CreateSearchStateOptions) {
   const text = createMemo(() => options.text().trim());
-  const localText = debouncedDependent(text, LOCAL_SEARCH_DEBOUNCE_MS);
+  const nameText = createMemo(() =>
+    (options.nameText ?? options.text)().trim()
+  );
+  const localText = debouncedDependent(nameText, LOCAL_SEARCH_DEBOUNCE_MS);
   const serviceText = debouncedDependent(text, SERVICE_SEARCH_DEBOUNCE_MS);
 
   const isSearching = () => text().length > 0;
@@ -202,7 +210,11 @@ export function createSearchState(options: CreateSearchStateOptions) {
     const service = serviceSearchResults();
     const merged = [...service, ...local];
 
-    if (merged.length === 0 && previous.length > 0 && text() !== localText()) {
+    if (
+      merged.length === 0 &&
+      previous.length > 0 &&
+      nameText() !== localText()
+    ) {
       return previous;
     }
 
@@ -223,7 +235,8 @@ export function createSearchState(options: CreateSearchStateOptions) {
     ];
   }, []);
 
-  const isLocalSearchSettling = () => isSearching() && text() !== localText();
+  const isLocalSearchSettling = () =>
+    isSearching() && nameText() !== localText();
 
   const isSearchServiceLoading = () => {
     if (!isSearching() || !validateSearchServiceText(text())) return false;
@@ -240,6 +253,8 @@ export function createSearchState(options: CreateSearchStateOptions) {
     data,
     isSearching,
     localFuzzyResults,
+    /** The trimmed text the local name matches were found with. */
+    localSearchText: localText,
     serviceSearchResults,
     featuredIds,
     searchQuery,

@@ -7,7 +7,7 @@ use opensearch_client::{
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::parsers::message_text::with_pastes_as_content;
+use crate::parsers::{message_links::message_links, message_text::with_pastes_as_content};
 
 /// What updating a channel message's document found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,6 +98,7 @@ fn channel_message_upsert_args(
         imported_author: message.imported_author,
         mentions,
         content: transformed_content.trim().to_string(),
+        links: message_links(raw_content),
         created_at_millis: EpochMillis::new(message.created_at.timestamp_millis())?,
         updated_at_millis: EpochMillis::new(message.updated_at.timestamp_millis())?,
     })

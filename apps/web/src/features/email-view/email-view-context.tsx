@@ -171,7 +171,8 @@ export type EmailViewContext = {
   /**
    * The view the navigation and the header show as selected: the open tab,
    * or the view the search on screen runs in (`inbox` for the whole Inbox);
-   * `search` for a search of all mail, which selects none.
+   * `search`, which selects none, for a search of all mail or an open field
+   * with no words yet.
    */
   shownTab: Accessor<EmailShownView>;
   /** The search field holds a query, whatever it says. */
@@ -226,6 +227,14 @@ export type EmailViewContext = {
       replace?: boolean;
     }
   ) => boolean;
+  /**
+   * The thread the list last opened (a row, the cursor beside the reading
+   * pane, or the reader's next and previous), a new value each time; links,
+   * notifications and Back open threads without it.
+   */
+  openedFromList: Accessor<{ id: string } | undefined>;
+  /** Records a list row opened without `openThread`, in a new split. */
+  recordListOpen: (threadId: string) => void;
   closeThread: () => void;
   navigateToList: () => Promise<void>;
   isSidebarSectionOpen: (id: string) => boolean;
@@ -314,8 +323,14 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const [searchField, setSearchField] = createSignal<EmailSearchField>();
   const registerSearchField = (field: EmailSearchField) => {
     setSearchField(field);
+    // Release after the teardown that unmounts the field. Written during it,
+    // the signal makes the view's memos stale while their owner is still
+    // being cleaned; a cleanup that reads one re-runs that owner and disposes
+    // it twice, which fails the navigation that unmounted the field.
     onCleanup(() =>
-      setSearchField((current) => (current === field ? undefined : current))
+      queueMicrotask(() =>
+        setSearchField((current) => (current === field ? undefined : current))
+      )
     );
   };
 
@@ -497,11 +512,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     { query: '' }
   );
   const shownTab = (): EmailShownView => {
+    if (!canSearchEmailTab(state.tab) || !searchOpen()) return state.tab;
     const { query, scope } = parsedSearch();
-    // With no search to stay on, the list is still the open tab's.
-    if (!searchHasText() || query === '') return state.tab;
-
-    if (!scope) return 'search';
+    // An open field reads as a search before it has words, even while the
+    // open tab's rows are still the ones listed.
+    if (query === '' || !scope) return 'search';
     return emailSearchScopeTab(scope) ?? 'inbox';
   };
   const showsInboxTabs = () =>
@@ -626,10 +641,14 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const closeThread = () =>
     fireAndForget(navigateToList(tabSearch.savedView), 'email-view');
   const notificationSource = useGlobalNotificationSource();
+  const [openedFromList, setOpenedFromList] = createSignal<{ id: string }>();
+  const recordListOpen = (threadId: string) =>
+    setOpenedFromList({ id: threadId });
   const openThread = (
     thread: EmailThreadTarget,
     options?: EntityDetailNavigationOptions & { replace?: boolean }
   ) => {
+    recordListOpen(thread.id);
     if (!opensInline(options)) return false;
     const selection = { type: 'email' as const, id: thread.id };
     // The router may refuse a claimed destination. Check compatibility without
@@ -975,6 +994,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     selectedThread,
     composing,
     openThread,
+    openedFromList,
+    recordListOpen,
     closeThread,
     navigateToList: () => navigateToList(tabSearch.savedView),
     isSidebarSectionOpen,

@@ -4492,7 +4492,14 @@
             "items": {
               "type": "string"
             },
-            "description": "The inboxes (email link ids) whose new mail starts the routine. Absent:\nevery inbox the owner reads, their own and those delegated to them."
+            "description": "The inboxes (email link ids) whose new or labeled mail starts the\nroutine. Absent: every inbox the owner reads, their own and those\ndelegated to them."
+          },
+          "labels": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Email labels, one of which the thread must gain: their row ids. Any\nlabel when absent. Only for `email.labeled`."
           },
           "match": {
             "type": ["array", "null"],
@@ -4533,6 +4540,7 @@
           "task.priority_changed",
           "task.property_changed",
           "email.message_received",
+          "email.labeled",
           "channel.created",
           "channel.message_posted",
           "channel.mentioned",

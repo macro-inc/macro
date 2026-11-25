@@ -67,9 +67,11 @@ projects.
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
   `tests/content_search/email_operators.rs` runs the same way and checks the
   conditions typed Mail search operators become (`EmailTextCondition`,
-  `EmailLabelCondition`, excluded threads, sent bounds), an address beside a
-  word, hyphenated and punctuated words in email text and searches at the term
-  cap inside the unified request; it needs the emails index empty too.
+  `EmailLabelCondition`, excluded threads, sent bounds), the inboxes and
+  shared threads a search reaches (`inbox_link_ids`, by inbox, never by
+  owner), an address beside a word, hyphenated and punctuated words in email
+  text and searches at the term cap inside the unified request; it needs the
+  emails index empty too.
 
 ## Gotchas
 
@@ -200,6 +202,24 @@ projects.
   `email_operators.rs` runs every shape of term up to the cap of 50 terms. A
   `has_child` clause counts as one in its parent's query and has its own
   limit.
+- Channel messages carry their link URLs in `links` (up to the query, at
+  most 2 KB each), analyzed by the built-in `pattern` analyzer,
+  which splits a host into its names (`app.sketchpad.example` -> app,
+  sketchpad, example); `content_text` keeps a host whole, so a site name
+  inside a subdomain never matched. A built-in analyzer needs no analysis
+  settings, so the field was added to the live index in place; a change to
+  `content_text` would need a new index version and a full reindex. `pattern`
+  has no maximum token length, so a link longer than Lucene's 32,766-byte
+  term would fail its whole document: keep the cap. Each content term also
+  matches `links` (`query::link_query`): its words split the same way and
+  matched by `create_query`'s rules (several words in order, as a capped
+  phrase prefix), with a leading `http`, `https` or `www` left out. A term of only
+  those, `com`, `org`, `net` or the start of one, matches no link (on dev
+  `com` alone was in 182 of 228 messages' links), and neither does one with a
+  non-ASCII letter, which `pattern` would split into looser ASCII pieces. A
+  hit matched only there takes its `links` highlight as its content snippet
+  (`parse_highlight_hit`), as `source_names` stands in for a calendar name.
+  `tests/content_search/channel_links.rs` checks it against a real index.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

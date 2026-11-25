@@ -30,13 +30,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('keeps the same focused input through category, mode and Enter changes', () => {
+it('keeps the same focused input through mode and Enter changes', () => {
   SearchState.open();
   render(() => <MobileSearchInput />);
   const input = screen.getByPlaceholderText('Search…');
   input.focus();
   fireEvent.input(input, { target: { value: 'teo' } });
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   expect(document.activeElement).toBe(input);
   expect(screen.getByPlaceholderText('Search…')).toBe(input);

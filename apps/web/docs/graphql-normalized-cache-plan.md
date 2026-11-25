@@ -79,7 +79,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
     write-session token: logout closes admission and drains admitted durable
     write/delete operations before clearing registered hosts. Independent local
     auth cleanup and server sign-out begin without waiting for this drain; reload
-    and replacement admission still wait for all cleanup. Tracked contact writes
+    and replacement admission still wait for all cleanup. A browser cache not wiped
+    within ten seconds counts as a failed wipe: the scope rotates, so nothing opens
+    it again, and the wipe goes on while the page lives. A native cache gets no such
+    limit, as its running engine refuses a new scope. Tracked contact writes
     retain their exact physical host even if auth propagation retires the public
     wrapper, whose callbacks and subsequent operations are silenced immediately.
     Successful login
@@ -89,9 +92,9 @@ entire cache in browser memory. With 10s of thousands of cached objects
     replacement that keeps the same client and host objects. A readiness probe
     precedes tracking so failed initialization cannot strand a never-written key.
     Logical retirement keeps narrow cleanup usable through the retained owner.
-    Typed recoverable bootstrap/owner failures may reconstruct a cleanup-only host
+    Typed recoverable host/owner failures may reconstruct a cleanup-only host
     from the original backend/scope factory without booting a user client or queue;
-    unknown or quarantined failures cannot use this path. Failed repair retains
+    unknown failures cannot use this path. Failed repair retains
     keys/ownership, reports the failure, and leaves admission closed for retry.
     A no-op delete is not proof of storage cleanup, and a never-settling durable
     write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
@@ -253,25 +256,47 @@ drain waits for that set to empty before closing the core, runner, and worker.
 The cache's validated envelopes, request ids, Web Locks, owner epochs,
 heartbeats, and replay policy remain application-owned. A normal `pagehide`
 uses a fenced navigation-departure message: the page terminates its dedicated
-worker, but the next owner opens the existing OPFS database. Only an
-unannounced liveness, transport, or engine failure **after the database
-open grant** selects `wipe-before-open`. A missed heartbeat alone is not owner
-loss: background tabs and their dedicated workers may be suspended while the
-SharedWorker still runs. The coordinator probes the physical owner Web Lock
-without waiting or stealing it; a held lock (or a failed probe) retries the
-heartbeat without changing epochs or touching storage. A released lock confirms
-silent worker termination and triggers the usual fenced recovery. Read deadlines
+worker, but the next owner opens the existing OPFS database. A page that leaves
+without saying so (a killed tab, a departure message that arrives after its
+liveness lock is released) or disposes its cache stops its worker the same way
+and is treated the same; a wipe already due stays due. The engine's
+port is not ordered with its page's, so a report it sent just before can be read
+too late and is then ignored. Only an engine failure
+reported by a page or seen by the coordinator **after the database open grant**
+selects `wipe-before-open`. A missed heartbeat alone is not owner loss: background tabs and their dedicated workers may be suspended while the
+SharedWorker still runs. The coordinator asks the browser whether that engine, by
+the client ID it reported when ready, still holds the physical owner Web Lock: the
+engine of another build may hold a lock of the same name. A held lock (or a failed
+probe) retries the heartbeat without changing epochs or touching storage. A
+released lock confirms silent worker termination and triggers the usual fenced
+recovery, which opens the existing database if another context holds the lock by
+then, as that one judged what the dead engine left. If the
+page's liveness lock is released too, the page left; the coordinator
+looks for it after a heartbeat interval, and also before an opening deadline ends
+an owner, and looks three times when looking fails. An answer, a hidden page or a
+departure that arrives meanwhile changes nothing: the engine is gone. Read deadlines
 still bound callers waiting on an unresponsive engine outside a visibility handoff.
 
 Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
 `waiting`, and `blocked`. A visible owner stays put even if another visible window
-gets focus. When its page hides, stop routing new work into that engine and ask it
-to drain immediately, without waiting for another visible consumer. An engine
-already loading/opening first finishes startup before draining. The runtime waits
+gets focus, and one that hides for less than a second keeps serving. After that,
+stop routing new work into that engine and ask it to drain, without waiting for
+another visible consumer. An engine
+already loading/opening first finishes startup before draining, and the time its
+page was hidden meanwhile counts. The runtime waits
 for admitted work and closes OPFS before acknowledging. Only then may another
 eligible visible page acquire the owner lock and open the existing database.
+A drain is looked at every five seconds in which some page is visible, or a newer
+build waits for it. One whose lock is free, after a heartbeat interval for its
+`engine-drained` to arrive, and one still draining at the third look, 15 s in, are
+ended as if their page had left (`ownerEvent: drain-timed-out`), so the next owner
+opens the existing database: a drain never ends in a wipe. A frozen one keeps its lock until it thaws or its page goes, and the
+next owner then runs into the lock's own time limit.
 Clients and their subscribers stay connected; an explicit page disposal can join
-the same drain and retire that page normally.
+the same drain and retire that page normally. A host disposed before it is ready
+leaves like a navigating page instead: it keeps the database and the cache scope,
+rejects its requests with `host-disposed`, and reports an admitted enqueue as
+uncertain.
 
 If no eligible tab is visible, the coordinator enters `parked` with no engine.
 Background cache work queues until a visible page resumes ownership; it never
@@ -329,7 +354,8 @@ to its event loop before starting (and again after each request), repeating
 while requests keep arriving (up to a bound), and then picks by priority. A
 typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
-hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
+hides again, cancel that budget: the next visible consumer starts a fresh one. On
+expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
 Only read callers are canceled, not admitted engine work or writes. A typed
 search already sent is the exception: it has no network fallback, so it stays
@@ -341,6 +367,15 @@ blocked is refused like any read, and Quick Access replays it. `search` takes an
 host stops waiting, though the coordinator may still run its copy. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
+
+The second covers an owner change. A read that waits for an owner for any other
+reason (the first startup, a recovery) ends after ten seconds in which its page
+is visible, with `CacheRequestTimeoutError`; reads sent once an owner is ready get
+their ten seconds for its answer, as before. A cache-only reader has nothing to
+turn to, so it tells the two apart (`isOwnerHandoffBlockedError` or the timeout)
+and asks again when `onOwnerReady` reports that the owner answers: after a start,
+after a replaced engine's handshake, and after an owner change that was called
+off. `onCacheGenerationChanged` reports replaced engines only.
 
 A replacement also invalidates document-read cursors and in-flight snapshots.
 The exchange retries a still-current read once against the new generation instead
@@ -382,8 +417,11 @@ contexts/coordinator still needs the existing uncertain-outcome and server-side
 idempotency protections. Parking never reports an unpersisted enqueue as durable.
 
 The read budget never kills an owner, steals a lock, wipes storage, or replays a
-write. If a drain itself stalls, writes wait until it can finish or existing
-failure/navigation recovery applies. Owner telemetry adds `park-started`, `parked`,
+write. A write still queued in the coordinator after 30 s in which some page is
+visible is refused with `write-not-admitted`: no engine ever got it. The exchange
+returns that as the mutation's error, whatever else changed meanwhile, and never
+sends it to the API, where it would overtake writes made since. Settlements,
+removals and the queue's own bookkeeping keep waiting. Owner telemetry adds `park-started`, `parked`,
 `unpark-started`, and `unpark-completed` alongside the `visibility-handoff-*` events.
 The backend-free `parking.browser.e2e.ts` exercises physical release, retained
 clients/storage, a query admitted while parked completing across replacement
@@ -399,6 +437,15 @@ enqueues nor forward them directly to the API. Requests queued at the coordinato
 but not yet routed remain eligible for one dispatch to the replacement engine;
 late old-epoch responses cannot settle the rejected requests.
 
+Any other request its owner left without an answer, drained or lost, is refused
+with `owner-epoch-lost`. A page still starting asks the next owner again and
+keeps its callers waiting, and so does an authority read, which startup waits on
+after the handshake. An authority read also waits out a suspension in the
+back/forward cache and a coordinator restart, so neither makes a starting page
+drop its host. Reads and writes are not replayed. During a handover the
+coordinator announced, a host told its owner was lost keeps sending it requests,
+which wait there for the next owner.
+
 Safari can recreate the SharedWorker global while retaining a page's MessagePort,
 including when another tab closes. A second Effect ready frame is a transport
 reset, not a duplicate initial handshake: the page retires its orphanable engine
@@ -407,9 +454,32 @@ The same host and subscribers survive. Pending operations reject without replay;
 an admitted optimistic enqueue is reported as uncertain so it cannot fall through
 to a second API write. Durable storage and the cache scope are preserved, while
 live-query dependencies and revision checkpoints are invalidated after reconnect.
-Restarted startup is bounded by the registration retry budget; exhaustion uses
-the normal session fallback without quarantining a healthy database. The
-`graphql_cache.owner` event records `ownerEvent: coordinator-restarted`.
+Restarted startup is bounded by the registration retry budget. A restart that
+cuts startup off, restarts that use up `COORDINATOR_CONNECT_ATTEMPTS`, and a
+registration whose every attempt met a restarted coordinator all reject with
+`CoordinatorRestartedError` (`owner-epoch-lost`), which preserves the database
+and scope and which page recovery retries, without the "Local cache unavailable"
+toast. The `graphql_cache.owner` event records
+`ownerEvent: coordinator-restarted`.
+
+A coordinator can also end without a word: Chromium ends it with the process of
+the page that started it. No port closes. The coordinator holds a Web Lock of its
+own for its life and names it in `registered` (`coordinatorLockName`); each page
+waits for that lock, shared, and takes being given it for a restart, as above. A
+coordinator that cannot take its lock works without one, and its end goes
+unnoticed until a connection that brought nothing for as long as an unanswered
+request, or while the host waits for an engine, is asked with a `ping`. No
+`pong` within five seconds is handled as a restart. A coordinator that drops a
+page's port after a message it could not read (`messageerror`) tells the page
+with `connection-closed`, which is handled the same way.
+
+A handshake nobody answers in its startup phase's time is treated like a lost
+connection: the same host connects again, within the same budget, and then ends
+with `request-timeout` and the database kept. `graphql_cache.owner` records each
+as `ownerEvent: startup-unanswered`. An authority read a ready owner leaves
+unanswered waits for a `ping` that is out, whose five seconds count only while the
+page is visible, and is then asked again, twice, before it ends with
+`request-timeout`, so the page can start over on a new host.
 
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS
@@ -432,32 +502,57 @@ URL, or storage scope. Navigation and disposal cancel the wait; no new adapter
 is created by a canceled initialization, even if its timer already fired.
 `graphql_cache.registration_retry` reports the wait duration, retry number,
 triggering error class, and whether the wait completed or was canceled. This is
-separate from a repeated-ready restart and does not make generic transport
-failures storage-safe. Engine recovery retains its bounded five retries.
-Exhausted bootstrap retries preserve the cache
-scope only when the coordinator explicitly proves storage was untouched, not from
-a page's last-seen phase. Missing/broken transports remain conservatively
-uncertain. Pages retry proven untouched bootstrap and owner-lock failures on reconnect,
+separate from a repeated-ready restart.
+
+Retries are bounded in rate, never in number. The coordinator opens the database
+again after every failed attempt: at once after the first loss, then after
+100 ms, doubling to thirty seconds, each time with the open or wipe the last
+attempt still owed. An attempt counts as failed until its engine,
+answering heartbeats, has also answered a request beyond the handshake or been
+open for thirty seconds. Five failed attempts in a row, a busy owner lock, or busy
+files start an **outage**: the coordinator tells every page `cache-unavailable`
+with a reason, refuses queued reads and writes with `owner-lock-unavailable`, and
+goes on. A page that is shown, or registers visible, starts the next attempt at
+once. It keeps startup handshakes and mutation outcomes for the engine that ends
+the outage.
+
+A page's host is **paused** through an outage: `disabled` and `paused` are both
+true, `getGraphqlSoupCacheHost()` returns nothing (reactively), and reads and
+writes fail at once so callers use the network. The client, its socket, its queue
+and its subscribers stay. A handshake with a later engine ends it: the host
+serves again, subscriptions start over, and every mounted query asks the network
+again, since neither the cache nor the view has what was pushed meanwhile (once
+online, if the page is offline). Recovery proves the queue readable at once, also
+while the page is offline or hidden, and stream listeners then refetch as after a
+socket reconnect. A logout or login that meets a paused host starts no other for
+its storage: the logout rotates the scope, the login's repair fails. A pause loses a live query's
+registration like an owner change does, and keeps the CRM authority's
+generation.
+
+A host whose transport failed ends with `CacheHostFailedError` (or the
+typed error it failed with) and leaves its scope and database as they are: no
+handoff, drain, timeout or transport failure quarantines a scope. Pages retry it,
+and coordinator-restart and unanswered-startup failures, on reconnect,
 foregrounding, or explicit draft Retry, with jittered exponential backoff capped
-at thirty seconds. A newly registered host restarts an exhausted untouched
-coordinator at a new owner epoch with `open-existing`; failed hosts remain
-excluded. Draft writes stay blocked until the replacement opens and inspects
-the preserved mutation queue. A read refused because the database was moving
+at thirty seconds. Draft writes stay blocked until the replacement opens and
+inspects the preserved mutation queue. A read refused because the database was moving
 between owners (`owner-handoff-blocked`) leaves the host running, so recovery
 proves that same host readable on its next attempt instead of registering
-another. Unknown storage failures still require explicit recovery or an update
-(the compose banner offers Reload then); retry never rotates the scope or clears
-persisted data. A page whose build was superseded (`cache-superseded`) never
-retries: that coordinator never hands the database back, so the page waits for
-the reload prompt. A page also stops after ten relapses in a row
-(`MAX_RECOVERY_RELAPSES`): restarts that succeeded but whose cache failed again
-before staying up for a minute. A successful restart no longer resets the
-backoff on its own; the count and backoff reset only once the restarted cache
-stays up. A restart that fails outright, such as a lock another context still
-holds, keeps retrying at the capped backoff. `graphql.cache_recovery` records
+another. So does a restart that only lost its request: its owner was lost, the
+page was suspended, the read timed out, or the page replaced the host meanwhile.
+When a host fails during a restart, the failure it reports decides, not what the
+restart then rejects with. A native engine's unknown failures still require
+explicit recovery or an update (the compose banner offers Reload then); retry
+never rotates the scope or clears persisted data. A page whose build was
+superseded (`cache-superseded`) never retries: an older build never opens a
+database a newer one took, so the page waits for the reload prompt. A successful
+restart does not reset the backoff on its own; the count and backoff reset only
+once the restarted cache stays up for a minute. `graphql.cache_recovery` records
 each attempt and its failure, `graphql.cache_recovery_relapse` a restarted host
-that failed before staying up, and `graphql.cache_recovery_stopped` why the page
-stopped.
+that failed before staying up, `graphql.cache_off_past_limit` a cache that was off
+for five minutes while its page was visible, with the attempts made
+(`CACHE_OFF_LIMIT_MS`; the page goes on), and `graphql.cache_recovery_stopped` why
+a page stopped.
 Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
 from a fixed list (`describeCacheError`), so the message itself never leaves.
 
@@ -477,12 +572,12 @@ draining it, answers:
 
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
   `cache-superseded`, and later requests are refused with the
-  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. The owner's
-  page leaves the way a navigating page does: it terminates its engine, which
-  releases the owner lock without counting as a lost owner. An enqueue that was
-  already sent is reported as uncertain rather than sent again, because it may
-  be in the durable queue that the newer build replays. Nothing is elected
-  again. The requester's engine, still retrying the lock, opens the same
+  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. A
+  running engine is drained first, within the same limit as any drain (15 s), so
+  what it was given settles; it then releases the owner lock. An enqueue that
+  was already sent and still has no answer is reported as uncertain rather than
+  sent again, because it may be in the durable queue that the newer build
+  replays. Nothing is elected again. The requester's engine, still retrying the lock, opens the same
   database with its data and queued mutations. A holder whose engine is still
   opening or already draining the database (hiding its owner tab starts a
   drain, and opening the requesting tab usually hides it) answers at once but
@@ -490,30 +585,45 @@ draining it, answers:
   engine is interrupted while its files may be changing. If that engine is
   lost first, the promised handover completes in place of the reset election,
   so a build never wipes a database it agreed to hand over.
-- **Keep**, if the requester is not newer. The requester fails closed as below.
+- **Keep**, if the requester is not newer. The reply carries the holder's build
+  time. A holder of the requester's own build keeps the database only until it
+  closes, so the requester goes into an outage and tries on. Any other holder is
+  newer, and the requester's tabs are superseded.
 
 A superseded page offers a persistent reload prompt. It reloads by itself only
 while hidden, online, not holding work (a call or an upload, via
 `holdAutomaticReload`), and not focused on a text field that holds text.
 Otherwise it retries the next time it is hidden or comes back online. A page
 that registers with a superseded coordinator later, for example after a
-rollback or from stale HTML, only runs uncached, because a reload could land on
-the same build again. Its `cache-unavailable` notice carries `superseded: true`,
-so its host retires with `cache-superseded` and recovery does not retry it.
+rollback or from stale HTML, is told the same. Its reload could land on the same
+build again, so a tab reloads by itself once per build
+(`reloadForSupersededCache`) and after that only when its prompt is used.
 
 A coordinator that holds nothing but gets a request from a newer build sends
 its tabs there too, without answering. An unanswered request is posted again
 every second while the engine keeps retrying the lock: the holder may be
 between owners, or parked with the lock already free, and the requester's own
-retries then take it. When the holder keeps the database, or when the engine
-exhausts its retries (builds from before handover never answer, so their
-holders cost that whole wait), the coordinator fails closed:
-it refuses queued requests with `owner-lock-unavailable` and tells every
-registered page `cache-unavailable`. Those pages retire their host for the rest
-of the page session, without quarantine, toast, or error report; only a tab
-that registers later tries again. Nothing waits in line for the lock, and a
-build only ever yields to a newer one. A rollback therefore leaves the rolled-back
-build uncached until the newer tabs close, instead of reloading tabs in a loop.
+retries then take it. When a holder of the same build keeps the database, or
+when the engine exhausts its retries (builds from before handover never answer,
+so their holders cost that whole wait), an outage starts (above), without toast
+or error report. The notice carries why, as
+`unavailableReason`: `owner-lock-timeout` (the engine gave up on the lock),
+`no-takeover-channel` (no BroadcastChannel to ask the holder), `holder-kept`,
+`files-busy` (below), or `recovery-failed` (five attempts failed); a newer build
+taking over is `superseded`. The
+coordinator records it on its `graphql_cache.owner` event, the page logs one
+`graphql cache failed closed` warning per reason with `cache.unavailable_reason`
+(inside an anonymous span, so it carries no user id), and recovery spans that
+fail on it carry the same attribute. Worker events reach the reporter over a
+BroadcastChannel every open build shares, and a reporter drops an event with a
+field its build does not know; adding `unavailableReason` therefore moved the
+channel and its reporter lock to `v2`, so an older build's reporter never drops
+this build's owner events. Nothing waits in line for the lock, and a
+build only ever yields to a newer one. A rollback therefore leaves the
+rolled-back build's open tabs uncached until they reload after the newer tabs
+close, instead of reloading tabs in a loop. An owner the browser froze before its
+drain ended keeps its lock and files until it thaws or is discarded; stealing
+them could corrupt the database, so the outage lasts as long.
 
 The browser can also hand the owner lock to the next engine before a departing
 page's terminated worker has let go of the database files. Production logs show
@@ -521,7 +631,7 @@ that gap outlasting two seconds after a reload. Every holder of these files
 first holds the owner lock, so a busy file seen while holding it is a predecessor
 still exiting, not damage. The OPFS adapter waits up to ten seconds for busy
 files within one open or wipe. If they stay busy, the engine reports
-`storage-busy`, and the coordinator fails closed as above. It keeps that
+`storage-busy`, and an outage starts as above. The coordinator keeps that
 attempt's open or wipe requirement instead of escalating a failed open to a
 wipe, which could not remove open files anyway.
 
@@ -556,12 +666,14 @@ paths remain behind the same `CacheHost` interface.
 Normalized records are serialized with `postcard` into `records.value`, behind a
 one-byte encoding tag: records of 256 bytes or more are stored deflated when that
 is smaller, and everything else stays raw. Other persisted payloads (queued
-mutations, optimistic layers, projections) remain plain postcard. A format bump
-that only changes the record encoding carries the previous database forward by
-dropping records, search projections, index facts, and calendar ranges — all
-refetchable — while keeping queued mutations, optimistic layers, and their
-projections. Native storage then compacts the migrated file with `VACUUM INTO`, so
-the upgrade reclaims the space instead of leaving freed pages behind.
+mutations, optimistic layers, projections) remain plain postcard. On native, a
+format bump that only changes the record encoding carries the previous file
+forward by dropping records, search projections, index facts, and calendar
+ranges — all refetchable — while keeping queued mutations, optimistic layers,
+and their projections; a browser opens a new database name instead, as above.
+Native storage then compacts the migrated file with `VACUUM INTO`, so the
+upgrade reclaims the space instead of leaving freed pages behind; a compaction
+that fails tries to keep the migrated file as it is.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
@@ -1610,8 +1722,8 @@ matching compact projections into a Rust heap of at most `limit + 1` documents.
 It no longer retains per-bucket text catalogs. Matching and ranking semantics,
 optimistic overlays, and indexed empty-query browsing are preserved; leading
 wildcards still scan selected buckets. Storage schema 12 makes the browse index
-covering by appending search text and source hashes. This is an incompatible
-cutover, not a migration: native caches reset, including queued mutations;
+covering by appending search text and source hashes. Native caches upgrade in
+place through the registered 11 to 12 storage step, keeping queued mutations;
 browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
 Existing cleanup safeguards for those older files remain. That streaming-search
 cutover did not change the record format or schema epoch. See
