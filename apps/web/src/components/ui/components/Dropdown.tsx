@@ -1,3 +1,4 @@
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -602,31 +603,60 @@ function DropdownTrigger<T extends ValidComponent = 'button'>(
   );
 }
 
-export const Dropdown = Object.assign(
-  (props: ComponentProps<typeof KobalteDropdownMenu>) => (
-    <KobalteDropdownMenu gutter={4} {...props} />
-  ),
-  {
-    RadioGroup:
-      KobalteDropdownMenu.RadioGroup /* passthrough — pure logical wrapper */,
-    Separator:
-      KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
-    ItemIndicator: DropdownItemIndicator,
-    ItemLabel:
-      KobalteDropdownMenu.ItemLabel /* passthrough — names the item for assistive tech */,
-    ItemDescription:
-      KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
-    CheckboxItem: DropdownCheckboxItem,
-    MultiSelectItem: DropdownMultiSelectItem,
-    SubContent: DropdownSubContent,
-    SubTrigger: DropdownSubTrigger,
-    GroupLabel: DropdownGroupLabel,
-    RadioItem: DropdownRadioItem,
-    Content: DropdownContent,
-    Trigger: DropdownTrigger,
-    Group: DropdownGroup,
-    Item: DropdownItem,
-    CopyItem: DropdownCopyItem,
-    Sub: DropdownSub,
-  }
-);
+/**
+ * The menu root. On touch it closes when the app navigates to another page,
+ * as sheets do (`createCloseOnNavigation`): its content is portaled to the
+ * body, so a menu whose owner outlives the navigation would stay over the new
+ * page. It holds uncontrolled open state itself so navigation can close it.
+ */
+function DropdownRoot(props: ComponentProps<typeof KobalteDropdownMenu>) {
+  const [local, rest] = splitProps(props, [
+    'open',
+    'defaultOpen',
+    'onOpenChange',
+  ]);
+  const [uncontrolledOpen, setUncontrolledOpen] = createSignal(
+    local.defaultOpen ?? false
+  );
+  const open = () => local.open ?? uncontrolledOpen();
+  const changeOpen = (next: boolean) => {
+    setUncontrolledOpen(next);
+    local.onOpenChange?.(next);
+  };
+  createCloseOnNavigation({
+    open: () => isTouchDevice() && open(),
+    close: () => changeOpen(false),
+  });
+  return (
+    <KobalteDropdownMenu
+      gutter={4}
+      {...rest}
+      open={open()}
+      onOpenChange={changeOpen}
+    />
+  );
+}
+
+export const Dropdown = Object.assign(DropdownRoot, {
+  RadioGroup:
+    KobalteDropdownMenu.RadioGroup /* passthrough — pure logical wrapper */,
+  Separator:
+    KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
+  ItemIndicator: DropdownItemIndicator,
+  ItemLabel:
+    KobalteDropdownMenu.ItemLabel /* passthrough — names the item for assistive tech */,
+  ItemDescription:
+    KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
+  CheckboxItem: DropdownCheckboxItem,
+  MultiSelectItem: DropdownMultiSelectItem,
+  SubContent: DropdownSubContent,
+  SubTrigger: DropdownSubTrigger,
+  GroupLabel: DropdownGroupLabel,
+  RadioItem: DropdownRadioItem,
+  Content: DropdownContent,
+  Trigger: DropdownTrigger,
+  Group: DropdownGroup,
+  Item: DropdownItem,
+  CopyItem: DropdownCopyItem,
+  Sub: DropdownSub,
+});

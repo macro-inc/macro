@@ -46,6 +46,7 @@ async function settled(sheet: Locator) {
 /** No sheet left anything behind that blocks the page. */
 async function expectPageInteractive(page: Page) {
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('menu')).toHaveCount(0);
   // Scroll lock and outside pointer blocking are gone with the sheets.
   expect(await bodyStyle(page)).toEqual(pageBody);
 
@@ -117,3 +118,57 @@ test('a link closes a sheet the app chrome owns', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Channel' })).toBeVisible();
   await expectPageInteractive(page);
 });
+
+/**
+ * Overlays built on Kobalte rather than a sheet: portaled to the body and
+ * owned by the page, which phones keep mounted behind the channel.
+ */
+const PAGE_OVERLAYS: {
+  name: string;
+  open: (page: Page) => Promise<void>;
+  overlay: (page: Page) => Locator;
+}[] = [
+  {
+    name: 'the photo viewer',
+    open: (page) => page.getByRole('button', { name: 'Photo' }).tap(),
+    overlay: (page) => page.getByRole('dialog'),
+  },
+  {
+    name: 'an image viewer that holds its own open state',
+    open: (page) => page.getByTestId('gallery').getByRole('button').tap(),
+    overlay: (page) => page.getByRole('dialog'),
+  },
+  {
+    name: 'a menu',
+    open: (page) => page.getByRole('button', { name: 'Options' }).tap(),
+    overlay: (page) => page.getByRole('menuitem', { name: 'Duplicate' }),
+  },
+  {
+    name: 'the share dialog',
+    open: (page) => page.getByRole('button', { name: 'Share' }).tap(),
+    overlay: (page) => page.getByRole('heading', { name: 'Share document' }),
+  },
+  {
+    name: 'the create menu',
+    open: (page) => page.getByRole('button', { name: 'New' }).tap(),
+    overlay: (page) => page.getByRole('button', { name: 'Note' }),
+  },
+];
+
+for (const overlay of PAGE_OVERLAYS) {
+  test(`a notification tap closes ${overlay.name}`, async ({ page }) => {
+    await overlay.open(page);
+    await expect(overlay.overlay(page)).toBeVisible();
+    // On phones the share dialog is a sheet: let its opening slide end.
+    await expect(page.locator('[data-transitioning]')).toHaveCount(0);
+
+    await page.evaluate(
+      (channel) => window.navigationFixture.tapNotification(channel),
+      CHANNEL
+    );
+
+    await expect(page.getByRole('heading', { name: 'Channel' })).toBeVisible();
+    await expect(overlay.overlay(page)).toHaveCount(0);
+    await expectPageInteractive(page);
+  });
+}

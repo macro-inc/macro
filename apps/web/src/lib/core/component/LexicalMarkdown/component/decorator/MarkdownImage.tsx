@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { internalDrag } from '@core/directive/internalDragState';
 
 false && internalDrag;
@@ -285,6 +286,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
 
   return (
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
+      <DialogClosesOnNavigation />
       <div
         ref={containerRef}
         class={cn(

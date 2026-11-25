@@ -110,10 +110,12 @@ read their code, and follow that pattern rather than inventing a new one.
   per-sheet delays or click guards for it. A drag dismissal the owner refuses
   (to confirm a discard, or while an action is pending) snaps the sheet back
   open.
-- Sheets and touch dialogs close themselves when the app navigates to
-  another page; don't close them per sheet. Pass `keepOpenOnNavigation` only
-  when dismissing does something the user didn't choose (discards files
-  shared to the app, records a prompt as dismissed). A sheet that reopens
+- Sheets, touch dialogs and `Dropdown` menus close themselves when the app
+  navigates to another page; don't close them per sheet. An overlay built on
+  Kobalte's `Dialog` directly (a full-screen viewer) renders
+  `DialogClosesOnNavigation` inside its root instead. Pass
+  `keepOpenOnNavigation` only when dismissing does something the user didn't
+  choose (discards files shared to the app, records a prompt as dismissed). A sheet that reopens
   after a dialog closes checks `shownPage()` first: a navigation may have
   closed the dialog.
 - A sheet opened from another sheet stacks on it under its own scrim, which
