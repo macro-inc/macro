@@ -6,6 +6,7 @@ import {
   TUTORIAL_PRESENTER,
   TUTORIAL_VIDEOS,
   type TutorialVideoId,
+  hasLightTutorialPreview,
   tutorialPosterUrl,
   tutorialPreviewUrl,
   tutorialVideoUrl,
@@ -72,6 +73,8 @@ export function TutorialVideoEmbed(props: {
   let playRecorded = false;
 
   const tutorial = () => TUTORIAL_VIDEOS[props.tutorial];
+  const lightPreview = () =>
+    sitePalette() === 'cream' && hasLightTutorialPreview(props.tutorial);
   const usesBenefitPoster = () => {
     const entry = tutorial();
     return 'preview' in entry && entry.preview === 'benefit';
@@ -163,8 +166,8 @@ export function TutorialVideoEmbed(props: {
             <div class="tutorial-video-poster" aria-hidden="true">
               <TutorialWallpaper tutorial={props.tutorial} />
               <PreviewWindow
-                src={tutorialPreviewUrl(props.tutorial, sitePalette() === 'cream')}
-                light={sitePalette() === 'cream'}
+                src={tutorialPreviewUrl(props.tutorial, lightPreview())}
+                light={lightPreview()}
               />
             </div>
           </Show>

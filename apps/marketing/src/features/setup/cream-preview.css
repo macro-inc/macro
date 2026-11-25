@@ -1,8 +1,15 @@
 /* Cream palette for the public website, /start, and the sample workspace.
    Retained behind WEBSITE_LIGHT_MODE_ENABLED, currently disabled (see sitePalette.ts).
    Palette sampled from the cream ad set: page #f5f1e8, with brighter, less saturated
-   raised surfaces; body #54524f, labels #72706c, near-black ink.
+   raised surfaces; body #54524f, labels #6a6762, near-black ink.
    Everything is scoped to html[data-palette=cream]; the dark site is unchanged. */
+
+/* ---- One capture per palette -------------------------------------------
+   App captures are in the markup once per palette. Only the one for the
+   palette on <html> is displayed, and a hidden lazy image is never fetched,
+   so prerendered pages serve either palette without a swap after load. */
+html:not([data-palette='cream']) .palette-light-only,
+html[data-palette='cream'] .palette-dark-only { display: none !important; }
 
 html[data-palette='cream'] {
   --marketing-mention: oklch(.52 .14 250deg);
@@ -14,7 +21,7 @@ html[data-palette='cream'] {
   --color-surface-4: #fefefd;
   --color-content-0: oklch(0.2 0.004 70deg);
   --color-content-1: #54524f;
-  --color-content-2: #72706c;
+  --color-content-2: #6a6762;
   --color-content-3: #8f8c86;
   --color-content-4: #a29f98;
   --color-chrome: #faf8f3;
@@ -39,7 +46,7 @@ html[data-palette='cream'] :is(.homepage-sections, .feature-page) {
   --c1l: 0.2 !important;   --c1c: 0.004 !important; --c1h: 70deg !important;
   --c2l: 0.36 !important;  --c2c: 0.005 !important; --c2h: 70deg !important;
   --c3l: 0.45 !important;  --c3c: 0.005 !important; --c3h: 70deg !important;
-  --c4l: 0.54 !important;  --c4c: 0.006 !important; --c4h: 75deg !important;
+  --c4l: 0.5 !important;  --c4c: 0.006 !important; --c4h: 75deg !important;
 }
 
 html[data-palette='cream'] body { background: #f5f1e8; color: var(--color-ink); }
@@ -49,10 +56,48 @@ html[data-palette='cream'] .onboarding-flow {
   --color-surface: #f5f1e8 !important;
   --color-ink: oklch(0.2 0.004 70deg) !important;
   --color-ink-muted: #54524f !important;
-  --color-ink-extra-muted: #72706c !important;
+  --color-ink-extra-muted: #6a6762 !important;
   --color-edge: #d9d4ca !important;
   --color-edge-muted: #e6e1d7 !important;
 }
+
+/* ---- Glass panels and drawn graphics ---------------------------------
+   demo-glass.css and benefit-page.css draw with these tokens. On cream the
+   glass is a pale fill and every white hairline becomes an ink one. */
+html[data-palette='cream'] :is(.feature-page, .macro-homepage) {
+  --demo-glass-fill: rgb(252 251 248 / 78%);
+  --demo-glass-solid: #faf8f3;
+  --demo-glass-chip: rgb(252 251 248 / 70%);
+  --demo-glass-chip-solid: #fcfbf8;
+  --demo-glass-rim: 29 28 26;
+}
+html[data-palette='cream'] .benefit-graphic {
+  --benefit-ink: var(--color-ink);
+  --benefit-ink-muted: var(--color-ink-muted);
+  --benefit-ink-subtle: var(--color-ink-subtle);
+  --benefit-line: 29 28 26;
+  --benefit-surface: #fcfbf8;
+  --benefit-mention: var(--marketing-mention);
+}
+
+/* ---- Dark app screens --------------------------------------------------
+   The product pages' app screens are dark captures with no light counterpart
+   yet. Their flat stage is translucent black, which reads as a deliberate
+   mat on the dark page but as grey fog on cream, so make it solid here. */
+html[data-palette='cream'] { --feature-screenshot-stage: #141414; }
+
+/* ---- Wall of love ----------------------------------------------------- */
+html[data-palette='cream'] .wall-of-love {
+  --love-accent: #a8506b;
+  --love-intro: #54524f;
+  --love-quote: #33312e;
+  --love-card-fill: rgb(252 251 248 / 72%);
+  --love-rim: 29 28 26;
+}
+/* The monograms keep white initials, so their tints turn opaque and deeper. */
+html[data-palette='cream'] .love-avatar { --initial-top: #857a80; --initial-bottom: #675f65; }
+html[data-palette='cream'] .love-card:nth-child(3n + 2) .love-avatar { --initial-top: #76828d; --initial-bottom: #58636f; }
+html[data-palette='cream'] .love-card:nth-child(3n) .love-avatar { --initial-top: #7f8376; --initial-bottom: #5f6659; }
 
 /* ---- Page chrome ---------------------------------------------------- */
 html[data-palette='cream'] .homepage-sections { background: #f5f1e8; }
@@ -60,7 +105,7 @@ html[data-palette='cream'] .site-page-vignette::before { background: linear-grad
 html[data-palette='cream'] .site-page-vignette::after { background: linear-gradient(to top, #f5f1e8 0%, #f5f1e8dd 22%, #f5f1e866 55%, transparent 100%); }
 html[data-palette='cream'] .site-header {
   --nav-ink: #1d1c1a;
-  --nav-muted: #72706c;
+  --nav-muted: #6a6762;
   --nav-surface: rgb(250 248 243 / 85%);
   --nav-menu-surface: var(--color-surface-2);
   --nav-mobile-surface: #f5f1e8;
@@ -106,7 +151,7 @@ html[data-palette='cream'] .homepage-sheet-divider { background: #1d1c1a14; }
 html[data-palette='cream'] .homepage-sheet-font-size { border-color: #1d1c1a14; color: #1d1c1a; }
 html[data-palette='cream'] .homepage-sheet-formula input { color: #1d1c1a; }
 html[data-palette='cream'] .homepage-sheet-formula svg { color: #8f8c86; }
-html[data-palette='cream'] :is(.homepage-sheet-column-row, .homepage-sheet-row > [role=rowheader], .homepage-sheet-footer) { background: var(--color-surface-1); color: #72706c; }
+html[data-palette='cream'] :is(.homepage-sheet-column-row, .homepage-sheet-row > [role=rowheader], .homepage-sheet-footer) { background: var(--color-surface-1); color: #6a6762; }
 html[data-palette='cream'] .homepage-sheet-column-row > div { color: var(--color-ink-muted); }
 html[data-palette='cream'] :is(.homepage-sheet-column-row > div, .homepage-sheet-row > [role=rowheader], .homepage-sheet-cell) { border-color: #1d1c1a12; }
 html[data-palette='cream'] .homepage-sheet-column-row > div.homepage-sheet-column-selected { background: #1d1c1a0a; color: #1d1c1a; }
@@ -132,7 +177,7 @@ html[data-palette='cream'] .dummy-route {
   --color-surface-4: #fefefd;
   --color-content-0: oklch(0.2 0.004 70deg);
   --color-content-1: #54524f;
-  --color-content-2: #72706c;
+  --color-content-2: #6a6762;
   --color-content-3: #8f8c86;
   --color-content-4: #a29f98;
   --color-chrome: #faf8f3;
@@ -174,7 +219,7 @@ html[data-palette='cream'] [data-user-message-bubble]::after {
    FeaturePage scopes the dark palette onto .feature-page with @scope; this
    selector outranks it. Pages also set OnboardingShell's palette inline on
    hero and heading wrappers, so those need !important. */
-html[data-palette='cream'] .feature-page {
+html[data-palette='cream'] :is(.feature-page, .macro-homepage) {
   --color-surface-0: #f5f1e8;
   --color-surface-1: #faf8f3;
   --color-surface-2: #fcfbf8;
@@ -182,7 +227,7 @@ html[data-palette='cream'] .feature-page {
   --color-surface-4: #fefefd;
   --color-content-0: oklch(0.2 0.004 70deg);
   --color-content-1: #54524f;
-  --color-content-2: #72706c;
+  --color-content-2: #6a6762;
   --color-content-3: #8f8c86;
   --color-content-4: #a29f98;
   --color-chrome: #faf8f3;
@@ -197,7 +242,7 @@ html[data-palette='cream'] .tour-page :is(.tour-hero, .tour-constellation, .tour
   --color-surface: #f5f1e8 !important;
   --color-ink: oklch(0.2 0.004 70deg) !important;
   --color-ink-muted: #54524f !important;
-  --color-ink-extra-muted: #72706c !important;
+  --color-ink-extra-muted: #6a6762 !important;
   --color-edge: #d9d4ca !important;
   --color-edge-muted: #e6e1d7 !important;
 }
@@ -216,7 +261,7 @@ html[data-palette='cream'] {
   --c1l: 0.2 !important;   --c1c: 0.004 !important; --c1h: 70deg !important;
   --c2l: 0.36 !important;  --c2c: 0.005 !important; --c2h: 70deg !important;
   --c3l: 0.45 !important;  --c3c: 0.005 !important; --c3h: 70deg !important;
-  --c4l: 0.54 !important;  --c4c: 0.006 !important; --c4h: 75deg !important;
+  --c4l: 0.5 !important;  --c4c: 0.006 !important; --c4h: 75deg !important;
 }
 html[data-palette='cream'] :is(#root, #app-scroll-root) { background: #f5f1e8; }
 html[data-palette='cream'] .site-menu-trigger { color: #1d1c1a; }
@@ -329,11 +374,12 @@ html[data-palette='cream'] .downloads-release a:hover { color: var(--color-ink);
    at scoped UI roots so their frozen dark tokens cannot shadow the palette. */
 html[data-palette='cream'],
 html[data-palette='cream'] .feature-page,
+html[data-palette='cream'] .macro-homepage,
 html[data-palette='cream'] .workspace-demo,
 html[data-palette='cream'] .dummy-route {
   --color-accent: oklch(0.2 0.004 70deg);
-  --color-content-3: #72706c;
-  --color-content-4: #72706c;
+  --color-content-3: #6a6762;
+  --color-content-4: #6a6762;
   --color-red: oklch(0.5 0.17 25deg);
   --color-orange: oklch(0.5 0.13 48deg);
   --color-amber: oklch(0.48 0.1 70deg);
@@ -350,7 +396,7 @@ html[data-palette='cream'] .dummy-route {
 html[data-palette='cream'] .posts-shell {
   --post-ink: #1d1c1a;
   --post-muted: #54524f;
-  --post-faint: #72706c;
+  --post-faint: #6a6762;
   --post-rule: #d9d4ca;
 }
 /* Legacy CTAs set both colors inline; override the pair together. */
@@ -386,15 +432,15 @@ html[data-palette='cream'] .calls-scene-picker button[aria-pressed=true] {
   color: var(--color-ink);
   border-color: var(--color-ink);
 }
-html[data-palette='cream'] .pricing-savings { --ps-ink-faint: #72706c; }
-html[data-palette='cream'] [class~='text-ink-extra-muted/60'] { color: #72706c; }
+html[data-palette='cream'] .pricing-savings { --ps-ink-faint: #6a6762; }
+html[data-palette='cream'] [class~='text-ink-extra-muted/60'] { color: #6a6762; }
 html[data-palette='cream'] .agents-connections :is(h3, .agents-setup-link, summary) {
   color: var(--color-ink);
 }
 html[data-palette='cream'] :is(.agents-connection-path, .agents-mcp-disclosure) {
   border-color: var(--color-edge);
 }
-html[data-palette='cream'] :is(.link-book-demo, .pdg-arrow) { color: #72706c; }
+html[data-palette='cream'] :is(.link-book-demo, .pdg-arrow) { color: #6a6762; }
 html[data-palette='cream'] .homepage-sheet-toolbar .homepage-sheet-tool {
   color: var(--color-ink-muted);
 }
@@ -552,7 +598,7 @@ html[data-palette='cream'] .feature-flow-texture {
 }
 
 html[data-palette='cream'] .homepage-demo-connection path {
-  stroke: #72706c80;
+  stroke: #6a676280;
 }
 
 /* Translucent constellation glass lets the color field show through in cream

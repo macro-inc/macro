@@ -147,6 +147,11 @@
 
 .homepage-tour-screen img[data-active='true'] { opacity: 1; }
 
+/* A light window needs less shadow to lift off the wallpaper. */
+.homepage-tour-screen img.palette-light-only {
+  filter: drop-shadow(0 1px 3px #0003) drop-shadow(0 24px 48px #0005);
+}
+
 @media (max-width: 699px) {
   .homepage-tour {
     width: calc(100% - 16px);
