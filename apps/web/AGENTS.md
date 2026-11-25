@@ -1334,8 +1334,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
-  keyboard in the field, and `commit` hears the Enter that runs the typed
-  search, which Email remembers); `operators` marks search operators (`in:sent`) in
+  keyboard in the field); `operators` marks search operators (`in:sent`) in
   the text, which `search-operator-text.tsx` draws as tokens behind the input
   while the text stays ordinary editable text; future operators reuse it.
   Email's wide search uses all of them. It registers the

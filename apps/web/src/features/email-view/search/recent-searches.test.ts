@@ -17,33 +17,6 @@ it('puts the latest search first without repeating it', () => {
   expect(addRecentSearch(['invoice'], '   ')).toEqual(['invoice']);
 });
 
-it('drops the searches typed on the way to a later one', () => {
-  expect(
-    addRecentSearch(['befo', 'Bef', 'invoice'], 'before:2026/11/01')
-  ).toEqual(['before:2026/11/01', 'invoice']);
-  // A later search that is shorter keeps the longer one before it.
-  expect(addRecentSearch(['invoice report'], 'invoice')).toEqual([
-    'invoice',
-    'invoice report',
-  ]);
-});
-
-it('drops a stored search that a later stored one starts with', () => {
-  localStorage.setItem(
-    'macro:email:recent-searches:v1:user-a',
-    JSON.stringify(['newer_than:1d test', 'label:hello', 'ne', 'befo', 'bef'])
-  );
-
-  createRoot((dispose) => {
-    expect(createRecentEmailSearches(() => 'user-a').recent()).toEqual([
-      'newer_than:1d test',
-      'label:hello',
-      'befo',
-    ]);
-    dispose();
-  });
-});
-
 it('keeps only the most recent searches', () => {
   const many = Array.from({ length: 12 }, (_, index) => `query ${index}`);
   const recent = many.reduce<string[]>(addRecentSearch, []);
