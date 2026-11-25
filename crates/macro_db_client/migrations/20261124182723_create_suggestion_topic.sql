@@ -33,8 +33,9 @@ CREATE TABLE suggestion_topic (
     )
 );
 
--- How many topics a generation named.
-CREATE INDEX suggestion_topic_generation_idx ON suggestion_topic (generation_id);
+-- How many topics a generation named; `key` lets the count read in order and
+-- stop at the cap.
+CREATE INDEX suggestion_topic_generation_idx ON suggestion_topic (generation_id, key);
 
 -- A suggestion has one topic or none. Nullable, with no default, so it
 -- changes only the catalog.

@@ -96,12 +96,18 @@ pub(super) async fn name_topic(
 ) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
     suggestions_db_utils::lock_user(&mut tx, session.user.as_ref()).await?;
-    // Naming one this generation named already is no new topic.
+    // Naming one this generation named already is no new topic. One more than
+    // the limit is read, in the index's order, so the count is bounded.
     let others = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM suggestion_topic
-           WHERE generation_id = $1 AND key <> $2"#,
+        r#"SELECT count(*) FILTER (WHERE named.key <> $2) AS "count!" FROM (
+               SELECT key FROM suggestion_topic
+               WHERE generation_id = $1
+               ORDER BY key
+               LIMIT $3
+           ) named"#,
         session.generation,
         topic.key,
+        i64::from(limit) + 1,
     )
     .fetch_one(&mut *tx)
     .await?;
