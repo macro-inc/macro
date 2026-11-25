@@ -1,4 +1,5 @@
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   createScrollIntentTracker,
   type ScrollDirection,
@@ -937,8 +938,9 @@ export function ThreadList(props: ThreadListProps) {
       <CustomScrollbar
         scrollContainer={scrollEl}
         watchContent
-        // The bar runs between the floating header and the composer.
-        insets={insets()}
+        // On touch the insets are chrome floating over the list, and the bar
+        // runs between it. Desktop insets are padding the bar spans.
+        insets={isTouchDevice() ? insets() : undefined}
         onScrollIntent={(delta) => {
           scrollCompensation?.finish();
           scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up');

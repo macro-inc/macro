@@ -135,7 +135,10 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     return THUMB_INSET + (scrollOffset() / max) * maxTop();
   };
 
-  const isVisible = () => scrollSize() > clientSize();
+  // A track squeezed shorter than the smallest thumb (insets taking most of a
+  // short container) has no room to scroll in.
+  const isVisible = () =>
+    scrollSize() > clientSize() && trackSize() >= MIN_THUMB_SIZE;
 
   createEffect(() => {
     const container = props.scrollContainer();
