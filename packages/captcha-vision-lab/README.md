@@ -68,8 +68,8 @@ doppler run -p shared_ai -c lcl --only-secrets FIREWORK_API_KEY -- \
 # solved  planner_calls=1  actions=1  planner_ms=1019  tokens=734  lab-records/<run>.json
 ```
 
-`--challenges` is capped at 5 per run. Results so far (20 live attempts:
-5 `model_error` with Kimi's default reasoning, then 15 of 15 solved with it
+`--challenges` is capped at 5 per run. Results so far (25 live attempts:
+5 `model_error` with Kimi's default reasoning, then 20 of 20 solved with it
 off) are in the design doc.
 
 With the local stack up (`just run_local`), the same commands apply
