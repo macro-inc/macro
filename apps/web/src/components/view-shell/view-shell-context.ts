@@ -28,6 +28,21 @@ export type ViewShellLayout = {
     expand: () => void;
     toggle: () => void;
   };
+  /**
+   * Wide touch only, for a shell with a `title`: the pane on the left (a
+   * collection's list, or a docked aside) collapses so the right pane takes
+   * the width. `kind` is undefined everywhere else.
+   */
+  leftPane: {
+    kind: Accessor<'list' | 'aside' | undefined>;
+    title: Accessor<string | undefined>;
+    /** The saved choice. A collection's list still shows with no detail. */
+    isCollapsed: Accessor<boolean>;
+    /** A docked aside stays while it's pinned or Main shows nothing. */
+    canCollapse: Accessor<boolean>;
+    collapse: () => void;
+    expand: () => void;
+  };
   main: {
     layout: Accessor<MainLayout>;
   };
@@ -53,21 +68,6 @@ export type ViewShellInternal = ViewShellLayout & {
   navigationTrigger: Accessor<HTMLButtonElement | undefined>;
   registerNavigationTrigger: (element: HTMLButtonElement) => void;
   chooseAsideWidth: (width: number) => void;
-  /**
-   * Wide touch only, for a shell with a `title`: the pane on the left (a
-   * collection's list, or a docked aside) collapses so the right pane takes
-   * the width. `kind` is undefined everywhere else.
-   */
-  leftPane: {
-    kind: Accessor<'list' | 'aside' | undefined>;
-    title: Accessor<string | undefined>;
-    /** The saved choice. A collection's list still shows with no detail. */
-    isCollapsed: Accessor<boolean>;
-    /** A docked aside stays while it's pinned or Main shows nothing. */
-    canCollapse: Accessor<boolean>;
-    collapse: () => void;
-    expand: () => void;
-  };
 };
 
 export const ViewShellContext = createContext<ViewShellInternal>();
@@ -92,6 +92,7 @@ export function useViewShell(): ViewShellLayout {
     width: ctx.width,
     breakpoints: ctx.breakpoints,
     aside: ctx.aside,
+    leftPane: ctx.leftPane,
     main: ctx.main,
     detail: ctx.detail,
   };

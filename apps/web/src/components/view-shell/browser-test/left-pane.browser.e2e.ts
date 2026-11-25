@@ -45,6 +45,8 @@ test('a collection list collapses beside an open item and comes back', async ({
   await draft.fill('Keep this draft');
   await hide(page).tap();
   await expect(listFrame).toBeHidden();
+  // Focus moves to the control that brings the list back.
+  await expect(show(page)).toBeFocused();
   expect((await detail.boundingBox())!.x).toBe(0);
   expect((await detail.boundingBox())!.width).toBe(1000);
   await expect(draft).toHaveValue('Keep this draft');
@@ -76,6 +78,7 @@ test('a collection list collapses beside an open item and comes back', async ({
   await expect(listFrame).toBeVisible();
   expect((await listFrame.boundingBox())!.width).toBe(403);
   await expect(hide(page)).toBeVisible();
+  await expect(hide(page)).toBeFocused();
   await expect(show(page)).toHaveCount(0);
 });
 

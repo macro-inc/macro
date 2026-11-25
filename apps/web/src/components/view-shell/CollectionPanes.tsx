@@ -62,7 +62,7 @@ export function CollectionPanes(props: {
     !ws.collectionLayout() &&
     !listVisible() &&
     !!props.onBack;
-  // A collapsed list keeps its scroll and selection for when it returns.
+  // A collapsed list stays mounted, keeping its rows and state for its return.
   const listMounted = () => listVisible() || stacked() || listCollapsed();
   const titled = () => ws.leftPane.kind() === 'list';
   const returnToList = () => {

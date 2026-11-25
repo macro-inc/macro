@@ -27,12 +27,29 @@ export function LeftPaneTitleRow(props: { canCollapse: boolean }) {
           size="icon-xs"
           class="ml-auto shrink-0"
           data-view-shell-left-pane-toggle="collapse"
-          onClick={() => ws.leftPane.collapse()}
+          onClick={() => {
+            ws.leftPane.collapse();
+            focusToggle(ws.root(), 'expand');
+          }}
         >
           <SidebarIcon class="size-4" />
         </Button>
       </Show>
     </div>
+  );
+}
+
+/** The clicked control leaves with its pane: hand focus to the other one. */
+function focusToggle(
+  shell: HTMLElement | undefined,
+  action: 'collapse' | 'expand'
+) {
+  queueMicrotask(() =>
+    shell
+      ?.querySelector<HTMLButtonElement>(
+        `[data-view-shell-left-pane-toggle="${action}"]`
+      )
+      ?.focus({ preventScroll: true })
   );
 }
 
@@ -47,7 +64,10 @@ export function LeftPaneExpandButton() {
         size="icon-xs"
         class="shrink-0"
         data-view-shell-left-pane-toggle="expand"
-        onClick={() => ws.leftPane.expand()}
+        onClick={() => {
+          ws.leftPane.expand();
+          focusToggle(ws.root(), 'collapse');
+        }}
       >
         <SidebarIcon class="size-4 touch:size-6" />
       </Button>

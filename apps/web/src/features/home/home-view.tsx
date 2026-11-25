@@ -179,6 +179,7 @@ export function HomePendingView() {
       <SplitPanel.Body>
         <HomeViewLayout
           inlinePreview={inlinePreviewLayout()}
+          empty
           list={listSkeleton}
         >
           <div class="size-full" />

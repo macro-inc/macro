@@ -218,11 +218,14 @@ function Root(props: ViewShellRootProps) {
         { default: undefined }
       )
     : createSignal<number>();
-  const [listCollapsed, setListCollapsed] = local.asidePreferenceKey
-    ? usePreference(listCollapsedPreferenceKey(local.asidePreferenceKey), {
-        default: false,
-      })
-    : createSignal(false);
+  // As for navigation, only the primary split follows and writes the saved
+  // choice.
+  const [listCollapsed, setListCollapsed] =
+    local.asidePreferenceKey && !secondarySplit
+      ? usePreference(listCollapsedPreferenceKey(local.asidePreferenceKey), {
+          default: false,
+        })
+      : createSignal(false);
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const [navigationTrigger, setNavigationTrigger] =
@@ -501,20 +504,23 @@ function Root(props: ViewShellRootProps) {
     leftPane: {
       kind: leftPaneKind,
       title: () => local.title,
-      isCollapsed: () =>
-        leftPaneKind() === 'list' ? listCollapsed() : value.aside.isCollapsed(),
+      isCollapsed: () => {
+        const kind = leftPaneKind();
+        if (kind === 'list') return listCollapsed();
+        return kind === 'aside' && value.aside.isCollapsed();
+      },
       canCollapse: () =>
         leftPaneKind() === 'list' ||
-        (leftPaneKind() === 'aside' &&
-          value.aside.canCollapse() &&
-          !local.mainEmpty),
+        (leftPaneKind() === 'aside' && value.aside.canCollapse()),
       collapse: () => {
-        if (leftPaneKind() === 'list') setListCollapsed(true);
-        else value.aside.collapse();
+        const kind = leftPaneKind();
+        if (kind === 'list') setListCollapsed(true);
+        else if (kind === 'aside') value.aside.collapse();
       },
       expand: () => {
-        if (leftPaneKind() === 'list') setListCollapsed(false);
-        else value.aside.expand();
+        const kind = leftPaneKind();
+        if (kind === 'list') setListCollapsed(false);
+        else if (kind === 'aside') value.aside.expand();
       },
     },
     returnToList: () => local.asideList?.onBack(),
@@ -527,7 +533,9 @@ function Root(props: ViewShellRootProps) {
         local.asidePreferenceKey !== undefined &&
         local.aside !== false &&
         !asidePinned() &&
-        !narrowList(),
+        !narrowList() &&
+        // A wide-touch aside stays while Main shows nothing.
+        !(leftPaneKind() === 'aside' && local.mainEmpty),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
       fillsShell: () => narrowList() === 'list',
