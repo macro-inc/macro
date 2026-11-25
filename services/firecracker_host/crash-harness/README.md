@@ -15,7 +15,7 @@ TLS, netns slots, nftables tables, uids), all named by `$PREFIX`
 ```sh
 cargo build --release -p firecracker_host --features crash-points
 FIRECRACKER=... JAILER=... IMAGE_SOURCE=<image dir> \
-  AGENT_BUILD=target/release/firecracker-host ./setup.sh   # builds the golden
+  AGENT_BUILD=target/release/firecracker-host ./setup.sh   # builds the goldens of $IMAGE and $NEXT_IMAGE
 ./run.sh                    # every case; or ./run.sh hibernate-published ...
 ./teardown.sh
 ```
@@ -43,6 +43,9 @@ and its dataset must be gone.
 | `wake-saved` | start a hibernated one | running; stale hibernation deleted | exec answers |
 | `destroy-disks-deleted` | destroy | absent or stopped | destroy finishes |
 | `golden-booted` | build a golden | the golden jail removed | the build runs again to ready |
+| `system-disk-previous-dropped` | replace the system disk of a running one | stopped on its old image, one system disk | the repeated replacement boots the new image with `/home` kept, and going back boots the old disk |
+| `system-disk-cloned` | replace the system disk of a running one | stopped on its old image; the unnamed clone deleted | as above |
+| `system-disk-saved` | replace the system disk of a running one | stopped on the new image, both disks kept | as above |
 
 The same shapes are unit-tested with fakes in
 `src/domain/service/reconcile/test.rs`; this harness checks them against

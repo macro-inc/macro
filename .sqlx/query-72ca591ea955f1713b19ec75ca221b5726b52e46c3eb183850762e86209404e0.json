@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ct.id, ct.company_id AS \"company_id!\", ct.name, ct.hidden,\n                      COALESCE((SELECT array_agg(LOWER(e.email) ORDER BY LOWER(e.email))\n                                FROM crm_contact_emails e WHERE e.contact_id = ct.id), '{}') AS \"addresses!\"\n               FROM (SELECT id, team_id, company_id, name, hidden FROM crm_contacts\n                     WHERE company_id = ANY($1) OFFSET 0) ct\n               WHERE ct.team_id = $2\n               ORDER BY ct.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "addresses!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "72ca591ea955f1713b19ec75ca221b5726b52e46c3eb183850762e86209404e0"
+}

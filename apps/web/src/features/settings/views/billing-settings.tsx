@@ -6,6 +6,7 @@ export const BillingSettingsView = (props: { context: BillingContext }) => (
   <BillingView
     state={{
       tier: props.context.tier(),
+      interval: props.context.interval?.(),
       hasPaid: props.context.hasPaid(),
       trialEligible: props.context.trialEligible?.(),
       aiUsageEnabled: props.context.aiUsageBilling(),
@@ -26,11 +27,11 @@ export const BillingSettingsView = (props: { context: BillingContext }) => (
       fireAndForget(props.context.changePlan(plan), 'billing-settings')
     }
     onManage={() => fireAndForget(props.context.manage(), 'billing-settings')}
-    onSelectPlan={(plan) =>
+    onSelectPlan={(plan, interval) =>
       fireAndForget(
         props.context.hasPaid()
           ? props.context.changePlan(plan)
-          : props.context.checkout(plan),
+          : props.context.checkout(plan, interval),
         'billing-settings'
       )
     }

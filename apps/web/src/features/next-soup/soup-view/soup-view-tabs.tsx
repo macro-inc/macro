@@ -14,7 +14,6 @@ import {
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { MobileFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/mobile-filter-drawer';
-import { MobileSearchFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
   type TabbedListView,
@@ -348,14 +347,6 @@ export const MobileSoupViewTabs = () => {
 
   return (
     <Switch>
-      <Match when={listView() === 'search'}>
-        {/* The search view has no tab pills — its header hosts only the
-            facet-filter drawer button (the desktop SearchFiltersRow's
-            mobile counterpart). */}
-        <div class="flex w-full justify-end px-(--mobile-chrome-gutter)">
-          <MobileSearchFilterDrawer />
-        </div>
-      </Match>
       <For
         each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
       >

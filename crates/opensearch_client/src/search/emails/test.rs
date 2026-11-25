@@ -108,7 +108,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["reply test".to_string()],
         user_id: "macro|alice@example.com".to_string(),
-        user_ids: vec![],
+        inbox_link_ids: vec![],
         thread_ids: vec![],
         required_thread_ids: vec![],
         link_ids: vec![],
@@ -155,7 +155,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["hello".to_string(), "test".to_string()],
         user_id: "macro|alice@example.com".to_string(),
-        user_ids: vec![],
+        inbox_link_ids: vec![],
         thread_ids: vec![],
         required_thread_ids: vec![],
         link_ids: vec![],
@@ -242,7 +242,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
 #[test]
 fn an_excluded_link_s_mail_never_matches_whatever_grants_it() -> anyhow::Result<()> {
     let json = EmailQueryBuilder::new(vec!["invoice".to_string()])
-        .user_ids(vec!["macro|owner@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string()])
         .ids(vec!["shared-thread".to_string()])
         .exclude_link_ids(vec!["deleting-link".to_string()])
         .build_bool_query()?
@@ -265,6 +265,11 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .page(1)
         .user_id("user123")
         .collapse(true)
+        .inbox_link_ids(vec![
+            "link1".to_string(),
+            "link2".to_string(),
+            "link3".to_string(),
+        ])
         .ids(vec!["thread1".to_string(), "thread2".to_string()])
         .link_ids(vec!["link1".to_string(), "link2".to_string()])
         .sender(vec!["sender@example.com".to_string()])
@@ -282,7 +287,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         "minimum_should_match": 1,
                         "should": [
                             {"terms": {"entity_id": ["thread1", "thread2"]}},
-                            {"term": {"user_id": "user123"}}
+                            {"terms": {"link_id": ["link1", "link2", "link3"]}}
                         ]
                     }
                 },
@@ -588,11 +593,11 @@ fn access_filter(json: &serde_json::Value) -> &serde_json::Value {
 }
 
 #[test]
-fn test_shared_threads_widen_the_mailbox_access() -> anyhow::Result<()> {
+fn test_shared_threads_widen_the_inbox_access() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("partial")
         .user_id("macro|viewer@example.com")
-        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string(), "delegated-link".to_string()])
         .ids(vec!["shared-thread".to_string()]);
 
     let json = builder.build_bool_query()?.build().to_json();
@@ -604,7 +609,7 @@ fn test_shared_threads_widen_the_mailbox_access() -> anyhow::Result<()> {
                 "minimum_should_match": 1,
                 "should": [
                     { "terms": { "entity_id": ["shared-thread"] } },
-                    { "terms": { "user_id": ["macro|viewer@example.com"] } }
+                    { "terms": { "link_id": ["own-link", "delegated-link"] } }
                 ]
             }
         })
@@ -617,7 +622,7 @@ fn test_ids_only_searches_only_the_listed_threads() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("partial")
         .user_id("macro|viewer@example.com")
-        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string()])
         .ids(vec!["shared-thread".to_string()])
         .ids_only(true);
 
@@ -635,14 +640,14 @@ fn test_required_thread_ids_narrow_on_top_of_access() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("partial")
         .user_id("macro|viewer@example.com")
-        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string()])
         .required_thread_ids(vec!["thread-a".to_string(), "thread-b".to_string()]);
 
     let json = builder.build_bool_query()?.build().to_json();
 
     assert_eq!(
         access_filter(&json),
-        &json!({ "terms": { "user_id": ["macro|viewer@example.com"] } })
+        &json!({ "terms": { "link_id": ["own-link"] } })
     );
     let filters = json["bool"]["filter"].as_array().unwrap();
     assert!(
@@ -758,6 +763,7 @@ fn a_search_of_conditions_alone_keeps_the_access_filter() -> anyhow::Result<()> 
     let builder = EmailQueryBuilder::new(Vec::new())
         .match_type("partial")
         .user_id("user123")
+        .inbox_link_ids(vec!["own-link".to_string()])
         .sent_between(Some(1_000), Some(2_000));
 
     let json = builder.build_bool_query()?.build().to_json();
@@ -765,7 +771,7 @@ fn a_search_of_conditions_alone_keeps_the_access_filter() -> anyhow::Result<()> 
     assert!(json["bool"]["must"].is_null());
     assert_eq!(
         access_filter(&json),
-        &json!({ "term": { "user_id": "user123" } })
+        &json!({ "terms": { "link_id": ["own-link"] } })
     );
     let filters = json["bool"]["filter"].as_array().unwrap();
     assert!(filters.contains(&json!({

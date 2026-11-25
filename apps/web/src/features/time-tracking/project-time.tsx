@@ -2,7 +2,12 @@ import type { EntityDetailNavigationOptions } from '@app/components/entity-detai
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableTimeTracking } from '@core/constant/featureFlags';
 import { type JSX, Show, Suspense } from 'solid-js';
-import { ReportPerson, saveCsv, useReportClock } from './report-host';
+import {
+  REPORT_TASK_PARTS,
+  ReportPerson,
+  saveCsv,
+  useReportClock,
+} from './report-host';
 import { TimeTrackingProvider } from './time-tracking-provider';
 import { MobileProjectTime } from './views/mobile/project-time';
 import { ProjectTimeDesktop } from './views/project-time';
@@ -23,6 +28,7 @@ function reportProps(props: ProjectTimeProps) {
     },
     clock: useReportClock(),
     person: (userId: string) => <ReportPerson userId={userId} />,
+    task: REPORT_TASK_PARTS,
     onOpenTask: (taskId: string, options?: EntityDetailNavigationOptions) => {
       props.onOpenTask({ id: taskId }, options);
     },

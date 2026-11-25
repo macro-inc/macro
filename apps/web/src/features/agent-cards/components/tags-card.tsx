@@ -128,13 +128,15 @@ export function TagsCard(props: {
     const sets = queryReadyGate(tagsQuery) ? tagsQuery.data : [];
     for (const set of sets) {
       for (const option of set.options) {
+        const label =
+          option.value.type === 'string' ? option.value.value : option.id;
         const target = {
           optionId: option.id,
           propertyDefinitionId: option.propertyDefinitionId,
+          label,
         };
         byId.set(option.id, {
-          label:
-            option.value.type === 'string' ? option.value.value : option.id,
+          label,
           color: option.color ?? undefined,
           open: () =>
             fireAndForget(

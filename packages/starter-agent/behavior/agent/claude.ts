@@ -26,12 +26,19 @@ export type TraceSpan = {
   readonly set: (name: string, value: string | number | boolean) => void;
   /** This span's W3C trace context, for a child process. */
   readonly traceparent: () => string | undefined;
+  /** Marks the span failed (error status), with a category, never error text. */
+  readonly fail?: (category: string) => void;
 };
 
-/** Runs `run` inside a span named `name` (the Telemetry facade, injected). */
+/**
+ * Runs `run` inside a span named `name` (the Telemetry facade, injected): a
+ * child of the active span, or of `parent` (a W3C `traceparent` another run
+ * or process recorded) when one is given.
+ */
 export type Trace = <Value>(
   name: string,
-  run: (span: TraceSpan) => Promise<Value>
+  run: (span: TraceSpan) => Promise<Value>,
+  parent?: string
 ) => Promise<Value>;
 
 /** A trace that records nothing. */

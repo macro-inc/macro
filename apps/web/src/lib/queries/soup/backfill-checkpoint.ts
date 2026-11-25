@@ -1,9 +1,8 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-
-// Bump when a default backfill input or completion guarantee changes so
-// persisted cursors cannot retain an older hydration contract.
-// Restart old cursors whose core lane still included channels.
-export const BACKFILL_VERSION = 19;
+import {
+  type SoupBackfillLane,
+  soupBackfillCheckpointKey,
+} from './backfill-contract';
 
 // Saving a checkpoint fires this in the tab that saved it; other tabs see the
 // write as a `storage` event.
@@ -35,20 +34,43 @@ type StoredSoupBackfillCheckpoint = Omit<
     >
   >;
 
-function checkpointKey(userId: string, checkpointId: string): string {
-  return `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}:${checkpointId}`;
-}
-
 // Holds the storage generation in which the lane last gave up.
 function failureKey(checkpointKey: string): string {
   return `${checkpointKey}:failed`;
 }
 
 // What this tab wrote when storage refused it, so the tab still reads its
-// own lanes' progress; a later write that storage takes drops the copy. A
-// failure entry of null means this tab cleared the mark.
-const unsavedCheckpoints = new Map<string, SoupBackfillCheckpoint>();
-const unsavedFailures = new Map<string, string | null>();
+// own lanes' progress, with the checkpoint text stored when it was refused.
+// A later write that storage takes drops the copy, and so does another tab
+// storing the lane: a tab runs a lane only while holding its locks, so what
+// the other tab stored is newer. A failure entry of null means this tab
+// cleared the mark.
+type Unsaved<T> = { value: T; over: string | null };
+const unsavedCheckpoints = new Map<string, Unsaved<SoupBackfillCheckpoint>>();
+const unsavedFailures = new Map<string, Unsaved<string | null>>();
+
+function storedText(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** This tab's unsaved copy for the lane `key`, while `stored` is still the
+ * checkpoint text it was refused over. */
+function unsavedCopy<T>(
+  copies: Map<string, Unsaved<T>>,
+  key: string,
+  stored: string | null
+): Unsaved<T> | undefined {
+  const copy = copies.get(key);
+  if (copy && copy.over !== stored) {
+    copies.delete(key);
+    return undefined;
+  }
+  return copy;
+}
 
 function notifySaved(key: string) {
   window.dispatchEvent(
@@ -96,14 +118,11 @@ function isCheckpoint(
   );
 }
 
-export function loadSoupBackfillCheckpoint(
-  userId: string,
-  checkpointId: string
+function parseCheckpoint(
+  saved: string | null,
+  userId: string
 ): SoupBackfillCheckpoint {
-  const unsaved = unsavedCheckpoints.get(checkpointKey(userId, checkpointId));
-  if (unsaved) return { ...unsaved };
   try {
-    const saved = localStorage.getItem(checkpointKey(userId, checkpointId));
     if (!saved) return initialSoupBackfillCheckpoint(userId);
 
     const parsed: unknown = JSON.parse(saved);
@@ -118,31 +137,60 @@ export function loadSoupBackfillCheckpoint(
       completedAt: parsed.completedAt ?? null,
     };
   } catch {
-    // Restarting from the beginning is safe when storage is unavailable or
-    // the saved checkpoint is malformed.
+    // Restarting from the beginning is safe when the saved checkpoint is
+    // malformed.
     return initialSoupBackfillCheckpoint(userId);
   }
 }
 
+/** A lane's checkpoint, with the stored text it was read from: null when
+ * none is stored or storage is unavailable. When storage refused this tab's
+ * last write, the tab's unsaved copy wins over the stored text. */
+export function readSoupBackfillCheckpoint(
+  userId: string,
+  lane: SoupBackfillLane
+): { stored: string | null; checkpoint: SoupBackfillCheckpoint } {
+  const key = soupBackfillCheckpointKey(userId, lane);
+  // Unavailable storage reads as none: restarting from the beginning is safe.
+  const stored = storedText(key);
+  const unsaved = unsavedCopy(unsavedCheckpoints, key, stored);
+  return {
+    stored,
+    checkpoint: unsaved
+      ? { ...unsaved.value }
+      : parseCheckpoint(stored, userId),
+  };
+}
+
+export function loadSoupBackfillCheckpoint(
+  userId: string,
+  lane: SoupBackfillLane
+): SoupBackfillCheckpoint {
+  return readSoupBackfillCheckpoint(userId, lane).checkpoint;
+}
+
 export function saveSoupBackfillCheckpoint(
   checkpoint: SoupBackfillCheckpoint,
-  checkpointId: string
+  lane: SoupBackfillLane
 ): void {
-  const key = checkpointKey(checkpoint.userId, checkpointId);
+  const key = soupBackfillCheckpointKey(checkpoint.userId, lane);
   try {
     localStorage.setItem(key, JSON.stringify(checkpoint));
     unsavedCheckpoints.delete(key);
   } catch {
     // Pages already cached are fetched again after a restart; until then
     // this tab reads the copy.
-    unsavedCheckpoints.set(key, { ...checkpoint });
+    unsavedCheckpoints.set(key, {
+      value: { ...checkpoint },
+      over: storedText(key),
+    });
   }
   // A saved page means the lane runs again.
   try {
     localStorage.removeItem(failureKey(key));
     unsavedFailures.delete(key);
   } catch {
-    unsavedFailures.set(key, null);
+    unsavedFailures.set(key, { value: null, over: storedText(key) });
   }
   notifySaved(key);
 }
@@ -152,16 +200,19 @@ export function saveSoupBackfillCheckpoint(
  * a save. */
 export function markSoupBackfillLaneFailed(
   userId: string,
-  checkpointId: string,
+  lane: SoupBackfillLane,
   storageGeneration: string
 ): void {
-  const key = checkpointKey(userId, checkpointId);
+  const key = soupBackfillCheckpointKey(userId, lane);
   try {
     localStorage.setItem(failureKey(key), storageGeneration);
     unsavedFailures.delete(key);
   } catch {
     // Other tabs keep waiting for the lane; this one reads the copy.
-    unsavedFailures.set(key, storageGeneration);
+    unsavedFailures.set(key, {
+      value: storageGeneration,
+      over: storedText(key),
+    });
   }
   notifySaved(key);
 }
@@ -170,12 +221,12 @@ export function markSoupBackfillLaneFailed(
  * has not saved a page since. */
 export function soupBackfillLaneFailed(
   userId: string,
-  checkpointId: string,
+  lane: SoupBackfillLane,
   storageGeneration: string
 ): boolean {
-  const key = checkpointKey(userId, checkpointId);
-  if (unsavedFailures.has(key))
-    return unsavedFailures.get(key) === storageGeneration;
+  const key = soupBackfillCheckpointKey(userId, lane);
+  const unsaved = unsavedCopy(unsavedFailures, key, storedText(key));
+  if (unsaved) return unsaved.value === storageGeneration;
   try {
     return localStorage.getItem(failureKey(key)) === storageGeneration;
   } catch {
@@ -187,10 +238,10 @@ export function soupBackfillLaneFailed(
  * up, in this tab or another. Returns the unsubscribe. */
 export function watchSoupBackfillCheckpoint(
   userId: string,
-  checkpointId: string,
+  lane: SoupBackfillLane,
   onSave: () => void
 ): () => void {
-  const key = checkpointKey(userId, checkpointId);
+  const key = soupBackfillCheckpointKey(userId, lane);
   const stopLocal = makeEventListener(
     window,
     CHECKPOINT_SAVED_EVENT,
@@ -213,10 +264,10 @@ export function watchSoupBackfillCheckpoint(
  * current storage generation began. A later pass in progress keeps it true. */
 export function soupBackfillLaneCompleted(
   userId: string,
-  checkpointId: string,
+  lane: SoupBackfillLane,
   storageGeneration: string
 ): boolean {
-  const checkpoint = loadSoupBackfillCheckpoint(userId, checkpointId);
+  const checkpoint = loadSoupBackfillCheckpoint(userId, lane);
   return (
     checkpoint.completedAt !== null &&
     checkpoint.storageGeneration === storageGeneration

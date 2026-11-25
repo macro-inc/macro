@@ -57,6 +57,10 @@ Document read/write/debug handlers declare their minimum session grant through
 Axum extractors; atomic reads/updates require a signed document grant even when
 an internal key is present. Surface grants remain kind-discriminated and exact
 to the requested surface. These are scoped sync JWTs, not app-session tokens.
+The import-only `/document/{id}/import-links` CAS requires an internal key and
+an exact signed owner grant. The importer fences it against its active body
+receipt. It persists and attributes the update, publishes the snapshot and
+broadcasts normally, and omits the `Edited` interaction.
 
 ## Checks
 

@@ -9,8 +9,10 @@ export default defineConfig({
   testMatch: [
     'independent-send-recovery.browser.e2e.ts',
     'calendar-points.browser.e2e.ts',
+    'calendar-create.browser.e2e.ts',
     'coordinator.browser.e2e.ts',
     'parking.browser.e2e.ts',
+    'queue-salvage.browser.e2e.ts',
     'cache-wasm-packaging.browser.e2e.ts',
     'notification-projection.browser.e2e.ts',
     'mail-projection.browser.e2e.ts',

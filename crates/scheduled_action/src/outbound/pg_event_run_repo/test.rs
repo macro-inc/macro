@@ -1232,3 +1232,28 @@ async fn a_finished_github_run_keeps_no_payload(pool: PgPool) {
     assert!(context["github"].get("payload").is_none());
     assert_eq!(context["github"]["event"], "workflow_run");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_keeps_the_trace_its_event_was_admitted_in(pool: PgPool) {
+    use tracing::Instrument as _;
+    let _recorded = crate::trace_context::testing::Recorded::start();
+    let (repo, traced, event) = setup(&pool).await;
+    let untraced = action(&pool, json!([{"events": ["document.updated"]}])).await;
+    let admission = tracing::info_span!(parent: None, "admission");
+    let admitted_in = admission.in_scope(crate::trace_context::current);
+    assert!(admitted_in.is_some());
+    admit(&repo, traced, &event).instrument(admission).await;
+    admit(&repo, untraced, &event).await;
+
+    let pending = repo.pending_runs(page(100)).await.unwrap();
+    let kept = |action_id| {
+        pending
+            .iter()
+            .find(|run| run.action_id == action_id)
+            .unwrap()
+            .traceparent
+            .clone()
+    };
+    assert_eq!(kept(traced), admitted_in);
+    assert_eq!(kept(untraced), None);
+}

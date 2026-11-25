@@ -80,7 +80,7 @@ describe('property mutation settlements', () => {
   it('survives engine replacement with preserved storage', async () => {
     const test = setup();
     const pending = test.observer.waitForCommit('1');
-    test.generation({ storage: 'preserved' });
+    test.generation({ storage: 'preserved', queue: 'preserved' });
     test.settle({ transactionId: '1', status: 'committed' });
     await expect(pending).resolves.toBeUndefined();
     test.observer.dispose();
@@ -91,7 +91,7 @@ describe('property mutation settlements', () => {
     const pending = expect(test.observer.waitForCommit('1')).rejects.toThrow(
       'cache reset'
     );
-    test.generation({ storage: 'reset' });
+    test.generation({ storage: 'reset', queue: 'reset' });
     await pending;
     await expect(test.observer.waitForCommit('2')).rejects.toThrow(
       'cache reset'

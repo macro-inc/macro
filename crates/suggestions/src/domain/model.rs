@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::run::{RunState, RunStateName};
+use super::topic::{Topic, TopicChange, TopicName};
 
 #[cfg(test)]
 mod test;
@@ -34,6 +35,8 @@ pub struct Suggestion {
     pub state: SuggestionState,
     /// Why it was resolved; only on resolved suggestions.
     pub state_reason: Option<String>,
+    /// The topic it belongs to, if any; never on a routine suggestion.
+    pub topic: Option<TopicName>,
     /// The items it is about.
     pub about: Vec<Target>,
     /// What acting on it produced.
@@ -530,6 +533,10 @@ pub struct SuggestionFeed {
     /// out when the feed was read with a `limit`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub done: Option<Vec<Suggestion>>,
+    /// The topics the open suggestions belong to, in the order they first
+    /// appear among them; left out when the feed was read with a `limit`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topics: Option<Vec<Topic>>,
     /// How many suggestions the whole feed holds of each status, whatever the
     /// `limit`.
     pub counts: FeedCounts,
@@ -575,6 +582,11 @@ pub struct SuggestionsReview {
     /// Open suggestions first, best first, then closed ones newest first. A
     /// dismissed suggestion's `stateChangedAt` is when the person dismissed it.
     pub suggestions: Vec<Suggestion>,
+    /// The topics those suggestions belong to, in the order they first
+    /// appear, each with how many of its suggestions are open. Absent from a
+    /// server that has none.
+    #[schema(required = false)]
+    pub topics: Vec<Topic>,
     /// Open suggestions the person has, and the most they may have.
     pub open: u32,
     /// The most open suggestions a person may have.
@@ -601,6 +613,12 @@ pub struct NewSuggestion {
     /// The feed's filters it shows under.
     #[serde(default)]
     pub categories: Vec<Category>,
+    /// The key of the topic it belongs to, named with
+    /// `macro.suggestions.nameTopic` first, or null for none; left out, a
+    /// suggestion that exists keeps the one it has.
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub topic: TopicChange,
     /// The items it is about.
     #[serde(default)]
     pub about: Vec<Target>,
@@ -638,6 +656,10 @@ pub struct RewriteSuggestion {
     /// New categories.
     #[serde(default)]
     pub categories: Option<Vec<Category>>,
+    /// The key of the topic it now belongs to, or null for none.
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub topic: TopicChange,
     /// New items it is about.
     #[serde(default)]
     pub about: Option<Vec<Target>>,
@@ -731,6 +753,8 @@ pub struct SuggestionContent {
     pub importance: u8,
     /// See [`Suggestion::categories`].
     pub categories: Vec<Category>,
+    /// The key of its [`Suggestion::topic`].
+    pub topic: Option<String>,
     /// See [`Suggestion::about`].
     pub about: Vec<Target>,
     /// A prompt suggestion's prompt.
@@ -752,6 +776,7 @@ impl SuggestionContent {
             summary: suggestion.summary.clone(),
             importance: suggestion.importance,
             categories: suggestion.categories.clone(),
+            topic: suggestion.topic.as_ref().map(|topic| topic.key.clone()),
             about: suggestion.about.clone(),
             prompt: match &suggestion.kind {
                 SuggestionKind::Prompt { prompt, .. } => Some(prompt.clone()),

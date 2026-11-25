@@ -474,3 +474,38 @@ export function expandCalendarToolPreviewEvents(
 
   return occurrences.length > 0 ? occurrences : [event];
 }
+
+/** The chips a calendar-tool preview draws, and the ones it highlights. */
+export interface CalendarToolPreviewEvents {
+  events: CalendarEvent[];
+  emphasizedIds: ReadonlySet<string>;
+  /** Whether the created event's occurrences stand in for the draft. */
+  showsCreated: boolean;
+}
+
+/**
+ * The person's events with the draft over them. Once the drafted event is
+ * created and its occurrences have loaded, they take the draft's place and
+ * its highlight; until then the draft stays, so the preview is never empty.
+ */
+export function calendarToolPreviewEvents(input: {
+  existing: readonly CalendarEvent[];
+  draft: readonly CalendarEvent[];
+  createdEventId: string | undefined;
+  limit: number;
+}): CalendarToolPreviewEvents {
+  const createdId = input.createdEventId;
+  const created = createdId
+    ? input.existing.filter((event) => event.eventId === createdId)
+    : [];
+  const showsCreated = created.length > 0;
+  const others = showsCreated
+    ? input.existing.filter((event) => event.eventId !== createdId)
+    : input.existing;
+  const emphasized = showsCreated ? created : input.draft;
+  return {
+    events: [...others.slice(0, input.limit), ...emphasized],
+    emphasizedIds: new Set(emphasized.map((event) => event.id)),
+    showsCreated,
+  };
+}

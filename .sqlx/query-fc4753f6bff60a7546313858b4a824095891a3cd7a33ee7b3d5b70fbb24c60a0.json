@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT el.id AS \"id!\", el.deleting_at IS NOT NULL AS \"deleting!\"\n        FROM email_links el\n        WHERE el.macro_id = $1\n        UNION\n        SELECT el.id, el.deleting_at IS NOT NULL\n        FROM email_links el\n        JOIN macro_user_links mul ON el.id = mul.link_id\n        WHERE mul.primary_macro_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleting!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "fc4753f6bff60a7546313858b4a824095891a3cd7a33ee7b3d5b70fbb24c60a0"
+}

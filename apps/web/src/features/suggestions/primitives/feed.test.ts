@@ -9,6 +9,7 @@ import type {
   FeedCounts,
   Suggestion,
   SuggestionFeed,
+  Topic,
 } from '../core/suggestion';
 import {
   backgroundSuggestion,
@@ -40,19 +41,35 @@ function countsOf(suggestions: Suggestion[]): FeedCounts {
   return counts;
 }
 
+/** The topics a server would send for `suggestions`: those of the open ones. */
+function topicsOf(suggestions: Suggestion[]): Topic[] {
+  return suggestions.flatMap(({ status, topic }) =>
+    topic && status !== 'done' ? [{ ...topic, reason: `${topic.key} now` }] : []
+  );
+}
+
 function host(suggestions: Suggestion[]) {
   const [feed, setFeed] = createSignal<SuggestionFeed | undefined>({
     suggestions,
     counts: countsOf(suggestions),
+    topics: topicsOf(suggestions),
   });
   /** The server's next answer lists `list`. */
   const serve = (list: Suggestion[]) =>
-    setFeed({ suggestions: list, counts: countsOf(list) });
+    setFeed({
+      suggestions: list,
+      counts: countsOf(list),
+      topics: topicsOf(list),
+    });
   /** The server stops listing a suggestion, as after a dismissal. */
   const drop = (id: string) =>
     setFeed((held) => {
       const left = held?.suggestions.filter((other) => other.id !== id) ?? [];
-      return { suggestions: left, counts: countsOf(left) };
+      return {
+        suggestions: left,
+        counts: countsOf(left),
+        topics: topicsOf(left),
+      };
     });
   const source = {
     feed,
@@ -573,6 +590,46 @@ describe('suggestions feed', () => {
       answer();
       await sent;
       expect(rowsOf(feed)).toEqual([['suggestion-composer', 'dismissed']]);
+    });
+  });
+
+  it('groups Today by topic, keeps a group whose rows settle, and leaves the other lists flat', async () => {
+    const acme = { key: 'customer:acme', name: 'Acme renewal' };
+    const first = { ...replySuggestion, topic: acme };
+    const second = { ...backgroundSuggestion, topic: acme };
+    const lone = {
+      ...reviewSuggestion,
+      topic: { key: 'event:offsite', name: 'Spring offsite' },
+    };
+    await withFeed([lone, first, second], async (feed) => {
+      const grouped = () =>
+        feed
+          .groups('today')
+          .map(({ topic, entries }) => [
+            topic?.name,
+            topic?.reason,
+            entries.map((entry) => entry.suggestion.id),
+          ]);
+      const inAcme = [
+        'Acme renewal',
+        'customer:acme now',
+        [first.id, second.id],
+      ];
+      expect(grouped()).toEqual([inAcme, [undefined, undefined, [lone.id]]]);
+      expect(feed.groups('toDo')).toHaveLength(1);
+      expect(feed.topics().map((topic) => topic.waiting)).toEqual([2]);
+
+      // Its topic now has one open row, and stays together.
+      await feed.dismiss(first);
+      expect(grouped()).toEqual([inAcme, [undefined, undefined, [lone.id]]]);
+      expect(feed.topics().map((topic) => topic.waiting)).toEqual([1]);
+
+      const [topic] = feed.topics();
+      expect(
+        feed
+          .groups('today', topic)
+          .map(({ entries }) => entries.map((entry) => entry.suggestion.id))
+      ).toEqual([[first.id, second.id]]);
     });
   });
 

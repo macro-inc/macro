@@ -8,8 +8,10 @@ import { soupPropertyToProperty } from './property-helpers';
 
 /** Compact status and priority editors before the task title. */
 export function TaskPropertyControl(props: {
-  entity: TaskEntityWithProperties;
+  entity: Pick<TaskEntityWithProperties, 'id' | 'properties' | 'subType'>;
   property: 'status' | 'priority';
+  /** False shows the value without offering to change it. */
+  canEdit?: boolean;
 }) {
   const definitionId = () =>
     props.property === 'status'
@@ -43,7 +45,7 @@ export function TaskPropertyControl(props: {
   return (
     <PropertyIconControl
       property={property()}
-      canEdit
+      canEdit={props.canEdit ?? true}
       completed={props.entity.subType.is_completed}
       onSave={(property, apiValues) =>
         save.mutateAsync({

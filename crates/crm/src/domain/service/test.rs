@@ -78,6 +78,7 @@ impl EmailPrivacyRepository for StubRepo {
             personal_domains: vec![],
             team_domain_warnings: Default::default(),
             personal_domain_warnings: Default::default(),
+            archived_team_domains: [("archived.example.com".to_owned(), uuid::Uuid::nil())].into(),
             can_remove_team_domains: false,
         })
     }
@@ -586,6 +587,23 @@ async fn members_can_add_team_blocks_but_only_admins_can_remove_them() {
                 .await
                 .unwrap()
                 .can_remove_team_domains
+        );
+    }
+}
+
+#[tokio::test]
+async fn only_admins_see_which_team_domains_come_from_archived_companies() {
+    let svc = service();
+    let settings = svc
+        .email_privacy(&receipt_with_role(TeamRole::Member))
+        .await
+        .unwrap();
+    assert!(settings.archived_team_domains.is_empty());
+    for role in [TeamRole::Admin, TeamRole::Owner] {
+        let settings = svc.email_privacy(&receipt_with_role(role)).await.unwrap();
+        assert_eq!(
+            settings.archived_team_domains,
+            [("archived.example.com".to_owned(), uuid::Uuid::nil())].into()
         );
     }
 }

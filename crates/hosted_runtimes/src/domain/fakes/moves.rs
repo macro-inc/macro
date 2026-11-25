@@ -107,7 +107,7 @@ impl ComputerMoves for FakeRepo {
     }
 
     async fn held_on(&self, host: HostId) -> Result<HashSet<ComputerId>, FakeError> {
-        Ok(self
+        let mut held: HashSet<ComputerId> = self
             .moves
             .lock()
             .unwrap()
@@ -116,7 +116,17 @@ impl ComputerMoves for FakeRepo {
                 moved.stage.holds_computer() && (moved.from_host == host || moved.to_host == host)
             })
             .map(|moved| moved.computer_id)
-            .collect())
+            .collect();
+        let on_host: Vec<ComputerId> = self
+            .computers
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|computer| computer.host == host)
+            .map(|computer| computer.id)
+            .collect();
+        held.extend(on_host.into_iter().filter(|id| self.upgrade_holds(*id)));
+        Ok(held)
     }
 
     async fn held(&self, computer_id: ComputerId) -> Result<bool, FakeError> {
@@ -125,7 +135,8 @@ impl ComputerMoves for FakeRepo {
             .lock()
             .unwrap()
             .iter()
-            .any(|moved| moved.computer_id == computer_id && moved.stage.holds_computer()))
+            .any(|moved| moved.computer_id == computer_id && moved.stage.holds_computer())
+            || self.upgrade_holds(computer_id))
     }
 
     async fn postpone_effect(

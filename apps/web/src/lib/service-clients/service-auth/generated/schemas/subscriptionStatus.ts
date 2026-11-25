@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SubscriptionStatusBilling } from './subscriptionStatusBilling';
+import type { SubscriptionStatusInterval } from './subscriptionStatusInterval';
 import type { SubscriptionStatusRenewalDate } from './subscriptionStatusRenewalDate';
 import type { SubscriptionStatusScheduledChange } from './subscriptionStatusScheduledChange';
 
@@ -13,6 +14,7 @@ import type { SubscriptionStatusScheduledChange } from './subscriptionStatusSche
  */
 export interface SubscriptionStatus {
   billing?: SubscriptionStatusBilling;
+  interval?: SubscriptionStatusInterval;
   /** Provider-confirmed subscription renewal date. */
   renewalDate?: SubscriptionStatusRenewalDate;
   scheduledChange?: SubscriptionStatusScheduledChange;

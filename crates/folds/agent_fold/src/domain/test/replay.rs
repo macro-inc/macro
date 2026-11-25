@@ -810,6 +810,65 @@ fn trusted_system_and_quiet_inputs_survive_repeated_chunked_history_replay() {
 }
 
 #[test]
+fn history_replay_drops_a_trailing_noop_after_prose_like_the_live_fold() {
+    use crate::domain::log::Message;
+    use agent_client_protocol::schema::v1::{RequestId, SessionId};
+    use agent_runtime_protocol::domain::{
+        action::AgentAction,
+        notification::{Notification, NotificationEvent, notification_context},
+    };
+    let event = Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    };
+    let original = AgentSessionLog {
+        agent_session_id: super::util::test_session(),
+        user_id: None,
+        logged_at: None,
+        content: Message::Notification(
+            AgentAction::notification(vec![event.clone()])
+                .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+                .unwrap(),
+        ),
+    };
+    let xml = notification_context(&[event]).unwrap();
+    let frames = vec![
+        original,
+        update("agent_message_chunk", "Calendar is connected."),
+        update("agent_message_chunk", "\n\n<no"),
+        update("agent_message_chunk", "op/>"),
+        frame(
+            "to_server",
+            json!({"id":"event","result":{"stopReason":"end_turn"}}),
+        ),
+        request("initialize", json!(0)),
+        result(json!(0)),
+        request("session/load", json!(5)),
+        update("user_message_chunk", &xml),
+        update("agent_message_chunk", "Calendar is connected."),
+        update("agent_message_chunk", "\n\n<noop/>"),
+        update("user_message_chunk", "next question"),
+        update("agent_message_chunk", "answer"),
+        result(json!(5)),
+    ];
+    let mut machine = FoldMachineImpl::new();
+    for entry in frames {
+        machine.push(entry);
+    }
+    let text: Vec<_> = machine
+        .messages()
+        .iter()
+        .map(|message| message.readable_text())
+        .collect();
+    assert_eq!(text, ["Calendar is connected.", "next question", "answer"]);
+    assert_eq!(machine.metadata().noop_turn, None);
+}
+
+#[test]
 fn an_untrusted_xml_prefix_is_still_user_text() {
     let mut frames = replay(json!(8));
     frames.insert(

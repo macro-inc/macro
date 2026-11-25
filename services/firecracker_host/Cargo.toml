@@ -28,6 +28,7 @@ hyper = { workspace = true, features = ["client", "http1"] }
 hyper-util = { workspace = true, features = ["http1", "http2", "server", "server-auto", "service", "tokio"] }
 memchr = { workspace = true }
 pinned_tls = { path = "../../crates/pinned_tls" }
+reqwest = { workspace = true, features = ["stream"] }
 opentelemetry = { workspace = true, features = ["metrics", "trace"] }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
@@ -37,6 +38,7 @@ rustix = { workspace = true, features = ["event", "fs", "mount", "process"] }
 rustls = { workspace = true, features = ["std"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
@@ -47,6 +49,7 @@ tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
+zstd = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]

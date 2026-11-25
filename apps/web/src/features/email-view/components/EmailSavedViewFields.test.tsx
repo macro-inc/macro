@@ -33,6 +33,14 @@ const TAGS: TagOptionSummary[] = [
   },
 ];
 
+const LARKSPUR = '0199a1b2-0000-7000-8000-0000000000c1';
+const ACME = '0199a1b2-0000-7000-8000-0000000000c2';
+const GONE = '0199a1b2-0000-7000-8000-0000000000c3';
+const LABELS = [
+  { value: ACME, label: 'Customers / Acme' },
+  { value: LARKSPUR, label: 'Customers / Larkspur' },
+];
+
 // The Advanced settings disclosure measures its body.
 beforeEach(() => {
   vi.stubGlobal(
@@ -58,6 +66,7 @@ function renderFields(initial = EMPTY_EMAIL_SAVED_VIEW_FILTERS) {
       inboxes={[]}
       suggestions={() => SUGGESTIONS}
       tags={TAGS}
+      labels={LABELS}
     />
   ));
   return {
@@ -66,6 +75,7 @@ function renderFields(initial = EMPTY_EMAIL_SAVED_VIEW_FILTERS) {
     }),
     participants: () => filters().participants,
     tags: () => filters().tags,
+    labels: () => filters().labels,
   };
 }
 
@@ -184,5 +194,61 @@ describe('EmailSavedViewFields tags', () => {
       deleted,
       { optionId: URGENT, propertyDefinitionId: TAG_SET },
     ]);
+  });
+});
+
+describe('EmailSavedViewFields labels', () => {
+  it('picks labels by their whole names beside tags', async () => {
+    const user = userEvent.setup();
+    const { labels } = renderFields();
+    const fields = screen
+      .getAllByRole('combobox')
+      .map((field) => field.getAttribute('aria-label'));
+    expect(fields.indexOf('Labels')).toBe(fields.indexOf('Tags') + 1);
+
+    const input = screen.getByRole('combobox', { name: 'Labels' });
+    await user.click(input);
+    await user.type(input, 'lark');
+    await user.click(
+      await screen.findByRole('option', { name: 'Customers / Larkspur' })
+    );
+
+    expect(labels()).toEqual([LARKSPUR]);
+    expect(
+      screen
+        .getByRole('button', { name: 'Advanced settings' })
+        .getAttribute('aria-expanded')
+    ).toBe('false');
+  });
+
+  it('keeps a label the viewer can no longer see when adding another', async () => {
+    const user = userEvent.setup();
+    const { labels } = renderFields({
+      ...EMPTY_EMAIL_SAVED_VIEW_FILTERS,
+      labels: [GONE],
+    });
+    expect(screen.getByText('Unavailable label')).toBeTruthy();
+
+    const input = screen.getByRole('combobox', { name: 'Labels' });
+    await user.click(input);
+    await user.click(
+      await screen.findByRole('option', { name: 'Customers / Acme' })
+    );
+
+    expect(labels()).toEqual([GONE, ACME]);
+  });
+
+  it('removes a chosen label', async () => {
+    const user = userEvent.setup();
+    const { labels } = renderFields({
+      ...EMPTY_EMAIL_SAVED_VIEW_FILTERS,
+      labels: [ACME],
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Customers / Acme' })
+    );
+
+    expect(labels()).toEqual([]);
   });
 });

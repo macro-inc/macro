@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CrmContactPreviewEmail } from './crmContactPreviewEmail';
+import type { CrmContactPreviewMergedInto } from './crmContactPreviewMergedInto';
 import type { CrmContactPreviewName } from './crmContactPreviewName';
 
 /**
@@ -13,8 +14,11 @@ import type { CrmContactPreviewName } from './crmContactPreviewName';
 export interface CrmContactPreview {
   /** The contact's primary email, which titles a contact with no name. */
   email?: CrmContactPreviewEmail;
-  /** The contact. */
+  /** The requested contact id. */
   id: string;
+  /** The contact the requested one was merged into, which is the one the
+rest of the preview shows. Absent for a contact that was not merged. */
+  mergedInto?: CrmContactPreviewMergedInto;
   /** The contact's display name. */
   name?: CrmContactPreviewName;
   /** When the contact record last changed. */
