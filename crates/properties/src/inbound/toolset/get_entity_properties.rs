@@ -178,13 +178,22 @@ where
 
         let entity_type = model_entity::EntityType::from(self.entity_type);
 
+        // A merged company's old id names the company it was merged into.
+        let entity_id = service_context
+            .entity_access_service
+            .current_entity_id(&self.entity_id, entity_type)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "You do not have access to this entity".to_string(),
+                internal_error: e.into(),
+            })?;
         // Prove the requesting user can view the entity before reading anything.
         let entity_access_receipt = service_context
             .entity_access_service
             .generate_entity_access_receipt::<ViewAccessLevel>(
                 &request_context.user_id,
                 None,
-                &self.entity_id,
+                &entity_id,
                 entity_type,
             )
             .await

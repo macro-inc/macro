@@ -822,6 +822,10 @@ STC-980	The reply editor in reply-input.tsx keeps its quote-collapsed class afte
 STC-981	The signature paywall's description in PaywallState.tsx reads "Upgrade to Pro." instead of saying it removes the Macro signature.
 STC-982	The composer's notice for a provider-rejected send (SEND_REJECTED) reads "This send needs attention." instead of "Your mail provider rejected this send…" in message-operation.ts.
 STC-983	Main projects the outbox-reserved working copy under its client draft ID while the thread lists the sent reply under a different server ID. After reload and a send-status check, the thread shows one sent reply and the test fails because one reply editor remains open.
+STC-984	The queued-sends panel drops the reason of a send whose draft changed in the mailbox and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-985	The queued-sends panel drops the reason of a send Outlook refused and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-986	The queued-sends panel drops the reason of a send whose draft Outlook no longer lets Macro write and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-987	The queued-sends panel drops the reason of a send whose draft content Outlook refused and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
 STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list fallback)): its rendering is switched off or changed in src/features/email-view/email-view.tsx
 STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-003	The failed list's message "Email couldn’t be loaded." is emptied in EmailList.tsx; its Try again button stays.

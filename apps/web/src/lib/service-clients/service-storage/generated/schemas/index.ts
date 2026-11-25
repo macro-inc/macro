@@ -842,6 +842,7 @@ export * from './crmBlockedDomainResponse';
 export * from './crmCompanyFilters';
 export * from './crmCompanyFiltersHidden';
 export * from './crmCompanyPreview';
+export * from './crmCompanyPreviewMergedInto';
 export * from './crmCompanyPreviewName';
 export * from './crmCompanyPreviewPrimaryDomain';
 export * from './crmCompanyResponse';

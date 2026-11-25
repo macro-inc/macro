@@ -42,6 +42,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   EntitySelectionToolbar,
+  isEmailEntity,
   ListEntity,
   ListLayoutProvider,
   type WithNotification,
@@ -82,6 +83,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailRowLabels } from '../primitives/create-email-row-labels';
 import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
 import { emailRowStyle } from '../primitives/email-row-style';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
@@ -143,12 +145,14 @@ export function EmailList(props: EmailListProps) {
     list,
     registerListActivationHandler,
     openThread,
-    recordListOpen,
     selectedThread,
     filterByTag,
     searchHasText,
     parsedSearch,
   } = useEmailView();
+  const emailRowLabels = createEmailRowLabels();
+  const rowLabelsFor = (entity: EntityData) =>
+    isEmailEntity(entity) ? emailRowLabels(entity) : undefined;
   const analytics = useAnalytics();
   // Results of a search that reaches beyond the inbox say which are archived.
   const searchReachesArchived = () => {
@@ -224,10 +228,10 @@ export function EmailList(props: EmailListProps) {
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
-    const inPlace = !newSplit && metadata?.event?.altKey !== true;
 
     if (
-      inPlace &&
+      !newSplit &&
+      metadata?.event?.altKey !== true &&
       openThread(
         { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
         { event: metadata?.event }
@@ -239,7 +243,6 @@ export function EmailList(props: EmailListProps) {
       return;
     }
 
-    if (!inPlace) recordListOpen(sourceRow.entity.id);
     openEntity(sourceRow.entity, {
       event: metadata?.event,
       openInNewSplit: newSplit,
@@ -921,6 +924,7 @@ export function EmailList(props: EmailListProps) {
                                         rows()[index() - 1]?.kind !== 'entity'
                                       }
                                       onFilterByTag={filterByTag}
+                                      labels={rowLabelsFor(entityRow().entity)}
                                       meta={
                                         <>
                                           <EmailSearchLocation

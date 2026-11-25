@@ -194,6 +194,13 @@ Outlook (Microsoft Graph) outbound adapters.
   vendored tz data (`vendor/chrono-tz`) lacks: Outlook writes send local
   times computed with them, so stale rules move an event; update the tz
   data first.
+- A draft's `content_fingerprint` is stored (checkpoints, `base_content`)
+  and compared after a deploy, so a change to how it is computed reads as an
+  edit of every waiting draft; `a_fingerprint_keeps_its_value_across_releases`
+  pins it. `field_digests` only names the changed field in a log.
+  `DraftContent` (from `ProviderDraft::content` or the sync read's
+  `MailboxMessage::draft_content`) carries the version it was read at;
+  `crates/email` uses it as a baseline only for that version.
 - The Graph root is `macro_service_urls::MicrosoftGraphUrl`, so
   `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
   `crates/outlook_emulator`; tests in other crates use

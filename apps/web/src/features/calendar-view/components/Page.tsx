@@ -6,7 +6,10 @@ import {
   type CalendarPageId,
   useCalendarPager,
 } from '@app/features/calendar/components/CalendarPagerContext';
-import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import {
+  selectionOnPage,
+  useCalendarView,
+} from '@app/features/calendar/components/CalendarViewContext';
 import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import {
   type CalendarOccurrenceData,
@@ -252,6 +255,14 @@ export function Page(props: {
   const eventsById = createMemo(
     () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
+  // Details opened on a new event show the server's copy before the grid
+  // draws it, so its chip stays the selected one until then. Every chip reads
+  // it, so it is worked out once per change.
+  const selectedChipId = createMemo(() => {
+    const selected = calendarView.selectedEvent();
+    if (!selected) return undefined;
+    return (selectionOnPage(selected, eventsById()) ?? selected).id;
+  });
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
@@ -352,7 +363,7 @@ export function Page(props: {
         }}
         selection={{
           color: effectiveSelectionColor(),
-          eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
+          eventId: isActive() ? selectedChipId() : undefined,
           onDateSelect: isMobile() ? undefined : handleSelect,
           onEventSelect: (event, element) => {
             if (isActive()) calendarView.selectEvent(event, element);

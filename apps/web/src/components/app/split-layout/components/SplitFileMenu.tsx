@@ -288,7 +288,10 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
 }
 
 function MobileRender(
-  props: SplitFileMenuRenderProps & { views?: SplitFileMenuViews }
+  props: SplitFileMenuRenderProps & {
+    views?: SplitFileMenuViews;
+    title?: string;
+  }
 ) {
   const [expandedSubmenu, setExpandedSubmenu] = createSignal<string | number>();
   const sections = () => getSplitFileMenuActionSections(props.groups);
@@ -449,6 +452,11 @@ function MobileRender(
         <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label={t('splitMenu.fileActions')}>
           <MobileDrawer.Handle />
+          <Show when={props.title}>
+            <p class="shrink-0 px-4 pb-4 text-sm font-medium break-words text-ink-muted">
+              {props.title}
+            </p>
+          </Show>
           <MobileDrawer.ScrollBody>
             <Show
               when={page()}
@@ -574,6 +582,11 @@ export type SplitFileMenuProps = {
   tools?: BlockTool[];
   /** See {@link SplitFileMenuViews}. Only the mobile drawer renders it. */
   mobileViews?: SplitFileMenuViews;
+  /**
+   * The item's whole name above the mobile drawer's actions, for a header
+   * whose title a phone cuts short.
+   */
+  mobileTitle?: string;
   /** Presentation-only grouping for a host's phone action sheet. */
   mobileActionGroups?: (
     groups: SplitFileMenuActionGroups
@@ -1059,6 +1072,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           triggerClass={props.buttonClass}
           groups={props.mobileActionGroups?.(actionGroups()) ?? actionGroups()}
           views={props.mobileViews}
+          title={props.mobileTitle}
         />
       </Show>
       <Show when={assigningProject()}>
