@@ -101,6 +101,9 @@ bun run lab:smoke -- --lab-run [--family <name>|all] [--provider mock|kimi]
   (giving up after 10 s) and the record is kept with outcome `timeout`.
   Each request the runner forwards to the lab has a 10 s bound and a fresh
   connection.
+  A browser that cannot start, or a page that cannot be read or
+  captured, ends the attempt as a kept `browser_error` (no planner call,
+  no action), and the command goes on to the next challenge.
 - **Planner** (`src/planner.ts`). Input: a PNG of the quiz region, the
   visible prompt, the response spec (the family's response kind and the
   visible labels). Output: that response, or abort.
