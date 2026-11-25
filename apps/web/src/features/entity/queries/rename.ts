@@ -237,8 +237,18 @@ async function sendGraphqlRenames(
       return operations.map(() => ({ success: true, queued: true }));
     }
     if (!result.data) throw new Error('GraphQL rename returned no data');
-    return result.data.renameEntities.results.map((result) => ({
-      success: result.__typename === 'GraphqlMutationSuccess',
+    const results = result.data.renameEntities.results;
+    const failures = results.flatMap((outcome) =>
+      outcome.__typename === 'GraphqlMutationError' ? [outcome] : []
+    );
+    if (failures[0]) {
+      span.setAttr('entity.failed_count', failures.length);
+      span.setAttr('entity.error_code', failures[0].errorCode);
+      // A fixed message: server errors can echo the requested name.
+      span.error('Entity rename failed');
+    }
+    return results.map((outcome) => ({
+      success: outcome.__typename === 'GraphqlMutationSuccess',
     }));
   } finally {
     if (!queued) settlement.complete();
