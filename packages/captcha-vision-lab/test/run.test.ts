@@ -93,6 +93,7 @@ describe('a lab run with the mock planner', () => {
       true,
       true,
       true,
+      true,
     ]);
     expect(inputs).toHaveLength(1);
     expect(inputs[0]!.labels).toEqual(LABELS);
@@ -190,18 +191,18 @@ describe('the provenance gate fails closed', () => {
       'unregistered_url',
     ],
     [
+      // Even back to the registered URL itself.
       'a redirect',
-      () => async () => Response.redirect(`${LAB_ORIGIN}/lab/elsewhere`, 302),
+      () => async () => Response.redirect(LAB_URL, 302),
       {},
-      'page_load_failed',
+      'redirect',
     ],
     [
       'a navigation away',
       (lab) =>
         injecting(lab, `<script>location.href = '/lab/elsewhere';</script>`),
       {},
-      // The aborted navigation leaves the main frame on Chromium's error page.
-      'main_frame_url',
+      'blocked_navigation',
     ],
     [
       'a popup',
@@ -219,6 +220,26 @@ describe('the provenance gate fails closed', () => {
         injecting(lab, `<iframe src="http://127.0.0.2:47832/frame"></iframe>`),
       {},
       'extra_frame',
+    ],
+    [
+      'a popup opened later',
+      (lab) =>
+        injecting(
+          lab,
+          `<script>setTimeout(() => window.open('${LAB_ORIGIN}/lab/popup'), 200);</script>`
+        ),
+      {},
+      'popup',
+    ],
+    [
+      'a WebSocket',
+      (lab) =>
+        injecting(
+          lab,
+          `<script>new WebSocket('ws://127.0.0.2:47832/x');</script>`
+        ),
+      {},
+      'non_lab_request',
     ],
     [
       'a third-party asset',
@@ -244,6 +265,91 @@ describe('the provenance gate fails closed', () => {
       expect(lab.stats().submissions).toBe(0);
     });
   }
+
+  test('an expired capability: zero planner calls and zero actions', async () => {
+    let now = 1_000_000;
+    const lab = createLab({ now: () => now });
+    handler = lab.fetch;
+    const sessionNonce = crypto.randomUUID();
+    const issued = lab.issue(sessionNonce);
+    const { planner, inputs } = recordingPlanner('A');
+    now += 30_001;
+
+    const record = await runChallenge({
+      lab,
+      planner,
+      ...issued,
+      sessionNonce,
+      targetUrl: LAB_URL,
+      executablePath: process.env.LAB_CHROMIUM_PATH,
+    });
+
+    expect(record.outcome).toBe('provenance_rejected');
+    expect(record.detail).toStartWith('page_load_failed');
+    expect(record.plannerCalls).toBe(0);
+    expect(inputs).toHaveLength(0);
+    expect(lab.stats().submissions).toBe(0);
+  });
+
+  test("another run's capability: zero planner calls and zero actions", async () => {
+    const lab = createLab();
+    handler = lab.fetch;
+    const other = lab.issue(crypto.randomUUID());
+    const { planner, inputs } = recordingPlanner('A');
+
+    const record = await run(lab, planner, { capability: other.capability });
+
+    expect(record.outcome).toBe('provenance_rejected');
+    expect(record.detail).toStartWith('page_load_failed');
+    expect(record.plannerCalls).toBe(0);
+    expect(inputs).toHaveLength(0);
+    expect(lab.stats().pageLoads).toBe(0);
+  });
+
+  const afterClick: [string, string, string][] = [
+    ['a popup', `window.open('${LAB_ORIGIN}/lab/popup')`, 'popup'],
+    [
+      'a third-party request',
+      `fetch('http://127.0.0.2:47832/beacon').catch(() => {})`,
+      'non_lab_request',
+    ],
+  ];
+
+  for (const [name, script, reason] of afterClick) {
+    test(`${name} set off by the click voids the scored attempt`, async () => {
+      const lab = createLab();
+      handler = injecting(
+        lab,
+        `<script>for (const button of document.querySelectorAll('[data-lab-option]')) button.addEventListener('click', () => ${script});</script>`
+      );
+
+      const record = await run(lab, recordingPlanner('A').planner);
+
+      expect(record.outcome).toBe('provenance_rejected');
+      expect(record.gate.at(-1)).toMatchObject({
+        stage: 'after_action',
+        allowed: false,
+        reason,
+      });
+      expect(record.actions).toHaveLength(1);
+    });
+  }
+
+  test('a failed click records no page markup', async () => {
+    const lab = createLab();
+    // A layer over the quiz swallows the click until it times out.
+    handler = injecting(
+      lab,
+      '<div style="position: fixed; inset: 0; z-index: 10"></div>'
+    );
+
+    const record = await run(lab, recordingPlanner('A').planner);
+
+    expect(record.outcome).toBe('action_error');
+    expect(record.detail).toBe('TimeoutError');
+    expect(JSON.stringify(record)).not.toMatch(/data-lab-option|<button/);
+    expect(lab.stats().submissions).toBe(0);
+  }, 20_000);
 
   test('the gate is checked again before the action', async () => {
     let now = 1_000_000;

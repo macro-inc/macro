@@ -15,13 +15,19 @@ import {
   type Route,
 } from 'playwright';
 import {
+  checkObservations,
   checkPage,
   checkTarget,
   emptyObservations,
   type GateDecision,
   type Observations,
 } from './gate.ts';
-import type { Planner, PlannerResult, TokenUsage } from './planner.ts';
+import {
+  type Planner,
+  PlannerError,
+  type PlannerResult,
+  type TokenUsage,
+} from './planner.ts';
 import {
   CAPABILITY_HEADER,
   LAB_ORIGIN,
@@ -87,6 +93,8 @@ export type RunInput = {
 const QUIZ_SELECTOR = '#quiz';
 const PROMPT_SELECTOR = '#prompt';
 const OPTION_SELECTOR = 'button[data-lab-option]';
+const CLICK_TIMEOUT_MS = 5_000;
+const AFTER_ACTION_QUIET_MS = 500;
 
 /**
  * Whether a navigation request is for the run's own main frame. A popup's
@@ -98,6 +106,24 @@ const isMainFrame = (request: Request, page: Page): boolean => {
   } catch {
     return false;
   }
+};
+
+/**
+ * Sends an allowed request from the runner itself, never following a
+ * redirect: a redirect is recorded and the request fails.
+ */
+const forward = async (
+  route: Route,
+  headers: Record<string, string>,
+  observed: Observations
+) => {
+  const response = await route.fetch({ headers, maxRedirects: 0 });
+  if (response.status() >= 300 && response.status() < 400) {
+    observed.redirects += 1;
+    await route.abort('blockedbyclient');
+    return;
+  }
+  await route.fulfill({ response });
 };
 
 type Session = {
@@ -127,16 +153,27 @@ const openSession = async (
   const page = context.pages()[0] ?? (await context.newPage());
   let navigationAllowed = true;
 
-  context.on('page', (opened) => {
-    if (opened !== page) observed.popups += 1;
+  // A popup is recorded and closed at once; its requests hit the allowlist
+  // below like any other.
+  context.on('page', async (opened) => {
+    if (opened === page) return;
+    observed.popups += 1;
+    await opened.close();
   });
   page.on('frameattached', () => {
     observed.extraFrames += 1;
   });
+  // The profile's initial about:blank is not a navigation of the run.
   page.on('framenavigated', (frame) => {
-    if (frame !== page.mainFrame()) return;
+    if (frame !== page.mainFrame() || frame.url() === 'about:blank') return;
     observed.mainNavigations += 1;
     observed.mainFrameUrl = frame.url();
+  });
+
+  // The request allowlist does not see WebSockets: refuse every one.
+  await context.routeWebSocket(/.*/, async (socket) => {
+    observed.blockedOrigins.push(new URL(socket.url()).origin);
+    await socket.close();
   });
 
   await context.route('**/*', async (route: Route) => {
@@ -153,7 +190,7 @@ const openSession = async (
       [SESSION_HEADER]: input.sessionNonce,
     };
     if (!request.isNavigationRequest()) {
-      await route.continue({ headers });
+      await forward(route, headers, observed);
       return;
     }
 
@@ -163,15 +200,16 @@ const openSession = async (
       !isMainFrame(request, page)
     ) {
       observed.blockedNavigations += 1;
-      if (request.redirectedFrom() !== null) observed.redirects += 1;
       await route.abort('blockedbyclient');
       return;
     }
 
     navigationAllowed = false;
-    await route.continue({
-      headers: { ...headers, [CAPABILITY_HEADER]: input.capability ?? '' },
-    });
+    await forward(
+      route,
+      { ...headers, [CAPABILITY_HEADER]: input.capability ?? '' },
+      observed
+    );
   });
 
   return { context, page, observed };
@@ -180,11 +218,21 @@ const openSession = async (
 /** Loads the target and lets the page's network settle before the gate. */
 const load = async ({ page, observed }: Session, targetUrl: string) => {
   const response = await page.goto(targetUrl, { waitUntil: 'load' });
-  if (response?.request().redirectedFrom()) observed.redirects += 1;
   await page.waitForLoadState('networkidle');
   if (response === null || response.status() !== 200) {
-    throw new Error(`lab page answered ${response?.status() ?? 'nothing'}`);
+    throw new Error('lab page did not answer 200');
   }
+};
+
+/**
+ * A fixed description of a failure for the record. Error messages are never
+ * recorded: Playwright's quote the page's markup (option ids included) and a
+ * provider's can quote model output.
+ */
+const failureCode = (error: unknown): string => {
+  if (error instanceof PlannerError) return error.code;
+  if (error instanceof Error) return error.name;
+  return 'unknown';
 };
 
 export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
@@ -238,9 +286,14 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     try {
       await load(session, input.targetUrl);
     } catch (error) {
+      // Name what the browser saw (a redirect, say) when it explains the
+      // failure; otherwise the load itself failed.
+      const seen = checkObservations('before_planner', observed);
+      if (!seen.allowed)
+        return rejectedBy(seen) ?? finish('provenance_rejected');
       const reason = 'page_load_failed';
       record.gate.push({ stage: 'before_planner', allowed: false, reason });
-      return finish('provenance_rejected', `${reason}: ${String(error)}`);
+      return finish('provenance_rejected', `${reason}: ${failureCode(error)}`);
     }
 
     const plannerRejection = rejectedBy(
@@ -250,7 +303,7 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
 
     const quiz = page.locator(QUIZ_SELECTOR);
     const prompt = (await page.locator(PROMPT_SELECTOR).innerText()).trim();
-    const controls = page.locator(OPTION_SELECTOR);
+    const controls = page.locator(OPTION_SELECTOR).filter({ visible: true });
     const labels = (await controls.locator('.label').allInnerTexts()).map(
       (label) => label.trim()
     );
@@ -264,7 +317,7 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
       planned = await input.planner.plan({ screenshot, prompt, labels });
     } catch (error) {
       record.timings.plannerMs = Math.round(performance.now() - plannerStarted);
-      return finish('model_error', String(error));
+      return finish('model_error', failureCode(error));
     }
     record.timings.plannerMs = Math.round(performance.now() - plannerStarted);
     record.usage = planned.usage;
@@ -297,10 +350,21 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
         page.waitForResponse(
           (response) => response.url() === `${LAB_ORIGIN}${LAB_SUBMIT_PATH}`
         ),
-        control.click(),
+        control.click({ timeout: CLICK_TIMEOUT_MS }),
       ]);
     } catch (error) {
-      return finish('action_error', String(error));
+      return finish('action_error', failureCode(error));
+    }
+
+    // Anything the click set off (a popup, a foreign request, a navigation)
+    // voids the attempt, whatever the server scored. Browser events reach us
+    // in no fixed order with the submit response, so watch a quiet window
+    // first, as long as the one networkidle gives before the planner.
+    await page.waitForTimeout(AFTER_ACTION_QUIET_MS);
+    const afterAction = checkObservations('after_action', observed);
+    record.gate.push(afterAction);
+    if (!afterAction.allowed) {
+      return finish('provenance_rejected', afterAction.reason);
     }
 
     // Only the lab service's own status decides the outcome.

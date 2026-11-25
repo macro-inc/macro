@@ -220,6 +220,7 @@ describe('a lab run with the Kimi adapter on the stand-in', () => {
     );
 
     expect(record.outcome).toBe('model_error');
+    expect(record.detail).toBe('answer_off_schema');
     expect(record.plannerCalls).toBe(1);
     expect(record.actions).toHaveLength(0);
     expect(lab.stats().submissions).toBe(0);

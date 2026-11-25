@@ -32,6 +32,14 @@ export type PlannerResult = {
   responseModel: string | undefined;
 };
 
+/** A planner failure, described by a fixed code so no model output is kept. */
+export class PlannerError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+    this.name = 'PlannerError';
+  }
+}
+
 export type Planner = {
   provider: 'mock' | 'kimi';
   model: string;
@@ -155,31 +163,38 @@ export const kimiPlanner = ({
       }),
     });
     if (!response.ok) {
-      throw new Error(`provider answered ${response.status}`);
+      throw new PlannerError(`provider_status_${response.status}`);
     }
 
-    const completion = Completion.parse(await response.json());
-    const answer = Answer.parse(
-      JSON.parse(completion.choices[0]!.message.content)
-    );
+    const completion = Completion.safeParse(await response.json());
+    if (!completion.success) throw new PlannerError('malformed_completion');
+    let content: unknown;
+    try {
+      content = JSON.parse(completion.data.choices[0]!.message.content);
+    } catch {
+      throw new PlannerError('answer_not_json');
+    }
+    const answer = Answer.safeParse(content);
+    if (!answer.success) throw new PlannerError('answer_off_schema');
     const decision: PlannerDecision =
-      'choice' in answer
-        ? { kind: 'choice', label: answer.choice }
-        : { kind: 'abort', reason: answer.abort };
+      'choice' in answer.data
+        ? { kind: 'choice', label: answer.data.choice }
+        : { kind: 'abort', reason: answer.data.abort };
     if (decision.kind === 'choice' && !labels.includes(decision.label)) {
-      throw new Error('provider chose a label that is not on the page');
+      throw new PlannerError('label_not_on_page');
     }
 
+    const { usage } = completion.data;
     return {
       decision,
-      responseModel: completion.model,
+      responseModel: completion.data.model,
       usage:
-        completion.usage === undefined
+        usage === undefined
           ? undefined
           : {
-              promptTokens: completion.usage.prompt_tokens,
-              completionTokens: completion.usage.completion_tokens,
-              totalTokens: completion.usage.total_tokens,
+              promptTokens: usage.prompt_tokens,
+              completionTokens: usage.completion_tokens,
+              totalTokens: usage.total_tokens,
             },
     };
   },

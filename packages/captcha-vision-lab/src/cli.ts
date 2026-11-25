@@ -64,10 +64,12 @@ const plannerFor = (provider: string): Planner => {
       `${baseUrl} is not loopback: pass --allow-remote-provider for a paid provider call`
     );
   }
-  const apiKey = process.env.FIREWORK_API_KEY ?? '';
-  if (remote && apiKey === '') {
-    return fail('FIREWORK_API_KEY is not set');
+  if (!remote) {
+    // The real key never goes to a local process.
+    return kimiPlanner({ baseUrl, apiKey: 'stand-in', model: KIMI_MODEL });
   }
+  const apiKey = process.env.FIREWORK_API_KEY ?? '';
+  if (apiKey === '') return fail('FIREWORK_API_KEY is not set');
   return kimiPlanner({ baseUrl, apiKey, model: KIMI_MODEL });
 };
 
