@@ -33,7 +33,7 @@ export function PhoneMonthEvent(props: {
     >
       <span class="flex h-5 shrink-0 items-center" aria-hidden="true">
         <span
-          class="size-2 rounded-full border border-ink-muted"
+          class="size-2 rounded-full"
           style={{ 'background-color': props.event.calendar.color }}
         />
       </span>

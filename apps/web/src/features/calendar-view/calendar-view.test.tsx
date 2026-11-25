@@ -21,7 +21,7 @@ import {
 } from '../calendar/components/CalendarPagerContext';
 import { calendarPageRange } from '../calendar/core/page-range';
 import { createCalendarPageMounts } from '../calendar/primitives/create-calendar-page-mounts';
-import type { CalendarEvent } from '../calendar/types';
+import { type CalendarEvent, DEFAULT_CALENDAR_SOURCE } from '../calendar/types';
 import { MonthDaySheet } from './components/month/MonthDaySheet';
 import { MonthGrid } from './components/month/MonthGrid';
 import { layoutPhoneMonthWeek } from './core/phone-month-layout';
@@ -352,7 +352,21 @@ describe('phone Month presentation', () => {
       <MonthDaySheet
         open
         date={new Date(2026, 10, 2)}
-        events={[event]}
+        events={[
+          event,
+          {
+            ...event,
+            id: 'override-event',
+            title: 'Override',
+            calendar: { ...event.calendar, color: '#b24499' },
+          },
+          {
+            ...event,
+            id: 'fallback-event',
+            title: 'Fallback',
+            calendar: DEFAULT_CALENDAR_SOURCE,
+          },
+        ]}
         timeFormat="24-hour"
         onOpenChange={() => {}}
         onCreate={create}
@@ -370,16 +384,24 @@ describe('phone Month presentation', () => {
     expect(eventRow.textContent).toContain('09:00');
     expect(eventRow.classList.contains('calendar-agenda-event')).toBe(false);
     expect(eventRow.classList.contains('text-ink')).toBe(true);
-    expect(
-      screen
-        .getByText('09:00 – 10:00')
-        .parentElement?.classList.contains('text-ink-muted')
-    ).toBe(true);
+    expect(eventRow.querySelector('.text-ink-muted')?.textContent).toContain(
+      '09:00 – 10:00'
+    );
     const dot = eventRow.querySelector<HTMLElement>(
       '[aria-hidden="true"] span'
     );
-    expect(dot?.classList.contains('border-ink-muted')).toBe(true);
+    expect(dot?.classList.contains('border')).toBe(false);
     expect(dot?.style.backgroundColor).toBe('rgb(81, 123, 230)');
+    const overrideDot = screen
+      .getByRole('button', { name: /Override/ })
+      .querySelector<HTMLElement>('[aria-hidden="true"] span');
+    expect(overrideDot?.style.backgroundColor).toBe('rgb(178, 68, 153)');
+    const fallbackDot = screen
+      .getByRole('button', { name: /Fallback/ })
+      .querySelector<HTMLElement>('[aria-hidden="true"] span');
+    expect(fallbackDot?.getAttribute('style')).toContain(
+      'background-color: var(--color-accent)'
+    );
     fireEvent.click(eventRow);
     expect(select).toHaveBeenCalledWith(event, eventRow);
     fireEvent.click(
