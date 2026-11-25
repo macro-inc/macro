@@ -5,6 +5,7 @@ use crate::domain::{
         AppInfo, BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
         NativeUpdateRequiredStatus, ProgressPercentage, Target, UnzipRequest, UnzipStatus,
         UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
+        format_persisted_bundle_path, resolve_persisted_bundle_path,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, TaskSpawner, UpdateRepo},
     startup::{BundleRejection, BundleStartup, StartupSelection},
@@ -576,11 +577,9 @@ async fn persist_pending_bundle(
     cache_dir: &Path,
     bundle_dir: &Path,
 ) -> Result<(), std::io::Error> {
-    fs.write(
-        &cache_dir.join(PENDING_BUNDLE_ROOT_FILE),
-        bundle_dir.to_string_lossy().as_bytes(),
-    )
-    .await
+    let stored = format_persisted_bundle_path(cache_dir, bundle_dir);
+    fs.write(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE), stored.as_bytes())
+        .await
 }
 
 async fn clear_pending_bundle(fs: &impl FsRepo, cache_dir: &Path) -> Result<(), std::io::Error> {
@@ -897,9 +896,33 @@ impl<Fs: FsRepo> Service<Fs> {
                 .await;
         };
 
-        let bundle_dir = PathBuf::from(contents.trim());
-        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
+        let Some((bundle_dir, relocated_fallback)) =
+            resolve_persisted_bundle_path(cache_dir, &contents)
+        else {
+            let _ = self.clear_pending_bundle(cache_dir).await;
+            return false;
+        };
+        if self
+            .restore_completed_bundle_dir(
+                cache_dir,
+                native_build,
+                bundle_dir,
+                relocated_fallback.is_none(),
+            )
             .await
+        {
+            return true;
+        }
+        if let Some(relocated) = relocated_fallback {
+            if self
+                .restore_completed_bundle_dir(cache_dir, native_build, relocated.clone(), true)
+                .await
+            {
+                let _ = persist_pending_bundle(&self.fs_repo, cache_dir, &relocated).await;
+                return true;
+            }
+        }
+        false
     }
 
     async fn restore_latest_completed_download(
@@ -939,7 +962,7 @@ impl<Fs: FsRepo> Service<Fs> {
             return false;
         };
 
-        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
+        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir, true)
             .await
     }
 
@@ -948,11 +971,14 @@ impl<Fs: FsRepo> Service<Fs> {
         cache_dir: &Path,
         native_build: u64,
         bundle_dir: PathBuf,
+        clear_on_failure: bool,
     ) -> bool {
         let Some(manifest) =
             BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
         else {
-            let _ = self.clear_pending_bundle(cache_dir).await;
+            if clear_on_failure {
+                let _ = self.clear_pending_bundle(cache_dir).await;
+            }
             return false;
         };
 
@@ -963,7 +989,9 @@ impl<Fs: FsRepo> Service<Fs> {
             && manifest.min_native_build <= native_build
             && self.fs_repo.read_to_string(&entrypoint).await.is_ok();
         if !usable {
-            let _ = self.clear_pending_bundle(cache_dir).await;
+            if clear_on_failure {
+                let _ = self.clear_pending_bundle(cache_dir).await;
+            }
             return false;
         }
 
@@ -2086,7 +2114,7 @@ mod tests {
             fs.read_to_string(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE))
                 .await
                 .unwrap(),
-            bundle_dir.to_string_lossy()
+            "0"
         );
     }
 

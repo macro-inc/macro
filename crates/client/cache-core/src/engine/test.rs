@@ -344,3 +344,43 @@ fn opaque_json_numbers_round_trip_exactly_through_hot_and_cold_reads() {
         }
     });
 }
+
+#[test]
+fn shrink_memory_evicts_caches_while_preserving_dependencies_and_durable_reads() {
+    pollster::block_on(async {
+        let query = "query Viewer { user { id } }";
+        let initial = serde_json::json!({"user": {"id": "viewer-1"}});
+        let updated = serde_json::json!({"user": {"id": "viewer-2"}});
+        let variables = serde_json::Map::new();
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(None, query, Some("Viewer"), &variables, &initial, None)
+            .await
+            .unwrap();
+        let read = engine
+            .read_query(Some(7), query, Some("Viewer"), &variables)
+            .await
+            .unwrap();
+        assert!(matches!(read, ReadResult::Hit { data } if data == initial));
+        assert!(!engine.hot.is_empty());
+        assert!(!engine.docs.is_empty());
+
+        engine.shrink_memory();
+
+        assert!(engine.hot.is_empty());
+        assert!(engine.docs.is_empty());
+        assert_eq!(engine.deps.active_ops(), 1);
+        // Reads still hit durable storage after hot eviction.
+        let read = engine
+            .read_query(Some(7), query, Some("Viewer"), &variables)
+            .await
+            .unwrap();
+        assert!(matches!(read, ReadResult::Hit { data } if data == initial));
+        // Active dependency tracking stays intact across memory eviction.
+        let write = engine
+            .write_query(None, query, Some("Viewer"), &variables, &updated, None)
+            .await
+            .unwrap();
+        assert!(write.affected_ops.contains(&7));
+    });
+}

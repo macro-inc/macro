@@ -203,6 +203,17 @@ impl Db {
             }
         }
     }
+
+    /// Releases cached prepared statements and evicts clean, unpinned pages
+    /// from Turso's page cache without disturbing dirty pages or durable state,
+    /// then restores the normal page-cache capacity.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn shrink_memory(&self, target_pages: usize) {
+        self.release_statements();
+        let pager = self.connection.get_pager();
+        let _ = pager.change_page_cache_size(1);
+        let _ = pager.change_page_cache_size(target_pages.max(1));
+    }
 }
 
 impl std::ops::Deref for Db {

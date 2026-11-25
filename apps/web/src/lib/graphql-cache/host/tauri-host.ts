@@ -132,6 +132,7 @@ const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
 const ABANDON_COMMAND = 'graphql_cache_abandon';
+const TEARDOWN_CLIENT_COMMAND = 'graphql_cache_teardown_client';
 
 // The only commands a caller stops waiting for: a read falls back to the
 // network, and a hung init would block every request. Tauri cannot cancel a
@@ -529,6 +530,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         scope: options.scope,
         hotCapacity: options.hotCapacity,
         schemaSdl,
+        clientId,
       });
     } catch (error) {
       if (isMissingCommand(error, INIT_COMMAND)) {
@@ -548,11 +550,45 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
+  let readySettled = false;
+  let initSucceeded = false;
+  let clientTornDown = false;
+  function sendClientTeardown() {
+    // Best effort: older native binaries lack this command and reject it.
+    fireAndForget(
+      invoke<void>(TEARDOWN_CLIENT_COMMAND, { clientId }).catch(
+        () => undefined
+      ),
+      'graphql-cache-host'
+    );
+  }
+  function teardownClient() {
+    if (clientTornDown) return;
+    clientTornDown = true;
+    if (readySettled) {
+      if (initSucceeded) sendClientTeardown();
+      return;
+    }
+    fireAndForget(
+      ready.then(
+        () => sendClientTeardown(),
+        () => undefined
+      ),
+      'graphql-cache-host'
+    );
+  }
+  const onPageHide = () => teardownClient();
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', onPageHide);
+  }
   fireAndForget(
     (async () => {
       try {
         await ready;
+        readySettled = true;
+        initSucceeded = true;
       } catch (error) {
+        readySettled = true;
         options.onInitializationError?.(
           error instanceof Error ? error : new Error(String(error))
         );
@@ -744,6 +780,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async readQuery(args: CacheReadArgs): Promise<ReadResult> {
       await ready;
+      if (clientTornDown) return { kind: 'miss' };
       const wireArgs = {
         opId: args.opKey === undefined ? undefined : opId(args.opKey),
         query: args.query,
@@ -768,7 +805,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async watchQuery(args) {
       await ready;
-      if (watchUnavailable) return { kind: 'unsupported' };
+      if (clientTornDown || watchUnavailable) return { kind: 'unsupported' };
       try {
         return await request(WATCH_COMMAND, {
           opId: opId(args.opKey),
@@ -937,9 +974,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       await ready;
       return await context.run(() =>
         request<WriteResult>('graphql_cache_write', {
-          originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+          originOpId:
+            clientTornDown || args.opKey === undefined
+              ? undefined
+              : opId(args.opKey),
           registration:
-            args.registerDependencies && args.opKey !== undefined
+            !clientTornDown &&
+            args.registerDependencies &&
+            args.opKey !== undefined
               ? {
                   opId: opId(args.opKey),
                   entityResolvers: args.entityResolvers,
@@ -1221,6 +1263,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     dispose() {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pagehide', onPageHide);
+      }
+      teardownClient();
       clearTimeout(affectedTimer);
       pendingAffected.clear();
       pendingReads.clear();

@@ -100,15 +100,26 @@ pub async fn graphql_cache_abandon(
 #[tauri::command]
 pub async fn graphql_cache_init<R: Runtime>(
     app: AppHandle<R>,
+    webview: tauri::Webview<R>,
     state: State<'_, CacheState>,
     scope: String,
     hot_capacity: Option<u32>,
+    client_id: Option<String>,
 ) -> Result<(), String> {
     // A pre-runtime-schema bundle may return after an OTA rollback. Retain
     // persisted definitions needed by queued work instead of reverting to only
     // the metadata embedded in the binary.
     let schema_sdl = cache_core::meta::BUNDLED_SCHEMA_SDL.to_owned();
-    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl).await
+    graphql_cache_init_with_schema(
+        app,
+        webview,
+        state,
+        scope,
+        hot_capacity,
+        schema_sdl,
+        client_id,
+    )
+    .await
 }
 
 /// Parses bundle SDL while retaining native cache execution and native Turso storage.
@@ -116,10 +127,12 @@ pub async fn graphql_cache_init<R: Runtime>(
 #[tauri::command]
 pub async fn graphql_cache_init_with_schema<R: Runtime>(
     app: AppHandle<R>,
+    webview: tauri::Webview<R>,
     state: State<'_, CacheState>,
     scope: String,
     hot_capacity: Option<u32>,
     schema_sdl: String,
+    client_id: Option<String>,
 ) -> Result<(), String> {
     let incoming = cache_core::meta::Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
     let dir = app
@@ -128,14 +141,24 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
     let schema_path = dir.join("schema.json");
+    let webview_label = webview.label().to_owned();
     let handle = {
         let mut guard = state
             .0
             .lock()
             .map_err(|_| "graphql cache state poisoned".to_string())?;
-        if let Some(existing) = guard.as_ref() {
+        if let Some(existing) = guard.as_mut() {
             if existing.scope != scope {
                 return Err("graphql cache scope mismatch".into());
+            }
+            if let Some(client_id) = client_id {
+                existing
+                    .webview_clients
+                    .entry(webview_label)
+                    .or_default()
+                    .insert(client_id);
+            } else {
+                existing.any_untracked_client = true;
             }
             existing.handle.clone()
         } else {
@@ -165,9 +188,21 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
                         authority,
                     );
                 });
+            let mut webview_clients = std::collections::HashMap::new();
+            let any_untracked_client = if let Some(client_id) = client_id {
+                webview_clients
+                    .entry(webview_label)
+                    .or_insert_with(std::collections::HashSet::new)
+                    .insert(client_id);
+                false
+            } else {
+                true
+            };
             *guard = Some(InitializedCache {
                 scope,
                 handle: handle.clone(),
+                webview_clients,
+                any_untracked_client,
             });
             handle
         }
@@ -1141,6 +1176,34 @@ pub async fn graphql_cache_teardown(
     op_id: String,
 ) -> Result<(), String> {
     engine_handle(&state)?.teardown(op_id).await
+}
+
+/// Unregisters every operation owned by a departing document's `client_id`.
+///
+/// No-op returning `0` when the cache has not been initialized yet so
+/// best-effort pagehide/dispose cleanup never fails noisily.
+#[tauri::command]
+pub async fn graphql_cache_teardown_client(
+    state: State<'_, CacheState>,
+    client_id: String,
+) -> Result<usize, String> {
+    let handle = {
+        let mut guard = state
+            .0
+            .lock()
+            .map_err(|_| "graphql cache state poisoned".to_string())?;
+        let Some(cache) = guard.as_mut() else {
+            return Ok(0);
+        };
+        for clients in cache.webview_clients.values_mut() {
+            clients.remove(&client_id);
+        }
+        cache
+            .webview_clients
+            .retain(|_, clients| !clients.is_empty());
+        cache.handle.clone()
+    };
+    Ok(handle.teardown_client(&client_id).await)
 }
 
 /// Wipes all cached state (logout).

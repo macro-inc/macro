@@ -336,15 +336,27 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
     }
 }
 
+/// Bound on remembered torn-down client prefixes so retired-client tracking
+/// stays O(1) even in long-lived native sessions with many reloads.
+const MAX_RETIRED_CLIENTS: usize = 64;
+
 /// Interns host-side string operation ids to engine `u64` ids.
 #[derive(Default)]
 struct OpInterner {
     by_name: HashMap<String, OpId>,
     by_id: HashMap<OpId, String>,
+    retired_clients: std::collections::VecDeque<String>,
     next: OpId,
 }
 
 impl OpInterner {
+    fn is_retired(&self, op_name: &str) -> bool {
+        let Some((client_id, _)) = op_name.split_once(':') else {
+            return false;
+        };
+        self.retired_clients.iter().any(|id| id == client_id)
+    }
+
     fn intern(&mut self, name: &str) -> OpId {
         if let Some(id) = self.by_name.get(name) {
             return *id;
@@ -356,10 +368,48 @@ impl OpInterner {
         id
     }
 
+    /// Interns `name` unless its client prefix was already torn down.
+    fn intern_active(&mut self, name: &str) -> Option<OpId> {
+        if self.is_retired(name) {
+            return None;
+        }
+        Some(self.intern(name))
+    }
+
     fn remove(&mut self, name: &str) -> Option<OpId> {
         let id = self.by_name.remove(name)?;
         self.by_id.remove(&id);
         Some(id)
+    }
+
+    fn remove_client(&mut self, client_id: &str) -> Vec<OpId> {
+        if !self.retired_clients.iter().any(|id| id == client_id) {
+            if self.retired_clients.len() >= MAX_RETIRED_CLIENTS {
+                self.retired_clients.pop_front();
+            }
+            self.retired_clients.push_back(client_id.to_owned());
+        }
+        let prefix = format!("{client_id}:");
+        let matched: Vec<(String, OpId)> = self
+            .by_name
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, id)| (name.clone(), *id))
+            .collect();
+        let mut removed = Vec::with_capacity(matched.len());
+        for (name, id) in matched {
+            self.by_name.remove(&name);
+            self.by_id.remove(&id);
+            removed.push(id);
+        }
+        removed
+    }
+
+    fn clear(&mut self) -> Vec<OpId> {
+        let removed: Vec<OpId> = self.by_id.keys().copied().collect();
+        self.by_name.clear();
+        self.by_id.clear();
+        removed
     }
 
     fn names(&self, ids: impl IntoIterator<Item = OpId>) -> Vec<String> {
@@ -464,6 +514,16 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     }
 }
 
+/// Default hot-tier record cap when the frontend omits `hot_capacity`.
+///
+/// Desktop retains `cache_core::engine::DEFAULT_HOT_CAPACITY` (10,000 records).
+/// Mobile matches `BROWSER_HOT_CAPACITY` (2,500 records) so decoded hot records
+/// stay bounded under iOS Jetsam limits while misses read from Turso.
+#[cfg(any(target_os = "ios", target_os = "android"))]
+const DEFAULT_NATIVE_HOT_CAPACITY: usize = 2_500;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+const DEFAULT_NATIVE_HOT_CAPACITY: usize = cache_core::engine::DEFAULT_HOT_CAPACITY;
+
 /// How long shutdown waits for an idle checkpoint that is copying.
 const SHUTDOWN_IDLE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -494,7 +554,7 @@ impl EngineHandle {
             storage,
             hot_capacity
                 .filter(|c| *c > 0)
-                .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+                .map_or(DEFAULT_NATIVE_HOT_CAPACITY, |c| c as usize),
             schema,
         )
         .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
@@ -583,7 +643,7 @@ impl EngineHandle {
     ) -> Result<ReadResultWire, String> {
         let mut state = self.ready_op_read(op_id.as_deref()).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let op = op_id.map(|name| ops.intern(&name));
+        let op = op_id.and_then(|name| ops.intern_active(&name));
         engine
             .read_query_with_entity_resolvers(
                 op,
@@ -617,7 +677,11 @@ impl EngineHandle {
             .map_err(|error| error.to_string())?;
         let mut state = self.ready_op_read(Some(&op_id)).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let op = ops.intern(&op_id);
+        let Some(op) = ops.intern_active(&op_id) else {
+            return Ok(cache_core::engine::watch_query::QueryUpdate::Miss {
+                revision: engine.current_revision().to_string(),
+            });
+        };
         engine
             .watch_query(
                 op,
@@ -757,10 +821,10 @@ impl EngineHandle {
         } = request;
         let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let origin = origin_op_id.map(|name| ops.intern(&name));
-        let registration = registration.map(|registration| {
-            let op_id = ops.intern(&registration.op_id);
-            (op_id, registration.entity_resolvers)
+        let origin = origin_op_id.and_then(|name| ops.intern_active(&name));
+        let registration = registration.and_then(|registration| {
+            let op_id = ops.intern_active(&registration.op_id)?;
+            Some((op_id, registration.entity_resolvers))
         });
         let input = NetworkWrite {
             query: &query,
@@ -1031,7 +1095,7 @@ impl EngineHandle {
         let mut state = self.inner.write().await;
         self.resume_retirement(&mut state).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let origin = origin_op_id.map(|name| ops.intern(&name));
+        let origin = origin_op_id.and_then(|name| ops.intern_active(&name));
         let client_metadata = soup_filter_cache_adapter::permissions::legacy_draft_metadata(
             client_metadata,
             &data,
@@ -1334,6 +1398,46 @@ impl EngineHandle {
             engine.teardown_operation(id);
         }
         Ok(())
+    }
+
+    /// Unregisters every operation belonging to `client_id` (prefix `"{client_id}:"`).
+    ///
+    /// Called when a webview document unloads or its WebContent process is
+    /// terminated so dead documents stop accumulating dependency state and
+    /// receiving `ops-affected` broadcasts.
+    pub async fn teardown_client(&self, client_id: &str) -> usize {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let ids = ops.remove_client(client_id);
+        let count = ids.len();
+        for id in ids {
+            engine.teardown_operation(id);
+        }
+        count
+    }
+
+    /// Unregisters every active operation in the engine.
+    ///
+    /// Used as a single-webview mobile fallback when a terminated WebContent
+    /// document belonged to an older OTA bundle that did not send its `clientId`.
+    pub async fn teardown_all_ops(&self) -> usize {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let ids = ops.clear();
+        let count = ids.len();
+        for id in ids {
+            engine.teardown_operation(id);
+        }
+        count
+    }
+
+    /// Evicts re-materializable in-memory caches under OS memory pressure
+    /// without altering durable data, active dependencies, or queued mutations.
+    pub async fn shrink_memory(&self) {
+        let mut state = self.inner.lock().await;
+        state.engine.shrink_memory();
+        state.engine.storage().shrink_memory();
+        state.selections.clear();
     }
 
     /// Drops all cached state (logout).

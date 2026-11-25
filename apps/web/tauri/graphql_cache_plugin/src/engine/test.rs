@@ -1095,3 +1095,80 @@ fn a_teardown_queued_behind_an_abandoned_read_still_unregisters_it() {
     let result = write(&handle, Some("client:2"), soup_data(true), None);
     assert!(result.affected_ops.is_empty());
 }
+
+#[test]
+fn teardown_client_drops_dead_document_ops_and_shrink_memory_preserves_reads() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    for op_id in ["dead-doc:1", "dead-doc:2", "live-doc:1"] {
+        let result = block_on(handle.read(
+            Some(op_id.to_owned()),
+            QUERY.to_owned(),
+            Some("Soup".to_owned()),
+            variables(),
+            Vec::new(),
+        ))
+        .unwrap();
+        assert!(matches!(result, ReadResultWire::Hit { .. }));
+    }
+
+    let removed = block_on(handle.teardown_client("dead-doc"));
+    assert_eq!(removed, 2);
+
+    block_on(handle.shrink_memory());
+
+    // Live reads still hit durable Turso storage after memory eviction.
+    let read_after_shrink = block_on(handle.read(
+        Some("live-doc:1".to_owned()),
+        QUERY.to_owned(),
+        Some("Soup".to_owned()),
+        variables(),
+        Vec::new(),
+    ))
+    .unwrap();
+    assert!(matches!(read_after_shrink, ReadResultWire::Hit { .. }));
+
+    // Late reads, watches, and write registrations arriving after teardown for
+    // the departed client must never re-register operations, while durable
+    // writes still persist normally.
+    let late_read = block_on(handle.read(
+        Some("dead-doc:99".to_owned()),
+        QUERY.to_owned(),
+        Some("Soup".to_owned()),
+        variables(),
+        Vec::new(),
+    ))
+    .unwrap();
+    assert!(matches!(late_read, ReadResultWire::Hit { .. }));
+    let late_watch = block_on(handle.watch(
+        "dead-doc:100".to_owned(),
+        QUERY.to_owned(),
+        Some("Soup".to_owned()),
+        variables(),
+        Vec::new(),
+        None,
+    ))
+    .unwrap();
+    assert!(matches!(
+        late_watch,
+        cache_core::engine::watch_query::QueryUpdate::Miss { .. }
+    ));
+    let late_write = block_on(handle.write(WriteRequest {
+        origin_op_id: Some("dead-doc:101".to_owned()),
+        registration: Some(crate::engine::WriteRegistration {
+            op_id: "dead-doc:101".to_owned(),
+            entity_resolvers: Vec::new(),
+        }),
+        query: QUERY.to_owned(),
+        operation_name: Some("Soup".to_owned()),
+        variables: variables(),
+        data: soup_data(true),
+        identity: None,
+    }))
+    .unwrap();
+    assert_eq!(late_write.affected_ops, vec!["live-doc:1"]);
+
+    // Subsequent writes only notify the surviving document, never the torn-down one.
+    let result = write(&handle, None, soup_data(false), None);
+    assert_eq!(result.affected_ops, vec!["live-doc:1"]);
+}

@@ -51,6 +51,7 @@ mod share_target;
 mod staged_upload;
 #[cfg(test)]
 mod test;
+mod web_content_recovery;
 mod whatsapp_passkey;
 #[cfg(desktop)]
 mod window_state;
@@ -246,12 +247,34 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
         let on_terminate = |webview: &tauri::Webview<AppRuntime>| {
-            tracing::warn!(webview = %webview.label(), "WebContent process terminated; reloading");
             if let Some(state) = webview.try_state::<diagnostics::Diagnostics>() {
                 let _ = state.record_web_content_termination().inspect_err(|error| {
                     tracing::warn!(%error, "Failed to record WebContent termination");
                 });
             }
+            // Snapshot and drop the terminated document's GraphQL cache operation
+            // bindings before reloading so dead documents cannot accumulate memory
+            // or race against the replacement document's cache initialization.
+            if let Some(cache) = webview.try_state::<graphql_cache_plugin::CacheState>() {
+                tauri::async_runtime::spawn(cache.teardown_webview(webview.label(), cfg!(mobile)));
+            }
+
+            #[cfg(mobile)]
+            let should_reload_now = webview
+                .try_state::<web_content_recovery::WebContentRecovery>()
+                .map_or(true, |recovery| recovery.on_terminated(webview.label()));
+            #[cfg(not(mobile))]
+            let should_reload_now = true;
+
+            if !should_reload_now {
+                tracing::warn!(
+                    webview = %webview.label(),
+                    "WebContent process terminated while backgrounded; deferring reload until resume"
+                );
+                return;
+            }
+
+            tracing::warn!(webview = %webview.label(), "WebContent process terminated; reloading");
             // Preserve Tauri's default recovery, but retain the cause in the
             // native process so the replacement document can report it.
             let _ = webview.reload().inspect_err(|error| {
@@ -413,6 +436,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         .manage(PendingShareFilesState::default())
         .manage(DeepLinkDelivery::default())
         .manage(graphql_cache_plugin::CacheState::default())
+        .manage(web_content_recovery::WebContentRecovery::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
             whatsapp_passkey::whatsapp_passkey_authenticate,
@@ -478,6 +502,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             graphql_cache_plugin::commands::graphql_cache_invalidate,
             graphql_cache_plugin::commands::graphql_cache_delete_records,
             graphql_cache_plugin::commands::graphql_cache_teardown,
+            graphql_cache_plugin::commands::graphql_cache_teardown_client,
             graphql_cache_plugin::commands::graphql_cache_clear,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
@@ -578,6 +603,23 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             if let Some(state) = app_handle.try_state::<diagnostics::Diagnostics>() {
                 state.record_native_event(diagnostics::events::NativeEvent::Foreground);
             }
+            let deferred_web_content_reload = app_handle
+                .try_state::<web_content_recovery::WebContentRecovery>()
+                .is_some_and(|recovery| recovery.on_resumed(label));
+            if deferred_web_content_reload {
+                if let Some(webview) = app_handle.get_webview_window(label) {
+                    tracing::info!(
+                        window_label = %label,
+                        "Reloading WebContent process that terminated while backgrounded"
+                    );
+                    let _ = webview.reload().inspect_err(|error| {
+                        tracing::error!(
+                            %error,
+                            "Failed to reload deferred terminated WebContent process on resume"
+                        );
+                    });
+                }
+            }
             // Connections kept from before the app was suspended may have been
             // dropped without notice; a request sent on one would hang.
             if let Some(http) = app_handle.try_state::<tauri_plugin_http::Http>() {
@@ -594,7 +636,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
                 }
             });
             #[cfg(feature = "auto_apply_update")]
-            {
+            if !deferred_web_content_reload {
                 let app = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = allow_update_reload_retry(&app).await {
@@ -621,6 +663,11 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             event: tauri::WindowEvent::Suspended,
             ..
         } => {
+            if let Some(recovery) =
+                app_handle.try_state::<web_content_recovery::WebContentRecovery>()
+            {
+                recovery.on_suspended();
+            }
             if let Some(state) = app_handle.try_state::<diagnostics::Diagnostics>() {
                 state.record_native_event(diagnostics::events::NativeEvent::Background);
             }

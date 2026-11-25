@@ -73,6 +73,6 @@ async fn an_explicit_embedded_selection_can_restore_a_later_pending_download() {
         fs.read_to_string(&cache_dir.join("bundle_root"))
             .await
             .unwrap(),
-        pending.to_string_lossy()
+        "2"
     );
 }

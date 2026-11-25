@@ -20,6 +20,12 @@ pub fn observe_memory_warnings<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
         if let Some(state) = app.try_state::<Diagnostics>() {
             state.record_native_event(NativeEvent::MemoryWarning);
         }
+        // Release re-materializable native GraphQL cache memory off the UI thread
+        // (hot records, parsed queries/selections, watch bases, prepared statements,
+        // and clean Turso pages) before iOS Jetsam terminates the host process.
+        if let Some(cache) = app.try_state::<graphql_cache_plugin::CacheState>() {
+            tauri::async_runtime::spawn(cache.shrink_memory());
+        }
     });
     // SAFETY: No object filter or operation queue. The callback captures only
     // the Send + Sync AppHandle and uses the diagnostic buffer's mutex.

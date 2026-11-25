@@ -45,6 +45,8 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
             crate::InitializedCache {
                 scope: "profile".into(),
                 handle,
+                webview_clients: Default::default(),
+                any_untracked_client: false,
             },
         ))));
         let events = Arc::new(Mutex::new(Vec::<CacheAuthority>::new()));
@@ -257,6 +259,8 @@ fn legacy_payloads_omit_generation_through_the_invoke_handler() {
             crate::InitializedCache {
                 scope: "legacy-profile".into(),
                 handle,
+                webview_clients: Default::default(),
+                any_untracked_client: true,
             },
         ))))
         .invoke_handler(tauri::generate_handler![
@@ -314,4 +318,125 @@ fn legacy_payloads_omit_generation_through_the_invoke_handler() {
             );
         }
     }
+}
+
+#[test]
+fn teardown_webview_prunes_only_terminated_webview_clients_and_supports_single_webview_fallback() {
+    use std::collections::{HashMap, HashSet};
+    use std::sync::Mutex;
+
+    pollster::block_on(async {
+        let handle = crate::engine::EngineHandle::new(
+            cache_turso::TursoStorage::open_in_memory("teardown-profile").unwrap(),
+            None,
+        );
+        let query = "{ user { id } }".to_owned();
+        let initial = serde_json::json!({"user": {"id": "viewer-1"}});
+        let updated = serde_json::json!({"user": {"id": "viewer-2"}});
+        handle
+            .write(crate::engine::WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query: query.clone(),
+                operation_name: None,
+                variables: Default::default(),
+                data: initial,
+                identity: None,
+            })
+            .await
+            .unwrap();
+        for op_id in ["main-client:1", "main-client:2", "other-client:1"] {
+            let _ = handle
+                .read(
+                    Some(op_id.to_owned()),
+                    query.clone(),
+                    None,
+                    Default::default(),
+                    Vec::new(),
+                )
+                .await
+                .unwrap();
+        }
+        let mut webview_clients = HashMap::new();
+        webview_clients.insert("main".to_owned(), HashSet::from(["main-client".to_owned()]));
+        webview_clients.insert(
+            "secondary".to_owned(),
+            HashSet::from(["other-client".to_owned()]),
+        );
+        let state = crate::CacheState(Mutex::new(Some(crate::InitializedCache {
+            scope: "teardown-profile".into(),
+            handle: handle.clone(),
+            webview_clients,
+            any_untracked_client: false,
+        })));
+
+        // Snapshot dead clients synchronously BEFORE a replacement document
+        // initializes on the same webview label, then finish teardown async.
+        let teardown_main = state.teardown_webview("main", true);
+        {
+            let mut guard = state.0.lock().unwrap();
+            guard
+                .as_mut()
+                .unwrap()
+                .webview_clients
+                .entry("main".to_owned())
+                .or_default()
+                .insert("replacement-client".to_owned());
+        }
+        let _ = handle
+            .read(
+                Some("replacement-client:1".to_owned()),
+                query.clone(),
+                None,
+                Default::default(),
+                Vec::new(),
+            )
+            .await
+            .unwrap();
+
+        let removed = teardown_main.await;
+        assert_eq!(removed, 2);
+        let write = handle
+            .write(crate::engine::WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query: query.clone(),
+                operation_name: None,
+                variables: Default::default(),
+                data: updated,
+                identity: None,
+            })
+            .await
+            .unwrap();
+        let mut remaining = write.affected_ops;
+        remaining.sort();
+        assert_eq!(remaining, vec!["other-client:1", "replacement-client:1"]);
+
+        // Duplicate termination with no untracked legacy clients is a safe no-op.
+        assert_eq!(state.teardown_webview("unknown-label", true).await, 0);
+
+        // Single-webview mobile fallback tears down untracked legacy-bundle ops.
+        state
+            .0
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .any_untracked_client = true;
+        let removed_fallback = state.teardown_webview("untracked-main", true).await;
+        assert_eq!(removed_fallback, 2);
+        let write_after = handle
+            .write(crate::engine::WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query,
+                operation_name: None,
+                variables: Default::default(),
+                data: serde_json::json!({"user": {"id": "viewer-3"}}),
+                identity: None,
+            })
+            .await
+            .unwrap();
+        assert!(write_after.affected_ops.is_empty());
+    });
 }
