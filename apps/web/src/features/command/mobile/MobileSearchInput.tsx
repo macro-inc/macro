@@ -2,7 +2,10 @@ import {
   SearchOperatorOverlay,
   type SearchTextPart,
 } from '@app/components/view-shell/search-operator-text';
-import { searchOperatorSpans } from '@app/features/next-soup/core/search-operators';
+import {
+  type SearchOperatorBinding,
+  searchOperatorSpans,
+} from '@app/features/next-soup/core/search-operators';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import {
@@ -19,10 +22,13 @@ import { useUniversalInputEnabled } from '../../universal-input/use-universal-in
 import { SearchState } from './mobileSearchState';
 
 /** The field's text with the operators the search reads marked, to draw. */
-function operatorParts(text: string): SearchTextPart[] {
+function operatorParts(
+  text: string,
+  bindings: readonly SearchOperatorBinding[]
+): SearchTextPart[] {
   const parts: SearchTextPart[] = [];
   let at = 0;
-  for (const { start, end } of searchOperatorSpans(text)) {
+  for (const { start, end } of searchOperatorSpans(text, bindings)) {
     if (start > at)
       parts.push({ text: text.slice(at, start), operator: false });
     parts.push({ text: text.slice(start, end), operator: true });
@@ -123,7 +129,7 @@ export function MobileSearchInput() {
         <div class="relative flex min-w-0 flex-1">
           <SearchOperatorOverlay
             multiline
-            parts={operatorParts(shown())}
+            parts={operatorParts(shown(), SearchState.session().bindings())}
             input={() => inputRef}
             class="py-1.5 text-base text-ink"
           />

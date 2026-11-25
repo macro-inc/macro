@@ -4,7 +4,10 @@ import {
   searchOperatorQuery,
   withSearchOperatorQuery,
 } from '@app/features/next-soup/core/search-operator-filters';
-import { searchQueryParts } from '@app/features/next-soup/core/search-operators';
+import {
+  type SearchOperatorBinding,
+  searchQueryParts,
+} from '@app/features/next-soup/core/search-operators';
 import {
   compileToAst,
   queryStateFrom,
@@ -26,9 +29,10 @@ import { type Accessor, createMemo } from 'solid-js';
  */
 export function createMobileFullTextSearch(
   text: Accessor<string>,
-  operatorLookup: Accessor<SearchOperatorLookup>
+  operatorLookup: Accessor<SearchOperatorLookup>,
+  bindings: Accessor<readonly SearchOperatorBinding[]> = () => []
 ) {
-  const parts = createMemo(() => searchQueryParts(text()));
+  const parts = createMemo(() => searchQueryParts(text(), bindings()));
   const operatorFilters = createMemo(() =>
     parts().read.operators > 0
       ? searchOperatorFilters(parts().read, operatorLookup())
@@ -36,12 +40,22 @@ export function createMobileFullTextSearch(
   );
   // Read at each request: the preset follows flags that may load later.
   const query = () => queryStateFrom(getViewPreset('search')?.filters ?? {});
+  // Bound tokens are left out of the service's text and go with the request
+  // as filters by id, which it joins with the operators it reads.
+  const requestQuery = () => {
+    const bound = parts().bound;
+    if (bound.groups.length === 0) return query();
+    return withSearchOperatorQuery(
+      query(),
+      searchOperatorQuery(searchOperatorFilters(bound, operatorLookup()))
+    );
+  };
   const search = createSearchState({
     surface: () => 'mobile_search',
     text: () => parts().serviceText,
     disableLocalSearch: () => true,
     enabled: () => !!parts().serviceText.trim(),
-    buildRequest: (search) => buildSoupSearchRequest(query(), search),
+    buildRequest: (search) => buildSoupSearchRequest(requestQuery(), search),
   });
   // The feed can't tell messages or calls by sender, so a sender alone, with
   // no word for the service, lists nothing rather than every channel.

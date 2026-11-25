@@ -23,6 +23,7 @@ import { MobileSearchResults } from './MobileSearchResults';
 import { SearchState } from './mobileSearchState';
 
 const mocks = vi.hoisted(() => ({
+  params: undefined as Record<string, unknown> | undefined,
   entitySearch: [] as { query: string; category: string }[],
   accountId: (() => 'owner') as Accessor<string>,
   authenticated: (() => true) as Accessor<boolean>,
@@ -75,7 +76,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     handle: {
       isActive: () => mocks.active(),
       currentEntryState: () => mocks.entryState,
-      content: () => ({ state: mocks.entryState }),
+      content: () =>
+        mocks.params
+          ? { type: 'component', id: 'search', params: mocks.params }
+          : { state: mocks.entryState },
       captureEntryState: () => {
         mocks.entryState = Object.fromEntries(
           [...mocks.captors].map(([key, read]) => [key, read()])
@@ -222,6 +226,7 @@ beforeEach(() => {
   mocks.active = active;
   mocks.setActive = setActive;
   mocks.entryState = undefined;
+  mocks.params = undefined;
   mocks.captors.clear();
   mocks.open.mockImplementation(() => {
     mocks.onOpen();
@@ -1274,4 +1279,61 @@ it('resumes viewport paging when editing a restored search in the dock', async (
   expect(mocks.loadMore).not.toHaveBeenCalled();
   SearchState.setQuery('Next');
   await waitFor(() => expect(mocks.loadMore).toHaveBeenCalledOnce());
+});
+
+it('opens on what a tag or the universal input picked, keeping its binding', () => {
+  const binding = {
+    token: 'tag:"🎉"',
+    tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+  };
+  mocks.entryState = {
+    'search.text': 'tag:"🎉"',
+    'search.bindings': [binding],
+  };
+  render(() => (
+    <>
+      <MobileSearchInput />
+      <MobileSearchResults />
+    </>
+  ));
+  // A space follows, so the token isn't read as one still being typed.
+  expect(SearchState.query()).toBe('tag:"🎉" ');
+  expect(SearchState.mode()).toBe('full-text');
+  const bindings = mocks.fullText.mock.calls.at(-1)?.[2] as () => unknown;
+  expect(bindings()).toEqual([binding]);
+  cleanup();
+
+  mocks.entryState = undefined;
+  mocks.params = {
+    initialQuery: 'tag:"🎉" launch',
+    initialBindings: [binding],
+  };
+  render(() => (
+    <>
+      <MobileSearchInput />
+      <MobileSearchResults />
+    </>
+  ));
+  expect(SearchState.query()).toBe('tag:"🎉" launch ');
+  expect(SearchState.session().bindings()).toEqual([binding]);
+  // Editing the token lets go of it.
+  fireEvent.input(screen.getByPlaceholderText('Search…'), {
+    target: { value: 'tag:"🎉x" launch' },
+  });
+  expect(SearchState.session().bindings()).toEqual([]);
+});
+
+it('restores its own session over what the opener picked', () => {
+  mocks.entryState = {
+    'search.text': 'tag:"🎉"',
+    'mobileSearch.session': { query: 'teo', mode: 'name' },
+  };
+  render(() => (
+    <>
+      <MobileSearchInput />
+      <MobileSearchResults />
+    </>
+  ));
+  expect(SearchState.query()).toBe('teo');
+  expect(SearchState.session().bindings()).toEqual([]);
 });

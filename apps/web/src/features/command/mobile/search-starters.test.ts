@@ -95,3 +95,30 @@ describe('searchStarterLabel', () => {
     );
   });
 });
+
+it("reads a bound tag as the Tag starter's value, and takes it out", () => {
+  const binding = {
+    token: 'tag:"🎉"',
+    tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+  };
+  expect(searchStarterValue('tag:"🎉" launch', 'tag', [binding])?.value).toBe(
+    '🎉'
+  );
+  expect(startSearchOperator('tag:"🎉" launch', 'tag', [binding])).toBe(
+    'launch tag:'
+  );
+});
+
+it('reads a bound token as its operator however it is quoted, and for which starters apply', () => {
+  const tag = {
+    token: 'tag:🎉',
+    tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+  };
+  expect(startSearchOperator('tag:"🎉" launch', 'tag', [tag])).toBe(
+    'launch tag:'
+  );
+  const channel = { token: 'in:#🎉', channelIds: ['channel-1'] };
+  // A bound channel leaves channels and calls, which Date can't narrow.
+  expect(searchStarterApplies('in:#🎉', 'date', [channel])).toBe(false);
+  expect(searchStarterApplies('in:#🎉', 'from', [channel])).toBe(true);
+});
