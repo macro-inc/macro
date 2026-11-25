@@ -609,10 +609,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     args: Record<string, unknown>,
     map: (result: Wire) => Result
   ): Promise<Result | { kind: 'unsupported' }> {
+    const context = Telemetry.captureContext();
     await ready;
     if (channelTimelineUnavailable) return { kind: 'unsupported' };
     try {
-      return map(await request<Wire>(command, args));
+      return map(await context.run(() => request<Wire>(command, args)));
     } catch (error) {
       if (!isMissingCommand(error, command)) throw error;
       channelTimelineUnavailable = true;
