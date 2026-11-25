@@ -19,6 +19,7 @@ import { SavedViewDraftHost } from '@app/features/saved-views/views/saved-view-d
 import { TasksTime } from '@app/features/time-tracking/tasks-time';
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { TutorialRow } from '@app/features/video-tutorials';
+import { t } from '@app/lib/i18n';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -239,6 +240,7 @@ function TasksViewRoot() {
         <ViewShell.Root
           contentLayout="collection"
           asidePreferenceKey="tasks"
+          title={t('nav.tasks')}
           resizable
           aside={{ preserveDuringResize: false }}
           main={{ preferredWidth: 640 }}

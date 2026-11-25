@@ -460,6 +460,13 @@ its mounted editor; existing narrow-touch standalone route transitions still
 apply. Ordinary wide-touch selections stay inline; modifier actions retain
 new-split behavior.
 
+On wide touch, Email, Files, Tasks, Calendar, Chat, and Notifications head their
+left pane (the list, or Calendar's sidebar) with the view's name and **Hide
+side pane**. Hiding it gives the open item the width; **Show side pane**, the
+first island of that item's top bar, brings it back. The choice is saved per
+view, and the pane stays while nothing is open beside it. Narrow touch and
+desktop have neither control.
+
 At 720px or narrower, touch navigation keeps its existing single-pane behavior.
 Chat shows its full-frame conversation feed without a sidebar or expand button;
 Notifications fills its pane and opens items as standalone pages. Home's composer

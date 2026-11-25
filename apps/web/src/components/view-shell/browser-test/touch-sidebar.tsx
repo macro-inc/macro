@@ -33,6 +33,7 @@ import { createAppSplitRouterMiddleware } from '@components/app/split-layout/spl
 import { SplitPanel } from '@components/app/split-panel';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createWindowSize } from '@solid-primitives/resize-observer';
+import { pressHandlers } from '@ui';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { MobileListLayout } from '../MobileListLayout';
@@ -147,6 +148,8 @@ function ChannelsWorkspaceFixture() {
       >
         <ViewShell.Root
           asidePreferenceKey="channels-fixture"
+          title="Chat"
+          mainEmpty={selected() === undefined}
           aside={wide() ? {} : false}
           resizable
         >
@@ -278,6 +281,7 @@ function CollectionWorkspaceFixture(
   const [localSelected, setSelected] = createSignal<string>();
   const selected = props.selected ?? localSelected;
   const [view, setView] = createSignal('all');
+  const [inbox, setInbox] = createSignal('all inboxes');
   const [dockPresses, setDockPresses] = createSignal(0);
   const sheetChrome = new URLSearchParams(location.search).has('sheet-chrome');
   const selectView = (next: string) => {
@@ -307,6 +311,7 @@ function CollectionWorkspaceFixture(
         <ViewShell.Root
           contentLayout="collection"
           asidePreferenceKey="collection-workspace-fixture"
+          title="Items"
           resizable
         >
           <ViewShell.Aside>
@@ -327,6 +332,13 @@ function CollectionWorkspaceFixture(
                 >
                   Recent items
                 </ViewSidebar.Item>
+                {/* Mail's inbox rows apply on press, then close on the click. */}
+                <ViewSidebar.Item
+                  active={inbox() === 'work inbox'}
+                  {...pressHandlers(() => setInbox('work inbox'))}
+                >
+                  Work inbox
+                </ViewSidebar.Item>
               </ViewSidebar.Content>
               <ViewSidebar.Footer>
                 <button type="button" class="h-10">
@@ -345,6 +357,12 @@ function CollectionWorkspaceFixture(
                     <ViewSidebar.Toggle action="expand" presentation="pill" />
                     <span class="island flex h-10 items-center rounded-full px-3">
                       {view()}
+                    </span>
+                    <span
+                      class="island flex h-10 items-center rounded-full px-3"
+                      data-testid="workspace-inbox"
+                    >
+                      {inbox()}
                     </span>
                   </div>
                 }
@@ -383,6 +401,14 @@ function CollectionWorkspaceFixture(
             >
               <ViewShell.TopBar class="touch:flex">
                 <span>Preview {selected()}</span>
+                {/* As archiving or deleting the open item does. */}
+                <button
+                  type="button"
+                  class="pointer-events-auto ml-auto"
+                  onClick={() => setSelected(undefined)}
+                >
+                  Close preview
+                </button>
               </ViewShell.TopBar>
               <textarea
                 class="ml-12 min-h-0 flex-1"
@@ -534,6 +560,7 @@ function HomeWorkspaceFixture() {
         inlinePreview={
           size.width > DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS.narrow
         }
+        empty={selected() === undefined}
         list={<HomeFixture onSelect={setSelected} />}
       >
         <ViewShell.Header class="empty:hidden">

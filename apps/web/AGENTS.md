@@ -235,6 +235,15 @@ once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboa
 order, and a folder's disclosure caret or a control there that opens a menu
 or a dialog chooses nothing.
 
+Wide-touch left panes have a backend-free regression,
+`left-pane.browser.e2e.ts` in the view-shell suite: a titled collection's list
+and a docked Chat aside collapse beside an open item and come back from the
+item's first island, the choice survives a reload, a list returns when nothing
+is open, and folded layouts get no title row. The suite's
+`touch-sidebar.browser.e2e.ts` also checks that a sheet row that applies on
+press (Mail's inbox rows) presses nothing in the list beneath it, even with a
+second tap while the sheet closes.
+
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
 tasks to an icon and narrowing the open search on phones only; tablet and desktop

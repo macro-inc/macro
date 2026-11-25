@@ -256,7 +256,11 @@ function TouchEmailPanes(props: {
       <EmailReader
         focusList={() => {
           if (shell.breakpoints.narrow?.()) closeThread();
-          else props.focusList();
+          else if (shell.leftPane.isCollapsed()) {
+            // A collapsed list can't take focus until it's back.
+            shell.leftPane.expand();
+            queueMicrotask(props.focusList);
+          } else props.focusList();
         }}
         setListPane={props.setListPane}
       />
@@ -288,6 +292,7 @@ function EmailLayout(props: {
     <ViewShell.Root
       contentLayout="collection"
       asidePreferenceKey="email"
+      title={t('nav.email')}
       resizable
       aside={{ preserveDuringResize: false }}
       main={{

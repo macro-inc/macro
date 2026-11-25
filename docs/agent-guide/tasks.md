@@ -1,6 +1,6 @@
 # Tasks
 
-On touch, **Show sidebar** stays on the left while **Search** and **Filters** float on the right over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills.
+On touch, **Show sidebar** stays on the left while **Search** and **Filters** float on the right over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills. With a task or project open, **Hide side pane** in the list's title row collapses the list beside it (see [navigation](navigation.md)).
 Search uses the same 40px glass island as Filters. Tasks and Projects lists reserve the greater of the bottom safe area and floating controls, plus 16px, so the final row can scroll fully clear of them.
 
 ## Surface

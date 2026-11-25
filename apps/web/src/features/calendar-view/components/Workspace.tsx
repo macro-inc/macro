@@ -8,6 +8,7 @@ import {
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { t } from '@app/lib/i18n';
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import {
@@ -227,6 +228,7 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
           <SplitPanel.Body>
             <ViewShell.Root
               asidePreferenceKey="calendar"
+              title={t('nav.calendar')}
               resizable
               aside={{ preserveDuringResize: false }}
               main={{ preferredWidth: 640 }}

@@ -1,6 +1,7 @@
 import { CollectionPanes, ViewShell } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { FolderDropZone } from '@app/features/next-soup/actions';
+import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
 import { SplitPanel } from '@components/app/split-panel';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -60,6 +61,7 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
           <ViewShell.Root
             contentLayout="collection"
             asidePreferenceKey="documents"
+            title={t('nav.files')}
             resizable
             aside={{ preserveDuringResize: false }}
             main={{ preferredWidth: 640 }}

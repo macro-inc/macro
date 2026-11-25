@@ -136,6 +136,18 @@ The sheet occupies no resize track and does not resize or remount the list or
 preview. Detail headers add no sidebar trigger; floating channel headers keep
 their measured local chrome.
 
+A shell given a `title` (the view's mobile dock label) heads its left pane on
+wide touch with that title and a **Hide side pane** control: a collection's
+list (`CollectionPanes`) or an aside docked beside Main. Collapsing gives the
+right pane the width, and that pane's first top bar leads with **Show side
+pane** (`ViewShell.TopBar` adds it before its navigation, so hosted headers get
+it too). The choice is saved per view (`asidePreferenceKey`): a list's in its
+own preference, an aside's in the shared navigation preference. A list stays
+while nothing is selected, and an aside while the shell's `mainEmpty` is true,
+since each then holds the only next step. The title row takes the top safe
+area, and the pane's content below it sees `--safe-top: 0px`. Narrow layouts
+and desktop are unchanged, and the list's Show sidebar sheet stays.
+
 On touch, `ViewShell.TopBar` inside `ViewShell.Main`, `ViewShell.Detail`, or a
 `CollectionPanes` detail floats over the pane as mobile chrome, like the split
 header of a standalone view. Wrap its title in `ViewShell.TopBarTitle`, its
@@ -196,6 +208,7 @@ Docked touch sidebars above the layout breakpoint use 1.57421875 times the base 
 and bounds (403px initially), and preserve that width while space permits.
 Desktop and narrow overlays keep base sizing. Normalize manually resized touch
 widths before saving so switching layouts or devices does not compound scaling.
-A docked touch sidebar is the view's list, as on a phone, so it has no title or
-collapse toggle: `ViewSidebar.Header` renders only the top safe area there.
+A docked touch sidebar is the view's list, as on a phone, so its own
+`ViewSidebar.Header` renders only the top safe area there; a titled shell's
+title row (above) names it and holds its collapse control instead.
 Sheets and overlays keep their header.

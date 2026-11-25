@@ -35,6 +35,11 @@ import {
 } from 'solid-js';
 import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
+import {
+  BelowLeftPaneTitle,
+  LeftPaneExpandButton,
+  LeftPaneTitleRow,
+} from './LeftPaneControls';
 import { NavigationSheet } from './NavigationSheet';
 import {
   createTouchTopBarInset,
@@ -80,6 +85,11 @@ const RESIZE_GUTTER = 1;
 /** Where a shell with `asidePreferenceKey` saves whether its navigation is hidden. */
 export function asideCollapsedPreferenceKey(app: string) {
   return `macro:pref:view-sidebar:collapsed:${app}`;
+}
+
+/** Where a shell saves whether its wide-touch collection list is collapsed. */
+function listCollapsedPreferenceKey(app: string) {
+  return `macro:pref:view-list:collapsed:${app}`;
 }
 
 export { useViewShell, type ViewShellLayout } from './view-shell-context';
@@ -138,6 +148,17 @@ export type ViewShellRootProps = Omit<
    * a back button that calls `onBack` in place of Show navigation.
    */
   asideList?: { open: boolean; onBack: () => void };
+  /**
+   * The view's name, as the mobile dock shows it. On wide touch a shell with
+   * a title heads its left pane (a collection's list or a docked aside) with
+   * it, beside a control that collapses that pane.
+   */
+  title?: string;
+  /**
+   * Main shows nothing selected. On wide touch a docked aside then stays
+   * open, since it holds the only next step.
+   */
+  mainEmpty?: boolean;
   main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
@@ -165,6 +186,8 @@ function Root(props: ViewShellRootProps) {
     'asideRequired',
     'asidePinned',
     'asideList',
+    'title',
+    'mainEmpty',
     'main',
     'detail',
     'detailOpen',
@@ -195,6 +218,14 @@ function Root(props: ViewShellRootProps) {
         { default: undefined }
       )
     : createSignal<number>();
+  // As for navigation, only the primary split follows and writes the saved
+  // choice.
+  const [listCollapsed, setListCollapsed] =
+    local.asidePreferenceKey && !secondarySplit
+      ? usePreference(listCollapsedPreferenceKey(local.asidePreferenceKey), {
+          default: false,
+        })
+      : createSignal(false);
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const [navigationTrigger, setNavigationTrigger] =
@@ -319,10 +350,27 @@ function Root(props: ViewShellRootProps) {
     return local.asideList.open ? 'main' : 'list';
   };
 
+  // A titled shell's left pane collapses on wide touch: a collection's list,
+  // or an aside docked beside Main.
+  const leftPaneKind = (): 'list' | 'aside' | undefined => {
+    if (
+      local.title === undefined ||
+      local.asidePreferenceKey === undefined ||
+      !isTouchDevice() ||
+      atLayoutBreakpoint()
+    )
+      return undefined;
+    // Collections lay out their list beside the detail in CollectionPanes.
+    if (collectionLayout()) return 'list';
+    if (local.aside === false) return undefined;
+    return 'aside';
+  };
+
   const asideMode = (): AsideMode => {
     if (collectionLayout()) return sheetOpen() ? 'docked' : 'collapsed';
     const list = narrowList();
     if (list) return list === 'list' ? 'docked' : 'collapsed';
+    if (leftPaneKind() === 'aside' && local.mainEmpty) return 'docked';
 
     return local.aside === false ||
       (atLayoutBreakpoint()
@@ -453,6 +501,28 @@ function Root(props: ViewShellRootProps) {
       );
     },
     narrowList,
+    leftPane: {
+      kind: leftPaneKind,
+      title: () => local.title,
+      isCollapsed: () => {
+        const kind = leftPaneKind();
+        if (kind === 'list') return listCollapsed();
+        return kind === 'aside' && value.aside.isCollapsed();
+      },
+      canCollapse: () =>
+        leftPaneKind() === 'list' ||
+        (leftPaneKind() === 'aside' && value.aside.canCollapse()),
+      collapse: () => {
+        const kind = leftPaneKind();
+        if (kind === 'list') setListCollapsed(true);
+        else if (kind === 'aside') value.aside.collapse();
+      },
+      expand: () => {
+        const kind = leftPaneKind();
+        if (kind === 'list') setListCollapsed(false);
+        else if (kind === 'aside') value.aside.expand();
+      },
+    },
     returnToList: () => local.asideList?.onBack(),
     chooseAsideWidth: (width) => setChosenAsideWidth(width / asideScale()),
     aside: {
@@ -463,7 +533,9 @@ function Root(props: ViewShellRootProps) {
         local.asidePreferenceKey !== undefined &&
         local.aside !== false &&
         !asidePinned() &&
-        !narrowList(),
+        !narrowList() &&
+        // A wide-touch aside stays while Main shows nothing.
+        !(leftPaneKind() === 'aside' && local.mainEmpty),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
       fillsShell: () => narrowList() === 'list',
@@ -689,7 +761,14 @@ function AsideHost(props: JSX.HTMLAttributes<HTMLDivElement>) {
             inert={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
             aria-hidden={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
           >
-            {local.children}
+            <div class="flex size-full min-h-0 min-w-0 flex-col">
+              <Show when={ws.leftPane.kind() === 'aside'}>
+                <LeftPaneTitleRow canCollapse={ws.leftPane.canCollapse()} />
+              </Show>
+              <BelowLeftPaneTitle titled={ws.leftPane.kind() === 'aside'}>
+                {local.children}
+              </BelowLeftPaneTitle>
+            </div>
           </div>
         </Resize.Panel>
       }
@@ -864,6 +943,17 @@ function TopBar(
   // split header; `floating` bars are positioned by their own layout.
   const inset = useTouchTopBarInset(bar, () => !local.floating);
   const floats = inset.floats;
+  const ws = useContext(ViewShellContext);
+  const pane = useContext(ViewShellPaneContext);
+  // The pane right of a collapsed left pane leads its first bar with the
+  // control that brings it back, whatever navigation the bar hosts.
+  const expandsLeftPane = () => {
+    const kind = ws?.leftPane.kind();
+    if (!kind || !ws?.leftPane.isCollapsed()) return false;
+    if (pane !== (kind === 'list' ? 'detail' : 'main')) return false;
+    // A bar stacked under another floating bar is not the pane's first.
+    return inset.offset() === 0;
+  };
   return (
     <SplitHeaderContextMenu>
       <div
@@ -882,6 +972,9 @@ function TopBar(
         }
         data-view-shell-top-bar=""
       >
+        <Show when={expandsLeftPane()}>
+          <LeftPaneExpandButton />
+        </Show>
         {local.navigation ?? <ViewNavigationControls />}
         {local.children}
       </div>

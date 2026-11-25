@@ -709,6 +709,63 @@ test('wide touch collections keep their list beside an empty or selected preview
   expect((await listFrame.boundingBox())!.width).toBe(403);
 });
 
+for (const second of ['none', 'during close', 'after close'] as const) {
+  test(`a sheet row that applies on press leaves the list beneath unpressed (second tap: ${second})`, async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width: 1000, height: 844 });
+    await page.goto(
+      '/src/components/view-shell/browser-test/touch-sidebar.html?workspace'
+    );
+    const detail = page.locator('[data-view-shell-detail]');
+    const sheet = page.getByRole('dialog', { name: 'Sidebar' });
+    await page.getByRole('button', { name: 'Show sidebar' }).tap();
+    await expect(sheet).toBeInViewport({ ratio: 1 });
+    await expect(sheet).not.toHaveAttribute('data-transitioning');
+    const row = await sheet
+      .getByRole('button', { name: 'Work inbox' })
+      .boundingBox();
+    const x = row!.x + row!.width / 2;
+    const y = row!.y + row!.height / 2;
+    // A list row sits under the inbox row, as Mail's thread rows do.
+    expect(
+      await page.evaluate(
+        ([x, y]) =>
+          document
+            .elementsFromPoint(x, y)
+            .some((element) => element.hasAttribute('data-workspace-row')),
+        [x, y]
+      )
+    ).toBe(true);
+    if (second === 'during close') {
+      // Hold the sheet's slide out long enough that the second tap is sure
+      // to land while it is still closing.
+      await page.addStyleTag({
+        content:
+          '[data-corvu-drawer-content][data-transitioning] { transition-duration: 2s !important; }',
+      });
+    }
+    await page.touchscreen.tap(x, y);
+    if (second === 'during close') {
+      await page.touchscreen.tap(x - 24, y + 4);
+      await expect(
+        page.locator('[data-corvu-drawer-content][data-closing]')
+      ).toHaveCount(1);
+    }
+    await expect(sheet).toBeHidden();
+    if (second === 'after close') await page.touchscreen.tap(x - 24, y + 4);
+    await expect(page.getByTestId('workspace-inbox')).toHaveText('work inbox');
+    // A tap that lands after the sheet has gone is an ordinary tap.
+    if (second === 'after close') {
+      await expect(detail).toContainText('Preview');
+      return;
+    }
+    await page.waitForTimeout(500);
+    await expect(detail).toContainText('Select an item to preview');
+  });
+}
+
 test('folding a collection preserves the mounted detail and its draft', async ({
   page,
 }) => {

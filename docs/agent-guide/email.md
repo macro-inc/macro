@@ -1,6 +1,6 @@
 # Email
 
-Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane. Show sidebar opens mailbox navigation in a sheet that slides over the email list.
+Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane. Show sidebar opens mailbox navigation in a sheet that slides over the email list. With a thread open, **Hide side pane** in the list's title row gives the thread the width, and **Show side pane** brings the list back (see [navigation](navigation.md)).
 
 Fold with a thread open to verify the same thread and its draft stay mounted.
 The thread fills the pane and its top-left Back button returns to the current
