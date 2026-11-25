@@ -14,6 +14,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use crate::mailbox::{BodyType, normalize_html};
 use crate::seed::{NewMessage, Seed, SeedContact, SeedError, SeedMailbox};
 
 use crate::{EmulatorError, Fault, LifecycleEvent, OutlookEmulator};
@@ -65,6 +66,9 @@ pub struct MessageChange {
     /// Replaces its categories.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<String>>,
+    /// Replaces its body, in the format it has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
     /// Moves it to a folder: a well-known name, a display name or an id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub folder: Option<String>,
@@ -145,6 +149,12 @@ impl OutlookEmulator {
             }
             if let Some(categories) = &change.categories {
                 message.categories = categories.clone();
+            }
+            if let Some(body) = &change.body {
+                message.body = match message.body_type {
+                    BodyType::Html => normalize_html(body),
+                    BodyType::Text => body.clone(),
+                };
             }
             match &change.folder {
                 Some(folder) => mailbox

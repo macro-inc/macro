@@ -109,6 +109,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
 pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
     sub_types: Vec<String>,
+    excluded_sub_types: Vec<String>,
     mode: DocumentSearchMode,
     property_filters: Vec<PropertyFilterArg>,
     tag_option_ids: Vec<String>,
@@ -121,6 +122,7 @@ impl DocumentQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             sub_types: Vec::new(),
+            excluded_sub_types: Vec::new(),
             mode: DocumentSearchMode::default(),
             property_filters: Vec::new(),
             tag_option_ids: Vec::new(),
@@ -143,10 +145,18 @@ impl DocumentQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn sub_types(mut self, sub_types: Vec<String>) -> Self {
         self.sub_types = sub_types;
+        self
+    }
+
+    /// Leaves out the documents of these sub types; a document with none
+    /// stays.
+    pub fn excluded_sub_types(mut self, excluded_sub_types: Vec<String>) -> Self {
+        self.excluded_sub_types = excluded_sub_types;
         self
     }
 
@@ -204,6 +214,12 @@ impl DocumentQueryBuilder {
         if !self.sub_types.is_empty() {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
         }
+        if !self.excluded_sub_types.is_empty() {
+            bool_query.must_not(QueryType::terms(
+                "sub_type",
+                self.excluded_sub_types.clone(),
+            ));
+        }
 
         // Property filters: one nested clause per filter, ANDed via bool.filter.
         // Each matches a `properties` entry whose definition_id and value line
@@ -250,6 +266,23 @@ impl DocumentQueryBuilder {
         } else {
             for clause in self.build_content_clauses() {
                 bool_query.must(clause);
+            }
+        }
+
+        // A term a minus left out drops every document it would match: by
+        // its name, a chunk of its content, or either, as the mode reads.
+        if include_name {
+            for query in self
+                .inner
+                .excluded_field_queries(DocumentSearchConfig::TITLE_KEY)?
+            {
+                bool_query.must_not(query);
+            }
+        }
+        if include_content {
+            for term in &self.inner.excluded_terms {
+                let query = child_content_query(term, &self.inner.match_type);
+                bool_query.must_not(HasChildQuery::new(CHILD_RELATION, query).into());
             }
         }
 
@@ -513,6 +546,7 @@ pub struct DocumentSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
@@ -531,6 +565,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
+            .excluded_sub_types(args.excluded_sub_types)
             .mode(args.mode)
             .property_filters(args.property_filters)
             .tag_option_ids(args.tag_option_ids)

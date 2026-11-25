@@ -30,6 +30,8 @@ export function UnifiedReplyInput(props: {
   /** Hide reply chrome without changing the thread destination or draft owner. */
   plain?: boolean;
   placeholder?: string;
+  /** Offer voice memos in the reply (off in a call's own thread). */
+  voiceMemos?: boolean;
   onNavigateToTarget: () => void;
   onExit: () => void;
 }) {
@@ -82,6 +84,7 @@ export function UnifiedReplyInput(props: {
         mode={props.plain ? 'channel' : 'reply'}
         placeholder={props.placeholder}
         collapsible
+        voiceMemos={props.voiceMemos}
         onExit={() => props.onExit()}
       />
     </div>

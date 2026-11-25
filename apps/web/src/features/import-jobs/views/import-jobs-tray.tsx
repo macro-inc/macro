@@ -6,11 +6,20 @@ import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ImportJobsTray as ImportJobsTrayCard } from '../components/import-jobs-tray';
 import { useImportJobs } from '../context/import-jobs-context';
-import { type ImportJob, isWorkspaceSource } from '../core/import-job';
+import {
+  type ImportJob,
+  isWorkspaceSource,
+  type WorkspaceSource,
+} from '../core/import-job';
 import { createImportJobs } from '../primitives/import-jobs';
 
 // Product names, not translated.
-const SOURCE_NAMES = { notion: 'Notion', linear: 'Linear', jira: 'Jira' };
+const SOURCE_NAMES: Record<WorkspaceSource, string> = {
+  notion: 'Notion',
+  linear: 'Linear',
+  jira: 'Jira',
+  hubspot: 'HubSpot',
+};
 
 /** The tray over the provided import sources, opening jobs through the host. */
 export function ImportJobsTrayView() {

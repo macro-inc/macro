@@ -10,13 +10,18 @@ export type InboxUnreadCount = {
    */
   passwordRequests: boolean;
   count: number;
+  /**
+   * How many of `count` Chat shows as unread. Undefined from a server that
+   * does not tell them apart.
+   */
+  chatCount?: number;
 };
 
 /** The highest count shown as a number; past it the label is `99+`. */
 const HIGHEST_SHOWN = 99;
 
-/** The channel rows: what the Channels view's notifications are. */
-export const CHANNEL_ROW_TYPES: readonly InboxRowType[] = [
+/** The channel rows, which Chat shows only some of as unread. */
+const CHANNEL_ROW_TYPES: readonly InboxRowType[] = [
   'channel_mention',
   'channel_messages',
   'channel_thread',
@@ -44,6 +49,25 @@ export function unreadRows(
       continue;
     }
     total += entry.count;
+  }
+  return total;
+}
+
+/**
+ * Unread rows Chat shows: those holding a top-level message or a mention,
+ * which is what can make a conversation unread in its sidebar. Every unread
+ * channel row from a server that does not tell them apart.
+ */
+export function unreadChatRows(counts: readonly InboxUnreadCount[]): number {
+  let total = 0;
+  for (const entry of counts) {
+    if (entry.chatCount !== undefined) {
+      total += entry.chatCount;
+      continue;
+    }
+    if (entry.type !== 'other' && CHANNEL_ROW_TYPES.includes(entry.type)) {
+      total += entry.count;
+    }
   }
   return total;
 }

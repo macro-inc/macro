@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { isMobile } from '@core/mobile/isMobile';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import { cn, Panel } from '@ui';
@@ -22,6 +23,7 @@ export function ShareDialogFrame(
       }
     >
       <KobalteDialog onOpenChange={props.onOpenChange} open={props.open}>
+        <DialogClosesOnNavigation />
         <KobalteDialog.Portal>
           <KobalteDialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
           <div class="z-modal fixed inset-0">

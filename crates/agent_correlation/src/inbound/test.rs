@@ -149,6 +149,7 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
                 Json(serde_json::json!({
                     "correlation": crate::context::current(),
                     "routine": crate::context::current_routine(),
+                    "program": crate::context::by_program(),
                 }))
             }),
         )
@@ -160,8 +161,9 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
     let [header, _, signature]: [&str; 3] =
         plain.split('.').collect::<Vec<_>>().try_into().unwrap();
     let forged = format!("{header}.{}.{signature}", signed.split('.').nth(1).unwrap());
-    for (bearer, correlation, routine_id) in [
-        (Some(signed), None, Some(routine)),
+    // A credential signed for an agent or a routine is a program's.
+    for (bearer, correlation, routine_id, program) in [
+        (Some(signed), None, Some(routine), true),
         (
             Some(routine_token(
                 routine,
@@ -170,10 +172,17 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
             )),
             Some(Uuid::from_u128(1)),
             Some(routine),
+            true,
         ),
-        (Some(token(None, None)), None, None),
-        (Some(forged), None, None),
-        (None, None, None),
+        (
+            Some(token(None, Some(Uuid::from_u128(3)))),
+            None,
+            None,
+            true,
+        ),
+        (Some(token(None, None)), None, None, false),
+        (Some(forged), None, None, false),
+        (None, None, None, false),
     ] {
         let mut request = Request::builder().method("POST").uri("/");
         if let Some(bearer) = bearer {
@@ -190,7 +199,7 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
             .unwrap();
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
-            serde_json::json!({ "correlation": correlation, "routine": routine_id }),
+            serde_json::json!({ "correlation": correlation, "routine": routine_id, "program": program }),
         );
     }
     // Only the correlation is looked up; the routine's signature is its authority.

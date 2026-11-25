@@ -16,7 +16,7 @@ describe('top-level channel notifications', () => {
     ['document_mention', undefined, true],
     ['document_mention', 'root', false],
     ['channel_message_reply', 'root', false],
-    ['channel_invite', undefined, true],
+    ['channel_invite', undefined, false],
     ['call_started', undefined, false],
   ] as const)(
     'classifies %s with thread %s as %s',

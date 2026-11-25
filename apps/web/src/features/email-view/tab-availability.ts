@@ -1,6 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableEmailFocus, enableReminders } from '@core/constant/featureFlags';
 import { match } from 'ts-pattern';
+import {
+  type EmailSearchScopeId,
+  emailSearchScopeTab,
+} from './search/email-search-scope';
 import type { EmailTab } from './types';
 
 /** Whether a flag-gated tab is on, still waiting for its flags, or off. */
@@ -24,4 +28,15 @@ export function useEmailTabAvailability(): (
       .with('reminders', () => availability(reminders()))
       .with('focus', () => availability(focus()))
       .otherwise(() => 'on' as const);
+}
+
+/** Whether the person has the view an `in:` filter names. */
+export function useEmailSearchScopeAvailability(): (
+  scope: EmailSearchScopeId
+) => boolean {
+  const availability = useEmailTabAvailability();
+  return (scope) => {
+    const tab = emailSearchScopeTab(scope);
+    return tab === undefined || availability(tab) === 'on';
+  };
 }

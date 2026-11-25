@@ -342,4 +342,89 @@ impl ContactListReader for DbContactsRepository {
             .map(|id| Ok(MacroUserIdStr::try_from(id)?))
             .collect()
     }
+
+    #[tracing::instrument(
+        name = "contacts.lists.members.read",
+        skip_all,
+        fields(
+            list = list.as_ref(),
+            limit = i64::from(limit.get()),
+            has_cursor = after.is_some(),
+            count = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn list_members(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        let after = after.map(ContactCursor::position);
+        let fetch = i64::from(limit.get()) + 1;
+        let mut transaction = self.db.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        // Each list is its own statement: a stored or inbox list names its
+        // key as a literal, so its partial index applies.
+        let ids = match list {
+            ContactList::Teammates => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/teammates.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Interacted => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/interacted.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Invited => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/invited.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Gmail => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/gmail.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Outlook => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/outlook.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+        };
+        transaction.commit().await?;
+
+        let page = id_page(ids, limit)?;
+        tracing::Span::current().record("count", page.contacts.len() as i64);
+        Ok(page)
+    }
 }

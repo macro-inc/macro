@@ -285,13 +285,17 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         Ok(())
     }
 
-    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
+    async fn project_task_ids(
+        &self,
+        project_id: Uuid,
+        limit: Option<u32>,
+    ) -> Result<Vec<String>, SystemPropertyError> {
         // The Project id is a literal so a generic plan can prove the partial
         // predicate of idx_ep_project_value_gin. A bound parameter cannot.
         // Containment on values->'value' matches whole-value containment of
         // {"value": [ref]}: null, non-object, and non-array rows are excluded
         // either way. The literal must stay equal to SystemPropertyKey::PROJECT_UUID.
-        let rows = sqlx::query_scalar!(
+        let query = sqlx::query_scalar!(
             r#"
             SELECT entity_id
             FROM entity_properties
@@ -301,11 +305,22 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
                   'entity_id', $1::text, 'entity_type', 'INITIATIVE'
               ))
             ORDER BY entity_id
+            LIMIT $2
             "#,
             project_id.to_string(),
-        )
-        .fetch_all(&self.pool)
-        .await?;
+            limit.map(i64::from),
+        );
+        if limit.is_none() {
+            return Ok(query.fetch_all(&self.pool).await?);
+        }
+        // A bounded read serves reports, which answer within their own
+        // statement timeout; this read keeps to the same bound.
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        let rows = query.fetch_all(&mut *transaction).await?;
+        transaction.commit().await?;
         Ok(rows)
     }
 

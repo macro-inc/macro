@@ -310,6 +310,7 @@ describe('ring coordination', () => {
     // call the user already joined.
     await vi.advanceTimersByTimeAsync(6_000);
     expect(onAcquire).not.toHaveBeenCalled();
+    expect(publishedMessages('silence')).toHaveLength(1);
     expect(onEnd).toHaveBeenCalledTimes(1);
   });
 
@@ -359,7 +360,12 @@ describe('ring coordination', () => {
     await vi.advanceTimersByTimeAsync(1_000);
     expect(fixture.onEnd).toHaveBeenCalledOnce();
     expect(fixture.onRelease).toHaveBeenCalledTimes(2);
+    // Expiry publishes silence; jsdom queues its storage event one tick later.
+    await vi.advanceTimersByTimeAsync(1);
     expect(vi.getTimerCount()).toBe(0);
+    expect(publishedMessages('silence')).toHaveLength(1);
+    const late = createParticipant(module);
+    expect(late.onAcquire).not.toHaveBeenCalled();
   });
 
   it('releases the sound and timers when ringing ends during scope setup', async () => {

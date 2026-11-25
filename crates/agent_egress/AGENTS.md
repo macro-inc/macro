@@ -28,8 +28,8 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `Forwarder`.
 - `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `github_tokens.rs`:
   the credential resolvers. Connected apps and custom servers resolve only
-  through `connectors::McpConnectionsService` (`connections(owner)
-  .scoped(selection).permit(key)` then `upstream`); never read a connection
+  through `connectors::McpConnectionsService` (`connections_to(owner,
+  sought).scoped(selection).permit(key)` then `upstream`); never read a connection
   store, the flag or the overlay table here.
 - The agent's selected app list (`SessionGrant::selection`, from the
   session's `AgentMcpServers`) is a permission: a destination outside it is

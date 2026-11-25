@@ -23,6 +23,8 @@ import { MobileSearchResults } from './MobileSearchResults';
 import { SearchState } from './mobileSearchState';
 
 const mocks = vi.hoisted(() => ({
+  params: undefined as Record<string, unknown> | undefined,
+  entitySearch: [] as { query: string; category: string }[],
   accountId: (() => 'owner') as Accessor<string>,
   authenticated: (() => true) as Accessor<boolean>,
   fullText: vi.fn(),
@@ -74,7 +76,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     handle: {
       isActive: () => mocks.active(),
       currentEntryState: () => mocks.entryState,
-      content: () => ({ state: mocks.entryState }),
+      content: () =>
+        mocks.params
+          ? { type: 'component', id: 'search', params: mocks.params }
+          : { state: mocks.entryState },
       captureEntryState: () => {
         mocks.entryState = Object.fromEntries(
           [...mocks.captors].map(([key, read]) => [key, read()])
@@ -91,7 +96,6 @@ vi.mock('@components/app/mobile/use-mobile-nav', () => ({
   useForegroundMobileView: () => () => 'search',
   useMobileNavNavigate: () => vi.fn(),
 }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => mocks.accountId,
   useIsAuthenticated: () => mocks.authenticated,
@@ -152,9 +156,40 @@ vi.mock('@entity', () => ({
     </div>
   ),
 }));
+vi.mock(
+  '@app/features/next-soup/soup-view/filters-bar/tag-filter-state',
+  () => ({
+    createTagOptions: () => ({
+      options: () => [],
+      defByOption: () => new Map(),
+    }),
+  })
+);
+vi.mock('@app/features/next-soup/soup-view/search-operator-lookup', () => ({
+  createSearchOperatorLookup: () => () => ({
+    userId: 'macro|me@example.com',
+    tags: () => [],
+    inboxes: () => [],
+    channels: () => [],
+  }),
+}));
+vi.mock(
+  '@app/features/next-soup/soup-view/filters-bar/search-operator-values',
+  () => ({
+    createSearchOperatorValues: () => () => ({
+      people: [],
+      tags: [],
+      inboxes: [],
+      channels: [],
+    }),
+  })
+);
 vi.mock('../queries/entity-search', () => ({
-  useEntitySearch: () => ({
-    items: () => mocks.items(),
+  useEntitySearch: (query: () => string, category: () => string) => ({
+    items: () => {
+      mocks.entitySearch.push({ query: query(), category: category() });
+      return mocks.items();
+    },
     rankItems: (items: QuickAccessItem[]) => items,
     isLoadingEntities: () => mocks.loadingEntities(),
     isSearchingEntities: () => false,
@@ -190,6 +225,7 @@ beforeEach(() => {
   mocks.active = active;
   mocks.setActive = setActive;
   mocks.entryState = undefined;
+  mocks.params = undefined;
   mocks.captors.clear();
   mocks.open.mockImplementation(() => {
     mocks.onOpen();
@@ -272,24 +308,18 @@ it('offers full text above empty results, only mounts it explicitly, and keeps t
   expect(document.activeElement).toBe(input);
   fireEvent.input(input, { target: { value: 'teo update' } });
   expect(SearchState.mode()).toBe('full-text');
-  SearchState.setCategory('email');
   expect(mocks.fullText).toHaveBeenCalledOnce();
   fireEvent.input(input, { target: { value: '  ' } });
   expect(SearchState.mode()).toBe('name');
-  expect(SearchState.category()).toBe('email');
   expect(screen.queryByText(/Search full text for/)).toBeNull();
   expect(screen.getByPlaceholderText('Search…')).toBe(input);
 });
 
-it('omits full text for Projects and hides search on result opening', async () => {
+it('lists a project by its name and hides search on result opening', async () => {
   const [items, setItems] = createSignal<QuickAccessItem[]>([]);
   mocks.items = items;
   render(() => <MobileSearchResults />);
   SearchState.setQuery('teo');
-  SearchState.searchFullText();
-  SearchState.setCategory('projects');
-  expect(screen.queryByText(/Search full text for/)).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   setItems([
     {
       id: 'project',
@@ -311,7 +341,6 @@ it('omits full text for Projects and hides search on result opening', async () =
   expect(mocks.open).toHaveBeenCalled();
   SearchState.open();
   expect(SearchState.mode()).toBe('name');
-  expect(SearchState.category()).toBe('all');
 });
 
 it('preserves the search after a failed person lookup and on return from a successful retry', async () => {
@@ -330,12 +359,13 @@ it('preserves the search after a failed person lookup and on return from a succe
       },
     },
   ];
-  mocks.directMessage.mockReturnValue(okAsync('direct-message'));
+  mocks.directMessage.mockReturnValue(
+    okAsync({ channelId: 'direct-message', source: 'server' })
+  );
   mocks.open.mockImplementationOnce(() => {
     throw new Error('Unavailable');
   });
   SearchState.setQuery('teo');
-  SearchState.setCategory('people');
   render(() => <MobileSearchResults />);
   fireEvent.click(screen.getByRole('button', { name: 'Teo' }));
   await waitFor(() =>
@@ -345,7 +375,6 @@ it('preserves the search after a failed person lookup and on return from a succe
   );
   expect(SearchState.isOpen()).toBe(true);
   expect(SearchState.query()).toBe('teo');
-  expect(SearchState.category()).toBe('people');
   expect(SearchState.mode()).toBe('name');
   fireEvent.click(screen.getByRole('button', { name: 'Teo' }));
   expect(SearchState.isOpen()).toBe(true);
@@ -360,7 +389,6 @@ it('preserves the search after a failed person lookup and on return from a succe
   mocks.setActive(true);
   expect(SearchState.isOpen()).toBe(true);
   expect(SearchState.query()).toBe('teo');
-  expect(SearchState.category()).toBe('people');
   expect(screen.getByRole('button', { name: 'Teo' })).toBeTruthy();
 });
 
@@ -379,7 +407,6 @@ it('opens the selected full-text message and hides the search chrome', () => {
   };
   mocks.fullTextItems = [email];
   SearchState.setQuery('teo');
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   render(() => <MobileSearchResults />);
   fireEvent.click(
@@ -391,7 +418,6 @@ it('opens the selected full-text message and hides the search chrome', () => {
   });
   expect(SearchState.isOpen()).toBe(false);
   expect(SearchState.query()).toBe('teo');
-  expect(SearchState.category()).toBe('email');
 });
 
 it('bounds mounted recent rows while keeping the first result usable', () => {
@@ -438,7 +464,6 @@ it('restores full-text order, query, category, mode and scroll after measuring r
   mocks.fullTextSettling = settling;
   mocks.hasMore = false;
   SearchState.setQuery('teo');
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   const view = render(() => <MobileSearchResults />);
   const list = screen.getByRole('region', { name: 'Search results' });
@@ -458,7 +483,6 @@ it('restores full-text order, query, category, mode and scroll after measuring r
   // A separate dock session must not overwrite this history entry.
   SearchState.open();
   SearchState.setQuery('another query');
-  SearchState.setCategory('tasks');
   SearchState.close();
   expect(mocks.entryState).toBe(entry);
   mocks.setActive(true);
@@ -474,7 +498,6 @@ it('restores full-text order, query, category, mode and scroll after measuring r
   const input = screen.getByPlaceholderText('Search…');
   expect(input).toHaveProperty('value', 'teo');
   expect(document.activeElement).not.toBe(input);
-  expect(SearchState.category()).toBe('email');
   expect(SearchState.mode()).toBe('full-text');
   expect(screen.getByText('Searching…')).toBeTruthy();
   expect(
@@ -518,7 +541,6 @@ it('reveals the same scrolled results when native Back uncovers search', () => {
   ];
   mocks.hasMore = false;
   SearchState.setQuery('teo');
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   render(() => (
     <>
@@ -569,7 +591,6 @@ it('restores the name list order and scroll after opening promotes a result by r
       ...originalItems.filter((item) => item.id !== 'project-2'),
     ]);
   SearchState.setQuery('Project');
-  SearchState.setCategory('projects');
   const view = render(() => <MobileSearchResults />);
   fireEvent.scroll(screen.getByRole('region', { name: 'Search results' }), {
     target: { scrollTop: 800 },
@@ -593,7 +614,6 @@ it('restores the name list order and scroll after opening promotes a result by r
   mocks.setActive(true);
   render(() => <MobileSearchResults />);
   expect(SearchState.query()).toBe('Project');
-  expect(SearchState.category()).toBe('projects');
   const restoredList = screen.getByRole('region', { name: 'Search results' });
   await waitFor(() => expect(restoredList.scrollTop).toBe(800));
   fireEvent.scroll(restoredList);
@@ -654,7 +674,7 @@ it.each(['before navigation', 'while away'])(
     };
     mocks.directMessage.mockImplementation(() => {
       if (arrival === 'before navigation') publishConversation();
-      return okAsync('new-dm');
+      return okAsync({ channelId: 'new-dm', source: 'server' });
     });
     SearchState.setQuery('Person');
     const view = render(() => <MobileSearchResults />);
@@ -718,7 +738,6 @@ it('reloads name rows on remount instead of storing them in history', async () =
   mocks.items = items;
   mocks.loadingEntities = loading;
   SearchState.setQuery('Project');
-  SearchState.setCategory('projects');
   const view = render(() => <MobileSearchResults />);
   fireEvent.scroll(screen.getByRole('region', { name: 'Search results' }), {
     target: { scrollTop: 800 },
@@ -731,7 +750,7 @@ it('reloads name rows on remount instead of storing them in history', async () =
   expect(mocks.entryState?.['mobileSearch.nameOrder']).toEqual({
     accountId: 'owner',
     query: 'Project',
-    category: 'projects',
+    category: 'all',
     ids: savedItems.map((item) => item.id),
   });
   expect(mocks.entryState?.['mobileSearch.nameScroll']).not.toHaveProperty(
@@ -932,7 +951,6 @@ it('does not revive saved name rows after a failed refresh or successful empty r
   mocks.refreshError = failed;
   mocks.hasMore = false;
   SearchState.setQuery('Project');
-  SearchState.setCategory('projects');
   const view = render(() => <MobileSearchResults />);
   fireEvent.click(screen.getByRole('button', { name: 'Project' }));
   view.unmount();
@@ -993,25 +1011,31 @@ it('discards saved full-text rows on access loss even when an old cursor remains
 });
 
 it('keeps a covered native search entry independent of a new dock session', () => {
-  SearchState.setQuery('original');
-  SearchState.setCategory('email');
+  SearchState.setQuery('type:email original');
   render(() => <MobileSearchResults />);
   mocks.setActive(false);
   expect(SearchState.isOpen()).toBe(false);
   SearchState.open();
-  SearchState.setQuery('new search');
-  SearchState.setCategory('tasks');
-  expect(
-    screen.getByRole('button', { name: 'Email' }).getAttribute('aria-pressed')
-  ).toBe('true');
-  expect(
-    screen.getByRole('button', { name: 'Tasks' }).getAttribute('aria-pressed')
-  ).toBe('false');
-  fireEvent.click(screen.getByRole('button', { name: 'Files' }));
-  expect(SearchState.category()).toBe('tasks');
+  SearchState.setQuery('type:task new search');
+  // The covered entry's starters show and edit its own search.
+  expect(screen.queryByRole('button', { name: 'Tasks' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Email' }));
+  expect(SearchState.query()).toBe('type:task new search');
   mocks.setActive(true);
-  expect(SearchState.query()).toBe('original');
-  expect(SearchState.category()).toBe('documents');
+  expect(SearchState.query()).toBe('original type:');
+});
+
+it('narrows name results with type: and lists other operators as full text', () => {
+  render(() => <MobileSearchResults />);
+  SearchState.setQuery('type:task teo');
+  expect(mocks.entitySearch.at(-1)).toEqual({
+    query: 'teo',
+    category: 'tasks',
+  });
+  expect(screen.getByText(/Search full text for/)).toBeTruthy();
+  SearchState.setQuery('assignee:me teo');
+  expect(mocks.fullText).toHaveBeenCalled();
+  expect(screen.queryByText(/Search full text for/)).toBeNull();
 });
 
 it('loads another name page near the end without a persistent paging bar', async () => {
@@ -1238,13 +1262,12 @@ it('resumes viewport paging when editing a restored search in the dock', async (
   mocks.entryState = {
     'mobileSearch.session': {
       query: 'First',
-      category: 'projects',
       mode: 'name',
     },
     'mobileSearch.nameScroll': {
       accountId: 'owner',
       query: 'First',
-      category: 'projects',
+      category: 'all',
       id: 'first',
       offset: 0,
       within: 0,
@@ -1255,4 +1278,61 @@ it('resumes viewport paging when editing a restored search in the dock', async (
   expect(mocks.loadMore).not.toHaveBeenCalled();
   SearchState.setQuery('Next');
   await waitFor(() => expect(mocks.loadMore).toHaveBeenCalledOnce());
+});
+
+it('opens on what a tag or the universal input picked, keeping its binding', () => {
+  const binding = {
+    token: 'tag:"🎉"',
+    tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+  };
+  mocks.entryState = {
+    'search.text': 'tag:"🎉"',
+    'search.bindings': [binding],
+  };
+  render(() => (
+    <>
+      <MobileSearchInput />
+      <MobileSearchResults />
+    </>
+  ));
+  // A space follows, so the token isn't read as one still being typed.
+  expect(SearchState.query()).toBe('tag:"🎉" ');
+  expect(SearchState.mode()).toBe('full-text');
+  const bindings = mocks.fullText.mock.calls.at(-1)?.[2] as () => unknown;
+  expect(bindings()).toEqual([binding]);
+  cleanup();
+
+  mocks.entryState = undefined;
+  mocks.params = {
+    initialQuery: 'tag:"🎉" launch',
+    initialBindings: [binding],
+  };
+  render(() => (
+    <>
+      <MobileSearchInput />
+      <MobileSearchResults />
+    </>
+  ));
+  expect(SearchState.query()).toBe('tag:"🎉" launch ');
+  expect(SearchState.session().bindings()).toEqual([binding]);
+  // Editing the token lets go of it.
+  fireEvent.input(screen.getByPlaceholderText('Search…'), {
+    target: { value: 'tag:"🎉x" launch' },
+  });
+  expect(SearchState.session().bindings()).toEqual([]);
+});
+
+it('restores its own session over what the opener picked', () => {
+  mocks.entryState = {
+    'search.text': 'tag:"🎉"',
+    'mobileSearch.session': { query: 'teo', mode: 'name' },
+  };
+  render(() => (
+    <>
+      <MobileSearchInput />
+      <MobileSearchResults />
+    </>
+  ));
+  expect(SearchState.query()).toBe('teo');
+  expect(SearchState.session().bindings()).toEqual([]);
 });

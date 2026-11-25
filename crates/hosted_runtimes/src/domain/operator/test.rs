@@ -3,6 +3,7 @@ mod agent;
 mod data_disk;
 mod effect_concurrency;
 mod host_scope;
+mod image_upgrade;
 mod moves;
 mod redeploy;
 mod setup_notice;
@@ -39,6 +40,8 @@ enum FakeFleetError {
     Missing,
     #[error("request rejected")]
     Rejected,
+    #[error("golden not ready")]
+    GoldenNotReady,
 }
 
 impl FleetError for FakeFleetError {
@@ -70,6 +73,21 @@ struct FakeFleet {
     instances: Mutex<Vec<FleetInstance>>,
     /// The host name it registers; `runtime-dev-1` when unset.
     host_name: Option<&'static str>,
+    /// `stage_image` requests that fail before reaching the host.
+    stage_failures: Mutex<u32>,
+    /// What `staged_image` answers, first to last; the last one repeats.
+    staged: Mutex<Vec<crate::domain::image_upgrade::StagedImage>>,
+    /// Images whose system disk does not boot.
+    broken_images: Mutex<Vec<String>>,
+    /// Images whose golden is still being built.
+    building_images: Mutex<Vec<String>>,
+    /// Images the host refuses before touching the computer.
+    refused_images: Mutex<Vec<String>>,
+    /// Images whose replacement fails after the host stopped the computer,
+    /// leaving it stopped on its old disk.
+    put_back_images: Mutex<Vec<String>>,
+    /// Each computer's system disk: image, previous image, running.
+    system_disks: Mutex<HashMap<ComputerId, (String, Option<String>, bool)>>,
 }
 
 const BASE_IMAGE: &str = "macro-box/2026-11-01";
@@ -136,6 +154,9 @@ impl Fleet for FakeFleet {
 
     async fn start(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("start {id}"));
+        if let Some(disk) = self.system_disks.lock().unwrap().get_mut(&id) {
+            disk.2 = true;
+        }
         if let Some(gate) = &self.start_gate {
             gate.wait().await;
         }

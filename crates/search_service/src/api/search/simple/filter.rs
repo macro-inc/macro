@@ -2,7 +2,9 @@
 //! This is used in simple_unified.rs
 
 use comms_db_client::model::SimpleMention;
+use item_filters::{EmailTextMatch, EmailTextPart};
 use models_search::calendar_event::CalendarEventSearchScope;
+use opensearch_client::search::emails::{EmailLabelCondition, EmailTextCondition, EmailTextFields};
 use opensearch_client::search::unified::{
     UnifiedCalendarEventSearchArgs, UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs,
     UnifiedChatSearchArgs, UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
@@ -181,6 +183,21 @@ pub(super) fn reject_unsupported_email_filters(
     Ok(())
 }
 
+fn text_condition(text_match: &EmailTextMatch) -> EmailTextCondition {
+    EmailTextCondition {
+        fields: match text_match.part {
+            EmailTextPart::Any => EmailTextFields::Any,
+            EmailTextPart::Subject => EmailTextFields::Subject,
+            EmailTextPart::From => EmailTextFields::From,
+            EmailTextPart::To => EmailTextFields::To,
+            EmailTextPart::Cc => EmailTextFields::Cc,
+            EmailTextPart::Bcc => EmailTextFields::Bcc,
+        },
+        text: text_match.text.clone(),
+        exclude: text_match.exclude,
+    }
+}
+
 /// Resolves the email threads `filters` reach for the caller, or `None` when
 /// emails are left out or no thread can match.
 pub(super) async fn email_search(
@@ -193,16 +210,11 @@ pub(super) async fn email_search(
     if !should_include {
         return Ok(None);
     }
-    // Every inbox the caller can reach (their own plus delegated). Connected
-    // secondary inboxes share the owner's user_id; delegated inboxes index
-    // under their own, so collect the distinct macro_ids the caller can search.
+    // Every inbox the caller can reach: their own plus those delegated to them.
     let links =
         email_db_client::links::get::fetch_search_inboxes_for_macro_id(&ctx.db, user_id.as_ref())
             .await
             .map_err(SearchError::InternalError)?;
-    let mut user_ids: Vec<String> = links.iter().map(|l| l.macro_id.clone()).collect();
-    user_ids.sort();
-    user_ids.dedup();
     // A mailbox being disconnected keeps its documents until its rows are
     // purged, which can take hours; its mail stops matching from the start.
     let disconnecting: Vec<String> = links
@@ -212,7 +224,6 @@ pub(super) async fn email_search(
         .collect();
     let inboxes = ViewerInboxes {
         link_ids: links.iter().map(|l| l.id).collect(),
-        user_ids,
     };
 
     let scope = ctx
@@ -223,10 +234,11 @@ pub(super) async fn email_search(
     let EmailScope::Threads(threads) = scope else {
         return Ok(None);
     };
+    let threads = *threads;
 
     Ok(Some(EmailSearch {
         args: UnifiedEmailSearchArgs {
-            user_ids: threads.user_ids,
+            inbox_link_ids: threads.inbox_link_ids.iter().map(Uuid::to_string).collect(),
             thread_ids: threads.thread_ids.iter().map(Uuid::to_string).collect(),
             ids_only: threads.ids_only,
             required_thread_ids: threads
@@ -240,9 +252,31 @@ pub(super) async fn email_search(
             recipients: filters.recipients.clone(),
             link_ids: filters.link_ids.clone(),
             exclude_link_ids: disconnecting,
+            label_link_ids: links.iter().map(|link| link.id.to_string()).collect(),
             include_labels: filters.include_labels.clone(),
             exclude_labels: filters.exclude_labels.clone(),
             importance: filters.importance,
+            text_conditions: filters.text_matches.iter().map(text_condition).collect(),
+            label_conditions: threads
+                .label_conditions
+                .into_iter()
+                .map(|condition| EmailLabelCondition {
+                    labels: condition.labels,
+                    tag_option_ids: condition
+                        .tag_option_ids
+                        .iter()
+                        .map(Uuid::to_string)
+                        .collect(),
+                    exclude: condition.exclude,
+                })
+                .collect(),
+            exclude_thread_ids: threads
+                .excluded_thread_ids
+                .iter()
+                .map(Uuid::to_string)
+                .collect(),
+            sent_after_millis: filters.sent_after.map(|after| after.timestamp_millis()),
+            sent_before_millis: filters.sent_before.map(|before| before.timestamp_millis()),
             ..Default::default()
         },
         hit_states: threads.hit_states,

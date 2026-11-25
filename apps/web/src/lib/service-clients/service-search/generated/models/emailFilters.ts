@@ -7,9 +7,16 @@
 import type { AttachmentKind } from './attachmentKind';
 import type { EmailFiltersCalendarOnly } from './emailFiltersCalendarOnly';
 import type { EmailFiltersDone } from './emailFiltersDone';
+import type { EmailFiltersFavorite } from './emailFiltersFavorite';
+import type { EmailFiltersHasAttachment } from './emailFiltersHasAttachment';
 import type { EmailFiltersImportance } from './emailFiltersImportance';
 import type { EmailFiltersIsRead } from './emailFiltersIsRead';
+import type { EmailFiltersSentAfter } from './emailFiltersSentAfter';
+import type { EmailFiltersSentBefore } from './emailFiltersSentBefore';
 import type { EmailFiltersView } from './emailFiltersView';
+import type { EmailLabelMatch } from './emailLabelMatch';
+import type { EmailSearchView } from './emailSearchView';
+import type { EmailTextMatch } from './emailTextMatch';
 import type { NotificationFilters } from './notificationFilters';
 import type { SharedEmailFilter } from './sharedEmailFilter';
 
@@ -53,6 +60,14 @@ state the Email view's Done filter uses, independent of notifications. */
   /** Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.
 Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default. */
   exclude_labels?: string[];
+  /** Leave out the threads in these mailbox views. Search only. */
+  exclude_views?: EmailSearchView[];
+  /** True for the caller's favorite threads only, false to leave them out.
+Search only. */
+  favorite?: EmailFiltersFavorite;
+  /** True for threads with an attachment on any message, false for threads
+with none. Search only. */
+  has_attachment?: EmailFiltersHasAttachment;
   /** Filter by email importance. None to not filter. True to show only important emails
 (drafts, personal, sent, or uncategorized). False to show only unimportant emails
 (those categorized as promotions, social, updates, or forums). */
@@ -62,6 +77,12 @@ Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never ap
   include_labels?: string[];
   /** Filter by the email thread's read flag, independently of notification state. */
   is_read?: EmailFiltersIsRead;
+  /** Tags or labels each thread must carry, or must not, by name, as typing
+`label:` or `in:<name>` into the search does. A name matches the
+caller's tags with that label and the labels with that name in the
+caller's inboxes, ignoring case; a name that is neither matches
+nothing. Search only. */
+  label_names?: EmailLabelMatch[];
   /** Restrict to specific inboxes by email_links.id. Empty means "any inbox the
 caller can access" (soup expands to the full set at the router edge). */
   link_ids?: string[];
@@ -80,8 +101,18 @@ searched in all. Empty to ignore project filtering. */
   recipients?: string[];
   /** Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders. */
   senders?: string[];
+  /** Only messages sent at or after this instant. Mail with no sent time
+never matches. Search only. */
+  sent_after?: EmailFiltersSentAfter;
+  /** Only messages sent before this instant. Mail with no sent time never
+matches. Search only. */
+  sent_before?: EmailFiltersSentBefore;
   /** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). */
   shared?: SharedEmailFilter;
+  /** Words or phrases each message must contain, or must not, in one part
+of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+into the search does. Search only. */
+  text_matches?: EmailTextMatch[];
   view?: EmailFiltersView;
 }

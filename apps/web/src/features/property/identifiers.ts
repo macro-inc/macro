@@ -23,6 +23,8 @@ export const SYSTEM_PROPERTY_IDS = {
   PROJECT: '00000001-0000-0000-0000-000000000014',
   /** When work on a task or project begins; Due Date ends the range. */
   START_DATE: '00000001-0000-0000-0000-000000000015',
+  /** Minutes logged on a task: the sum of its time entries, written only by them. */
+  TIME_LOGGED: '00000001-0000-0000-0000-000000000016',
 } as const;
 
 /** Stable option IDs, kept independent of UI/block registries for tooling. */

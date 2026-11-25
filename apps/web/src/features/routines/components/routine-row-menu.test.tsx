@@ -13,6 +13,8 @@ import { RoutinesList } from './routines-list';
 
 const device = vi.hoisted(() => ({
   tabs: true,
+  // Phones and tablets list routines in the table; a pointer gets cards.
+  touch: false,
   setMobile: (_mobile: boolean): void => {},
   /** Rows with a long-press handler attached now. */
   pressable: 0,
@@ -24,6 +26,9 @@ vi.mock('@core/mobile/isMobile', async () => {
   device.setMobile = setMobile;
   return { isMobile: mobile };
 });
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 vi.mock('@components/app/tab-layout/open-in-new-tab', () => ({
   canOpenInNewTab: () => device.tabs,
 }));
@@ -112,6 +117,8 @@ function menuActions(
     onOpenInNewTab: vi.fn(),
     onRun: vi.fn(),
     runPending: () => false,
+    onStop: vi.fn(),
+    stopPending: () => false,
     onDuplicate: vi.fn(),
     onKeep: vi.fn(),
     onCopyLink: vi.fn(),
@@ -171,6 +178,7 @@ function choose(name: string) {
 beforeEach(() => {
   device.setMobile(false);
   device.tabs = true;
+  device.touch = false;
   device.pressable = 0;
 });
 afterEach(cleanup);
@@ -268,6 +276,7 @@ describe('routine row menu', () => {
 
   it('disables Run now in the phone drawer while a run starts', async () => {
     device.setMobile(true);
+    device.touch = true;
     const [pending, setPending] = createSignal(false);
     setup([briefing], menuActions({ runPending: () => pending() }));
     fireEvent.contextMenu(
@@ -300,6 +309,8 @@ describe('routine row menu', () => {
   });
 
   it('keeps a sub-routine as the owner’s own', async () => {
+    // A routine's sub-routines open under it in the table.
+    device.touch = true;
     const menu = menuActions();
     setup([parent], menu);
     fireEvent.click(
@@ -358,6 +369,7 @@ describe('routine row menu', () => {
 
   it('opens the actions in a drawer on a long press on a phone', async () => {
     device.setMobile(true);
+    device.touch = true;
     const menu = menuActions();
     setup([briefing], menu);
     screen
@@ -387,6 +399,7 @@ describe('routine row menu', () => {
 
   it('takes the long press only while at phone width', async () => {
     device.setMobile(true);
+    device.touch = true;
     setup([briefing]);
     expect(device.pressable).toBe(1);
     // Turned sideways past the phone width: the context menu's own long press
@@ -410,6 +423,7 @@ describe('routine row menu', () => {
 
   it('opens the drawer for a phone’s own context menu event', async () => {
     device.setMobile(true);
+    device.touch = true;
     setup([briefing]);
     expect(
       fireEvent.contextMenu(

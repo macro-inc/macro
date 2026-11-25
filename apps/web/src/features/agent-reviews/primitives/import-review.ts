@@ -1,9 +1,16 @@
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+} from 'solid-js';
 import {
   alreadyInMacro,
   alreadyInMacroSummary,
   buildPlanTree,
   EMPTY_IMPORT_DRAFT,
+  hubspotTotals,
   type ImportDraft,
   type ImportPlanEntry,
   type ImportProgress,
@@ -52,11 +59,21 @@ export function createImportReview(sources: ImportReviewSources) {
   };
   // Shown until the review is reloaded; the controller saves it in order.
   const [editedDraft, setEditedDraft] = createSignal<ImportDraft>();
+  const [dependencyScope, setDependencyScope] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
+  const [refreshingDependencies, setRefreshingDependencies] =
+    createSignal(false);
   const draft = (): ImportDraft => {
     const saved = item();
-    return (
-      editedDraft() ?? (saved ? withRowLists(saved.draft) : EMPTY_IMPORT_DRAFT)
-    );
+    const current =
+      editedDraft() ?? (saved ? withRowLists(saved.draft) : EMPTY_IMPORT_DRAFT);
+    const excluded = new Set(current.excluded);
+    for (const entry of sources.entries()) {
+      if (entry.linkedFrom?.length && !dependencyScope().has(entry.id))
+        excluded.add(entry.id);
+    }
+    return { ...current, excluded: [...excluded] };
   };
   const nodes = createMemo(() =>
     buildPlanTree(planTreeEntries(sources.entries()))
@@ -97,6 +114,7 @@ export function createImportReview(sources: ImportReviewSources) {
   const locked = () =>
     !sources.canAct() ||
     controller.busy() ||
+    refreshingDependencies() ||
     Boolean(controller.error()) ||
     controller.stale() ||
     record().presentedAt == null;
@@ -106,6 +124,41 @@ export function createImportReview(sources: ImportReviewSources) {
     !locked() && (phase().kind === 'plan' || phase().kind === 'planFailed');
   const count = () => importCount(sources.entries(), draft().excluded);
   const volume = () => importVolume(sources.entries(), draft().excluded);
+
+  let refreshedDependencies = '';
+  createEffect(() => {
+    const ids = sources
+      .entries()
+      .filter((entry) => entry.linkedFrom?.length)
+      .map((entry) => entry.id)
+      .sort();
+    const key = ids.join(',');
+    if (
+      key === refreshedDependencies ||
+      controller.busy() ||
+      controller.saving() ||
+      controller.error() ||
+      record().presentedAt == null
+    )
+      return;
+    refreshedDependencies = key;
+    // New dependencies can arrive after presentation. Keep them as links
+    // until the server has saved the exclusions and acknowledged their scope.
+    setRefreshingDependencies(true);
+    fireAndForget(
+      (async () => {
+        try {
+          if ((await controller.flush()) && (await controller.reload())) {
+            setEditedDraft(undefined);
+            setDependencyScope(new Set(ids));
+          }
+        } finally {
+          setRefreshingDependencies(false);
+        }
+      })(),
+      'agent-reviews'
+    );
+  });
 
   function setIncluded(id: string, included: boolean) {
     const current = item();
@@ -155,7 +208,17 @@ export function createImportReview(sources: ImportReviewSources) {
   }
   async function reload(): Promise<boolean> {
     const reloaded = await controller.reload();
-    if (reloaded) setEditedDraft(undefined);
+    if (reloaded) {
+      setEditedDraft(undefined);
+      setDependencyScope(
+        new Set(
+          sources
+            .entries()
+            .filter((entry) => entry.linkedFrom?.length)
+            .map((entry) => entry.id)
+        )
+      );
+    }
     return reloaded;
   }
 
@@ -175,7 +238,15 @@ export function createImportReview(sources: ImportReviewSources) {
         draft(),
         sources.report()?.onTeam ?? true
       ),
-    totals: () => planTotals(sources.entries(), draft().excluded),
+    totals: () => [
+      ...planTotals(sources.entries(), draft().excluded),
+      // A newer run's owners and losses are not this review's.
+      ...hubspotTotals(
+        sources.report()?.reviewId === record().id
+          ? sources.report()?.hubspot
+          : undefined
+      ),
+    ],
     planningStatus: () =>
       planningStatus(progress(), sources.entries(), draft().source),
     alreadyInMacroSummary: () => alreadyInMacroSummary(sources.entries()),

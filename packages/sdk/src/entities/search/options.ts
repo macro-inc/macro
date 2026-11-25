@@ -24,6 +24,14 @@ export interface SearchOpts extends IterationOptions {
 }
 
 /**
+ * The time zone a search's typed dates (`after:2025/01/31`) are read in: the
+ * one asked for, else this runtime's.
+ */
+export function searchTimeZone(timeZone?: string): string | undefined {
+  return timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
  * Build a `search(client, query, opts?)` function for one entity type: unified
  * search hits narrowed to `type`, each mapped through `make`.
  * Most relevant first, auto-paginated; `maxItems` caps the total.
@@ -55,6 +63,7 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
   ): AsyncGenerator<T> {
     const searchOn = searchOpts?.searchOn ?? 'name_content';
     const pageSize = searchOpts?.pageSize ?? DEFAULT_SEARCH_PAGE_SIZE;
+    const timeZone = searchTimeZone();
     return paginate(async (cursor) => {
       const { results, next_cursor } = unwrap(
         await client.search.unifiedSearch({
@@ -64,6 +73,7 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
             search_on: searchOn,
             ...(filters ? { filters } : {}),
             ...(includeCrm ? { include_crm: true } : {}),
+            ...(timeZone ? { time_zone: timeZone } : {}),
           },
           query: {
             page_size: pageSize,

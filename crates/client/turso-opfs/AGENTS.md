@@ -15,6 +15,8 @@ contract and the multi-target verification commands.
   `OpfsOwner`, `OpfsSession`, or close/reset paths.
 - `src/browser.rs` (wasm32 only): `OpfsOwner`, `OpfsSession`, `ConnectedOpfsSession`,
   close/reset state types.
+- `src/browser/sidecar.rs` (wasm32 only): `Sidecar`, the file beside the pair
+  that a wipe leaves alone.
 - `src/state.rs`, `src/write_batch.rs`: target-independent lifecycle machine,
   compiled natively for unit tests.
 

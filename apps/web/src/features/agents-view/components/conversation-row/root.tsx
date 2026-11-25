@@ -4,6 +4,7 @@ import { pressHandlers, Tooltip } from '@ui';
 import { ConversationRowContext, type ConversationRowProps } from './context';
 
 export function ConversationRowRoot(props: ConversationRowProps) {
+  let titleElement: HTMLSpanElement | undefined;
   const description = () => {
     const labels: string[] = [];
     if (props.failed) labels.push(t('agentWork.rowFailed'));
@@ -15,16 +16,23 @@ export function ConversationRowRoot(props: ConversationRowProps) {
   };
 
   return (
-    <ConversationRowContext.Provider value={props}>
+    <ConversationRowContext.Provider
+      value={{
+        row: props,
+        setTitleElement: (element) => {
+          titleElement = element;
+        },
+      }}
+    >
       <ViewSidebar.Item
         as="div"
         active={props.active}
-        class="group/conversation relative text-ink [--conversation-row-surface:var(--color-hover)] aria-[current=page]:[--conversation-row-surface:var(--color-active)] not-aria-[current=page]:focus-within:bg-hover"
+        class="group/conversation relative text-ink bg-(--conversation-row-overlay) [--conversation-row-overlay:transparent] not-aria-[current=page]:hover:[--conversation-row-overlay:var(--color-hover)] not-aria-[current=page]:focus-within:[--conversation-row-overlay:var(--color-hover)] group-data-[state=open]/cm-trigger:not-aria-[current=page]:[--conversation-row-overlay:var(--color-hover)] aria-[current=page]:[--conversation-row-overlay:var(--color-active)]"
         data-agent-session-row={props.id}
         data-kind={props.kind}
         data-session-state={props.state}
       >
-        <Tooltip.Root placement="right">
+        <Tooltip.Root placement="right" measureTarget={() => titleElement}>
           <Tooltip.Trigger
             as="button"
             type="button"

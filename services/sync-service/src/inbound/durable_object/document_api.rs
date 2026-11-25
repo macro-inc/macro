@@ -14,6 +14,13 @@ use crate::{
 
 const MAX_BODY_BYTES: usize = (MAX_BINARY_BYTES + MAX_REVISION_BYTES).div_ceil(3) * 4 + 1024;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::inbound) enum DocumentOperation {
+    Read,
+    Edit,
+    ImportLinks,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -57,10 +64,11 @@ impl SyncSession {
         &self,
         mut req: Request,
         document_id: &str,
-        is_update: bool,
+        operation: DocumentOperation,
         access: crate::domain::document::DocumentAccess,
         claims: crate::auth::AuthToken,
     ) -> Result<Response> {
+        let is_update = operation != DocumentOperation::Read;
         if req.method() != if is_update { Method::Post } else { Method::Get } {
             return Ok(response(405));
         }
@@ -150,6 +158,7 @@ impl SyncSession {
             document_state: &state,
             document_id,
             attribution: editor.as_ref(),
+            report_edit: operation == DocumentOperation::Edit,
         };
         // The service synchronously compares + validates + imports before its
         // first storage await, just like a websocket update in this isolate.

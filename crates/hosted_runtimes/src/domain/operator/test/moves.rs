@@ -17,7 +17,7 @@ impl FakeFleet {
         self.calls.lock().unwrap().push(call);
     }
 
-    fn logged(&self, prefix: &str) -> usize {
+    pub(super) fn logged(&self, prefix: &str) -> usize {
         self.calls
             .lock()
             .unwrap()

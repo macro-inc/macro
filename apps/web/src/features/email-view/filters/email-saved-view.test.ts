@@ -14,6 +14,8 @@ import {
 const INBOX = '0199a1b2-0000-7000-8000-000000000001';
 const TAG_DEFINITION = '0199a1b2-0000-7000-8000-0000000000aa';
 const TAG_OPTION = '0199a1b2-0000-7000-8000-0000000000bb';
+const LABEL = '0199a1b2-0000-7000-8000-0000000000cc';
+const OTHER_LABEL = '0199a1b2-0000-7000-8000-0000000000cd';
 
 describe('captureEmailSavedView', () => {
   it('saves a filtered Signal tab as an inbox-only definition and reopens it on All', () => {
@@ -50,6 +52,7 @@ describe('captureEmailSavedView', () => {
       attachments: ['attachment-pdf'],
       calendar: [],
       tags: [TAG_OPTION],
+      labels: [],
     });
     expect(restored.conditions.importance).toBe('signal');
     expect(restored.tagBindings.get(TAG_OPTION)).toBe(TAG_DEFINITION);
@@ -129,6 +132,57 @@ describe('captureEmailSavedView', () => {
         },
       }).isErr()
     ).toBe(true);
+  });
+});
+
+describe('labels in a view', () => {
+  it('saves the ticked labels and reopens them as the Labels filter', () => {
+    const captured = captureEmailSavedView({
+      tab: 'all',
+      inboxIds: [INBOX],
+      facets: { labels: [OTHER_LABEL, LABEL.toUpperCase(), LABEL] },
+      conditions: undefined,
+      context: EMPTY_TAG_FACET_CONTEXT,
+    })._unsafeUnwrap();
+
+    expect(captured.filters.labels).toEqual([LABEL, OTHER_LABEL]);
+    expect(materializeEmailSavedView(captured).facets.labels).toEqual([
+      LABEL,
+      OTHER_LABEL,
+    ]);
+  });
+
+  it('keeps a definition without labels as it was written', () => {
+    const captured = captureEmailSavedView({
+      tab: 'all',
+      inboxIds: [INBOX],
+      facets: {},
+      conditions: undefined,
+      context: EMPTY_TAG_FACET_CONTEXT,
+    })._unsafeUnwrap();
+
+    expect('labels' in captured.filters).toBe(false);
+    const read = readEmailSavedView({
+      kind: 'email',
+      version: 1,
+      filters: EMPTY_EMAIL_SAVED_VIEW_FILTERS,
+    });
+    expect(read.issues).toEqual([]);
+    expect(materializeEmailSavedView(read.config).facets.labels).toEqual([]);
+  });
+
+  it('skips a label id it cannot read and keeps the rest', () => {
+    const read = readEmailSavedView({
+      kind: 'email',
+      version: 1,
+      filters: {
+        ...EMPTY_EMAIL_SAVED_VIEW_FILTERS,
+        labels: [LABEL, 'not-a-label-id'],
+      },
+    });
+
+    expect(read.config.filters.labels).toEqual([LABEL]);
+    expect(read.issues.length).toBeGreaterThan(0);
   });
 });
 

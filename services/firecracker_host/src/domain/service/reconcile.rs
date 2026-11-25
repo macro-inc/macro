@@ -155,15 +155,32 @@ pub async fn settle<M: Machines>(
 }
 
 /// At startup, before anything is served: settle every record and save
-/// the ones that changed, then remove every jail no live process holds
+/// the ones that changed, delete system disks no record names (a
+/// replacement cut short), then remove every jail no live process holds
 /// (a launch or golden build cut short). Failures are reported, not
 /// returned: one bad computer must not keep the agent from serving the rest.
-pub async fn at_startup<S: Store, M: Machines>(
+pub async fn at_startup<S: Store, D: Disks, M: Machines>(
     records: &mut [ComputerRecord],
     store: &S,
+    disks: &D,
     machines: &M,
 ) -> ReconcileReport {
     let mut report = ReconcileReport::default();
+    for record in records.iter() {
+        match disks
+            .remove_other_system_disks(record.computer_id, &record.system_disks())
+            .await
+        {
+            Ok(removed) => report.repaired(
+                Some(record.computer_id),
+                &vec![Repair::LeftoverSystemDiskRemoved; removed.len()],
+            ),
+            Err(error) => report.unresolved(format!(
+                "removing leftover system disks of {}: {error}",
+                record.computer_id
+            )),
+        }
+    }
     for record in records.iter_mut() {
         let before = record.clone();
         match settle(record, machines, Moment::Startup).await {

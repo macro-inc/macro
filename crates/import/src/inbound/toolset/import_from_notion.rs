@@ -68,6 +68,20 @@ pub struct ImportFromNotionResponse {
     pub message: String,
 }
 
+impl ImportFromNotionResponse {
+    /// The agent reads why a run failed from `error_kind` and the message;
+    /// the run's report text is for the owner's card.
+    pub(super) fn for_agent(report: NotionImportReport, message: String) -> Self {
+        Self {
+            report: NotionImportReport {
+                error: None,
+                ..report
+            },
+            message,
+        }
+    }
+}
+
 impl ToolAnnotated for ImportFromNotion {
     const ANNOTATIONS: ToolAnnotations =
         ToolAnnotations::additive("Import from Notion").with_open_world();
@@ -114,7 +128,7 @@ impl<T: NotionWorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromN
             other => import_error("Notion import failed", other),
         })?;
         let message = message(self.action, &report);
-        Ok(ImportFromNotionResponse { report, message })
+        Ok(ImportFromNotionResponse::for_agent(report, message))
     }
 }
 

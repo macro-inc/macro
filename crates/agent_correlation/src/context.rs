@@ -15,6 +15,9 @@ pub struct Attribution {
     pub correlation_id: Option<Uuid>,
     /// Routine whose run the work acts for, from a signed token claim.
     pub routine_id: Option<Uuid>,
+    /// Whether a program acts with a person's access: an agent, or a routine's
+    /// run. From the credential's signed claims, or [`as_program`].
+    pub program: bool,
     /// The validated invocation's agent session.
     pub session_id: Option<Uuid>,
     /// The scope stored with the validated invocation, else the one the
@@ -107,6 +110,23 @@ pub fn current_verb() -> Option<AgentVerb> {
 /// The routine whose run the current request acts for, if any.
 pub fn current_routine() -> Option<Uuid> {
     attribution().routine_id
+}
+
+/// Whether the current request was made by a program running with a person's
+/// access, an agent or a routine, rather than by the person.
+pub fn by_program() -> bool {
+    let attribution = attribution();
+    attribution.program || attribution.correlation_id.is_some()
+}
+
+/// Run work an agent does in this process, such as a tool call, as a program's:
+/// no signed credential says so.
+pub async fn as_program<F: Future>(future: F) -> F::Output {
+    let attribution = Attribution {
+        program: true,
+        ..attribution()
+    };
+    scope_attribution(attribution, future).await
 }
 
 /// Run work with the correlation accepted at its boundary. `None` clears any

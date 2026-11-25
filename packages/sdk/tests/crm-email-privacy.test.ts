@@ -70,6 +70,7 @@ const privacy: EmailPrivacySettings = {
   team_domains: ['blocked.example'],
   personal_domain_warnings: {},
   team_domain_warnings: {},
+  archived_team_domains: {},
   can_remove_team_domains: false,
 };
 

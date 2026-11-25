@@ -26,6 +26,16 @@ pub struct PreviewCursorQuery {
     pub team_id: Option<Uuid>,
 }
 
+/// A page of thread previews, and where the list goes on when the read
+/// stopped short of a full page before reaching the end of the mail.
+#[derive(Debug, Default)]
+pub struct PreviewCursorPage {
+    pub previews: Vec<EmailThreadPreview>,
+    /// The sort value and id of the last thread the read walked, below which
+    /// the next page starts. Set only on a short page that isn't the last.
+    pub continue_below: Option<(DateTime<Utc>, Uuid)>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display, IntoStaticStr)]
 #[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum PreviewViewStandardLabel {

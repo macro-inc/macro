@@ -234,7 +234,7 @@ async fn member_access_revocation_reaches_http_search_and_soup(pool: PgPool) -> 
         );
         assert_eq!(
             search
-                .search_company_names(&receipt, "company", &[], None, 50, None)
+                .search_company_names(&receipt, "company", &[], &[], None, 50, None)
                 .await?
                 .is_empty(),
             !enabled

@@ -23,10 +23,6 @@ export default {
   policySelected: 'Primary mailbox · Selected by rules',
   policyAll: 'Primary mailbox · All eligible mail',
   policyOff: 'Primary mailbox · Sharing off',
-  policySelectedDescription:
-    'Share whole threads that match your rules. Person and company rules follow their current records. Exclusions always apply.',
-  policyAllDescription:
-    'All eligible past and future email is shared. Your exclusions still apply.',
   policyRuleDescription:
     'A thread is included if any rule matches. Private threads and blacklists take priority.',
   policyDomain: 'Domain',
@@ -126,6 +122,9 @@ export default {
   policyActionWithdraw: 'Sharing stopped',
   policyActionRevoke: 'Mailbox access revoked',
   policyActionTargets: 'Live rule targets changed',
+  policyActionMerged: 'Companies merged',
+  emailSharingChangedBody:
+    'Companies your sharing rules named were merged, so your rules were updated.',
   policyActionUnknown: 'Sharing changed',
   policyActorMember: 'You',
   policyActorAgent: 'Your agent',
@@ -164,7 +163,7 @@ export default {
     'Your thread is excluded from CRM. Manage it in Email settings; a teammate’s copy may still be shared.',
   privacyThreadsTitle: 'Excluded threads',
   privacyThreadsDescription:
-    'Excluded threads stop sharing your copy through CRM, including mail already shared. A teammate’s contributed copy can still be visible. Company and contact records stay. To exclude a thread, choose “Exclude thread from CRM” in its header or menu.',
+    'Only your copy is hidden. To add one, choose “Exclude thread from CRM” in the thread’s menu.',
   privacyNoThreads: 'No excluded threads.',
   privacyThreadNoSubject: '(No subject)',
   privacyRestoreThread: 'Remove',
@@ -185,14 +184,17 @@ export default {
   email: 'Email',
   addEmail: 'Add email',
   manageContactEmail: 'Email options for {{email}}',
+  contactEmailLabel: 'Email: {{email}}',
+  contactEmailSummary: {
+    one: 'Email: {{email}} and {{count}} more',
+    other: 'Email: {{email}} and {{count}} more',
+  },
   primaryEmail: 'Primary',
-  primaryContactEmail: '{{email}} (primary)',
   makePrimaryContactEmail: 'Make primary',
+  makeContactEmailPrimaryNamed: 'Make {{email}} primary',
   removeContactEmail: 'Remove',
-  contactEmailLinksCompany:
-    'This address links the contact to its company, so it cannot be removed.',
-  contactEmailPlaceholder: 'person@example.com',
-  saveContact: 'Save',
+  removeContactEmailNamed: 'Remove {{email}}',
+  addEmailPlaceholder: 'Add an email address',
   savingContact: 'Saving…',
   cancel: 'Cancel',
   company: 'Company',
@@ -207,7 +209,6 @@ export default {
     'The contact, its email history and its discussions are kept. It will no longer appear under this company.',
   contactCompanyLinkedByEmail:
     'Linked by an email address on this company’s domain.',
-  goToCompany: 'Go to company',
   searchCompanies: 'Search companies…',
   contactEditFailed: 'Could not save this change. Try again.',
   contactEmailConflict:
@@ -218,6 +219,33 @@ export default {
     'This contact or company is no longer available to edit.',
   contactEditInvalid:
     'This change is unavailable. Check the value and try again.',
+  domain: 'Domain',
+  domains: 'Domains',
+  addDomain: 'Add domain',
+  manageCompanyDomain: 'Domain options for {{domain}}',
+  primaryDomain: 'Primary',
+  companyDomainLabel: 'Domain: {{domain}}',
+  companyDomainSummary: {
+    one: 'Domain: {{domain}} and {{count}} more',
+    other: 'Domain: {{domain}} and {{count}} more',
+  },
+  removeCompanyDomainNamed: 'Remove {{domain}}',
+  companyDomainPlaceholder: 'example.com',
+  companyDomainAddHelp:
+    'Mail and new contacts from this domain go to this company.',
+  companyDomainRemoveHelp:
+    'Contacts and email history stay. New mail from this domain is no longer filed under this company.',
+  companyDomainTaken:
+    '{{company}} already has this domain. Remove it there first.',
+  companyDomainTakenArchived:
+    'An archived company already has this domain. A team admin can restore it or remove the domain from it.',
+  companyDomainInvalid:
+    'This domain can’t be added. Enter a company domain such as example.com; personal email providers can’t be added.',
+  companyDomainNamesCompany:
+    'The company is named after this domain. Rename the company first.',
+  companyDomainAdminRequired:
+    'Email sync is off for this company, so only a team admin can remove its domains.',
+  companyDomainUnavailable: 'This company is no longer available to edit.',
 
   navigation: 'CRM navigation',
   records: 'Records',
@@ -312,14 +340,18 @@ export default {
   privacyTeamTitle: 'Team blacklist',
   privacyPersonalTitle: 'My blacklist',
   privacyTeamDescription:
-    'These domains are excluded from everyone’s CRM email contributions. Any member can add a domain; only admins can remove one.',
+    'Hides every thread with someone at these domains or their subdomains from everyone’s shared email, past and future. Only admins can remove a domain.',
   privacyPersonalDescription:
-    'These domains are excluded from your contributions. Teammates can still contribute their copies of the same conversation.',
-  privacyDomainDescription:
-    'Subdomains are included. A blocked participant excludes the entire email thread. Existing companies stay visible.',
+    'Works like the team blacklist, for your email only. A teammate’s copy can still be shared.',
   privacyNoDomains: 'No domains blocked.',
   privacyRemove: 'Remove',
   privacyRemoveDomain: 'Remove {{domain}}',
+  privacyArchivedCompanyDomain:
+    'Its company is archived. Restore the company first to remove this domain.',
+  privacyOpenArchivedCompany: 'Open company',
+  privacyOpenArchivedCompanyLabel: 'Open the archived company for {{domain}}',
+  privacyArchivedCompanyConflict:
+    'This domain’s company is archived. Restore the company first to remove this domain.',
   privacyTeamDomainLabel: 'Domain to block for the team',
   privacyPersonalDomainLabel: 'Domain to block for my emails',
   privacyDomainPlaceholder: 'example.com',
@@ -332,15 +364,15 @@ export default {
   privacyLoading: 'Loading email settings…',
   privacyRetry: 'Retry',
   privacyContributionTitle: 'Your email contribution',
-  privacyAvailability:
-    'Email contribution is optional and separate from CRM access.',
-  privacyConnect: 'Connect your email first',
-  privacyShared: 'Your eligible emails are shared with your team.',
-  privacyNotShared: 'Your emails are not contributing to CRM.',
+  privacyConnect: 'No email connected',
+  privacyConnectEmail: 'Connect email',
   privacyOn: 'Sharing on',
   privacyOff: 'Sharing off',
   privacyConsentDescription:
-    'Opting in shares the full content of all available past and future emails from this mailbox with your team, except blocked threads. Review both blacklists below first. Blocking a domain also hides previously shared matching threads. Stopping sharing withdraws your email contributions; companies and contacts remain.',
+    'Shares the full content of this mailbox’s past and future email with your team, except blocked threads. If you stop later, companies and contacts stay. Review both blacklists below first.',
+  privacyStopDescription:
+    'Stopping withdraws your email from CRM. Companies and contacts stay.',
+  privacyReviewBlacklists: 'Review both blacklists below before you share.',
   privacyStop: 'Stop sharing my emails',
   privacyShare: 'Share my emails with CRM',
   privacyBanner: 'Your emails aren’t contributing to CRM.',
@@ -353,4 +385,95 @@ export default {
   privacyUpdateFailed: 'Could not update CRM email settings',
   privacyRefreshFailed:
     'Your email settings were saved, but some views could not refresh. Reload to see the latest state.',
+  mergeWith: 'Merge with…',
+  mergeCompanies: 'Merge companies',
+  mergeButton: 'Merge',
+  mergePickTitle: 'Merge with another company',
+  mergePickDescription: 'Choose the companies that are the same as {{name}}.',
+  mergeSearchLabel: 'Search companies',
+  mergeSearchPlaceholder: 'Search by name or domain',
+  mergeNoMatches: 'No other companies match.',
+  mergeTooMany: { other: 'A merge takes at most {{count}} companies.' },
+  mergeKeepTitle: 'Merge companies',
+  mergeKeepDescription:
+    'Choose the company to keep. It keeps its name, primary domain and values. Everything else moves into it.',
+  mergeKeepLabel: 'Company to keep',
+  mergeContinue: 'Continue',
+  mergeReviewAction: 'Review merge',
+  mergeReviewTitle: 'Merge into {{name}}',
+  mergeReviewDescription: {
+    one: '{{names}} goes away. Links to it open {{name}}.',
+    other: '{{names}} go away. Links to them open {{name}}.',
+  },
+  mergeDomains: 'Domains',
+  mergePrimary: 'Primary',
+  mergeMovesTo: 'Moves to {{name}}',
+  mergeMovesNothing: 'Nothing else is attached to it.',
+  mergeMovePeople: { one: '{{count}} person', other: '{{count}} people' },
+  mergeMoveEntries: {
+    one: '{{count}} pipeline entry',
+    other: '{{count}} pipeline entries',
+  },
+  mergeMoveLinks: {
+    one: '{{count}} linked item',
+    other: '{{count}} linked items',
+  },
+  mergeMoveMessages: {
+    one: '{{count}} discussion message',
+    other: '{{count}} discussion messages',
+  },
+  mergePipelines: 'Pipelines',
+  mergeSharedPipeline: {
+    one: '{{pipeline}}: {{count}} entry after the merge',
+    other: '{{pipeline}}: {{count}} separate entries after the merge',
+  },
+  mergeConflicts: 'Different values',
+  mergeConflictKept: 'Kept',
+  mergeConflictDropped: 'Dropped',
+  mergeConflictValue: 'A value',
+  mergeEmailSync: 'Email sync',
+  mergeSyncOn: 'Stays on for {{name}}',
+  mergeSyncOff: 'Stays off for {{name}}',
+  mergeSyncKeptOut: 'Mail from {{domains}} stays out',
+  mergeSharing: 'Teammates’ email sharing',
+  mergeSharingDescription: {
+    one: '{{count}} teammate shares mail from a company being merged.',
+    other: '{{count}} teammates share mail from a company being merged.',
+  },
+  mergeSharingLabel: 'Their sharing',
+  mergeSharingKeep: 'Keep sharing the same mail',
+  mergeSharingStop: 'Stop sharing it',
+  mergeSharingTooLarge:
+    'Keeping it would need more rules than their sharing can hold.',
+  mergeUndoWarning: 'This can’t be undone.',
+  mergeConfirm: {
+    one: 'Merge {{count}} company',
+    other: 'Merge {{count}} companies',
+  },
+  mergeMerging: 'Merging…',
+  mergeSameAddressTitle: 'Two people here have the same email address',
+  mergeSameAddressBody:
+    'A company lists an address only once, and merging companies doesn’t merge people. Take one of them out of its company, then merge again.',
+  mergeSameAddressPerson: '{{name}} ({{address}}) in {{company}}',
+  mergeArchived: 'Archived',
+  mergeBlockedTitle: 'These companies can’t be merged yet',
+  mergeNothingChanged: 'Nothing has changed.',
+  mergeStale: 'Something changed since the review. Check it again.',
+  mergeUnconfirmed:
+    'We couldn’t confirm the merge. Merge again to finish it; it won’t run twice.',
+  mergeRefusePermission: 'Only team admins and owners can merge companies.',
+  mergeRefuseUnavailable:
+    'Merging companies isn’t available for your team yet.',
+  mergeRefuseMissing: 'One of these companies no longer exists.',
+  mergeRefuseArchived: 'One of these companies is archived. Restore it first.',
+  mergeRefuseMerged: 'One of these companies was already merged into another.',
+  mergeRefuseTooLarge:
+    'Keeping teammates’ sharing would need more rules than their sharing can hold. Choose to stop sharing it.',
+  mergeRefuseGeneric: 'These companies couldn’t be merged.',
+  mergeDone: 'Companies merged',
+  mergeDoneDetail: {
+    one: '{{names}} is now part of {{name}}.',
+    other: '{{names}} are now part of {{name}}.',
+  },
+  mergeOpen: 'Open',
 };

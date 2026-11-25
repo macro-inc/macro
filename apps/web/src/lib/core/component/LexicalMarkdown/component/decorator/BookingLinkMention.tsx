@@ -5,11 +5,9 @@ import OpenIcon from '@icon/system/regular/arrows-out.svg';
 import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import {
   $isBookingLinkMentionNode,
+  BACKGROUND_UPDATE_TAGS,
   type BookingLinkMentionDecoratorProps,
-  HISTORIC_TAG,
   parseBookingUrl,
-  SKIP_DOM_SELECTION_TAG,
-  SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
 import { cn, Surface } from '@ui';
 import {
@@ -91,7 +89,7 @@ function BookingLinkMentionContent(props: BookingLinkMentionDecoratorProps) {
         }
       },
       {
-        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
+        tag: BACKGROUND_UPDATE_TAGS,
         discrete: true,
       }
     );

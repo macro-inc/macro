@@ -131,6 +131,7 @@ describe('removed assignee lookup', () => {
             setKeybindings={() => {}}
             setPlaceholder={() => {}}
             selectedEntityCount={1}
+            savedValueState="known"
           />
         </PropertyRootContext.Provider>
       </PropertiesProvider>

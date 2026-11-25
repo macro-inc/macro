@@ -18,4 +18,5 @@ export const EmailPolicyAuditAction = {
   withdrawn: 'withdrawn',
   mailbox_revoked: 'mailbox_revoked',
   live_targets_changed: 'live_targets_changed',
+  records_merged: 'records_merged',
 } as const;

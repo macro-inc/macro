@@ -508,6 +508,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         for calendar in calendars {
             observed.push(calendar.calendar.provider_calendar_id.clone());
             let system_calendar = calendar.is_system(&lease.token_identity.email_address);
+            let web_subscription = calendar.is_web_subscription();
             let upserted = upsert_calendar_tx(
                 &mut tx,
                 &mut log,
@@ -543,6 +544,25 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             .execute(&mut *tx)
             .await
             .map_err(report)?;
+            // Viewers show it as a subscription, and their calendar caches
+            // refetch a calendar only when the log names it.
+            let subscription_changed = sqlx::query!(
+                "UPDATE calendars SET web_subscription=$2 WHERE id=$1 AND web_subscription<>$2",
+                c.id,
+                web_subscription
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?
+            .rows_affected()
+                > 0;
+            if subscription_changed {
+                log.record(
+                    lease.binding.link_id,
+                    CalendarChangeOp::UpsertCalendar(c.id),
+                );
+            }
+            change.changed |= subscription_changed;
             sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at)
                 VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,calendar_id) WHERE calendar_id IS NOT NULL DO NOTHING"#,
                 Uuid::now_v7(),lease.account_id,c.id,lease.binding.sync_generation,lease.binding.grant_generation,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
