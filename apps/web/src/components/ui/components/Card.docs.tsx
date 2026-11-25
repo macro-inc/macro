@@ -57,6 +57,34 @@ function CanonicalDemo() {
 }
 // #endregion
 
+// #region demo:raised
+function RaisedDemo() {
+  const [following, setFollowing] = createSignal(false);
+  return (
+    <Card variant="raised" class="w-full max-w-md">
+      <Card.Header>
+        <Card.Metadata>Reading list by Alex Morgan</Card.Metadata>
+        <Card.Title>Making room for good work</Card.Title>
+        <Card.Description>
+          Three short notes on focus, rhythm, and collaboration.
+        </Card.Description>
+      </Card.Header>
+      <Card.Footer>
+        <Card.Metadata>{following() ? 'Following' : '3 notes'}</Card.Metadata>
+        <Button
+          size="sm"
+          variant="secondary"
+          aria-pressed={following()}
+          onClick={() => setFollowing(!following())}
+        >
+          {following() ? 'Unfollow' : 'Follow'}
+        </Button>
+      </Card.Footer>
+    </Card>
+  );
+}
+// #endregion
+
 // #region demo:setup
 function SetupDemo() {
   const [expanded, setExpanded] = createSignal(false);
@@ -226,7 +254,7 @@ export default defineDoc({
   exports: ['Card'],
   import: "import { Card, Item } from '@ui';",
   description:
-    'A canonical rich-content card: identity in Header, readable content in Body, and supporting details and actions in Footer. Title, Description, Metadata, and Icon share Item primitives: semibold text-sm titles, regular text-sm descriptions, and medium-weight text-xs details. Cards default to outlined; use filled for a surface background or ghost for no frame. Depth and offset inherit the Layer model.',
+    'A canonical rich-content card: identity in Header, readable content in Body, and supporting details and actions in Footer. Title, Description, Metadata, and Icon share Item primitives: semibold text-sm titles, regular text-sm descriptions, and medium-weight text-xs details. Cards default to outlined; use raised for a card on a page or embedded in a message or document, filled for a surface background, or ghost for no frame. Depth and offset inherit the Layer model.',
   demos: [
     {
       id: 'canonical',
@@ -234,6 +262,13 @@ export default defineDoc({
       description:
         'Compose only the slots you need. This example uses a plain first-line icon, a clear title/description/details hierarchy, body content, and an expandable reading action.',
       render: CanonicalDemo,
+    },
+    {
+      id: 'raised',
+      title: 'Raised',
+      description:
+        'The composer surface that Discover, routine, and embedded cards sit on. Its main action is secondary; the rest are ghost.',
+      render: RaisedDemo,
     },
     {
       id: 'setup',
