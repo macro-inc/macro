@@ -18,6 +18,7 @@ use utoipa::OpenApi;
         super::axum_router::set_enrollment,
         super::axum_router::clear_enrollment,
         super::axum_router::power,
+        super::axum_router::replace_system_disk,
         super::axum_router::exec,
         super::moves::replication,
         super::moves::replicate,

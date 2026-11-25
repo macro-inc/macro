@@ -13,7 +13,8 @@ use firecracker_host_api::moves::{
 };
 use firecracker_host_api::{
     Action, ComputerId, ComputerResources, ComputerRole, ControlPlaneId, CreateComputer,
-    EnrollmentDocument, EnrollmentGeneration, GoldenKey, GuestImage, PairingId, SetEnrollment,
+    EnrollmentDocument, EnrollmentGeneration, GoldenKey, GuestImage, PairingId, ReplaceSystemDisk,
+    SetEnrollment,
 };
 use rootcause::Report;
 use serde::Deserialize;
@@ -123,6 +124,13 @@ pub enum ClientCommand {
     Unfreeze { computer_id: ComputerId },
     /// Snapshot to disk and end the process.
     Hibernate { computer_id: ComputerId },
+    /// Boot from a system disk of `image` (or back to the previous one),
+    /// keeping `/home` and identity.
+    ReplaceSystemDisk {
+        computer_id: ComputerId,
+        #[arg(long)]
+        image: String,
+    },
     /// Destroy the computer and its disks.
     Destroy { computer_id: ComputerId },
     /// On the target: accept the computer from a source holding `ticket`
@@ -321,6 +329,16 @@ async fn run_command(endpoint: PathBuf, command: ClientCommand) -> Result<i32, C
         ClientCommand::Hibernate { computer_id } => {
             power(&client, computer_id, Action::Hibernate).await?
         }
+        ClientCommand::ReplaceSystemDisk { computer_id, image } => json(
+            &client
+                .replace_system_disk(
+                    computer_id,
+                    &ReplaceSystemDisk {
+                        image: image_name(&image)?,
+                    },
+                )
+                .await?,
+        )?,
         ClientCommand::Destroy { computer_id } => {
             client.destroy(computer_id).await?;
             String::new()

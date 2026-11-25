@@ -13,7 +13,7 @@ use firecracker_host_api::{
 use crate::domain::service::HostError;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::domain::model::{ComputerRecord, Process, Slot};
+use crate::domain::model::{ComputerRecord, Process, Slot, SystemDisk};
 
 /// Records on the durable disk.
 pub trait Store: Send + Sync + 'static {
@@ -89,6 +89,24 @@ pub trait Disks: Send + Sync + 'static {
         &self,
         record: &ComputerRecord,
     ) -> impl Future<Output = Result<ComputerDisks, Self::Err>> + Send;
+
+    /// Clone `key`'s sealed golden rootfs into the computer's system disk
+    /// `disk`, sized to its root disk; a leftover file of that name is
+    /// replaced. The computer's other files are untouched.
+    fn clone_system_disk(
+        &self,
+        record: &ComputerRecord,
+        key: &GoldenKey,
+        disk: SystemDisk,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete the computer's system disk files other than `keep`; returns
+    /// the ones deleted.
+    fn remove_other_system_disks(
+        &self,
+        computer_id: ComputerId,
+        keep: &[SystemDisk],
+    ) -> impl Future<Output = Result<Vec<SystemDisk>, Self::Err>> + Send;
 
     /// A writable copy of `key`'s image rootfs for the golden boot,
     /// replacing any earlier one.
@@ -385,6 +403,14 @@ pub trait HostOperations: Send + Sync + 'static {
         self: &Arc<Self>,
         computer_id: ComputerId,
         request: CreateComputer,
+    ) -> impl Future<Output = Result<Computer, HostError>> + Send;
+
+    /// Boot the computer from a system disk of `image`; see
+    /// [`firecracker_host_api::ReplaceSystemDisk`].
+    fn replace_system_disk(
+        &self,
+        computer_id: ComputerId,
+        image: GuestImage,
     ) -> impl Future<Output = Result<Computer, HostError>> + Send;
 
     /// Run a power action.

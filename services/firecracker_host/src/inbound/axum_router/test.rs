@@ -9,7 +9,7 @@ use firecracker_host_api::exec::{ExecRequest, Frame, MAX_FRAME_BYTES, read_frame
 use firecracker_host_api::{
     Action, Computer, ComputerId, ComputerResources, ComputerRole, ControlPlaneId, CreateComputer,
     EnrollmentDocument, EnrollmentGeneration, ErrorCode, GoldenImage, GoldenKey, GoldenState,
-    GuestImage, HostInfo, HostLimits, NetworkSlots, PairingId, PowerState, SetEnrollment,
+    GuestImage, HostInfo, HostLimits, NetworkSlots, PairingId, PowerState, ReplaceSystemDisk, SetEnrollment,
 };
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -34,6 +34,7 @@ fn computer(computer_id: ComputerId, request: &CreateComputer) -> Computer {
         generation: request.generation,
         pairing_id: request.pairing_id,
         image: request.image.clone(),
+        previous_image: None,
         role: request.role,
         resources: request.resources,
         state: PowerState::Running,
@@ -113,6 +114,21 @@ impl HostOperations for FakeOperations {
             .unwrap()
             .insert(computer_id, created.clone());
         Ok(created)
+    }
+
+    async fn replace_system_disk(
+        &self,
+        computer_id: ComputerId,
+        image: GuestImage,
+    ) -> Result<Computer, HostError> {
+        let mut computers = self.computers.lock().unwrap();
+        let computer = computers
+            .get_mut(&computer_id)
+            .ok_or(HostError::NotFound(computer_id))?;
+        if computer.image != image {
+            computer.previous_image = Some(std::mem::replace(&mut computer.image, image));
+        }
+        Ok(computer.clone())
     }
 
     async fn power(&self, computer_id: ComputerId, action: Action) -> Result<Computer, HostError> {
@@ -336,6 +352,21 @@ async fn the_client_and_the_router_agree_on_every_route() {
         .unwrap_err();
     assert_eq!(refused.code(), Some(ErrorCode::InvalidState));
     client.power(computer_id(), Action::Start).await.unwrap();
+
+    let replaced = client
+        .replace_system_disk(
+            computer_id(),
+            &ReplaceSystemDisk {
+                image: GuestImage::try_new("macro-box/2").unwrap(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(replaced.image.as_str(), "macro-box/2");
+    assert_eq!(
+        replaced.previous_image,
+        Some(GuestImage::try_new("macro-box/1").unwrap())
+    );
 
     let pairing_id = PairingId::new_from_uuid(Uuid::from_u128(10));
     let enrolled = client

@@ -11,7 +11,7 @@ use firecracker_host_api::{
 use uuid::Uuid;
 
 use super::{HostError, HostMeasurement, HostProbe, HostService, ServiceSettings, SwapPlacement};
-use crate::domain::model::{ComputerRecord, Process, Slot};
+use crate::domain::model::{ComputerRecord, Process, Slot, SystemDisk};
 use crate::domain::ports::{
     BootSource, ComputerDisks, Disks, DriveBacking, GoldenAvailability, Goldens, GuestSwap, Jail,
     LaunchPhases, Launched, Machines, Store,
@@ -54,8 +54,12 @@ impl Store for FakeStore {
     }
 }
 
+/// Disk operations in order, and each computer's system disk files.
 #[derive(Clone, Default)]
-pub(super) struct FakeDisks(Arc<Mutex<Vec<String>>>);
+pub(super) struct FakeDisks(
+    pub(super) Arc<Mutex<Vec<String>>>,
+    pub(super) Arc<Mutex<HashMap<ComputerId, std::collections::BTreeSet<SystemDisk>>>>,
+);
 
 impl Disks for FakeDisks {
     type Err = FakeError;
@@ -64,10 +68,54 @@ impl Disks for FakeDisks {
             .lock()
             .unwrap()
             .push(format!("prepare {}", record.computer_id));
+        self.1
+            .lock()
+            .unwrap()
+            .entry(record.computer_id)
+            .or_default()
+            .insert(record.system_disk);
         Ok(ComputerDisks {
             rootfs: DriveBacking::File("/rootfs".into()),
             home: DriveBacking::File("/home".into()),
         })
+    }
+    async fn clone_system_disk(
+        &self,
+        record: &ComputerRecord,
+        key: &GoldenKey,
+        disk: SystemDisk,
+    ) -> Result<(), FakeError> {
+        if key.image.as_str() == "unclonable" {
+            return Err(FakeError);
+        }
+        self.0.lock().unwrap().push(format!(
+            "clone {} {} {}",
+            record.computer_id, key.image, disk.0
+        ));
+        self.1
+            .lock()
+            .unwrap()
+            .entry(record.computer_id)
+            .or_default()
+            .insert(disk);
+        Ok(())
+    }
+    async fn remove_other_system_disks(
+        &self,
+        computer_id: ComputerId,
+        keep: &[SystemDisk],
+    ) -> Result<Vec<SystemDisk>, FakeError> {
+        let mut files = self.1.lock().unwrap();
+        let Some(disks) = files.get_mut(&computer_id) else {
+            return Ok(Vec::new());
+        };
+        let removed: Vec<SystemDisk> = disks
+            .iter()
+            .copied()
+            .filter(|disk| !keep.contains(disk))
+            .collect();
+        disks.retain(|disk| keep.contains(disk));
+        Ok(removed)
     }
     async fn create_golden_rootfs(&self, _key: &GoldenKey) -> Result<DriveBacking, FakeError> {
         Ok(DriveBacking::File("/golden".into()))
@@ -95,6 +143,7 @@ impl Disks for FakeDisks {
     }
     async fn delete(&self, computer_id: ComputerId) -> Result<(), FakeError> {
         self.0.lock().unwrap().push(format!("delete {computer_id}"));
+        self.1.lock().unwrap().remove(&computer_id);
         Ok(())
     }
 }
@@ -339,6 +388,7 @@ impl HostProbe for FakeProbe {
 
 pub(super) struct Host {
     pub(super) store: FakeStore,
+    pub(super) disks: FakeDisks,
     pub(super) machines: FakeMachines,
     pub(super) goldens: FakeGoldens,
     pub(super) probe: FakeProbe,
@@ -347,6 +397,15 @@ pub(super) struct Host {
 }
 
 pub(super) async fn host_with(store: FakeStore, machines: FakeMachines, slots: u16) -> Host {
+    host_with_disks(store, FakeDisks::default(), machines, slots).await
+}
+
+pub(super) async fn host_with_disks(
+    store: FakeStore,
+    disks: FakeDisks,
+    machines: FakeMachines,
+    slots: u16,
+) -> Host {
     let goldens = FakeGoldens(
         Arc::new(Mutex::new(GoldenAvailability::Ready)),
         Arc::new(Mutex::new(Vec::new())),
@@ -354,7 +413,7 @@ pub(super) async fn host_with(store: FakeStore, machines: FakeMachines, slots: u
     let probe = FakeProbe::default();
     let service = HostService::start(
         store.clone(),
-        FakeDisks::default(),
+        disks.clone(),
         goldens.clone(),
         machines.clone(),
         probe.clone(),
@@ -374,6 +433,7 @@ pub(super) async fn host_with(store: FakeStore, machines: FakeMachines, slots: u
     let service = Arc::new(service);
     Host {
         store,
+        disks,
         machines,
         goldens,
         probe,

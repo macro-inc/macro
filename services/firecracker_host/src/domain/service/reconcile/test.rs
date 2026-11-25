@@ -321,3 +321,114 @@ async fn a_pass_removes_a_jail_no_record_holds_but_skips_a_busy_computer() {
     );
     drop(guard);
 }
+
+/// Disks whose computer holds these system disk files.
+fn disks_with(files: &[u32]) -> super::super::test::FakeDisks {
+    let disks = super::super::test::FakeDisks::default();
+    disks.1.lock().unwrap().insert(
+        computer_id(),
+        files
+            .iter()
+            .map(|&generation| crate::domain::model::SystemDisk(generation))
+            .collect(),
+    );
+    disks
+}
+
+fn files_left(host: &super::super::test::Host) -> Vec<u32> {
+    host.disks.1.lock().unwrap()[&computer_id()]
+        .iter()
+        .map(|disk| disk.0)
+        .collect()
+}
+
+#[tokio::test]
+async fn killed_after_dropping_the_previous_disk_from_the_record_its_file_goes_at_startup() {
+    // The record already dropped disk 1 (the previous one); its file stayed.
+    let store = FakeStore::default();
+    saved(&store, &record(PowerState::Stopped, None)).await;
+    let host = super::super::test::host_with_disks(
+        store,
+        disks_with(&[0, 1]),
+        FakeMachines::default(),
+        1,
+    )
+    .await;
+
+    assert_eq!(files_left(&host), [0]);
+}
+
+#[tokio::test]
+async fn killed_after_the_clone_before_the_save_the_computer_boots_its_old_disk() {
+    let store = FakeStore::default();
+    let stopped = record(PowerState::Stopped, None);
+    saved(&store, &stopped).await;
+    let host = super::super::test::host_with_disks(
+        store,
+        disks_with(&[0, 1]),
+        FakeMachines::default(),
+        1,
+    )
+    .await;
+
+    assert_eq!(files_left(&host), [0]);
+    let computer = host
+        .service
+        .power(computer_id(), Action::Start)
+        .await
+        .unwrap();
+    assert_eq!(computer.image, stopped.image);
+    assert_eq!(computer.previous_image, None);
+    assert_eq!(
+        host.machines.launches.lock().unwrap()[0].0,
+        BootSource::ColdBoot
+    );
+}
+
+#[tokio::test]
+async fn killed_after_the_save_before_the_boot_both_disks_stay_and_a_start_cold_boots_the_new_one()
+{
+    let store = FakeStore::default();
+    let mut swapped = record(PowerState::Stopped, None);
+    let old_image = swapped.image.clone();
+    swapped.image = firecracker_host_api::GuestImage::try_new("macro-box/2026-11-24a").unwrap();
+    swapped.system_disk = crate::domain::model::SystemDisk(1);
+    swapped.previous_system_disk = Some(crate::domain::model::PreviousSystemDisk {
+        disk: crate::domain::model::SystemDisk(0),
+        image: old_image.clone(),
+    });
+    saved(&store, &swapped).await;
+    let host = super::super::test::host_with_disks(
+        store,
+        disks_with(&[0, 1]),
+        FakeMachines::default(),
+        1,
+    )
+    .await;
+
+    assert_eq!(files_left(&host), [0, 1]);
+    let computer = host
+        .service
+        .power(computer_id(), Action::Start)
+        .await
+        .unwrap();
+    assert_eq!(computer.image, swapped.image);
+    assert_eq!(computer.previous_image, Some(old_image));
+    assert_eq!(
+        host.machines.launches.lock().unwrap()[0].0,
+        BootSource::ColdBoot
+    );
+}
+
+#[test]
+fn a_record_from_before_system_disk_replacement_boots_its_first_disk() {
+    let mut legacy = serde_json::to_value(record(PowerState::Stopped, None)).unwrap();
+    let object = legacy.as_object_mut().unwrap();
+    object.remove("system_disk");
+    object.remove("previous_system_disk");
+
+    let loaded: ComputerRecord = serde_json::from_value(legacy).unwrap();
+
+    assert_eq!(loaded.system_disk, crate::domain::model::SystemDisk(0));
+    assert_eq!(loaded.previous_system_disk, None);
+}

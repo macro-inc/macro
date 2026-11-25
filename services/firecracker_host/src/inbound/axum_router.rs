@@ -9,6 +9,8 @@
 //! - `PUT | DELETE /v1/computers/{computer_id}/enrollment`: replace, clear.
 //! - `POST /v1/computers/{computer_id}/{action}`: start, stop, restart,
 //!   freeze, unfreeze, hibernate.
+//! - `POST /v1/computers/{computer_id}/system-disk`: boot from a system disk
+//!   of another image, or back to the previous one.
 //! - `GET /v1/computers/{computer_id}/exec`: a WebSocket running a program
 //!   in the guest (frames in `firecracker_host_api::exec`).
 //!
@@ -31,7 +33,7 @@ use axum::{Json, Router};
 use firecracker_host_api::exec::{ExecRequest, Frame, MAX_FRAME_BYTES, read_frame, write_frame};
 use firecracker_host_api::{
     Action, Computer, ComputerId, CreateComputer, ErrorCode, ErrorResponse, GoldenImage, GoldenKey,
-    GoldenState, HostInfo, HostLimits, SetEnrollment,
+    GoldenState, HostInfo, HostLimits, ReplaceSystemDisk, SetEnrollment,
 };
 use futures::{SinkExt, StreamExt};
 
@@ -80,6 +82,10 @@ pub fn host_router<Operations: HostOperations>(state: HostRouterState<Operations
         )
         .route("/v1/computers/{computer_id}/exec", get(exec::<Operations>))
         .route(
+            "/v1/computers/{computer_id}/system-disk",
+            post(replace_system_disk::<Operations>),
+        )
+        .route(
             "/v1/computers/{computer_id}/{action}",
             post(power::<Operations>),
         )
@@ -94,7 +100,9 @@ pub fn host_router<Operations: HostOperations>(state: HostRouterState<Operations
 fn status(code: ErrorCode) -> StatusCode {
     match code {
         ErrorCode::NotFound => StatusCode::NOT_FOUND,
-        ErrorCode::GenerationMismatch | ErrorCode::InvalidState => StatusCode::CONFLICT,
+        ErrorCode::GenerationMismatch | ErrorCode::InvalidState | ErrorCode::ImageConflict => {
+            StatusCode::CONFLICT
+        }
         ErrorCode::InvalidRequest | ErrorCode::ImageMissing => StatusCode::UNPROCESSABLE_ENTITY,
         ErrorCode::GoldenNotReady | ErrorCode::NoNetworkSlot => StatusCode::SERVICE_UNAVAILABLE,
         ErrorCode::GuestUnreachable => StatusCode::GATEWAY_TIMEOUT,
@@ -334,6 +342,35 @@ pub(crate) async fn power<Operations: HostOperations>(
     Path((computer_id, action)): Path<(ComputerId, Action)>,
 ) -> Result<Json<Computer>, HostError> {
     state.service.power(computer_id, action).await.map(Json)
+}
+
+/// Boot the computer from a system disk of another image, or back to its
+/// previous one, keeping its `/home` and identity.
+#[utoipa::path(
+    post,
+    path = "/v1/computers/{computer_id}/system-disk",
+    params(("computer_id" = ComputerId, Path)),
+    request_body = ReplaceSystemDisk,
+    responses(
+        (status = 200, body = Computer),
+        (status = 404, body = ErrorResponse, description = "notFound"),
+        (status = 409, body = ErrorResponse, description = "invalidState (hibernated)"),
+        (status = 422, body = ErrorResponse, description = "invalidRequest or imageMissing"),
+        (status = 503, body = ErrorResponse, description = "goldenNotReady or noNetworkSlot"),
+    ),
+    tag = "computers"
+)]
+#[tracing::instrument(skip_all, fields(%computer_id, image = %request.image), err)]
+pub(crate) async fn replace_system_disk<Operations: HostOperations>(
+    State(state): Service<Operations>,
+    Path(computer_id): Path<ComputerId>,
+    Json(request): Json<ReplaceSystemDisk>,
+) -> Result<Json<Computer>, HostError> {
+    state
+        .service
+        .replace_system_disk(computer_id, request.image)
+        .await
+        .map(Json)
 }
 
 /// Run a program in the guest over a WebSocket. A computer that is missing
