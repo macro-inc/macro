@@ -125,8 +125,10 @@ verify_revision() {
       --slurpfile muppet "$runtime_root/node_modules/@macro-inc/muppet/package.json" '
       [ "dependencies", "devDependencies", "optionalDependencies",
         "peerDependencies", "workspaces", "overrides" ] as $keys |
-      . as $behavior | (.muppetApi // 0) as $need |
-      ($need | type == "number" and floor == . and . >= 0) and
+      def level: type == "number" and floor == . and . >= 0 and . <= 9007199254740991;
+      . as $behavior |
+      (if has("muppetApi") then .muppetApi else 0 end) as $need |
+      ($need | level) and ($muppet[0].apiLevel | level) and
       $need <= $muppet[0].apiLevel and
       all($keys[]; $behavior[.] == $template[0][.])
       ' >/dev/null
@@ -247,11 +249,12 @@ if [[ $previous == "$version" ]]; then
   exit 0
 fi
 
-# Coordinate with the screen freeze/restart helper as well as with lands.
-# A land running inside the process is allowed to finish during the drain.
-exec 8>"$pause/lock"
-flock -n 8 || fail 'agent pause or restart is in progress'
-[[ ! -e $pause/paused && $(property FreezerState) == running ]] || fail 'agent is frozen'
+# A land already active can finish and ask the path unit for a restart
+# during the drain. Hold the pause/restart lock only at the switch.
+ensure_not_frozen() {
+  [[ ! -e $pause/paused && $(property FreezerState) == running ]] || fail 'agent is frozen'
+}
+ensure_not_frozen
 restart_before=$(as_agent stat -c '%i:%y' "$restart_marker" 2>/dev/null || true)
 token=$(cat /proc/sys/kernel/random/uuid)
 owns_transaction=yes
@@ -261,6 +264,9 @@ chmod 644 "$fence.new"
 mv -Tf "$fence.new" "$fence"
 
 wait_for "$drain_timeout" drain_receipt "$invocation" "$token" || fail 'active work did not drain'
+exec 8>"$pause/lock"
+flock -n 8 || fail 'agent pause or restart is in progress'
+ensure_not_frozen
 # The lock path belongs to the agent. A child takes it as that user and
 # holds it until this shell closes the pipe, including if systemd kills us.
 as_agent mkdir -p -- "$(dirname "$git_lock")"

@@ -20,7 +20,7 @@ install -m 644 "$repo/packages/muppet/host/maintenance.ts" "$base/docker/host/"
 install -m 644 "$repo/packages/starter-agent/behavior/context/runtime-maintenance.ts" "$base/docker/"
 install -m 644 "$repo/nix/macro-box/files/agent-runtime-update" "$base/docker/update"
 install -m 644 "$repo/nix/macro-box/files/"{start-agent,agent-env-setting} "$base/docker/"
-install -m 644 "$test_dir"/{setup.sh,service.ts} "$base/docker/"
+install -m 644 "$test_dir"/{setup.sh,service.ts,land.sh} "$base/docker/"
 
 docker run -d --name "$fixture" --privileged --cgroupns=private --tmpfs /run \
   --tmpfs /run/lock --network none \
@@ -95,10 +95,31 @@ expect_exit 1 submit "$version_a" "$digest"
 assert_unchanged "$baseline"
 guest 'test ! -e /run/macro-agent-runtime/fence && test ! -e /home/.macro-agent-runtime/current'
 
+echo 'A land that commits behavior during the drain aborts the update'
+before_land=$(guest 'runuser -u macro -- git -C /home/macro/agent/workspace rev-parse HEAD')
+submit "$version_a" "$digest" &
+land_update=$!
+wait_until 'test -e /run/macro-agent-runtime/fence'
+guest 'flock --nonblock /run/macro-agent-pause/lock true'
+guest 'install -d -o macro -g macro /home/macro/agent/workspace/state/run/heartbeat'
+guest 'runuser -u macro -- flock /home/macro/agent/workspace/state/run/heartbeat/git.lock /run/current-system/sw/bin/bash /fixture/land.sh
+echo release > /home/macro/.fixture/release'
+expect_exit 1 wait "$land_update"
+assert_unchanged "$baseline"
+guest 'test ! -e /run/macro-agent-runtime/fence && test ! -e /home/.macro-agent-runtime/current'
+guest "runuser -u macro -- git -C /home/macro/agent/workspace restore --source=$before_land --staged --worktree cli.ts
+runuser -u macro -- git -C /home/macro/agent/workspace commit -qm restore-fixture-behavior
+rm -f /home/macro/.fixture/release
+echo busy-again >> /home/macro/.fixture/events"
+wait_until 'grep -q "delivering busy-again" /home/macro/.fixture/log'
+
 echo 'A concurrent update is refused; queued input crosses the service restart'
 submit "$version_a" "$digest" &
 updating=$!
 wait_until 'test -e /run/macro-agent-runtime/fence'
+# An admitted land must be able to send its restart through the pause
+# helper while the updater waits for active work.
+guest 'flock --nonblock /run/macro-agent-pause/lock true'
 expect_exit 1 submit "$version_b" "$digest"
 guest 'echo queued-dm >> /home/macro/.fixture/events; echo queued-event >> /home/macro/.fixture/events; echo queued-schedule >> /home/macro/.fixture/events; echo release > /home/macro/.fixture/release'
 wait "$updating"

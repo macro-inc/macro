@@ -18,11 +18,11 @@ async function deliver() {
     await control.dispatch(false, async () => {
       if (done.has(event)) return;
       log(`delivering ${event} on ${selection}`);
-      while (event === 'busy' && !Bun.file(`${root}/release`).size) await Bun.sleep(30);
-      if (event === 'busy') {
+      while (event.startsWith('busy') && !Bun.file(`${root}/release`).size) await Bun.sleep(30);
+      if (event.startsWith('busy')) {
         const repository = '/home/macro/agent/workspace';
         mkdirSync(`${repository}/state`, { recursive: true });
-        writeFileSync(`${repository}/state/advance`, 'admitted work completed');
+        writeFileSync(`${repository}/state/advance`, event);
         for (const args of [['add', 'state'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'memory checkpoint']]) {
           if (Bun.spawnSync(['git', '-C', repository, ...args]).exitCode !== 0) throw new Error('fixture commit failed');
         }
