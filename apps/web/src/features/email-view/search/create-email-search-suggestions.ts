@@ -275,6 +275,9 @@ export function createEmailSearchSuggestions(options: {
     listed,
     focused,
     setFocused: (next) => {
+      // Header teardown can report blur after focus has already left the field.
+      // Avoid publishing a new selection while Solid disposes the Mail view.
+      if (next === focused()) return;
       if (next) setAwaitsPickedResults(false);
       else if (leftWithResults()) remember();
 

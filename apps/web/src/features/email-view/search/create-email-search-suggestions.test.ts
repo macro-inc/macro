@@ -94,6 +94,17 @@ it('remembers a search once the field is left with it', () => {
   });
 });
 
+it('does not remember a restored search when its untouched field unmounts', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup('restored query');
+
+    suggestions.setFocused(false);
+
+    expect(remembered(setSearch, suggestions)).toEqual([]);
+    dispose();
+  });
+});
+
 it('remembers a search left with its results on screen, not one left before they arrive', () => {
   createRoot((dispose) => {
     const { setSearch, setHasResults, suggestions } = setup();
