@@ -6,7 +6,11 @@ const mocks = vi.hoisted(() => ({ upsert: vi.fn() }));
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
-  const queryClient = new QueryClient();
+  // A settled mutation nothing observes leaves the cache once its gcTime
+  // passes; with none, the test can see it go.
+  const queryClient = new QueryClient({
+    defaultOptions: { mutations: { gcTime: 0 } },
+  });
   return { queryClient, useQueryClient: () => queryClient };
 });
 vi.mock('@queries/soup/cache', () => ({
@@ -49,9 +53,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// A computation created with no owner (such as a mutation hook's memo) is
-// never disposed, and it keeps every view whose signals it reads alive.
-it('records an open without creating a computation nothing disposes', async () => {
+// trackOpen records the open after an await, with no Solid owner. A mutation
+// hook there creates computations and a subscription that are never disposed,
+// and its observer keeps the mutation in the cache for the whole session.
+it('records an open without leaving computations or the mutation behind', async () => {
   expect(hooks).toBeDefined();
   const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
 
@@ -72,4 +77,7 @@ it('records an open without creating a computation nothing disposes', async () =
     (owner) => owner.fn !== undefined && owner.owner === null
   );
   expect(ownerless).toHaveLength(0);
+  await vi.waitFor(() =>
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+  );
 });

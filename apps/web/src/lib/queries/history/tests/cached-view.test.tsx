@@ -181,8 +181,15 @@ describe('a recorded view in cached history', () => {
   it('resolves when the server refuses a view recorded without a component', async () => {
     mocks.upsert.mockResolvedValue(err([{ code: 'NETWORK', message: 'x' }]));
 
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
     await recordHistoryView({ itemId: 'shared', itemType: 'document' });
 
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: historyKeys.list.queryKey,
+    });
+    expect(mocks.query).not.toHaveBeenCalled();
     expect(mocks.writeQuery).not.toHaveBeenCalled();
   });
 

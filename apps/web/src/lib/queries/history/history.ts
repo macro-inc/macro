@@ -14,7 +14,6 @@ import {
 import {
   keepPreviousData,
   type QueryClient,
-  MutationObserver as QueryMutationObserver,
   queryOptions,
   type Updater,
   useMutation,
@@ -318,20 +317,20 @@ export function useUpsertToHistoryMutation(
 /**
  * Records a view of an item in the user's history as
  * `useUpsertToHistoryMutation` does, for code that runs without a Solid owner
- * (after an await, in a browser callback). A mutation hook called there
- * creates computations nothing disposes, and each one keeps the views whose
- * signals it reads alive.
+ * (after an await, in a browser callback), where a mutation hook's
+ * subscription and computations would never be disposed. The mutation is
+ * built without an observer, so the cache drops it once its gcTime passes
+ * after it settles; one with an observer stays until the observer lets go.
  */
 export async function recordHistoryView(
   params: UpsertToHistoryParams
 ): Promise<void> {
-  const observer = new QueryMutationObserver(
-    queryClient,
-    upsertToHistoryMutationOptions()
-  );
-  // The hook's `mutate` drops the failure too: onError already rolled history
-  // back, and a missed view is not worth reporting.
-  void (await catchToResult(async () => await observer.mutate(params)));
+  const mutation = queryClient
+    .getMutationCache()
+    .build(queryClient, upsertToHistoryMutationOptions());
+  // The hook's `mutate` drops the failure too: onError already restored
+  // history, and a missed view is not worth reporting.
+  void (await catchToResult(async () => await mutation.execute(params)));
 }
 
 /**
