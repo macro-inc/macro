@@ -37,7 +37,9 @@ test('the channels index gains link URLs in place', () => {
 
   expect(plan.missingPaths).toEqual(['links']);
   expect(plan.conflictPaths).toEqual([]);
-  expect(plan.updates).toEqual({ links: { type: 'text', analyzer: 'pattern' } });
+  expect(plan.updates).toEqual({
+    links: { type: 'text', analyzer: 'pattern' },
+  });
   // A built-in analyzer: adding one to the index's analysis settings would
   // need the live index closed.
   expect(Object.keys(settings.analysis.analyzer)).toEqual(['content_text']);
