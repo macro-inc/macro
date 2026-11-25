@@ -1,17 +1,8 @@
+import { metaClickIds } from '@app/lib/analytics/metaClickIds';
 import { registerClient } from '@core/util/mockClient';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
-
-/**
- * Gets Meta _fbp (browser ID) and _fbc (click ID) values from cookies set by the Meta Pixel.
- */
-function getMetaIds(): { fbp: string | undefined; fbc: string | undefined } {
-  const cookies = document.cookie;
-  const fbp = cookies.match(/(?:^|; )_fbp=([^;]*)/)?.[1];
-  const fbc = cookies.match(/(?:^|; )_fbc=([^;]*)/)?.[1];
-  return { fbp, fbc };
-}
 
 /**
  * Gets the Google Analytics client ID using gtag.
@@ -66,7 +57,7 @@ export const stripeServiceClient = {
       onboardingTrial,
     } = args;
     const gaClientId = await getGaClientId();
-    const { fbp, fbc } = getMetaIds();
+    const { fbp, fbc } = metaClickIds();
 
     const result = await authServiceClient.createCheckoutSessionV2({
       successUrl:

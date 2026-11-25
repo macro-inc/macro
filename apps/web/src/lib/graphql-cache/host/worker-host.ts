@@ -397,6 +397,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let telemetryRelayStarted = false;
   let telemetryFinished = false;
   let initializationStartedAt = 0;
+  let readyWaiters: (() => void)[] = [];
   let storageHealthTimer: ReturnType<typeof setInterval> | undefined;
   const setIntervalFn =
     options.setInterval ?? globalThis.setInterval.bind(globalThis);
@@ -997,6 +998,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    */
   function stopForSession(error: Error, { uncertain = false } = {}): void {
     state = 'failed';
+    releaseReadyWaiters();
     outage = undefined;
     stopPing?.();
     releaseTransportWaiters();
@@ -1164,6 +1166,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    */
   function leave(mode: 'leaving' | 'navigation'): void {
     state = 'disposing';
+    releaseReadyWaiters();
     stopPing?.();
     releaseTransportWaiters();
     disposalMode = mode;
@@ -1201,6 +1204,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // every already-admitted RPC has a response or its existing read timer.
     // Mutations deliberately have no arbitrary disposal timeout.
     state = 'disposing';
+    releaseReadyWaiters();
     stopPing?.();
     disposalMode = 'draining';
     clearSubscribers();
@@ -1525,6 +1529,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
   }
 
+  /** Settles every whenReady() caller: the engine opened or never will. */
+  function releaseReadyWaiters(): void {
+    const waiters = readyWaiters;
+    readyWaiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
   function startStorageHealthSampling(): void {
     fireAndForget(observeStorageHealth(), 'graphql-cache-host');
     storageHealthTimer ??= setIntervalFn(() => {
@@ -1605,6 +1616,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         state = 'ready';
         initialization = undefined;
         reconnects = 0;
+        // Before the outage listeners, which may throw. The waiters run after
+        // endOutage has cleared the outage, so they find the engine open.
+        releaseReadyWaiters();
         endOutage();
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
@@ -1786,6 +1800,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   return {
     clientId,
+    // A paused engine is not open: its writes reject rather than wait.
+    isReady: () => state === 'ready' && outage === undefined,
+    whenReady() {
+      if (
+        (state === 'ready' && outage === undefined) ||
+        state === 'failed' ||
+        state === 'disposing' ||
+        state === 'disposed'
+      )
+        return Promise.resolve();
+      return new Promise<void>((resolve) => readyWaiters.push(resolve));
+    },
     get disabled() {
       return outage !== undefined;
     },

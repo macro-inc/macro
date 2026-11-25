@@ -162,3 +162,195 @@ async fn an_upgrade_of_an_unknown_computer_is_refused(pool: PgPool) {
         Err(StartUpgradeError::UnknownComputer(unknown))
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn runtime_update_and_image_replacement_hold_the_computer_exclusively(pool: PgPool) {
+    use crate::domain::runtime_update::{RuntimeBundle, RuntimeUpdateOutcome, RuntimeUpdates};
+
+    insert_team(&pool).await;
+    let agent = super::agents::insert_agent(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    let microvm = host(&repo, "runtime-host", 32, 0, 3).await;
+    sqlx::query!(
+        "UPDATE hosted_runtime_host SET endpoint = 'https://host.invalid', server_certificate_pem = 'fixture' WHERE id = $1",
+        microvm.id.into_inner(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut purchase = standard(1);
+    purchase.agent = Some(agent);
+    let reservation = reserve(&repo, purchase).await;
+    let computer = repo
+        .convert_reservation(reservation.id, active(1), now())
+        .await
+        .unwrap()
+        .unwrap();
+    changed(&repo, computer.id, Event::InstanceStarted, now()).await;
+    changed(&repo, computer.id, Event::MacrodConnected, now()).await;
+
+    let version = "a".repeat(40);
+    let bundle = RuntimeBundle {
+        digest: "b".repeat(64),
+        url: format!(
+            "https://fixture.s3.amazonaws.com/agent-runtime-bundles/{version}/runtime.tar.zst?X-Amz-Signature=fixture"
+        ),
+        version,
+    };
+    let id = repo
+        .request_runtime_update(computer.id, &bundle)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        repo.request_runtime_update(computer.id, &bundle)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(repo.held(computer.id).await.unwrap());
+    assert!(
+        repo.held_on(microvm.id)
+            .await
+            .unwrap()
+            .contains(&computer.id)
+    );
+
+    start_image_upgrade(&repo, &request(vec![computer.id], 7), now())
+        .await
+        .unwrap()
+        .unwrap();
+    let image_holder = Uuid::now_v7();
+    let (_, mut images) = repo
+        .lease_upgrade(image_holder, now(), now() + Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    let image = &mut images[0];
+    image.state = ComputerUpgradeState::Replacing;
+    assert!(
+        !repo
+            .update_computer_upgrade(image_holder, image, now())
+            .await
+            .unwrap()
+    );
+
+    assert!(
+        repo.claim_runtime_update(
+            Uuid::now_v7(),
+            Duration::minutes(15),
+            &[crate::domain::ids::HostId::new(Uuid::now_v7())],
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    let previous = repo
+        .claim_runtime_update(Uuid::now_v7(), Duration::zero(), &[microvm.id])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(previous.id, id);
+    assert!(!previous.attempted);
+    let holder = Uuid::now_v7();
+    let claimed = repo
+        .claim_runtime_update(holder, Duration::minutes(15), &[microvm.id])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(claimed.id, id);
+    assert!(claimed.attempted);
+    assert!(
+        repo.claim_runtime_update(Uuid::now_v7(), Duration::minutes(15), &[microvm.id])
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        !repo
+            .finish_runtime_update(Uuid::now_v7(), id, RuntimeUpdateOutcome::Applied)
+            .await
+            .unwrap()
+    );
+    sqlx::query!(
+        "UPDATE agent_runtime_update SET deadline_at = now() WHERE id = $1",
+        id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut holder = holder;
+    assert!(
+        !repo
+            .defer_runtime_update_settlement(Uuid::now_v7(), id)
+            .await
+            .unwrap()
+    );
+    for terminal in [false, false, true] {
+        assert_eq!(
+            repo.defer_runtime_update_settlement(holder, id)
+                .await
+                .unwrap(),
+            terminal
+        );
+        if terminal {
+            break;
+        }
+        assert!(repo.held_for_image(computer.id).await.unwrap());
+        sqlx::query!(
+            "UPDATE agent_runtime_update SET lease_until = now() WHERE id = $1",
+            id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        holder = Uuid::now_v7();
+        repo.claim_runtime_update(holder, Duration::minutes(15), &[microvm.id])
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    assert_eq!(
+        repo.runtime_update_outcome(id).await.unwrap(),
+        Some(RuntimeUpdateOutcome::NeedsOperator)
+    );
+    assert!(repo.held(computer.id).await.unwrap());
+    assert!(!repo.held_for_image(computer.id).await.unwrap());
+    for event in [Event::PowerOn, Event::PowerOff, Event::ReleaseNow] {
+        assert!(matches!(
+            repo.apply(computer.id, event, now()).await.unwrap(),
+            Some(Applied::Rejected(Rejected::RuntimeUpdateInProgress))
+        ));
+    }
+    assert!(
+        repo.request_runtime_update(computer.id, &bundle)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    assert!(
+        repo.update_computer_upgrade(image_holder, image, now())
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.request_runtime_update(computer.id, &bundle)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    image.state = ComputerUpgradeState::Upgraded;
+    assert!(
+        repo.update_computer_upgrade(image_holder, image, now())
+            .await
+            .unwrap()
+    );
+    assert!(!repo.held(computer.id).await.unwrap());
+    assert!(
+        repo.request_runtime_update(computer.id, &bundle)
+            .await
+            .unwrap()
+            .is_some()
+    );
+}

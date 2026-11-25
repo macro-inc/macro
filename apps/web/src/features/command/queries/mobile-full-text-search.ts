@@ -2,6 +2,7 @@ import {
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
+  searchOperatorTagAst,
   withSearchOperatorQuery,
 } from '@app/features/next-soup/core/search-operator-filters';
 import {
@@ -9,6 +10,7 @@ import {
   searchQueryParts,
 } from '@app/features/next-soup/core/search-operators';
 import {
+  bothTargetAsts,
   compileToAst,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
@@ -70,11 +72,14 @@ export function createMobileFullTextSearch(
       const operators = operatorFilters();
       return {
         params: { limit: 25, sort_method: 'updated_at' },
-        body: compileToAst(
-          operators
-            ? withSearchOperatorQuery(query(), searchOperatorQuery(operators))
-            : query()
-        ),
+        body: operators
+          ? bothTargetAsts(
+              compileToAst(
+                withSearchOperatorQuery(query(), searchOperatorQuery(operators))
+              ),
+              searchOperatorTagAst(operators)
+            )
+          : compileToAst(query()),
       };
     },
     () => ({ enabled: browsing(), keepPreviousData: false })

@@ -2,6 +2,8 @@
 
 mod api;
 mod config;
+#[cfg(test)]
+mod test_spans;
 mod voice_gateway;
 /// Only the route modules the API document names, not the control plane.
 mod computers {

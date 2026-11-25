@@ -7,20 +7,26 @@
     <script>
       // First-paint palette. Keep in sync with src/features/setup/sitePalette.ts.
       (function () {
-        var lightModeEnabled = false;
         var theme = new URLSearchParams(location.search).get('theme');
-        var light = lightModeEnabled && (theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches));
-        var homepage = location.pathname === '/';
+        if (theme !== 'cream' && theme !== 'dark') {
+          try {
+            theme = localStorage.getItem('macro-site-palette');
+          } catch (error) {
+            theme = null;
+          }
+        }
+        var light = theme === 'cream';
         var root = document.documentElement;
         root.dataset.themeLight = String(light);
         root.style.colorScheme = light ? 'light' : 'dark';
-        if (homepage) root.setAttribute('data-homepage', '');
-        else if (light) root.dataset.palette = 'cream';
-        document.querySelector('meta[name="theme-color"]').content = homepage
-          ? (light ? '#ffffff' : '#000000')
-          : (light ? '#f5f1e8' : '#000000');
+        if (location.pathname === '/') root.setAttribute('data-homepage', '');
+        if (light) root.dataset.palette = 'cream';
+        document.querySelector('meta[name="theme-color"]').content = light ? '#f5f1e8' : '#000000';
       })();
     </script>
+    <!-- The light page color for the first paint, before the stylesheet that
+         defines the palette arrives. <html> paints var(--b0). -->
+    <style>html[data-palette=cream]{--b0:#f5f1e8}</style>
     <title>Macro — The Unified System for Work</title>
     <!-- Default SEO tags. Tags marked data-seo are replaced per-route by the
          prerender step (scripts/prerender.ts) and updated at runtime by

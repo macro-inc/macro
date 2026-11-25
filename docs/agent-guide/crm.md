@@ -166,14 +166,18 @@ merge is available through `POST /crm/merges/preview` then `POST /crm/merges`,
 the SDK's `crm.merges`, and the agent's PreviewMerge and MergeRecords tools.
 Verify with two throwaway companies on desktop and at phone width.
 
-Duplicate people (contacts) have no merge screen yet: team admins and owners
-merge them through the same routes with `recordType: "contact"`, the SDK's
-`crm.merges.previewContacts` and `mergeContacts`, or the same tools. Verify
-with two throwaway contacts: the review lists the addresses that join and the
-values that differ, and a contact under another company with a work address,
-or none, blocks the merge (`different_companies`). After the commit, the
-contact that stays has every address, pipeline entry, task reference and
-discussion message, and the merged contact's old link opens it.
+Duplicate people merge the same way from a People list: Merge in the selection
+toolbar, Merge people (several selected) or Merge with… (one) in a row's menu,
+or a long-press on a phone. Merge with… searches people by name, address or
+company. The review lists the person's addresses after the merge (its primary
+first), what moves, pipelines, values that differ, email sync and teammates'
+sharing, as for companies. Someone under another company with a work address,
+or no address, blocks it; the block lists each of them with their company.
+After the merge a toast offers Open, and the merged people's old links open the
+person who stays. The routes take `recordType: "contact"`, and the SDK has
+`crm.merges.previewContacts` and `mergeContacts`. Verify with two throwaway
+contacts on desktop and at phone width: the person who stays has every
+address, pipeline entry, task reference and discussion message.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses

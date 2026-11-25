@@ -29,7 +29,7 @@ import type {
   EmailPrivacyChange,
   ExcludedThreads,
 } from '../core/email-privacy';
-import type { MergeCommands } from '../core/merge';
+import type { MergeCommands, MergeRecordType } from '../core/merge';
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { PipelineEntryRecord } from '../core/pipeline-entry';
@@ -186,8 +186,8 @@ export type CrmContext = {
     order: number;
   }>;
   createPropertyCommands(): PropertyCommands;
-  /** Review and commit company merges; admins and owners only. */
-  createMergeCommands(): MergeCommands;
+  /** Review and commit merges of one record type; admins and owners only. */
+  createMergeCommands(recordType: MergeRecordType): MergeCommands;
   /** A stored property value as text, by its property, for a merge review. */
   createPropertyValueLabel(): (
     propertyId: string,
@@ -208,8 +208,35 @@ export type CrmContext = {
     query: { readonly isLoading: boolean };
   };
   createContactSuggestions(): {
-    contacts: Accessor<{ id: string; name: string; email?: string | null }[]>;
+    contacts: Accessor<
+      {
+        id: string;
+        name: string;
+        email?: string | null;
+        companyName?: string | null;
+      }[]
+    >;
     query: { readonly isLoading: boolean };
+  };
+  /**
+   * Every person the server matches for a typed query, across the viewer's
+   * CRM teams, page by page; two people holding one address stay two.
+   */
+  createContactSearch(search: Accessor<string>): {
+    contacts: Accessor<
+      readonly {
+        id: string;
+        name: string;
+        email?: string | null;
+        companyName?: string | null;
+      }[]
+    >;
+    isLoading: () => boolean;
+    hasMore: () => boolean;
+    isLoadingMore: () => boolean;
+    loadMore: () => Promise<void>;
+    error: () => unknown;
+    retry: () => Promise<void>;
   };
   exportCompanies(
     signal: AbortSignal,

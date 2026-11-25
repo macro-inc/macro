@@ -35,6 +35,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 mod abandon;
 mod access;
+pub use access::EngineTiming;
 use access::{AccessGuard, EngineAccess};
 mod authority;
 mod idle;
@@ -97,6 +98,10 @@ pub struct WriteResultWire {
     /// Stable caller identity on settlement.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mutation_uuid: Option<String>,
+    /// The engine wait and hold of a queued mutation's enqueue or commit,
+    /// recorded on its `graphql.mutation_queue.*` span.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine: Option<EngineTiming>,
 }
 
 /// Internal hydration result used to fan out changes before returning only
@@ -464,6 +469,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         reset: result.reset,
         revalidations: result.revalidations,
         mutation_uuid: result.mutation_uuid,
+        engine: None,
     }
 }
 
@@ -1100,10 +1106,12 @@ impl EngineHandle {
                 error: error.to_string(),
             },
         };
+        let mut write = wire_write_result(ops, result.write_result);
+        write.engine = Some(state.timing());
         Ok(EnqueueOptimisticMutationResultWire {
             transaction_id: result.transaction_id.to_string(),
             upsert_kind: result.upsert_kind.into(),
-            result: wire_write_result(ops, result.write_result),
+            result: write,
             initial_claim,
         })
     }
@@ -1231,28 +1239,33 @@ impl EngineHandle {
             .await
             .map_err(|e| e.to_string())?;
 
-        match result {
+        let mut wire = match result {
             CommitOptimisticWriteResult::Failed(result) => {
-                Ok(CommitOptimisticWriteResultWire::Failed {
+                CommitOptimisticWriteResultWire::Failed {
                     error: result.error,
                     replacement_transaction_id: result
                         .replacement_transaction_id
                         .map(|id| id.to_string()),
                     result: wire_write_result(ops, result.write_result),
-                })
+                }
             }
             CommitOptimisticWriteResult::Committed(result) => {
-                Ok(CommitOptimisticWriteResultWire::Committed {
+                CommitOptimisticWriteResultWire::Committed {
                     result: wire_write_result(ops, result),
-                })
+                }
             }
             CommitOptimisticWriteResult::CommittedSuperseded(result) => {
-                Ok(CommitOptimisticWriteResultWire::CommittedSuperseded {
+                CommitOptimisticWriteResultWire::CommittedSuperseded {
                     replacement_transaction_id: result.replacement_transaction_id.to_string(),
                     result: wire_write_result(ops, result.write_result),
-                })
+                }
             }
-        }
+        };
+        let (CommitOptimisticWriteResultWire::Failed { result, .. }
+        | CommitOptimisticWriteResultWire::Committed { result }
+        | CommitOptimisticWriteResultWire::CommittedSuperseded { result, .. }) = &mut wire;
+        result.engine = Some(state.timing());
+        Ok(wire)
     }
 
     /// Permanently fails a claimed mutation and drops its optimistic layer.

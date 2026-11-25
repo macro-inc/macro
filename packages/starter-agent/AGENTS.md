@@ -42,6 +42,9 @@ runs: input a function doesn't take is refused with the compiler's error.
   template was written for, and your computer's image decides which muppet
   you run on. Code can only use what that muppet has (`land` type-checks
   against it). Template authors raise it, after muppet's `apiLevel`.
+- A service-only runtime update waits for `markHealthy` and the Muppet
+  dispatcher to drain. Register detached work with the dispatcher and opt
+  sources in only when queued input can be replayed after restart.
 - Never start a second `bin/agent run`: two would answer the same messages.
 - Nothing in this repository names a particular agent, owner or product,
   outside `agent.json` and `state/`. Keep it that way: it is a template.

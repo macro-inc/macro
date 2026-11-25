@@ -391,9 +391,18 @@ fn id(n: u128) -> String {
     Uuid::from_u128(n).to_string()
 }
 
-fn tags_for(query: &str, named: &NamedIds, requested: TagFilter) -> Result<TagFilter, SearchError> {
+fn tags_for(query: &str, named: &NamedIds, requested: TagFilter) -> TagFilter {
     let (mut filters, read, _) = apply(&format!("{query} launch"));
     apply_names(&read, named, &mut filters, requested)
+}
+
+fn groups(groups: &[&[u128]]) -> TagFilter {
+    TagFilter {
+        groups: groups
+            .iter()
+            .map(|group| group.iter().map(|n| id(*n)).collect())
+            .collect(),
+    }
 }
 
 #[test]
@@ -405,43 +414,65 @@ fn tags_join_with_or_and_require_each_otherwise() {
     );
 
     assert_eq!(
-        tags_for("tag:finance OR tag:legal", &names, TagFilter::default()).unwrap(),
-        TagFilter {
-            option_ids: vec![id(1), id(2)],
-            match_all: false
-        }
+        tags_for("tag:finance OR tag:legal", &names, TagFilter::default()),
+        groups(&[&[1, 2]])
     );
     assert_eq!(
-        tags_for("tag:finance tag:legal", &names, TagFilter::default()).unwrap(),
-        TagFilter {
-            option_ids: vec![id(1), id(2)],
-            match_all: true
-        }
+        tags_for("tag:finance tag:legal", &names, TagFilter::default()),
+        groups(&[&[1], &[2]])
     );
-    assert!(matches!(
+    assert_eq!(
         tags_for(
             "tag:finance OR tag:legal tag:q3",
             &names,
             TagFilter::default()
         ),
-        Err(SearchError::TagConditionsDontCombine)
-    ));
+        groups(&[&[1, 2], &[3]])
+    );
+}
+
+#[test]
+fn a_tag_name_in_several_tag_sets_is_one_group_beside_another_tag() {
+    let names = named(&[("finance", &[1, 4]), ("q3", &[3])], &[], &[]);
+
+    assert_eq!(
+        tags_for("tag:finance tag:q3", &names, TagFilter::default()),
+        groups(&[&[1, 4], &[3]])
+    );
 }
 
 #[test]
 fn typed_tags_are_required_beside_the_requests_own() {
-    let names = named(&[("finance", &[1])], &[], &[]);
-    let requested = TagFilter {
-        option_ids: vec![id(9)],
-        match_all: false,
-    };
+    let names = named(&[("finance", &[1]), ("legal", &[2])], &[], &[]);
 
     assert_eq!(
-        tags_for("tag:finance", &names, requested).unwrap(),
-        TagFilter {
-            option_ids: vec![id(9), id(1)],
-            match_all: true
-        }
+        tags_for(
+            "tag:finance",
+            &names,
+            TagFilter::requested(vec![id(9)], false)
+        ),
+        groups(&[&[9], &[1]])
+    );
+    assert_eq!(
+        tags_for(
+            "tag:finance OR tag:legal",
+            &names,
+            TagFilter::requested(vec![id(8), id(9)], false)
+        ),
+        groups(&[&[8, 9], &[1, 2]])
+    );
+    assert_eq!(
+        tags_for(
+            "tag:finance",
+            &names,
+            TagFilter::requested(vec![id(8), id(9)], true)
+        ),
+        groups(&[&[8], &[9], &[1]])
+    );
+    assert_eq!(
+        tags_for("tag:finance", &names, groups(&[&[1]])),
+        groups(&[&[1]]),
+        "a group already required changes nothing"
     );
 }
 
@@ -450,24 +481,10 @@ fn a_tag_name_that_reaches_nothing_matches_nothing() {
     let names = named(&[("finance", &[])], &[], &[]);
     let (mut filters, read, _) = apply("tag:finance launch");
 
-    let tags = apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    let tags = apply_names(&read, &names, &mut filters, TagFilter::default());
 
     assert!(kinds(&filters).is_empty());
     assert_eq!(tags, TagFilter::default());
-}
-
-#[test]
-fn an_or_group_beside_the_requests_tags_is_refused() {
-    let names = named(&[("finance", &[1]), ("legal", &[2])], &[], &[]);
-    let requested = TagFilter {
-        option_ids: vec![id(9)],
-        match_all: false,
-    };
-
-    assert!(matches!(
-        tags_for("tag:finance OR tag:legal", &names, requested),
-        Err(SearchError::TagConditionsDontCombine)
-    ));
 }
 
 #[test]
@@ -477,7 +494,7 @@ fn names_narrow_the_requests_own_inboxes_and_channels() {
     let mut filters = every_kind();
     filters.email_filters.link_ids = vec![id(11)];
     let (read, _) = apply_to(&mut filters, "inbox:ana@example.com launch");
-    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    apply_names(&read, &names, &mut filters, TagFilter::default());
     assert!(
         kinds(&filters).is_empty(),
         "the request reads another inbox only"
@@ -486,7 +503,7 @@ fn names_narrow_the_requests_own_inboxes_and_channels() {
     let mut filters = every_kind();
     filters.channel_filters.channel_ids = vec![id(20), id(21)];
     let (read, _) = apply_to(&mut filters, "in:#launch notes");
-    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    apply_names(&read, &names, &mut filters, TagFilter::default());
     assert_eq!(filters.channel_filters.channel_ids, [id(20)]);
 }
 
@@ -495,24 +512,24 @@ fn inbox_and_channel_names_narrow_to_what_they_reach() {
     let names = named(&[], &[("ana@example.com", 10)], &[("launch", 20)]);
 
     let (mut filters, read, _) = apply("inbox:ana@example.com launch");
-    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    apply_names(&read, &names, &mut filters, TagFilter::default());
     assert_eq!(kinds(&filters), ["emails"]);
     assert_eq!(filters.email_filters.link_ids, [id(10)]);
 
     let (mut filters, read, _) = apply("in:#Launch notes");
-    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    apply_names(&read, &names, &mut filters, TagFilter::default());
     assert_eq!(kinds(&filters), ["channels", "calls"]);
     assert_eq!(filters.channel_filters.channel_ids, [id(20)]);
     assert_eq!(filters.call_filters.channel_ids, [id(20)]);
 
     let (mut filters, read, _) = apply("inbox:bo@example.com launch");
-    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    apply_names(&read, &names, &mut filters, TagFilter::default());
     assert!(
         kinds(&filters).is_empty(),
         "an inbox the caller doesn't read"
     );
 
     let (mut filters, read, _) = apply("in:#ops launch");
-    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    apply_names(&read, &names, &mut filters, TagFilter::default());
     assert!(kinds(&filters).is_empty(), "a channel the caller isn't in");
 }

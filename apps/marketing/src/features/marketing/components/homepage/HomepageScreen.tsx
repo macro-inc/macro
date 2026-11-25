@@ -16,6 +16,8 @@ export function HomepageScreen(props: {
   tutorial: TutorialVideoId;
   src: string;
   alt: string;
+  /** Shown instead on the light palette. */
+  light: { src: string; alt: string };
   fit?: 'bleed' | 'full';
   page?: { title: string; path: string };
 }) {
@@ -33,9 +35,18 @@ export function HomepageScreen(props: {
         <TutorialWallpaper tutorial={props.tutorial} />
       </div>
       <img
-        class="homepage-screen-window"
+        class="homepage-screen-window palette-dark-only"
         src={props.src}
         alt={props.alt}
+        width="1700"
+        height="916"
+        loading="lazy"
+        decoding="async"
+      />
+      <img
+        class="homepage-screen-window palette-light-only"
+        src={props.light.src}
+        alt={props.light.alt}
         width="1700"
         height="916"
         loading="lazy"

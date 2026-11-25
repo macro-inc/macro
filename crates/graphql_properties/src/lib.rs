@@ -3,6 +3,8 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+/// GraphQL writes to property definitions, options, and tag sets.
+mod catalog;
 /// Shared property definitions and selectable options.
 mod definitions;
 /// DataLoader implementations for entity property edges.
@@ -11,7 +13,15 @@ mod loaders;
 mod mutations;
 /// GraphQL property objects, values, and edge resolver.
 mod objects;
+/// The viewer's tag sets.
+mod tags;
 
+pub use catalog::{
+    AddPropertyOptionInput, CreatePropertyDefinitionInput, GraphqlCreatePropertyScope,
+    GraphqlPromotedTag, GraphqlPropertyOptionSeedInput, GraphqlPropertyOptionValueInput,
+    GraphqlTagMerge, GraphqlTagPromotion, GraphqlTagPromotionConflict, PropertyCatalogMutationRoot,
+    PropertyCatalogWriter, UpdatePropertyOptionInput,
+};
 pub use definitions::{
     GraphqlNumberPropertyOptionValue, GraphqlPropertyDefinition, GraphqlPropertyDefinitionOwner,
     GraphqlPropertyDefinitionScope, GraphqlPropertyOption, GraphqlPropertyOptionValue,
@@ -36,3 +46,4 @@ pub use objects::{
     GraphqlPropertyEntityReference, GraphqlPropertyValue, GraphqlSelectOptionPropertyValue,
     GraphqlStringPropertyValue, load_entity_properties,
 };
+pub use tags::{GraphqlTagScope, GraphqlTagSet, load_tag_sets};

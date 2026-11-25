@@ -51,6 +51,16 @@ describe('searchOperatorCompletions', () => {
     expect(inserts('in:inbox')).toEqual([]);
   });
 
+  it('writes a tag as it can be typed: quotes left out, an emoji alone', () => {
+    const values = { ...VALUES, tags: ['Q3 "Plan"', '🔥'] };
+    expect(
+      searchOperatorCompletions('tag:q3', values).map((row) => row.insert)
+    ).toEqual(['tag:"Q3 Plan"']);
+    expect(
+      searchOperatorCompletions('tag:', values).map((row) => row.insert)
+    ).toEqual(['tag:"Q3 Plan"', 'tag:🔥']);
+  });
+
   it('offers the filter a plain word stands for, and the person a name starts', () => {
     expect(inserts('budget tasks')).toEqual(['type:task']);
     expect(inserts('Docs')).toEqual(['type:doc']);

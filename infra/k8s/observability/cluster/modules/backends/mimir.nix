@@ -80,13 +80,19 @@ let
       # Prometheus' --storage.tsdb.retention.time on the host.
       compactor_blocks_retention_period = "30d";
       # Prometheus' --enable-feature=exemplar-storage, at its default size.
-      # Tempo's span metrics carry trace IDs as exemplars.
+      # The sampler's span metrics carry trace IDs as exemplars.
       max_global_exemplars_per_user = 100000;
       # Prometheus has no series limit; Mimir defaults to 150k. The host holds
-      # about 53k; each of the two metrics generators may add up to 50k (its
-      # own cap), and the node Alloy adds the cluster's own node, kubelet and
+      # about 53k; the samplers add their span metrics and service graphs,
+      # and the node Alloy adds the cluster's own node, kubelet and
       # cAdvisor series.
       max_global_series_per_user = 300000;
+      # So that one metric whose label turns out to be free text can't take
+      # them all. The largest has about 3k.
+      max_global_series_per_metric = 20000;
+      # OTLP delta counts and histograms are stored as they come instead of
+      # refused; queries sum them with sum_over_time. Experimental in Mimir.
+      otel_native_delta_ingestion = true;
       # Mimir's 10k samples/s would cut off senders catching up after an
       # outage; the host takes about 900/s.
       ingestion_rate = 50000;
@@ -264,11 +270,6 @@ in
               shared.writers
               shared.readers
               shared.nodeAlloy
-              # Tempo's metrics generator: span metrics and service graphs.
-              (shared.pods {
-                "app.kubernetes.io/name" = "tempo";
-                "app.kubernetes.io/component" = "metrics-generator";
-              })
             ];
             ports = shared.tcp [ ports.http ];
           }
