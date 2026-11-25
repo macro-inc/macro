@@ -29,6 +29,7 @@ import type {
   EmailPrivacyChange,
   ExcludedThreads,
 } from '../core/email-privacy';
+import type { MergeCommands } from '../core/merge';
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { PipelineEntryRecord } from '../core/pipeline-entry';
@@ -185,6 +186,13 @@ export type CrmContext = {
     order: number;
   }>;
   createPropertyCommands(): PropertyCommands;
+  /** Review and commit company merges; admins and owners only. */
+  createMergeCommands(): MergeCommands;
+  /** A stored property value as text, by its property, for a merge review. */
+  createPropertyValueLabel(): (
+    propertyId: string,
+    value: unknown
+  ) => string | undefined;
   hydrateCompany(company: CrmCompanyEntity): CrmCompanyEntity;
   createSettingsCommands(): CrmMutation<
     { enabled: boolean; backfill?: boolean },

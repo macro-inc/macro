@@ -1,3 +1,4 @@
+import { propertyValueLabel } from '@app/features/activity/queries/property-value';
 import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
@@ -16,6 +17,7 @@ import { idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazy } from '@core/util/lazy';
 import type { EntityData } from '@entity';
+import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { usePrimaryEmailLinkId } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
@@ -94,6 +96,7 @@ import { createEmailPolicySource } from './queries/email-policy';
 import { createEmailPrivacySource } from './queries/email-privacy';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
+import { createMergeCommands } from './queries/merges';
 import { createPipelineTransfer } from './queries/pipeline-transfer';
 import { createPipelinesSource } from './queries/pipelines';
 import {
@@ -357,6 +360,15 @@ export function createAppCrmContext(): CrmContext {
     RecordTasks: CrmRecordTasks,
     RecordActivity: CrmRecordActivity,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
+    createMergeCommands: () => createMergeCommands(deps),
+    createPropertyValueLabel: () => {
+      const definitions = useAllProperties();
+      return (propertyId, value) =>
+        propertyValueLabel(
+          value,
+          definitions().find((definition) => definition.id === propertyId)
+        );
+    },
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({
         ...deps,
