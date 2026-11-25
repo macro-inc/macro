@@ -8,6 +8,7 @@
 import type { FeedCounts } from './feedCounts';
 import type { Suggestion } from './suggestion';
 import type { SuggestionFeedDone } from './suggestionFeedDone';
+import type { SuggestionFeedTopics } from './suggestionFeedTopics';
 
 /**
  * A person's feed: their open suggestions, best first, and the ones they
@@ -23,4 +24,7 @@ out when the feed was read with a `limit`. */
   done?: SuggestionFeedDone;
   /** The open suggestions, at most `limit` of them. */
   suggestions: Suggestion[];
+  /** The topics the open suggestions belong to, in the order they first
+appear among them; left out when the feed was read with a `limit`. */
+  topics?: SuggestionFeedTopics;
 }

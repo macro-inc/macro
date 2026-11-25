@@ -136,6 +136,7 @@ const ready = (
     ownerLockClientId: TEST_ENGINE_CLIENT_ID,
     databaseActionProof: proof,
     openOutcome,
+    queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
   });
 };
 

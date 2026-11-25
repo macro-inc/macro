@@ -25,6 +25,7 @@ function ready(
       ? 'wiped-before-open'
       : 'opened-existing',
     openOutcome,
+    queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
   });
 }
 

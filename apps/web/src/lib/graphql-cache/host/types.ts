@@ -130,6 +130,9 @@ export type CacheChangeOptions = {
 /** Engine replacement is independent of whether durable cache data survived. */
 export type CacheGenerationChange = {
   storage: 'preserved' | 'reset';
+  /** Queued mutations can outlive the storage that queued them. Reset means
+   * that some may be gone and that transaction IDs may start over. */
+  queue: 'preserved' | 'reset';
 };
 
 export type AffectedOperationsListener = (

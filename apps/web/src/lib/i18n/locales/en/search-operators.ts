@@ -40,6 +40,7 @@ export default {
   tipInProgress: 'In progress',
   tipTagged: 'Tagged {{name}}',
   tipPhrase: 'Contains “{{words}}”',
+  tipLeaveOut: 'Leaves out “{{words}}”',
   tips: 'Search tips',
   allOperators: 'All search operators',
 } as const;

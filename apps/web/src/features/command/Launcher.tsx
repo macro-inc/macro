@@ -8,6 +8,7 @@ import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-ti
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
@@ -1477,6 +1478,7 @@ export const Launcher = (props: LauncherProps) => (
 const DesktopLauncher = (props: LauncherProps) => {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
+      <DialogClosesOnNavigation />
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass dialog-overlay-open-animation" />
         <Dialog.Content

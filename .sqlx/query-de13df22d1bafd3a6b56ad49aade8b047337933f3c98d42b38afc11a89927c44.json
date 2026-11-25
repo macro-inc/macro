@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FILTER (WHERE named.key <> $2) AS \"count!\" FROM (\n               SELECT key FROM suggestion_topic\n               WHERE generation_id = $1\n               ORDER BY key\n               LIMIT $3\n           ) named",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "de13df22d1bafd3a6b56ad49aade8b047337933f3c98d42b38afc11a89927c44"
+}

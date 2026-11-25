@@ -38,8 +38,10 @@ import {
   SyncSourceStatus,
 } from '@macro-inc/collaboration/collab/source';
 import {
+  $createImageNode,
   $getId,
   $isCustomCodeNode,
+  $isImageNode,
   createPeerIdValidator,
   INTERNAL_TRANSFORMERS,
   NodeReplacements,
@@ -71,6 +73,7 @@ import {
 import { render } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { CollabProvider } from '../collaboration/CollabProvider';
+import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
 import type { MarkdownEditorErrors } from '../constants';
 import {
   createLexicalWrapper,
@@ -78,6 +81,7 @@ import {
   LexicalWrapperContext,
 } from '../context/LexicalWrapperContext';
 import { registerMarkdownEditing } from '../editing/registerMarkdownEditing';
+import { initializeLexical } from '../init';
 import {
   editorFocusSignal,
   editorStateAsMarkdown,
@@ -394,6 +398,35 @@ function Peer() {
       editor().focus();
       return found;
     },
+    insertImageBefore: (prefix, url) => {
+      editor().update(
+        () => {
+          $getRoot()
+            .getChildren()
+            .find((child) => child.getTextContent().startsWith(prefix))
+            ?.insertBefore(
+              $createImageNode({
+                srcType: 'url',
+                url,
+                alt: '',
+                width: 0,
+                height: 0,
+                id: '',
+              })
+            );
+        },
+        { discrete: true }
+      );
+    },
+    scaleImages: (scale) => {
+      editor().update(
+        () => {
+          for (const child of $getRoot().getChildren())
+            if ($isImageNode(child)) child.setScale(scale);
+        },
+        { discrete: true }
+      );
+    },
     toMarkdown: stateToMarkdown,
     roundTrip: markdownRoundTrip,
     selection: () => editor().getEditorState().read($caret),
@@ -402,6 +435,13 @@ function Peer() {
 
   return (
     <main class="p-4 text-ink bg-page">
+      {/* Another split's composer, where focus stays while the document syncs. */}
+      <div
+        contentEditable
+        role="textbox"
+        aria-label="Composer"
+        class="mb-4 min-h-8 border border-edge-muted p-2 outline-none"
+      />
       <Show when={syncSource()}>
         <FuzzEditor
           documentId={documentId}
@@ -487,6 +527,7 @@ function FuzzEditor(props: {
           aria-multiline="true"
           class="w-full outline-none"
         />
+        <DecoratorRenderer editor={editor} />
         <Show when={container()}>
           {(element) => (
             <CollabProvider
@@ -511,6 +552,7 @@ function FuzzEditor(props: {
   );
 }
 
+initializeLexical();
 const root = document.getElementById('root');
 if (!root) throw new Error('index.html has no #root');
 const client = new QueryClient();

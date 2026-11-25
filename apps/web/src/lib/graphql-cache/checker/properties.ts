@@ -10,7 +10,10 @@
  * S1 one engine has a database open at a time.
  * S2 a live page never drops its host, short of a newer build taking over, and
  *    never asks to reload without one.
- * S3 a write that reached the durable queue stays in it.
+ * S3 a write that reached the durable queue stays in it, unless the database
+ *    could not be read: then the page that queued it is told. No page is told
+ *    otherwise, and the database is wiped only after an engine died in a page
+ *    that went on, failed to open it or stopped answering.
  * S4 no older build opens the database after a newer one.
  * S5 a refused request says why, with an error code.
  * S6 nothing throws out of an event handler or a timer.
@@ -129,12 +132,71 @@ function lostWrites(world: World): Violation[] {
       detail: page,
     }));
   const lost = [...world.storage.admitted]
-    .filter(([uuid]) => !queue.has(uuid))
+    .filter(([uuid]) => !queue.has(uuid) && !world.storage.unreadable.has(uuid))
     .map(([uuid, admittedTo]) => ({
       symptom: `S3:queued write lost (${lostBecause(world, admittedTo, scope)})`,
       detail: uuid,
     }));
   return [...neverStored, ...lost];
+}
+
+/**
+ * Pages whose queued write could not be read, and which were not told. One that
+ * had been signed out, or had left its cache to a newer build, when the write
+ * was lost has no host to ask.
+ */
+function untold(world: World): Violation[] {
+  return world.calls
+    .filter(({ page, uuid, issuedAt, issuedTick, moot }) => {
+      const lost = world.storage.unreadable.get(uuid ?? '');
+      if (moot || lost === undefined) return false;
+      const asked = pageOf(world, page);
+      if (!asked || exempt(asked)) return false;
+      const signedOut =
+        issuedTick < asked.sessionTick && asked.sessionTick < lost;
+      const left =
+        asked.reloadAskedAt !== undefined && asked.reloadAskedAt < lost;
+      return (
+        !signedOut && !left && !asked.queueResets.some((at) => at >= issuedAt)
+      );
+    })
+    .map(({ page }) => ({
+      symptom: 'S3:queued write lost and its page not told',
+      detail: page,
+    }));
+}
+
+/** Faults after which a page joins a coordinator anew. It cannot know what
+ * became of the queue meanwhile, so it says that some may be gone. */
+const REJOINS = /^(bfcache|crash-process|late-message|restart-coordinator)/;
+
+function needlesslyTold(world: World): Violation[] {
+  const excused = (fault: string) =>
+    fault === 'corrupt-database' || REJOINS.test(fault);
+  if (world.injected.some(excused)) return [];
+  return world.calls
+    .filter(({ page, uuid, result, settledAt }) => {
+      if (!uuid || result !== 'ok' || settledAt === undefined) return false;
+      return pageOf(world, page)?.queueResets.some((at) => at > settledAt);
+    })
+    .map(({ page }) => ({
+      symptom: 'S3:told the queue was lost, which was kept',
+      detail: page,
+    }));
+}
+
+/** The faults a coordinator answers by wiping the database. */
+const WIPE_CAUSES =
+  /^(crash-engine|fail-open|corrupt-database|require-reset|late-message)/;
+
+function needlessWipes(world: World): Violation[] {
+  if (world.injected.some((fault) => WIPE_CAUSES.test(fault))) return [];
+  return [...world.storage.databases]
+    .filter(([, { wipes }]) => wipes > 0)
+    .map(([scope]) => ({
+      symptom: 'S3:database wiped though no engine failed',
+      detail: scope,
+    }));
 }
 
 function olderOpens(world: World): Violation[] {
@@ -200,8 +262,13 @@ function missingEngine(world: World, pages: Page[]): Violation[] {
     .findLast((coordinator) => coordinator.scope() === scope)
     ?.coreState();
   if (state?.startsWith('active')) return [];
-  if (state?.startsWith('resetting-after-loss') && heldByFrozen(world))
-    return [];
+  // Each attempt to take it over waits, then fails. One whose assets do not
+  // load never gets to wait.
+  const loads = !world.injected.some((fault) => /assets$/.test(fault));
+  const waits =
+    state?.startsWith('resetting-after-loss') ||
+    (state?.startsWith('activating') && loads);
+  if (waits && heldByFrozen(world)) return [];
   return [
     {
       symptom: `L2:no active engine (${state?.replace(/[@:/].*/, '') ?? 'no coordinator'})`,
@@ -231,6 +298,9 @@ export function check(world: World): Violation[] {
     ...retirements(world),
     ...needlessReloads(world),
     ...lostWrites(world),
+    ...untold(world),
+    ...needlesslyTold(world),
+    ...needlessWipes(world),
     ...olderOpens(world),
     ...uncodedRefusals(world),
     ...world.sim.uncaught.map((error) => ({
