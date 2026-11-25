@@ -37,7 +37,21 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `_agent-runtime.nix` builds its `node_modules` from the starter agent's own
   `bun.lock` (one fixed-output fetch), with `@macro-inc/muppet` and
   `@macro-inc/observability` (TypeScript source) and `@macro-inc/sdk` (built
-  against those packages) beside them.
+  against those packages) beside them. The runtime also supplies the starter
+  dependency manifest for service-only compatibility checks. The
+  `macro-agent-runtime-update` root helper stages immutable bundles and
+  keeps the atomic selection and recovery journal in `/home/.macro-agent-runtime`.
+  The ordered boot unit reconciles interruptions before the agent starts
+  and resets the selection when the system image changes. Inspection uses
+  the running agent's mount namespace and a root-owned Git metadata view
+  with isolated configuration. The controller checks the guest journal
+  before accepting a terminal result.
+  The launcher preloads Muppet's `host/maintenance.ts` when present in the
+  selected runtime. The starter's optional bridge calls into it after
+  `markHealthy` and registers detached work. Earlier images and agent repos
+  can still boot, and the updater requires the current invocation's
+  bridge receipt before it sets a fence.
+  See the [rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md).
   `_computer-use-linux.nix` builds computer-use-linux (MIT) from source at a
   pinned release.
 - `files/` holds the enrollment probe script, the agent's `start-agent`,
@@ -186,6 +200,10 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   boot's HEAD, and after 3 the next start
   rolls back with a commit of last-good's tree on top of the broken head,
   which the runtime's next sync pushes, so a pull can't undo it.
+- The guest runtime updater inspects the checkout in a transient systemd
+  unit. It reuses the agent sandbox and disables network and namespaces for
+  inspection. Chromium retains its user namespaces. Boot-time pruning
+  requires an empty agent cgroup because children can survive a restart.
 - The agent's desktop is five system units in that sandbox, none in
   macro's session: `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901),
   `macro-agent-openbox` (what its menu starts stays in the sandbox),
@@ -389,8 +407,8 @@ existing credentials: no new pairing and no Claude login.
   loopback while `network-online.target` never comes: the claim and macrod's
   runtime connection still go through, and neither unit is ordered after it.
 - The agent runtime (`packages/muppet` and the starter agent's packages)
-  reaches agents only in a new image; a harness deploy changes only the
-  seeded starter agent. Release the two together
+  ships with the image. A compatible dev teammate can select a versioned
+  runtime bundle. A harness deploy changes only the seeded starter agent
   (`docs/runbooks/firecracker-computers-rollout.md`).
 - After `packages/starter-agent/bun.lock` changes, update `outputHash` in
   `_agent-runtime.nix` from the fetch derivation's reported `got:` hash.
@@ -418,6 +436,9 @@ existing credentials: no new pairing and no Claude login.
   `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
   muppet API check (the code's `muppetApi` against the image's `apiLevel`), and
   agent-stopped's failure count, against local git repositories.
+- `tests/runtime-bundles/run.sh [image]` boots a disposable Docker agent
+  computer with synthetic input and exercises the systemd update
+  transaction, bridge, rollback and recovery.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;

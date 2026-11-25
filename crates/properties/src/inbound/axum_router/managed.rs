@@ -1,6 +1,5 @@
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::PropertyOwner;
 use models_properties::api::CreatePropertyScope;
 use uuid::Uuid;
 
@@ -15,11 +14,8 @@ impl<S: PropertiesService, A: EntityAccessService, Auth> PropertiesRouterState<S
         scope: CreatePropertyScope,
         display_name: &str,
     ) -> Result<(), PropertiesErr> {
-        if scope == CreatePropertyScope::Team && self.is_managed_team_definition_name(display_name)
-        {
-            return Err(PropertiesErr::ManagedDefinition);
-        }
-        Ok(())
+        self.managed_team_definitions
+            .reject_create(scope, display_name)
     }
 
     pub(super) async fn reject_managed_definition(
@@ -28,20 +24,8 @@ impl<S: PropertiesService, A: EntityAccessService, Auth> PropertiesRouterState<S
         user: &MacroUserIdStr<'_>,
         team: Option<&TeamReceipt>,
     ) -> Result<(), PropertiesErr> {
-        let definition = match self
-            .properties_service
-            .get_property_definition(definition_id, user, team)
+        self.managed_team_definitions
+            .reject_definition(self.properties_service.as_ref(), definition_id, user, team)
             .await
-        {
-            Ok(definition) => definition,
-            Err(PropertiesErr::NotFound) => return Ok(()),
-            Err(err) => return Err(err),
-        };
-        if matches!(definition.owner, PropertyOwner::Team { .. })
-            && self.is_managed_team_definition_name(&definition.display_name)
-        {
-            return Err(PropertiesErr::ManagedDefinition);
-        }
-        Ok(())
     }
 }

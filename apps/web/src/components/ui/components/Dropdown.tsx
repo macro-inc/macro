@@ -146,6 +146,32 @@ function resolvePortalMount(
   return searchRef?.closest<HTMLElement>('.portal-scope') ?? undefined;
 }
 
+/** Shared menu chrome for controls that retain listbox or combobox semantics. */
+function DropdownContentFrame(props: SurfaceProps) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <Surface
+      depth={2}
+      hideBorder
+      {...rest}
+      class={cn(
+        'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
+        local.class
+      )}
+    />
+  );
+}
+
+function DropdownItemFrame(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return <div {...rest} class={cn(ROW_CLASS, local.class)} />;
+}
+
+function DropdownGroupFrame(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return <div {...rest} class={cn('flex flex-col p-1.5', local.class)} />;
+}
+
 function installKeyboardNavigation(el: HTMLElement) {
   const cleanup = addCtrlJKMenuNavigation(el);
   onCleanup(cleanup);
@@ -272,15 +298,9 @@ function DropdownContent(props: DropdownContentProps) {
           />
         </Show>
         <KobalteDropdownMenu.Content
-          class={cn(
-            // Paint the same surface as context menus, including custom
-            // contents (calendar month lists) without a Dropdown.Group.
-            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
-            local.class
-          )}
+          class={local.class}
           depth={local.depth ?? 2}
-          as={Surface}
-          hideBorder
+          as={DropdownContentFrame}
           {...rest}
           onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
@@ -317,13 +337,9 @@ function DropdownSubContent(props: DropdownSubContentProps) {
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
         <KobalteDropdownMenu.SubContent
-          class={cn(
-            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
-            local.class
-          )}
+          class={local.class}
           depth={local.depth ?? 2}
-          as={Surface}
-          hideBorder
+          as={DropdownContentFrame}
           {...rest}
           ref={setContentRef}
         >
@@ -340,7 +356,8 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1.5', local.class)}
+      as={DropdownGroupFrame}
+      class={local.class}
       {...rest}
     />
   );
@@ -654,6 +671,9 @@ export const Dropdown = Object.assign(DropdownRoot, {
   GroupLabel: DropdownGroupLabel,
   RadioItem: DropdownRadioItem,
   Content: DropdownContent,
+  ContentFrame: DropdownContentFrame,
+  GroupFrame: DropdownGroupFrame,
+  ItemFrame: DropdownItemFrame,
   Trigger: DropdownTrigger,
   Group: DropdownGroup,
   Item: DropdownItem,

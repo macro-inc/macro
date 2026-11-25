@@ -568,12 +568,6 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: InputReceivedMetadata;
 } | {
-    event_type: 'agent_session.mentioned';
-    /**
-     * A prompt named other users who can open the session.
-     */
-    metadata: SessionMentionedMetadata;
-} | {
     event_type: 'agent_session.stopped';
     /**
      * The session's live actor is gone.
@@ -19781,34 +19775,6 @@ export type SessionIdentity = {
      * nothing and read as a person.
      */
     source?: SessionSource;
-};
-
-/**
- * A prompt named other users who can open the session. Published when the
- * prompt is accepted, not when it is answered: "come look at this" should
- * not wait for the turn.
- */
-export type SessionMentionedMetadata = {
-    /**
-     * The action carrying the prompt.
-     */
-    action_id: AgentActionId;
-    /**
-     * The session.
-     */
-    identity: SessionIdentity;
-    /**
-     * The users named, already narrowed to those who can open the session
-     * and never including the author.
-     */
-    mentioned: Array<MacroUserIdStr>;
-    mentioned_by?: null | MacroUserIdStr;
-    /**
-     * The channel or document message the prompt was posted as, when it
-     * arrived from a thread rather than the session view. That message
-     * already notified the users it named when it was posted.
-     */
-    origin_message_id?: string | null;
 };
 
 /**

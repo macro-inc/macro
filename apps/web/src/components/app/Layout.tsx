@@ -15,7 +15,7 @@ import {
   companyCreation,
   contactCreation,
 } from '@app/features/crm/creation-adapter';
-import { companyMerge } from '@app/features/crm/crm-merge';
+import { recordMerge } from '@app/features/crm/crm-merge';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -126,9 +126,9 @@ const CreateContactModal = lazyNamed(
   () => import('@app/features/crm/crm-create'),
   'CreateContactModal'
 );
-const CompanyMergeModal = lazyNamed(
+const CrmMergeModal = lazyNamed(
   () => import('@app/features/crm/crm-merge-dialog'),
-  'CompanyMergeModal'
+  'CrmMergeModal'
 );
 
 /** True from the first time `opened` is, so a dialog loads on first open and can animate closed. */
@@ -265,7 +265,7 @@ export function AppChrome(props: ParentProps) {
   const contactDialogUsed = hasOpened(
     () => contactCreation.target() !== undefined
   );
-  const mergeDialogUsed = hasOpened(companyMerge.open);
+  const mergeDialogUsed = hasOpened(recordMerge.open);
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -314,7 +314,7 @@ export function AppChrome(props: ParentProps) {
           </Show>
           <Show when={mergeDialogUsed()}>
             <Suspense>
-              <CompanyMergeModal />
+              <CrmMergeModal />
             </Suspense>
           </Show>
           <Show when={isAddInboxDialogOpen()}>

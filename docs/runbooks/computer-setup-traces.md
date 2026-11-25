@@ -12,7 +12,9 @@ an agent teammate lasts until the agent reports online ([Macro computers: Observ
 
 | Span | Service | Meaning |
 | --- | --- | --- |
+| `team_agents.invite.repo_seed` | authentication_service | Invite-only repository create round trip, including seeding. Inspect the existing repo client and store spans for time within that call. |
 | `purchase` → `reserve` | authentication_service | Purchase; `reserve` holds the persisted parent. |
+| `computer.purchase.invite_phase` | authentication_service | Teammate purchases add `phase=price` for paid price resolution, `phase=billing_lock` for acquisition of the paid purchase guard, and `phase=commit` for the Postgres commit after the computer row and outbox effects are staged. |
 | `computer.purchase.charge` | authentication_service | The purchase's subscription update, run while the guest is created; `outcome` is `charged`, `refused` or `unknown`. |
 | `computer.setup.payment` | authentication_service | Reservation until the charge settled or the comp; overlaps `computer.setup.create`. |
 | `computer.billing.effect` → `computer.billing.charge` / `computer.billing.settle_charge` | authentication_service | Delayed payment recovery, when the request did not settle the charge, and the fence of a computer released while charging. |
@@ -55,6 +57,15 @@ span.computer_id = "<computer uuid>" }`.
 In Datadog, use `operation_name:computer.setup @computer_id:<computer uuid>`,
 and the `computer.setup.phase.duration` / `computer.setup.duration`
 histograms (by `phase`) for distributions.
+
+For teammate invites, read the seed, price, reserve, billing lock, conversion
+and charge spans on the request trace when the purchase settles there. If the
+confirmation worker converts the reservation later, find the commit span
+under its recovery trace using the computer ID on the conversion parent.
+The commit phase measures the Postgres commit call and its acknowledgment.
+An error leaves the commit outcome uncertain. A retry that finds an existing
+computer does not emit another insert commit. The computer row's `created_at`
+is copied from the reservation and marks an earlier point.
 
 ## Rate limit at the intake
 

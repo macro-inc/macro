@@ -1,10 +1,13 @@
+import { ComposerDropTarget } from '@app/features/calendar/components/composer/parts/ComposerDropTarget';
 import { hasEveryoneElseDeclined } from '@app/features/calendar/components/EventContent';
 import { EventDetails } from '@app/features/calendar/components/EventDetails';
+import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
   useCalendarInvitationForwardFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { createCalendarPanelPlacement } from '@app/features/calendar/primitives/create-calendar-panel-placement';
 import {
   type CalendarEvent,
   type CalendarTimeFormat,
@@ -33,6 +36,7 @@ import DownloadSimpleIcon from '@icon/system/regular/download-simple.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
@@ -155,7 +159,7 @@ function EveryoneElseDeclinedNotice(props: {
       <div class="border-edge-muted mx-3 mb-3 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 rounded-lg border bg-active p-3 text-sm text-ink-muted sm:mt-2 sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:text-xs">
         <span
           aria-hidden="true"
-          class="flex size-5 shrink-0 items-center justify-center rounded bg-ink/10 text-ink-muted sm:size-4"
+          class="flex size-5 shrink-0 items-center justify-center rounded bg-control text-ink-muted sm:size-4"
         >
           <ExclamationIcon class="size-3" />
         </span>
@@ -233,7 +237,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               aria-label="Close event details"
               variant="ghost"
               size="icon-md"
-              class="size-11 rounded-full bg-ink/6 text-ink-muted"
+              class="size-11 rounded-full bg-control text-ink-muted"
             >
               <CloseIcon class="size-5 shrink-0" />
             </MobileDrawer.Close>
@@ -244,7 +248,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Copy event"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={() => copyCalendarEventMention(props.event)}
                 >
                   <LinkIcon class="size-5 shrink-0" />
@@ -254,7 +258,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Download .ics"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={() => downloadCalendarEventIcs(props.event)}
                 >
                   <DownloadSimpleIcon class="size-5 shrink-0" />
@@ -264,7 +268,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Forward by email"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={forwardByEmail}
                 >
                   <ArrowBendUpRightIcon class="size-5 shrink-0" />
@@ -276,7 +280,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Edit event"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={openEditor}
                 >
                   <PencilSimpleIcon class="size-5 shrink-0" />
@@ -288,7 +292,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip={deleteEventLabel(props.event)}
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={deleteDialog.open}
                 >
                   <TrashIcon class="size-5 shrink-0" />
@@ -460,6 +464,30 @@ function DeleteEventDialog(
  */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const openEventComposer = useOpenEventComposer();
+  const host = useCalendarComposerHost();
+  let content: HTMLDivElement | undefined;
+  const pinned = () => host?.cardPinned() ?? false;
+  const { drag, docked, dockRect, anchorRect, maxHeight } =
+    createCalendarPanelPlacement({
+      kind: 'event-card',
+      boundary: () => host?.boundary() ?? props.boundary,
+      dock: () => host?.dock(),
+      surface: () => content,
+      anchor: () =>
+        props.anchor.isConnected
+          ? props.anchor.getBoundingClientRect()
+          : undefined,
+      pinned,
+      disabled: () => !host || host.sessions.state.transitioning,
+      onPin: () => host?.setCardPinned(true),
+      onUnpin: () => host?.setCardPinned(false),
+      onStart: () => {
+        host?.setDrag(drag);
+      },
+      onFinish: () => {
+        host?.setDrag(undefined);
+      },
+    });
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
@@ -472,7 +500,13 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
   const openEditor = () => {
-    openEventComposer({ event: props.event });
+    const anchor = props.anchor;
+    openEventComposer({
+      event: props.event,
+      anchorRect: () =>
+        anchor.isConnected ? anchor.getBoundingClientRect() : undefined,
+      returnFocus: anchor,
+    });
     props.onOpenChange(false);
   };
   const forwardEventEmail = useForwardEventEmail();
@@ -484,8 +518,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
 
   return (
     <Popover
-      anchorRef={() => props.anchor}
-      boundary={() => props.boundary}
+      getAnchorRect={anchorRect}
+      boundary={() => host?.boundary() ?? props.boundary}
       open
       onOpenChange={(open) => {
         // Keep the popover mounted while its delete dialog or guest editor
@@ -498,23 +532,35 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         )
           return;
         props.onOpenChange(open);
+        if (!open) host?.setCardPinned(false);
       }}
       placement="right-start"
-      gutter={8}
+      gutter={docked() ? 0 : 8}
       // Flip only to the other side, never to an end alignment: sections
       // that arrive after opening (join requests) change the
       // height, and an end fallback would re-place the popover from below
       // the event to above it. Slide keeps a tall popover in view instead.
-      flip="left-start"
-      slide
-      overlap
+      flip={!docked() && !drag.state.position && 'left-start'}
+      slide={!docked() && !drag.state.position}
+      overlap={!docked()}
       fitViewport
     >
-      <Popover.Portal mount={props.boundary}>
+      <Popover.Portal mount={host?.boundary() ?? props.boundary}>
+        <Show when={drag.state.active && drag.target()}>
+          {(bounds) => (
+            <ComposerDropTarget
+              bounds={bounds()}
+              active={drag.state.overTarget}
+            />
+          )}
+        </Show>
         <Layer depth={3}>
           <Popover.Content
             class="portal-scope z-modal max-w-[var(--kb-popper-content-available-width)] outline-none"
-            onInteractOutside={handleOpenEventOutsidePress}
+            onInteractOutside={(event) => {
+              if (pinned()) event.preventDefault();
+              else handleOpenEventOutsidePress(event);
+            }}
             onOpenAutoFocus={(event) => {
               // Aims can arrive while the keyboard is elsewhere — arrow-key
               // scanning in the inbox previews a calendar notification here,
@@ -539,10 +585,43 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               }
             }}
           >
-            <Popover.Arrow class="fill-surface" />
-            <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,var(--kb-popper-content-available-width,20rem))] max-w-[min(24rem,var(--kb-popper-content-available-width,24rem))] flex-col overflow-hidden menu-surface">
+            <Show when={!docked()}>
+              <Popover.Arrow class="fill-surface" />
+            </Show>
+            <div
+              ref={content}
+              class="flex w-96 max-w-[calc(100vw-32px)] flex-col overflow-hidden menu-surface"
+              style={{
+                height: docked() ? `${dockRect()?.height ?? 0}px` : undefined,
+                width: docked() ? `${dockRect()?.width ?? 384}px` : undefined,
+                'max-height': `${maxHeight()}px`,
+              }}
+            >
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
-              <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
+              <div
+                class="flex shrink-0 cursor-grab touch-none select-none items-center justify-end gap-1 px-2 pt-2"
+                onPointerDown={drag.start}
+              >
+                <div class="min-h-7 flex-1" />
+                <Show when={host}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={
+                      pinned() ? 'Unpin event details' : 'Pin event details'
+                    }
+                    tooltip={
+                      pinned() ? 'Unpin event details' : 'Pin event details'
+                    }
+                    aria-pressed={pinned()}
+                    onClick={() => {
+                      drag.reset();
+                      host?.setCardPinned(!pinned());
+                    }}
+                  >
+                    <SidePanelIcon class="size-4" />
+                  </Button>
+                </Show>
                 <Show when={!props.event.teamProjection}>
                   <Button
                     aria-label="Copy event"

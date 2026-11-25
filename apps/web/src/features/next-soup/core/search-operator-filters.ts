@@ -1,9 +1,12 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
 import {
+  bothTargetAsts,
+  compileToAst,
   defineQueryFilters,
   type Query,
   type QueryState,
+  queryStateFrom,
 } from '../filters/filter-store';
 import {
   DEFAULT_SECTIONS,
@@ -11,7 +14,7 @@ import {
   type SearchIndexId,
 } from './search-filters';
 import {
-  isPhraseQuote,
+  nameAsTyped,
   SEARCH_OPERATOR_TYPES,
   type SearchOperatorBinding,
   type SearchOperatorCallStatus,
@@ -23,7 +26,11 @@ import {
   type SearchOperatorTaskStatus,
   searchOperatorIndexes,
 } from './search-operators';
-import { compileSearchQuery, TAG_SEARCH_TYPES } from './search-query';
+import {
+  compileSearchQuery,
+  searchIndexesFilters,
+  TAG_SEARCH_TYPES,
+} from './search-query';
 
 /**
  * Turns the operators read out of a Search query into the filters the
@@ -82,7 +89,14 @@ export type SearchOperatorFilters = {
   indexes: SearchIndexId[] | undefined;
   /** The operators ask for something no item can be. */
   matchesNothing: boolean;
+  /**
+   * Tag groups beyond the one `state.tags` holds, each matched by any of its
+   * tags, which every item must also meet (`searchOperatorTagAst`).
+   */
+  moreTagGroups: SearchFiltersState['tags'][];
 };
+
+type TargetAstMap = ReturnType<typeof compileToAst>;
 
 const unique = <T>(values: T[]) => [...new Set(values)];
 
@@ -195,18 +209,13 @@ export function searchOperatorFilters(
     ...boundTags(group),
   ]);
   if (tagGroups.some((group) => group.length === 0)) matchesNothing = true;
-  // The view applies one list of tags, any of them or all, so groups of
-  // alternatives that must each hold can't be listed, as the service refuses.
+  // The view's tag filter is one list, any of it or all of it. Groups of
+  // alternatives that must each hold (`tag:a OR tag:b tag:c`) put the first
+  // group there and join the others to it, each by any of its tags.
   const allSingle = tagGroups.every((group) => group.length === 1);
-  if (tagGroups.length > 1 && !allSingle) matchesNothing = true;
-  const tagsById = new Map(
-    tagGroups.flat().map((tag) => [tag.optionId, tag.propertyId])
-  );
-  const tags = [...tagsById].map(([value, propertyId]) => ({
-    propertyId,
-    type: 'select' as const,
-    value,
-  }));
+  const oneList = tagGroups.length <= 1 || allSingle;
+  const [firstGroup = [], ...otherGroups] = tagGroups;
+  const tags = tagFilters(oneList ? tagGroups.flat() : firstGroup);
 
   const indexes = searchOperatorIndexes(read);
   if (indexes.length === 0) matchesNothing = true;
@@ -223,9 +232,44 @@ export function searchOperatorFilters(
     },
     task: { status: taskStatus, priority, assignees, createdBy },
     tags,
-    tagMode: tagGroups.length > 1 ? 'all' : 'any',
+    tagMode: oneList && tagGroups.length > 1 ? 'all' : 'any',
   };
-  return { state, indexes: allIndexes ? undefined : indexes, matchesNothing };
+  return {
+    state,
+    indexes: allIndexes ? undefined : indexes,
+    matchesNothing,
+    moreTagGroups: oneList ? [] : otherGroups.map(tagFilters),
+  };
+}
+
+/** `tags` as the view's tag filters, each option once. */
+function tagFilters(tags: SearchOperatorTag[]): SearchFiltersState['tags'] {
+  const byId = new Map(tags.map((tag) => [tag.optionId, tag.propertyId]));
+  return [...byId].map(([value, propertyId]) => ({
+    propertyId,
+    type: 'select' as const,
+    value,
+  }));
+}
+
+/**
+ * The tag groups `searchOperatorQuery` can't hold, compiled to join the
+ * query it compiles (`bothTargetAsts`): each group matched by any of its
+ * tags, every group required. Empty when there are none.
+ */
+export function searchOperatorTagAst({
+  matchesNothing,
+  moreTagGroups,
+}: SearchOperatorFilters): TargetAstMap {
+  if (matchesNothing) return {};
+  let joined: TargetAstMap = {};
+  for (const tags of moreTagGroups) {
+    const { propf } = compileToAst(
+      queryStateFrom({ include: { tagFilters: tags } })
+    );
+    if (propf) joined = bothTargetAsts(joined, { propf });
+  }
+  return joined;
 }
 
 /**
@@ -236,13 +280,20 @@ export function searchOperatorFilters(
  */
 export function searchOperatorQuery({
   state,
+  indexes,
   matchesNothing,
 }: SearchOperatorFilters): Query {
   // Nothing can match, so the feed is asked for nothing rather than paged
   // through for rows that would all be dropped.
   if (matchesNothing) return defineQueryFilters({});
   const query = compileSearchQuery(state);
-  const include = { ...query.include };
+  // One type's compile keeps the feed to it. Several (`in:#` reads channels
+  // and calls) are kept to their targets together, or the feed pages through
+  // every other kind for rows the view then drops.
+  const include = {
+    ...(indexes && indexes.length > 1 ? searchIndexesFilters(indexes) : {}),
+    ...query.include,
+  };
   // A tag narrows every kind that carries tags, as on the service, while a
   // type's own compile keeps tags to the types whose facets offer them.
   if (state.tags.length) {
@@ -322,8 +373,7 @@ const INDEX_TYPES: Record<SearchIndexId, string> = {
  * A name as the value of a token the field shows: without quotes, which no
  * value can hold, and quoted when it holds whitespace.
  */
-const shownValue = (name: string) =>
-  asValue([...name].filter((char) => !isPhraseQuote(char)).join(''));
+const shownValue = (name: string) => asValue(nameAsTyped(name));
 
 /** Operator text an opener writes, with the ids its bound tokens stand for. */
 export type SearchOperatorText = {

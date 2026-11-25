@@ -228,11 +228,27 @@ const isOneOf = <T extends string>(
 
 const hasWord = (text: string) => /[\p{Alphabetic}\p{N}]/u.test(text);
 
+/**
+ * Whether an operator's value can name something: a letter, a digit, or
+ * another non-ASCII character such as an emoji, so `tag:🔥` is a tag while
+ * ASCII punctuation alone (`tag:-`) stays a word, as the service reads it.
+ */
+const namesSomething = (value: string) =>
+  /[\p{Alphabetic}\p{N}]|[^\p{ASCII}\s]/u.test(value);
+
 /** Quotes a phrase is typed with, as the service reads them. */
 const PHRASE_QUOTES = /["“”„]/;
 
 /** Whether `char` opens or closes a phrase, as the service reads it. */
 export const isPhraseQuote = (char: string) => PHRASE_QUOTES.test(char);
+
+/**
+ * `name` as a typed value can hold it: a query's terms drop the phrase
+ * quotes they're typed with, so a tag named `Q3 "Plan"` is typed as
+ * `tag:"Q3 Plan"`.
+ */
+export const nameAsTyped = (name: string) =>
+  [...name].filter((char) => !isPhraseQuote(char)).join('');
 
 /**
  * The query's terms as the service splits them: by whitespace outside
@@ -287,7 +303,7 @@ function operator(
   const parsed = NAME_AND_VALUE.exec(term);
   if (!parsed) return undefined;
   const [, typedName = '', value = ''] = parsed;
-  if (!hasWord(value)) return undefined;
+  if (!namesSomething(value)) return undefined;
   const name = typedName.toLowerCase();
   if (!isOneOf(SEARCH_OPERATOR_NAMES, name)) return undefined;
   const lowered = value.toLowerCase();
@@ -313,7 +329,7 @@ function operator(
     )
     // `in:` without a `#` names a Mail view or label.
     .with('in', (): SearchOperatorValue | undefined =>
-      value.startsWith('#') && hasWord(value.slice(1))
+      value.startsWith('#') && namesSomething(value.slice(1))
         ? { kind: 'name', name: value.slice(1) }
         : undefined
     )

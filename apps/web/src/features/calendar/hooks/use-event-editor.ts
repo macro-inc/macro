@@ -29,6 +29,8 @@ import {
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
 import { eventGuestOptions } from '../components/composer/guest-options';
+import type { CreatedCalendarEvent } from '../core/composer';
+import type { ComposerMetadataChanges } from '../core/composer-metadata';
 import type { EventReplacementRequest } from '../core/event-replacement';
 import {
   type CalendarEvent,
@@ -146,12 +148,6 @@ function callPlan(
   };
 }
 
-/** A new event's id and the time it was created with. */
-export type CreatedCalendarEvent = {
-  eventId: string;
-  time: EventEditorSubmitValues['time'];
-};
-
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
@@ -228,6 +224,8 @@ export function useEventEditor(props: UseEventEditorProps) {
           provider: calendar?.provider ?? event.calendar.provider,
           capabilities: calendar?.capabilities ?? event.calendar.capabilities,
           label: event.calendar.name || 'Calendar',
+          name: event.calendar.name,
+          accountLabel: calendar?.emailAddress,
           color: event.calendar.color,
           defaultReminders: reminderCalendar?.defaultReminders,
           isPrimary: calendar?.isPrimary ?? event.calendar.isPrimary,
@@ -240,6 +238,8 @@ export function useEventEditor(props: UseEventEditorProps) {
       provider: calendar.provider,
       capabilities: calendar.capabilities,
       label: calendarDisplayLabel(calendar, spansInboxes()),
+      name: calendar.name,
+      accountLabel: calendar.emailAddress,
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
       isPrimary: calendar.isPrimary,
@@ -351,7 +351,8 @@ export function useEventEditor(props: UseEventEditorProps) {
   const editUpdate = (
     event: CalendarEvent,
     values: EventEditorSubmitValues,
-    scope: CalendarUpdateScope | undefined
+    scope: CalendarUpdateScope | undefined,
+    metadata: ComposerMetadataChanges = {}
   ) => {
     const { existingMeetingUrl, cleanContent, wantsMacroCall, conference } =
       callPlan(event, values);
@@ -395,7 +396,9 @@ export function useEventEditor(props: UseEventEditorProps) {
         : [];
     const detailChanges = {
       ...(values.title !== event.title ? { title: values.title } : {}),
-      ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
+      ...(metadata.timeZoneChanged || hasTimeChanged(event, values.time)
+        ? { time: values.time }
+        : {}),
       ...(content.location !== (event.location ?? '')
         ? { location: content.location }
         : {}),
@@ -405,6 +408,8 @@ export function useEventEditor(props: UseEventEditorProps) {
       ...(recurrenceChanged ? { recurrenceLines: values.recurrenceLines } : {}),
       ...(conference ? { conference } : {}),
       ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
+      ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
+      ...(metadata.transparency ? { transparency: metadata.transparency } : {}),
     };
     const updateArgs = {
       eventId: event.eventId,
@@ -440,11 +445,17 @@ export function useEventEditor(props: UseEventEditorProps) {
    */
   const replacementRequest = (
     values: EventEditorSubmitValues,
-    scope?: CalendarUpdateScope
+    scope?: CalendarUpdateScope,
+    metadata: ComposerMetadataChanges = {}
   ): EventReplacementRequest | undefined => {
     const event = props.event();
     if (!event) return undefined;
-    const { patch, recurrenceId } = editUpdate(event, values, scope).updateArgs;
+    const { patch, recurrenceId } = editUpdate(
+      event,
+      values,
+      scope,
+      metadata
+    ).updateArgs;
     return {
       target: {
         eventId: event.eventId,
@@ -459,13 +470,16 @@ export function useEventEditor(props: UseEventEditorProps) {
         attendees: patch.attendees,
         recurrenceLines: patch.recurrenceLines,
         reminders: patch.reminders,
+        ...(patch.visibility ? { visibility: patch.visibility } : {}),
+        ...(patch.transparency ? { transparency: patch.transparency } : {}),
       },
     };
   };
 
   const save = async (
     values: EventEditorSubmitValues,
-    scope?: CalendarUpdateScope
+    scope?: CalendarUpdateScope,
+    metadata: ComposerMetadataChanges = {}
   ) => {
     if (pending()) return;
     setPending(true);
@@ -527,6 +541,10 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
+          ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
+          ...(metadata.transparency
+            ? { transparency: metadata.transparency }
+            : {}),
           onAccepted: closeAccepted,
         });
         // A create still queued behind older writes has only a local id,
@@ -537,7 +555,12 @@ export function useEventEditor(props: UseEventEditorProps) {
         return;
       }
 
-      const { updateArgs, invitedEmails } = editUpdate(event, values, scope);
+      const { updateArgs, invitedEmails } = editUpdate(
+        event,
+        values,
+        scope,
+        metadata
+      );
       const updates = Object.keys(updateArgs.patch).length > 0;
       const invites = invitedEmails.length > 0;
       // A new Macro call is minted by its own request and linked by a second

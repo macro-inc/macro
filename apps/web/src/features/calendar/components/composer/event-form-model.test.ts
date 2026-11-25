@@ -4,6 +4,7 @@ import {
   calendarSelectionToEditorInitialValues,
   defaultEditorInitialValues,
   type EventEditorInitialValues,
+  eventDateValidationError,
   eventHasEnded,
 } from './event-form-model';
 
@@ -19,6 +20,31 @@ function values(
 function localMidnight(date: string): string {
   return new Date(`${date}T00:00`).toISOString();
 }
+
+describe('eventDateValidationError', () => {
+  it('distinguishes incomplete and unparseable endpoints for timed and all-day drafts', () => {
+    expect(eventDateValidationError(values({ start: '' }))).toContain('start');
+    expect(eventDateValidationError(values({ end: '' }))).toContain('end');
+    expect(eventDateValidationError(values({ start: 'not-a-date' }))).toContain(
+      'start'
+    );
+    expect(
+      eventDateValidationError(
+        values({ allDay: true, start: '2026-02-30', end: '2026-03-01' })
+      )
+    ).toContain('start');
+    expect(
+      eventDateValidationError(
+        values({ allDay: true, start: '2026-03-01', end: 'bad' })
+      )
+    ).toContain('end');
+    expect(
+      eventDateValidationError(
+        values({ allDay: true, start: '2026-03-01', end: '2026-03-01' })
+      )
+    ).toBeUndefined();
+  });
+});
 
 describe('new event conferencing', () => {
   it('defaults new events and calendar selections to Macro call', () => {

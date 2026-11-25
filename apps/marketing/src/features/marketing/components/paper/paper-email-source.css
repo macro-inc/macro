@@ -49,6 +49,8 @@
 
 /* Preserve Rahul's focused crop; keep both callouts in view on a phone. */
 .paper-email-source-1 { --color-ui-canvas:#000; --color-ui-blue-ink:var(--email-source-accent); }
+/* The edge fades blend into the page, so on the light palette they use its color. */
+html[data-theme-light='true'] .paper-email-source-1 { --color-ui-canvas:var(--color-page, var(--b0)); }
 .paper-email-source-1, .paper-email-source-2 { background-color:transparent; }
 .paper-feature-art[data-compact=true] .paper-email-source-2,
 .paper-feature-art[data-compact=true] .paper-email-source-40,
@@ -63,5 +65,6 @@
 .paper-feature-art[data-compact=true] .paper-email-source-48 { left:134.9px; }
 .paper-feature-art[data-compact=true] .paper-email-source-45 { font-size:14px; }
 
-/* Product UI remains dark against this page’s black canvas, like the interactive demos. */
-.paper-email-source-1 { --color-ui-accent:oklch(70% 0.120 250); --color-ui-avatar-bg:oklch(38.8% 0 0); --color-ui-avatar-content:#FFFFFF; --color-ui-border-secondary:oklch(100% 0 0 / 12%); --color-ui-button-primary-bg:#FFFFFF; --color-ui-button-primary-ink:#000000; --color-ui-button-secondary-bg:oklch(100% 0 0 / 8%); --color-ui-button-secondary-pressed:oklch(100% 0 0 / 16%); --color-ui-content-primary:oklch(100% 0 0); --color-ui-content-secondary:oklch(83% 0 0); --color-ui-content-tertiary:#BEBEBE; --color-ui-floating-edge:oklch(100% 0 0 / 10%); --color-ui-glass-edge:oklch(100% 0 0 / 8%); --color-ui-glass-highlight:oklch(100% 0 0 / 8%); --color-ui-surface-floating:oklch(19.5% 0 0); --color-ui-white:#FFFFFF; }
+/* On the dark palette the product UI stays dark against the black canvas, like
+   the interactive demos. The light palette keeps paper-feature-art's light tokens. */
+html:not([data-theme-light='true']) .paper-email-source-1 { --color-ui-accent:oklch(70% 0.120 250); --color-ui-avatar-bg:oklch(38.8% 0 0); --color-ui-avatar-content:#FFFFFF; --color-ui-border-secondary:oklch(100% 0 0 / 12%); --color-ui-button-primary-bg:#FFFFFF; --color-ui-button-primary-ink:#000000; --color-ui-button-secondary-bg:oklch(100% 0 0 / 8%); --color-ui-button-secondary-pressed:oklch(100% 0 0 / 16%); --color-ui-content-primary:oklch(100% 0 0); --color-ui-content-secondary:oklch(83% 0 0); --color-ui-content-tertiary:#BEBEBE; --color-ui-floating-edge:oklch(100% 0 0 / 10%); --color-ui-glass-edge:oklch(100% 0 0 / 8%); --color-ui-glass-highlight:oklch(100% 0 0 / 8%); --color-ui-surface-floating:oklch(19.5% 0 0); --color-ui-white:#FFFFFF; }

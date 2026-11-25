@@ -283,15 +283,21 @@ describe('searchOperatorSpans', () => {
   });
 
   it('draws a bound token as an operator', () => {
+    // A tag named with ASCII punctuation alone reads as a word when typed.
     const bindings = [
-      { token: 'tag:🔥', tags: [{ propertyId: 'tags-1', optionId: 'fire-1' }] },
+      { token: 'tag:--', tags: [{ propertyId: 'tags-1', optionId: 'dash-1' }] },
     ];
     expect(
-      searchOperatorSpans('launch tag:🔥', bindings).map(({ start, end }) =>
-        'launch tag:🔥'.slice(start, end)
+      searchOperatorSpans('launch tag:--', bindings).map(({ start, end }) =>
+        'launch tag:--'.slice(start, end)
       )
-    ).toEqual(['tag:🔥']);
-    expect(drawn('launch tag:🔥')).toEqual([]);
+    ).toEqual(['tag:--']);
+    expect(drawn('launch tag:--')).toEqual([]);
+  });
+
+  it('reads a tag or channel named by an emoji alone', () => {
+    expect(drawn('launch tag:🔥 in:#🚀')).toEqual(['tag:🔥', 'in:#🚀']);
+    expect(drawn('launch tag:- in:#-')).toEqual([]);
   });
 
   it('draws an operator the rest of the query lets it be', () => {

@@ -96,6 +96,23 @@ async fn names_resolve_ignoring_case() {
 }
 
 #[tokio::test]
+async fn a_tag_is_named_as_typed_quotes_left_out_and_by_an_emoji_alone() {
+    let service = OperatorNamesService(FakeNames {
+        tags: vec![tag("Q3 \"Plan\"", 1), tag("🔥", 2)],
+        ..FakeNames::default()
+    });
+    let names = TypedNames {
+        tags: vec!["q3 plan".to_string(), "🔥".to_string()],
+        ..TypedNames::default()
+    };
+
+    let named = service.resolve(&viewer(), &names).await.unwrap();
+
+    assert_eq!(named.tag("q3 plan"), [Uuid::from_u128(1)]);
+    assert_eq!(named.tag("🔥"), [Uuid::from_u128(2)]);
+}
+
+#[tokio::test]
 async fn a_name_that_reaches_nothing_has_no_ids() {
     let service = OperatorNamesService(FakeNames {
         tags: vec![tag("Travel", 3)],

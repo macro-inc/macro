@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                SELECT 1 FROM agent_runtime_update WHERE computer_id = $1\n                AND (outcome IS NULL OR ($2 IS FALSE AND outcome = 'needs_operator' AND cleared_at IS NULL))\n            ) AS \"pending!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pending!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "82ba5c6b21417b066c25e2c6160c80c98997b578536783621b6bcd23799654d3"
+}

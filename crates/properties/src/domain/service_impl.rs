@@ -44,7 +44,8 @@ use super::events::{
 };
 use super::metadata;
 use super::model::{
-    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    CreatePropertyDefinitionOutcome, CreatePropertyOptionWithIdOutcome, EditReceipt,
+    EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyMutationSnapshot,
     EntityPropertyOptionSelection, EntityPropertyOptionUpdate, PropertyAccessReceiptExt,
     PropertyDefinitionOwner, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
     PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagScope, TagSet,
@@ -412,6 +413,66 @@ where
             .ok_or(PropertiesErr::NotFound)
     }
 
+    /// Why an option delete found nothing under the definition it named:
+    /// [`PropertiesErr::OptionInAnotherDefinition`] when `found` lives on
+    /// under another definition the caller can read (its own, its team's or a
+    /// built-in one, as `get_property_options` decides;
+    /// a promoted tag keeps its id), which a delete sent again after a lost
+    /// reply must not take for its own deletion; otherwise `gone`, so a
+    /// caller learns nothing of options it cannot see.
+    async fn elsewhere_or(
+        &self,
+        found: Option<PropertyOption>,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Option<Uuid>,
+        gone: PropertiesErr,
+    ) -> Result<PropertiesErr, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let Some(option) = found else {
+            return Ok(gone);
+        };
+        let owned = self
+            .repository
+            .get_property_definition_with_owner(option.property_definition_id, user_id, team_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .is_some();
+        // The owner lookup leaves out built-in definitions, which every caller reads.
+        let visible = owned
+            || self
+                .repository
+                .get_property_definition(option.property_definition_id)
+                .await
+                .map_err(anyhow::Error::from)?
+                .is_some_and(|definition| definition.is_system);
+        Ok(if visible {
+            PropertiesErr::OptionInAnotherDefinition
+        } else {
+            gone
+        })
+    }
+
+    /// [`Self::elsewhere_or`] for an option read again now.
+    async fn missing_option(
+        &self,
+        option_id: Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Option<Uuid>,
+        gone: PropertiesErr,
+    ) -> Result<PropertiesErr, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let found = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        self.elsewhere_or(found, user_id, team_id, gone).await
+    }
+
     /// Resolve the personal tag definition that owns `option_id`, rejecting
     /// options the caller does not own and options that are not labels.
     async fn owned_personal_tag_option(
@@ -595,7 +656,7 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn list_caller_tag_sets(
         &self,
         user_id: &str,
@@ -1205,7 +1266,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn get_property_definition(
         &self,
         property_definition_id: Uuid,
@@ -1234,7 +1295,7 @@ where
         Ok(definition)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn list_property_definitions(
         &self,
         team: Option<&TeamReceipt>,
@@ -1286,7 +1347,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(skip(self, team, request), fields(display_name = %request.display_name), err)]
+    #[tracing::instrument(skip(self, team, request, user_id), fields(display_name = %request.display_name), err)]
     async fn create_property_definition(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1328,7 +1389,7 @@ where
             _ => Vec::new(),
         };
 
-        let property = self
+        let property = match self
             .repository
             .create_property_definition(
                 owner,
@@ -1339,7 +1400,16 @@ where
                 property_options,
             )
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(anyhow::Error::from)?
+        {
+            CreatePropertyDefinitionOutcome::Created(property) => property,
+            CreatePropertyDefinitionOutcome::DuplicateName => {
+                return Err(PropertiesErr::DuplicateDefinitionName);
+            }
+            CreatePropertyDefinitionOutcome::DuplicateOptionValue => {
+                return Err(PropertiesErr::DuplicateOptionValue);
+            }
+        };
 
         tracing::info!(
             property_id = %property.id,
@@ -1352,7 +1422,7 @@ where
         Ok(property)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn delete_property_definition(
         &self,
         property_definition_id: Uuid,
@@ -1400,7 +1470,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn get_property_options(
         &self,
         property_definition_id: Uuid,
@@ -1433,7 +1503,7 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn get_property_options_batch(
         &self,
         property_definition_ids: &[Uuid],
@@ -1451,7 +1521,7 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(skip(self, team, request), fields(request = ?request), err)]
+    #[tracing::instrument(skip(self, team, request, user_id), fields(request = ?request), err)]
     async fn add_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1478,6 +1548,75 @@ where
         self.publish_property_event(Self::property_option_created_event(&option, user_id));
 
         Ok(option)
+    }
+
+    #[tracing::instrument(
+        skip(self, user_id, team, request),
+        fields(request = ?request),
+        err
+    )]
+    async fn add_property_option_with_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        if option_id.is_nil() {
+            return Err(PropertiesErr::Validation(
+                "option id must not be nil".to_string(),
+            ));
+        }
+        let (display_order, option_value, color) = self
+            .prepare_property_option(user_id, team, property_definition_id, request)
+            .await?;
+
+        match self
+            .repository
+            .create_property_option_with_id(
+                option_id,
+                property_definition_id,
+                display_order,
+                option_value,
+                color,
+            )
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            CreatePropertyOptionWithIdOutcome::Created(option) => {
+                tracing::info!(
+                    option_id = %option.id,
+                    display_order = option.display_order,
+                    "successfully added property option"
+                );
+                self.publish_property_event(Self::property_option_created_event(&option, user_id));
+                return Ok(option);
+            }
+            CreatePropertyOptionWithIdOutcome::DuplicateValue => {
+                return Err(PropertiesErr::DuplicateOptionValue);
+            }
+            CreatePropertyOptionWithIdOutcome::IdTaken => {}
+        }
+
+        // The id is taken. The client minted it for this add, so an option of
+        // this definition under it is this add's own, made by an earlier try:
+        // answer with it as it stands now, renamed or recolored since or not.
+        // An id on another definition's option is refused.
+        let existing = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        match existing {
+            Some(option) if option.property_definition_id == property_definition_id => {
+                tracing::info!(option_id = %option.id, "property option add replayed");
+                Ok(option)
+            }
+            _ => Err(PropertiesErr::Validation(
+                "option id is already in use".to_string(),
+            )),
+        }
     }
 
     async fn get_or_create_property_option(
@@ -1509,7 +1648,7 @@ where
         Ok(result.option)
     }
 
-    #[tracing::instrument(skip(self, team, request), fields(request = ?request), err)]
+    #[tracing::instrument(skip(self, team, request, user_id), fields(request = ?request), err)]
     async fn update_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1580,7 +1719,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip(self, team, plan), err)]
+    #[tracing::instrument(skip(self, team, plan, user_id), err)]
     async fn replace_property_options(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1654,7 +1793,7 @@ where
         Ok(after)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn delete_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1662,12 +1801,18 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
-        self.owned_modifiable_definition(
-            property_definition_id,
-            user_id,
-            team_id_from_receipt(team),
-        )
-        .await?;
+        let team_id = team_id_from_receipt(team);
+        match self
+            .owned_modifiable_definition(property_definition_id, user_id, team_id)
+            .await
+        {
+            Err(PropertiesErr::NotFound) => {
+                return Err(self
+                    .missing_option(option_id, user_id, team_id, PropertiesErr::NotFound)
+                    .await?);
+            }
+            other => other?,
+        };
 
         let option = self
             .repository
@@ -1677,15 +1822,27 @@ where
             .ok_or(PropertiesErr::OptionNotFound)?;
 
         if option.property_definition_id != property_definition_id {
-            return Err(PropertiesErr::OptionNotFound);
+            return Err(self
+                .elsewhere_or(
+                    Some(option),
+                    user_id,
+                    team_id,
+                    PropertiesErr::OptionNotFound,
+                )
+                .await?);
         }
 
-        let mutations = self
+        let Some(mutations) = self
             .repository
             .delete_property_option(property_definition_id, option_id)
             .await
             .map_err(anyhow::Error::from)?
-            .ok_or(PropertiesErr::OptionNotFound)?;
+        else {
+            // Moved (a promotion) or deleted since it was read.
+            return Err(self
+                .missing_option(option_id, user_id, team_id, PropertiesErr::OptionNotFound)
+                .await?);
+        };
 
         tracing::info!(
             entities_updated = mutations.len(),
@@ -1697,7 +1854,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn list_tag_sets(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1724,7 +1881,7 @@ where
         Ok(sets)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn ensure_tag_set(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1751,7 +1908,7 @@ where
         self.build_tag_set(scope, Some(result.definition)).await
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn promote_tag_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1791,7 +1948,7 @@ where
         Ok(remap.option)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn merge_tag_option(
         &self,
         user_id: &MacroUserIdStr<'_>,

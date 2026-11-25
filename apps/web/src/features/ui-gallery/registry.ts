@@ -2,7 +2,7 @@ import { extractTypeSource } from './source';
 import { type ComponentDoc, DOC_CATEGORIES, type DocCategory } from './types';
 
 /**
- * Every `.docs.tsx` file under `components/ui`, discovered at build time.
+ * UI, shared date/time, and calendar component docs, discovered at build time.
  * Adding a page is adding a file — there is no list to keep up to date.
  *
  * Modules load eagerly because the sidebar needs each doc's name and category
@@ -14,18 +14,30 @@ import { type ComponentDoc, DOC_CATEGORIES, type DocCategory } from './types';
  * are relative (same constraint as IconGallery).
  */
 const docModules = import.meta.glob<{ default: ComponentDoc }>(
-  '../../components/ui/**/*.docs.tsx',
+  [
+    '../../components/ui/**/*.docs.tsx',
+    '../../components/date-time-range/**/*.docs.tsx',
+    '../../components/app/mobile/MobileSheetParts.docs.tsx',
+    '../../components/app/mobile/wheel-picker/*.docs.tsx',
+    '../../features/calendar/components/**/*.docs.tsx',
+  ],
   { eager: true }
 );
 
 const docSources = import.meta.glob<string>(
-  '../../components/ui/**/*.docs.tsx',
+  [
+    '../../components/ui/**/*.docs.tsx',
+    '../../components/date-time-range/**/*.docs.tsx',
+    '../../components/app/mobile/MobileSheetParts.docs.tsx',
+    '../../components/app/mobile/wheel-picker/*.docs.tsx',
+    '../../features/calendar/components/**/*.docs.tsx',
+  ],
   { query: '?raw', import: 'default' }
 );
 
 /** Component files backing the `@ui` barrel, used by the coverage report. */
 const uiComponentModules = import.meta.glob(
-  '../../components/ui/components/*.tsx'
+  '../../components/ui/components/**/*.tsx'
 );
 
 /**
@@ -34,7 +46,12 @@ const uiComponentModules = import.meta.glob(
  * the page you open pays for it.
  */
 const componentSources = import.meta.glob<string>(
-  '../../components/ui/components/*.tsx',
+  [
+    '../../components/ui/components/**/*.tsx',
+    '../../components/date-time-range/**/*.tsx',
+    '../../components/app/mobile/Sheet*.tsx',
+    '../../features/calendar/components/**/*.tsx',
+  ],
   { query: '?raw', import: 'default' }
 );
 
@@ -168,7 +185,7 @@ export function coverageRows(): CoverageRow[] {
 }
 
 /**
- * Finds a type declaration anywhere in the `@ui` component sources. Not limited
+ * Finds a type declaration anywhere in the discovered component sources. Not limited
  * to the page's own sibling, so a page can surface a type it re-exports (Panel
  * documents `SurfaceProps`, which lives in `Surface.tsx`).
  */

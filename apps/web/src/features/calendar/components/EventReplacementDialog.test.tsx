@@ -56,11 +56,11 @@ function showPreview(preview: Partial<EventReplacementPreview>) {
 it('reads a one-day all-day replacement as that one day', () => {
   showPreview({ startsAt: '2030-01-04', endsAt: '2030-01-05' });
 
-  expect(screen.getByText('Fri, January 4 · All day')).toBeTruthy();
+  expect(screen.getByText('Fri, Jan 4 · All day')).toBeTruthy();
 });
 
 it('reads a two-day all-day replacement as its two days', () => {
   showPreview({ startsAt: '2030-01-04', endsAt: '2030-01-06' });
 
-  expect(screen.getByText('Jan 4–Jan 5 · All day')).toBeTruthy();
+  expect(screen.getByText('Jan 4 – Jan 5 · All day')).toBeTruthy();
 });

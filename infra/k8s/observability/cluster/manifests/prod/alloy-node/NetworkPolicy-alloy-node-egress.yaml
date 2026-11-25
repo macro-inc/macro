@@ -31,6 +31,8 @@ spec:
           protocol: TCP
         - port: 8080
           protocol: TCP
+        - port: 12345
+          protocol: TCP
       to:
         - namespaceSelector:
             matchLabels:
@@ -43,6 +45,7 @@ spec:
                   - loki
                   - tempo
                   - mimir
+                  - alloy
   podSelector: {}
   policyTypes:
     - Egress
