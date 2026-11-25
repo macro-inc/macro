@@ -61,6 +61,9 @@ async function follow(seed: number) {
     commit({ seq: String(seq), watermark: { kind: 'lower' } });
 
   let connected = false;
+  // The server pushes changes a while after the socket connected.
+  let listening = false;
+  let listen: ReturnType<typeof setTimeout> | undefined;
   const runtime = createChannelSyncRuntime({
     host: {
       ...engine.host,
@@ -138,6 +141,9 @@ async function follow(seed: number) {
   runtime.onChanged(CHANNEL_ID, read);
   const connect = () => {
     connected = true;
+    listen = setTimeout(() => {
+      listening = true;
+    }, below(2000));
     runtime.onConnected();
     fireAndForget(read(), 'test');
   };
@@ -169,7 +175,7 @@ async function follow(seed: number) {
       28,
       () => {
         head += 1;
-        return connected && push(head);
+        return listening && push(head);
       },
     ],
     [8, () => lower(head - below(8))],
@@ -186,6 +192,8 @@ async function follow(seed: number) {
       () => {
         if (!connected) return connect();
         connected = false;
+        listening = false;
+        clearTimeout(listen);
         runtime.onDisconnected();
       },
     ],

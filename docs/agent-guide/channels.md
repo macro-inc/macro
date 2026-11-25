@@ -2153,8 +2153,9 @@ bundle), a channel opens from the device: its history and threads show without a
 request once the device holds them, and opening the same channel again reads
 nothing from the server while the connection stays up and the device is known to
 hold every change. After a drop, once the device's database was replaced over its
-stored data, or after another tab replaced the channel, it asks the server only
-for the changes since the device last heard. Sends, edits, deletes and reactions go through the
+stored data, or after another tab replaced the channel, it asks the server for
+the changes since the device last heard, or, when the server no longer keeps
+them all, for the latest page, which replaces what the device held. Sends, edits, deletes and reactions go through the
 durable cache mutation queue as `SendChannelMessage`, `EditChannelMessage`,
 `DeleteChannelMessage` and `ReactToChannelMessage`, and go out when the
 connection returns. A view that reads from the device shows a change another tab of

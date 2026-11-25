@@ -10,6 +10,7 @@ import {
   type ChannelChangesPage,
   type ChannelSyncRuntime,
   createChannelSyncRuntime,
+  LISTENING_MS,
   MAX_CHANGE_PAGES,
 } from '../channel-sync-runtime';
 import { channelEngine } from './channel-engine';
@@ -574,6 +575,36 @@ describe('catch-up', () => {
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
   });
 
+  it('keeps what another tab got while the server answered that it was too far behind', async () => {
+    const answer = Promise.withResolvers<ChannelChangesPage>();
+    const { engine, runtime, asked, replaceWithLatest } = setup('5', (after) =>
+      after === '5' ? answer.promise : changes(Number(after))
+    );
+    runtime.onConnected();
+    const open = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    engine.apply({ channelId: CHANNEL_ID, seq: '900', reset: true });
+    answer.resolve(changes(900, { resetRequired: true }));
+    await expect(open).resolves.toBe('applied');
+    expect(asked()).toEqual(['5', '900']);
+    expect(replaceWithLatest).not.toHaveBeenCalled();
+  });
+
+  it('replaces nothing of a channel dropped while the server answered that it was too far behind', async () => {
+    const answer = Promise.withResolvers<ChannelChangesPage>();
+    const { engine, runtime, replaceWithLatest } = setup(
+      '5',
+      () => answer.promise
+    );
+    runtime.onConnected();
+    const open = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    engine.setSeq(null);
+    answer.resolve(changes(900, { resetRequired: true }));
+    await expect(open).resolves.toBe('not-held');
+    expect(replaceWithLatest).not.toHaveBeenCalled();
+  });
+
   it('stops when the channel is dropped under the request', async () => {
     const { engine, runtime, asked } = setup('5', () => {
       engine.setSeq(null);
@@ -788,6 +819,46 @@ describe('connections', () => {
     runtime.onConnected();
     await runtime.ensureCurrent(CHANNEL_ID);
     expect(asked()).toEqual(['5', '6']);
+  });
+
+  it('asks once more for what changed before the server pushed changes over the connection', async () => {
+    let head = 5;
+    const { engine, runtime, asked } = setup('5', () => changes(head));
+    runtime.open(CHANNEL_ID);
+    runtime.onConnected();
+    await debounced();
+    expect(asked()).toEqual(['5']);
+    // Changed after the server answered, and pushed to no one.
+    head = 6;
+    await vi.advanceTimersByTimeAsync(LISTENING_MS);
+    await debounced();
+    expect(engine.seq()).toBe('6');
+    expect(asked()).toEqual(['5', '5']);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+    await vi.advanceTimersByTimeAsync(10 * LISTENING_MS);
+    expect(asked()).toEqual(['5', '5']);
+  });
+
+  it('asks again, once opened, for a channel off screen read before the server pushed changes', async () => {
+    const { runtime, asked } = setup('5');
+    runtime.onConnected();
+    await runtime.ensureCurrent(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    expect(asked()).toEqual(['5']);
+    await vi.advanceTimersByTimeAsync(LISTENING_MS);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    expect(asked()).toEqual(['5', '5']);
+  });
+
+  it('does not trust a read sent before the server surely pushed changes', async () => {
+    const { runtime, read, asked } = setup('5');
+    runtime.onConnected();
+    const sent = runtime.epoch();
+    await vi.advanceTimersByTimeAsync(LISTENING_MS);
+    read('5', sent);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    expect(asked()).toEqual(['5']);
   });
 
   it('forgets every channel after a storage reset', async () => {

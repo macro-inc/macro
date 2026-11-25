@@ -36,6 +36,12 @@ export const CATCH_UP_JITTER_MS = 250;
 export const CATCH_UP_RETRY_MS = 2_000;
 export const CATCH_UP_RETRY_MAX_MS = 60_000;
 /**
+ * A connection is up before the server pushes changes over it, and nothing says
+ * when it does: what changes in between is in no frame. Past this wait it
+ * surely does, and the channels are asked for once more.
+ */
+export const LISTENING_MS = 5_000;
+/**
  * How long one page of a catch-up may take, stored on the device included. It
  * holds the channel's other catch-ups; past this it fails and is tried again.
  */
@@ -83,7 +89,7 @@ type ChannelState = {
   checking: boolean;
   /**
    * The newest sequence the server said it was at, asked since the socket
-   * connected: every later change arrives as a frame.
+   * connected; past `LISTENING_MS`, every later change arrives as a frame.
    */
   serverSeq: bigint | undefined;
   /** The newest frame seen since the socket connected, held or not. */
@@ -136,7 +142,10 @@ export interface ChannelSyncRuntime {
   connected(): boolean;
   /** A view opened the channel; returns its release. */
   open(channelId: string): () => void;
-  /** Changes when the socket drops or connects; taken before a server read. */
+  /**
+   * Changes when the socket drops, connects or surely pushes every change;
+   * taken before a server read.
+   */
   epoch(): number;
   /** A server read of the channel was answered. */
   noteServerRead(channelId: string, read: ChannelServerRead): void;
@@ -207,6 +216,7 @@ export function createChannelSyncRuntime(
   const listeners = new Map<string, Set<(change: ChannelViewChange) => void>>();
   let isConnected = false;
   let socketEpoch = 0;
+  let listening: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
 
   const stateOf = (channelId: string): ChannelState => {
@@ -257,17 +267,22 @@ export function createChannelSyncRuntime(
     Effect.runSync(effect.pipe(Effect.forkIn(scope)));
 
   /** Asks the device for the channel's watermark. */
-  const readSeq = async (channelId: string, state: ChannelState) => {
-    const { moves } = state;
-    const head = await deps.host.channelTimeline({ channelId, limit: 1 });
-    const seq = head.kind === 'page' ? parseSeq(head.seq) : null;
-    // Answered after a read that began later.
-    if (moves >= state.readAt) {
-      state.readAt = moves;
-      state.seq = seq;
-    }
-    return seq;
-  };
+  const readSeq = (channelId: string, state: ChannelState) =>
+    Telemetry.span('channel.read_watermark', async (span) => {
+      span.setAttr('channel.id', channelId);
+      const { moves } = state;
+      const head = await deps.host.channelTimeline({ channelId, limit: 1 });
+      const seq = head.kind === 'page' ? parseSeq(head.seq) : null;
+      const superseded = moves < state.readAt;
+      span.setAttr('watermark.held', seq !== null);
+      span.setAttr('watermark.superseded', superseded);
+      // Answered after a read that began later.
+      if (!superseded) {
+        state.readAt = moves;
+        state.seq = seq;
+      }
+      return seq;
+    });
 
   const isBehind = (state: ChannelState) =>
     typeof state.seq === 'bigint' && lacks(state, state.seq);
@@ -432,9 +447,9 @@ export function createChannelSyncRuntime(
     span.setAttr('channel.id', channelId);
     span.setAttr('catch_up.reason', reason);
     const epoch = socketEpoch;
-    const watermark = Effect.tryPromise(() => readSeq(channelId, state)).pipe(
-      Effect.timeout(CATCH_UP_PAGE_BUDGET_MS)
-    );
+    const watermark = Effect.tryPromise(() =>
+      span.run(() => readSeq(channelId, state))
+    ).pipe(Effect.timeout(CATCH_UP_PAGE_BUDGET_MS));
     const from = yield* watermark;
     if (from === null) return 'not-held' as const;
     if (isConnected && !lacks(state, from)) return 'current' as const;
@@ -455,7 +470,14 @@ export function createChannelSyncRuntime(
           outcome: yield* storedIn(span, 'page', answer.stored),
         };
       }).pipe(Effect.timeout(CATCH_UP_PAGE_BUDGET_MS));
-      if (!outcome) break;
+      if (!outcome) {
+        const held = yield* watermark;
+        if (held === null) return 'not-held' as const;
+        // Another tab moved it on meanwhile: read again from where it is.
+        if (held <= after) break;
+        after = held;
+        continue;
+      }
       changes +=
         delta.messages.length +
         delta.activities.length +
@@ -565,6 +587,16 @@ export function createChannelSyncRuntime(
     state.pendingAt = undefined;
   };
 
+  /** What the server said before it surely pushed every change proves nothing. */
+  const askAgain = () => {
+    socketEpoch += 1;
+    for (const [channelId, state] of channels) {
+      state.serverSeq = undefined;
+      // One already waiting asks too.
+      if (!state.pending) scheduleCatchUp(channelId, 'reconnect');
+    }
+  };
+
   return {
     onFrame(frame) {
       if (disposed) return;
@@ -579,6 +611,7 @@ export function createChannelSyncRuntime(
     onDisconnected() {
       isConnected = false;
       socketEpoch += 1;
+      clearTimeout(listening);
       for (const state of channels.values()) {
         state.serverSeq = undefined;
         state.seenSeq = undefined;
@@ -589,6 +622,8 @@ export function createChannelSyncRuntime(
     onConnected() {
       if (disposed) return;
       isConnected = true;
+      clearTimeout(listening);
+      listening = setTimeout(askAgain, LISTENING_MS);
       // A catch-up or read begun while the socket was down missed frames
       // this connection did not send: none of them marks the channel current.
       socketEpoch += 1;
@@ -666,6 +701,7 @@ export function createChannelSyncRuntime(
     },
     dispose() {
       disposed = true;
+      clearTimeout(listening);
       stopChanges();
       Effect.runFork(Scope.close(scope, Exit.void));
       channels.clear();
