@@ -111,4 +111,9 @@ State ownership, reactivity, and async error handling.
   `@core/util/onElementConnect`, which runs the callback under the caller's
   owner, and register cleanup for setup-time resources (plugins, debounced
   saves) at setup, not in that callback. Enforced by ast-grep
-  `ts-/tsx-no-ownerless-element-connect`, CI error.
+  `ts-/tsx-no-ownerless-element-connect`, CI error. Code after an `await`
+  has no owner either: never call a hook (`useMutation`, a `use*Query` or
+  `use*Mutation`) there or in a handler. Its computations subscribe to the
+  signals of every view they read and keep those views alive after they
+  close. Run such a mutation through a module-scope `MutationObserver` over
+  module-scope options, as `recordHistoryView` in `queries/history` does.
