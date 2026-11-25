@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, State, rejection::JsonRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -76,19 +76,25 @@ pub struct VerifiedSessionLoginRequest {
 pub async fn verified_handler(
     State(ctx): State<ApiContext>,
     cookies: Cookies,
-    Json(request): Json<VerifiedSessionLoginRequest>,
+    request: Result<Json<VerifiedSessionLoginRequest>, JsonRejection>,
 ) -> Result<Response, Response> {
-    let verifier = CodeVerifier::parse(request.verifier).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                message: e.to_string().into(),
-            }),
-        )
-            .into_response()
-    })?;
+    let Json(request) = request.map_err(bad_request)?;
+    let verifier = CodeVerifier::parse(request.verifier).map_err(bad_request)?;
     let challenge = CodeChallenge::of(&verifier);
     sign_in_with_session_code(&ctx, &request.session_code, Some(&challenge), cookies).await
+}
+
+/// A request this route cannot read (no JSON, a missing field, a malformed
+/// verifier) answers 400 with an `ErrorResponse`, as documented, before any
+/// code is looked up.
+fn bad_request(error: impl std::fmt::Display) -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse {
+            message: error.to_string().into(),
+        }),
+    )
+        .into_response()
 }
 
 async fn sign_in_with_session_code(

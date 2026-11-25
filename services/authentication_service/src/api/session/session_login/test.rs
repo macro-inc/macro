@@ -245,3 +245,39 @@ async fn bound_redemption_telemetry_carries_no_code_token_or_verifier() {
         assert!(!text.contains(secret), "{secret} reached telemetry: {text}");
     }
 }
+
+/// What `verified_handler` answers for a body it cannot read: the extractor
+/// sees the request first, and its rejection must become the documented 400.
+async fn read_verified_request(body: &str, json: bool) -> Response {
+    use axum::extract::FromRequest;
+    let mut request = axum::http::Request::post("/session/login");
+    if json {
+        request = request.header(axum::http::header::CONTENT_TYPE, "application/json");
+    }
+    let request = request
+        .body(axum::body::Body::from(body.to_owned()))
+        .unwrap();
+    match Json::<VerifiedSessionLoginRequest>::from_request(request, &()).await {
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(rejection) => bad_request(rejection),
+    }
+}
+
+#[tokio::test]
+async fn an_unreadable_verified_login_answers_the_documented_400() {
+    for (body, json) in [
+        (r#"{"sessionCode":"code"}"#, true),
+        (r#"{"sessionCode":"code","#, true),
+        (r#"{"sessionCode":"code","verifier":"v"}"#, false),
+    ] {
+        let response = read_verified_request(body, json).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{body}");
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let error: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(error["message"].is_string(), "{body}: {error}");
+    }
+    let readable = read_verified_request(r#"{"sessionCode":"code","verifier":"v"}"#, true).await;
+    assert_eq!(readable.status(), StatusCode::OK);
+}

@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json,
-    extract::State,
+    extract::{State, rejection::JsonRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -54,19 +54,23 @@ pub struct SessionCreationResponse {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     token_context: Extension<TokenContext>,
-    Json(request): Json<SessionCreationRequest>,
+    request: Result<Json<SessionCreationRequest>, JsonRejection>,
 ) -> Result<Response, Response> {
     let span = tracing::Span::current();
-    let challenge = CodeChallenge::parse(&request.challenge).map_err(|e| {
-        span.record("outcome", "invalid_challenge");
+    // An unreadable request (no JSON, no challenge, a malformed one) answers
+    // the documented 400 rather than the extractor's own rejection.
+    let bad_request = |error: &dyn std::fmt::Display| {
+        span.record("outcome", "invalid_request");
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: e.to_string().into(),
+                message: error.to_string().into(),
             }),
         )
             .into_response()
-    })?;
+    };
+    let Json(request) = request.map_err(|e| bad_request(&e))?;
+    let challenge = CodeChallenge::parse(&request.challenge).map_err(|e| bad_request(&e))?;
 
     let session_code = generate_session_code();
     ctx.macro_cache_client
