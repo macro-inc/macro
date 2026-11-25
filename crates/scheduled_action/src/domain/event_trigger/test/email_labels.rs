@@ -198,6 +198,27 @@ fn a_label_filter_without_a_condition_runs_mail_a_receipt_condition_turns_away()
 }
 
 #[test]
+fn a_label_filter_for_another_inbox_leaves_a_receipt_condition_in_place() {
+    const ELSEWHERE: &str = "01900000-0000-7000-8000-0000000000c1";
+    let routine = filters(json!([
+        {
+            "events": ["email.message_received"], "inboxes": [OTHER_ID],
+            "condition": "Is it an invoice?"
+        },
+        { "events": ["email.labeled"], "inboxes": [ELSEWHERE] },
+    ]));
+    // Labeled mail into the receipt filter's inbox: only that filter took it.
+    let run = routine.run_event(&received(&[LABEL]).normalize().unwrap());
+    let stored: EventReference =
+        serde_json::from_str(&serde_json::to_string(&run).unwrap()).unwrap();
+    assert!(stored.labels_gained().is_empty());
+    assert!(matches!(
+        routine.condition_requirement(&stored),
+        ConditionRequirement::AnyOf(_)
+    ));
+}
+
+#[test]
 fn only_a_filter_of_email_labeled_alone_takes_labels() {
     let parse = |filter: Value| serde_json::from_value::<EventFilter>(filter);
     assert!(parse(json!({ "events": ["email.labeled"], "labels": [LABEL] })).is_ok());

@@ -576,7 +576,9 @@ inboxes; without it, it watches every inbox the owner reads. `routine.trigger()`
 returns picked inboxes as `Link` handles too. `email.labeled` runs when a thread
 gains one of the owner's Gmail labels or Outlook categories, as mail arrives or
 later; its filter can take `labels`, `Label` handles from `macro.email.labels()`,
-to run only on those. Labels a routine or an agent adds never start one.
+to run only on those. Labels a routine or an agent adds never start one, and
+neither do Gmail's system labels and categories (Inbox, Unread, Important, …),
+drafts, mail that arrives in spam or trash, or historical imports.
 Saving it needs the owner's `enable-email-labeled-trigger` PostHog flag on top
 of the `enable-event-routines` every event trigger needs; without it the save
 fails with a 400 (`email label triggers are not enabled`).

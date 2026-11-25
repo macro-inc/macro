@@ -774,6 +774,10 @@ impl EventFilters {
         if !by_name && event.general_event() == Some(EventName::EmailLabeled) {
             kept.event_name = EventName::EmailLabeled;
         }
+        // Read while the event still has its inbox, which the run drops.
+        let label_filter_took_it = self.0.iter().any(|filter| {
+            filter.events.contains(&EventName::EmailLabeled) && filter.accepts(event)
+        });
         if let EventSource::Entity {
             property_change,
             inbox,
@@ -785,12 +789,14 @@ impl EventFilters {
                 *property_change = None;
             }
             *inbox = None;
-            // A routine watching email.labeled checks them again at dispatch,
-            // whatever its run is named: a received-mail run admitted by its
-            // label filter alone must not take on a receipt condition. Other
-            // routines drop them, since code from before them can't read a
-            // run that keeps them; label routines only exist once it can.
-            if kept.event_name != EventName::EmailLabeled && !self.watches_email_labels() {
+            // A run a label filter took keeps them, whatever it is named, so
+            // dispatch weighs that filter too: a received-mail run its label
+            // filter alone admits must not take on a receipt condition. Other
+            // runs drop them, so a label filter that didn't take the event
+            // (another inbox, other labels) can't match the run at dispatch,
+            // and code from before them, which can't read a run that keeps
+            // them, still reads every run of a routine without label filters.
+            if !label_filter_took_it {
                 labels_gained.clear();
             }
         }
