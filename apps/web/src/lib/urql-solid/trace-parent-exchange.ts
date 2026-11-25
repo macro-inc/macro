@@ -2,12 +2,19 @@ import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type Exchange, makeOperation, type Operation } from '@urql/core';
 import { map, pipe } from 'wonka';
 
-/**
- * Operation context key for the trace a request should join. Queries get one
- * from the span they start in; a mutation carries one only when its caller set
- * it (a write that waited before it was sent).
- */
+/** Operation context key for the trace an operation's request should join. */
 export const TRACE_PARENT_CONTEXT_KEY = 'macroTraceParent';
+
+/**
+ * The trace a mutation's caller named. Its request, its queue attempt and the
+ * cache work after its response join that trace.
+ */
+export function mutationTraceParentOf(
+  operation: Operation
+): TraceContext | undefined {
+  if (operation.kind !== 'mutation') return undefined;
+  return operation.context[TRACE_PARENT_CONTEXT_KEY];
+}
 
 /**
  * The caller's context for the operation's first request only: a re-sent
@@ -24,8 +31,8 @@ function firstRequestIn(parent: TraceContext): TraceContext {
   };
 }
 
-// Mutations are sent by the mutation queue inside its own attempt span, so
-// none is captured here.
+// A mutation joins a trace only when its caller names one: one sent outside a
+// span would otherwise start a root trace for its cache work.
 function captured(operation: Operation): Operation {
   if (operation.kind !== 'query' || operation.context[TRACE_PARENT_CONTEXT_KEY])
     return operation;
@@ -44,7 +51,8 @@ function traced(operation: Operation): Operation {
   return makeOperation(operation.kind, operation, {
     ...operation.context,
     // fetchExchange calls this synchronously when it sends, so the transport's
-    // client span starts in the parent's trace and injects its traceparent.
+    // client span starts in the parent's trace and injects its traceparent. A
+    // queued attempt's own span, entered inside this, stays the closer parent.
     fetch: (input, init) => parent.run(() => send(input, init)),
   });
 }

@@ -1,0 +1,274 @@
+//! The build script's publishing, against stand-ins: `nix` builds three tiny
+//! files and runs `nix shell`'s command directly, `zstd` adds a prefix, and `aws`
+//! keeps the bucket in a directory, answering 403 for a missing key (the
+//! deploy key can't list the bucket) and 412 to a conditional create of a key
+//! that exists.
+
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+
+const SOURCE_SHA: &str = "4f5c7d69c7fc685164701f4ec0a0b9b1768430a6";
+const VERSION: &str = "macro-box/2026-11-25a";
+
+fn stub(bin: &Path, name: &str, script: &str) {
+    let path = bin.join(name);
+    std::fs::write(
+        &path,
+        format!("#!/usr/bin/env bash\nset -euo pipefail\n{script}\n"),
+    )
+    .expect("write stub");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("executable");
+}
+
+struct Fixture {
+    _temp: tempfile::TempDir,
+    root: PathBuf,
+    bin: PathBuf,
+    bucket: PathBuf,
+    log: PathBuf,
+}
+
+/// A checkout whose build makes `kernel` as vmlinux, and an empty bucket.
+fn fixture(kernel: &str) -> Fixture {
+    let temp = tempfile::tempdir().expect("fixture directory");
+    let root = temp.path().join("checkout");
+    let bin = temp.path().join("bin");
+    let bucket = temp.path().join("bucket");
+    for directory in [&root, &bin, &bucket] {
+        std::fs::create_dir_all(directory).expect("fixture directory");
+    }
+    std::fs::write(temp.path().join("kvm"), "").expect("kvm stand-in");
+    stub(&bin, "git", &format!("echo {SOURCE_SHA}"));
+    stub(
+        &bin,
+        "nix",
+        &format!(
+            r#"case "$1" in
+  build) mkdir -p result-image; printf '%s' '{kernel}' > result-image/vmlinux
+         printf 'rootfs' > result-image/rootfs.ext4; printf 'console=ttyS0' > result-image/boot_args ;;
+  shell) while [ "$1" != -c ]; do shift; done; shift; exec "$@" ;;
+esac"#
+        ),
+    );
+    // zstd -q -T0 -10 --sparse <in> -o <out>
+    stub(
+        &bin,
+        "zstd",
+        r#"{ printf '%s' 'compressed:'; cat "$5"; } > "$7""#,
+    );
+    stub(
+        &bin,
+        "aws",
+        r#"printf '%s\n' "$*" >> "$STUB_AWS_LOG"
+key() { local url=$1; url=${url#s3://}; echo "$STUB_BUCKET/${url#*/}"; }
+if [ "$1 $2 $3" = "s3 cp --only-show-errors" ]; then
+  if [[ $4 == s3://* ]]; then
+    [ -z "${STUB_READBACK_FORBIDDEN:-}" ] || { echo "An error occurred (AccessDenied) when calling the GetObject operation: Access Denied" >&2; exit 254; }
+    [ -f "$(key "$4")" ] || { echo "An error occurred (403) when calling the HeadObject operation: Forbidden" >&2; exit 1; }
+    cp "$(key "$4")" "$5"
+  else
+    [ -z "${STUB_UPLOAD_FORBIDDEN:-}" ] || { echo "An error occurred (AccessDenied) when calling the UploadPart operation: Access Denied" >&2; exit 1; }
+    mkdir -p "$(dirname "$(key "$5")")"; cp "$4" "$(key "$5")"
+  fi
+  exit 0
+fi
+if [ "$1 $2" = "s3api put-object" ]; then
+  [ -z "${STUB_PUT_FORBIDDEN:-}" ] || { echo "An error occurred (AccessDenied) when calling the PutObject operation: Access Denied" >&2; exit 254; }
+  target="$STUB_BUCKET/$6"
+  [ "$9 ${10}" = '--if-none-match *' ] || exit 2
+  [ ! -f "$target" ] || { printf '\nAn error occurred (PreconditionFailed) when calling the PutObject operation (412): At least one of the pre-conditions you specified did not hold\n' >&2; exit 254; }
+  mkdir -p "$(dirname "$target")"; cp "$8" "$target"; exit 0
+fi
+exit 3"#,
+    );
+    Fixture {
+        log: temp.path().join("aws.log"),
+        _temp: temp,
+        root,
+        bin,
+        bucket,
+    }
+}
+
+fn run(fixture: &Fixture, extra: &[(&str, &str)]) -> std::process::Output {
+    let mut command = std::process::Command::new("bash");
+    command
+        .args([
+            "-c",
+            "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
+        ])
+        .current_dir(&fixture.root)
+        .env("STUB_BIN", &fixture.bin)
+        .env(
+            "STUB_SCRIPT",
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/workflows/scripts/firecracker_image_rollout_build.sh"),
+        )
+        .env("STUB_BUCKET", &fixture.bucket)
+        .env("STUB_AWS_LOG", &fixture.log)
+        .env(
+            "KVM_DEVICE",
+            fixture.bin.parent().expect("temp").join("kvm"),
+        )
+        .env("SOURCE_SHA", SOURCE_SHA)
+        .env("IMAGE_VERSION", VERSION)
+        .env("FILES_DIR", fixture.root.join("files"))
+        .env("NIX_CACHE_URL", "s3://macro-nix-cache?region=us-east-1");
+    for (name, value) in extra {
+        command.env(name, value);
+    }
+    command.output().expect("run the build script")
+}
+
+fn published(fixture: &Fixture) -> Vec<String> {
+    let directory = fixture.bucket.join("firecracker-images").join(VERSION);
+    let mut names: Vec<String> = std::fs::read_dir(directory)
+        .map(|entries| {
+            entries
+                .map(|entry| {
+                    entry
+                        .expect("entry")
+                        .file_name()
+                        .into_string()
+                        .expect("name")
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let output = std::process::Command::new("sha256sum")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child.stdin.take().expect("stdin").write_all(bytes)?;
+            child.wait_with_output()
+        })
+        .expect("sha256sum");
+    String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .next()
+        .expect("digest")
+        .to_owned()
+}
+
+#[test]
+fn a_new_version_uploads_files_by_content_then_creates_its_manifest() {
+    let fixture = fixture("kernel-1");
+    let output = run(&fixture, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        stdout.contains("published macro-box/2026-11-25a"),
+        "{stdout}"
+    );
+    let mut expected = vec![
+        format!("{}-vmlinux.zst", sha256_hex(b"kernel-1")),
+        format!("{}-rootfs.ext4.zst", sha256_hex(b"rootfs")),
+        format!("{}-boot_args.zst", sha256_hex(b"console=ttyS0")),
+        "files.json".to_owned(),
+    ];
+    expected.sort();
+    assert_eq!(published(&fixture), expected);
+    let log = std::fs::read_to_string(&fixture.log).expect("aws log");
+    assert!(log.contains("--if-none-match *"), "{log}");
+    // The manifest is created after every file.
+    assert!(
+        log.lines().last().expect("calls").contains("put-object"),
+        "{log}"
+    );
+}
+
+#[test]
+fn the_same_build_again_finds_its_version_published_with_these_files() {
+    let fixture = fixture("kernel-1");
+    assert!(run(&fixture, &[]).status.success());
+    let output = run(&fixture, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        stdout.contains("already published with these files"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_different_build_of_a_published_version_is_refused() {
+    let fixture = fixture("kernel-1");
+    assert!(run(&fixture, &[]).status.success());
+    let manifest = fixture
+        .bucket
+        .join("firecracker-images")
+        .join(VERSION)
+        .join("files.json");
+    let before = std::fs::read(&manifest).expect("manifest");
+    std::fs::remove_dir_all(fixture.root.join("result-image")).expect("clean build");
+    stub(
+        &fixture.bin,
+        "nix",
+        r#"case "$1" in
+  build) mkdir -p result-image; printf 'kernel-2' > result-image/vmlinux
+         printf 'rootfs' > result-image/rootfs.ext4; printf 'console=ttyS0' > result-image/boot_args ;;
+  shell) while [ "$1" != -c ]; do shift; done; shift; exec "$@" ;;
+esac"#,
+    );
+
+    let output = run(&fixture, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{stdout}");
+    assert!(
+        stdout.contains("already published with other files"),
+        "{stdout}"
+    );
+    // The published manifest still names the first build's files.
+    assert_eq!(std::fs::read(&manifest).expect("manifest"), before);
+}
+
+#[test]
+fn a_refused_publish_says_what_aws_answered() {
+    let fixture = fixture("kernel-1");
+    let output = run(&fixture, &[("STUB_PUT_FORBIDDEN", "1")]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{stdout}");
+    assert!(stdout.contains("AWS said:"), "{stdout}");
+    assert!(stdout.contains("Access Denied"), "{stdout}");
+    assert!(!published(&fixture).contains(&"files.json".to_owned()));
+}
+
+#[test]
+fn a_published_manifest_that_cannot_be_read_fails_the_retry() {
+    let fixture = fixture("kernel-1");
+    assert!(run(&fixture, &[]).status.success());
+
+    let output = run(&fixture, &[("STUB_READBACK_FORBIDDEN", "1")]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{stdout}");
+    assert!(
+        stdout.contains("GetObject operation: Access Denied"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("is published but its files.json can't be read"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_failed_object_upload_does_not_publish_a_manifest() {
+    let fixture = fixture("kernel-1");
+    let output = run(&fixture, &[("STUB_UPLOAD_FORBIDDEN", "1")]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{stdout}");
+    assert!(
+        stdout.contains("UploadPart operation: Access Denied"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("uploading vmlinux failed"), "{stdout}");
+    let log = std::fs::read_to_string(&fixture.log).expect("aws log");
+    assert!(!log.contains("put-object"), "{log}");
+}

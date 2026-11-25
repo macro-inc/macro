@@ -19,3 +19,11 @@ it('ignores an unknown stored tier', async () => {
   const { preferredSpeed } = await import('./speed');
   expect(preferredSpeed()).toBe('standard');
 });
+
+it('counts explicit speed picks even when the tier returns to its original value', async () => {
+  const { preferredSpeedRevision, setPreferredSpeed } = await import('./speed');
+  const before = preferredSpeedRevision();
+  setPreferredSpeed('ultrafast');
+  setPreferredSpeed('standard');
+  expect(preferredSpeedRevision()).toBe(before + 2);
+});

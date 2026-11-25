@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
 import {
+  bothTargetAsts,
+  compileToAst,
+  queryStateFrom,
+} from '../filters/filter-store';
+import {
   NO_SEARCH_OPERATOR_NAMES,
   type SearchOperatorLookup,
   searchFiltersOperatorText,
   searchOperatorFilters,
   searchOperatorQuery,
+  searchOperatorTagAst,
   withSearchOperatorQuery,
 } from './search-operator-filters';
 import {
@@ -14,6 +20,18 @@ import {
   searchQueryParts,
   splitSearchTerms,
 } from './search-operators';
+
+/** Whether an item holding the tag options `held` meets a tag filter AST. */
+function holdsTags(ast: unknown, held: string[]): boolean {
+  const node = ast as {
+    '&'?: unknown[];
+    '|'?: unknown[];
+    l?: { v: { so: string } };
+  };
+  if (node['&']) return node['&'].every((child) => holdsTags(child, held));
+  if (node['|']) return node['|'].some((child) => holdsTags(child, held));
+  return node.l !== undefined && held.includes(node.l.v.so);
+}
 
 const LOOKUP: SearchOperatorLookup = {
   userId: 'macro|Me@Example.com',
@@ -76,10 +94,29 @@ describe('searchOperatorFilters', () => {
     const any = compile('tag:finance OR tag:legal');
     expect(any.state.tagMode).toBe('any');
     expect(any.indexes).not.toContain('channels');
+  });
 
-    expect(compile('tag:finance OR tag:legal tag:q3').matchesNothing).toBe(
-      true
+  it('requires every tag group, each by any of its tags', () => {
+    const grouped = compile('tag:finance OR tag:legal tag:q3');
+    expect(grouped.matchesNothing).toBe(false);
+    expect(grouped.state.tagMode).toBe('any');
+    expect(grouped.state.tags.map((tag) => tag.value)).toEqual([
+      'finance-1',
+      'legal-1',
+    ]);
+
+    const feed = bothTargetAsts(
+      compileToAst(queryStateFrom(searchOperatorQuery(grouped))),
+      searchOperatorTagAst(grouped)
     );
+    const listed = (held: string[]) => holdsTags(feed.propf, held);
+    expect(listed(['finance-1', 'q3-1'])).toBe(true);
+    expect(listed(['legal-1', 'q3-1'])).toBe(true);
+    expect(listed(['q3-1'])).toBe(false);
+    expect(listed(['finance-1', 'legal-1'])).toBe(false);
+
+    const oneList = compile('tag:finance tag:legal');
+    expect(searchOperatorTagAst(oneList)).toEqual({});
   });
 
   it('keeps every condition, whichever types are left', () => {

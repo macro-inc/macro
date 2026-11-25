@@ -102,6 +102,7 @@ import { filter, pipe } from 'wonka';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
+import { forgetSoupNetworkAnswers } from '../../queries/soup/graphql/network-freshness';
 import {
   cacheResponseErrorCode,
   createCacheErrorThrottle,
@@ -138,6 +139,7 @@ import {
   type SoupBackfillResult,
   type SoupInitialInput,
   type SoupInput,
+  type SoupItemPreviewFieldsFragment,
   type SoupNotificationFieldsFragment,
   type SoupNotificationNavigationMetadataFieldsFragment,
   type SoupPropertyFieldsFragment,
@@ -1098,6 +1100,9 @@ export function getGraphqlSoupClient(): Client {
       const target = host;
       if (!target || cachedCacheHost !== target) return;
       installCrmCacheHost(target);
+      // Lists the network answered meanwhile were not written to the cache,
+      // and what changed was not heard: none may take its cached page.
+      forgetSoupNetworkAnswers();
       fireAndForget(resume(target), 'graphql-cache-recovery');
     };
     const onInitializationError = (error: Error) => {
@@ -1295,7 +1300,8 @@ export type GraphqlGroupedSoupPage = {
 
 export type GraphqlSoupItem =
   | SoupQuery['user']['soup']['items'][number]
-  | (ChannelListItemFieldsFragment & { notifications?: never });
+  | (ChannelListItemFieldsFragment & { notifications?: never })
+  | (SoupItemPreviewFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,

@@ -33505,21 +33505,6 @@
           },
           {
             "type": "object",
-            "description": "A prompt named other users who can open the session.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["agent_session.mentioned"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/SessionMentionedMetadata",
-                "description": "A prompt named other users who can open the session."
-              }
-            }
-          },
-          {
-            "type": "object",
             "description": "The session's live actor is gone.",
             "required": ["metadata", "event_type"],
             "properties": {
@@ -63586,44 +63571,6 @@
           "source": {
             "$ref": "#/components/schemas/SessionSource",
             "description": "Who started the session. Events from before it was recorded say\nnothing and read as a person."
-          }
-        }
-      },
-      "SessionMentionedMetadata": {
-        "type": "object",
-        "description": "A prompt named other users who can open the session. Published when the\nprompt is accepted, not when it is answered: \"come look at this\" should\nnot wait for the turn.",
-        "required": ["identity", "action_id", "mentioned"],
-        "properties": {
-          "action_id": {
-            "$ref": "#/components/schemas/AgentActionId",
-            "description": "The action carrying the prompt."
-          },
-          "identity": {
-            "$ref": "#/components/schemas/SessionIdentity",
-            "description": "The session."
-          },
-          "mentioned": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MacroUserIdStr"
-            },
-            "description": "The users named, already narrowed to those who can open the session\nand never including the author."
-          },
-          "mentioned_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MacroUserIdStr",
-                "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
-              }
-            ]
-          },
-          "origin_message_id": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The channel or document message the prompt was posted as, when it\narrived from a thread rather than the session view. That message\nalready notified the users it named when it was posted."
           }
         }
       },

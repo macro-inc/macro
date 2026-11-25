@@ -9,6 +9,8 @@
 
 use std::sync::Arc;
 
+use agent_session::domain::connection::RuntimeConnectionId;
+
 use axum::extract::{FromRef, Path, Query, State, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -34,6 +36,7 @@ pub mod media;
 pub mod refreezes;
 mod rfb;
 mod socket;
+mod telemetry;
 #[cfg(test)]
 mod test;
 pub mod tunnel;
@@ -89,12 +92,16 @@ impl ScreenMedias {
     }
 }
 
+/// The current macrod connection, when registered on this replica.
+pub type MacrodConnection = Arc<dyn Fn(HarnessId) -> Option<RuntimeConnectionId> + Send + Sync>;
+
 /// State for the screen routes.
 pub struct ScreenState<Auth> {
     screens: Arc<Screens>,
     tunnel: Arc<dyn tunnel::GuestTunnel>,
     waker: Arc<dyn tunnel::ScreenWaker>,
     medias: ScreenMedias,
+    macrod_connection: MacrodConnection,
     viewers: Arc<Viewers>,
     shutdown: CancellationToken,
     authorization_state: MacroAuthorizationState<Auth>,
@@ -107,6 +114,7 @@ impl<Auth> Clone for ScreenState<Auth> {
             tunnel: Arc::clone(&self.tunnel),
             waker: Arc::clone(&self.waker),
             medias: self.medias.clone(),
+            macrod_connection: Arc::clone(&self.macrod_connection),
             viewers: Arc::clone(&self.viewers),
             shutdown: self.shutdown.clone(),
             authorization_state: self.authorization_state.clone(),
@@ -126,6 +134,7 @@ pub struct ScreenRoutes<Auth> {
     pub tunnel: Arc<dyn tunnel::GuestTunnel>,
     pub waker: Arc<dyn tunnel::ScreenWaker>,
     pub medias: ScreenMedias,
+    pub macrod_connection: MacrodConnection,
     pub shutdown: CancellationToken,
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
@@ -140,6 +149,7 @@ where
         tunnel: routes.tunnel,
         waker: routes.waker,
         medias: routes.medias,
+        macrod_connection: routes.macrod_connection,
         viewers: Arc::new(Viewers::default()),
         shutdown: routes.shutdown,
         authorization_state: routes.authorization_state,
@@ -274,6 +284,7 @@ where
             .screens
             .issue_ticket(request, traceparent.as_deref())
             .await?;
+        tracing::info!("computer.screen.ticket_issued");
         Ok(Json(ScreenTicket {
             ticket: issued.secret.expose().to_owned(),
             expires_at: issued.expires_at,
@@ -288,6 +299,8 @@ where
 #[derive(serde::Deserialize)]
 pub struct SocketQuery {
     ticket: String,
+    journey: Option<uuid::Uuid>,
+    attempt: Option<std::num::NonZeroU32>,
 }
 
 /// Open the screen socket with a ticket. Browsers can't set headers on a
@@ -336,14 +349,18 @@ where
         tunnel: Arc::clone(&state.tunnel),
         waker: Arc::clone(&state.waker),
         media,
+        macrod_connection: Arc::clone(&state.macrod_connection),
         viewers: Arc::clone(&state.viewers),
         reauthorize,
         reauthorize_every: socket::REAUTHORIZE_EVERY,
         idle: socket::IDLE,
         shutdown: state.shutdown.clone(),
     };
-    let traceparent = redeemed.traceparent;
+    let attempt = query.journey.zip(query.attempt);
+    let span = socket::session_span(&grant, redeemed.traceparent.as_deref(), attempt);
+    let failed_span = span.clone();
     upgrade
         .max_message_size(MAX_VIEWER_MESSAGE_BYTES)
-        .on_upgrade(move |socket| socket::serve(socket, grant, deps, traceparent))
+        .on_failed_upgrade(move |_| socket::upgrade_failed(failed_span))
+        .on_upgrade(move |socket| socket::serve(socket, grant, deps, span))
 }

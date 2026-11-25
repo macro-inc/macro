@@ -14,4 +14,5 @@ pub mod pg_routine_template_repo;
 pub mod pg_run_stops;
 pub mod pg_scheduled_action_repo;
 pub mod pg_suggestion_repo;
+pub mod routine_plans;
 pub mod tokio_dispatcher;

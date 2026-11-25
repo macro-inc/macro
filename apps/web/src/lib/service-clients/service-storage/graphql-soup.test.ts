@@ -2409,6 +2409,12 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(soup.graphqlCacheEnabled()).toBe(false);
       expect(visible()).toBeUndefined();
       expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+      // A list answered by the network now was never written to the cache.
+      const freshness = await import('@queries/soup/graphql/network-freshness');
+      freshness.recordSoupNetworkAnswer(client, 'list');
+      expect(freshness.soupNetworkAnswerFresh(client, 'list', 60_000)).toBe(
+        true
+      );
 
       const order: string[] = [];
       mocks.subscriptionsConnected.mockImplementation(() => {
@@ -2455,6 +2461,10 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(visible()).toBe(host);
       expect(soup.getGraphqlSoupClient()).toBe(client);
       expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+      // Its cached page may predate the outage: the list reads the network.
+      expect(freshness.soupNetworkAnswerFresh(client, 'list', 60_000)).toBe(
+        false
+      );
 
       // Offline, what was missed is asked for once there is a network.
       const online = vi.spyOn(navigator, 'onLine', 'get');
