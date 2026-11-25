@@ -704,6 +704,53 @@ async fn a_torn_database_says_so_when_its_doubt_does_not_fit() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_loss_nobody_was_told_of_outlives_a_death_before_it_is_noted_behind_newer_writes() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-death";
+    closed_with_queue(SCOPE).await;
+    write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+    break_side_files("write", REFUSE_LOSSES).await;
+    wipe_and_die(SCOPE).await;
+    restore_side_files().await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_death_between_noting_a_loss_and_ending_the_copy_under_it_queues_nothing_twice() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-cut";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    let untold = [SalvageFile::loss(QueueLoss::default()), copy.clone()].concat();
+    let doubted = [copy, SalvageFile::loss(QueueLoss::default())].concat();
+    let skip_ending = "if (args[0] === 22) throw new DOMException('died', 'UnknownError');
+        return original(...args);";
+    for left in [untold, doubted] {
+        let (engine, _, _) = open(SCOPE, false).await;
+        resolved(engine.close()).await;
+        write_side_file(SCOPE, &left).await;
+        let owner = owner(SCOPE).await;
+        let sidecar = owner.sidecar();
+        break_side_files("truncate", skip_ending).await;
+        let noted = sidecar
+            .replace(&SalvageFile::loss(QueueLoss::default()))
+            .await;
+        restore_side_files().await;
+        owner.release().await.expect("release");
+        assert!(noted.is_err());
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_ne!(queue[0], "none");
+        assert_ne!(queue[0], "kept");
+        tell(&engine, SCOPE).await;
+        assert_eq!(depth(&engine).await, "1");
+        resolved(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
 async fn an_import_from_memory_leaves_the_copy_that_could_not_be_read() {
     const SCOPE: &str = "cache-wasm-salvage-import-unread";
     closed_with_queue(SCOPE).await;

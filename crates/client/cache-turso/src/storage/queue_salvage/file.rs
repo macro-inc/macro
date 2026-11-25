@@ -36,7 +36,7 @@ pub struct QueueLoss {
 #[derive(Debug, Default)]
 pub struct SalvageFile {
     queue: Option<SalvagedQueue>,
-    /// What was queued after that queue may be lost.
+    /// What was queued after that queue, or before any, may be lost.
     lost: bool,
     abandoned: bool,
     dropped: u64,
@@ -61,6 +61,8 @@ impl SalvageFile {
                         queue: Some(queue),
                         reads: file.reads,
                         dropped: file.dropped,
+                        // A loss noted behind no queue is one nobody was told of.
+                        lost: file.lost && file.queue.is_none(),
                         ..Self::default()
                     };
                 }
@@ -109,7 +111,7 @@ impl SalvageFile {
         self.queue.as_ref()
     }
 
-    /// Returns whether something queued after the file's queue may be lost.
+    /// Returns whether something that was queued and is not in the file may be lost.
     pub fn lost(&self) -> bool {
         self.lost
     }

@@ -60,7 +60,7 @@ impl Sidecar {
     }
 
     /// Writes `bytes` over the start, ends the file behind them, and flushes it.
-    /// Cut short, the file starts with all of `bytes` or with what was there.
+    /// Cut short between the two, what was there still follows `bytes`.
     pub async fn replace(&self, bytes: &[u8]) -> Result<(), OpfsError> {
         owner_binding(self.owner)?;
         let root = worker_root()

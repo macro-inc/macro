@@ -326,8 +326,10 @@ fn what_a_wipe_lost_outlives_the_queue_that_follows_it() {
         };
         assert_eq!(told(&[&frame]), (false, false, 0));
         assert_eq!(told(&[&frame, &loss, &loss]), (true, true, 4));
-        // A newer queue ends the doubt, not the count.
-        assert_eq!(told(&[&loss, &frame]), (false, false, 2));
+        // A newer queue ends the doubt about an older one, not the count.
+        assert_eq!(told(&[&frame, &loss, &frame]), (false, false, 2));
+        // A loss behind no queue was told to nobody.
+        assert_eq!(told(&[&loss, &frame]), (true, false, 2));
         let unknown = [loss[..4].to_vec(), vec![0; loss.len() - 4]].concat();
         assert_eq!(told(&[&frame, &unknown]), (false, false, 0));
     });
