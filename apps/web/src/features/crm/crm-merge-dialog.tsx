@@ -5,42 +5,64 @@ import { isMobile } from '@core/mobile/isMobile';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { createEffect, on, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { CrmProvider } from './context/crm-context';
+import type { MergeRecord, MergeRecordType } from './core/merge';
 import { createAppCrmContext } from './crm-adapter';
-import { companyMerge } from './crm-merge';
-import { MergeCompaniesDialog } from './views/merge-companies-dialog';
+import { recordMerge } from './crm-merge';
+import { MergeDialog } from './views/merge-dialog';
 
-/** The app's one merge dialog, opened by `openMergeCompanies`. */
-export function CompanyMergeModal() {
+function mergedNotice(
+  recordType: MergeRecordType,
+  survivor: MergeRecord,
+  merged: MergeRecord[]
+) {
+  const names = new Intl.ListFormat(formatLocale(), {
+    style: 'long',
+    type: 'conjunction',
+  }).format(merged.map((record) => record.name));
+  const detail = { count: merged.length, names, name: survivor.name };
+  return match(recordType)
+    .with('company', () => ({
+      title: t('crm.mergeDone'),
+      subtext: t('crm.mergeDoneDetail', detail),
+    }))
+    .with('contact', () => ({
+      title: t('crm.mergePeopleDone'),
+      subtext: t('crm.mergePeopleDoneDetail', detail),
+    }))
+    .exhaustive();
+}
+
+/** The app's one merge dialog, opened by `openMerge`. */
+export function CrmMergeModal() {
   const { openWithSplit } = useSplitLayout();
   createEffect(
     on(crmAccessAllowed, (allowed) => {
-      if (!allowed) companyMerge.close();
+      if (!allowed) recordMerge.close();
     })
   );
   return (
     <CrmProvider value={createAppCrmContext()}>
-      <Show when={companyMerge.request()} keyed>
+      <Show when={recordMerge.request()} keyed>
         {(request) => (
-          <MergeCompaniesDialog
-            open={companyMerge.open()}
+          <MergeDialog
+            open={recordMerge.open()}
             onOpenChange={(open) => {
-              if (!open) companyMerge.close();
+              if (!open) recordMerge.close();
             }}
-            companies={request.companies}
+            recordType={request.recordType}
+            records={request.records}
             onMerged={({ survivor, merged }) => {
               request.onMerged?.();
               if (!crmAccessAllowed()) return;
-              const names = new Intl.ListFormat(formatLocale(), {
-                style: 'long',
-                type: 'conjunction',
-              }).format(merged.map((company) => company.name));
-              const notice = toast.success(t('crm.mergeDone'), {
-                subtext: t('crm.mergeDoneDetail', {
-                  count: merged.length,
-                  names,
-                  name: survivor.name,
-                }),
+              const { title, subtext } = mergedNotice(
+                request.recordType,
+                survivor,
+                merged
+              );
+              const notice = toast.success(title, {
+                subtext,
                 duration: isMobile() ? undefined : 8000,
                 dismissStyle: 'icon',
                 actions: [
@@ -50,7 +72,10 @@ export function CompanyMergeModal() {
                     trailingIcon: true,
                     onClick: () => {
                       if (notice !== undefined) toast.dismiss(notice);
-                      openWithSplit({ type: 'company', id: survivor.id });
+                      openWithSplit({
+                        type: request.recordType,
+                        id: survivor.id,
+                      });
                     },
                   },
                 ],

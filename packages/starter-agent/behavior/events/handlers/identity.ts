@@ -7,6 +7,7 @@ import {
   readIdentity,
 } from '../../capabilities/identity/index.ts';
 import {
+  givenName,
   introduce,
   known,
   unknown,
@@ -43,12 +44,16 @@ export const ensureIntroduction = async (
   await context.disk.write(marker, `${isoText(context.clock.now())}\n`);
 };
 
-/** Every wake is told who the agent is, or that it doesn't know yet and how to find out. */
+/** Each wake uses saved identity when present and the configured name otherwise. */
 export const identityHandlers = () =>
-  behavior<Base>().on(
+  behavior<Needs & { readonly config: Pick<Base['config'], 'identity'> }>().on(
     (sources) => sources.hooks.preWake,
     async ({ add }, context) => {
       const identity = await readIdentity(context);
-      add(identity === undefined ? unknown : known(identity));
+      add(
+        identity === undefined
+          ? unknown(givenName(context.config.identity.name))
+          : known(identity)
+      );
     }
   );

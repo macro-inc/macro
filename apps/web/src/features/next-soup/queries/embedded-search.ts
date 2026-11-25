@@ -13,7 +13,7 @@ import {
   searchOperatorFilters,
   searchOperatorQuery,
 } from '../core/search-operator-filters';
-import { searchQueryParts } from '../core/search-operators';
+import { leavesOutName, searchQueryParts } from '../core/search-operators';
 import { compileSearchQuery } from '../core/search-query';
 import {
   bothTargetAsts,
@@ -67,8 +67,10 @@ export function createEmbeddedSearchSource(options: {
     const inOperatorTypes = (operatorFilters()?.indexes ?? []).map((index) =>
       createSearchResultFilter(index, query())
     );
+    const leftOut = parts().leftOutWords;
     return (entity: EntityData) =>
       inType(entity) &&
+      !leavesOutName(entity.name, leftOut) &&
       (inOperatorTypes.length === 0 ||
         inOperatorTypes.some((matchesType) => matchesType(entity)));
   });

@@ -12,6 +12,7 @@ function ready(core: CoordinatorCore, tabId: string, ownerEpoch: number) {
     ownerLockHeld: true,
     databaseActionProof: 'opened-existing',
     openOutcome: 'opened-existing',
+    queue: 'preserved',
   });
 }
 
@@ -163,6 +164,7 @@ it('does not cancel a storage open on hide and parks only after its drain acknow
     ownerLockHeld: true,
     databaseActionProof: 'opened-existing',
     openOutcome: 'opened-existing',
+    queue: 'preserved',
   });
   expect(actions).toEqual([
     { kind: 'drain-owner', tabId: 'a', ownerEpoch: 1, handoff: true },

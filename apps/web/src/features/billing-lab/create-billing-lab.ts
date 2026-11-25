@@ -1,5 +1,6 @@
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { createSignal } from 'solid-js';
-import { PLAN_BY_TIER } from '../paywall/plans';
+import { type PaidPlanTier, PLAN_BY_TIER } from '../paywall/plans';
 import type { BillingContext } from '../settings/context/billing-context';
 import type { UsageContext } from '../usage/context/usage-context';
 import { toUsageSummary } from '../usage/queries/usage-summary';
@@ -18,7 +19,7 @@ import { fixtureSnapshot } from './queries/fixture-snapshot';
 export type LabSurface = 'billing' | 'usage';
 export type LabPayment =
   | { kind: 'credits'; amountCents: number }
-  | { kind: 'subscription'; tier: 'premium' | 'max' }
+  | { kind: 'subscription'; tier: PaidPlanTier; interval: BillingInterval }
   | { kind: 'methods' };
 
 const defaultSurface = (scenario: ScenarioId): LabSurface =>
@@ -35,6 +36,8 @@ export function createBillingLab(initial: ScenarioId) {
   const [failNext, setFailNext] = createSignal(false);
   const [notice, setNotice] = createSignal('');
   const [limitOpen, setLimitOpen] = createSignal(false);
+  const [cycleDialogPlan, setCycleDialogPlan] =
+    createSignal<PaidPlanTier | null>(null);
   const [payment, setPayment] = createSignal<LabPayment>();
   const [events, setEvents] = createSignal<
     { id: number; at: string; label: string }[]
@@ -61,6 +64,7 @@ export function createBillingLab(initial: ScenarioId) {
     setPending(false);
     setFailNext(false);
     setLimitOpen(false);
+    setCycleDialogPlan(null);
     setPayment(undefined);
     setEvents([]);
     setNotice('');
@@ -94,6 +98,7 @@ export function createBillingLab(initial: ScenarioId) {
   };
   const billing: BillingContext = {
     tier: () => state().tier,
+    interval: () => state().interval,
     renewalDate: () => state().periodEnd,
     scheduledChange: () => {
       const plan = state().scheduledPlan;
@@ -117,7 +122,8 @@ export function createBillingLab(initial: ScenarioId) {
     canManageSubscription: () => state().role !== 'member',
     canChangePlan: () => state().role !== 'member',
     changingPlan: pending,
-    checkout: (tier) => startBillingPayment({ kind: 'subscription', tier }),
+    checkout: (tier, interval) =>
+      startBillingPayment({ kind: 'subscription', tier, interval }),
     manage: () => startBillingPayment({ kind: 'methods' }),
     openTeamSettings: () =>
       record('Team settings navigation requested (simulated)'),
@@ -240,6 +246,8 @@ export function createBillingLab(initial: ScenarioId) {
     events,
     limitOpen,
     setLimitOpen,
+    cycleDialogPlan,
+    setCycleDialogPlan,
     payment,
     setPayment,
     billing,
@@ -284,7 +292,7 @@ export function createBillingLab(initial: ScenarioId) {
           );
         if (selected.kind === 'subscription')
           update(
-            (value) => changePlan(value, selected.tier),
+            (value) => changePlan(value, selected.tier, selected.interval),
             'Simulated subscription activated'
           );
         if (selected.kind === 'methods')

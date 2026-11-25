@@ -33,6 +33,7 @@
             "kind": {
               "Enum": [
                 "premium",
+                "business",
                 "max"
               ]
             }

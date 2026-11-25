@@ -112,6 +112,48 @@ export function useCrmContactMentionSource(
 
 const CONTACT_SEARCH_DEBOUNCE_MS = 250;
 
+/**
+ * Every CRM contact the server matches for a typed query, page by page, with
+ * no address deduplication: a merge has to reach each record, even two that
+ * hold one address.
+ */
+export function useCrmContactSearch(search: Accessor<string>) {
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
+  const query = debouncedDependent(
+    () => search().trim(),
+    CONTACT_SEARCH_DEBOUNCE_MS
+  );
+  const server = useCrmContactsQuery(
+    { client: useQueryClient() },
+    () =>
+      crmAccessAllowed() &&
+      !contactSearchDisabled().enabled &&
+      query().length > 0,
+    query
+  );
+  return {
+    contacts: () =>
+      queryReadyGate(server)
+        ? server.data.pages.flatMap((page) =>
+            page.contacts.map(toCrmContactEntity)
+          )
+        : [],
+    isLoading: () => query().length > 0 && server.isLoading,
+    hasMore: () => !!server.hasNextPage && !server.isFetchNextPageError,
+    isLoadingMore: () => server.isFetchingNextPage,
+    loadMore: async () => {
+      await server.fetchNextPage();
+    },
+    error: () => server.error ?? undefined,
+    // A failed later page is the next one to read; a failed first page is
+    // read from the start.
+    retry: async () => {
+      if (server.isFetchNextPageError) await server.fetchNextPage();
+      else await server.refetch();
+    },
+  };
+}
+
 /** Contacts matching a typed query: cached matches at once, then authorized
  * server pages across the viewer's CRM-enabled teams beyond the cached rows. */
 export function useCrmContactDiscovery(

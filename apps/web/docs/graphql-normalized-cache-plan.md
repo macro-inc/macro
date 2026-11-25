@@ -431,8 +431,8 @@ five queued catch-up commits producing one visible-cache refresh on return.
 
 Every departure rejects already-routed optimistic enqueues whose replies were
 lost as `admitted-enqueue-uncertain`, including requests from surviving tabs.
-An engine epoch fence does not undo a committed queue entry, and a planned
-recovery wipe has not erased it yet. The exchange must neither retry those
+An engine epoch fence does not undo a committed queue entry, and neither does a
+recovery wipe (4.3). The exchange must neither retry those
 enqueues nor forward them directly to the API. Requests queued at the coordinator
 but not yet routed remain eligible for one dispatch to the replacement engine;
 late old-epoch responses cannot settle the rejected requests.
@@ -648,8 +648,8 @@ not open, which includes the unversioned name once the versions move past it.
 A newer version is kept, because its build may come back after a rollback. The page lists OPFS and, only if a stale name exists,
 starts a disposable worker (a file Turso cannot read may poison its OPFS
 registry) that deletes each stale database whose owner lock is free and whose
-`mutation_queue` is empty. Databases still queueing mutations, or whose queue
-cannot be counted, are kept and reported.
+`mutation_queue` is empty. Databases still queueing mutations, whose queue
+cannot be counted, or whose side file (4.3) holds a queue, are kept and reported.
 
 Browsers missing the required worker, lock, or OPFS
 capabilities use a storage-free no-op cache host. Tauri
@@ -674,6 +674,47 @@ and their projections; a browser opens a new database name instead, as above.
 Native storage then compacts the migrated file with `VACUUM INTO`, so the
 upgrade reclaims the space instead of leaving freed pages behind; a compaction
 that fails tries to keep the migrated file as it is.
+A recovery wipe in the browser keeps the mutation queue. Under the owner lock, the
+engine about to wipe opens the old database, copies what it queues (rows with their
+IDs, leases and attempt counts, their optimistic layers and shadows, the aliases
+they use, and the account binding) into a side file, `{database}-salvage`, and
+flushes it before it removes the database. The next open queues the copy again
+before it serves its first request, in one transaction that also records that this
+copy was taken, and then removes the side file. An engine may die between any two of
+these steps: the next one finds the old database, the copy, or both, and a copy
+already taken is never queued twice while its database can say so. A wipe that takes writes the side file does not hold
+(unreadable, given up, or no room for the copy) notes that and their number in the
+side file first, in room the copy and the read before it reserved, so the open that
+follows tells it even when this engine dies; a disk that had none of that room left is
+the exception, until the wipe has made some. A copy the old database had taken already, as far as
+that database can still say, is forgotten; one that may have been taken, because
+the database lost what it says or one of its two files, is queued but called
+`partial`. Only a side file that refused the note of its import and could be neither
+removed nor emptied, or one whose database then lost both files, passes for a copy
+nobody took. A wipe holds the side file open from before it reads the queue until
+it is done, unless it had to remove a copy it could not rewrite; one that finds
+another context at it waits, and leaves the database as it is when that takes too long. An open that lost something leaves the side file saying so, and only that;
+the engine removes it (`queueLossTold`) at the first request or heartbeat after
+`engine-ready`, which shows that the coordinator took it and so told its pages, and
+until then every later open tells it again.
+A database with one of its two files gone is noted there as a loss too before it is
+opened and reset, even when no copy says what it queued. A side file that cannot be read three times over is given up as
+`unreadable` rather than queued behind newer writes later; only one that can be neither
+removed nor emptied then can still come back, behind them and as `partial`. Records, the
+projections and index facts the server's answers gave them, and everything else
+refetchable are not carried; only the pending writes' own projections are. The copy
+is given up after three engines die reading the old database, three die taking the
+copy in, or eight wipes in two minutes, and a database bound to another account
+refuses it. Logout, an account switch, a mismatched identity and stale-database
+cleanup remove the copy with the database it belongs to. `graphql_cache.schema_init`
+reports a crossing as `cache.queue_outcome` (`kept`, `partial`, `unreadable`,
+`abandoned`), with `cache.queue_kept` and `cache.queue_dropped`;
+`graphql_cache.queue_read`, `recovery_wipe` and `queue_import` time its steps. The
+engine tells pages the queue's state apart from the database's (`queue` beside
+`openOutcome`): `reset` unless every queued write is still there under its ID, and
+only then do pages drop a mutation in flight and settle pending writes as lost. A
+native reset still drops the queue.
+
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives

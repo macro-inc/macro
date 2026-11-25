@@ -463,6 +463,15 @@ impl SuggestionApi for FakeSuggestions {
         unused()
     }
 
+    async fn name_topic(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: suggestions::domain::topic::NameTopic,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        unused()
+    }
+
     async fn retire(
         &self,
         _: &CreationPrincipal,

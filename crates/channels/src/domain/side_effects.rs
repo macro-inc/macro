@@ -703,7 +703,7 @@ where
             .map_err(Into::into)?;
         let is_first_top_level_message = message_count <= 1 && message.thread_id.is_none();
 
-        let (user_mentions, document_mention_ids) = mentions.into_iter().fold(
+        let (mut user_mentions, document_mention_ids) = mentions.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut users, mut docs), mention| {
                 match mention.entity_type.as_str() {
@@ -716,6 +716,22 @@ where
                 (users, docs)
             },
         );
+        // Someone in a call can be outside its channel (a guest); only members
+        // may hear about channel messages.
+        let channel_members: HashSet<&str> = participants
+            .iter()
+            .filter(|participant| participant.left_at.is_none())
+            .map(|participant| participant.user_id.as_str())
+            .collect();
+        // Naming someone to an agent in an agent DM says who the agent should
+        // work with; it is not a message to them, and they cannot open the
+        // conversation anyway. Only its member still hears that it was named.
+        if self
+            .is_agent_dm(channel_id, &metadata, &user_mentions)
+            .await
+        {
+            user_mentions.retain(|user_id| channel_members.contains(user_id.as_str()));
+        }
         let document_mentions = self.load_document_mentions(document_mention_ids).await;
         let thread_context = self
             .load_thread_notification_context(message.thread_id)
@@ -726,13 +742,6 @@ where
             .into_iter()
             .chain(user_mentions.iter().cloned())
             .collect::<Vec<_>>();
-        // Someone in a call can be outside its channel (a guest); only members
-        // may hear about channel messages.
-        let channel_members: HashSet<&str> = participants
-            .iter()
-            .filter(|participant| participant.left_at.is_none())
-            .map(|participant| participant.user_id.as_str())
-            .collect();
         let thread_audience = thread_context
             .participants
             .iter()
@@ -785,6 +794,29 @@ where
             mentioned_members,
             is_first_top_level_message,
         })
+    }
+
+    /// Whether a posted message is in an agent DM, looked up only when that
+    /// could change who it notifies: a direct message that names somebody.
+    /// A failed lookup notifies as in any DM.
+    async fn is_agent_dm(
+        &self,
+        channel_id: Uuid,
+        metadata: &ChannelMetadata,
+        user_mentions: &[String],
+    ) -> bool {
+        if metadata.channel_type != ChannelType::DirectMessage || user_mentions.is_empty() {
+            return false;
+        }
+
+        self.context
+            .is_agent_dm(channel_id)
+            .await
+            .map_err(Into::<anyhow::Error>::into)
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, %channel_id, "unable to tell whether a DM is an agent DM");
+            })
+            .unwrap_or(false)
     }
 
     async fn load_document_mentions(
