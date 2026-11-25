@@ -1320,6 +1320,35 @@ async fn a_commit_names_each_teammate_whose_rules_it_rewrote_to_tell_them(pool: 
     );
 }
 
+/// Commit `writer` once another session of this test's database waits on a
+/// lock: the merge has reached the lock the writer holds.
+async fn release_when_blocked(pool: PgPool, writer: sqlx::Transaction<'static, sqlx::Postgres>) {
+    for _ in 0..400 {
+        let waiting: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if waiting > 0 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    writer.commit().await.unwrap();
+}
+
+/// The review of `merge`, ready to commit.
+async fn reviewed_command(world: &World, merge: &MergeTargets) -> MergeCommand {
+    let preview = world.merges.preview(&world.scope(), merge).await.unwrap();
+    MergeCommand {
+        targets: merge.clone(),
+        revision: preview.revision,
+        request_key: Uuid::now_v7(),
+        sharing_rules: SharingRulesChoice::Keep,
+    }
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_database_cell_edited_while_the_merge_waits_keeps_the_edit(pool: PgPool) {
     let world = World::new(pool.clone()).await;
@@ -1338,6 +1367,8 @@ async fn a_database_cell_edited_while_the_merge_waits_keeps_the_edit(pool: PgPoo
         .await
         .unwrap();
     detach.commit().await.unwrap();
+
+    let command = reviewed_command(&world, &targets(stays, &[merged])).await;
 
     // A writer holds the table's version row, as every batch does until it
     // commits, and points the cell at another company.
@@ -1361,12 +1392,11 @@ async fn a_database_cell_edited_while_the_merge_waits_keeps_the_edit(pool: PgPoo
     .await
     .unwrap();
 
-    let release = async move {
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        writer.commit().await.unwrap();
-    };
-    let merge = targets(stays, &[merged]);
-    let (merging, ()) = tokio::join!(world.merge(&merge, SharingRulesChoice::Keep), release);
+    let scope = world.scope();
+    let (merging, ()) = tokio::join!(
+        world.merges.commit(&scope, &command),
+        release_when_blocked(pool.clone(), writer)
+    );
     merging.unwrap();
 
     assert_eq!(
@@ -1433,6 +1463,8 @@ async fn a_pipeline_cell_another_merge_is_writing_is_read_after_it(pool: PgPool)
     let other = world.company("Other", true, &["other.example.com"]).await;
     let pipeline = company_pipeline(&world, "Deals", &[merged]).await;
 
+    let command = reviewed_command(&world, &targets(stays, &[merged])).await;
+
     // Another team's merge holds the pipeline FOR SHARE as this one does, and
     // its write holds the table's version row while it changes the cell.
     let mut writer = pool.begin().await.unwrap();
@@ -1460,12 +1492,11 @@ async fn a_pipeline_cell_another_merge_is_writing_is_read_after_it(pool: PgPool)
     .await
     .unwrap();
 
-    let release = async move {
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        writer.commit().await.unwrap();
-    };
-    let merge = targets(stays, &[merged]);
-    let (merging, ()) = tokio::join!(world.merge(&merge, SharingRulesChoice::Keep), release);
+    let scope = world.scope();
+    let (merging, ()) = tokio::join!(
+        world.merges.commit(&scope, &command),
+        release_when_blocked(pool.clone(), writer)
+    );
 
     // It read the other write's value, which the review didn't show, so it
     // refuses rather than writing over it.
