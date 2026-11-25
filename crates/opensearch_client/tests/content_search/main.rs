@@ -430,6 +430,7 @@ async fn search(
         match_type: case.match_type.to_string(),
         cursor: SearchCursorOption::default(),
         search_indices: searched.iter().map(|kind| kind.index()).collect(),
+        excluded_terms: case.left_out.iter().map(|word| word.to_string()).collect(),
         document_search_args: UnifiedDocumentSearchArgs {
             terms: terms.clone(),
             document_ids: ids_with(Kind::Document, &[Access::Shared]),
@@ -490,8 +491,8 @@ fn compare(case: &Case, entities: &[Seeded], expected: &Expected, found: &Found)
             .map_or_else(|| format!("unknown {id}"), |entity| entity.name.clone())
     };
     let label = format!(
-        "{:?} ({:?}, {}, {:?})",
-        case.terms, case.mode, case.match_type, case.matching
+        "{:?} leaving out {:?} ({:?}, {}, {:?})",
+        case.terms, case.left_out, case.mode, case.match_type, case.matching
     );
 
     let mut failures = Vec::new();

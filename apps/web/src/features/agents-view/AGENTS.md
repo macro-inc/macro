@@ -9,7 +9,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 ## Start here
 
 - `views/AgentsView.tsx`: production query, selection, draft, and navigation ownership.
-- `phone-list.tsx` and `components/phone-list-section.tsx`: phone list, in-flow section headings, archive, favorites, bubbles, and existing entity actions.
+- `phone-list.tsx`, `components/phone-list-section.tsx`, and `components/phone-list-leading.tsx`: phone list, in-flow headings, shared leading slots, archive, favorites, bubbles, and existing entity actions.
 - `phone-sidebar.tsx` and `views/mobile/agents-navigation.tsx`: shell-owned phone drawer and shared routine list data.
 - `core/phone-list.ts`: waiting/favorite partition and startable agent selection.
 - `primitives/mobile-agent-request.ts`: selection handoff to the mounted accessory composer.
@@ -67,11 +67,14 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Use shared grouped Tabs for the compact phone accessory and Home's track tabs for full new-session views; keep the Auto gate and host mode state unchanged.
 - Keep session model controls inside the composer, with only + on the left and model, dictation, then Send/Stop on the right; full new-session views share Home's mode/repository row below the composer on desktop and phone, while the compact phone accessory retains its upper drawer.
 - Use `MobileHeader.Title` with its shared padding and `MobileHeader.Back` with the shell's history action and caret; do not hand-build title or back islands.
+- Omit `SplitHeaderScope.TopBar.leading` when a mobile Routines header owns navigation; a hidden placeholder still creates an empty title island.
+- Present routine triggers without dot separators: keep one trigger per line or a first-trigger summary with a remaining count, retaining full trigger details.
 - Push phone subpages into split history and derive their restored state without navigating again; let nested agent editors consume Back before leaving their list.
 - Suppress the mobile navigation dock only in active session hosts with an empty `FloatRegion` contribution; retain header/gesture Back and the shared accessory host's safe-area padding, and restore navigation on list and management pages.
 - Use Email's collection-layout NavigationSheet and ViewSidebar sections for phone destinations; Conversations and Archived keep the hamburger, never a title-menu sheet or Archived Back button.
 - Mark drawer destinations with the existing `referredFrom: 'agents'` origin and read current router-entry metadata for management-page navigation; drawer entries show the hamburger, external entries and details keep Back.
 - Keep phone list headings in normal flow inside their row sections, with no sticky positioning or per-heading offsets; use one vertical scroller, apply MobileListLayout's measured island inset once as its top padding, and use parent gaps/padding instead of child layout margins.
+- Align every phone list heading and row-leading slot at 24px, including flat Conversations and Archived; share PhoneConversationRow and PhoneListLeading, and apply the outer gutter once on the section stack, never on individual cards.
 - Reuse EmptyStatePanel for exhausted empty phone lists with embedded scrolling disabled; omit search/filter actions and focus the existing accessory composer from Start a conversation.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - An agent picked from the new-conversation composer's @ menu (Agents page, Home and the phone composer, which all mount `NewChatPage`) becomes the selected agent through `rosterAgentForMention` and the picker's own `selectAgent`; never add a second selection path.
