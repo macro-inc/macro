@@ -212,6 +212,18 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                             )
                             .await
                         {
+                            // Mark it pending, as a fresh download is, so the
+                            // next launch can start on it.
+                            if let Some(bundle_dir) = entrypoint.parent()
+                                && let Err(e) =
+                                    persist_pending_bundle(&self.fs_repo, &update_dir, bundle_dir)
+                                        .await
+                            {
+                                tracing::warn!(
+                                    error=?e,
+                                    "[bundle-update] failed to mark a reused bundle pending"
+                                );
+                            }
                             return Ok(UpdateStatus::Completed(CompletedStatus {
                                 bundle_build: update.bundle_build,
                                 entrypoint,
@@ -411,16 +423,27 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
         let Ok(contents) = self.fs_repo.read_to_string(&marker).await else {
             return;
         };
-        let manifest_path = Path::new(contents.trim()).join("bundle-manifest.json");
-        let pending_bundle_build = BundleManifest::read(&manifest_path, &self.fs_repo)
-            .await
-            .map(|manifest| manifest.bundle_build);
+        let pending_dir = PathBuf::from(contents.trim());
+        let pending_bundle_build =
+            BundleManifest::read(&pending_dir.join("bundle-manifest.json"), &self.fs_repo)
+                .await
+                .map(|manifest| manifest.bundle_build);
         if pending_bundle_build.is_some() && pending_bundle_build == offered_bundle_build {
             return;
         }
 
         if let Err(e) = clear_pending_bundle(&self.fs_repo, &update_dir).await {
             tracing::warn!(error=?e, "[bundle-update] failed to forget an unoffered pending bundle");
+            return;
+        }
+        // Remove its files too: without a saved selection, startup restores the
+        // newest complete download it finds. Never the saved bundle, which a
+        // marker left behind by a failed clear can still name.
+        let (saved_root, _) = BundleRoot::load(&update_dir, &self.fs_repo).await;
+        if saved_root.path() != Some(pending_dir.as_path())
+            && let Err(e) = self.fs_repo.remove_dir_all(&pending_dir).await
+        {
+            tracing::warn!(error=?e, "[bundle-update] failed to remove an unoffered pending bundle");
         }
     }
 

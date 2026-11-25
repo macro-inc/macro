@@ -145,6 +145,53 @@ async fn check_forgets_a_pending_download_the_server_no_longer_offers() {
 
     assert!(matches!(status, UpdateStatus::NoUpdateNeeded));
     assert!(!fs.file_exists(cache_dir.join(PENDING_BUNDLE_ROOT_FILE)));
+    // Gone from disk too, so startup's scan for downloads can't restore it.
+    assert!(!fs.dir_exists(&staged));
+}
+
+#[tokio::test]
+async fn forgetting_a_pending_download_keeps_the_saved_bundle_it_names() {
+    let fs = FakeFs::default();
+    let cache_dir = cache_dir();
+    let saved = seed_bundle(&fs, &cache_dir, "1", 25, 0);
+    seed_persisted_bundle_root(&fs, &cache_dir, &saved);
+    seed_pending_bundle_root(&fs, &cache_dir, &saved);
+    let mut worker = worker_with_fs_and_native_build(fs.clone(), None, cache_dir.clone(), 0);
+
+    worker
+        .next_status(UpdateStatus::CheckingForDownload(app_info(0)))
+        .await
+        .unwrap();
+
+    assert!(!fs.file_exists(cache_dir.join(PENDING_BUNDLE_ROOT_FILE)));
+    assert!(fs.dir_exists(&saved));
+}
+
+#[tokio::test]
+async fn reused_download_is_marked_pending_for_the_next_launch() {
+    let fs = FakeFs::default();
+    let cache_dir = cache_dir();
+    let cached = seed_bundle(&fs, &cache_dir, "2", 30, 0);
+    let mut update = bundle_update();
+    update.bundle_build = 30;
+    let mut worker = worker_with_fs_and_native_build(
+        fs.clone(),
+        Some(BundleAction::Update(update)),
+        cache_dir.clone(),
+        0,
+    );
+
+    worker
+        .next_status(UpdateStatus::CheckingForDownload(app_info(0)))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        fs.read_to_string(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE))
+            .await
+            .unwrap(),
+        cached.to_string_lossy()
+    );
 }
 
 #[tokio::test]
