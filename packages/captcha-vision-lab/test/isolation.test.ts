@@ -4,9 +4,9 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
-const PACKAGE = join(import.meta.dir, '..');
+const PACKAGE = resolve(import.meta.dir, '..');
 const REPOSITORY = join(PACKAGE, '..', '..');
 
 describe('isolation', () => {
@@ -35,22 +35,30 @@ describe('isolation', () => {
   });
 
   test('the lab imports only its own files, node, playwright and zod', () => {
+    // Every import form (static, dynamic, re-export, require), in every file
+    // under src and test, as Bun's own parser sees it.
+    const transpiler = new Bun.Transpiler({ loader: 'ts' });
     const files = ['src', 'test'].flatMap((directory) =>
-      readdirSync(join(PACKAGE, directory)).map((file) =>
-        join(PACKAGE, directory, file)
-      )
+      readdirSync(join(PACKAGE, directory), { recursive: true })
+        .map((file) => join(PACKAGE, directory, String(file)))
+        .filter((file) => file.endsWith('.ts'))
     );
-    const specifiers = files.flatMap((file) =>
-      [
-        ...readFileSync(file, 'utf8').matchAll(
-          /^} from '([^']+)';$|^import .* from '([^']+)';$/gm
-        ),
-      ].map((match) => (match[1] ?? match[2])!)
+    const imports = files.flatMap((file) =>
+      transpiler
+        .scanImports(readFileSync(file, 'utf8'))
+        .map(({ path }) => ({ file, path }))
     );
 
-    expect(specifiers.length).toBeGreaterThan(0);
-    for (const specifier of specifiers) {
-      expect(specifier).toMatch(/^(\.\.?\/|node:|bun:test$|playwright$|zod$)/);
+    expect(imports.length).toBeGreaterThan(0);
+    for (const { file, path } of imports) {
+      if (path.startsWith('.')) {
+        // A relative import must stay inside this package.
+        const target = resolve(dirname(file), path);
+        expect(target.startsWith(`${PACKAGE}/`)).toBe(true);
+        expect(target).not.toContain('/node_modules/');
+      } else {
+        expect(path).toMatch(/^(node:|bun:test$|playwright$|zod$)/);
+      }
     }
   });
 
