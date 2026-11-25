@@ -199,13 +199,18 @@ export function createGraphqlSoupAstItemsQuery(
             { showSupportedForeignEntities }
           )[0]
         : undefined;
-      // A delivered notification moves a notified row before the re-read
-      // (`placeNotifiedRows`): map it again when its floor rises.
-      if (notifiedAt && entity) trackNotifiedFloor(entity.id);
+      // Map the row again when a delivered notification raises its floor: a
+      // notified list moves it before the re-read (`placeNotifiedRows`), and
+      // Home dates its rows by notification time whatever the list sorts by.
+      if (entity) trackNotifiedFloor(entity.id);
       return {
         key: soupItemKey(record),
         pageNotifiedAt: notifiedAt,
         item: () => item,
+        // Mapped here, once per row: the Mail index below reads every row
+        // whenever one row maps again.
+        itemId:
+          entity?.id ?? (item ? mapApiSoupItemToEntity(item).id : undefined),
         entity,
         timestamp: fetchedItem
           ? soupEntityTimestamp(mapApiSoupItemToEntity(fetchedItem), sort)
@@ -241,7 +246,7 @@ export function createGraphqlSoupAstItemsQuery(
       ? Object.fromEntries(
           visible().flatMap((row) => {
             const item = row.item();
-            return item ? [[mapApiSoupItemToEntity(item).id, item]] : [];
+            return item && row.itemId ? [[row.itemId, item]] : [];
           })
         )
       : undefined

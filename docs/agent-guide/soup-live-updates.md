@@ -76,7 +76,8 @@ other entity partitions, and notified-at sorting still use the network path:
 every notification patch (new, updated or deleted) re-reads mounted notified-at
 lists, whose rows render their own notifications (a loaded row takes the
 delivered notification time at once: its mapping reads the notified-at floor
-reactively, and the flat list moves it up to that time before the read); an entity the notification
+reactively; a flat list moves it up to that time before the read, a
+grouped one keeps it in place until the read); an entity the notification
 feed's refetch no longer returns is patched by nothing else. A Soup deletion of a
 channel (the viewer left or was removed from it) re-reads them too: the rows of
 its threads, and of documents shared only through it, otherwise stay. A flat one replays its

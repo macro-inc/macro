@@ -29,7 +29,8 @@ export function raiseNotifiedFloor(entityId: string, notifiedAt: string): void {
 /**
  * Subscribe the running computation to the entity's floor: it runs again when
  * a delivered notification raises it. `resolveNotifiedAt` alone never tracks,
- * so only a row projection that places rows by the floor pays for it.
+ * so only the GraphQL row projection, which maps one row per computation,
+ * pays for it.
  */
 export function trackNotifiedFloor(entityId: string): void {
   notifiedFloors.track(entityId);
