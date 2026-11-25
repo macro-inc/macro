@@ -32,7 +32,7 @@ export const TUTORIAL_VIDEOS = {
   mail: {
     feature: 'Email',
     title: 'Learn how to use Macro Mail',
-    length: '1:50',
+    length: '1:56',
   },
   tasks: {
     feature: 'Tasks',
@@ -67,18 +67,18 @@ export const TUTORIAL_VIDEOS = {
   calls: {
     feature: 'Calls',
     title: 'Learn how to use Macro Calls',
-    length: '0:59',
+    length: '0:58',
   },
-  crm: { feature: 'CRM', title: 'Learn how to use Macro CRM', length: '1:44' },
+  crm: { feature: 'CRM', title: 'Learn how to use Macro CRM', length: '1:46' },
   agents: {
     feature: 'Agents',
     title: 'Learn how to use Macro Agents',
-    length: '0:57',
+    length: '0:56',
   },
   macrod: {
     feature: 'MacroD',
     title: 'Learn how to use MacroD',
-    length: '1:31',
+    length: '1:47',
   },
   'teams-admin': {
     feature: 'Teams & Admin',
@@ -89,7 +89,7 @@ export const TUTORIAL_VIDEOS = {
   github: {
     feature: 'GitHub',
     title: 'Learn how to use Macro with GitHub',
-    length: '0:49',
+    length: '0:51',
   },
   routines: {
     feature: 'Routines',

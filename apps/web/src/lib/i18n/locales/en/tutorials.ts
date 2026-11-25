@@ -14,17 +14,17 @@ export default {
   mailBlock: 'Macro Mail',
   mailSnippet:
     'Every account in one inbox, plus channels, tasks, routines and agents',
-  mailLength: '1:50',
+  mailLength: '1:56',
   crmTitle: 'Learn how to use Macro CRM',
   crmBlock: 'Macro CRM',
   crmSnippet:
     'A pipeline that updates itself: kanban, routines after calls, AI chat',
-  crmLength: '1:44',
+  crmLength: '1:46',
   githubTitle: 'Learn how to use Macro with GitHub',
   githubBlock: 'GitHub in Macro',
   githubSnippet:
     'Pull request previews, coding agents that merge from channels, and PRs in splits',
-  githubLength: '0:49',
+  githubLength: '0:51',
   docsTitle: 'Learn how to use Macro Docs',
   docsBlock: 'Macro Docs',
   docsSnippet:
@@ -59,7 +59,7 @@ export default {
   callsBlock: 'Macro Calls',
   callsSnippet:
     'Calls with transcripts and summaries, shared with your team and its agents',
-  callsLength: '0:59',
+  callsLength: '0:58',
   schedulingTitle: 'Learn how to use Macro Scheduling',
   schedulingBlock: 'Macro Scheduling',
   schedulingSnippet:
@@ -84,12 +84,12 @@ export default {
   agentsBlock: 'Macro Agents',
   agentsSnippet:
     'Agents in your channels, tasks for agents, macroD, and every step they take',
-  agentsLength: '0:57',
+  agentsLength: '0:56',
   macrodTitle: 'Learn how to use MacroD',
   macrodBlock: 'MacroD',
   macrodSnippet:
-    'Set up the coding agent you already use, then @mention it in a channel',
-  macrodLength: '1:31',
+    'Set up the coding agent you already use, then @mention it anywhere in Macro',
+  macrodLength: '1:47',
   driveTitle: 'Learn how to use Macro Drive',
   driveBlock: 'Macro Drive',
   driveSnippet:
