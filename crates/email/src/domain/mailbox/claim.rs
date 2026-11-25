@@ -45,7 +45,7 @@ impl ClaimTurns {
     /// rounds first.
     pub fn next(&self) -> StreamClaim {
         let turn = self.0.fetch_add(1, Ordering::Relaxed);
-        if turn % IMPORT_FIRST_EVERY == 0 {
+        if turn.is_multiple_of(IMPORT_FIRST_EVERY) {
             StreamClaim::ImportFirst
         } else {
             StreamClaim::LongestDue
