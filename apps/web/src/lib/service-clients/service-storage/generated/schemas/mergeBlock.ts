@@ -5,8 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MergeBlockOneOf } from './mergeBlockOneOf';
+import type { MergeBlockOneOfThree } from './mergeBlockOneOfThree';
 
 /**
  * Why a merge can't go ahead until someone changes the records.
  */
-export type MergeBlock = MergeBlockOneOf;
+export type MergeBlock = MergeBlockOneOf | MergeBlockOneOfThree;

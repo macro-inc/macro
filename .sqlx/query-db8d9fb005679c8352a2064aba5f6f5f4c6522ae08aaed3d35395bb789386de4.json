@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH moving AS MATERIALIZED (\n                   SELECT DISTINCT ON (s.link_id) s.id, s.contact_id\n                   FROM crm_contact_sources s\n                   WHERE s.contact_id = ANY($2)\n                     AND NOT EXISTS (\n                         SELECT 1 FROM crm_contact_sources held\n                         WHERE held.contact_id = $1 AND held.link_id = s.link_id\n                     )\n                   ORDER BY s.link_id, s.created_at, s.id\n               ), moved AS (\n                   UPDATE crm_contact_sources s SET contact_id = $1\n                   FROM moving WHERE s.id = moving.id\n                   RETURNING s.id\n               )\n               SELECT moving.id, moving.contact_id FROM moving JOIN moved USING (id)\n               ORDER BY moving.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "db8d9fb005679c8352a2064aba5f6f5f4c6522ae08aaed3d35395bb789386de4"
+}
