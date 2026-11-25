@@ -521,7 +521,7 @@ impl ParkedWorkRecoveryRepository for PgMailboxSync {
     ) -> Result<Option<ParkedWorkRecoveryPage>, MailboxError> {
         // This is an absolute page budget, not a fresh timeout for each probe.
         tokio::time::timeout(
-            Duration::from_secs(2),
+            self.recovery_page_budget,
             self.advance_parked_work_recovery(limit),
         )
         .await

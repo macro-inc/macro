@@ -37,6 +37,8 @@ pub struct PgMailboxSync {
     pub(super) db: PgPool,
     imports_paused: bool,
     provider: crate::domain::models::UserProvider,
+    /// Wall-clock bound on one parked-work recovery page, across its probes.
+    recovery_page_budget: std::time::Duration,
 }
 
 impl PgMailboxSync {
@@ -45,7 +47,14 @@ impl PgMailboxSync {
             db,
             imports_paused: false,
             provider: crate::domain::models::UserProvider::Outlook,
+            recovery_page_budget: std::time::Duration::from_secs(2),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_recovery_page_budget(mut self, budget: std::time::Duration) -> Self {
+        self.recovery_page_budget = budget;
+        self
     }
 
     /// Bind every claim to one provider so workers never send another provider's work to this gateway.

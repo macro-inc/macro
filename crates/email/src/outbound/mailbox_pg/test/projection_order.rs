@@ -4,28 +4,30 @@ use crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository;
 use crate::domain::mailbox::projection::MailboxProjectionRepository;
 use crate::domain::mailbox::projection::ProjectionClaim;
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_slow_projection_unpark_halves_within_the_wrap_until_it_fits(db: PgPool) {
-    let (repo, link) = fixture(&db).await;
+/// 64 parked projection rows on `link`, behind a trigger that sleeps 0.4 s
+/// on any unpark UPDATE over 10 rows and counts each attempt by size.
+async fn slow_projection_unpark(db: &PgPool, link: Uuid) {
     sqlx::query!(
         "INSERT INTO email_projection_outbox (id,link_id,generation,payload,parked_at) SELECT gen_random_uuid(),$1,1,'{\"kind\":\"link_changed\"}',now() FROM generate_series(1,64)",
         link
-    ).execute(&db).await.unwrap();
+    ).execute(db).await.unwrap();
     sqlx::query!("CREATE SEQUENCE unpark_large_attempt")
-        .execute(&db)
+        .execute(db)
         .await
         .unwrap();
     sqlx::query!("CREATE SEQUENCE unpark_medium_attempt")
-        .execute(&db)
+        .execute(db)
         .await
         .unwrap();
     sqlx::query!("CREATE SEQUENCE unpark_small_attempt")
-        .execute(&db)
+        .execute(db)
         .await
         .unwrap();
-    // Sequences survive savepoint rollback. With projection-only work, the
-    // shared quota's first UPDATE is 22, 11 or 6 rows for budgets 64, 32 or 16.
-    // Budget 16 can then borrow its remaining 10 rows without another timeout.
+    // Sequences survive savepoint rollback. With projection-only work across
+    // the five families, a link page's first UPDATE is 13, 7, 4 or 2 rows for
+    // budgets 64, 32, 16 or 8, and its borrowing UPDATE takes the rest of the
+    // page, so attempts over 10 rows sleep past the probe's 250 ms statement
+    // timeout and halve until the page fits; a page takes several probes.
     sqlx::query!(
         r#"
         CREATE FUNCTION projection_unpark_budget() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -42,12 +44,21 @@ async fn a_slow_projection_unpark_halves_within_the_wrap_until_it_fits(db: PgPoo
         END $$
         "#
     )
-    .execute(&db)
+    .execute(db)
     .await
     .unwrap();
     sqlx::query!(
         "CREATE TRIGGER projection_unpark_budget AFTER UPDATE ON email_projection_outbox REFERENCING OLD TABLE AS updated_rows FOR EACH STATEMENT EXECUTE FUNCTION projection_unpark_budget()"
-    ).execute(&db).await.unwrap();
+    ).execute(db).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_slow_projection_unpark_halves_within_the_wrap_until_it_fits(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    // The page's timed-out attempts add up past the production budget, which
+    // the next test covers; this one checks what the halving achieves.
+    let repo = repo.with_recovery_page_budget(std::time::Duration::from_secs(60));
+    slow_projection_unpark(&db, link).await;
     let page = repo.recover_page(64).await.unwrap().unwrap();
     assert_eq!(page.rows_unparked, 64);
     assert_eq!(page.failed_probes, 0);
@@ -58,8 +69,17 @@ async fn a_slow_projection_unpark_halves_within_the_wrap_until_it_fits(db: PgPoo
     ).fetch_one(&db).await.unwrap();
     assert!(
         all_called,
-        "64 and 32 must time out before a smaller attempt drains the link"
+        "large and medium attempts must time out before smaller ones drain the link"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_recovery_page_past_its_budget_fails_as_persistence(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let repo = repo.with_recovery_page_budget(std::time::Duration::from_millis(300));
+    slow_projection_unpark(&db, link).await;
+    let error = repo.recover_page(64).await.unwrap_err();
+    assert!(matches!(error, MailboxError::Persistence), "{error:?}");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
