@@ -3049,9 +3049,10 @@ impl CacheEngine {
             let mut state = state.lock().await;
             // Once closed, the side file is the next open's.
             state.ensure_callable()?;
-            if std::mem::take(&mut state.loss_to_tell) {
+            if state.loss_to_tell {
                 salvage::told(&state.sidecar).await?;
             }
+                state.loss_to_tell = false;
             Ok(JsValue::UNDEFINED)
         })
     }

@@ -536,9 +536,13 @@ async fn leave(sidecar: &Sidecar, report: QueueReport) -> Result<QueueReport, Js
 }
 
 /// Drops the loss that [`leave`] noted, once it was told. One that stays is
-/// told again.
+/// told again, and a queue that could not be read before is the next open's.
 pub(super) async fn told(sidecar: &Sidecar) -> Result<(), JsValue> {
-    unless_busy(sidecar.remove().await)
+    let read = read_file(sidecar).await;
+    match read.map_err(|error| storage_err_js(&error))? {
+        Some(file) if file.queue().is_none() => unless_busy(sidecar.remove().await),
+        _ => Ok(()),
+    }
 }
 
 /// Forgets a queue on its way, with the database it was on its way to. One

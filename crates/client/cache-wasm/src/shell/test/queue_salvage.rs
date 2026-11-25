@@ -751,6 +751,63 @@ async fn a_death_between_noting_a_loss_and_ending_the_copy_under_it_queues_nothi
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_told_loss_that_could_not_be_let_go_of_is_let_go_of_later() {
+    const SCOPE: &str = "cache-wasm-salvage-told-busy";
+    closed_with_queue(SCOPE).await;
+    write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    hold_side_file(SCOPE).await;
+    let told = wasm_bindgen_futures::JsFuture::from(engine.queue_loss_told()).await;
+    release_side_file().await;
+    assert!(told.is_err());
+    tell(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn telling_leaves_a_queue_that_could_not_be_read() {
+    const SCOPE: &str = "cache-wasm-salvage-told-unread";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+    run_js(
+        "self.removeEntry = FileSystemDirectoryHandle.prototype.removeEntry;
+         const create = FileSystemFileHandle.prototype.createSyncAccessHandle;
+         self.createAny = create;
+         FileSystemFileHandle.prototype.createSyncAccessHandle = async function (...options) {
+           const handle = await create.apply(this, options);
+           if (this.name.endsWith('-salvage'))
+             handle.write = handle.truncate = () => {
+               throw new DOMException('full', 'QuotaExceededError');
+             };
+           return handle;
+         };
+         FileSystemDirectoryHandle.prototype.removeEntry = async function (file, options) {
+           if (file.endsWith('-salvage')) throw new DOMException('no', 'UnknownError');
+           return self.removeEntry.call(this, file, options);
+         };
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    run_js(
+        "FileSystemFileHandle.prototype.createSyncAccessHandle = self.createAny;
+         FileSystemDirectoryHandle.prototype.removeEntry = self.removeEntry;
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    restore_side_files().await;
+    assert_eq!(queue[0], "unreadable");
+    resolved(engine.queue_loss_told()).await;
+    resolved(engine.close()).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn an_import_from_memory_leaves_the_copy_that_could_not_be_read() {
     const SCOPE: &str = "cache-wasm-salvage-import-unread";
     closed_with_queue(SCOPE).await;
