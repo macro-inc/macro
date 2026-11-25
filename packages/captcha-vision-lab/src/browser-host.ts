@@ -88,14 +88,19 @@ const labRequest = (
   body: Buffer | null
 ): Promise<LabResponse> =>
   new Promise((resolve, reject) => {
+    const failed = (error: Error) => {
+      clearTimeout(timeout);
+      reject(error);
+    };
     const outgoing = httpRequest(
       url,
       { method, headers, agent: false },
       (incoming) => {
         const chunks: Buffer[] = [];
         incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
-        incoming.on('error', reject);
+        incoming.on('error', failed);
         incoming.on('end', () => {
+          clearTimeout(timeout);
           const flat: Record<string, string> = {};
           for (const [name, value] of Object.entries(incoming.headers)) {
             if (value !== undefined) {
@@ -110,9 +115,10 @@ const labRequest = (
         });
       }
     );
-    outgoing.on('error', reject);
-    outgoing.setTimeout(LAB_REQUEST_TIMEOUT_MS, () =>
-      outgoing.destroy(new Error('lab request timed out'))
+    outgoing.on('error', failed);
+    const timeout = setTimeout(
+      () => outgoing.destroy(new Error('lab request timed out')),
+      LAB_REQUEST_TIMEOUT_MS
     );
     outgoing.end(body ?? undefined);
   });

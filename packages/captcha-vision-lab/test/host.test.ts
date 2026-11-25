@@ -138,6 +138,50 @@ describe('a host with an open page', () => {
 
   const ordinal = (reply: HostReply) => reply.type;
 
+  test('a continuously streaming response exceeds the absolute request deadline', async () => {
+    handler = async () => {
+      const chunk = new TextEncoder().encode(' ');
+      let interval: ReturnType<typeof setInterval>;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            const started = performance.now();
+            controller.enqueue(chunk);
+            interval = setInterval(() => {
+              if (performance.now() - started >= 12_000) {
+                clearInterval(interval);
+                controller.close();
+              } else {
+                controller.enqueue(chunk);
+              }
+            }, 250);
+          },
+          cancel() {
+            clearInterval(interval);
+          },
+        }),
+        { headers: { 'content-type': 'text/html' } }
+      );
+    };
+    const profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-test-'));
+    const host = startBrowserHost();
+    try {
+      if (host === undefined) throw new Error('no node on PATH');
+      const opened = await host.request({
+        type: 'open',
+        targetUrl: LAB_URL,
+        capability: 'c',
+        sessionNonce: 'n',
+        profile,
+        executablePath: process.env.LAB_CHROMIUM_PATH,
+      });
+      expect(opened).toMatchObject({ type: 'opened', result: 'load_failed' });
+    } finally {
+      await host?.stop();
+      await rm(profile, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   test('a second open ends the host', async () => {
     const { host, cleanup } = await openedHost();
     try {
