@@ -144,10 +144,15 @@ navigation, and replacement confirm dirty-draft discard.
 Desktop creation shows Event/Out of office choices and session-local summary groups
 for dates/repeat, guests, and calendar/reminders/visibility. Opening a group replaces
 its summary in place; several groups can remain open. Dates and times join with a
-comma. The date group contains All day, Time zone, and Repeat, without Duration or
-More/Fewer. Guest/reminder multiselects preserve protected guests and non-popup
-reminders; Custom accepts minutes. Long Description/Location fields scroll inside.
-The footer contains Cancel, Create event/Save, and recurring scope when applicable.
+comma. The date group contains the shared All day switch, Time zone, and Repeat,
+without Duration or More/Fewer. Desktop and agent date/time controls use the same
+control surface, height, and radius. Guest/reminder multiselects preserve protected
+guests and non-popup reminders; Custom accepts minutes. Long Description/Location
+fields scroll inside. The footer keeps Cancel and Create event/Save on the right.
+For recurring edits, Save opens its scope menu: This event or All events. Enter
+opens the menu; arrow keys and Enter select and save. Following-event updates are
+not supported by the current API. Cancelling the menu does not save or change scope.
+Eligible invitation forwarding appears as a labelled icon button on the left.
 Desktop field groups use a 10px gap (`gap-2.5`). Capped descriptions expose a thin
 native scrollbar. Guest summaries and selectors show neutral avatar stacks before
 selected names. The agent draft and preview share equal columns once their container
@@ -178,8 +183,11 @@ team conflicts; unsupported guests and failed reads remain unknown.
 Time pills open hour/minute wheels, with AM/PM when applicable. Settlement applies
 values; arrows step rows. Hours carry across noon/midnight; off-step minutes survive
 until changed. Start changes preserve duration and end changes require a positive
-range. All day hides clocks/Time zone and restores times when switched off.
-Only one picker remains open.
+range. The shared All day switch hides clocks/Time zone and restores times when
+switched off. Only one picker remains open. Recurring phone edits use the same
+Save-button scope menu; eligible forwarding sits to its left in the fixed footer.
+Agent drafts share the all-day control and field surfaces; they create events,
+so recurring edit scope and invitation forwarding do not apply to their flow.
 
 Day-slot creation opens a low non-modal sheet with an unsaved grid draft. Resizing
 updates form times without clearing other edits; form time/zone changes update the
@@ -370,7 +378,7 @@ new session from the same meeting link must start a separate chat thread.
 
 
 Phone event creation and editing use the single grouped sheet described above.
-Recurring scope stays above the footer, and dismissal preserves dirty-draft confirmation.
+Recurring scope opens from Save in the fixed footer, and dismissal preserves dirty-draft confirmation.
 Legacy EventForm/MobileEventForm remain unwired reference components.
 An event created from Home's **+ New** → Event opens the calendar on it once it saves, with its
 details showing; events created inside the calendar stay where they were made.
@@ -954,9 +962,10 @@ line unless the description already shows it, plus `CONFERENCE` (and, for Meet,
 `X-GOOGLE-CONFERENCE`). The toast reads `Invitation forwarded to <name>` (or `to N
 people`) once the send is accepted; a failure reads `Could not forward the invitation`, with
 `Retry` unless the server refused the recipients (400 `invalid_recipients`, whose reason
-shows instead). The editor offers the same `Forward invitation` beside its read-only guests
-pill, whose tooltip carries the longer explanation. Event details stay open while the
-forward editor is, as they do for `Add guests`. Snapshots, cancelled events, read-only
+shows instead). The editor offers a labelled `Forward invitation` button with its
+icon on the footer's left, only for eligible edits. Event details keep the compact
+forward action in the attendees header. Event details stay open while the forward
+editor is open, as they do for `Add guests`. Snapshots, cancelled events, read-only
 copies and team projections offer nothing. To check the toasts without sending mail, answer
 the route with 202 `{messageId, threadId}`, or with 502 `send_failed` or 400
 `invalid_recipients`.
@@ -1803,9 +1812,9 @@ Outlook event you organize, turning Teams off (the pill reads `No meeting link`)
 disables Save and shows a notice with `Replace event…` and `Undo`; `Undo` turns
 Teams back on. `Replace event…` previews a replacement that carries the editor's
 unsaved changes (title, time, description, location, guests, reminders, repeat
-rule) without Teams; nothing is saved to the old event. It replaces this occurrence
-or all events as the editor's `Apply changes to` choice says. A time or repeat change
-on the whole series drops its changed and cancelled occurrences, as Outlook does;
+rule) without Teams; nothing is saved to the old event. For recurring events,
+`Replace without meeting` asks for This event or All events before its preview.
+A time or repeat change on the whole series drops its changed and cancelled occurrences, as Outlook does;
 otherwise occurrences still showing the series' value take the edit, and guests
 added or removed on the series are added to or removed from every occurrence. Check the
 cancellation/reinvitation acknowledgement before `Replace event`. The old

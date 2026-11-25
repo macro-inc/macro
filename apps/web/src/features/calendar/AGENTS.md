@@ -41,11 +41,14 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Keep the same editor mounted while pinning or floating; guard dirty replacement and all dismissal paths.
 - Use the shared sidebar target and drag primitive for cards and composers; gate pinning on measured host width without losing the requested pin.
 - Preserve explicit metadata through both save and conference replacement; do not rewrite untouched values.
-- Keep single-occurrence visibility unavailable because read APIs omit that override.
+- Omit single-occurrence visibility, recurrence, and guest-policy writes without mutating the staged series draft.
 - Compose phone menus as inline choices or pages inside the same sheet, never stacked drawers.
 - Stage People and custom recurrence changes until Done; discard staged changes on Back or permission loss.
 - Keep unsaved Day-grid resizing bound to the mounted draft, not persisted-event mutations.
 - Keep standalone composer hotkey scopes attached to their host so app shortcuts still run from text fields.
+- Use the shared ToggleSwitch for All day and the same control surfaces for desktop and agent date/time fields.
+- Request recurring edit scope from the Save dropdown; preserve the supported `this_event`/`all` save path and single-occurrence restrictions.
+- Keep eligible invitation forwarding as a labelled footer-leading action, separate from Save/Cancel and event-detail header icons.
 - Keep native momentum on the virtual track; sample the live viewport without writing scrollLeft during movement.
 - Finish the previous target and advance immediately on rapid period presses; use native smooth scrolling for a single press.
 - Navigate from known locator dates before loading occurrences, refine Agenda to the resolved occurrence day, and keep skeletons/errors inside the destination page.
