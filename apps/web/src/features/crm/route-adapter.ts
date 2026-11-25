@@ -32,6 +32,7 @@ import type {
 } from './context/workspace-context';
 import { pipelineIdOfTab, pipelineTab } from './core/navigation';
 import type { CrmRecordRef, CrmRecordSection } from './core/record';
+import { useOpenMergedCompany } from './crm-merged-company';
 import {
   type CrmItemParams,
   type CrmRecordParams,
@@ -132,7 +133,8 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
   const showRecord = (
     trail: readonly CrmRecordRef[],
     section: CrmRecordSection | undefined,
-    followLink = false
+    followLink = false,
+    replace = false
   ) => {
     const record = trail.at(-1);
     if (!record) return;
@@ -144,6 +146,7 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
     // A message target belongs to the record it was asked for.
     const options = {
       allowDuplicate: !followLink,
+      replace,
       state: [...trail],
       search: { [crmRecordSearch.namespace]: undefined },
     };
@@ -161,6 +164,18 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
       'crm'
     );
   };
+
+  const openMerged = useOpenMergedCompany((survivorId) =>
+    showRecord(
+      [
+        ...records().slice(0, -1),
+        { type: 'company', id: survivorId, name: '' },
+      ],
+      undefined,
+      true,
+      true
+    )
+  );
 
   const showList = (next: string, replace?: boolean) => {
     const pipelineId = pipelineIdOfTab(next);
@@ -311,6 +326,7 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
         ? { commentId: recordSearch.commentId, seek: recordSearch.seek }
         : undefined,
     open: (trail, options) => showRecord(trail, undefined, options?.followLink),
+    openMerged,
     setSection: (section) => showRecord(records(), section),
     item,
     openItem,

@@ -84,6 +84,8 @@ type CrmRecordDetailProps = {
   ) => void;
   onSectionChange: (section: CrmRecordSection) => void;
   onClose: () => void;
+  /** Shows the company the shown one was merged into, in its place. */
+  onMerged?: (survivorId: string) => void;
   navigation: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
 };
@@ -240,6 +242,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                         section={companySection()}
                         headerToggle={false}
                         onOpenPipeline={props.onOpenPipeline}
+                        onMerged={props.onMerged}
                         onOpenContact={(contact) =>
                           open({
                             type: 'contact',
