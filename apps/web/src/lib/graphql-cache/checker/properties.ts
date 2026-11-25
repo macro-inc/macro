@@ -142,19 +142,22 @@ function lostWrites(world: World): Violation[] {
 
 /**
  * Pages whose queued write could not be read, and which were not told. One that
- * was signed out since, or left its cache to a newer build, has no host to ask.
+ * had been signed out, or had left its cache to a newer build, when the write
+ * was lost has no host to ask.
  */
 function untold(world: World): Violation[] {
   return world.calls
     .filter(({ page, uuid, issuedAt, moot }) => {
-      if (moot || !uuid || !world.storage.unreadable.has(uuid)) return false;
+      const lostAt = world.storage.unreadable.get(uuid ?? '');
+      if (moot || lostAt === undefined) return false;
       const asked = pageOf(world, page);
+      if (!asked || exempt(asked)) return false;
+      const signedOut =
+        issuedAt < asked.sessionSince && asked.sessionSince <= lostAt;
+      const left =
+        asked.reloadAskedAt !== undefined && asked.reloadAskedAt <= lostAt;
       return (
-        asked !== undefined &&
-        !exempt(asked) &&
-        issuedAt >= asked.sessionSince &&
-        !world.reloadRequests.includes(page) &&
-        !asked.queueResets.some((at) => at >= issuedAt)
+        !signedOut && !left && !asked.queueResets.some((at) => at >= issuedAt)
       );
     })
     .map(({ page }) => ({
@@ -259,8 +262,12 @@ function missingEngine(world: World, pages: Page[]): Violation[] {
     .findLast((coordinator) => coordinator.scope() === scope)
     ?.coreState();
   if (state?.startsWith('active')) return [];
-  // Each attempt to take it over waits, then fails.
-  const waits = /^(activating|resetting-after-loss)/.test(state ?? '');
+  // Each attempt to take it over waits, then fails. One whose assets do not
+  // load never gets to wait.
+  const loads = !world.injected.some((fault) => /assets$/.test(fault));
+  const waits =
+    state?.startsWith('resetting-after-loss') ||
+    (state?.startsWith('activating') && loads);
   if (waits && heldByFrozen(world)) return [];
   return [
     {

@@ -273,6 +273,8 @@ export class Page {
   session = 0;
   /** When its session last began after another had ended. */
   sessionSince = 0;
+  /** When it asked to reload for a newer build. */
+  reloadAskedAt: number | undefined;
   /** When its host said that some of the queue may be gone. */
   readonly queueResets: number[] = [];
 
@@ -304,6 +306,7 @@ export class Page {
         telemetry: NOOP_TELEMETRY,
         onSuperseded: () => {
           this.world.reloadRequests.push(this.id);
+          this.reloadAskedAt ??= this.world.sim.now;
         },
         onUnavailable: (error) => {
           if (this.host !== host) return;
