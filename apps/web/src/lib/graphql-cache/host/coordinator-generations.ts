@@ -35,6 +35,7 @@ export class CoordinatorGenerations {
   private started: number | undefined;
   /** Ends this page's turn to start a generation, or its wait for it. */
   private endTurn: (() => void) | undefined;
+  private attempt = 0;
 
   constructor(
     readonly scope: string,
@@ -44,7 +45,7 @@ export class CoordinatorGenerations {
   /** The newest one that runs, or else the last this page knew. */
   async pick(): Promise<number> {
     const started = this.started;
-    const newest = (await this.running()).at(-1);
+    const newest = (await this.running())?.at(-1);
     this.current =
       started === undefined
         ? (newest ?? this.current)
@@ -58,7 +59,7 @@ export class CoordinatorGenerations {
     for (;;) {
       await delay(COORDINATOR_WATCH_INTERVAL_MS, signal);
       if (this.connecting === undefined) continue;
-      const newest = (await this.running()).at(-1);
+      const newest = (await this.running())?.at(-1);
       if (newest !== undefined && newest > this.connecting)
         throw new NewerCoordinatorRunsError();
     }
@@ -66,18 +67,25 @@ export class CoordinatorGenerations {
 
   /**
    * Nobody answered. A coordinator that runs may only be slow, so it gets every
-   * attempt but the last; without one the next attempt uses a new name. Resolves
-   * with whether it does.
+   * attempt but the last; without one the next attempt uses a new name. Not in a
+   * browser that won't say what runs, whose pages could not find one another.
+   * Resolves with whether the next attempt uses a new name.
    */
   async renameUnanswered(lastAttemptNext: boolean): Promise<boolean> {
-    const { current } = this;
+    const { current, attempt } = this;
     const running = await this.running();
+    if (running === undefined || attempt !== this.attempt) return false;
     if (running.some((generation) => generation > current)) return false;
     if (running.includes(current) && !lastAttemptNext) return false;
     if (!(await this.takeTurn())) return false;
     // The page whose turn it was before may have started one.
-    const newest = (await this.running()).at(-1);
-    if (newest !== undefined && newest > current) {
+    const runningNow = await this.running();
+    if (attempt !== this.attempt) return false;
+    const newest = runningNow?.at(-1);
+    if (
+      runningNow === undefined ||
+      (newest !== undefined && newest > current)
+    ) {
       this.endAttempt();
       return false;
     }
@@ -87,6 +95,7 @@ export class CoordinatorGenerations {
 
   /** The attempt ended, with or without an answer. */
   endAttempt(): void {
+    this.attempt += 1;
     this.connecting = undefined;
     this.started = undefined;
     this.endTurn?.();
@@ -133,22 +142,37 @@ export class CoordinatorGenerations {
     return goesOn;
   }
 
-  /** The generations that run, oldest first; none when the browser won't say. */
-  private async running(): Promise<number[]> {
+  /** The generations that run, oldest first, if the browser says. */
+  private async running(): Promise<number[] | undefined> {
+    const giveUp = new AbortController();
     try {
-      const { held = [] } = await navigator.locks.query();
+      const { held = [] } = await Promise.race([
+        navigator.locks.query(),
+        noAnswer(LOCK_QUERY_TIMEOUT_MS, giveUp.signal),
+      ]);
       return held
-        .flatMap(({ name }) =>
-          name === undefined
+        .flatMap(({ name, mode }) =>
+          // A shared one is a page's that was only told the holder is gone.
+          name === undefined || mode === 'shared'
             ? []
             : (generationFromCoordinatorLockName(this, name) ?? [])
         )
         .sort((left, right) => left - right);
     } catch {
-      return [];
+      return undefined;
+    } finally {
+      giveUp.abort();
     }
   }
 }
+
+const LOCK_QUERY_TIMEOUT_MS = 5_000;
+
+/** Rejects after `ms`, or when `signal` aborts. */
+const noAnswer = async (ms: number, signal: AbortSignal): Promise<never> => {
+  await delay(ms, signal);
+  throw new Error('the browser does not list its locks');
+};
 
 /** Rejects when `signal` aborts. */
 const delay = (ms: number, signal: AbortSignal): Promise<void> =>

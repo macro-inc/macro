@@ -470,6 +470,41 @@ test('a page that is not answered brings the pages of a running coordinator with
   ).toBe(generation);
 });
 
+test('a page that is not answered gets its cache while the page with the engine is stuck', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name.includes('firefox'),
+    'Firefox may run both pages on the thread that is stuck'
+  );
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&scope=${crypto.randomUUID()}`;
+  await page.goto(path);
+  await expect(async () => {
+    expect(await startAndRead(page)).toEqual({ kind: 'miss' });
+  }).toPass();
+  await page.evaluate(() => window.cacheLifecycleHarness.write('kept'));
+  const unanswered = await context.newPage();
+  await unanswered.goto(`${path}&unanswered=true`);
+  const STUCK_MS = 40_000;
+  const stuckUntil = Date.now() + STUCK_MS;
+  const stuck = page.evaluate((until) => {
+    while (Date.now() < until);
+  }, stuckUntil);
+  await expect(async () => {
+    expect(await startAndRead(unanswered)).toMatchObject({ kind: 'hit' });
+  }).toPass({ timeout: STUCK_MS });
+  expect(Date.now()).toBeLessThan(stuckUntil);
+
+  await stuck;
+  await expect(async () => {
+    expect(await startAndRead(page)).toMatchObject({ kind: 'hit' });
+  }).toPass();
+  await expect
+    .poll(() => [page, unanswered].flatMap((target) => target.workers()).length)
+    .toBe(1);
+});
+
 test('a silently terminated engine still recovers after releasing its owner lock', async ({
   page,
 }, testInfo) => {

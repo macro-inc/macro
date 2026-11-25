@@ -9,6 +9,7 @@ import {
 import {
   type CoordinatorMessagePort,
   CoordinatorRouter,
+  queryHeldLockNames,
 } from './coordinator-router';
 import type { CacheTakeoverMessage } from './coordinator-takeover';
 
@@ -3672,6 +3673,60 @@ describe('registration acknowledgement', () => {
     await register(router, late, 'tab-late');
     expect(registered(late)).toEqual([]);
     expect(messagesOfKind(late, 'connection-closed')).toHaveLength(1);
+  });
+
+  it('has its engine close the database, and answers who is registering, as it ends', async () => {
+    const lost: (() => void)[] = [];
+    const probe = Promise.withResolvers<boolean>();
+    let probes = 0;
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => (probes++ === 0 ? true : probe.promise),
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock: async (_lockName, onLost) => {
+        lost.push(onLost);
+      },
+      queryHeldLockNames: async () => [],
+      endCoordinator: () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    const joining = new FakePort();
+    const joined = register(router, joining, 'tab-b');
+    lost[0]?.();
+
+    expect(messagesOfKind(engine, 'drain-engine')).toMatchObject([
+      { ownerEpoch: 1 },
+    ]);
+    expect(messagesOfKind(joining, 'connection-closed')).toHaveLength(1);
+    probe.resolve(true);
+    await joined;
+    expect(registered(joining)).toEqual([]);
+  });
+
+  it('does not take a page that was told the holder is gone for a coordinator', async () => {
+    vi.stubGlobal('navigator', {
+      locks: {
+        query: async () => ({
+          held: [
+            {
+              name: 'graphql-cache-coordinator:scope:0:6:gone',
+              mode: 'shared',
+            },
+            {
+              name: 'graphql-cache-coordinator:scope:0:5:runs',
+              mode: 'exclusive',
+            },
+          ],
+        }),
+      },
+    });
+    expect(await queryHeldLockNames()).toEqual([
+      'graphql-cache-coordinator:scope:0:5:runs',
+    ]);
+    vi.unstubAllGlobals();
   });
 
   it('serves its tabs when it cannot end an older coordinator', async () => {

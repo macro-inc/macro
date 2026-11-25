@@ -14,11 +14,14 @@ const BUILD = { scope: 'scope', buildTime: 1 };
 const TURN = newCoordinatorLockName(BUILD);
 
 let running: number[];
+/** Generations whose lock a page was given, to learn that they ended. */
+let watched: number[];
 let locks: ReturnType<typeof originLocks>;
 
 beforeEach(() => {
   vi.useFakeTimers({ now: 1_000 });
   running = [];
+  watched = [];
   locks = originLocks();
   vi.stubGlobal('navigator', {
     locks: {
@@ -27,6 +30,11 @@ beforeEach(() => {
         held: [
           ...running.map((generation) => ({
             name: coordinatorLivenessLockName({ ...BUILD, generation }, 'id'),
+            mode: 'exclusive',
+          })),
+          ...watched.map((generation) => ({
+            name: coordinatorLivenessLockName({ ...BUILD, generation }, 'id'),
+            mode: 'shared',
           })),
           // Another build's, another scope's, and no coordinator's.
           { name: 'graphql-cache-coordinator:scope:2:9999999:id' },
@@ -161,11 +169,46 @@ describe('CoordinatorGenerations', () => {
     await ended;
   });
 
-  it('knows none where the browser lists no locks', async () => {
+  it('keeps its name where the browser lists no locks', async () => {
     vi.stubGlobal('navigator', { locks: { request: locks.request } });
     const page = await unansweredPage();
-    expect(await page.renameUnanswered(false)).toBe(true);
-    expect(await page.pick()).toBe(1_000);
+    expect(await page.renameUnanswered(true)).toBe(false);
+    expect(await page.pick()).toBe(0);
+    page.endAttempt();
+  });
+
+  it('keeps its name where the browser never lists its locks', async () => {
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: locks.request,
+        query: () => new Promise<LockManagerSnapshot>(() => {}),
+      },
+    });
+    const page = newPage();
+    const picked = page.pick();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(await picked).toBe(0);
+    page.endAttempt();
+    const renamed = page.renameUnanswered(true);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(await renamed).toBe(false);
+  });
+
+  it('takes no turn for an attempt that ended while it looked', async () => {
+    const page = await unansweredPage();
+    const renamed = page.renameUnanswered(false);
+    page.endAttempt();
+    expect(await renamed).toBe(false);
+
+    const next = await unansweredPage();
+    expect(await next.renameUnanswered(false)).toBe(true);
+    next.endAttempt();
+  });
+
+  it('does not take a page that was told the holder is gone for a coordinator', async () => {
+    watched = [7];
+    const page = newPage();
+    expect(await page.pick()).toBe(0);
     page.endAttempt();
   });
 });

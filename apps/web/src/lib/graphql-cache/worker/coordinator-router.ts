@@ -231,10 +231,12 @@ async function verifyClientHoldsLock(
   );
 }
 
+/** The locks somebody holds for their life. A shared one is a page's that was
+ * only told the holder is gone, and keeps it while it is frozen. */
 export async function queryHeldLockNames(): Promise<string[]> {
   const snapshot = await navigator.locks.query();
   return (snapshot.held ?? []).flatMap((lock) =>
-    lock.name === undefined ? [] : [lock.name]
+    lock.name === undefined || lock.mode === 'shared' ? [] : [lock.name]
   );
 }
 
@@ -627,10 +629,6 @@ export class CoordinatorRouter {
       return;
     }
     this.pendingRegistrations.delete(port);
-    if (this.endedReason !== undefined) {
-      this.closeConnection(port, this.endedReason);
-      return;
-    }
     if (!lockHeld) {
       this.postProtocolError(
         port,
@@ -767,8 +765,21 @@ export class CoordinatorRouter {
       outcome: 'abrupt',
       ownerEvent: 'coordinator-replaced',
     });
+    // Its page ends the engine, unless that page is stuck.
+    const route = this.engineRoute;
+    if (route)
+      this.sendToEngine(
+        route,
+        envelope<CoordinatorToEngineEnvelope>({
+          kind: 'drain-engine',
+          ownerEpoch: route.ownerEpoch,
+        })
+      );
     for (const { port } of this.tabs.values())
       this.closeConnection(port, reason);
+    for (const port of this.pendingRegistrations.keys())
+      this.closeConnection(port, reason);
+    this.pendingRegistrations.clear();
     this.endCoordinator();
   }
 
