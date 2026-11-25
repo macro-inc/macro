@@ -267,8 +267,8 @@ people keep their two initials. Agents have no picture editor. Under the sizes, 
 what Add charges for: "Its own computer, always on. $X/month is added to your
 team subscription, prorated for the rest of this billing period. The agent's
 seat costs nothing extra." (for an included size, "Nothing is added to your
-team subscription…"). Voice and role come later, and the agent asks what to take
-on once it is online.
+team subscription…"). Voice and role come later. Once online, the agent uses
+its invite name and asks what to take on.
 
 Sizes come from the same catalog and prices as Buy a computer
 (sold-out sizes are disabled and marked **Sold out**; Add with every size sold

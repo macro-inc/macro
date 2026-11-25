@@ -4,10 +4,9 @@ A new agent, ready to become someone's: an agent with its own Macro account
 that talks with you in chat, joins calls with its voice, shares its screen,
 keeps its own memory, and can change its own code.
 
-When its owner described it in the invite, that is who it is
-(`state/memory/identity/identity.md`). When they didn't, it is not anyone
-yet: the first thing it does is DM its owner to ask who it should be, and
-what it is told becomes part of every later run.
+Each wake uses the agent's saved identity (`state/memory/identity/identity.md`)
+when present. With a name-only invite, the agent already knows its name from
+`agent.json` and DMs its owner to ask what to take on first.
 
 - `AGENT.md` is its charter: how it works. It says nothing about who it is.
 - `ARCHITECTURE.md` is how the code is laid out and the rules it keeps.
@@ -25,9 +24,9 @@ repository, provides `@macro-inc/muppet`, `@macro-inc/sdk`, Claude Code and
 the programs the capabilities use, and runs `bin/agent run` as a system
 service.
 
-Once it is running, it DMs you in Macro. Answer it: that conversation is how
-it learns its name, its purpose and how to talk. It writes what you tell it
-to `state/memory/identity/identity.md`.
+When it needs to learn its role, it DMs you in Macro. That conversation is
+how it learns its purpose and how to talk. It writes what you tell it to
+`state/memory/identity/identity.md`.
 
 ## What it can do
 

@@ -8,9 +8,10 @@ In one of the agent's own runs, `AGENT.md` is already your system prompt. In
 any other session here, you are working on the agent: read `AGENT.md` before
 changing what it does.
 
-1. `AGENT.md` is its charter: how it works. Who it is comes from its owner,
-   in conversation, and is kept in `state/memory/identity/identity.md`. Never
-   write a personality into the charter or the code.
+1. `AGENT.md` is its charter: how it works. Each wake uses the identity in
+   `state/memory/identity/identity.md` when present. Until then it uses the
+   configured name in `agent.json` if present and asks its owner about the
+   rest. Never write a personality into the charter or the code.
 2. `ARCHITECTURE.md` is how the code is laid out and the rules it keeps. Read
    it before changing anything under `behavior/`.
 3. `ENGINEERING.md` is how a change or a fix is made.
