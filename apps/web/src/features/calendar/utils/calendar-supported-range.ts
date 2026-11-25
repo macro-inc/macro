@@ -1,5 +1,3 @@
-import type { CalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
-
 const CALENDAR_HISTORY_DAYS = 364;
 const CALENDAR_FUTURE_DAYS = 729;
 
@@ -23,9 +21,21 @@ export function getCalendarSupportedRange(
   return { start, end };
 }
 
+/** Clip a larger display window while retaining the supported dates it contains. */
+export function clipCalendarDisplayRange(
+  start: Date,
+  end: Date,
+  now = new Date()
+) {
+  const supported = getCalendarSupportedRange(now);
+  const first = start < supported.start ? supported.start : start;
+  const last = end > supported.end ? supported.end : end;
+  return first < last ? { start: first, end: last } : undefined;
+}
+
 /** Returns whether the complete viewport can be served by the backend. */
 export function isCalendarRangeSupported(
-  range: CalendarOccurrenceQueryRange,
+  range: { start: string | Date; end: string | Date },
   now = new Date()
 ) {
   const supportedRange = getCalendarSupportedRange(now);

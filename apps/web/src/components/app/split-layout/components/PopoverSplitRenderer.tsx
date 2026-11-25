@@ -1,3 +1,4 @@
+import { isDayDraftRangeBinding } from '@app/features/calendar/context/day-draft-range-context';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -62,14 +63,30 @@ function PopoverSplitModal(props: {
   popover: PopoverSplitData;
   onClose: () => void;
 }) {
+  const draftParam =
+    props.popover.content.type === 'component'
+      ? props.popover.content.params?.dayDraftRange
+      : undefined;
+  const dayDraft = isDayDraftRangeBinding(draftParam) ? draftParam : undefined;
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [drawerHeader, setDrawerHeader] = createSignal<HTMLElement>();
-  const [fillsDrawer, setFillsDrawer] = createSignal(false);
-  const fillDrawer = () => {
-    setFillsDrawer(true);
-    onCleanup(() => setFillsDrawer(false));
+  const [drawerFooter, setDrawerFooter] = createSignal<HTMLElement>();
+  const [drawerScrollBody, setDrawerScrollBody] = createSignal<HTMLElement>();
+  const [drawerHeightRequests, setDrawerHeightRequests] = createSignal<
+    { height: number; opaque?: boolean }[]
+  >([]);
+  const drawerTargetHeight = () => drawerHeightRequests().at(-1)?.height;
+  const fillDrawer = (requestedHeight = 70, options?: { opaque?: boolean }) => {
+    // The latest live owner wins; disposing either owner only removes its request.
+    const request = { height: requestedHeight, opaque: options?.opaque };
+    setDrawerHeightRequests((requests) => [...requests, request]);
+    onCleanup(() =>
+      setDrawerHeightRequests((requests) =>
+        requests.filter((current) => current !== request)
+      )
+    );
   };
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
@@ -136,6 +153,8 @@ function PopoverSplitModal(props: {
     isPanelActive: () => true,
     panelRef,
     drawerHeader,
+    drawerFooter,
+    drawerScrollBody,
     ...(isTouchDevice() ? { fillDrawer } : {}),
     panelSize: { width: null, height: null },
     contentOffsetTop,
@@ -166,7 +185,11 @@ function PopoverSplitModal(props: {
     <SplitPanelContext.Provider value={stubPanelContext}>
       <SoupContextProvider>
         <Show when={props.popover.mount}>
-          <Panel.Body class={cn(fillsDrawer() && 'flex flex-auto flex-col')}>
+          <Panel.Body
+            class={cn(
+              drawerTargetHeight() != null && 'flex flex-auto flex-col'
+            )}
+          >
             <Suspense>
               <Dynamic component={props.popover.mount.element} />
             </Suspense>
@@ -204,34 +227,60 @@ function PopoverSplitModal(props: {
     >
       <MobileDrawer
         side="bottom"
+        modal={dayDraft ? false : undefined}
+        closeOnOutsidePointer={dayDraft ? true : undefined}
         open={props.popover.isOpen}
         onOpenChange={onOpenChange}
+        onOutsidePointer={(event) => {
+          if (
+            dayDraft?.interacting() ||
+            (event.target instanceof Element &&
+              event.target.closest('.calendar-day-draft'))
+          )
+            event.preventDefault();
+        }}
         onInitialFocus={(event) => focusPopoverInput(event, panelRef())}
       >
         <MobileDrawer.Portal>
-          <MobileDrawer.Overlay />
+          <Show when={!dayDraft}>
+            <MobileDrawer.Overlay />
+          </Show>
           <MobileDrawer.Content
             ref={attachPanel}
             aria-label={displayName()}
             maxHeight={92}
+            opaque={drawerHeightRequests().at(-1)?.opaque}
+            class="[&:has(>[data-drawer-footer]:not(:empty))>[data-drawer-scroll-body]]:pb-0"
             // Room to write a few paragraphs without covering the page.
-            targetHeight={fillsDrawer() ? 70 : undefined}
+            targetHeight={drawerTargetHeight()}
           >
             <MobileDrawer.Handle />
             {/* Before the scroll body so it exists when the content mounts;
                 hidden unless the content portals its pinned actions here. */}
-            <div ref={setDrawerHeader} class="shrink-0 empty:hidden" />
-            <MobileDrawer.ScrollBody>
+            <div
+              ref={setDrawerHeader}
+              class="relative z-10 shrink-0 empty:hidden"
+            />
+            <MobileDrawer.ScrollBody ref={setDrawerScrollBody}>
               {/* As in Dialog's drawer: at its natural height the body's
                   overflow-clip cannot clip the drawer's scroll body. Filling
                   content grows past it but never shrinks below it, so a
                   sheet the keyboard shortens still scrolls. */}
               <div
-                class={fillsDrawer() ? 'flex flex-auto flex-col' : 'shrink-0'}
+                class={
+                  drawerTargetHeight() != null
+                    ? 'flex flex-auto flex-col'
+                    : 'shrink-0'
+                }
               >
                 <Content />
               </div>
             </MobileDrawer.ScrollBody>
+            <div
+              ref={setDrawerFooter}
+              data-drawer-footer
+              class="shrink-0 empty:hidden"
+            />
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>
