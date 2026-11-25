@@ -467,3 +467,22 @@ fn email_attachment_kinds_materialize() {
         Some(Expr::Literal(EmailLiteral::Attachment(AttachmentKind::Pdf)))
     ));
 }
+
+#[test]
+fn email_labels_materialize_and_reject_malformed_ids() {
+    let id = Uuid::from_u128(7);
+    let ast = materialize_graphql_filter(
+        json!({"emailFilter": {"tree": {"literal": {"label": id.to_string()}}}}),
+    )
+    .unwrap();
+    assert!(matches!(
+        ast.email_filter.tree.as_deref(),
+        Some(Expr::Literal(EmailLiteral::Label(label))) if *label == id
+    ));
+    assert!(
+        materialize_graphql_filter(
+            json!({"emailFilter": {"tree": {"literal": {"label": "not-a-uuid"}}}})
+        )
+        .is_err()
+    );
+}

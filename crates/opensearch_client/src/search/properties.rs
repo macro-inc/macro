@@ -12,27 +12,25 @@ fn nested_values_query<'a>(option_ids: Vec<String>) -> QueryType<'a> {
     .into()
 }
 
-/// Build a `nested` query over `properties` matching docs against `option_ids`.
-/// There is no `definition_id` constraint: tag option ids are globally unique,
-/// so this matches a tag regardless of which definition owns it. With
-/// `match_all` false a doc matches when any nested entry's `values` contains
-/// one of the ids; with `match_all` true every id must be present, expressed
-/// as one nested clause per id ANDed inside `bool.must` (the ids may live on
-/// different nested entries, e.g. a personal and a team tag definition).
-/// Returns `None` when there are no option ids.
-pub(crate) fn build_tag_filter<'a>(
-    option_ids: &[String],
-    match_all: bool,
-) -> Option<QueryType<'a>> {
-    if option_ids.is_empty() {
-        return None;
+/// Build a `nested` query over `properties` that every group of
+/// `tag_groups` must meet, each by any one of its option ids in a nested
+/// entry's `values`. There is no `definition_id` constraint: tag option ids
+/// are globally unique, so this matches a tag regardless of which definition
+/// owns it. Each group is its own nested clause, ANDed inside `bool.must`,
+/// since its tags may live on a different nested entry than another
+/// group's (e.g. a personal and a team tag definition). One group matches any
+/// of its tags, and one id per group every one of them. Returns `None` when
+/// there are no groups.
+pub(crate) fn build_tag_filter<'a>(tag_groups: &[Vec<String>]) -> Option<QueryType<'a>> {
+    match tag_groups {
+        [] => None,
+        [only] => Some(nested_values_query(only.clone())),
+        groups => {
+            let mut all = BoolQueryBuilder::new();
+            for group in groups {
+                all.must(nested_values_query(group.clone()));
+            }
+            Some(all.build().into())
+        }
     }
-    if !match_all {
-        return Some(nested_values_query(option_ids.to_vec()));
-    }
-    let mut all = BoolQueryBuilder::new();
-    for option_id in option_ids {
-        all.must(nested_values_query(vec![option_id.clone()]));
-    }
-    Some(all.build().into())
 }

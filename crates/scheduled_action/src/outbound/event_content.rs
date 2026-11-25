@@ -210,6 +210,8 @@ where
         }
     }
 
+    /// The event's email; for a whole thread labeled in Macro, its newest
+    /// sent or received message.
     async fn email(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -221,9 +223,10 @@ where
             .await
             .map_err(|error| Report::new(error).into_dynamic())?
             .unwrap_or_default();
-        Ok(messages
-            .into_iter()
-            .find(|message| Some(message.db_id) == event.message_id()))
+        Ok(match event.message_id() {
+            Some(id) => messages.into_iter().find(|message| message.db_id == id),
+            None => messages.into_iter().find(|message| !message.is_draft),
+        })
     }
 
     async fn channel(
@@ -335,12 +338,18 @@ where
 /// The classifier's view of the content.
 fn content_json(event: &EventReference, content: &EventContent) -> Value {
     match content {
-        EventContent::Email(message) => json!({
-            "email": message.as_ref().map_or_else(
-                || unavailable("the email is no longer available"),
-                email_json,
-            ),
-        }),
+        EventContent::Email(message) => {
+            let mut value = json!({
+                "email": message.as_ref().map_or_else(
+                    || unavailable("the email is no longer available"),
+                    email_json,
+                ),
+            });
+            if let (EventName::EmailLabeled, Some(message)) = (event.event_name(), message) {
+                value["labels_added"] = json!(gained_label_names(event, message));
+            }
+            value
+        }
         EventContent::Channel { channel, message } => {
             let mut value = json!({
                 "channel": {
@@ -438,6 +447,20 @@ fn email_body(message: &ParsedMessage) -> Option<String> {
         .or(message.body_text.as_deref())
         .or(message.snippet.as_deref())
         .map(truncate)
+}
+
+/// The names of the labels the event's thread gained, as the email carries them.
+fn gained_label_names(event: &EventReference, message: &ParsedMessage) -> Vec<String> {
+    message
+        .labels
+        .iter()
+        .filter(|label| {
+            label
+                .id
+                .is_some_and(|id| event.labels_gained().contains(&id))
+        })
+        .map(|label| label.name.clone())
+        .collect()
 }
 
 fn email_json(message: &ParsedMessage) -> Value {

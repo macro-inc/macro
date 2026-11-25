@@ -1,16 +1,14 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { useNavigate } from '@app/lib/split-router';
 import { bookingLinksRoute } from '@app/routes/routes';
-import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { getWebOrigin } from '@core/util/webOrigin';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Dropdown } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
+import { copyBookingLink } from './booking-link';
 import type { EventType } from './core/types';
 import { useSchedulingProfileWithAutoSetupQuery } from './queries/source';
 
@@ -40,14 +38,7 @@ function Actions(props: { sidebar?: boolean; compact?: boolean }) {
       return;
     }
 
-    const slug = event?.slug;
-    const url = slug
-      ? `${getWebOrigin()}/app/book/${encodeURIComponent(profile.id)}/${encodeURIComponent(slug)}`
-      : `${getWebOrigin()}/app/book/${encodeURIComponent(profile.id)}`;
-
-    if (await writeClipboardData({ 'text/plain': url }))
-      toast.success('Booking link copied');
-    else toast.failure('Could not copy booking link');
+    await copyBookingLink(profile, event?.slug);
   };
 
   return (

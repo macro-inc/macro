@@ -17,7 +17,7 @@ function restoreSpeed(): ModelSpeed | undefined {
  * Browser preference shared by all composers. A model that doesn't offer the
  * preferred tier runs at standard.
  */
-export const [preferredSpeed, setPreferredSpeed] = makePersistedState(
+const [preferredSpeed, writePreferredSpeed] = makePersistedState(
   createSignal<ModelSpeed>('standard'),
   {
     storages: {
@@ -29,3 +29,14 @@ export const [preferredSpeed, setPreferredSpeed] = makePersistedState(
     },
   }
 );
+
+export { preferredSpeed };
+
+// Count picks, not just value changes: choosing a tier and returning to the
+// original tier during a pending model change still supersedes its reset.
+let speedSelectionRevision = 0;
+export const preferredSpeedRevision = () => speedSelectionRevision;
+export const setPreferredSpeed = (speed: ModelSpeed) => {
+  speedSelectionRevision++;
+  return writePreferredSpeed(speed);
+};

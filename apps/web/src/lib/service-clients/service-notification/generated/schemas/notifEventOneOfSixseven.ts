@@ -4,15 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ChannelAccessRequestedMetadata } from './channelAccessRequestedMetadata';
 import type { NotifEventOneOfSixsevenTag } from './notifEventOneOfSixsevenTag';
-import type { PasswordAccessRequestedMetadata } from './passwordAccessRequestedMetadata';
 
 /**
- * An agent asked for access to a vault item the user manages.
+ * Someone asked to join a channel the user participates in.
  */
 export type NotifEventOneOfSixseven = {
-  /** An agent asked for access to a vault item the user manages. */
-  content: PasswordAccessRequestedMetadata;
+  /** Someone asked to join a channel the user participates in. */
+  content: ChannelAccessRequestedMetadata;
   tag: NotifEventOneOfSixsevenTag;
 };

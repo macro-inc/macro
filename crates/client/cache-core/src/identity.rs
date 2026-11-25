@@ -149,6 +149,22 @@ pub fn alias_target(record: &Record) -> Option<&EntityKey<'static>> {
     }
 }
 
+/// Drop everything from a record but its identity metadata. Returns false, and
+/// changes nothing, when it has none.
+pub fn retain_metadata(record: &mut Record) -> bool {
+    const FIELDS: [&str; 3] = [ALIAS_FIELD, MUTATION_UUID_FIELD, DELETED_FIELD];
+    if !FIELDS
+        .iter()
+        .any(|field| record.fields.contains_key(*field))
+    {
+        return false;
+    }
+    record.fields.retain(|field, _| {
+        FIELDS.contains(&field.as_str()) || matches!(field.as_str(), "id" | "__typename")
+    });
+    true
+}
+
 /// Rebase normalized records and their links; arbitrary text is never rewritten.
 pub fn remap_updates(
     updates: RecordUpdates,

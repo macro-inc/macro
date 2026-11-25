@@ -2,6 +2,7 @@ import { behavior } from '@macro-inc/muppet/core/behavior';
 import { source } from '@macro-inc/muppet/core/event';
 import type { CallsContext } from '../../capabilities/calls/context.ts';
 import { followCalls, world, worlds } from '../../capabilities/calls/watch.ts';
+import { maintenanceSource } from '../../context/runtime-maintenance.ts';
 
 const watchLog = 'calls';
 
@@ -44,4 +45,6 @@ const readings = ({ calls: { watcher }, config, clock, log }: Needs) => {
 
 /** Where calls' events come from: `calls` is the world of live calls, every few seconds. */
 export const callsSources = (context: Needs) =>
-  behavior().source({ calls: source(readings(context)) });
+  behavior().source({
+    calls: maintenanceSource(source(readings(context)), 'replayable'),
+  });

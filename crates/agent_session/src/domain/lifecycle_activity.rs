@@ -46,7 +46,6 @@ impl ActivitySource for AgentSessionLifecycleEvent {
             | Self::Settled(_)
             | Self::WaitingForInput(_)
             | Self::InputReceived(_)
-            | Self::Mentioned(_)
             | Self::Stopped(_)
             | Self::Renamed(_) => Ingest::Ignore,
         }

@@ -8,7 +8,8 @@ export default defineConfig({
   testDir: directory,
   testMatch: '*.browser.e2e.ts',
   outputDir: `${directory}/test-results`,
-  timeout: 45_000,
+  timeout: 90_000,
+  globalSetup: `${directory}/warm-up.ts`,
   fullyParallel: true,
   use: {
     baseURL: `http://127.0.0.1:${port}`,

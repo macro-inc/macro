@@ -66,6 +66,9 @@ const OVERCOMMIT_TICK: Duration = Duration::from_secs(10);
 /// Each open computer move advances one step per pass; a final copy round
 /// takes seconds, so the pass is frequent.
 const MOVE_TICK: Duration = Duration::from_secs(5);
+/// An image upgrade advances one step per pass; a step can wait on a
+/// host's system disk replacement (a shutdown and a boot).
+const IMAGE_UPGRADE_TICK: Duration = Duration::from_secs(10);
 /// How often expiry notices are checked.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// How often every awake computer's harnessd status is read, catching a
@@ -192,10 +195,13 @@ impl screen::tunnel::GuestExec for Operator {
         use hosted_runtimes::domain::ports::{Fleet as _, FleetError as _};
         use screen::tunnel::{GuestProgram, TunnelError};
         Box::pin(async move {
-            let fleet = self
-                .fleet_of(computer)
+            let (fleet, image) = self
+                .fleet_and_image_of(computer)
                 .await
                 .map_err(|error| TunnelError::Unreachable(error.to_string()))?;
+            if let Some(image) = image {
+                tracing::Span::current().record("computer.guest.image", image.as_str());
+            }
             let process = fleet.exec(computer, argv).await.map_err(|error| {
                 if error.is_missing() {
                     TunnelError::ComputerOff
@@ -366,6 +372,12 @@ fn computer_reachable(url: macro_service_urls::Url) -> Option<macro_service_urls
     (!loopback).then_some(url)
 }
 
+/// Whether image upgrades run in `environment`: development only, until a
+/// production rollout is approved.
+fn image_upgrades_allowed(environment: macro_env::Environment) -> bool {
+    matches!(environment, macro_env::Environment::Develop)
+}
+
 /// The operator's periodic passes.
 #[derive(Debug, Clone, Copy, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
@@ -375,6 +387,8 @@ enum Pass {
     Reconcile,
     Overcommit,
     Moves,
+    ImageUpgrade,
+    RuntimeUpdate,
     ClaudeSignIns,
     ClaudeStatus,
 }
@@ -387,6 +401,7 @@ impl Pass {
             Self::Reconcile => RECONCILE_TICK,
             Self::Overcommit => OVERCOMMIT_TICK,
             Self::Moves => MOVE_TICK,
+            Self::ImageUpgrade | Self::RuntimeUpdate => IMAGE_UPGRADE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
             Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
@@ -413,11 +428,12 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: ClaudeSignInWatch<Ingress>,
     effect_signals: PgEffectSignals,
+    environment: macro_env::Environment,
     tracker: &TaskTracker,
     shutdown: CancellationToken,
 ) {
     let claude_sign_ins = Arc::new(claude_sign_ins);
-    for pass in [
+    let mut passes = vec![
         Pass::Effects,
         Pass::Timers,
         Pass::Reconcile,
@@ -425,12 +441,18 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Moves,
         Pass::ClaudeSignIns,
         Pass::ClaudeStatus,
-    ] {
+    ];
+    if image_upgrades_allowed(environment) {
+        passes.push(Pass::ImageUpgrade);
+        passes.push(Pass::RuntimeUpdate);
+    }
+    for pass in passes {
         tracker.spawn(run_pass(
             pass,
             Arc::clone(&operator),
             Arc::clone(&claude_sign_ins),
             effect_signals.clone(),
+            environment,
             shutdown.clone(),
         ));
     }
@@ -441,6 +463,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
     effect_signals: PgEffectSignals,
+    environment: macro_env::Environment,
     shutdown: CancellationToken,
 ) {
     let mut interval = tokio::time::interval(pass.tick());
@@ -457,6 +480,8 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                 | Pass::Reconcile
                 | Pass::Overcommit
                 | Pass::Moves
+                | Pass::ImageUpgrade
+                | Pass::RuntimeUpdate
                 | Pass::ClaudeSignIns
                 | Pass::ClaudeStatus => std::future::pending().await,
             }
@@ -494,6 +519,18 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map_err(anyhow::Error::from),
                 Pass::Moves => shutdown
                     .run_until_cancelled(operator.advance_moves())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::ImageUpgrade => shutdown
+                    .run_until_cancelled(operator.advance_image_upgrade())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::RuntimeUpdate => shutdown
+                    .run_until_cancelled(operator.advance_runtime_update(environment))
                     .await
                     .transpose()
                     .map(|_| ())

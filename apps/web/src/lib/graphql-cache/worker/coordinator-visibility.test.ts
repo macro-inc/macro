@@ -17,6 +17,7 @@ function ready(core: CoordinatorCore, tabId: string, ownerEpoch: number) {
     ownerLockHeld: true,
     databaseActionProof: 'opened-existing',
     openOutcome: 'opened-existing',
+    queue: 'preserved',
   });
 }
 

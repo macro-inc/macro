@@ -20,7 +20,7 @@ export function observePropertyMutationSettlements(
     wake();
   });
   const unsubscribeGeneration = host?.onCacheGenerationChanged((change) => {
-    if (change.storage !== 'reset') return;
+    if (change.queue !== 'reset') return;
     resetError = new Error('Property save interrupted by a cache reset');
     wake();
   });

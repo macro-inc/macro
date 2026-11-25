@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_company_aliases (retired_id, company_id, merge_id)\n               SELECT id, $1, $3 FROM UNNEST($2::uuid[]) AS retired(id)\n               RETURNING retired_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "retired_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2d99f5ad64e1e1e772b6702965f11b30797a498f7529a87e1a134e4701cdaeaf"
+}

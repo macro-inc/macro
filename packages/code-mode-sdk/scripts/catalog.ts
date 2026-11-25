@@ -35,6 +35,7 @@ export const entityDirectories: readonly string[] = [
   'agent-mailbox',
   'crm',
   'crm-email-privacy',
+  'crm-merges',
   'databases',
   'documents',
   'email',

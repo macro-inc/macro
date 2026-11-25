@@ -6,6 +6,7 @@ import agentScreen from './en/agent-screen';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
+import calendar from './en/calendar';
 import calendarPrompt from './en/calendar-prompt';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
@@ -38,6 +39,7 @@ import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import routinesList from './en/routines-list';
 import runtimeSharing from './en/runtime-sharing';
+import searchOperators from './en/search-operators';
 import searchResults from './en/search-results';
 import settingsBilling from './en/settings-billing';
 import settingsDownloads from './en/settings-downloads';
@@ -69,6 +71,7 @@ export default {
   agentSetup,
   githubConnect,
   agentWork,
+  calendar,
   calendarPrompt,
   calls,
   channelComposer,
@@ -103,6 +106,7 @@ export default {
   settingsBilling,
   settingsEmail,
   runtimeSharing,
+  searchOperators,
   searchResults,
   settingsLanguage,
   settingsNativeApp,

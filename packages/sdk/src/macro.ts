@@ -111,6 +111,15 @@ export type {
   CrmEmailRuleSet,
 } from './entities/crm-email-privacy/email-rules';
 export {
+  type CrmCompanyMerge,
+  type CrmCompanyMergeCommit,
+  type CrmContactMerge,
+  type CrmContactMergeCommit,
+  CrmMergeNamespace,
+  type CrmMergeOutcome,
+  type CrmMergePreview,
+} from './entities/crm-merges/merges';
+export {
   type AddColumnOptions,
   type ApplyOpsOptions,
   type ChangeColumnTypeOptions,
@@ -651,6 +660,10 @@ export {
 export type {
   SuggestionInput,
   SuggestionsReview,
+  SuggestionTopic,
+  SuggestionTopicInput,
+  SuggestionTopicReason,
+  SuggestionTopicReasonInput,
 } from './entities/suggestions/namespace';
 export {
   Suggestion,

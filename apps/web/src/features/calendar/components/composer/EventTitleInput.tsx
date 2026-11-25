@@ -1,3 +1,5 @@
+import { TextField } from '@ui';
+
 /** The event title field shared by full and embedded event composers. */
 export function EventTitleInput(props: {
   value: string;
@@ -6,15 +8,21 @@ export function EventTitleInput(props: {
   autofocus?: boolean;
 }) {
   return (
-    <input
-      type="text"
+    <TextField
+      class="w-full"
       value={props.value}
-      onInput={(event) => props.onChange(event.currentTarget.value)}
-      placeholder="New event"
-      aria-label="Title"
-      autofocus={props.autofocus}
+      onChange={props.onChange}
       disabled={props.disabled}
-      class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
-    />
+    >
+      <TextField.TextArea
+        variant="title"
+        rows={1}
+        autoResize
+        submitOnEnter
+        placeholder="New event"
+        aria-label="Title"
+        autofocus={props.autofocus}
+      />
+    </TextField>
   );
 }

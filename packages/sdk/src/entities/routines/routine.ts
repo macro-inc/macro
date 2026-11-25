@@ -22,6 +22,7 @@ import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import type { Agent } from '../agents/agent';
 import { Chat } from '../chats/chat';
+import type { Label } from '../email/label';
 import { Link } from '../email/link';
 import { MacroEntity } from '../entity';
 import type { EntityReference } from '../reference';
@@ -31,7 +32,7 @@ import { User } from '../users/user';
 /** An event selector references resources by typed handles. */
 export type RoutineEventFilter = Omit<
   EventFilter,
-  'ids' | 'condition' | 'inboxes'
+  'ids' | 'condition' | 'inboxes' | 'labels'
 > & {
   /**
    * The items these events are watched on, as references to handles the SDK
@@ -39,13 +40,18 @@ export type RoutineEventFilter = Omit<
    * Omit to match all items.
    */
   entities?: EntityReference[];
+  /**
+   * Only for `email.labeled`, alone in its filter: the labels, from
+   * `macro.email.labels()`, one of which a thread must gain. Omit for any label.
+   */
+  labels?: Label[];
   /** Optional yes/no condition on the triggering content. */
   condition?: string;
   /**
-   * For `email.message_received` alone: the inboxes whose new mail starts the
-   * routine, from `macro.email.links()`. Omit to watch every inbox the owner
-   * reads, their own and those shared with them; prefer this to checking the
-   * inbox in a code step.
+   * For `email.message_received` or `email.labeled` alone: the inboxes whose
+   * mail starts the routine, from `macro.email.links()`. Omit to watch every
+   * inbox the owner reads, their own and those shared with them; prefer this
+   * to checking the inbox in a code step.
    */
   inboxes?: Link[];
 };
@@ -72,11 +78,14 @@ function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
     .with({ type: 'once' }, (value) => value)
     .with({ type: 'events' }, (value) => ({
       type: 'events' as const,
-      filters: value.filters.map(({ entities, inboxes, ...filter }) => ({
-        ...filter,
-        ids: entities?.map((entity) => entity.entity.id),
-        inboxes: inboxes?.map((inbox) => inbox.id),
-      })),
+      filters: value.filters.map(
+        ({ entities, inboxes, labels, ...filter }) => ({
+          ...filter,
+          ids: entities?.map((entity) => entity.entity.id),
+          inboxes: inboxes?.map((inbox) => inbox.id),
+          labels: labels?.map((label) => label.id),
+        }),
+      ),
     }))
     .exhaustive();
 }

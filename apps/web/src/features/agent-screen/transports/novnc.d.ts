@@ -27,6 +27,11 @@ declare module '@novnc/novnc' {
     qualityLevel: number;
     compressionLevel: number;
     disconnect(): void;
+    /** noVNC 1.7 internals used to observe the first completed update. */
+    _framebufferUpdate(): boolean;
+    _handleDataRect(): boolean;
+    _FBU: { width: number; height: number };
+    _display: { flush(): Promise<void> };
   }
 }
 

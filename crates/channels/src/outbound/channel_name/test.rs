@@ -72,6 +72,7 @@ fn search<'a>(patterns: &'a [String], limit: i64) -> ChannelNameSearch<'a> {
     ChannelNameSearch {
         viewer_user_id: viewer(),
         patterns,
+        excluded_patterns: &[],
         regex_patterns: false,
         channel_ids: &[],
         channel_types: &[],
@@ -349,7 +350,7 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
     seed_plan_data(&pool).await?;
     let mut connection = pool.acquire().await?;
     sqlx::raw_sql(&format!(
-        "PREPARE match_channel_names(text, uuid[], text[], timestamptz, uuid, text[], bool, uuid[], text[], bigint) AS {MATCH_CHANNEL_NAMES_SQL}"
+        "PREPARE match_channel_names(text, uuid[], text[], timestamptz, uuid, text[], bool, uuid[], text[], bigint, text[]) AS {MATCH_CHANNEL_NAMES_SQL}"
     ))
     .execute(&mut *connection)
     .await?;
@@ -376,14 +377,24 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
         sqlx::raw_sql(&format!("SET plan_cache_mode = {plan_cache_mode}"))
             .execute(&mut *connection)
             .await?;
-        for patterns in [
-            vec!["%person%"],
-            vec!["%zzz%"],
-            vec!["%zzz%", "%person%", "%plan%"],
+        for (channel_types, regex, patterns, excluded) in [
+            ("", false, vec!["%person%"], vec![]),
+            ("", false, vec!["%zzz%"], vec![]),
+            ("", false, vec!["%zzz%", "%person%", "%plan%"], vec![]),
+            ("", false, vec!["%person%"], vec!["%plan%", "%bot%"]),
+            // The search service's `in:#` lookup: every type named, DMs
+            // included, and one anchored name that matches nothing.
+            (
+                "public,private,team,direct_message",
+                true,
+                vec!["^zzz$"],
+                vec![],
+            ),
         ] {
             let row = sqlx::raw_sql(&format!(
-                "EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT JSON) EXECUTE match_channel_names('{VIEWER}', '{{}}', '{{}}', NULL, NULL, '{{{}}}', false, '{{{system_bot_ids}}}', '{{{system_bot_names}}}', 51)",
-                patterns.join(",")
+                "EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT JSON) EXECUTE match_channel_names('{VIEWER}', '{{}}', '{{{channel_types}}}', NULL, NULL, '{{{}}}', {regex}, '{{{system_bot_ids}}}', '{{{system_bot_names}}}', 51, '{{{}}}')",
+                patterns.join(","),
+                excluded.join(",")
             ))
             .fetch_one(&mut *connection)
             .await?;
@@ -392,7 +403,7 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
             let mut nodes = Vec::new();
             plan_nodes(&explain[0]["Plan"], &mut nodes);
             let context = format!(
-                "{plan_cache_mode}, {patterns:?}:\n{}",
+                "{plan_cache_mode}, {channel_types:?}, {patterns:?} leaving out {excluded:?}:\n{}",
                 serde_json::to_string_pretty(&explain)?
             );
 
@@ -410,7 +421,7 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
                 // EXPLAIN reports removed rows per loop, rounded to a whole row.
                 if let Some(removed_per_loop) = node["Rows Removed by Join Filter"].as_f64() {
                     let loops = node["Actual Loops"].as_f64().unwrap_or(1.0);
-                    let bound = viewer_channels * patterns.len() as f64;
+                    let bound = viewer_channels * (patterns.len() + excluded.len()) as f64;
                     assert!(
                         removed_per_loop * loops <= bound + loops / 2.0,
                         "a join compared {removed_per_loop} rows in each of {loops} loops, more than {bound} in all, {context}"

@@ -56,6 +56,10 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`agent_runtime_update` stores leased dev operator requests for one
+Firecracker teammate. Unfinished rows hold the computer and keep the
+presigned download URL, which is cleared when an outcome is written.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -251,7 +255,8 @@ foreign keys; the broker deletes expired rows.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
-`hosted_runtimes`.
+`hosted_runtimes`. So are `image_upgrade` and `image_upgrade_computer`
+(operator image upgrades); their rows go with their computer.
 
 `password_item_entities`, `password_folders`, `password_activity`,
 `password_write_intents`, `password_totp_enrollments`, `password_team_lifecycle`,

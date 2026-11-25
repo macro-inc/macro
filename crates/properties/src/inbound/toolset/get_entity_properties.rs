@@ -178,7 +178,8 @@ where
 
         let entity_type = model_entity::EntityType::from(self.entity_type);
 
-        // A merged company's old id names the company it was merged into.
+        // A merged company's or contact's old id names the record it was
+        // merged into.
         let entity_id = service_context
             .entity_access_service
             .current_entity_id(&self.entity_id, entity_type)

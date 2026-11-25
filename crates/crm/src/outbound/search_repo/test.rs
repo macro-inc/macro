@@ -140,7 +140,7 @@ async fn search_matches_by_directory_name(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "acme", &[], None, false, 100, None)
+        .search_company_names(&team, "acme", &[], &[], None, false, 100, None)
         .await?;
 
     assert_eq!(results.len(), 1);
@@ -157,7 +157,7 @@ async fn search_matches_by_domain_when_no_directory(pool: PgPool) -> anyhow::Res
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "acme", &[], None, false, 100, None)
+        .search_company_names(&team, "acme", &[], &[], None, false, 100, None)
         .await?;
 
     assert_eq!(results.len(), 1);
@@ -175,7 +175,7 @@ async fn search_is_case_insensitive(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "ACME", &[], None, false, 100, None)
+        .search_company_names(&team, "ACME", &[], &[], None, false, 100, None)
         .await?;
     assert_eq!(results.len(), 1);
     Ok(())
@@ -189,7 +189,7 @@ async fn search_matches_substring(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "cme", &[], None, false, 100, None)
+        .search_company_names(&team, "cme", &[], &[], None, false, 100, None)
         .await?;
     assert_eq!(results.len(), 1);
     Ok(())
@@ -203,7 +203,7 @@ async fn search_no_match_returns_empty(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "zzz", &[], None, false, 100, None)
+        .search_company_names(&team, "zzz", &[], &[], None, false, 100, None)
         .await?;
     assert!(results.is_empty());
     Ok(())
@@ -221,7 +221,7 @@ async fn search_matches_secondary_domain_but_names_from_primary(
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "globex", &[], None, false, 100, None)
+        .search_company_names(&team, "globex", &[], &[], None, false, 100, None)
         .await?;
 
     assert_eq!(results.len(), 1);
@@ -241,7 +241,7 @@ async fn search_company_with_no_domains_never_matches(pool: PgPool) -> anyhow::R
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "anything", &[], None, false, 100, None)
+        .search_company_names(&team, "anything", &[], &[], None, false, 100, None)
         .await?;
     assert!(results.is_empty());
     Ok(())
@@ -260,7 +260,7 @@ async fn search_highlights_matched_span(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "acme", &[], None, false, 100, None)
+        .search_company_names(&team, "acme", &[], &[], None, false, 100, None)
         .await?;
 
     assert_eq!(results.len(), 1);
@@ -281,7 +281,7 @@ async fn search_escapes_regex_metacharacters_in_highlight(pool: PgPool) -> anyho
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "c++", &[], None, false, 100, None)
+        .search_company_names(&team, "c++", &[], &[], None, false, 100, None)
         .await?;
 
     assert_eq!(
@@ -315,7 +315,7 @@ async fn search_excludes_hidden_with_hidden_none(pool: PgPool) -> anyhow::Result
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "corp", &[], None, false, 100, None)
+        .search_company_names(&team, "corp", &[], &[], None, false, 100, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(ids, vec![visible]);
@@ -330,7 +330,7 @@ async fn search_visible_explicit_false_same_as_none(pool: PgPool) -> anyhow::Res
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "corp", &[], Some(false), false, 100, None)
+        .search_company_names(&team, "corp", &[], &[], Some(false), false, 100, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(ids, vec![visible]);
@@ -346,7 +346,7 @@ async fn search_hidden_only_for_admin(pool: PgPool) -> anyhow::Result<()> {
     let repo = CrmSearchRepositoryImpl::new(pool);
     // hidden=Some(true) + include_hidden (admin) → hidden rows only.
     let results = repo
-        .search_company_names(&team, "corp", &[], Some(true), true, 100, None)
+        .search_company_names(&team, "corp", &[], &[], Some(true), true, 100, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(ids, vec![hidden]);
@@ -362,7 +362,7 @@ async fn search_hidden_requested_by_member_returns_empty(pool: PgPool) -> anyhow
     let repo = CrmSearchRepositoryImpl::new(pool);
     // hidden=Some(true) but NOT include_hidden (member) → no hidden rows leak.
     let results = repo
-        .search_company_names(&team, "corp", &[], Some(true), false, 100, None)
+        .search_company_names(&team, "corp", &[], &[], Some(true), false, 100, None)
         .await?;
     assert!(
         results.is_empty(),
@@ -380,7 +380,7 @@ async fn search_active_tab_ignores_capability(pool: PgPool) -> anyhow::Result<()
     let repo = CrmSearchRepositoryImpl::new(pool);
     // hidden=None even with the capability → still visible only.
     let results = repo
-        .search_company_names(&team, "corp", &[], None, true, 100, None)
+        .search_company_names(&team, "corp", &[], &[], None, true, 100, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(ids, vec![visible]);
@@ -402,7 +402,7 @@ async fn search_scopes_to_team(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team_a, "acme", &[], None, false, 100, None)
+        .search_company_names(&team_a, "acme", &[], &[], None, false, 100, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(
@@ -422,7 +422,7 @@ async fn search_filters_by_company_ids_when_non_empty(pool: PgPool) -> anyhow::R
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "acme", &[wanted], None, false, 100, None)
+        .search_company_names(&team, "acme", &[], &[wanted], None, false, 100, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(ids, vec![wanted]);
@@ -446,7 +446,7 @@ async fn search_orders_by_interaction_desc(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "acme", &[], None, false, 100, None)
+        .search_company_names(&team, "acme", &[], &[], None, false, 100, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(ids, vec![newest, newer, older]);
@@ -466,7 +466,7 @@ async fn search_respects_limit(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CrmSearchRepositoryImpl::new(pool);
     let results = repo
-        .search_company_names(&team, "acme", &[], None, false, 2, None)
+        .search_company_names(&team, "acme", &[], &[], None, false, 2, None)
         .await?;
     let ids: Vec<Uuid> = results.iter().map(|m| m.id).collect();
     assert_eq!(ids, vec![c, b], "limit caps to the two newest");
@@ -493,7 +493,7 @@ async fn search_paginates_past_cursor(pool: PgPool) -> anyhow::Result<()> {
     let mut first_page: Vec<Uuid> = Vec::new();
     for page_idx in 0..10 {
         let page = repo
-            .search_company_names(&team, "acme", &[], None, false, 2, cursor)
+            .search_company_names(&team, "acme", &[], &[], None, false, 2, cursor)
             .await?;
         if page.is_empty() {
             break;
@@ -551,7 +551,7 @@ async fn search_pagination_breaks_ties_on_id(pool: PgPool) -> anyhow::Result<()>
     let mut cursor: Option<CrmCompanySearchCursor> = None;
     for _ in 0..10 {
         let page = repo
-            .search_company_names(&team, "acme", &[], None, false, 2, cursor)
+            .search_company_names(&team, "acme", &[], &[], None, false, 2, cursor)
             .await?;
         if page.is_empty() {
             break;
@@ -785,5 +785,44 @@ async fn enrich_returns_all_requested_visible_companies(pool: PgPool) -> anyhow:
         ids, want,
         "every requested visible company is hydrated once"
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_left_out_word_drops_companies_whose_name_or_a_domain_holds_it(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@example.com").await?;
+    let kept = insert_company(&pool, team, &["acme.com"]).await?;
+    insert_company(&pool, team, &["acmelabs.com", "labs-draft.com"]).await?;
+    let named = insert_company(&pool, team, &["acme.org"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET custom_name = 'Acme Draft Co' WHERE id = $1"#)
+        .bind(named)
+        .execute(&pool)
+        .await?;
+    insert_company(&pool, team, &["acme.net"]).await?;
+    insert_directory(&pool, "acme.net", Some("Acme Draft House"), None).await?;
+
+    let repo = CrmSearchRepositoryImpl::new(pool);
+    let every_match = repo
+        .search_company_names(&team, "acme", &[], &[], None, false, 100, None)
+        .await?;
+    assert_eq!(every_match.len(), 4);
+
+    let left_out = repo
+        .search_company_names(
+            &team,
+            "acme",
+            &["DRAFT".to_string()],
+            &[],
+            None,
+            false,
+            100,
+            None,
+        )
+        .await?;
+    let ids: Vec<Uuid> = left_out.iter().map(|company| company.id).collect();
+    assert_eq!(ids, [kept]);
     Ok(())
 }

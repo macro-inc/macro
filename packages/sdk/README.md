@@ -570,10 +570,18 @@ await macro.routines.create({
 
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
-A filter on `email.message_received` alone can take `inboxes`, `Link` handles from
-`macro.email.links()`, to watch only those of the owner's inboxes; without it, it
-watches every inbox the owner reads. `routine.trigger()` returns picked inboxes as
-`Link` handles too.
+A filter on `email.message_received` or `email.labeled` alone can take `inboxes`,
+`Link` handles from `macro.email.links()`, to watch only those of the owner's
+inboxes; without it, it watches every inbox the owner reads. `routine.trigger()`
+returns picked inboxes as `Link` handles too. `email.labeled` runs when a thread
+gains one of the owner's Gmail labels or Outlook categories, as mail arrives or
+later; its filter can take `labels`, `Label` handles from `macro.email.labels()`,
+to run only on those. Labels a routine or an agent adds never start one, and
+neither do Gmail's system labels and categories (Inbox, Unread, Important, …),
+drafts, mail that arrives in spam or trash, or historical imports.
+Saving it needs the owner's `enable-email-labeled-trigger` PostHog flag on top
+of the `enable-event-routines` every event trigger needs; without it the save
+fails with a 400 (`email label triggers are not enabled`).
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
 `routine.update(options)` replaces task and trigger settings; `delete()` removes it.
 Routines run as their owner, so share one as a template instead:
@@ -1017,8 +1025,7 @@ is undefined when the picture was removed or set by URL).
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,
-`mentioned` (a prompt named other users who can see the session), `stopped`,
-`renamed`, and `deleted`. Each carries the session's identity and
+`stopped`, `renamed`, and `deleted`. Each carries the session's identity and
 hydrates to an `AgentSession` handle, the owner `User`, and, for a session
 opened from a channel thread, the `Channel`, `Thread`, and magic-chip
 `Message` the turn renders into.
