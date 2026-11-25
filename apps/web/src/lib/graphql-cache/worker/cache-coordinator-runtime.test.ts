@@ -140,6 +140,39 @@ describe('cache coordinator runtime', () => {
     expect(connect).toHaveBeenCalledOnce();
     await Effect.runPromise(runner.close());
   });
+
+  it('lets the router answer a message that could not be read', async () => {
+    const { connect, endpoint, ports, runner } = setup();
+    connect.mockImplementation((port: CoordinatorMessagePort) => {
+      ports.push(port);
+      port.onmessageerror = () => {
+        port.postMessage({
+          coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
+          kind: 'connection-closed',
+          reason: 'test',
+        } satisfies CoordinatorToTabEnvelope);
+        port.close();
+      };
+    });
+    endpoint.receive(message);
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce());
+    const closedBeforeSend: boolean[] = [];
+    const post = endpoint.postMessage.bind(endpoint);
+    endpoint.postMessage = (sent) => {
+      closedBeforeSend.push(endpoint.closed);
+      post(sent);
+    };
+
+    endpoint.dispatchEvent(new MessageEvent('messageerror'));
+
+    await vi.waitFor(() => expect(endpoint.closed).toBe(true));
+    expect(closedBeforeSend).toEqual([false]);
+    expect(endpoint.sent.at(-1)).toEqual([
+      EFFECT_WORKER_RESPONSE_TAG,
+      expect.objectContaining({ kind: 'connection-closed' }),
+    ]);
+    await Effect.runPromise(runner.close());
+  });
 });
 
 describe('shared coordinator client retirement', () => {
