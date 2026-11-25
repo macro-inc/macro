@@ -39,11 +39,11 @@ impl MailboxTokenSource for EmulatorToken {
     }
 }
 
-pub(super) type Graph =
-    MailboxApiService<OutlookApiClientRepository, EmulatorToken, AlwaysAllowRateLimiter>;
+pub(super) type Graph<T = EmulatorToken> =
+    MailboxApiService<OutlookApiClientRepository, T, AlwaysAllowRateLimiter>;
 
 /// What email-service's provider gateway does: the Graph service for a key.
-pub(super) struct Gateway(pub(super) Graph);
+pub(super) struct Gateway<T = EmulatorToken>(pub(super) Graph<T>);
 
 pub(super) fn access(mailbox: MailboxKey) -> MailboxAccess {
     MailboxAccess {
@@ -53,7 +53,7 @@ pub(super) fn access(mailbox: MailboxKey) -> MailboxAccess {
     }
 }
 
-impl MailboxGateway for Gateway {
+impl<T: MailboxTokenSource> MailboxGateway for Gateway<T> {
     async fn folders(&self, mailbox: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
         self.0.folders(access(mailbox)).await
     }

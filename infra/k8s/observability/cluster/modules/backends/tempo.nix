@@ -4,6 +4,13 @@
 # in S3. Two of each stateless part, so a rollout or a lost node keeps
 # ingest and queries up; one compactor, which only works in the background.
 #
+# The compactor and queriers hold whole traces, so a few large ones set their
+# memory: at 1Gi both ran out on dev traffic alone, and the compactor never
+# finished a cycle, so blocks piled up unmerged and past retention. The
+# compactor also merges fewer traces per output block than Tempo's default.
+# Its request reserves most of what it may use: the m7g.large nodes have
+# little room above their requests, and a second compactor would double that.
+#
 # The metrics generator turns spans into span metrics and service graphs
 # and writes them to Mimir, and keeps recent blocks for TraceQL metrics.
 # Retention, processors and their limits are the host's (lib.nix `host`).
@@ -67,7 +74,11 @@ in
           structuredConfig = {
             inherit (host.tempo) query_frontend;
             ingester.max_block_duration = host.tempo.ingester.max_block_duration;
-            compactor.compaction.block_retention = host.tempo.compactor.compaction.block_retention;
+            compactor.compaction = {
+              inherit (host.tempo.compactor.compaction) block_retention;
+              # Tempo's default is 6M.
+              max_compaction_objects = 1000000;
+            };
           };
         };
         serviceAccount.automountServiceAccountToken = false;
@@ -104,9 +115,9 @@ in
           resources = resources "1Gi" "2Gi";
         };
         distributor = stateless "distributor" 2 "128Mi" "512Mi";
-        querier = stateless "querier" 2 "256Mi" "1Gi";
+        querier = stateless "querier" 2 "512Mi" "1536Mi";
         queryFrontend = stateless "query-frontend" 2 "128Mi" "512Mi";
-        compactor = stateless "compactor" 1 "256Mi" "1Gi";
+        compactor = stateless "compactor" 1 "1536Mi" "2560Mi";
 
         metricsGenerator = stateless "metrics-generator" 2 "256Mi" "1Gi" // {
           enabled = true;

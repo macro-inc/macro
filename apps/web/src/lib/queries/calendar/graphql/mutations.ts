@@ -9,6 +9,7 @@ import {
   selectRecords,
 } from '@graphql-cache/index';
 import type { CalendarEvent } from '@service-calendar/generated/schemas/calendarEvent';
+import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import {
   type CalendarEventFieldsFragment,
   CalendarEventFieldsFragmentDoc,
@@ -49,10 +50,11 @@ import type {
   RsvpCalendarEventArgs,
   UpdateCalendarEventArgs,
 } from '../mutations';
-import { mapCalendarEvent } from './map';
+import { mapCalendarEvent, mapCalendarOccurrence } from './map';
 import {
   deletionPlan,
   graphqlEnum,
+  graphqlOccurrenceTimeRecord,
   graphqlReminders,
   graphqlTimeInput,
   graphqlTimeRecord,
@@ -116,7 +118,155 @@ const pendingCreates = new Set<string>();
 const answeringCreates = new Set<string>();
 /** The server id each confirmed create replaced its local id with. */
 const landedCreates = new Map<string, string>();
+/**
+ * The occurrence each of the latest creates' answers carried for the one
+ * drawn locally, by local id: open details move to it before the calendar's
+ * own reads draw it. Sign-out reloads the app, which drops them.
+ */
+const landedReplies = new Map<string, CalendarOccurrenceItem>();
+const LANDED_REPLY_LIMIT = 16;
 const landedListeners = new Set<(localId: string, serverId: string) => void>();
+
+/** One occurrence of one event: the pair the calendar keys its chips by. */
+export interface CalendarOccurrenceRef {
+  eventId: string;
+  occurrenceKey: string;
+}
+
+/**
+ * A move made here, as its answer says: a moved event keeps its id, but its
+ * occurrence takes the key of its new start, so another occurrence replaces
+ * the moved one.
+ */
+export interface CalendarOccurrenceMove {
+  from: CalendarOccurrenceRef;
+  to: CalendarOccurrenceRef;
+}
+
+const occurrenceRef = (eventId: string, occurrenceKey: string) =>
+  JSON.stringify([eventId, occurrenceKey]);
+
+/** How many moves made here of each occurrence the queue holds. */
+const movingOccurrences = new Map<string, number>();
+const moveListeners = new Set<(move?: CalendarOccurrenceMove) => void>();
+
+/** Whether a move made here of this occurrence still waits for its answer. */
+export function isCalendarOccurrenceMoving(
+  eventId: string,
+  occurrenceKey: string
+): boolean {
+  return movingOccurrences.has(occurrenceRef(eventId, occurrenceKey));
+}
+
+/**
+ * Calls `listener` with a move made here once its answer names the
+ * occurrence that replaced the moved one, before the calendar drops the
+ * moved one, and with nothing once the move is answered or fails.
+ */
+export function onCalendarOccurrenceMoved(
+  listener: (move?: CalendarOccurrenceMove) => void
+): () => void {
+  moveListeners.add(listener);
+  return () => moveListeners.delete(listener);
+}
+
+/** A listener's failure must not fail a move the server saved. */
+function announceMove(move?: CalendarOccurrenceMove) {
+  for (const listener of [...moveListeners]) {
+    try {
+      listener(move);
+    } catch (error) {
+      console.warn('Calendar move listener failed', error);
+    }
+  }
+}
+
+function holdMoving(ref: string, change: 1 | -1) {
+  const count = (movingOccurrences.get(ref) ?? 0) + change;
+  if (count > 0) movingOccurrences.set(ref, count);
+  else movingOccurrences.delete(ref);
+}
+
+/**
+ * The occurrence a time change moves to a new key: a standalone event's only
+ * one. A series instance keeps its provider's original start as its key, and
+ * a series moved whole moves every instance, so neither is followed.
+ */
+function movedOccurrence(
+  event: EventRecord | undefined,
+  occurrences: readonly OccurrenceRecord[],
+  patch: UpdateCalendarEventArgs['patch'],
+  recurring: boolean
+): OccurrenceRecord | undefined {
+  if (!patch.time || !event || recurring) return undefined;
+  const standalone = occurrences.filter((occurrence) =>
+    isStandalone(event, occurrence)
+  );
+  return standalone.length === 1 ? standalone[0] : undefined;
+}
+
+/**
+ * The occurrence a committed answer put in place of a standalone event's
+ * moved one: its only live occurrence. An answer the queue holds says nothing
+ * yet.
+ */
+function replacingOccurrence(
+  result: OperationResult<UpdateCalendarEventMutation>
+): OccurrenceRecord | undefined {
+  const payload = result.data?.updateCalendarEvent;
+  if (
+    !payload ||
+    result.error ||
+    optimisticMutationDispositionOf(result)?.kind === 'queued'
+  )
+    return undefined;
+  const live = payload.occurrences.filter(
+    (occurrence) => !occurrence.isCancelled
+  );
+  return live.length === 1 ? live[0] : undefined;
+}
+
+function answeredMove(
+  moved: OccurrenceRecord,
+  replacing: OccurrenceRecord | undefined
+): CalendarOccurrenceMove | undefined {
+  // A resize keeps the start, and with it the occurrence.
+  if (
+    !replacing ||
+    occurrenceRef(replacing.eventId, replacing.occurrenceKey) ===
+      occurrenceRef(moved.eventId, moved.occurrenceKey)
+  )
+    return undefined;
+  return {
+    from: { eventId: moved.eventId, occurrenceKey: moved.occurrenceKey },
+    to: { eventId: replacing.eventId, occurrenceKey: replacing.occurrenceKey },
+  };
+}
+
+/**
+ * Holds `moved` while the queue holds its move, and announces where the
+ * move's answer put it. Without a moved occurrence it does nothing.
+ */
+function trackMove(moved: OccurrenceRecord | undefined) {
+  const ref = moved && occurrenceRef(moved.eventId, moved.occurrenceKey);
+  let held = false;
+  return {
+    enqueued() {
+      if (!ref || held) return;
+      held = true;
+      holdMoving(ref, 1);
+    },
+    answered(result: OperationResult<UpdateCalendarEventMutation>) {
+      const move = moved && answeredMove(moved, replacingOccurrence(result));
+      if (move) announceMove(move);
+    },
+    settled() {
+      if (!ref || !held) return;
+      holdMoving(ref, -1);
+      announceMove();
+    },
+  };
+}
 
 /** Whether `eventId` is a local event the server has not confirmed yet. */
 export function isCalendarEventCreating(eventId: string): boolean {
@@ -128,6 +278,16 @@ export function createdCalendarEventId(eventId: string): string | undefined {
   return landedCreates.get(eventId);
 }
 
+/**
+ * The server's copy of the occurrence created under the local id `eventId`,
+ * from the create's own answer, when it carried one.
+ */
+export function createdCalendarOccurrence(
+  eventId: string
+): CalendarOccurrenceItem | undefined {
+  return landedReplies.get(eventId);
+}
+
 /** Calls `listener` when a create made here lands under its server id. */
 export function onCalendarEventCreated(
   listener: (localId: string, serverId: string) => void
@@ -136,10 +296,20 @@ export function onCalendarEventCreated(
   return () => landedListeners.delete(listener);
 }
 
-function landCreate(localId: string, serverId: string | undefined) {
+function landCreate(
+  localId: string,
+  serverId: string | undefined,
+  answered?: OccurrenceRecord
+) {
   pendingCreates.delete(localId);
   if (!serverId || serverId === localId) return;
   landedCreates.set(localId, serverId);
+  if (answered) {
+    landedReplies.set(localId, mapCalendarOccurrence(answered));
+    const oldest = landedReplies.keys().next().value;
+    if (landedReplies.size > LANDED_REPLY_LIMIT && oldest !== undefined)
+      landedReplies.delete(oldest);
+  }
   for (const listener of [...landedListeners]) listener(localId, serverId);
 }
 
@@ -484,7 +654,7 @@ export async function executeGraphqlUpdate(
           .map((occurrence) => ({
             __typename: occurrence.__typename,
             id: occurrence.id,
-            time: graphqlTimeRecord(time),
+            time: graphqlOccurrenceTimeRecord(time),
           }))
       : [];
   // A recurring series' instances are expanded by the provider, so a time
@@ -496,7 +666,8 @@ export async function executeGraphqlUpdate(
     !oneOccurrence &&
     recurring &&
     (patch.time != null || patch.recurrenceLines != null);
-  const result = await executeOptimisticMutation(
+  const move = trackMove(movedOccurrence(event, occurrences, patch, recurring));
+  const sent = executeOptimisticMutation(
     client,
     UpdateCalendarEventDocument,
     {
@@ -571,13 +742,28 @@ export async function executeGraphqlUpdate(
     } as OptimisticResponse<UpdateCalendarEventMutation>,
     {
       uuid: uuidv4(),
-      onEnqueued: args.onAccepted,
+      onEnqueued: () => {
+        move.enqueued();
+        args.onAccepted?.();
+      },
       ...(uncertain
         ? { uncertainCalendarEventKeys: [eventKey(args.eventId)] }
         : {}),
     }
   ).toPromise();
-  return settle(host, result, result.data?.updateCalendarEvent ?? undefined);
+  try {
+    const result = await sent;
+    // Announced before the answer replaces the event's occurrences, so open
+    // details know where to go before the moved occurrence leaves.
+    move.answered(result);
+    return await settle(
+      host,
+      result,
+      result.data?.updateCalendarEvent ?? undefined
+    );
+  } finally {
+    move.settled();
+  }
 }
 
 /** Deletes an event, one occurrence, or an occurrence onward. */
@@ -620,15 +806,51 @@ export async function executeGraphqlDelete(
   return settle(host, result, result.data?.deleteCalendarEvent ?? undefined);
 }
 
-/** The calendar a new event lands on, as the server picks it. */
-async function targetCalendar(client: Client, calendarId: string | undefined) {
+/** What a new event's local copy takes from the calendar it lands on. */
+interface TargetCalendar {
+  id: string;
+  linkId: string;
+  emailAddress: string;
+  guestPolicy: boolean;
+}
+
+/**
+ * The calendar a new event lands on, as the server picks it. A calendar the
+ * caller already holds needs no read: the cache answers the list only after
+ * every read queued before it, which can take seconds.
+ */
+async function targetCalendar(
+  client: Client,
+  {
+    calendarId,
+    calendar,
+  }: Pick<CreateCalendarEventArgs, 'calendarId' | 'calendar'>
+): Promise<TargetCalendar | undefined> {
+  if (calendar && calendar.id === calendarId) {
+    return {
+      id: calendar.id,
+      linkId: calendar.emailLinkId,
+      emailAddress: calendar.emailAddress,
+      guestPolicy: calendar.capabilities.guestPolicy,
+    };
+  }
   const result = await client
     .query(CalendarsDocument, {}, { requestPolicy: 'cache-only' })
     .toPromise();
   const calendars = result.data?.user.calendars ?? [];
-  return calendarId
-    ? calendars.find((calendar) => calendar.id === calendarId)
-    : calendars.find((calendar) => calendar.isPrimary && calendar.isWritable);
+  const listed = calendarId
+    ? calendars.find((candidate) => candidate.id === calendarId)
+    : calendars.find(
+        (candidate) => candidate.isPrimary && candidate.isWritable
+      );
+  return (
+    listed && {
+      id: listed.id,
+      linkId: listed.linkId,
+      emailAddress: listed.emailAddress,
+      guestPolicy: listed.capabilities.guestPolicy,
+    }
+  );
 }
 
 /**
@@ -658,12 +880,15 @@ export async function executeGraphqlCreate(
 }
 
 async function createThroughQueue(
-  { onAccepted, ...args }: CreateCalendarEventArgs,
+  { onAccepted, calendar: knownCalendar, ...args }: CreateCalendarEventArgs,
   client: Client,
   host: Pick<CacheHost, 'readRecordsByKeys'> | undefined
 ): Promise<{ outcome: CalendarMutationOutcome; event?: CalendarEvent }> {
   const clientId = args.idempotencyKey ?? uuidv4();
-  const calendar = await targetCalendar(client, args.calendarId ?? undefined);
+  const calendar = await targetCalendar(client, {
+    calendarId: args.calendarId ?? undefined,
+    calendar: knownCalendar,
+  });
   const now = new Date().toISOString();
   const time = graphqlTimeRecord(args.time);
   const reminders = args.reminders
@@ -743,7 +968,7 @@ async function createThroughQueue(
       editDetails: true,
       inviteGuests: true,
       removeGuests: true,
-      setGuestPolicy: calendar?.capabilities.guestPolicy ?? false,
+      setGuestPolicy: calendar?.guestPolicy ?? false,
       rsvp: false,
       organize: true,
     },
@@ -759,7 +984,7 @@ async function createThroughQueue(
     occurrenceKey,
     recurrenceId: null,
     isCancelled: false,
-    time,
+    time: graphqlOccurrenceTimeRecord(args.time),
     overrideTitle: null,
     overrideDescription: null,
     overrideLocation: null,
@@ -868,7 +1093,13 @@ async function createThroughQueue(
     if (!serverId) return { outcome };
     return { outcome, event: mapCalendarEvent({ ...event, id: serverId }) };
   }
-  landCreate(clientId, outcome.payload.event.id);
+  const answered = outcome.payload.occurrences;
+  landCreate(
+    clientId,
+    outcome.payload.event.id,
+    answered.find((item) => item.occurrenceKey === occurrenceKey) ??
+      (answered.length === 1 ? answered[0] : undefined)
+  );
   return {
     outcome,
     event: mapCalendarEvent(outcome.payload.event),

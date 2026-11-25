@@ -24,6 +24,8 @@ export type ListSearchSuggestions = {
    * running a search, so the keyboard stays in the field to go on typing.
    */
   editsQuery?: (index: number) => boolean;
+  /** Enter in the field, with no row active, runs the typed search. */
+  commit?: () => void;
   /** The list's element id and its active row's, announced from the field. */
   listId?: string;
   activeId?: () => string | undefined;
@@ -178,6 +180,7 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
       if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;
 
       event.preventDefault();
+      if (event.key === 'Enter') options.suggestions?.()?.commit?.();
       leave('first');
     },
     onEscape: () => leave('current'),

@@ -11,18 +11,21 @@ import type {
 } from '@service-storage/graphql/generated/graphql';
 import { type Client, CombinedError } from '@urql/core';
 import { GraphQLError } from 'graphql';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CalendarMutationError,
   committedEvent,
   createdCalendarEventId,
+  createdCalendarOccurrence,
   executeGraphqlCreate,
   executeGraphqlDelete,
   executeGraphqlInviteGuests,
   executeGraphqlRsvp,
   executeGraphqlUpdate,
   isCalendarEventCreating,
+  isCalendarOccurrenceMoving,
   onCalendarEventCreated,
+  onCalendarOccurrenceMoved,
   trackCalendarCreateSettlements,
 } from '../mutations';
 import { attendee, graphqlEvent, graphqlOccurrence } from './fixtures';
@@ -397,6 +400,50 @@ describe('executeGraphqlUpdate', () => {
     expect(call?.optimistic.uncertainCalendarEventKeys).toBeUndefined();
   });
 
+  it.each([
+    ['a standalone event', { eventId: 'event-1' }, []],
+    [
+      'one occurrence of a series',
+      {
+        eventId: 'event-1',
+        scope: 'this_event' as const,
+        recurrenceId: 'r6',
+        occurrenceKey: '2026-10-06T09:00:00+00:00',
+      },
+      ['RRULE:FREQ=DAILY'],
+    ],
+  ])(
+    'gives a moved occurrence of %s no time zone, as the server’s carry none',
+    async (_, target, recurrenceLines) => {
+      const host = fakeHost(graphqlEvent({ recurrenceLines }), [instance(6)]);
+      const { calls, client } = fakeClient('committed');
+      const time = {
+        kind: 'timed' as const,
+        startsAt: '2026-10-07T10:00:00Z',
+        endsAt: '2026-10-07T10:30:00Z',
+        timeZone: 'America/New_York',
+      };
+
+      await executeGraphqlUpdate(host, { ...target, patch: { time } }, client);
+
+      const [call] = calls;
+      expect(response(call!).occurrences).toEqual([
+        expect.objectContaining({
+          id: 'event-1:2026-10-06T09:00:00+00:00',
+          time: {
+            __typename: 'GraphqlTimedEventTime',
+            startsAt: '2026-10-07T10:00:00+00:00',
+            endsAt: '2026-10-07T10:30:00+00:00',
+            timeZone: null,
+          },
+        }),
+      ]);
+      expect(call?.variables.input).toMatchObject({
+        time: { timed: { timeZone: 'America/New_York' } },
+      });
+    }
+  );
+
   it('leaves recurring instances in place and marks the series uncertain', async () => {
     const host = fakeHost(graphqlEvent(), [instance(6)]);
     const { calls, client } = fakeClient('committed');
@@ -523,6 +570,245 @@ describe('executeGraphqlUpdate', () => {
       retryable: false,
     });
     expect(host.calendarCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeGraphqlUpdate moving an occurrence', () => {
+  const key = (day: number) => `2026-10-0${day}T09:00:00+00:00`;
+  const at = (day: number, hour = 9) => ({
+    kind: 'timed' as const,
+    startsAt: `2026-10-0${day}T${String(hour).padStart(2, '0')}:00:00Z`,
+    endsAt: `2026-10-0${day}T${String(hour + 1).padStart(2, '0')}:00:00Z`,
+  });
+  const timeRecord = (day: number, hour: number) => ({
+    __typename: 'GraphqlTimedEventTime' as const,
+    startsAt: `2026-10-0${day}T${String(hour).padStart(2, '0')}:00:00+00:00`,
+    endsAt: `2026-10-0${day}T${String(hour + 1).padStart(2, '0')}:00:00+00:00`,
+    timeZone: null,
+  });
+  const moves: Array<() => void> = [];
+  afterEach(() => {
+    for (const stop of moves.splice(0)) stop();
+  });
+
+  /** Every move announced to a listener, in order; `undefined` ends a move. */
+  function listen() {
+    const announced: Array<unknown> = [];
+    moves.push(onCalendarOccurrenceMoved((move) => announced.push(move)));
+    return announced;
+  }
+
+  it('announces the occurrence a standalone event’s answer puts in place of the moved one', async () => {
+    const event = graphqlEvent({ recurrenceLines: [] });
+    const host = fakeHost(event, [instance(6)]);
+    const answered = instance(7, { time: timeRecord(7, 9) });
+    let movingWhileSent = false;
+    const { client } = fakeClient(
+      'committed',
+      { event, occurrences: [answered, { ...instance(6), isCancelled: true }] },
+      () => {
+        movingWhileSent = isCalendarOccurrenceMoving('event-1', key(6));
+      }
+    );
+    const announced = listen();
+    let announcedAtCommit: unknown[] = [];
+    host.calendarCommit.mockImplementationOnce(async () => {
+      announcedAtCommit = [...announced];
+      return { kind: 'committed', revision: '2' as never, changed: [] };
+    });
+
+    await executeGraphqlUpdate(
+      host,
+      { eventId: 'event-1', patch: { time: at(7) } },
+      client
+    );
+
+    const move = {
+      from: { eventId: 'event-1', occurrenceKey: key(6) },
+      to: { eventId: 'event-1', occurrenceKey: key(7) },
+    };
+    expect(movingWhileSent).toBe(true);
+    // Open details know where the occurrence went before it leaves the page.
+    expect(announcedAtCommit).toEqual([move]);
+    expect(announced).toEqual([move, undefined]);
+    expect(isCalendarOccurrenceMoving('event-1', key(6))).toBe(false);
+  });
+
+  it('announces nothing for a resize, which keeps the occurrence', async () => {
+    const event = graphqlEvent({ recurrenceLines: [] });
+    const host = fakeHost(event, [instance(3)]);
+    const { client } = fakeClient('committed', {
+      event,
+      occurrences: [instance(3, { time: timeRecord(3, 9) })],
+    });
+    const announced = listen();
+
+    await executeGraphqlUpdate(
+      host,
+      {
+        eventId: 'event-1',
+        patch: {
+          time: {
+            kind: 'timed',
+            startsAt: '2026-10-03T09:00:00Z',
+            endsAt: '2026-10-03T11:00:00Z',
+          },
+        },
+      },
+      client
+    );
+
+    expect(announced).toEqual([undefined]);
+  });
+
+  it.each([
+    [
+      'a series moved as a whole',
+      graphqlEvent(),
+      'committed' as const,
+      [instance(4, { time: timeRecord(4, 10) })],
+    ],
+    [
+      'an answer with more than one occurrence',
+      graphqlEvent({ recurrenceLines: [] }),
+      'committed' as const,
+      [instance(4, { time: timeRecord(4, 10) }), instance(5)],
+    ],
+    [
+      'an answer the queue holds',
+      graphqlEvent({ recurrenceLines: [] }),
+      'queued' as const,
+      [],
+    ],
+    [
+      'a refused move',
+      graphqlEvent({ recurrenceLines: [] }),
+      'failed' as const,
+      [],
+    ],
+  ])(
+    'announces no replacement for %s, so open details close as before',
+    async (_, event, disposition, occurrences) => {
+      const host = fakeHost(event, [instance(4)]);
+      const { client } = fakeClient(disposition, { event, occurrences });
+      const announced = listen();
+
+      await executeGraphqlUpdate(
+        host,
+        { eventId: 'event-1', patch: { time: at(4, 10) } },
+        client
+      ).catch(() => undefined);
+
+      expect(announced.filter((move) => move !== undefined)).toEqual([]);
+      expect(isCalendarOccurrenceMoving('event-1', key(4))).toBe(false);
+    }
+  );
+
+  it('keeps one occurrence of a series moved alone under its original start', async () => {
+    const event = graphqlEvent();
+    const moved = instance(8, { recurrenceId: key(8) });
+    const host = fakeHost(event, [
+      instance(7, { recurrenceId: key(7) }),
+      moved,
+    ]);
+    const { client } = fakeClient('committed', {
+      event,
+      occurrences: [
+        instance(7, { recurrenceId: key(7) }),
+        { ...moved, time: timeRecord(8, 11) },
+      ],
+    });
+    const announced = listen();
+
+    await executeGraphqlUpdate(
+      host,
+      {
+        eventId: 'event-1',
+        scope: 'this_event',
+        recurrenceId: key(8),
+        occurrenceKey: key(8),
+        patch: { time: at(8, 11) },
+      },
+      client
+    );
+
+    // The server keys an instance by its original start, so its details
+    // stay on the occurrence they show.
+    expect(announced).toEqual([]);
+    expect(isCalendarOccurrenceMoving('event-1', key(8))).toBe(false);
+  });
+
+  it('holds the moved occurrence while either of two moves of it is answered', async () => {
+    const event = graphqlEvent({ recurrenceLines: [] });
+    const host = fakeHost(event, [instance(2)]);
+    const first = fakeClient('committed', {
+      event,
+      occurrences: [instance(3, { time: timeRecord(3, 9) })],
+    });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fake = first.client as unknown as {
+      mutation: (...args: unknown[]) => { toPromise: () => Promise<unknown> };
+    };
+    const slow = {
+      ...fake,
+      mutation: (...args: unknown[]) => {
+        const sent = fake.mutation(...args);
+        return {
+          toPromise: async () => {
+            await held;
+            return sent.toPromise();
+          },
+        };
+      },
+    } as unknown as Client;
+
+    const answered = executeGraphqlUpdate(
+      host,
+      { eventId: 'event-1', patch: { time: at(3) } },
+      slow
+    );
+    await vi.waitFor(() =>
+      expect(isCalendarOccurrenceMoving('event-1', key(2))).toBe(true)
+    );
+    // A second move behind the first is held by the queue and returns at once.
+    await executeGraphqlUpdate(
+      host,
+      { eventId: 'event-1', patch: { time: at(4) } },
+      fakeClient('queued').client
+    );
+
+    expect(isCalendarOccurrenceMoving('event-1', key(2))).toBe(true);
+    release();
+    await answered;
+    expect(isCalendarOccurrenceMoving('event-1', key(2))).toBe(false);
+  });
+
+  it('saves the move when a listener fails', async () => {
+    const event = graphqlEvent({ recurrenceLines: [] });
+    const host = fakeHost(event, [instance(1)]);
+    const { client } = fakeClient('committed', {
+      event,
+      occurrences: [instance(2, { time: timeRecord(2, 9) })],
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    moves.push(
+      onCalendarOccurrenceMoved(() => {
+        throw new Error('listener failed');
+      })
+    );
+
+    const outcome = await executeGraphqlUpdate(
+      host,
+      { eventId: 'event-1', patch: { time: at(2) } },
+      client
+    );
+
+    expect(outcome.kind).toBe('committed');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 
@@ -876,6 +1162,169 @@ describe('executeGraphqlCreate', () => {
       event: { id: 'server-1' },
     });
     expect(isCalendarEventCreating(clientId)).toBe(false);
+  });
+
+  it('queues a create on a calendar the caller holds without reading the calendar list', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-5', title: 'Away' }),
+    });
+    const query = vi.spyOn(client, 'query');
+
+    await executeGraphqlCreate(
+      {
+        title: 'Away',
+        calendarId: 'calendar-2',
+        calendar: {
+          id: 'calendar-2',
+          emailLinkId: 'link-2',
+          emailAddress: 'work@example.com',
+          capabilities: {
+            autoDecline: true,
+            customRecurrence: true,
+            emailReminders: true,
+            removeConference: true,
+            resetRsvp: true,
+            guestPolicy: true,
+          },
+        },
+        outOfOffice: { autoDeclineMode: 'decline_none' },
+        time: {
+          kind: 'timed',
+          startsAt: '2026-11-28T09:00:00Z',
+          endsAt: '2026-11-28T17:00:00Z',
+          timeZone: 'America/New_York',
+        },
+      },
+      client
+    );
+
+    expect(query).not.toHaveBeenCalled();
+    const call = calls[0]!;
+    expect(call.variables.input).not.toHaveProperty('calendar');
+    expect(call.variables.input).not.toHaveProperty('emailLinkId');
+    expect(response(call).event).toMatchObject({
+      calendarId: 'calendar-2',
+      linkId: 'link-2',
+      organizerEmail: 'work@example.com',
+      eventType: 'OUT_OF_OFFICE',
+      viewerCan: expect.objectContaining({ setGuestPolicy: true }),
+    });
+  });
+
+  it('reads the calendar list for a create on a calendar the caller does not hold', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-6' }),
+    });
+    const query = vi.spyOn(client, 'query');
+
+    await executeGraphqlCreate(
+      {
+        title: 'Lunch',
+        calendarId: 'calendar-1',
+        calendar: {
+          id: 'calendar-2',
+          emailLinkId: 'link-2',
+          emailAddress: 'work@example.com',
+          capabilities: {
+            autoDecline: true,
+            customRecurrence: true,
+            emailReminders: true,
+            removeConference: true,
+            resetRsvp: true,
+            guestPolicy: false,
+          },
+        },
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(response(calls[0]!).event).toMatchObject({
+      calendarId: 'calendar-1',
+      linkId: 'link-1',
+    });
+  });
+
+  it('gives the local occurrence no time zone, as the server’s carry none', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-7' }),
+    });
+
+    await executeGraphqlCreate(
+      {
+        title: 'Standup',
+        time: {
+          kind: 'timed',
+          startsAt: '2026-11-28T15:00:00Z',
+          endsAt: '2026-11-28T15:30:00Z',
+          timeZone: 'America/New_York',
+        },
+      },
+      client
+    );
+
+    const optimistic = response(calls[0]!);
+    expect(optimistic.event?.time).toMatchObject({
+      timeZone: 'America/New_York',
+    });
+    expect(optimistic.occurrences[0]?.time).toEqual({
+      __typename: 'GraphqlTimedEventTime',
+      startsAt: '2026-11-28T15:00:00+00:00',
+      endsAt: '2026-11-28T15:30:00+00:00',
+      timeZone: null,
+    });
+  });
+
+  it('keeps the server’s copy of the occurrence drawn locally from the create’s answer', async () => {
+    const event = graphqlEvent({
+      id: 'server-8',
+      title: 'Offsite',
+      recurrenceLines: ['RRULE:FREQ=DAILY'],
+    });
+    const occurrence = (day: string) =>
+      graphqlOccurrence({
+        id: `server-8:${day}`,
+        eventId: 'server-8',
+        occurrenceKey: day,
+        event,
+      });
+    const landed = vi.fn();
+    const stop = onCalendarEventCreated(landed);
+    const { calls, client } = fakeClient('committed', {
+      event,
+      occurrences: [occurrence('2026-11-28'), occurrence('2026-11-29')],
+    });
+
+    await executeGraphqlCreate(
+      {
+        title: 'Offsite',
+        recurrenceLines: ['RRULE:FREQ=DAILY'],
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    expect(landed).toHaveBeenCalledWith(clientId, 'server-8');
+    expect(createdCalendarOccurrence(clientId)).toEqual(
+      expect.objectContaining({
+        event: expect.objectContaining({ id: 'server-8', title: 'Offsite' }),
+        occurrence: expect.objectContaining({
+          eventId: 'server-8',
+          occurrenceKey: '2026-11-28',
+        }),
+      })
+    );
+    stop();
   });
 
   it('leaves a create its own call still answers to that call when the alias is not readable yet', async () => {

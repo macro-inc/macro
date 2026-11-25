@@ -31,17 +31,22 @@ pub mod computer;
 pub mod error;
 pub mod exec;
 pub mod host;
+pub mod images;
 pub mod mmds;
 pub mod moves;
 
 pub use computer::{
     Action, Computer, ComputerResources, CreateComputer, DiskBackend, EnrollmentDocument,
-    LaunchSource, LaunchTimings, PowerState, SetEnrollment, Usage,
+    LaunchSource, LaunchTimings, PowerState, ReplaceSystemDisk, SetEnrollment, Usage,
 };
 pub use computer_id::ComputerId;
 pub use computer_types::{ComputerRole, ControlPlaneId, EnrollmentGeneration, GuestImage};
 pub use error::{ErrorCode, ErrorResponse};
 pub use host::{
     GoldenImage, GoldenKey, GoldenState, HostInfo, HostLimits, InvalidHostLimits, NetworkSlots,
+};
+pub use images::{
+    ImageFileDigest, ImageFileName, ImageFileSource, ImageState, InvalidSha256Digest, Sha256Digest,
+    SourceUrl, StageImage, StagedImage,
 };
 pub use pairing_id::PairingId;

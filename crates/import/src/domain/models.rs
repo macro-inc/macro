@@ -9,15 +9,29 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod notion_loss;
+mod notion_report;
 mod notion_run;
+pub use notion_loss::{
+    FidelityWarning, ImportNotice, ImportNoticeKind, PropertySnapshotKind, ReferenceLossReason,
+    SourceLossDetail, SourceLossFact, SourceStopReason, ViewWarning,
+};
 mod notion_sharing;
+pub use notion_report::{
+    ConfirmedNotionWrites, NotionChangedView, NotionDatabaseViewChanges, NotionReportDetails,
+    NotionReportNote, NotionReportNoteCount, NotionReportNoteKind, NotionReviewOmission,
+    NotionReviewOmissionCount, NotionReviewOmissionKind, NotionTabChoice, NotionViewChange,
+    NotionViewChangeKind,
+};
 pub use notion_run::{
-    AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TaskImportNotice,
-    TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind, WrittenObject,
+    AdoptedRun, NOTION_OUTAGE_PREFIX, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED,
+    TaskImportNotice, TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind,
+    WrittenObject,
 };
 
 pub use notion_sharing::{
-    NotionAlreadyImported, NotionImporter, NotionSharing, NotionWriteChoices,
+    NotionAlreadyImported, NotionDependencyReview, NotionImporter, NotionSharing,
+    NotionWriteChoices,
 };
 
 #[cfg(test)]
@@ -653,6 +667,12 @@ pub struct NotionTaskFields {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionPlanItem {
+    /// Notion objects whose bodies require this external data source.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependency_of: Vec<String>,
+    /// Planned objects whose bodies display this source inline.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inline_on: Vec<String>,
     /// What the import does with it; absent while planning has staged the
     /// object but the decision model has not answered for it yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1070,6 +1090,12 @@ pub struct NotionImportReport {
     /// Provider items skipped because they were unreadable, or optional features unavailable.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    /// Grouped report details for a Notion workspace review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<NotionReportDetails>,
+    /// Actual writes from the completed Notion ledger, excluding reused copies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed: Option<ConfirmedNotionWrites>,
     /// Tracker issues in the plan.
     #[serde(default)]
     pub issues: u32,
@@ -1111,11 +1137,11 @@ pub struct NotionImportReport {
     pub documents: u32,
     /// Data sources written as databases.
     pub databases: u32,
-    /// Rows those databases hold, every one counted while planning.
+    /// Estimated database rows while planning, confirmed rows once completed.
     pub database_rows: u32,
     /// Tasks the task lists become, one per row.
     pub task_rows: u32,
-    /// Plan objects already imported.
+    /// Plan objects finished so far, or confirmed new copies once completed.
     pub imported: u32,
     /// Plan objects still waiting to be written.
     pub waiting: u32,
@@ -1144,6 +1170,15 @@ pub struct NotionImportReport {
     /// Objects that failed to import, with the failure.
     #[serde(default)]
     pub failures: Vec<NotionReportItem>,
+    /// Total objects that failed, including those outside the sample.
+    #[serde(default)]
+    pub failure_count: u32,
+    /// Whether the warning or by-hand list was bounded before settlement.
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[specta(skip)]
+    #[schema(ignore)]
+    pub settlement_lists_truncated: bool,
     /// A HubSpot plan's counts, owners and losses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hubspot: Option<HubspotReport>,

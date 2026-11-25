@@ -190,7 +190,8 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
             let found: Vec<_> = found
                 .into_iter()
                 .map(|mut group| {
-                    if !self.record_ids.is_empty() {
+                    // `record_entries` already reads only those records.
+                    if search.is_some() && !self.record_ids.is_empty() {
                         group.entries.retain(|entry| {
                             entry
                                 .record

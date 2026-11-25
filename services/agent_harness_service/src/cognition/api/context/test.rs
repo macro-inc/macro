@@ -620,6 +620,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let (import_service, onboarding_service) = {
         let connections = Arc::new(composed.connectors.clone());
         let creator = ai_tools::ToolEntityCreator {
+            notion_link_editor: None,
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
             channel_service: tool_service_context.channel_tool_context.service.clone(),

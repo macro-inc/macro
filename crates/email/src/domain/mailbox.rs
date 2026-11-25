@@ -1,13 +1,15 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
 use crate::domain::backfill_jobs::worker::is_unstorable_sqlstate;
+use claim::{ClaimTurns, StreamClaim};
 use email_api_client::domain::models::{
     EmailApiError, FolderRole, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage,
     ProviderId, RoundStart, StreamPosition, StreamToken,
 };
-use live_pass::{FolderPass, LiveImportPass, StreamKind};
+use live_pass::{FolderPass, LiveImportPass};
 use progress::{ImportCompleted, ImportTally};
 use retry::{message_retry, retry_seconds};
+use schedule::{POLL_INTERVALS, PollIntervals};
 use std::future::Future;
 use std::time::Instant;
 use telemetry::{
@@ -19,6 +21,7 @@ use uuid::Uuid;
 
 pub mod calendar_disconnect;
 pub mod catalog;
+pub mod claim;
 pub mod commands;
 pub mod connection;
 pub mod contacts;
@@ -38,6 +41,7 @@ pub mod progress;
 pub mod projection;
 pub mod reimport;
 mod retry;
+pub mod schedule;
 pub mod settings;
 pub mod telemetry;
 pub mod watches;
@@ -80,6 +84,10 @@ pub enum MailboxError {
     /// every worker that claims it) and its lease expired.
     #[error("the message's last {0} claims ended without an outcome")]
     ClaimsUnfinished(i32),
+    /// The draft was edited outside Macro, or may have been, so neither copy
+    /// overwrites the other.
+    #[error("the draft changed outside Macro")]
+    DraftChanged(drafts::models::DraftChange),
 }
 
 /// Which projection effect deferred the work (`outlook.effect`).
@@ -202,6 +210,8 @@ pub struct StreamLease {
     pub initial_complete: bool,
     pub lease_id: Uuid,
     pub fence: i64,
+    /// When the stream came due: the claim's wait in line runs from here.
+    pub due_at: chrono::DateTime<chrono::Utc>,
     /// The stream's pending notification: the newest one that no delta
     /// checkpoint has read past yet, so a deferred or multi-page read keeps
     /// carrying it.
@@ -251,6 +261,10 @@ pub struct CommittedPage {
     pub queued: u64,
     /// Set when this page finished the mailbox's import run.
     pub import_completed: Option<ImportCompleted>,
+    /// Seconds until the stream's next poll, when the page was a checkpoint
+    /// that scheduled one; none while the stream stays due (more pages to
+    /// read, or a notification that arrived during the read).
+    pub next_poll_seconds: Option<u32>,
 }
 
 pub enum SyncLease<'a> {
@@ -286,21 +300,21 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         &self,
         lease: &CatalogLease,
     ) -> impl Future<Output = Result<u32, MailboxError>> + Send;
-    /// Claims the longest-due stream of `kind`, except that a mail folder's
-    /// import round goes ahead of finished folders that came due less than
-    /// five minutes before it, so its next page is read once its mailbox has
-    /// room instead of behind every poll.
+    /// Claims the due folder stream `claim` names.
     fn claim_stream(
         &self,
         lease_id: Uuid,
-        kind: StreamKind,
+        claim: StreamClaim,
     ) -> impl Future<Output = Result<Option<StreamLease>, MailboxError>> + Send;
     /// Atomically records every changed/removed ID and advances the opaque
     /// cursor only while this generation and lease fence are still current.
+    /// A checkpoint schedules the next poll by `polls`, unless a notification
+    /// arrived during the read, which leaves the stream due.
     fn commit_page(
         &self,
         lease: &StreamLease,
         page: &MailboxChangePage,
+        polls: PollIntervals,
     ) -> impl Future<Output = Result<CommittedPage, MailboxError>> + Send;
     /// Reset only this expired stream; this operation never removes messages.
     /// Its folder's live pass goes with the round it ran beside.
@@ -423,6 +437,7 @@ pub struct MailboxSyncService<R, P, I> {
     ingest: I,
     imports: ImportTally,
     live_pass: LiveImportPass,
+    turns: ClaimTurns,
 }
 
 impl<R, P, I> MailboxSyncService<R, P, I> {
@@ -434,6 +449,7 @@ impl<R, P, I> MailboxSyncService<R, P, I> {
             ingest,
             imports: ImportTally::default(),
             live_pass: LiveImportPass::default(),
+            turns: ClaimTurns::default(),
         }
     }
 
@@ -511,7 +527,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
-                let delay = retry_seconds(&error);
+                let delay = if error == EmailApiError::AuthRequired {
+                    REAUTHORIZATION_PROBE_SECONDS
+                } else {
+                    retry_seconds(&error)
+                };
                 let error = MailboxError::from(error);
                 self.repo
                     .release_catalog(lease, delay)
@@ -566,22 +586,28 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     /// Process one bounded provider page. Notifications only make streams due;
     /// periodic polling recovers missed, duplicate and out-of-order notifications.
     ///
-    /// An import round that waits for room in its mailbox's import (paced, or
-    /// refused by the request gate) reads nothing, so the claim moves on to
-    /// the next due stream. Import rounds are claimed ahead of finished
-    /// folders, and a waiting round is due again seconds later: without
-    /// moving on, a large mailbox's waiting rounds would take the turns every
-    /// other mailbox's new mail needs.
+    /// Every other turn that claims a mail folder takes the longest-due import
+    /// round first, the others the longest-due folder of either kind
+    /// (`ClaimTurns`); a turn that claims a live pass counts as neither. An
+    /// import round
+    /// that waits for room in its mailbox's import (paced, or refused by the
+    /// request gate) reads nothing, so the claim moves on to the next due
+    /// stream of the same claim. A waiting round is due again seconds later:
+    /// without moving on, a large mailbox's waiting rounds would take the
+    /// turns every other mailbox's new mail needs.
     pub async fn enumerate_once(&self) -> Result<bool, MailboxError> {
+        // Chosen at the turn's first mail folder claim and kept for its
+        // retries, so a live pass doesn't use up an import-first turn.
+        let mut folder_claim = None;
         for _ in 0..PACED_CLAIMS_PER_TURN {
-            let Some(lease) = self
-                .claim_folder_stream()
+            let Some((lease, claim)) = self
+                .claim_folder_stream(&mut folder_claim)
                 .await
                 .map_err(|error| claim_failed("enumerate", error))?
             else {
                 return Ok(false);
             };
-            let span = enumerate_span(&lease);
+            let span = enumerate_span(&lease, claim);
             adopt_notification_trace(&span, lease.notification.as_ref());
             // Only an import round waiting for room comes back without reading.
             if self.enumerate(&lease).instrument(span).await? {
@@ -592,18 +618,24 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     }
 
     /// New mail goes first: a due live pass is claimed before any folder.
-    async fn claim_folder_stream(&self) -> Result<Option<StreamLease>, MailboxError> {
+    async fn claim_folder_stream(
+        &self,
+        folder_claim: &mut Option<StreamClaim>,
+    ) -> Result<Option<(StreamLease, StreamClaim)>, MailboxError> {
         if self.live_pass.enabled()
             && let Some(lease) = self
                 .repo
-                .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::LivePass)
+                .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LivePass)
                 .await?
         {
-            return Ok(Some(lease));
+            return Ok(Some((lease, StreamClaim::LivePass)));
         }
-        self.repo
-            .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
-            .await
+        let claim = *folder_claim.get_or_insert_with(|| self.turns.next());
+        Ok(self
+            .repo
+            .claim_stream(macro_uuid::generate_uuid_v7(), claim)
+            .await?
+            .map(|lease| (lease, claim)))
     }
 
     /// A failure leaves the folder as it was before the switch: its new mail
@@ -665,12 +697,15 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     span_int(page.changed.len() + page.removed.len()),
                 );
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
-                let committed = self.repo.commit_page(lease, &page).await;
+                let committed = self.repo.commit_page(lease, &page, POLL_INTERVALS).await;
                 if committed.is_ok() && live_pass::opens(lease, checkpoint, &self.live_pass) {
                     self.open_live_pass(lease).await;
                 }
                 committed.map(|committed| {
                     span.record("outlook.rows_queued", span_int(committed.queued));
+                    if let Some(seconds) = committed.next_poll_seconds {
+                        span.record("outlook.poll_interval_seconds", i64::from(seconds));
+                    }
                     delta_advanced = true;
                     folder_initial_complete |= checkpoint;
                     committed.import_completed
@@ -985,6 +1020,12 @@ pub(crate) fn import_round_lead_seconds(role: FolderRole) -> u32 {
         _ => 0,
     }
 }
+
+/// How long discovery waits to ask for a token again for a mailbox whose
+/// token is refused. It is the only sync work claimed while the mailbox needs
+/// reconnecting, and the sign-in service asks Microsoft again at the same
+/// pace, so a refusal that clears on its own resumes sync within the hour.
+const REAUTHORIZATION_PROBE_SECONDS: u32 = 60 * 60;
 
 /// How soon discovery looks again for a mailbox it found missing, and the
 /// longest it waits: the 12 h a working subscription waits for renewal.

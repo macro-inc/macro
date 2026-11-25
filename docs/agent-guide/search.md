@@ -5,17 +5,24 @@
 Sidebar `Search` button → `/app/search` with a focused query box. Until you type
 or add a filter, desktop Search lists nothing and shows its empty state, which
 points to `⌘K` (Ctrl+K elsewhere) for the command menu. Results
-(including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
+(led by a `Best Matches` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
-`Featured Results` are the name matches, listed before the search service
-answers. They obey the Type filter and tags like the rows below them, and
-featured documents and tasks show the same properties. They are not listed
-while the search is scoped to a channel, a sender, or a task facet (status,
-priority, assignee, created by), which name matches cannot be checked against.
+`Best Matches` are the three best name matches, listed before the search service
+answers: one-to-one DMs whose person matches first, then by how well the name
+matches (whole name, first word, start of a word, inside a word), with group
+chats after other kinds. The other matching chats fold behind an `N more chats`
+row under them, which lists them in place (Enter or a click) until the text
+changes; other name matches start `More Results`. A Search narrowed to one Type
+lists every match without folding. They obey the Type filter and tags like the
+rows below them, and featured documents and tasks show the same properties.
+They are not listed while the search is scoped to a channel, a sender, or a
+task facet (status, priority, assignee, created by), which name matches cannot
+be checked against. Other list views (Home, Chat, Drive) still feature every
+name match under `Featured Results`.
 
 Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
-**All** name results, and in the desktop Search page's `Featured Results`. They
+**All** name results, and in the desktop Search page's `Best Matches`. They
 come from the routines list (Quick Access `routine` bucket), not the search
 service, and open the routine in the Agents workspace. They stay out of the
 empty recency list and out of Home, Drive and Tasks searches.
@@ -98,6 +105,14 @@ that is not blank or only quote marks, a single character included. A term
 under three characters matches as a whole word in document, chat, call and
 email content (`pr` finds "PR", not "project"); names and channel messages
 still match it as a prefix.
+
+A channel or DM message also matches the words of the web links it shares,
+whether its text shows the URL or a label: the names in the host
+(`sketchpad` finds `app.sketchpad.example`), the domain (`sketchpad.example`) and
+the words of the path. A message found only through a link shows that link as
+its snippet, with the match highlighted. `http`, `https`, `www`, `com`, `org`,
+`net` or the start of one, typed alone, find only messages whose text holds
+them.
 
 Contacts, agent sessions and commands list before the local cache answers a
 typed query. While it has not, Command-K and phone name search show

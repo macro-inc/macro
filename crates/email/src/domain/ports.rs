@@ -167,6 +167,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<EmailThreadPreview>, EmailErr>> + Send;
 
+    /// [`Self::previews_for_view_cursor`] with where a short page goes on.
+    fn previews_page_for_view_cursor(
+        &self,
+        query: PreviewCursorQuery,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<crate::domain::models::PreviewCursorPage, EmailErr>> + Send;
+
     fn attachments_by_thread_ids(
         &self,
         thread_ids: &[Uuid],

@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT table_marker.macro_id, view_marker.macro_id AS \"view_id?\", COALESCE(holder.metadata->'warnings', '[]'::jsonb) AS \"warnings!\"\n            FROM import_entity AS holder\n            JOIN import_entity_written AS database_marker ON database_marker.import_id = holder.id\n                AND database_marker.kind = 'database' AND database_marker.object = ''\n            JOIN import_entity_written AS table_marker ON table_marker.import_id = holder.id\n                AND table_marker.kind = 'table' AND table_marker.object = ''\n            LEFT JOIN import_entity_written AS view_marker ON view_marker.import_id = holder.id\n                AND view_marker.kind = 'view' AND view_marker.object = $4\n            WHERE holder.source = 'notion' AND holder.kind = 'data_source'\n                AND holder.foreign_id = $2 AND holder.status = 'imported'\n                AND holder.entity_type = 'database' AND holder.entity_id = $3::uuid::text\n                AND database_marker.macro_id = $3\n                AND (holder.user_id = $1 OR holder.team_id = (SELECT team_id FROM team_user WHERE user_id = $1))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "view_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "warnings!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "42c7011a387b7d407873acde9fb6a5b289d5262f63272a5602c67b688ff4859a"
+}

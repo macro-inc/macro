@@ -93,6 +93,33 @@ pub struct SetEnrollment {
     pub enrollment: EnrollmentDocument,
 }
 
+/// `POST /v1/computers/{computer_id}/system-disk`: give the computer a fresh
+/// system disk (root drive) of `image`, keeping its `/home` volume, identity,
+/// enrollment and pairing.
+///
+/// The agent stops a running guest, puts the system disk of `image` in
+/// place, keeps the current one as the previous one (dropping an older
+/// previous one), and cold boots the guest if it was running. It never
+/// restores golden memory over the existing `/home`.
+///
+/// - `image` is the current image: answers the computer as it is, so a
+///   repeat after a lost answer does nothing.
+/// - `image` is [`Computer::previous_image`]: a rollback; the previous disk
+///   itself comes back, nothing is cloned.
+/// - Otherwise: a fresh clone of the sealed golden rootfs of `image` for the
+///   computer's shape; [`crate::ErrorCode::GoldenNotReady`] until that golden
+///   is built.
+///
+/// A hibernated computer is refused ([`crate::ErrorCode::InvalidState`]):
+/// its memory belongs to its current disk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceSystemDisk {
+    /// The image to boot from now on.
+    pub image: GuestImage,
+}
+
 /// Where a VM's power stands.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display, strum::AsRefStr,
@@ -179,8 +206,14 @@ pub struct Computer {
     pub generation: EnrollmentGeneration,
     /// The pairing the current enrollment claims.
     pub pairing_id: PairingId,
-    /// Image the VM was created from.
+    /// Image of the system disk the VM boots: the one it was created from,
+    /// or the one [`ReplaceSystemDisk`] last put in place.
     pub image: GuestImage,
+    /// Image of the previous system disk, kept so that a [`ReplaceSystemDisk`]
+    /// back to it puts that very disk back. Absent from an agent older than
+    /// the field.
+    #[serde(default)]
+    pub previous_image: Option<GuestImage>,
     /// Whom the computer is for.
     pub role: ComputerRole,
     /// Enforced limits.

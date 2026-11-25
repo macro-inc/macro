@@ -14,26 +14,27 @@ future re-enablement.
 
 Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both website entry styles. Keep public website text selectable with native browser behavior; restrict `user-select: none` to interactive controls that need it, never the page globally.
 
-The homepage uses the feature-page hero with the live site's headline and subhead.
-Break the H1 after “The unified workspace” and keep the supporting H2 “Macro
-replaces 27+ apps with one connected system for humans and agents.”
-on two lines below it on desktop, breaking after “connected.” Below 700px, left-align the hero and use the
-product-list subhead ending in “Everything links to everything else.” Keep Get
+The homepage uses the feature-page hero.
+Keep the H1 “A new kind of office suite.” on a single line across desktop and mobile, and keep the supporting H2 “Macro
+replaces 27+ apps with one connected workspace for humans and agents.”
+on two lines below it, breaking after “connected.” Below 700px, left-align the hero. Keep Get
 Macro (signup) beside Book a demo. `HomepageTour` follows in an 800px
 maximum desktop frame at 16:9. Each module
 (Home, Mail, Chat, Tasks, Calendar, Docs, CRM, Calls) has a tab showing its
 captured app window on a `TutorialWallpaper`. The tour advances every five
 seconds until the visitor picks a tab, uses the arrow keys or the Next button,
-and never advances under reduced motion. A phone shows the window's left part
-at a readable size, and the tab strip fades at the edge where more tabs
-continue. Below the tour, two faded vertical rules separate the backing, security,
+and never advances under reduced motion. A phone aligns the frame with the hero's
+left inset and bleeds it flush to the right viewport edge, showing the window's
+left part at a readable size with wallpaper visible below it while the wider tab
+strip fades at the edge where more tabs continue. Below the tour, two faded vertical rules separate the backing, security,
 and GitHub badges. The GitHub badge links to the repository and refreshes its
-star count on mount above the August trending caption. `HomepageSections`
+star count on mount above the August trending caption. `HomepageFounderLetter`
+then introduces Macro in the 640px reading column with a short founder note and signature above the first section divider. `HomepageSections`
 then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with a centered
-graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and one simple sentence that fills nearly two lines on desktop above
+graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading (tightened where needed for a single mobile line) and one simple sentence that fills nearly two lines on desktop above
 the capture. Place two frosted dark glass pills on the bottom right of each capture: a “Watch · [length]” button that opens `TutorialVideoDialog` (auto-playing the Block's walkthrough video) and a “Learn about [feature] →” link to that Block's page.
-Let the heading wrap at its normal size. Follow each capture with one or two short
+Scale mobile section headings with `clamp(22px, 6.2vw, 27px)` so short headings fit on one line while longer ones wrap naturally. Follow each capture with one or two short
 sentences in the same type as the introduction that reference other Blocks with `ProductCopy` icon links and explain how they integrate. Below 768px, pricing lists the included modules with an icon and a link to each page. Follow the feature sections with `HomepageTestimonials`, `HomepageBlog` (a horizontal strip on desktop and a vertical post list on phones), and `HomepageClosing`. The captures
 in `src/assets/homepage/`
 come from the in-app tutorial videos and show demo data. Mount shared UI styles

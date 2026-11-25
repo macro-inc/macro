@@ -483,12 +483,19 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     let body = if streaming {
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
         let chunks = tokio_stream::wrappers::ReceiverStream::new(chunks);
+        let (mut meter, mut parser) = (meter, SseUsage::default());
         let (watch, body) = match notices.map(NoticeWatch::new) {
             Some((watch, tail)) => (Some(watch), Body::from_stream(chunks.chain(tail))),
             None => (None, Body::from_stream(chunks)),
         };
         tokio::spawn(
-            pump(Box::pin(upstream.bytes_stream()), meter, watch, caller).instrument(span.clone()),
+            pump(
+                Box::pin(upstream.bytes_stream()),
+                move |chunk| observe(&mut meter, &mut parser, chunk),
+                watch,
+                caller,
+            )
+            .instrument(span.clone()),
         );
         body
     } else {
@@ -541,7 +548,7 @@ async fn authenticate_brain(
         .ok_or(Rejection::BRAIN_UNAUTHENTICATED)
 }
 
-type UpstreamChunks =
+pub(crate) type UpstreamChunks =
     Pin<Box<dyn futures::Stream<Item = reqwest::Result<axum::body::Bytes>> + Send>>;
 
 /// Screen notices a request carried, settled once its answer finished.
@@ -574,7 +581,7 @@ type NoticeTail = Pin<
 
 /// Carried notices waiting for the caller's connection to take the whole
 /// answer.
-struct NoticeWatch {
+pub(crate) struct NoticeWatch {
     notices: CarriedNotices,
     /// Sent by the body's tail once the connection took everything before it,
     /// with a way to hold the body's end until the notices are settled;
@@ -611,23 +618,26 @@ impl NoticeWatch {
     }
 }
 
-/// Streams `upstream` to the caller while metering it. When the caller hangs
-/// up, its notices go back at once (it never had the answer), and the rest
-/// is still read (for at most [`DRAIN_TIMEOUT`]) so the final usage is
-/// recorded: an abort must not skip output billing. Otherwise the notices
-/// settle once the connection took the whole stream: delivered only when
-/// the message stopped and no chunk broke.
-async fn pump(
+/// Streams `upstream` to the caller, showing each chunk to `observe` (which
+/// meters it, and says whether the answer has stopped so far). When the
+/// caller hangs up, its notices go back at once (it never had the answer),
+/// and the rest is still read (for at most [`DRAIN_TIMEOUT`]) so the final
+/// usage is recorded: an abort must not skip output billing. Otherwise the
+/// notices settle once the connection took the whole stream: delivered only
+/// when the answer stopped and no chunk broke.
+pub(crate) async fn pump<Observe>(
     mut upstream: UpstreamChunks,
-    mut meter: Option<UsageMeter>,
+    mut observe: Observe,
     notices: Option<NoticeWatch>,
     caller: tokio::sync::mpsc::Sender<Result<axum::body::Bytes, std::io::Error>>,
-) {
-    let mut parser = SseUsage::default();
+) where
+    Observe: FnMut(&reqwest::Result<axum::body::Bytes>) -> bool + Send,
+{
     let mut broke = false;
+    let mut stopped = false;
     while let Some(chunk) = upstream.next().await {
         broke |= chunk.is_err();
-        observe(&mut meter, &mut parser, &chunk);
+        stopped = observe(&chunk);
         if caller
             .send(chunk.map_err(std::io::Error::other))
             .await
@@ -638,11 +648,11 @@ async fn pump(
             }
             let drain = async {
                 while let Some(chunk) = upstream.next().await {
-                    observe(&mut meter, &mut parser, &chunk);
+                    observe(&chunk);
                 }
             };
             if tokio::time::timeout(DRAIN_TIMEOUT, drain).await.is_err() {
-                tracing::warn!("anthropic stream outlived its drain after the caller hung up");
+                tracing::warn!("a model stream outlived its drain after the caller hung up");
             }
             return;
         }
@@ -650,15 +660,16 @@ async fn pump(
     // The caller's stream ends here; its tail waits for the notices.
     drop(caller);
     if let Some(notices) = notices {
-        notices.settle(parser.stopped() && !broke).await;
+        notices.settle(stopped && !broke).await;
     }
 }
 
+/// Meters `chunk`; whether the answer has stopped so far.
 fn observe(
     meter: &mut Option<UsageMeter>,
     parser: &mut SseUsage,
     chunk: &reqwest::Result<axum::body::Bytes>,
-) {
+) -> bool {
     match chunk {
         Ok(bytes) => {
             parser.observe(bytes);
@@ -675,6 +686,7 @@ fn observe(
             span.record("otel.status_code", "ERROR");
         }
     }
+    parser.stopped()
 }
 
 async fn authenticate<Sessions: AgentSessionRepo>(

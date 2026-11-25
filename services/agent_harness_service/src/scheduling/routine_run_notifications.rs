@@ -1,6 +1,7 @@
 //! Tells a routine's owner about every run it finishes: one
 //! `routine_run_finished` notification per run, saying whether it succeeded or
-//! failed, unless they stopped it. These land in the inbox only: the app never
+//! failed, unless they stopped it. A run refused because an app the routine
+//! requires is disconnected names the apps to reconnect. These land in the inbox only: the app never
 //! pops them up as alerts, and they send no phone push.
 
 #[cfg(test)]
@@ -60,6 +61,7 @@ impl<Ingress: NotificationIngress> RoutineRunNotifications<Ingress> {
                     None => run.routine_name,
                 },
                 outcome,
+                apps_to_connect: run.apps_to_connect,
             },
             sender_id: None,
             recipient_ids: HashSet::from([run.owner]),

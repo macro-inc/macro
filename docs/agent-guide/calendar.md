@@ -37,12 +37,26 @@ error.
 
 With the calendar cache, `Create event` and `Save` close the composer as soon as
 the write is saved locally and queued (as property saves do), before the provider
-answers; the event is already on the grid under a local id. Its details open
-while the reply is on its way and move to the server's id once the create lands;
-only then does the URL name the event. A refused save shows
+answers; the event is already on the grid under a local id. The composer hands
+the create the calendar it shows, so the create reads no calendar list first.
+Its details open while the reply is on its way and move to the server's copy
+the create's answer carries as soon as it arrives, before the grid's own reads
+draw it; only then does the URL name the event, and the new chip stays selected
+until the grid replaces it. A local copy, new or moved, shows no
+`Original time` line: the server keeps a time zone on the event, never on its
+occurrences. A refused save shows
 `Failed to create event` or `Failed to update event` afterwards, and a refused
 create leaves the grid. An edit that adds a new Macro call still waits for the
 call to be linked. Over REST the composer closes when the provider answers.
+
+A moved event keeps its id, but its occurrence is keyed by its start, so the
+server's answer to a drag or a time edit that changes the start replaces the
+occurrence. Details opened on it stay open while the move is answered, then
+follow the occurrence the answer names to its chip, and the URL drops a link's
+locator for the old one. A resize, and a one-occurrence move of a series, keep
+the key. When the answer cannot say
+which occurrence replaced the moved one (a whole series moved, a queued move),
+the details close as the old occurrence leaves the grid.
 
 If a permission change retires a successful create response, the composer uses
 the preserved server identity. If that identity cannot be read yet, it closes

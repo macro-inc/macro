@@ -144,8 +144,12 @@ export interface CacheHost {
   readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback when browser cache APIs are unsupported. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported,
+   * and while `paused`. */
   readonly disabled?: boolean;
+  /** Nothing can open the database for now. The host keeps its subscriptions
+   * and serves again, without being replaced, once something can. */
+  readonly paused?: boolean;
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;
@@ -257,6 +261,16 @@ export interface CacheHost {
   onCacheGenerationChanged(
     cb: (change: CacheGenerationChange) => void
   ): () => void;
+
+  /**
+   * The cache's owner answers again: after the host starts, after an owner
+   * change that replaced the engine, and after one that was called off. For a
+   * reader with no network to turn to, refused with
+   * `isOwnerHandoffBlockedError` or ended by a `CacheRequestTimeoutError`
+   * while it waited. Nothing is replayed to a late subscriber. Absent on a host
+   * whose reads never wait for an owner.
+   */
+  onOwnerReady?(cb: () => void): () => void;
 
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

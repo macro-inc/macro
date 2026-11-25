@@ -12,8 +12,12 @@ pub const MAX_PREVIEW_IDS: usize = 100;
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct CrmCompanyPreview {
-    /// The company.
+    /// The requested company id.
     pub id: Uuid,
+    /// The company the requested one was merged into, which is the one the
+    /// rest of the preview shows. Absent for a company that was not merged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merged_into: Option<Uuid>,
     /// The team's name override, else the primary domain's directory name.
     pub name: Option<String>,
     /// The company's first domain, which titles a company with no name.

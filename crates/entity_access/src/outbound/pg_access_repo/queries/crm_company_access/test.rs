@@ -81,3 +81,4 @@ async fn team_crm_company_access_denies_other_team(pool: PgPool) -> anyhow::Resu
 }
 
 mod member_access;
+mod merged;

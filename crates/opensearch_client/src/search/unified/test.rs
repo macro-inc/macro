@@ -605,6 +605,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "links": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "source_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
@@ -820,7 +821,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         {
                           "bool": {"minimum_should_match": 1, "should": [
                             {"match_phrase": {"content": "test"}},
-                            {"match_phrase": {"imported_author": "test"}}
+                            {"match_phrase": {"imported_author": "test"}},
+                            {"match_phrase": {"links": "test"}}
                           ]}
                         }
                       ]
@@ -942,6 +944,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "links": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "source_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },

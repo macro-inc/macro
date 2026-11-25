@@ -135,4 +135,39 @@ impl MailboxProgressRepository for PgMailboxSync {
             })
             .collect())
     }
+
+    async fn folder_line(&self) -> Result<FolderLine, MailboxError> {
+        // The mail folder streams `claim_stream` could take now, with its
+        // link filters. It reads every due folder (one row per
+        // folder, not per message) once a minute; the timeout keeps a slow
+        // read from holding a connection.
+        let mut tx = self.begin().await.map_err(db_error)?;
+        sqlx::query!("SET LOCAL statement_timeout = '10s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        let row = sqlx::query!(
+            r#"
+            SELECT count(*) FILTER (WHERE s.initial_complete) AS "polls_due!",
+                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(s.next_run_at) FILTER (WHERE s.initial_complete))), 0)::bigint AS "oldest_poll_due_seconds!",
+                count(*) FILTER (WHERE NOT s.initial_complete) AS "import_rounds_due!",
+                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(s.next_run_at) FILTER (WHERE NOT s.initial_complete))), 0)::bigint AS "oldest_import_round_due_seconds!"
+            FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+            WHERE s.kind = 'mail_folder' AND s.next_run_at <= now()
+                AND (s.lease_until IS NULL OR s.lease_until < now())
+                AND l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL
+                AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+        "#
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(FolderLine {
+            polls_due: row.polls_due,
+            oldest_poll_due_seconds: row.oldest_poll_due_seconds,
+            import_rounds_due: row.import_rounds_due,
+            oldest_import_round_due_seconds: row.oldest_import_round_due_seconds,
+        })
+    }
 }
