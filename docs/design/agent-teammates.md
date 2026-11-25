@@ -11,11 +11,12 @@ work); each agent's code starts as a copy of `packages/starter-agent`.
 | Piece | Where | What it does |
 | --- | --- | --- |
 | Account, seat, invite | `crates/team_agents`, auth service `/team_agents` | The agent's Macro user, its team seat (included, not billed), its API key, and the invite UI under Settings → Team. |
+| Email inbox | `crates/team_agents` (`domain::inbox`, `team_agent_inboxes`) + email_service `AgentMailboxes` | Optional, one per agent, owned by the agent's own account; the address never becomes its account id. team_agents decides when (invite option, **Add an inbox**), keeps one request id per agent, and pauses (removal) or releases (failed invite) it; email_service creates it at the provider and serves it to the agent's email tools. Team deletion pauses every agent's inbox (email_service releases paused mailboxes after 30 days), and a sweep finishes wind-downs email_service hasn't confirmed. |
 | Computer | `crates/hosted_runtimes` (#10186) | Buys and runs the computer. A computer linked to an agent (`agent_user_id`) is created from the agent image (`macro-box-agent`, `macro.box.agentMode`). |
 | Enrollment | `crates/hosted_runtimes` + `crates/team_agents` | On every enrollment generation, the computer of an agent gets `agent.env`: its Macro key, gateway and service addresses, its repo URL and token, and, in Macro-credits mode, its Anthropic gateway access. The key and repo token rotate with each generation. |
 | Repository | `crates/agent_git` | One bare repo per agent, over smart HTTP, seeded from `packages/starter-agent` with `agent.json` (owner = the inviting admin, the agent itself) and, when the invite described it, the agent's identity. |
 | Runtime | `packages/muppet` | Behaviors, event sources, typed capability modules, the code mode, the Claude Code agent. Pure: IO comes from an injected context. |
-| The agent's code | `packages/starter-agent` → the agent's repo | Chat, schedules, people, identity, heartbeat (commit, land), tools, browser, captcha ([CAPTCHAs](agent-teammates-captcha.md)), calls, secrets. |
+| The agent's code | `packages/starter-agent` → the agent's repo | Chat, schedules, people, identity, heartbeat (commit, land), tools, browser, captcha ([CAPTCHAs](agent-teammates-captcha.md)), calls, secrets, mailbox (its own email, `docs/design/agent-mailboxes.md`). |
 | Image | `nix/macro-box` | The agent service (a hardened system unit), its launcher, Claude Code, Chromium, Xvnc, ffmpeg, PulseAudio, bubblewrap, xclip, computer-use-linux, OpenCode (the CAPTCHA solver). |
 
 ## The repo

@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT i.agent_user_id, i.team_id, i.request_id, i.mailbox_id, i.address, i.state,\n                   i.last_error, i.fake_provider, i.updated_at\n            FROM team_agent_inboxes i\n            WHERE i.state IN ('provisioning', 'active', 'failed')\n              AND i.updated_at > $1\n              AND i.updated_at < $2\n              AND NOT EXISTS (SELECT 1 FROM team_agents ta WHERE ta.user_id = i.agent_user_id)\n            ORDER BY i.updated_at\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "mailbox_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "fake_provider",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b68ff34c3a6c69dacdbfaa253b2fbc7a76ab2043238654c8be51531f52477f49"
+}

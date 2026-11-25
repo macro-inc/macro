@@ -20,6 +20,8 @@ import { heartbeatCapabilities } from './capabilities/heartbeat/index.ts';
 import { identityCapabilities } from './capabilities/identity/index.ts';
 import { laterContext } from './capabilities/later/context.ts';
 import { laterCapabilities } from './capabilities/later/index.ts';
+import { mailboxContext } from './capabilities/mailbox/context.ts';
+import { mailboxCapabilities } from './capabilities/mailbox/index.ts';
 import type { PeopleClaude } from './capabilities/people/ask.ts';
 import { peopleContext } from './capabilities/people/context.ts';
 import { peopleCapabilities } from './capabilities/people/index.ts';
@@ -83,6 +85,7 @@ export const assistant = (
   const browser = browserContext(base);
   const captcha = captchaContext(base, browser.decorations.browser);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
+  const mailbox = mailboxContext(base);
   const built = behavior()
     .decorate(base)
     .decorate({ agent })
@@ -115,7 +118,9 @@ export const assistant = (
     .use(captchaCapabilities)
     .use(secrets)
     .use(secretsCapabilities)
-    .use(secretsHandlers(scheduled));
+    .use(secretsHandlers(scheduled))
+    .use(mailbox)
+    .use(mailboxCapabilities);
   functionNames = Object.values(built.capabilities).flatMap((capability) =>
     capability.kind === 'module' ? Object.keys(capability.functions) : []
   );

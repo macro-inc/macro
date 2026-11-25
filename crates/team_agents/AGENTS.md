@@ -84,18 +84,50 @@ on macrod connect for an agent's computer unless the agent already counts as
 online (one invited before reports, backfilled; its workspace never reports). Not tied to the starter agent: any
 agent runtime reports the same way.
 
+An agent may have its own email inbox (`domain::inbox`, behind
+`enable-agent-inboxes` for the acting admin): `inbox: true` on the invite
+(best effort after the purchase, and again on a repeated invite) or
+`PUT /team_agents/{agent}/inbox`. `InboxService` reserves one
+`team_agent_inboxes` row per agent whose `request_id` every retry reuses,
+calls email_service's agent mailboxes (`AgentMailboxes` port), and mirrors the
+answer (`provisioning`, `active`, `failed` with a reason). The list shows
+inboxes to team admins and owners only, and asks about inboxes still
+`provisioning` (all at once). The mailbox's owner is the agent's account; its
+address lives only on the inbox.
+
+Winding an inbox down marks the record first (`pausing` when the agent is
+removed or its team is deleted, `releasing` when its invite is taken back),
+creating it if the agent has none; only email_service's confirmation settles
+it (`paused`, `released`), as a compare-and-set on the mark. email_service
+releases paused mailboxes after its 30-day retention. Provisioning reserves
+its record only while the agent holds its seat (same statement) and writes
+only through `update_live`, which refuses a marked record; then it finishes
+what the mark asks for. The record outlives the seat and the team (it goes
+only with the agent's account). Team deletion calls `InboxService::pause_team`
+through the teams crate's `OwnedEntityCleanup::pause_agent_inboxes`: it marks
+every seated agent, inbox or not, and fails only when a mark can't be stored.
+`inbound::inbox_sweep` (every replica, each minute) claims due marks
+(`FOR UPDATE SKIP LOCKED`, backoff a minute doubling to an hour, never
+abandoned; a mark failing for over a day logs an error), asks email_service
+first, and also pauses live inboxes from the
+last hour whose agent lost its seat without a mark; a mark with no mailbox
+settles after 15 minutes.
+
 ## Start here
 
 - `src/domain/service.rs`: invite, list, remove and enrollment issuance.
 - `src/domain/ports.rs`: what the service needs from other crates.
 - `src/domain/admission.rs`: agent admission for the vault.
+- `src/domain/inbox.rs`: the agent's email inbox lifecycle.
 
 ## Scope
 
-- Owns: agent accounts, the `team_agents` table, enrollment issuance.
+- Owns: agent accounts, the `team_agents` and `team_agent_inboxes` tables,
+  enrollment issuance.
 - Not here: the computer lifecycle and billing → `crates/hosted_runtimes`;
   membership and seats → `crates/teams`; the repo server → `crates/agent_git`;
-  the agent runtime → `packages/muppet` and its template `packages/starter-agent`.
+  the agent runtime → `packages/muppet` and its template `packages/starter-agent`;
+  the mailbox itself, its provider and the agent's email tools → email_service.
 
 ## Checks
 

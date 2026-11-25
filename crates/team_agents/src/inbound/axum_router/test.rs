@@ -80,6 +80,20 @@ impl TeamAgentService for Reached {
     ) -> Result<(), TeamAgentError> {
         self.reached()
     }
+    async fn inbox(
+        &self,
+        _: EntityAccessReceipt<AdminTeamRole>,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<AgentInbox, TeamAgentError> {
+        self.reached()
+    }
+    async fn add_inbox(
+        &self,
+        _: EntityAccessReceipt<AdminTeamRole>,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<AgentInbox, TeamAgentError> {
+        self.reached()
+    }
     async fn issue_enrollment(
         &self,
         _: ComputerId,
@@ -373,4 +387,56 @@ async fn an_invalid_purchase_key_is_a_bad_request_with_a_message() {
         "the purchase key must be 1 to 128 printable ASCII characters"
     );
     assert!(body.get("code").is_none());
+}
+
+fn member_router(service: Arc<Reached>) -> axum::Router {
+    team_agents_router(TeamAgentsRouterState {
+        service,
+        entity_access_service: Arc::new(FakeEntityAccessService::with_membership(
+            USER_ID,
+            TeamRole::Member,
+        )),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorization)),
+    })
+}
+
+fn inbox(method: &str) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri("/macro%7Csam-abc123%40agents.macro.invalid/inbox")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[tokio::test]
+async fn an_admin_reads_and_adds_an_agents_inbox_and_a_member_cannot() {
+    for method in ["GET", "PUT"] {
+        let service = Arc::new(Reached::default());
+        let response = router(service.clone())
+            .oneshot(inbox(method))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method}");
+        assert_eq!(service.0.load(Ordering::SeqCst), 1, "{method}");
+
+        let service = Arc::new(Reached::default());
+        let response = member_router(service.clone())
+            .oneshot(inbox(method))
+            .await
+            .unwrap();
+        // The admin extractor refuses a member before the service.
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{method}");
+        assert_eq!(service.0.load(Ordering::SeqCst), 0, "{method}");
+    }
+}
+
+#[tokio::test]
+async fn no_email_provider_is_service_unavailable() {
+    let (status, body) = error_body(TeamAgentError::InboxesNotConfigured).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body["message"],
+        "email inboxes aren't available on this server"
+    );
 }

@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team_agent_inboxes\n            SET mailbox_id = COALESCE($2, mailbox_id),\n                address = COALESCE($3, address),\n                state = $4,\n                last_error = $5,\n                fake_provider = $6,\n                updated_at = now()\n            WHERE agent_user_id = $1\n              AND state NOT IN ('pausing', 'paused', 'releasing', 'released')\n            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,\n                      last_error, fake_provider, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "mailbox_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "fake_provider",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bc72f7d13304e703c559fef4906d55859eb732cc27874f41c721fd56957bee84"
+}

@@ -11,6 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::admission::AgentAccountFacts;
+use super::inbox::AgentInbox;
 use super::models::{
     AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerId, ComputerPurchase,
     ComputerState, CreateTeamAgent, CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgent,
@@ -276,6 +277,22 @@ pub trait TeamAgentService: Send + Sync + 'static {
         agent: &MacroUserIdStr<'_>,
         voice: AgentVoice,
     ) -> impl Future<Output = Result<AgentVoice, TeamAgentError>> + Send;
+
+    /// The email inbox of an agent on the receipt's team, asking again
+    /// while it is being created.
+    fn inbox(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<AgentInbox, TeamAgentError>> + Send;
+
+    /// Give an agent on the receipt's team its email inbox, or retry the one
+    /// it has. Idempotent: one inbox per agent.
+    fn add_inbox(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<AgentInbox, TeamAgentError>> + Send;
 
     /// The calling agent reports that it is online. The first report makes
     /// it `running` and tells its inviter it is ready; later ones change

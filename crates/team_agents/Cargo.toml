@@ -14,6 +14,7 @@ inbound = [
   "hosted_runtimes/schema",
   "entity_access/axum",
   "entity_access/inbound",
+  "dep:tokio",
 ]
 outbound = [
   "agent_git/client",
@@ -24,6 +25,8 @@ outbound = [
   "dep:sqlx",
   "dep:teams",
   "dep:user_api_key",
+  "dep:email_service_client",
+  "dep:tokio",
 ]
 
 [dependencies]
@@ -31,8 +34,10 @@ agent_credentials = { path = "../agent_credentials" }
 agent_git = { path = "../agent_git", default-features = false }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+email_service_client = { path = "../email_service_client", optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 feature_flags = { path = "../feature_flags" }
+futures = { workspace = true }
 harness_id = { path = "../harness_id" }
 hosted_runtimes = { path = "../hosted_runtimes", default-features = false, features = ["ports"] }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
@@ -45,8 +50,10 @@ notification = { path = "../notification", optional = true, default-features = f
 rootcause = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
 teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["macros", "time"] }
 tracing = { workspace = true }
 user_api_key = { path = "../user_api_key", optional = true, features = ["ports"] }
 utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
@@ -65,6 +72,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 user_api_key = { path = "../user_api_key", features = ["postgres"] }
+wiremock = { workspace = true }
 
 # The crate depends on itself in tests to turn on `inbound`, which shear reads as unused.
 [package.metadata.cargo-shear]

@@ -32,6 +32,7 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::domain::inbox::AgentInbox;
 use crate::domain::models::{
     ComputerId, ComputerSize, CreateTeamAgent, TeamAgent, TeamAgentError, TeamAgents,
 };
@@ -79,7 +80,10 @@ impl IntoResponse for TeamAgentError {
             | Self::InvalidPurchaseKey
             | Self::InvalidAgentId => StatusCode::BAD_REQUEST,
             Self::UnknownVoice => StatusCode::BAD_REQUEST,
-            Self::NotFound | Self::NoVoice => StatusCode::NOT_FOUND,
+            Self::NotFound | Self::NoVoice | Self::NoInbox => StatusCode::NOT_FOUND,
+            Self::InboxesNotConfigured | Self::InboxUnavailable(_) => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
             Self::NotEnabled | Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::ComputerUnavailable(_)
             | Self::NoRoom(_)
@@ -100,6 +104,10 @@ impl IntoResponse for TeamAgentError {
             }
             Self::VoiceUnavailable(error) => {
                 tracing::error!(error = ?error, "a voice request failed");
+                self.to_string()
+            }
+            Self::InboxUnavailable(error) => {
+                tracing::error!(error = ?error, "an inbox request failed");
                 self.to_string()
             }
             other => other.to_string(),
@@ -148,6 +156,8 @@ pub struct TeamAgentErrorBody {
 /// - `DELETE /{agent_user_id}` — a team admin removes an agent.
 /// - `GET`/`PUT /{agent_user_id}/voice` — a team admin reads or changes the
 ///   agent's call voice.
+/// - `GET`/`PUT /{agent_user_id}/inbox` — a team admin reads the agent's
+///   email inbox, or gives it one.
 pub fn team_agents_router<S, Eas, Auth, T>(state: TeamAgentsRouterState<S, Eas, Auth>) -> Router<T>
 where
     S: TeamAgentService,
@@ -170,6 +180,11 @@ where
             "/{agent_user_id}/voice",
             get(get_team_agent_voice_handler::<S, Eas, Auth>)
                 .put(set_team_agent_voice_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{agent_user_id}/inbox",
+            get(get_team_agent_inbox_handler::<S, Eas, Auth>)
+                .put(add_team_agent_inbox_handler::<S, Eas, Auth>),
         )
         .with_state(state)
 }
@@ -410,6 +425,86 @@ where
         state
             .service
             .set_voice(access.entity_access_receipt, &agent, voice)
+            .await?,
+    ))
+}
+
+/// The agent's email inbox: its address and state. Asks email_service again
+/// while the inbox is being created. Requires a team admin or owner.
+#[utoipa::path(
+    get,
+    tag = "team-agents",
+    operation_id = "get_team_agent_inbox",
+    path = "/team_agents/{agent_user_id}/inbox",
+    params(AgentPath),
+    responses(
+        (status = 200, body = AgentInbox),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse, description = "No such agent, or it has no inbox"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_team_agent_inbox_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+) -> Result<Json<AgentInbox>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map(MacroUserIdStr::into_owned)
+        .map_err(|_| TeamAgentError::InvalidAgentId)?;
+    Ok(Json(
+        state
+            .service
+            .inbox(access.entity_access_receipt, &agent)
+            .await?,
+    ))
+}
+
+/// Give the agent its own email inbox, or retry the one it has; one inbox
+/// per agent however often this is called. Its mail belongs to the agent's
+/// own account. Requires a team admin or owner.
+#[utoipa::path(
+    put,
+    tag = "team-agents",
+    operation_id = "add_team_agent_inbox",
+    path = "/team_agents/{agent_user_id}/inbox",
+    params(AgentPath),
+    responses(
+        (status = 200, body = AgentInbox, description = "The inbox; `failed` with a reason when the provider refused, `provisioning` while it keeps trying"),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+        (status = 503, body = ErrorResponse, description = "No email provider is set up, or email inboxes didn't answer"),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn add_team_agent_inbox_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+) -> Result<Json<AgentInbox>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map(MacroUserIdStr::into_owned)
+        .map_err(|_| TeamAgentError::InvalidAgentId)?;
+    Ok(Json(
+        state
+            .service
+            .add_inbox(access.entity_access_receipt, &agent)
             .await?,
     ))
 }

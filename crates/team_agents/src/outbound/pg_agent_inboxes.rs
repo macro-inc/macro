@@ -1,0 +1,383 @@
+//! Postgres adapter for agents' inbox records (`team_agent_inboxes`).
+
+use chrono::{DateTime, Utc};
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::domain::inbox::{
+    AgentInboxFailure, AgentInboxRepository, AgentInboxState, InboxRecord, InboxUpdate,
+};
+
+#[cfg(test)]
+mod test;
+
+/// Errors from the inbox record store.
+#[derive(Debug, thiserror::Error)]
+pub enum PgAgentInboxesError {
+    /// A query failed.
+    #[error(transparent)]
+    Sqlx(#[from] sqlx::Error),
+    /// A stored row doesn't parse; the value is not repeated.
+    #[error("a stored inbox row is malformed")]
+    Malformed,
+    /// The agent has no record to update.
+    #[error("the agent has no inbox record")]
+    Missing,
+}
+
+/// Agents' inbox records in MacroDB.
+#[derive(Clone)]
+pub struct PgAgentInboxes {
+    pool: PgPool,
+}
+
+impl PgAgentInboxes {
+    /// Build the store on a pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+struct InboxRow {
+    agent_user_id: String,
+    team_id: Uuid,
+    request_id: Uuid,
+    mailbox_id: Option<Uuid>,
+    address: Option<String>,
+    state: String,
+    last_error: Option<String>,
+    fake_provider: bool,
+    updated_at: DateTime<Utc>,
+}
+
+impl TryFrom<InboxRow> for InboxRecord {
+    type Error = PgAgentInboxesError;
+
+    fn try_from(row: InboxRow) -> Result<Self, Self::Error> {
+        Ok(InboxRecord {
+            agent: MacroUserIdStr::parse_from_str(&row.agent_user_id)
+                .map(MacroUserIdStr::into_owned)
+                .map_err(|_| PgAgentInboxesError::Malformed)?,
+            team_id: row.team_id,
+            request_id: row.request_id,
+            mailbox_id: row.mailbox_id,
+            address: row.address,
+            state: row
+                .state
+                .parse::<AgentInboxState>()
+                .map_err(|_| PgAgentInboxesError::Malformed)?,
+            last_error: row
+                .last_error
+                .map(|error| error.parse::<AgentInboxFailure>())
+                .transpose()
+                .map_err(|_| PgAgentInboxesError::Malformed)?,
+            fake_provider: row.fake_provider,
+            updated_at: row.updated_at,
+        })
+    }
+}
+
+impl AgentInboxRepository for PgAgentInboxes {
+    type Err = PgAgentInboxesError;
+
+    #[tracing::instrument(skip_all, err)]
+    async fn reserve(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        request_id: Uuid,
+        state: AgentInboxState,
+    ) -> Result<InboxRecord, Self::Err> {
+        // The no-op update makes the conflicting row come back, so a racing
+        // second reserve reads the first one's request id.
+        let row = sqlx::query_as!(
+            InboxRow,
+            r#"
+            INSERT INTO team_agent_inboxes (agent_user_id, team_id, request_id, state)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (agent_user_id) DO UPDATE SET agent_user_id = EXCLUDED.agent_user_id
+            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
+                      last_error, fake_provider, updated_at
+            "#,
+            agent.as_ref(),
+            team_id,
+            request_id,
+            state.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        row.try_into()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn get(&self, agent: &MacroUserIdStr<'_>) -> Result<Option<InboxRecord>, Self::Err> {
+        let row = sqlx::query_as!(
+            InboxRow,
+            r#"
+            SELECT agent_user_id, team_id, request_id, mailbox_id, address, state,
+                   last_error, fake_provider, updated_at
+            FROM team_agent_inboxes
+            WHERE agent_user_id = $1
+            "#,
+            agent.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(InboxRecord::try_from).transpose()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<InboxRecord>, Self::Err> {
+        let rows = sqlx::query_as!(
+            InboxRow,
+            r#"
+            SELECT agent_user_id, team_id, request_id, mailbox_id, address, state,
+                   last_error, fake_provider, updated_at
+            FROM team_agent_inboxes
+            WHERE team_id = $1
+            "#,
+            team_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(InboxRecord::try_from).collect()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn update(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        update: &InboxUpdate,
+    ) -> Result<InboxRecord, Self::Err> {
+        let row = sqlx::query_as!(
+            InboxRow,
+            r#"
+            UPDATE team_agent_inboxes
+            SET mailbox_id = COALESCE($2, mailbox_id),
+                address = COALESCE($3, address),
+                -- Entering a mark starts its backoff over.
+                sweep_attempts = CASE WHEN state <> $4 THEN 0 ELSE sweep_attempts END,
+                next_sweep_at = CASE
+                    WHEN state <> $4 THEN now() + interval '1 minute'
+                    ELSE next_sweep_at
+                END,
+                state = $4,
+                last_error = $5,
+                fake_provider = $6,
+                updated_at = now()
+            WHERE agent_user_id = $1
+            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
+                      last_error, fake_provider, updated_at
+            "#,
+            agent.as_ref(),
+            update.mailbox_id,
+            update.address,
+            update.state.as_ref(),
+            update.last_error.map(|error| error.as_ref().to_owned()),
+            update.fake_provider,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(PgAgentInboxesError::Missing)?;
+
+        row.try_into()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn update_live(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        update: &InboxUpdate,
+    ) -> Result<Option<InboxRecord>, Self::Err> {
+        let row = sqlx::query_as!(
+            InboxRow,
+            r#"
+            UPDATE team_agent_inboxes
+            SET mailbox_id = COALESCE($2, mailbox_id),
+                address = COALESCE($3, address),
+                state = $4,
+                last_error = $5,
+                fake_provider = $6,
+                updated_at = now()
+            WHERE agent_user_id = $1
+              AND state NOT IN ('pausing', 'paused', 'releasing', 'released')
+            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
+                      last_error, fake_provider, updated_at
+            "#,
+            agent.as_ref(),
+            update.mailbox_id,
+            update.address,
+            update.state.as_ref(),
+            update.last_error.map(|error| error.as_ref().to_owned()),
+            update.fake_provider,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(InboxRecord::try_from).transpose()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn settle(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        from: AgentInboxState,
+        update: &InboxUpdate,
+    ) -> Result<Option<InboxRecord>, Self::Err> {
+        let row = sqlx::query_as!(
+            InboxRow,
+            r#"
+            UPDATE team_agent_inboxes
+            SET mailbox_id = COALESCE($3, mailbox_id),
+                address = COALESCE($4, address),
+                state = $5,
+                last_error = $6,
+                fake_provider = $7,
+                updated_at = now()
+            WHERE agent_user_id = $1 AND state = $2
+            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
+                      last_error, fake_provider, updated_at
+            "#,
+            agent.as_ref(),
+            from.as_ref(),
+            update.mailbox_id,
+            update.address,
+            update.state.as_ref(),
+            update.last_error.map(|error| error.as_ref().to_owned()),
+            update.fake_provider,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(InboxRecord::try_from).transpose()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn seatless_live(
+        &self,
+        changed_after: DateTime<Utc>,
+        changed_before: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<InboxRecord>, Self::Err> {
+        let rows = sqlx::query_as!(
+            InboxRow,
+            r#"
+            SELECT i.agent_user_id, i.team_id, i.request_id, i.mailbox_id, i.address, i.state,
+                   i.last_error, i.fake_provider, i.updated_at
+            FROM team_agent_inboxes i
+            WHERE i.state IN ('provisioning', 'active', 'failed')
+              AND i.updated_at > $1
+              AND i.updated_at < $2
+              AND NOT EXISTS (SELECT 1 FROM team_agents ta WHERE ta.user_id = i.agent_user_id)
+            ORDER BY i.updated_at
+            LIMIT $3
+            "#,
+            changed_after,
+            changed_before,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(InboxRecord::try_from).collect()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn claim_unsettled(
+        &self,
+        now: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<InboxRecord>, Self::Err> {
+        // SKIP LOCKED lets replicas claim disjoint marks; the backoff is a
+        // minute doubling per attempt, at most an hour.
+        let rows = sqlx::query_as!(
+            InboxRow,
+            r#"
+            WITH due AS (
+                SELECT agent_user_id
+                FROM team_agent_inboxes
+                WHERE state IN ('pausing', 'releasing')
+                  AND next_sweep_at <= $1
+                ORDER BY next_sweep_at
+                LIMIT $2
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE team_agent_inboxes i
+            SET sweep_attempts = LEAST(i.sweep_attempts + 1, 100),
+                next_sweep_at = $1 + LEAST(
+                    interval '1 minute' * power(2, LEAST(i.sweep_attempts, 6)),
+                    interval '1 hour'
+                )
+            FROM due
+            WHERE i.agent_user_id = due.agent_user_id
+            RETURNING i.agent_user_id, i.team_id, i.request_id, i.mailbox_id, i.address,
+                      i.state, i.last_error, i.fake_provider, i.updated_at
+            "#,
+            now,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(InboxRecord::try_from).collect()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn reserve_seated(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        request_id: Uuid,
+    ) -> Result<Option<InboxRecord>, Self::Err> {
+        // The seat is read under FOR SHARE, so a team deletion removing it
+        // waits for this insert, and one that removed it first leaves
+        // nothing to insert.
+        let row = sqlx::query_as!(
+            InboxRow,
+            r#"
+            INSERT INTO team_agent_inboxes (agent_user_id, team_id, request_id, state)
+            SELECT ta.user_id, ta.team_id, $3, 'provisioning'
+            FROM team_agents ta
+            WHERE ta.user_id = $1 AND ta.team_id = $2
+            FOR SHARE
+            ON CONFLICT (agent_user_id) DO UPDATE SET agent_user_id = EXCLUDED.agent_user_id
+            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
+                      last_error, fake_provider, updated_at
+            "#,
+            agent.as_ref(),
+            team_id,
+            request_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(InboxRecord::try_from).transpose()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn seated_agents(
+        &self,
+        team_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let agents = sqlx::query_scalar!(
+            "SELECT user_id FROM team_agents WHERE team_id = $1",
+            team_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        agents
+            .into_iter()
+            .map(|agent| {
+                MacroUserIdStr::parse_from_str(&agent)
+                    .map(MacroUserIdStr::into_owned)
+                    .map_err(|_| PgAgentInboxesError::Malformed)
+            })
+            .collect()
+    }
+}

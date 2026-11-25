@@ -13,6 +13,9 @@ import type { CreateTeamAgentVoice } from './createTeamAgentVoice';
 export interface CreateTeamAgent {
   /** Profile picture URL (a static file the caller uploaded). */
   avatarUrl?: CreateTeamAgentAvatarUrl;
+  /** Give the agent its own email inbox once its computer is bought. An
+inbox that can't be made never fails the invite. */
+  inbox?: boolean;
   /** What the agent is responsible for. Seeds its workspace; when this and
 `personality` are empty the agent asks its owner what to take on. */
   jobDescription?: string;
