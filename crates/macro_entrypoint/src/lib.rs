@@ -294,9 +294,8 @@ impl MacroEntrypoint {
                 let env = DdEnv::new()
                     .map(|e| e.to_string())
                     .unwrap_or_else(|_| "unknown".to_string());
-                let grafana_endpoint = matches!(self.env, Environment::Develop)
-                    .then(GrafanaOtlpEndpoint::new)
-                    .flatten();
+                // Set only in ECS tasks that run the Alloy sidecar.
+                let grafana_endpoint = GrafanaOtlpEndpoint::new();
                 let meter_provider = init_otel_metrics(env.clone());
                 let tracer_provider = init_opentelemetry(env, grafana_endpoint.as_deref());
 

@@ -4,9 +4,10 @@ import type { ecs } from '@pulumi/awsx/types/input';
 import {
   grafanaIngestSecretArn,
   grafanaTelemetryEnabled,
+  stack,
 } from '../../../shared';
 
-// Applied automatically with the dev sidecar; never overrides the primary OTLP endpoint.
+// Applied automatically with the Alloy sidecar; never overrides the primary OTLP endpoint.
 export const grafanaTelemetryEnvironment = grafanaTelemetryEnabled
   ? [{ name: 'GRAFANA_OTLP_ENDPOINT', value: 'http://127.0.0.1:14317' }]
   : [];
@@ -35,6 +36,7 @@ export function grafanaTelemetryContainers(
           value: readFileSync(join(__dirname, 'ecs-telemetry.alloy'), 'utf8'),
         },
         { name: 'TELEMETRY_SERVICE', value: serviceName },
+        { name: 'TELEMETRY_ENVIRONMENT', value: stack },
         { name: 'GOMEMLIMIT', value: '400MiB' },
       ],
       secrets: [

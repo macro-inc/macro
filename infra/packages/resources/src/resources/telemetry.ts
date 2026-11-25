@@ -10,7 +10,7 @@ import {
   grafanaTelemetryEnvironment,
 } from './grafana';
 
-/** Standard app container and telemetry sidecars, with Grafana copies in dev. */
+/** Standard app container and telemetry sidecars, with Grafana copies where enabled. */
 export function withTelemetry(
   serviceName: string,
   containers: Record<string, ecs.TaskDefinitionContainerDefinitionArgs>,
