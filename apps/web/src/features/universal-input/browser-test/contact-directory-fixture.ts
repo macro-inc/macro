@@ -126,19 +126,28 @@ export async function fetchContactReferencePage(
   };
 }
 /** Named people across the directory, matched as the server matches them:
- * the whole name, address or id, or the first name. */
+ * each typed word starts a word of the name a person is shown with (their
+ * name, else their address's local part), and an address or user id names
+ * nobody. */
 export async function fetchContactNamedPeople(
   args: { search: string; limit?: number },
   signal: AbortSignal
 ) {
   signal.throwIfAborted();
   const query = normalizeNameText(args.search);
-  const named = people.filter(
-    (user) =>
-      [user.id, user.email, user.name].some(
-        (label) => normalizeNameText(label) === query
-      ) || normalizeNameText(user.name).split(' ')[0] === query
-  );
+  const words = query ? query.split(' ') : [];
+  const namesNobody = query.includes('@') || query.startsWith('macro|');
+  const named = namesNobody
+    ? []
+    : people.filter((user) => {
+        const shown = normalizeNameText(
+          user.name || user.email.split('@')[0] || ''
+        ).split(' ');
+        return (
+          words.length > 0 &&
+          words.every((word) => shown.some((part) => part.startsWith(word)))
+        );
+      });
   return {
     user: {
       id: VIEWER,
