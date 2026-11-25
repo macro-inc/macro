@@ -890,6 +890,35 @@ async fn a_copy_is_forgotten_before_its_database() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_database_outlives_a_copy_that_cannot_be_forgotten() {
+    const SCOPE: &str = "cache-wasm-salvage-forgotten-busy";
+    for reset in [false, true] {
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let copy = read_side_file(SCOPE).await;
+        let (engine, _, _) = open(SCOPE, false).await;
+        if !reset {
+            resolved(engine.close()).await;
+        }
+        leave_side_file(SCOPE, &copy).await;
+        hold_side_file(SCOPE).await;
+        let failed = match reset {
+            true => wasm_bindgen_futures::JsFuture::from(engine.physical_reset())
+                .await
+                .is_err(),
+            false => destroy_cache(SCOPE.into()).await.is_err(),
+        };
+        release_side_file().await;
+        assert!(failed);
+        // Only the database says that the copy is of a queue it took.
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!(["none", 0, 0]), "{reset}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
 async fn an_import_from_memory_leaves_the_copy_that_could_not_be_read() {
     const SCOPE: &str = "cache-wasm-salvage-import-unread";
     closed_with_queue(SCOPE).await;

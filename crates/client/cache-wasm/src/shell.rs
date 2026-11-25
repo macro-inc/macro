@@ -1479,11 +1479,14 @@ pub async fn destroy_cache(scope: String) -> Result<(), JsValue> {
     let owner = OpfsOwner::acquire(&database_identity(&scope))
         .await
         .map_err(err_js)?;
-    // First, or a death in between would leave what the database had settled.
-    let forgotten = salvage::forget(&owner.sidecar()).await;
+    // First, and only then: the copy of a queue that settled is inert beside
+    // the database that held it, and would come back without it.
+    if let Err(error) = salvage::forget(&owner.sidecar()).await {
+        owner.release().await.map_err(err_js)?;
+        return Err(error);
+    }
     let owner = owner.recovery_wipe().await.map_err(err_js)?;
-    owner.release().await.map_err(err_js)?;
-    forgotten
+    owner.release().await.map_err(err_js)
 }
 
 #[cfg(feature = "browser-test-hooks")]
@@ -1812,18 +1815,17 @@ async fn close_storage(
 
 /// Closes `storage`, then wipes it and everything it queued.
 async fn discard_storage(storage: BrowserStorage, sidecar: &Sidecar) -> Result<OpfsOwner, JsValue> {
-    // First, as in `destroy_cache`.
-    let forgotten = salvage::forget(sidecar).await;
-    let owner = match unwrap_storage(storage).try_close().map_err(err_js)? {
+    let storage = unwrap_storage(storage);
+    // As in `destroy_cache`.
+    if let Err(error) = salvage::forget(sidecar).await {
+        release_storage(storage).await?;
+        return Err(error);
+    }
+    match storage.try_close().map_err(err_js)? {
         TursoStorageCloseOutcome::Healthy(closed) => closed.reset().await,
         TursoStorageCloseOutcome::ResetRequired(closed) => closed.reset().await,
     }
-    .map_err(err_js)?;
-    if let Err(error) = forgotten {
-        owner.release().await.map_err(err_js)?;
-        return Err(error);
-    }
-    Ok(owner)
+    .map_err(err_js)
 }
 
 #[wasm_bindgen]
