@@ -516,6 +516,32 @@ async fn a_copy_that_may_have_been_imported_is_never_called_kept_once_its_databa
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_copy_of_a_torn_database_is_never_called_kept_when_its_doubt_does_not_fit() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-full";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut copy = read_side_file(SCOPE).await;
+    copy.extend(SalvageFile::import_attempt());
+    let refuse_losses = "const frame = args[0];
+        if (frame.byteLength === 22 && frame[12] === 4)
+          throw new DOMException('full', 'QuotaExceededError');
+        return original(...args);";
+    for recovery in [false, true] {
+        let (engine, _, _) = open(SCOPE, false).await;
+        resolved(engine.close()).await;
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        write_side_file(SCOPE, &copy).await;
+        break_side_files("write", refuse_losses).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        restore_side_files().await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
 async fn a_copy_of_a_torn_database_is_never_called_kept_after_a_death() {
     const SCOPE: &str = "cache-wasm-salvage-torn-death";
     closed_with_queue(SCOPE).await;
