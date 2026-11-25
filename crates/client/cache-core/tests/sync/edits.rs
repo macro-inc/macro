@@ -287,3 +287,51 @@ fn an_edit_with_no_run_in_progress_fences_nothing() {
         assert_eq!(in_inbox(&engine, 1).await, Some(true));
     });
 }
+
+#[test]
+fn a_listing_read_before_an_edit_keeps_the_record_the_edit_restored() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut run = start(
+            &mut engine,
+            &args(vec![lane(
+                "tasks",
+                TASKS,
+                "soup",
+                json!({"kind": "hydrate"}),
+            )]),
+        )
+        .await;
+        let stream = ndjson(&[
+            soup_page("tasks", 0, &[1, 2, 3], None),
+            lane_done("tasks", 1, 3),
+            end("complete"),
+        ]);
+        run_stream(&mut engine, &mut run, &stream).await.unwrap();
+
+        let plan = args(vec![lane(
+            "tasks-ids",
+            TASK_IDS,
+            "soup",
+            json!({"kind": "membership", "scopes": ["tasks"]}),
+        )]);
+        let mut run = start(&mut engine, &plan).await;
+        // The server lists before the user restores task 2; the edit is
+        // confirmed before the listing is applied.
+        engine.fence_sync_records([&task_key(2)]);
+        let mut ids_page = soup_page("tasks-ids", 0, &[1, 3], None);
+        for item in ids_page["response"]["data"]["user"]["soup"]["items"]
+            .as_array_mut()
+            .unwrap()
+        {
+            item.as_object_mut().unwrap().remove("name");
+        }
+        let stream = ndjson(&[ids_page, lane_done("tasks-ids", 1, 2), end("complete")]);
+        run_stream(&mut engine, &mut run, &stream).await.unwrap();
+
+        assert_eq!(
+            present(&engine, &[task_key(1), task_key(2), task_key(3)]).await,
+            [true, true, true]
+        );
+    });
+}

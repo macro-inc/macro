@@ -614,7 +614,7 @@ where
                         listed.iter().any(|key| !members.contains(key))
                     };
                     let applied = self
-                        .delete_unlisted(hooks, &lane.id, scopes, members, &listed)
+                        .delete_unlisted(hooks, run.fence, &lane.id, scopes, members, &listed)
                         .await?;
                     if unfetched {
                         self.refetch_scopes::<H::Error>(scopes).await?;
@@ -670,14 +670,17 @@ where
     async fn delete_unlisted<H: SyncHooks<S>>(
         &mut self,
         hooks: &H,
+        fence: u64,
         lane_id: &str,
         scopes: &[String],
         members: Vec<EntityKey<'static>>,
         listed: &BTreeSet<EntityKey<'static>>,
     ) -> Result<SyncApplied, SyncWriteError<S::Error, H::Error>> {
+        // A record an edit confirmed after the run began (restored, rejoined)
+        // stays: the listing was read before the edit.
         let stale = members
             .into_iter()
-            .filter(|key| !listed.contains(key))
+            .filter(|key| !listed.contains(key) && !self.sync_fence.holds(fence, key))
             .collect::<Vec<_>>();
         if stale.is_empty() {
             return Ok(SyncApplied::Recorded);
