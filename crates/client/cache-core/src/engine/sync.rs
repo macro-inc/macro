@@ -49,9 +49,10 @@ use thiserror::Error;
 const DELETE_CHUNK: usize = 1_000;
 
 /// Records server-confirmed edits wrote: a settled mutation's records, a
-/// mutation response, and records a host invalidated because they changed
-/// outside the cache's writes ([`Engine::invalidate_keys`]: a push, or an edit
-/// made through REST). Each is kept with the
+/// mutation response, records a host invalidated because they changed outside
+/// the cache's writes ([`Engine::invalidate_keys`], a push), and records the
+/// app fences after an edit made through REST
+/// ([`Engine::fence_sync_records`]). Each is kept with the
 /// fence it was written under; a run begun under an earlier fence may hold
 /// pages the server read before the edit, so its pages leave the record as
 /// it is. The next run reads after the edit and writes it again.
@@ -389,6 +390,16 @@ where
                 SyncApplied::Recorded
             }
         };
+        // The run's own write can give the authority a new generation without
+        // resetting the cache (a page binding the account of an authority that
+        // already holds a policy). Nothing else wrote in between: the engine
+        // was borrowed for the whole frame. A reset ends the run instead.
+        if run.reset_epoch == self.reset_epoch {
+            run.authority = self
+                .authority_generation()
+                .await
+                .map_err(SyncWriteError::Engine)?;
+        }
         Ok(Some(applied))
     }
 

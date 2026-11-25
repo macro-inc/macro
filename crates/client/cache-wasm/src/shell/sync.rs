@@ -147,8 +147,6 @@ impl CacheEngine {
         })
     }
 
-    /// Decodes response bytes into pending frames and resolves to how many
-    /// are pending. Never writes.
     /// Keeps a sync run begun before now from writing these records back:
     /// the app changed them outside the cache's writes (an edit made through
     /// REST). Does nothing when no run is in progress.
@@ -165,6 +163,8 @@ impl CacheEngine {
         })
     }
 
+    /// Decodes response bytes into pending frames and resolves to how many
+    /// are pending. Never writes.
     #[wasm_bindgen(js_name = syncFeed)]
     pub fn sync_feed(&self, bytes: Vec<u8>) -> js_sys::Promise {
         let state = self.state.clone();
@@ -184,7 +184,8 @@ impl CacheEngine {
 
     /// Applies the oldest pending frame: one bounded step of engine writes
     /// (see `cache_core::engine::sync`). Rejects with `cacheSyncFailure:
-    /// 'aborted'` once the cache was cleared or reset after the run began.
+    /// 'aborted'` once the cache was cleared, reset or given a new authority
+    /// generation after the run began.
     #[wasm_bindgen(js_name = syncApplyNext)]
     pub fn sync_apply_next(&self) -> js_sys::Promise {
         let state = self.state.clone();

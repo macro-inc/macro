@@ -116,6 +116,36 @@ fn a_run_begun_before_an_authority_transition_writes_nothing_after_it() {
 }
 
 #[test]
+fn a_run_follows_the_generation_its_own_page_gave_the_authority() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        // A policy recorded before any response bound the account.
+        let unbound = engine.current_authority("session").await.unwrap();
+        engine
+            .begin_authority_transition("session", unbound.generation, "allowed".into(), false)
+            .await
+            .unwrap();
+        let mut run = start(&mut engine, &tasks_plan()).await;
+        // The first page binds the account, which renews the generation
+        // without resetting the cache.
+        let stream = ndjson(&[
+            soup_page("tasks", 0, &[2], Some("c1")),
+            soup_page("tasks", 1, &[3], None),
+            lane_done("tasks", 2, 2),
+            end("complete"),
+        ]);
+        run_stream(&mut engine, &mut run, &stream).await.unwrap();
+
+        let bound = engine.current_authority("session").await.unwrap();
+        assert_ne!(bound.generation, unbound.generation);
+        assert_eq!(
+            present(&engine, &[task_key(2), task_key(3)]).await,
+            [true, true]
+        );
+    });
+}
+
+#[test]
 fn a_run_begun_before_the_cache_had_an_authority_adopts_its_first() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

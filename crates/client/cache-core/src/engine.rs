@@ -3582,8 +3582,8 @@ impl<S: Storage> Engine<S> {
         self.query_watches.remove(op_id);
     }
 
-    /// Handles records invalidated from outside a write, such as a push or an
-    /// edit made through REST: evicts them from the hot tier so the next read
+    /// Handles records invalidated from outside a write, such as a push:
+    /// evicts them from the hot tier so the next read
     /// hits storage, and returns the local active operations that depend on
     /// them. A sync run begun before leaves them as they are, since its pages
     /// may predate the change. One engine owns a database at a time, so no
