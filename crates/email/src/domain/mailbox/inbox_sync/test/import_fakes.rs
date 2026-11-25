@@ -146,7 +146,7 @@ impl InboxSyncMessageStore for Fake {
         _: Uuid,
         message: &mut service::message::Message,
         resync: Option<&InboxSyncResync>,
-    ) -> Result<(), Failure> {
+    ) -> Result<Vec<Uuid>, Failure> {
         self.io(
             "insert_message",
             (
@@ -158,10 +158,14 @@ impl InboxSyncMessageStore for Fake {
         if let Some(labels) = state.import.labels_after_insert.take() {
             state.labels = labels;
         }
-        Ok(())
+        Ok(state.gained_labels.clone())
     }
     async fn insert_thread(&self, _: Uuid, thread: service::thread::Thread) -> Result<(), Failure> {
         self.io("insert_thread", thread)
+    }
+    async fn labels_new_to_thread(&self, message: Uuid) -> Result<Vec<Uuid>, Failure> {
+        self.io("labels_new_to_thread", message)?;
+        Ok(self.0.lock().unwrap().gained_labels.clone())
     }
     async fn message_ids(&self, _: Uuid, _: &str) -> Result<(Uuid, Uuid), Failure> {
         self.io("message_ids", ())?;

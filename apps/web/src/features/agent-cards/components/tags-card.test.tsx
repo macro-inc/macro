@@ -89,7 +89,7 @@ describe('TagsCard', () => {
     fireEvent.click(getByRole('button', { name: /Bug/ }));
     expect(mocks.navigate).toHaveBeenCalledWith(
       mocks.openWithSplit,
-      { optionId: 'opt-bug', propertyDefinitionId: 'def-1' },
+      { optionId: 'opt-bug', propertyDefinitionId: 'def-1', label: 'Bug' },
       { handle: undefined }
     );
     expect(queryByRole('button', { name: /feature/ })).toBeNull();

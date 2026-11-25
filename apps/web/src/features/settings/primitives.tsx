@@ -100,16 +100,29 @@ export function SettingsPage(props: {
             <div class="max-w-full shrink-0 pt-1">{props.actions}</div>
           </Show>
         </header>
-        <div
-          class={cn(
-            'flex flex-col',
-            inSheet ? 'mt-3 gap-6' : 'mt-6 gap-8',
-            props.bodyClass
-          )}
+        <SettingsSections
+          class={cn(inSheet ? 'mt-3' : 'mt-6', props.bodyClass)}
         >
           {props.children}
-        </div>
+        </SettingsSections>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The vertical rhythm between sections. SettingsPage uses it for its body;
+ * settings shown outside a page, such as in a dialog, wrap their sections in it
+ * so they keep the same spacing.
+ */
+export function SettingsSections(props: {
+  class?: string;
+  children: JSX.Element;
+}) {
+  const inSheet = useContext(SettingsSheetContext);
+  return (
+    <div class={cn('flex flex-col', inSheet ? 'gap-6' : 'gap-8', props.class)}>
+      {props.children}
     </div>
   );
 }

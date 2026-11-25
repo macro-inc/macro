@@ -10,14 +10,13 @@
  *   (silent restart). See the design doc and cache-core `identity_witness`.
  *
  * The scope is stable for the browser profile and maps to one Turso/OPFS
- * database identity. Identity changes reset that database's contents. Scope
- * replacement is serialized across tabs so a stale transport failure cannot
- * overwrite a newer logout rotation.
+ * database identity. Identity changes reset that database's contents. Only a
+ * logout whose wipe could not be confirmed replaces it, serialized with tabs of
+ * builds that also replaced it after a failed transport.
  */
 
 const SCOPE_STORAGE_KEY = 'graphql-cache:scope';
 const SCOPE_STORAGE_LOCK = 'graphql-cache:scope-storage';
-const quarantineScopeFor = (scope: string): string => `quarantine:${scope}`;
 
 type ScopeStorageAction = () => string | undefined;
 
@@ -48,33 +47,7 @@ async function withScopeStorageLock(
   }
 }
 
-/**
- * Conditionally quarantines one uncertain transport scope.
- *
- * Simultaneous failures for the same scope converge on one deterministic
- * replacement. The compare and set run under the same cross-tab lock as
- * logout rotation, so a stale host cannot overwrite a newer unrelated scope.
- */
-export async function quarantineCacheScope(
-  expectedScope: string
-): Promise<string | undefined> {
-  const replacement = quarantineScopeFor(expectedScope);
-  return await withScopeStorageLock(() => {
-    try {
-      const current = localStorage.getItem(SCOPE_STORAGE_KEY);
-      if (current === expectedScope) {
-        localStorage.setItem(SCOPE_STORAGE_KEY, replacement);
-        return replacement;
-      }
-      return current === replacement ? replacement : undefined;
-    } catch {
-      // Without a trustworthy compare, retaining the persisted value is safer.
-      return undefined;
-    }
-  });
-}
-
-/** Quarantines a cache whose durable logout wipe could not be confirmed. */
+/** Leaves a cache behind whose durable logout wipe could not be confirmed. */
 export async function rotateCacheScope(): Promise<string | undefined> {
   return await withScopeStorageLock(() => {
     try {

@@ -30,13 +30,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('keeps the same focused input through category, mode and Enter changes', () => {
+it('keeps the same focused input through mode and Enter changes', () => {
   SearchState.open();
   render(() => <MobileSearchInput />);
   const input = screen.getByPlaceholderText('Search…');
   input.focus();
   fireEvent.input(input, { target: { value: 'teo' } });
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   expect(document.activeElement).toBe(input);
   expect(screen.getByPlaceholderText('Search…')).toBe(input);
@@ -50,4 +49,18 @@ it('keeps the same focused input through category, mode and Enter changes', () =
   expect(SearchState.isOpen()).toBe(false);
   expect(SearchState.query()).toBe('');
   expect(navigate).toHaveBeenCalledWith('home');
+});
+
+it('offers the search tips while the field is empty', () => {
+  SearchState.open();
+  render(() => <MobileSearchInput />);
+  fireEvent.click(screen.getByRole('button', { name: 'Search tips' }));
+  expect(screen.getByText('Assigned to you')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'All search operators' })
+  ).toBeTruthy();
+  fireEvent.input(screen.getByPlaceholderText('Search…'), {
+    target: { value: 'launch' },
+  });
+  expect(screen.queryByRole('button', { name: 'Search tips' })).toBeNull();
 });

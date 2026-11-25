@@ -2,6 +2,7 @@ import type { Accessor, JSX } from 'solid-js';
 import type {
   EventTriggerDraft,
   RoutineEventGroup,
+  RoutineEventName,
 } from '../core/routine-triggers';
 
 /** What the routine page supplies to edit event triggers: pickers and labels. */
@@ -35,4 +36,6 @@ export type EventSlots = {
   ) => JSX.Element;
   /** False hides event triggers from the menu; existing ones stay editable. */
   offerEvents?: boolean;
+  /** Events the menu leaves out, such as one still rolling out. */
+  hiddenEvents?: readonly RoutineEventName[];
 };

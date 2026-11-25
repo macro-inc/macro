@@ -937,6 +937,9 @@ export function localDraftQueueLifecycle(
         (draft.status !== 'queued' && draft.status !== 'deleting')
       )
         continue;
+      // A save that lost to its draft's send has left the queue; the send
+      // settles the copy.
+      if (await emailSendOwnsDraft(draft.key)) continue;
       const status =
         draft.status === 'deleting' ? 'delete-failed' : 'unconfirmed';
       const marked = await localDraftStore.update(

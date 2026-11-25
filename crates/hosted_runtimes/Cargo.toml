@@ -34,6 +34,8 @@ outbound = [
   "tokio/time",
 ]
 ports = []
+# The `image-upgrade` binary the image rollout workflow runs.
+image-upgrade-cli = ["outbound", "dep:clap", "tokio/macros"]
 # OpenAPI schemas for the shared types other crates' routes return.
 schema = ["dep:utoipa"]
 
@@ -42,6 +44,7 @@ async-stripe = { workspace = true, default-features = false }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, optional = true }
 computer_id = { workspace = true }
 computer_types = { path = "../computer_types" }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
@@ -91,3 +94,8 @@ wiremock = { workspace = true }
 [[example]]
 name = "firecracker_fleet_smoke"
 required-features = ["outbound"]
+
+[[bin]]
+name = "image-upgrade"
+path = "src/bin/image_upgrade.rs"
+required-features = ["image-upgrade-cli"]

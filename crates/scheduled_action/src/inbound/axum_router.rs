@@ -1000,6 +1000,7 @@ impl IntoResponse for ScheduledActionApiError {
                 }
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
+                | ActionPolicyError::EmailLabelsDisabled
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::InvalidAppearance(_)
                 | ActionPolicyError::GithubNotLinked

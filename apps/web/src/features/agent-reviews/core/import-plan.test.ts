@@ -256,6 +256,13 @@ describe('already in Macro', () => {
 });
 
 describe('planSummary', () => {
+  it('does not call an undecided plan an empty import', () => {
+    const waiting = entries.map((entry) => ({ ...entry, decision: null }));
+    const summary = planSummary(planCounts(waiting), importVolume(waiting, []));
+    expect(summary).toContain('Deciding what to import');
+    expect(summary).not.toContain('importing nothing');
+  });
+
   it('reads the plan size and decisions', () => {
     expect(planSummary(planCounts(entries), importVolume(entries, []))).toBe(
       'Notion shared 4 pages and 1 database — importing 2 pages, 40 tasks · 1 skipped, 1 needs you'
@@ -480,6 +487,20 @@ it('counts tracker issues as tasks independently of their projects', () => {
     { label: 'Projects', value: '1' },
     { label: 'Tasks', value: '1' },
   ]);
+});
+
+it('including a parent does not opt in an external dependency below it', () => {
+  const dependency: ImportPlanEntry = {
+    ...entries[1],
+    id: 'linked',
+    parentId: 'wiki',
+    decision: 'copy',
+    linkedFrom: ['Wiki'],
+  };
+  const nodes = buildPlanTree([entries[0], dependency]);
+  const draft = { ...EMPTY_IMPORT_DRAFT, excluded: ['wiki', 'linked'] };
+  expect(setExcluded(draft, nodes, 'wiki', false).excluded).toEqual(['linked']);
+  expect(setExcluded(draft, nodes, 'linked', false).excluded).toEqual(['wiki']);
 });
 
 describe('HubSpot plans', () => {

@@ -43,4 +43,13 @@ pub trait DatabaseStorageProvisioner: super::ports::DatabaseStorage {
         transaction: &mut Self::Transaction,
         database: &StorageBlueprint,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    /// Apply a storage batch in the caller's transaction, as
+    /// [`super::ports::DatabaseStorage::apply_storage_writes`] does in its own.
+    /// Any outcome but `Applied` may leave some of the batch's writes in the
+    /// transaction, so the caller must roll back instead of committing.
+    fn apply_storage_writes_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        writes: &super::models::Writes,
+    ) -> impl Future<Output = Result<super::models::WritesOutcome, Self::Error>> + Send;
 }

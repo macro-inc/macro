@@ -20,7 +20,13 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
 vi.mock('@app/features/email-message/components/email-user-tooltip', () => ({
   EmailUserTooltip: (props: ParentProps) => <>{props.children}</>,
 }));
-vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
+vi.mock('@property/tags', () => ({
+  InlineFetchedEntityTagsPill: () => null,
+  LabelsMenuPill: () => null,
+}));
+vi.mock('@queries/email/thread-labels', () => ({
+  useShownThreadLabels: () => () => [],
+}));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),

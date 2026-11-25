@@ -291,6 +291,8 @@ pub enum ActionPolicyError {
     NoFutureFirings,
     #[error("event-trigger management is not enabled")]
     EventManagementDisabled,
+    #[error("email label triggers are not enabled")]
+    EmailLabelsDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
     #[error("connect GitHub before enabling a GitHub trigger")]

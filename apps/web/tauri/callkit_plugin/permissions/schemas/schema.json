@@ -295,6 +295,12 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Read, select and watch audio output for the active call.",
+          "type": "string",
+          "const": "allow-audio-output",
+          "markdownDescription": "Read, select and watch audio output for the active call."
+        },
+        {
           "description": "Enables the abort_join command without any pre-configured scope.",
           "type": "string",
           "const": "allow-abort-join",
@@ -353,6 +359,18 @@
           "type": "string",
           "const": "deny-get-active-call-state",
           "markdownDescription": "Denies the get_active_call_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_audio_output command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-audio-output",
+          "markdownDescription": "Enables the get_audio_output command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_audio_output command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-audio-output",
+          "markdownDescription": "Denies the get_audio_output command without any pre-configured scope."
         },
         {
           "description": "Enables the get_pending_answered_call command without any pre-configured scope.",
@@ -451,6 +469,18 @@
           "markdownDescription": "Denies the request_microphone_permission command without any pre-configured scope."
         },
         {
+          "description": "Enables the select_audio_output command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-select-audio-output",
+          "markdownDescription": "Enables the select_audio_output command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the select_audio_output command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-select-audio-output",
+          "markdownDescription": "Denies the select_audio_output command without any pre-configured scope."
+        },
+        {
           "description": "Enables the set_call_drawer_channel_title command without any pre-configured scope.",
           "type": "string",
           "const": "allow-set-call-drawer-channel-title",
@@ -533,6 +563,18 @@
           "type": "string",
           "const": "deny-switch-camera",
           "markdownDescription": "Denies the switch_camera command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the watch_audio_output command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch-audio-output",
+          "markdownDescription": "Enables the watch_audio_output command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the watch_audio_output command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch-audio-output",
+          "markdownDescription": "Denies the watch_audio_output command without any pre-configured scope."
         },
         {
           "description": "Enables the watch_call_answered command without any pre-configured scope.",

@@ -1,19 +1,11 @@
 export default {
   // The gutter toggle and its list
   toggle: 'Notifications in this channel',
-  viewNotDone: 'Not done',
-  viewUnread: 'Unread',
-  viewChoice: 'Which notifications to list',
+  title: 'Unread',
   markDone: 'Mark done',
   markStackDone: 'Mark done: {{label}}',
-  markStackRead: 'Mark read: {{label}}',
-  markRead: 'Mark read',
   markAllDone: 'Mark all done',
-  markAllRead: 'Mark all read',
   markDoneFailed: 'Couldn’t mark this done',
-  markReadFailed: 'Couldn’t mark this read',
-  emptyNotDone: 'Nothing left to mark done',
-  emptyUnread: 'Nothing unread',
   loadFailed: 'Couldn’t load these notifications',
 
   // A stack's label: what it holds and who wrote it

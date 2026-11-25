@@ -265,6 +265,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   reauthorization instead of retrying. Keep it 4xx: a 500 makes callers retry
   and trips the HTTP server-errors monitor. Macro's own OAuth client failing
   (`invalid_client`) stays a 500.
+- `/internal/microsoft_access_token` answers 401 for a grant whose refresh
+  Microsoft refused (`ReauthorizationRequired`, `MissingPermissions`). A
+  refusal is recorded in `refresh_refused_at`, never a revocation: the grant
+  answers 401 without asking Microsoft for `REFUSED_REFRESH_RETRY` (an hour),
+  then refreshes once more, and a refresh that works clears it. Only a
+  disconnect or a replacing grant revokes (`revoke_released_grant`).
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.

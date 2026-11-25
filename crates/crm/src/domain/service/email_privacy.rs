@@ -70,7 +70,12 @@ impl<CR: CompaniesRepository, R: CompanyMetadataResolver> EmailPrivacyService
             .companies_repository
             .email_privacy(access.team_id(), user.as_ref())
             .await?;
-        settings.can_remove_team_domains = access.has_admin_role();
+        let admin = access.has_admin_role();
+        settings.can_remove_team_domains = admin;
+        // Archived companies are visible only to team admins and owners.
+        if !admin {
+            settings.archived_team_domains.clear();
+        }
         Ok(settings)
     }
 

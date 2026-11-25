@@ -88,6 +88,42 @@ fn logged_time_carries_its_length_day_and_source() {
 }
 
 #[test]
+fn a_merge_names_the_merged_records_and_the_values_it_dropped() {
+    let event = GraphqlActivityEvent::from(record(RecordedAction::Known(Action::RecordMerged(
+        activity::RecordMerge {
+            merge_id: Uuid::nil(),
+            merged: vec![activity::MergedRecordName {
+                id: "0199b1f2-3e22-75b2-97eb-d9c6b91accb1".to_string(),
+                name: Some("Old Co".to_string()),
+            }],
+            dropped: vec![activity::DroppedPropertyValue {
+                property: "0199b1f2-3e22-75b2-97eb-d9c6b91accb2".to_string(),
+                record: "0199b1f2-3e22-75b2-97eb-d9c6b91accb1".to_string(),
+                value: json!({ "type": "String", "value": "Silver" }),
+            }],
+        },
+    ))));
+
+    assert_eq!(event.action_tag, "record_merged");
+    match event.action {
+        GraphqlActivityAction::RecordMerged(merge) => {
+            assert_eq!(merge.merged.len(), 1);
+            assert_eq!(
+                merge.merged[0].id.as_str(),
+                "0199b1f2-3e22-75b2-97eb-d9c6b91accb1"
+            );
+            assert_eq!(merge.merged[0].name.as_deref(), Some("Old Co"));
+            assert_eq!(merge.dropped.len(), 1);
+            assert_eq!(
+                merge.dropped[0].value.0,
+                json!({ "type": "String", "value": "Silver" })
+            );
+        }
+        other => panic!("expected RecordMerged, got {}", type_name(&other)),
+    }
+}
+
+#[test]
 fn a_form_response_reads_as_responded() {
     let event = GraphqlActivityEvent::from(ActivityRecord {
         entity_type: activity::EntityType::Form,
@@ -136,6 +172,7 @@ fn type_name(action: &GraphqlActivityAction) -> &'static str {
         GraphqlActivityAction::TaskAdded(_) => "TaskAdded",
         GraphqlActivityAction::TaskRemoved(_) => "TaskRemoved",
         GraphqlActivityAction::TimeLogged(_) => "TimeLogged",
+        GraphqlActivityAction::RecordMerged(_) => "RecordMerged",
         GraphqlActivityAction::Unknown(_) => "Unknown",
     }
 }

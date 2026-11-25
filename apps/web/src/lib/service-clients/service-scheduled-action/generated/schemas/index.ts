@@ -119,6 +119,7 @@ export * from './eventFilterCondition';
 export * from './eventFilterGithub';
 export * from './eventFilterIds';
 export * from './eventFilterInboxes';
+export * from './eventFilterLabels';
 export * from './eventFilterMatch';
 export * from './eventFilterProperty';
 export * from './eventFilters';

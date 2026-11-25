@@ -64,6 +64,9 @@ function extractSearchHighlight(entity: EntityData): string | undefined {
   return entity.search.nameHighlight ?? undefined;
 }
 
+/** A search result's highlighted name is inert like its snippet: a highlight
+ * splits a URL in the name, so a live link there would open only its first
+ * part. */
 export function EntityTitle(props: { entity: EntityData }) {
   const titleData = () => {
     const searchHighlight = extractSearchHighlight(props.entity);
@@ -86,6 +89,7 @@ export function EntityTitle(props: { entity: EntityData }) {
       fallback={<span class="truncate">{titleData().text}</span>}
     >
       <StaticMarkdown
+        inert
         markdown={titleData().text as string}
         theme={unifiedListMarkdownTheme}
         singleLine={true}

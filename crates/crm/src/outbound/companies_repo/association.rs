@@ -41,20 +41,24 @@ impl CompaniesRepositoryImpl {
                 let rows = self.company_contacts(scope, company_id).await?;
                 // One row per visible contact, or a single NULL-contact row
                 // for a visible company without any; no rows means the
-                // company itself is not visible.
-                if rows.is_empty() {
+                // company itself is not visible. A merged company's old id
+                // reads the company it was merged into.
+                let Some((company_id, _)) = rows.first().copied() else {
                     return Ok(None);
-                }
+                };
                 Ok(Some(CrmRecordAssociation::company(
                     company_id,
-                    rows.into_iter().flatten().collect(),
+                    rows.into_iter()
+                        .filter_map(|(_, contact_id)| contact_id)
+                        .collect(),
                 )))
             }
             CrmAssociation::Activity => Ok(None),
+            // A merged contact's old id reads the contact it was merged into.
             CrmAssociation::Contact(contact_id) => Ok(self
-                .contact_visible(scope, contact_id)
+                .visible_contact(scope, contact_id)
                 .await?
-                .then(|| CrmRecordAssociation::contact(contact_id))),
+                .map(CrmRecordAssociation::contact)),
         }
     }
 
@@ -213,28 +217,39 @@ impl CompaniesRepositoryImpl {
             .collect())
     }
 
+    // Each arm reads the company by primary key behind an `OFFSET 0` fence
+    // before the team filter: with stale statistics a custom plan can
+    // otherwise scan the team's companies.
     async fn company_contacts(
         &self,
         scope: CrmContactListScope<'_>,
         company_id: Uuid,
-    ) -> Result<Vec<Option<Uuid>>, CrmError> {
+    ) -> Result<Vec<(Uuid, Option<Uuid>)>, CrmError> {
         let rows = match scope {
             CrmContactListScope::Viewer(user_id) => {
-                sqlx::query_scalar!(
+                sqlx::query!(
                     r#"
-                    SELECT ct.id AS "contact_id?"
-                    FROM crm_companies co
+                    SELECT co.id AS "company_id!", ct.id AS "contact_id?"
+                    FROM (
+                        SELECT id, team_id, hidden
+                        FROM crm_companies
+                        WHERE id = COALESCE(
+                            (SELECT a.company_id FROM crm_company_aliases a WHERE a.retired_id = $2),
+                            $2
+                        )
+                        OFFSET 0
+                    ) co
                     JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id
                        AND (NOT ct.hidden OR tu.team_role <> 'member')
-                    WHERE co.id = $2
-                      AND (NOT co.hidden OR tu.team_role <> 'member')
+                    WHERE NOT co.hidden OR tu.team_role <> 'member'
                     ORDER BY ct.id
                     "#,
                     user_id,
                     company_id,
                 )
+                .map(|row| (row.company_id, row.contact_id))
                 .fetch_all(&self.pool)
                 .await
             }
@@ -242,14 +257,21 @@ impl CompaniesRepositoryImpl {
                 team_id,
                 include_hidden,
             } => {
-                sqlx::query_scalar!(
+                sqlx::query!(
                     r#"
-                    SELECT ct.id AS "contact_id?"
-                    FROM crm_companies co
+                    SELECT co.id AS "company_id!", ct.id AS "contact_id?"
+                    FROM (
+                        SELECT id, team_id, hidden
+                        FROM crm_companies
+                        WHERE id = COALESCE(
+                            (SELECT a.company_id FROM crm_company_aliases a WHERE a.retired_id = $1),
+                            $1
+                        )
+                        OFFSET 0
+                    ) co
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id AND (NOT ct.hidden OR $3)
-                    WHERE co.id = $1
-                      AND co.team_id = $2
+                    WHERE co.team_id = $2
                       AND (NOT co.hidden OR $3)
                     ORDER BY ct.id
                     "#,
@@ -257,6 +279,7 @@ impl CompaniesRepositoryImpl {
                     team_id,
                     include_hidden,
                 )
+                .map(|row| (row.company_id, row.contact_id))
                 .fetch_all(&self.pool)
                 .await
             }
@@ -264,28 +287,37 @@ impl CompaniesRepositoryImpl {
         rows.map_err(|error| CrmError::StorageLayerError(error.into()))
     }
 
-    async fn contact_visible(
+    /// The id of the contact `contact_id` names now, when the scope may see
+    /// it. The contact is read by primary key behind an `OFFSET 0` fence
+    /// before the team filter: unfenced, stale statistics can pick the team's
+    /// `team_id` index and test every contact of the team against the id.
+    async fn visible_contact(
         &self,
         scope: CrmContactListScope<'_>,
         contact_id: Uuid,
-    ) -> Result<bool, CrmError> {
+    ) -> Result<Option<Uuid>, CrmError> {
         let visible = match scope {
             CrmContactListScope::Viewer(user_id) => {
                 sqlx::query_scalar!(
                     r#"
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM crm_contacts ct
-                        LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
-                        WHERE ct.id = $2
-                          AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
-                    ) AS "visible!"
+                    SELECT ct.id AS "id!"
+                    FROM (
+                        SELECT id, team_id, company_id, hidden
+                        FROM crm_contacts
+                        WHERE id = COALESCE(
+                              (SELECT a.contact_id FROM crm_contact_aliases a WHERE a.retired_id = $2),
+                              $2
+                          )
+                        OFFSET 0
+                    ) ct
+                    LEFT JOIN crm_companies co ON co.id = ct.company_id
+                    JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
+                    WHERE NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member'
                     "#,
                     user_id,
                     contact_id,
                 )
-                .fetch_one(&self.pool)
+                .fetch_optional(&self.pool)
                 .await
             }
             CrmContactListScope::Team {
@@ -294,20 +326,25 @@ impl CompaniesRepositoryImpl {
             } => {
                 sqlx::query_scalar!(
                     r#"
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM crm_contacts ct
-                        LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        WHERE ct.id = $1
-                          AND ct.team_id = $2
-                          AND (NOT (ct.hidden OR co.hidden IS TRUE) OR $3)
-                    ) AS "visible!"
+                    SELECT ct.id AS "id!"
+                    FROM (
+                        SELECT id, team_id, company_id, hidden
+                        FROM crm_contacts
+                        WHERE id = COALESCE(
+                              (SELECT a.contact_id FROM crm_contact_aliases a WHERE a.retired_id = $1),
+                              $1
+                          )
+                        OFFSET 0
+                    ) ct
+                    LEFT JOIN crm_companies co ON co.id = ct.company_id
+                    WHERE ct.team_id = $2
+                      AND (NOT (ct.hidden OR co.hidden IS TRUE) OR $3)
                     "#,
                     contact_id,
                     team_id,
                     include_hidden,
                 )
-                .fetch_one(&self.pool)
+                .fetch_optional(&self.pool)
                 .await
             }
         };

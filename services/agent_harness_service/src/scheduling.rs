@@ -769,7 +769,14 @@ where
         .transpose()
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Event routines follow each owner's PostHog flag; without PostHog no one has it.
-    let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
+    // `email.labeled` is on in development until PostHog has its flag.
+    let email_labels_without_flag = matches!(
+        config.environment,
+        macro_env::Environment::Develop | macro_env::Environment::Local
+    );
+    let event_routines = routine_flags.clone().map(|flags| {
+        FlaggedEventRoutines::new(flags).with_email_labels_without_flag(email_labels_without_flag)
+    });
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),

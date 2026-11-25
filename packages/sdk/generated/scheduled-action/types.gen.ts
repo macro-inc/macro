@@ -733,10 +733,16 @@ export type EventFilter = {
     github?: null | GithubSelector;
     ids?: Array<string> | null;
     /**
-     * The inboxes (email link ids) whose new mail starts the routine. Absent:
-     * every inbox the owner reads, their own and those delegated to them.
+     * The inboxes (email link ids) whose new or labeled mail starts the
+     * routine. Absent: every inbox the owner reads, their own and those
+     * delegated to them.
      */
     inboxes?: Array<string> | null;
+    /**
+     * Email labels, one of which the thread must gain: their row ids. Any
+     * label when absent. Only for `email.labeled`.
+     */
+    labels?: Array<string> | null;
     /**
      * Exact tests on the payload, all of which must pass.
      */
@@ -753,7 +759,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'email.labeled' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * A finished run, with the routines it created.
