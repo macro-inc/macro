@@ -107,7 +107,6 @@ fn error(error: AgentMailboxesError) -> MailboxError {
             | AgentMailboxErrorCode::Paused
             | AgentMailboxErrorCode::AlreadyProvisioned
             | AgentMailboxErrorCode::NotFound
-            | AgentMailboxErrorCode::ConfirmationRequired
             | AgentMailboxErrorCode::SendOutcomeUnknown
             | AgentMailboxErrorCode::SendLimit,
         ) => return MailboxError::Rejected,

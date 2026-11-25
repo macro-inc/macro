@@ -56,8 +56,10 @@ export type MailPage = {
 export type Sent = { readonly id: string; readonly threadId?: string };
 
 /**
- * What the send is for, by stable ids (a task, a message, a turn): it makes
- * the send's idempotency key, so a retry or a re-run sends it once.
+ * Which one email this is, by stable ids (a task, a message, a date): with
+ * the kind of send (and a reply's message), it makes the send's idempotency
+ * key, so a retry or a re-run sends it once, and another email never shares
+ * it.
  */
 export type Purpose = { readonly purpose: string };
 
@@ -152,7 +154,7 @@ export const sdkMailbox = ({
         cc: [...cc],
         subject,
         textBody: text,
-        idempotencyKey: mailbox.sendKey(purpose),
+        idempotencyKey: mailbox.sendKey(`send: ${purpose}`),
       });
       return sentFrom(sent);
     }),
@@ -164,7 +166,9 @@ export const sdkMailbox = ({
       return sentFrom(
         await message.reply({
           textBody: text,
-          idempotencyKey: macroClient.agentMailbox.sendKey(purpose),
+          idempotencyKey: macroClient.agentMailbox.sendKey(
+            `reply ${messageId}: ${purpose}`
+          ),
         })
       );
     }),

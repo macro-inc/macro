@@ -66,10 +66,11 @@ export const readMyEmail = (
 /**
  * Sends a new email from your own address, now.
  *
- * `purpose` says what this email is for, by ids that don't change (the task,
- * message or conversation it answers, and what it does): the same purpose
- * sends at most once, so a retry or a re-run never sends it twice. Give each
- * different email its own purpose.
+ * `purpose` names this one email, by ids that don't change (the task or
+ * conversation it is for and what it does; for a recurring email, the date
+ * or period too): the same purpose sends at most once, so a retry or a
+ * re-run never sends it twice, and a later email with the same purpose is
+ * not sent. Give every email its own purpose.
  */
 export const sendMyEmail = (
   { mailbox }: MailboxContext,

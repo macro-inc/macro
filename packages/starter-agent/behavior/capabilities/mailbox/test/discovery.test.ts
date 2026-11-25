@@ -237,14 +237,14 @@ test(
       { method: 'POST', path: '/email/email/agent-mailbox/messages' },
     ]);
     const [first, second] = sendBodies;
-    expect(first).toMatchObject({
+    expect(first).toEqual({
       to: ['person@example.org'],
+      cc: [],
       subject: 'Friday',
       textBody: 'Friday works.',
       idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
     });
     expect(second).toEqual(first);
-    expect(first).not.toHaveProperty('confirmation');
   },
   coldCheckMs + 10_000
 );
