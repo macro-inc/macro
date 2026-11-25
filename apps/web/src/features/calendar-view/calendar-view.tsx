@@ -208,12 +208,12 @@ export function CalendarView(props: CalendarViewProps) {
     // selection still names this event, and clearing it would make the next
     // request for the same event a navigation.
     if (!next && panel.isInlinePreview) return;
-    // A moved event's details land on its new occurrence; a locator naming
-    // the old one would no longer find it.
+    // A moved event's details land on its new occurrence; a locator for the
+    // old one, its key or only its dates (a Home row's), may no longer find it.
     const staleLocator =
       landedOccurrenceKey !== undefined &&
-      search.occurrenceKey !== '' &&
-      search.occurrenceKey !== landedOccurrenceKey;
+      search.occurrenceKey !== landedOccurrenceKey &&
+      (search.occurrenceKey !== '' || search.startDate !== '');
     if (search.eventId === next && !staleLocator) return;
     locallyWrittenEventId = next;
     // A locally focused event is already on screen; drop the locator with it.

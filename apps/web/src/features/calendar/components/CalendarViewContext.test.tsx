@@ -7,6 +7,7 @@ import {
   OCCURRENCE_FOCUS_TIMEOUT_MS,
   useCalendarFocus,
 } from '@app/features/calendar-view/calendar-focus-target';
+import type { CalendarOccurrenceMove } from '@queries/calendar/graphql/mutations';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createRoot, createSignal } from 'solid-js';
@@ -25,10 +26,10 @@ const creates = vi.hoisted(() => ({
   landed: new Map<string, string>(),
   answered: new Map<string, CalendarOccurrenceItem>(),
 }));
-/** Moves by `JSON.stringify([eventId, occurrenceKey])`, as the grid keys chips. */
+/** Moving occurrences by `JSON.stringify([eventId, occurrenceKey])`, as the grid keys chips. */
 const moves = vi.hoisted(() => ({
   moving: new Set<string>(),
-  moved: new Map<string, { eventId: string; occurrenceKey: string }>(),
+  listeners: new Set<(move?: CalendarOccurrenceMove) => void>(),
 }));
 
 vi.mock('@queries/calendar/team-cache', () => ({
@@ -43,8 +44,12 @@ vi.mock('@queries/calendar/graphql/mutations', () => ({
   createdCalendarOccurrence: (id: string) => creates.answered.get(id),
   isCalendarOccurrenceMoving: (eventId: string, occurrenceKey: string) =>
     moves.moving.has(JSON.stringify([eventId, occurrenceKey])),
-  movedCalendarOccurrence: (eventId: string, occurrenceKey: string) =>
-    moves.moved.get(JSON.stringify([eventId, occurrenceKey])),
+  onCalendarOccurrenceMoved: (
+    listener: (move?: CalendarOccurrenceMove) => void
+  ) => {
+    moves.listeners.add(listener);
+    return () => moves.listeners.delete(listener);
+  },
 }));
 vi.mock('../hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
@@ -439,9 +444,17 @@ describe('details opened on an event that was just moved', () => {
   const page = (...events: CalendarEvent[]) =>
     new Map(events.map((event) => [event.id, event]));
   const ref = JSON.stringify(['event-1', FROM]);
+  const announce = (move?: CalendarOccurrenceMove) => {
+    for (const listener of moves.listeners) listener(move);
+  };
+  /** The move's answer names the saved occurrence, and the move ends. */
   const answer = () => {
+    announce({
+      from: { eventId: 'event-1', occurrenceKey: FROM },
+      to: { eventId: 'event-1', occurrenceKey: TO },
+    });
     moves.moving.delete(ref);
-    moves.moved.set(ref, { eventId: 'event-1', occurrenceKey: TO });
+    announce();
   };
 
   beforeEach(() => {
@@ -449,7 +462,6 @@ describe('details opened on an event that was just moved', () => {
     creates.landed = new Map();
     creates.answered = new Map();
     moves.moving = new Set([ref]);
-    moves.moved = new Map();
   });
 
   afterEach(() => {
@@ -526,9 +538,47 @@ describe('details opened on an event that was just moved', () => {
     view().selectEvent(moved, document.createElement('a'));
 
     moves.moving.delete(ref);
+    announce();
     view().refreshSelectedEventFromPage(page(saved), true);
 
     expect(view().selectedEvent()).toBeUndefined();
+  });
+
+  it('keep following through the chip remounting before the page draws the saved occurrence', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+    answer();
+
+    view().reanchorSelectedEvent(moved, document.createElement('a'));
+    view().refreshSelectedEventFromPage(page(saved), true);
+
+    expect(view().selectedEvent()).toBe(saved);
+  });
+
+  it('never lead a later selection to where an earlier move went', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+    answer();
+    view().refreshSelectedEventFromPage(page(saved), true);
+    view().closeEventDetails();
+
+    // The event now repeats, and an instance takes the key the move left.
+    const instance = { ...occurrence(FROM), recurrenceId: FROM };
+    view().selectEvent(instance, document.createElement('a'));
+    view().refreshSelectedEventFromPage(page(instance, saved), true);
+
+    expect(view().selectedEvent()).toBe(instance);
+  });
+
+  it('follow only the move of the occurrence they show', () => {
+    const { view } = renderContexts();
+    const other = occurrence('2026-11-29T15:00:00+00:00');
+    view().selectEvent(other, document.createElement('a'));
+
+    answer();
+    view().refreshSelectedEventFromPage(page(other, saved), true);
+
+    expect(view().selectedEvent()).toBe(other);
   });
 
   it('close when the page draws neither occurrence', () => {

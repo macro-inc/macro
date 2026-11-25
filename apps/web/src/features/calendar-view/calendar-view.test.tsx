@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   contentParams: undefined as Record<string, unknown> | undefined,
   searchEventId: '',
   searchOccurrenceKey: '',
+  searchStartDate: '',
 }));
 
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
@@ -46,7 +47,7 @@ vi.mock('@app/lib/split-router', () => ({
     {
       eventId: mocks.searchEventId,
       occurrenceKey: mocks.searchOccurrenceKey,
-      startDate: '',
+      startDate: mocks.searchStartDate,
       endDate: '',
     },
     mocks.setSearch,
@@ -76,6 +77,10 @@ vi.mock('@notifications/notification-helpers', () => ({
 }));
 vi.mock('@queries/calendar/occurrences', () => ({
   useCalendarOccurrencesQuery: () => ({}),
+  createCalendarOccurrenceQueryRange: (start: Date, end: Date) => ({
+    start: start.toISOString(),
+    end: end.toISOString(),
+  }),
 }));
 vi.mock('./calendar-focus-target', () => ({
   CalendarFocusContextProvider: (props: { children: JSX.Element }) =>
@@ -108,6 +113,7 @@ beforeEach(() => {
   mocks.contentParams = undefined;
   mocks.searchEventId = '';
   mocks.searchOccurrenceKey = '';
+  mocks.searchStartDate = '';
 });
 
 afterEach(cleanup);
@@ -192,6 +198,30 @@ describe('the URL of details that followed a moved event', () => {
       { eventId: 'event' },
       { mode: 'replace', history: 'replace' }
     );
+  });
+
+  it('drops a Home row’s dates, which carry no occurrence key', () => {
+    mocks.searchEventId = 'event';
+    mocks.searchStartDate = '2026-11-28';
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', '2026-11-29T16:00:00+00:00');
+
+    expect(mocks.setSearch).toHaveBeenCalledExactlyOnceWith(
+      { eventId: 'event' },
+      { mode: 'replace', history: 'replace' }
+    );
+  });
+
+  it('keeps the URL of details opened from the grid, which names only the event', () => {
+    mocks.searchEventId = 'event';
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', '2026-11-29T16:00:00+00:00');
+
+    expect(mocks.setSearch).not.toHaveBeenCalled();
   });
 
   it('keeps a link’s locator for the occurrence it still names', () => {

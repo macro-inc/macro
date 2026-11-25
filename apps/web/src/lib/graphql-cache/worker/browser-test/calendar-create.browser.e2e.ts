@@ -68,7 +68,7 @@ test.describe('a calendar create through the real cache and queue', () => {
     const outcome = await page.evaluate(() => window.calendarCreate.move());
     expect(outcome).toEqual({
       beforeAnswer: { moving: true, shown: ['moved occurrence'] },
-      movedTo: true,
+      announced: ['2026-11-28T15:00:00+00:00 -> 2026-11-28T16:00:00+00:00'],
       moving: false,
     });
   });

@@ -17,7 +17,7 @@ import {
   executeGraphqlUpdate,
   isCalendarEventCreating,
   isCalendarOccurrenceMoving,
-  movedCalendarOccurrence,
+  onCalendarOccurrenceMoved,
   trackCalendarCreateSettlements,
 } from '../../../queries/calendar/graphql/mutations';
 import {
@@ -362,6 +362,13 @@ async function move() {
   );
 
   release = undefined;
+  const announced: string[] = [];
+  const stopListening = onCalendarOccurrenceMoved((announcedMove) => {
+    if (announcedMove)
+      announced.push(
+        `${announcedMove.from.occurrenceKey} -> ${announcedMove.to.occurrenceKey}`
+      );
+  });
   const moved = executeGraphqlUpdate(
     host,
     {
@@ -395,6 +402,7 @@ async function move() {
       !keys.includes(occurrenceAt(TIME.startsAt))
     );
   }, 'the saved occurrence to replace the moved one');
+  stopListening();
   return {
     beforeAnswer: {
       ...beforeAnswer,
@@ -403,9 +411,7 @@ async function move() {
       ),
     },
     // Open details follow the moved occurrence to the one the answer keyed.
-    movedTo:
-      movedCalendarOccurrence(eventId, TIME.startsAt)?.occurrenceKey ===
-      MOVED_TIME.startsAt,
+    announced,
     moving: isCalendarOccurrenceMoving(eventId, TIME.startsAt),
   };
 }
