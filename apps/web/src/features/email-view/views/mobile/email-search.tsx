@@ -169,24 +169,12 @@ function EmailSearchTipsSheet(props: {
         <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label={t('emailViews.searchTips')}>
           <MobileDrawer.Handle class="pb-1" />
-          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
-            <MobileDrawer.Title
-              as="h2"
-              class="min-w-0 text-lg font-semibold text-ink"
-            >
-              {t('emailViews.searchTips')}
-            </MobileDrawer.Title>
-            <Button
-              aria-label={t('common.close')}
-              tooltip={{ content: t('common.close'), disabled: true }}
-              variant="ghost"
-              size="icon-sm"
-              class="shrink-0 rounded-full bg-ink/6"
-              onClick={() => props.onOpenChange(false)}
-            >
-              <XIcon class="size-4" aria-hidden="true" />
-            </Button>
-          </div>
+          <MobileDrawer.Title
+            as="h2"
+            class="shrink-0 px-6 pb-4 text-lg font-semibold text-ink"
+          >
+            {t('emailViews.searchTips')}
+          </MobileDrawer.Title>
           <MobileDrawer.ScrollBody
             data-corvu-no-drag
             class="touch-pan-y gap-3 overscroll-contain pb-6"

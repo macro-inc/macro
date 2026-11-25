@@ -87,23 +87,36 @@ export function EmailSearchDocsLink(props: { class?: string }) {
  * lists the operators, and pressing it opens the full list on the docs site.
  */
 export function EmailSearchTipsButton() {
+  // An empty wide field closes when it loses focus, taking the button and
+  // its card with it, so a press here keeps the focus in the field.
+  const keepFieldFocus = (event: Event) => event.preventDefault();
   return (
-    <HoverCard
-      as="button"
-      triggerAriaLabel={t('emailViews.searchTips')}
-      triggerOnClick={openEmailSearchDocs}
-      triggerClass={buttonClasses({ variant: 'ghost', size: 'icon-sm' })}
-      placement="bottom-start"
-      contentClass="flex-col items-stretch p-3 text-sm text-ink"
-      content={
-        <div class="flex w-max max-w-[min(360px,calc(100vw-32px))] flex-col">
-          <EmailSearchTipList class="px-2" />
-          <div class="my-2 border-t border-edge-muted" />
-          <EmailSearchDocsLink />
-        </div>
-      }
+    <span
+      class="contents"
+      onPointerDown={keepFieldFocus}
+      onMouseDown={keepFieldFocus}
     >
-      <InfoIcon aria-hidden="true" class="size-3.5 shrink-0" />
-    </HoverCard>
+      <HoverCard
+        as="button"
+        triggerAriaLabel={t('emailViews.searchAllOperators')}
+        triggerOnClick={openEmailSearchDocs}
+        triggerClass={buttonClasses({ variant: 'ghost', size: 'icon-sm' })}
+        placement="bottom-start"
+        contentClass="flex-col items-stretch p-3 text-sm text-ink"
+        content={
+          <div
+            class="flex w-max max-w-[min(360px,calc(100vw-32px))] flex-col"
+            onPointerDown={keepFieldFocus}
+            onMouseDown={keepFieldFocus}
+          >
+            <EmailSearchTipList class="px-2" />
+            <div class="my-2 border-t border-edge-muted" />
+            <EmailSearchDocsLink />
+          </div>
+        }
+      >
+        <InfoIcon aria-hidden="true" class="size-3.5 shrink-0" />
+      </HoverCard>
+    </span>
   );
 }

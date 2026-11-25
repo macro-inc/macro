@@ -94,7 +94,7 @@ const wordFilterLabel = (filter: EmailSearchWordFilter) =>
     .with('is:starred', () => t('emailViews.searchWordStarred'))
     .with('has:attachment', () => t('emailViews.searchWordAttachment'))
     .with('in:sent', () => t('emailViews.searchWordSent'))
-    .with('newer_than:1d', () => t('emailViews.searchWordToday'))
+    .with('newer_than:1d', () => t('emailViews.searchWordLastDay'))
     .with('newer_than:7d', () => t('emailViews.searchWordThisWeek'))
     .exhaustive();
 

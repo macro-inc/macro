@@ -229,6 +229,12 @@ it('offers the filter a plain word stands for, and picking it replaces the words
     expect(recentListed(suggestions)[0]).toBe('newer_than:7d ');
     suggestions.pick(0);
     expect(search()).toBe('budget newer_than:7d ');
+
+    // A view alone would search nothing, so `sent` needs other words.
+    setSearch('sent');
+    expect(recentListed(suggestions)).toEqual([]);
+    setSearch('invoice sent');
+    expect(recentListed(suggestions)).toEqual(['in:sent ']);
     dispose();
   });
 });
@@ -255,10 +261,36 @@ it('offers mail from and to someone a plain word names', () => {
   });
 });
 
-it('reads a plain word of two letters or more as a name being typed', () => {
+it('matches a name without its accents', () => {
+  createRoot((dispose) => {
+    const [search, setSearch] = createSignal('');
+    const suggestions = createEmailSearchSuggestions({
+      userId: () => 'user-a',
+      search,
+      setSearch,
+      hasResults: () => true,
+      openedThread: () => undefined,
+      isResult: () => true,
+      scopeAvailable: () => true,
+      people: () => [
+        { id: 'u3', email: 'jose@example.com', name: 'José Ruiz' },
+      ],
+    });
+    suggestions.setFocused(true);
+    setSearch('jose');
+    expect(recentListed(suggestions)).toEqual([
+      'from:jose@example.com ',
+      'to:jose@example.com ',
+    ]);
+    dispose();
+  });
+});
+
+it('reads a plain word of three letters or more as a name being typed', () => {
   expect(emailSearchNameBeingTyped('budget ana')).toBe('ana');
   expect(emailSearchNameBeingTyped("o'neil")).toBe("o'neil");
-  for (const text of ['a', 'ana ', 'from:an', '-ana', '"ana', 'q3']) {
+  expect(emailSearchNameBeingTyped('o’neil')).toBe('o’neil');
+  for (const text of ['an', 'ana ', 'from:ana', '-ana', '"ana', 'q3x']) {
     expect(emailSearchNameBeingTyped(text)).toBeUndefined();
   }
 });

@@ -160,17 +160,20 @@ found and ranked as the composer's recipient picker finds them, and finish
 with their address; `label:` lists the person's tags and their inboxes' own
 labels (not system labels such as Inbox), quoting a name with a space.
 A plain word that stands for a filter offers it as the first row
-(`unread`, `starred`, `attachment`, `sent`, `today`, `this week`), and a
-word of two or more letters that starts part of someone's name offers mail
+(`unread`, `starred`, `attachment`, `today`, `this week`, and `sent` beside
+other words, since a view alone searches nothing), and a word of three or
+more letters that starts part of someone's name, accents aside, offers mail
 from them and to them; picking either replaces the word with the operator,
 and `Enter` still searches the word as typed. While the field is open, an
 info button beside the **Search** title lists nine operators with what each
 finds when hovered, and **All search operators** (or pressing the button)
-opens the operator list on the docs site's Search page.
+opens the operator list on the docs site's Search page; a press keeps the
+focus in the field, since an empty one closes on blur.
 People and labels are read only while the field has focus and such an
-operator is typed. Picking one finishes it the same way. A row is the
+operator is typed (people also for a plain word of three letters or more). Picking one finishes it the same way. A row is the
 filter's text, drawn as an operator, with a few words beside it only when
-they say something the text does not (`to:` also covers Cc and Bcc;
+they say something the text does not (a row a plain word offers names what
+it finds, with its operator beside it to learn) (`to:` also covers Cc and Bcc;
 `after:` counts its day, `before:` does not). Typing changes the rows, so it
 also clears the row the arrow keys picked out. Operators stay ordinary text (caret,
 selection, `Backspace`, paste), and every one the search service would read,

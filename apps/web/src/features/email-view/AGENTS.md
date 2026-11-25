@@ -54,7 +54,8 @@ the Soup-backed thread list, and saved email views.
   (`create-email-search-suggestions.ts`, drawn by
   `components/EmailSearchSuggestionList.tsx`, fed people and labels by
   `queries/use-email-search-values.ts`, which reads them only while the
-  field has focus and such an operator is typed), behind
+  field has focus and such an operator, or a plain word of three letters or
+  more, is typed), behind
   `enable-email-wide-search`. `components/EmailSearchTips.tsx` is the
   operator list the header's info button shows on hover and the touch field's
   Search tips sheet shows, linking to the docs' `#search-mail` section.

@@ -97,7 +97,7 @@ export default {
   searchWordStarred: 'Starred',
   searchWordAttachment: 'With attachments',
   searchWordSent: 'In Sent',
-  searchWordToday: 'Today',
+  searchWordLastDay: 'In the last day',
   searchWordThisWeek: 'In the last 7 days',
   searchTips: 'Search tips',
   searchTipSubject: 'Subject contains “{{words}}”',
