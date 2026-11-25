@@ -360,7 +360,7 @@ export function createAppCrmContext(): CrmContext {
     RecordTasks: CrmRecordTasks,
     RecordActivity: CrmRecordActivity,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
-    createMergeCommands: () => createMergeCommands(deps),
+    createMergeCommands: (recordType) => createMergeCommands(deps, recordType),
     createPropertyValueLabel: () => {
       const definitions = useAllProperties();
       return (propertyId, value) =>

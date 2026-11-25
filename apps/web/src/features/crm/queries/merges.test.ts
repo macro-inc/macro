@@ -1,6 +1,7 @@
 import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
+import type { MergeRecordType } from '../core/merge';
 import { crmKeys } from './keys';
 import { createMergeCommands } from './merges';
 
@@ -25,11 +26,17 @@ beforeEach(() => {
   client = new QueryClient();
 });
 
-function commandsWith(storage: Record<string, unknown>) {
-  return createMergeCommands({
-    client,
-    storage: storage as never,
-  });
+function commandsWith(
+  storage: Record<string, unknown>,
+  recordType: MergeRecordType = 'company'
+) {
+  return createMergeCommands(
+    {
+      client,
+      storage: storage as never,
+    },
+    recordType
+  );
 }
 
 it('reviews a company merge and reads a refusal by its code', async () => {
@@ -70,7 +77,7 @@ it('reviews a company merge and reads a refusal by its code', async () => {
   });
 });
 
-it('reads a block it shows no people for by its kind alone', async () => {
+it('reviews a merge of people, reading people under other companies and a kind it doesn’t know', async () => {
   const people = [
     {
       contactId: 'c1',
@@ -93,32 +100,67 @@ it('reads a block it shows no people for by its kind alone', async () => {
         {
           code: 'merge_conflict',
           message: 'no',
-          blocked: { kind: 'different_companies', people },
+          blocked: { kind: 'something_new', items: [1] },
         },
       ])
     );
-  const commands = commandsWith({ previewCrmMerge });
+  const commands = commandsWith({ previewCrmMerge }, 'contact');
 
   expect(
-    await commands.review({ survivorId: 'kept', sourceIds: ['old'] })
+    await commands.review({ survivorId: 'pat', sourceIds: ['pat-l'] })
   ).toEqual({
     ok: true,
     value: {
       revision: 'r',
       conflicts: [],
-      blocked: { kind: 'different_companies' },
+      blocked: { kind: 'different_companies', people },
     },
   });
+  expect(previewCrmMerge).toHaveBeenCalledWith({
+    recordType: 'contact',
+    survivorId: 'pat',
+    sourceIds: ['pat-l'],
+  });
   expect(
-    await commands.review({ survivorId: 'kept', sourceIds: ['old'] })
+    await commands.review({ survivorId: 'pat', sourceIds: ['pat-l'] })
   ).toEqual({
     ok: false,
     refusal: {
       code: 'merge_conflict',
-      blocked: { kind: 'different_companies' },
+      blocked: { kind: 'unknown' },
       currentId: null,
     },
   });
+});
+
+it('after a merge of people, forgets them and drops their unopened reads', async () => {
+  const merged = crmKeys.contact('pat-l').queryKey;
+  const kept = crmKeys.contact('pat').queryKey;
+  client.setQueryData(merged, { id: 'pat-l', name: 'Pat L.' });
+  client.setQueryData(kept, { id: 'pat', name: 'Pat Lee' });
+  const commitCrmMerge = vi.fn(async () =>
+    ok({ survivorId: 'pat', mergedIds: ['PAT-L'], mergeId: 'm' })
+  );
+  const commands = commandsWith({ commitCrmMerge }, 'contact');
+
+  await commands.commit({
+    survivorId: 'pat',
+    sourceIds: ['PAT-L'],
+    revision: 'r',
+    requestKey: 'key',
+    sharingRules: 'keep',
+  });
+
+  expect(commitCrmMerge).toHaveBeenCalledWith(
+    expect.objectContaining({ recordType: 'contact', survivorId: 'pat' })
+  );
+  expect(effects.forget).toHaveBeenCalledWith({
+    companies: [],
+    contacts: ['pat-l'],
+  });
+  expect(client.getQueryState(merged)).toBeUndefined();
+  expect(client.getQueryData(kept)).toEqual({ id: 'pat', name: 'Pat Lee' });
+  expect(effects.refresh).toHaveBeenCalled();
 });
 
 it('after a commit, forgets the merged companies and reads everything again', async () => {
