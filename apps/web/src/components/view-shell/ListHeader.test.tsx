@@ -551,7 +551,7 @@ it('closes a wide field when the view clears its search from outside', () => {
   expect(view.queryByRole('searchbox')).toBeNull();
 });
 
-it('reports closed and unfocused when it unmounts while open', () => {
+it('reports closed and unfocused once it has unmounted while open', async () => {
   const [shown, setShown] = createSignal(true);
   const [open, setOpen] = createSignal(false);
   const [focused, setFocused] = createSignal(false);
@@ -573,6 +573,7 @@ it('reports closed and unfocused when it unmounts while open', () => {
   expect(focused()).toBe(true);
 
   setShown(false);
+  await Promise.resolve();
 
   expect(open()).toBe(false);
   expect(focused()).toBe(false);
