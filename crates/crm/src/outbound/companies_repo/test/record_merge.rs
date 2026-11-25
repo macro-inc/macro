@@ -1424,3 +1424,54 @@ async fn another_teams_pipeline_naming_a_merged_company_names_the_one_that_stays
     );
     assert_eq!(logged_cells(&pool, outcome.merge_id).await, 1);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_pipeline_cell_another_merge_is_writing_is_read_after_it(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let other = world.company("Other", true, &["other.example.com"]).await;
+    let pipeline = company_pipeline(&world, "Deals", &[merged]).await;
+
+    // Another team's merge holds the pipeline FOR SHARE as this one does, and
+    // its write holds the table's version row while it changes the cell.
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM crm_pipeline_entities WHERE id = $1 FOR SHARE")
+        .bind(pipeline.id)
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    sqlx::query("SELECT version FROM database_tables WHERE id = $1 FOR UPDATE")
+        .bind(pipeline.table_id.into_uuid())
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE entity_properties ep SET values = $3
+         FROM database_rows r, database_columns c
+         WHERE r.id::text = ep.entity_id AND r.table_id = $1
+           AND c.table_id = r.table_id AND c.id = $2
+           AND c.property_definition_id = ep.property_definition_id",
+    )
+    .bind(pipeline.table_id.into_uuid())
+    .bind(pipeline.primary_column_id.into_uuid())
+    .bind(refs(&[other]))
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+
+    let release = async move {
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        writer.commit().await.unwrap();
+    };
+    let merge = targets(stays, &[merged]);
+    let (merging, ()) = tokio::join!(world.merge(&merge, SharingRulesChoice::Keep), release);
+
+    // It read the other write's value, which the review didn't show, so it
+    // refuses rather than writing over it.
+    assert!(matches!(merging, Err(MergeError::PreviewStale)));
+    assert_eq!(
+        named_in(&pool, &pipeline).await,
+        vec![vec![other.to_string()]]
+    );
+}

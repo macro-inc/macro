@@ -163,7 +163,7 @@ where
         let all_text: Vec<String> = all.iter().map(Uuid::to_string).collect();
 
         let cells = if lock {
-            lock_pipelines_holding(conn, &all).await?
+            lock_pipelines_holding(conn, sources, &all).await?
         } else {
             pipeline_cells(conn, &all).await?
         };
@@ -552,20 +552,7 @@ async fn lock_database_cells(
         }
         // A database's row before its tables', as its writers take them: the
         // write path holds it FOR SHARE, and a table delete FOR UPDATE.
-        sqlx::query_scalar!(
-            "SELECT id FROM databases WHERE id = ANY(SELECT database_id FROM database_tables WHERE id = ANY($1)) ORDER BY id FOR SHARE",
-            &missing,
-        )
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(db)?;
-        sqlx::query_scalar!(
-            "SELECT id FROM database_tables WHERE id = ANY($1) ORDER BY id FOR UPDATE",
-            &missing,
-        )
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(db)?;
+        lock_tables(conn, &missing).await?;
         locked.extend(missing);
         locked.sort_unstable();
     }
@@ -573,13 +560,18 @@ async fn lock_database_cells(
 }
 
 /// Hold the pipelines that reference `records` as their lifecycle readers
-/// do. Their cell writers wait for the merge; a pipeline that gained such a
-/// cell between the reads is locked on the next round.
+/// do, and the tables holding a cell that names one of `sources` as their
+/// cell writers do. Another team's merge holds the same pipelines FOR SHARE
+/// too, so only the table lock keeps the two from writing a cell from a
+/// stale read. A pipeline or table that gained such a cell between the reads
+/// is locked on the next round.
 async fn lock_pipelines_holding(
     conn: &mut PgConnection,
+    sources: &[Uuid],
     records: &[Uuid],
 ) -> Result<Vec<PipelineCell>, MergeError> {
     let mut locked: Vec<Uuid> = Vec::new();
+    let mut locked_tables: Vec<Uuid> = Vec::new();
     for _ in 0..3 {
         let cells = pipeline_cells(conn, records).await?;
         let mut wanted: Vec<Uuid> = cells.iter().map(|cell| cell.pipeline_id).collect();
@@ -590,7 +582,15 @@ async fn lock_pipelines_holding(
             .copied()
             .filter(|id| !locked.contains(id))
             .collect();
-        if missing.is_empty() {
+        let mut tables: Vec<Uuid> = cells
+            .iter()
+            .filter(|cell| names_any(&cell.values, EntityKind::Company, sources))
+            .map(|cell| cell.table_id)
+            .filter(|id| !locked_tables.contains(id))
+            .collect();
+        tables.sort_unstable();
+        tables.dedup();
+        if missing.is_empty() && tables.is_empty() {
             return Ok(cells);
         }
         sqlx::query_scalar!(
@@ -600,10 +600,37 @@ async fn lock_pipelines_holding(
         .fetch_all(&mut *conn)
         .await
         .map_err(db)?;
+        lock_tables(conn, &tables).await?;
         locked.extend(missing);
         locked.sort_unstable();
+        locked_tables.extend(tables);
+        locked_tables.sort_unstable();
     }
     Err(CrmError::Contended.into())
+}
+
+/// Lock `tables` as their writers do: each database's row FOR SHARE, in id
+/// order, then the tables' version rows FOR UPDATE, which every writing
+/// batch holds until it commits.
+async fn lock_tables(conn: &mut PgConnection, tables: &[Uuid]) -> Result<(), MergeError> {
+    if tables.is_empty() {
+        return Ok(());
+    }
+    sqlx::query_scalar!(
+        "SELECT id FROM databases WHERE id = ANY(SELECT database_id FROM database_tables WHERE id = ANY($1)) ORDER BY id FOR SHARE",
+        tables,
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(db)?;
+    sqlx::query_scalar!(
+        "SELECT id FROM database_tables WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+        tables,
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(db)?;
+    Ok(())
 }
 
 /// Whether `scope`'s actor is still an admin or owner of the team, read in
