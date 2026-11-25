@@ -745,12 +745,15 @@ export class CoordinatorCore {
     return actions;
   }
 
+  /** `takenOver` says another context holds the database by now, so whatever
+   * this owner left of it is that one's to judge. */
   ownerLost(
     tabId: string,
     ownerEpoch: OwnerEpoch,
-    reason: string
+    reason: string,
+    takenOver = false
   ): CoordinatorAction[] {
-    return this.transitionToAbruptLoss(tabId, ownerEpoch, reason);
+    return this.transitionToAbruptLoss(tabId, ownerEpoch, reason, takenOver);
   }
 
   /**
@@ -957,7 +960,8 @@ export class CoordinatorCore {
   private transitionToAbruptLoss(
     tabId: string,
     ownerEpoch: OwnerEpoch,
-    reason: string
+    reason: string,
+    takenOver = false
   ): CoordinatorAction[] {
     const state = this.stateValue;
     if (
@@ -970,6 +974,11 @@ export class CoordinatorCore {
       return [];
     }
 
+    const untouched =
+      state.kind === 'activating' && !startupPhaseMayTouchStorage(state.phase);
+    const lostAction: DatabaseAction = takenOver
+      ? 'open-existing'
+      : 'wipe-before-open';
     const actions = this.rejectEpochRequests(
       ownerEpoch,
       `owner epoch ${ownerEpoch} was lost: ${reason}`,
@@ -984,10 +993,7 @@ export class CoordinatorCore {
       previousTabId: tabId,
       previousEpoch: ownerEpoch,
       nextEpoch: this.currentEpoch + 1,
-      databaseAction:
-        state.kind === 'activating' && !startupPhaseMayTouchStorage(state.phase)
-          ? state.databaseAction
-          : 'wipe-before-open',
+      databaseAction: untouched ? state.databaseAction : lostAction,
       reason,
     };
     this.assertInvariants();

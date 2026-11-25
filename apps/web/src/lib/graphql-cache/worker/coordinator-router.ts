@@ -84,7 +84,7 @@ export interface CoordinatorRouterOptions {
   handoffReadTimeoutMs?: number;
   verifyTabLockHeld?: (lockName: string) => Promise<boolean>;
   holdCoordinatorLock?: (lockName: string) => Promise<void>;
-  verifyOwnerLockHeld?: (lockName: string) => Promise<boolean>;
+  verifyOwnerLockHeld?: VerifyOwnerLockHeld;
   /** Names of every Web Lock currently held in this storage partition. */
   queryHeldLockNames?: () => Promise<string[]>;
   watchTabLock?: (
@@ -113,9 +113,16 @@ type PendingTakeover = {
   timer: ReturnType<typeof setTimeout> | undefined;
 };
 
+type VerifyOwnerLockHeld = (
+  lockName: string,
+  clientId: string | undefined
+) => Promise<boolean>;
+
 type EngineRoute = {
   tabId: string;
   ownerEpoch: number;
+  /** Who holds the owner lock for this engine, once it is ready. */
+  ownerLockClientId?: string;
   transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
 };
 
@@ -200,6 +207,21 @@ export async function verifyExclusiveLockHeld(
     lockName,
     { mode: 'exclusive', ifAvailable: true },
     (lock) => lock === null
+  );
+}
+
+/**
+ * Whether `clientId` holds the lock. The engine of another build may hold it
+ * under the same name. Anyone counts when the browser did not tell the client.
+ */
+async function verifyClientHoldsLock(
+  lockName: string,
+  clientId: string | undefined
+): Promise<boolean> {
+  if (clientId === undefined) return await verifyExclusiveLockHeld(lockName);
+  const snapshot = await navigator.locks.query();
+  return (snapshot.held ?? []).some(
+    (lock) => lock.name === lockName && lock.clientId === clientId
   );
 }
 
@@ -296,7 +318,7 @@ export class CoordinatorRouter {
   private readonly holdCoordinatorLock: (lockName: string) => Promise<void>;
   /** The lock's name, once held. */
   private coordinatorLock: Promise<string | undefined> | undefined;
-  private readonly verifyOwnerLockHeld: (lockName: string) => Promise<boolean>;
+  private readonly verifyOwnerLockHeld: VerifyOwnerLockHeld;
   private readonly queryHeldLockNames: () => Promise<string[]>;
   private readonly watchTabLock: (
     lockName: string,
@@ -351,7 +373,7 @@ export class CoordinatorRouter {
       options.verifyTabLockHeld ?? verifyExclusiveLockHeld;
     this.holdCoordinatorLock = options.holdCoordinatorLock ?? holdLockForLife;
     this.verifyOwnerLockHeld =
-      options.verifyOwnerLockHeld ?? verifyExclusiveLockHeld;
+      options.verifyOwnerLockHeld ?? verifyClientHoldsLock;
     this.queryHeldLockNames = options.queryHeldLockNames ?? queryHeldLockNames;
     this.watchTabLock = options.watchTabLock ?? watchTabLivenessLock;
     this.setTimeoutFn =
@@ -800,6 +822,7 @@ export class CoordinatorRouter {
           (action) => action.kind === 'protocol-violation'
         );
         if (!violated) {
+          route.ownerLockClientId = message.ownerLockClientId;
           // Accepted readiness proves the storage outcome even if visibility
           // immediately drains this epoch or publishing its actions fails.
           const recoveryResetReason = this.pendingRecoveryResetEpochs.get(
@@ -1460,11 +1483,12 @@ export class CoordinatorRouter {
     ownerEpoch: number,
     reason: string,
     fatalCode?: EngineFatalCode,
-    failureCode?: ActivationFailureCode
+    failureCode?: ActivationFailureCode,
+    takenOver = false
   ): void {
     const core = this.coreValue;
     if (!core) return;
-    const actions = core.ownerLost(tabId, ownerEpoch, reason);
+    const actions = core.ownerLost(tabId, ownerEpoch, reason, takenOver);
     if (actions.length === 0) return;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
@@ -1818,7 +1842,7 @@ export class CoordinatorRouter {
     // crash: revoking ownership here wipes healthy storage and can exhaust
     // recovery while the page is still suspended. Only a released physical
     // owner lock confirms silent worker death (terminate() emits no error).
-    const lockHeld = await this.ownerLockHeld(core.scope);
+    const lockHeld = await this.ownerLockHeld(core.scope, route);
     // The ack, a graceful drain, or another failure may have won the race
     // while the lock probe was pending. Never act on that stale observation.
     if (
@@ -1942,7 +1966,7 @@ export class CoordinatorRouter {
   ): Promise<void> {
     const core = this.coreValue;
     if (!core) return;
-    const lockHeld = await this.ownerLockHeld(core.scope);
+    const lockHeld = await this.ownerLockHeld(core.scope, route);
     if (!draining()) return;
     if (!lockHeld) {
       // Its engine closed the database, and the news of it may be on its way,
@@ -1973,10 +1997,17 @@ export class CoordinatorRouter {
     this.applyActions(core.drainExpired(tabId, ownerEpoch, reason));
   }
 
-  /** Whether anyone holds the owner lock; a failed probe is no sign of a loss. */
-  private async ownerLockHeld(scope: string): Promise<boolean> {
+  /** Whether `route`'s engine, or else anyone, holds the owner lock; a failed
+   * probe is no sign of a loss. */
+  private async ownerLockHeld(
+    scope: string,
+    route?: EngineRoute
+  ): Promise<boolean> {
     try {
-      return await this.verifyOwnerLockHeld(databaseOwnerLockName(scope));
+      return await this.verifyOwnerLockHeld(
+        databaseOwnerLockName(scope),
+        route?.ownerLockClientId
+      );
     } catch {
       return true;
     }
@@ -1991,7 +2022,8 @@ export class CoordinatorRouter {
         route.tabId,
         route.ownerEpoch,
         'engine owner lock was released',
-        () => this.engineRoute === route
+        () => this.engineRoute === route,
+        true
       ).catch(reportCoordinatorTaskFailure);
     }, this.heartbeatIntervalMs);
   }
@@ -2006,6 +2038,7 @@ export class CoordinatorRouter {
     ownerEpoch: number,
     reason: string,
     silent: () => boolean,
+    lockReleased = false,
     probes = 1
   ): Promise<void> {
     const core = this.coreValue;
@@ -2025,6 +2058,7 @@ export class CoordinatorRouter {
             ownerEpoch,
             reason,
             silent,
+            lockReleased,
             probes + 1
           ).catch(reportCoordinatorTaskFailure);
         }, this.heartbeatIntervalMs);
@@ -2034,8 +2068,13 @@ export class CoordinatorRouter {
     }
     // An answer or another failure may have won the race.
     if (!silent()) return;
-    if (pageGone) this.loseTab(tabId, 'tab liveness lock was released');
-    else this.failOwner(tabId, ownerEpoch, reason);
+    if (pageGone) {
+      this.loseTab(tabId, 'tab liveness lock was released');
+      return;
+    }
+    const takenOver = lockReleased && (await this.ownerLockHeld(core.scope));
+    if (!silent()) return;
+    this.failOwner(tabId, ownerEpoch, reason, undefined, undefined, takenOver);
   }
 
   private acceptHeartbeat(ownerEpoch: number, heartbeatId: number): void {
