@@ -1,35 +1,22 @@
 use super::*;
 use objc2_intents::INSpeakable;
 
-fn sender() -> Sender {
-    Sender {
+#[test]
+fn a_channel_message_is_a_group_conversation_named_for_its_channel() {
+    let sender = Sender {
         id: "macro|ada@example.com".into(),
         name: "Ada Lovelace".into(),
         avatar_url: None,
-    }
-}
-
-fn content() -> Retained<UNMutableNotificationContent> {
+    };
     let content = UNMutableNotificationContent::new();
     content.setBody(&NSString::from_str("Ship it"));
-    content
-}
-
-#[test]
-fn a_channel_message_is_a_group_conversation_named_for_its_channel() {
-    let intent = message_intent(
-        &content(),
-        &sender(),
-        None,
-        Some("design"),
-        Some("channel-1"),
-    );
+    let intent = message_intent(&content, &sender, None, Some("design"), Some("channel-1"));
 
     // SAFETY: these getters take no arguments and return retained objects.
     unsafe {
         // Fewer than two recipients makes macOS drop the channel name.
         let recipients = intent.recipients().expect("a group has recipients");
-        assert!(recipients.count() >= 2);
+        assert_eq!(recipients.count(), 2);
         assert_eq!(
             intent
                 .speakableGroupName()
@@ -59,7 +46,14 @@ fn a_channel_message_is_a_group_conversation_named_for_its_channel() {
 
 #[test]
 fn a_direct_message_stays_between_two_people() {
-    let intent = message_intent(&content(), &sender(), None, None, Some("channel-1"));
+    let sender = Sender {
+        id: "macro|ada@example.com".into(),
+        name: "Ada Lovelace".into(),
+        avatar_url: None,
+    };
+    let content = UNMutableNotificationContent::new();
+    content.setBody(&NSString::from_str("Ship it"));
+    let intent = message_intent(&content, &sender, None, None, Some("channel-1"));
 
     // SAFETY: these getters take no arguments and return retained objects.
     unsafe {

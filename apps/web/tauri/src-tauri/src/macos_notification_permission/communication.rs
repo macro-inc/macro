@@ -78,8 +78,9 @@ impl Sender {
     }
 }
 
-/// Present `content` as a message from `sender`. `group_name` is set for
-/// conversations with more than two people.
+/// Present `content` as a message from `sender`. `group_name` names the
+/// conversation it happened in (a channel or a document), and is unset for a
+/// direct message.
 pub(super) fn from_sender(
     content: Retained<UNMutableNotificationContent>,
     sender: &Sender,
