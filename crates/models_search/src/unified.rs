@@ -88,6 +88,20 @@ pub fn entity_filters_from_include(
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
     /// The search query string. Must not be empty; one character is enough.
+    /// It reads operators that choose what to search, each narrowing the
+    /// search to the kinds it applies to: `type:` `doc`, `task`, `email`,
+    /// `channel`, `call`, `folder`, `agent` or `calendar`; `status:` a task's
+    /// (`not_started`, `in_progress`, `in_review`, `completed`, `canceled`)
+    /// or a call's (`missed`, `attended`, `unattended`); `priority:` (`low`,
+    /// `medium`, `high`, `urgent`); `assignee:` and `author:` (who created a
+    /// task) `me` or an address; `tag:` a tag name; `inbox:` an inbox
+    /// address; `in:#` a channel name; and, beside `type:channel` or
+    /// `type:call`, `from:` a sender or speaker. `OR` between two of the
+    /// same operator joins them (`tag:a OR tag:b`); repeated without it,
+    /// each must hold, except that two `from:` on calls, and tags joined by
+    /// `OR` beside another tag, are refused with a 400. Only a search of
+    /// email alone runs on operators with no word beside them; any other is
+    /// refused with a 400.
     /// When the search reaches email it also reads Gmail's operators:
     /// `subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,
     /// `signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,
@@ -95,9 +109,10 @@ pub struct UnifiedSearchRequest {
     /// `is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
     /// (`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
     /// `1y`), and a minus before an operator to leave matching mail out. A
-    /// query that types an operator searches email only. A minus before a
-    /// word or quoted phrase leaves out mail containing it beside an operator
-    /// or in a search of email alone; elsewhere it is part of the word.
+    /// query that types one of these Gmail operators searches email only. A
+    /// minus before a word or quoted phrase leaves out mail containing it
+    /// beside an operator or in a search of email alone; elsewhere it is part
+    /// of the word.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.

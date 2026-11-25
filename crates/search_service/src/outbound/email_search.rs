@@ -50,6 +50,24 @@ fn attachment_kind(kind: AttachmentKind) -> ThreadAttachmentKind {
     }
 }
 
+/// The tag options `user` can see, from every tag set they can use.
+pub(crate) async fn caller_tag_options(
+    db: &ReadOnlyPool,
+    user: &MacroUserId<Lowercase<'_>>,
+) -> Result<Vec<TagOption>, Report> {
+    let definitions = get_caller_tag_definitions_with_options(db, user.as_ref())
+        .await
+        .map_err(|error| rootcause::report!("{error:#}"))?;
+    Ok(CallerTagSets::new(definitions)
+        .options()
+        .iter()
+        .map(|option| TagOption {
+            label: option.label.clone(),
+            option_id: option.option_id,
+        })
+        .collect())
+}
+
 impl EmailSearchSource for EmailSearchPgSource {
     async fn shared_threads(
         &self,
@@ -182,17 +200,7 @@ impl EmailSearchSource for EmailSearchPgSource {
         &self,
         user: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<TagOption>, Report> {
-        let definitions = get_caller_tag_definitions_with_options(&self.db, user.as_ref())
-            .await
-            .map_err(|error| rootcause::report!("{error:#}"))?;
-        Ok(CallerTagSets::new(definitions)
-            .options()
-            .iter()
-            .map(|option| TagOption {
-                label: option.label.clone(),
-                option_id: option.option_id,
-            })
-            .collect())
+        caller_tag_options(&self.db, user).await
     }
 
     async fn inbox_labels(&self, link_ids: &[Uuid]) -> Result<Vec<String>, Report> {
