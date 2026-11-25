@@ -279,4 +279,52 @@ describe('createJevTriageController', () => {
       });
     });
   });
+
+  it('returns an empty triage map immediately when Jev is disabled so local rules take effect', async () => {
+    const storage = createMemoryStorage();
+    const decide = vi.fn<JevDecidePort>(async () => ({
+      ok: true,
+      probabilities: {
+        needs_reply: 0.99,
+        urgent: 0.99,
+        resolved: 0,
+        fyi_noise: 0,
+      },
+    }));
+    const channels = [makeChannel('sup-1', 'Macro Support x Acme', 'm-1')];
+
+    await new Promise<void>((resolve, reject) => {
+      createRoot((dispose) => {
+        const [enabled, setEnabled] = createSignal(true);
+        const ctrl = createJevTriageController({
+          accountKey: () => 'dana:1',
+          userId: () => 'dana',
+          enabled,
+          channels: () => channels,
+          supportChannelIds: () => new Set(['sup-1']),
+          unreadOrMentionedIds: () => new Set(['sup-1']),
+          mentionCounts: () => new Map(),
+          teamMemberIds: () => new Set(['dana']),
+          decide,
+          storage,
+          debounceMs: 0,
+          now: () => NOW,
+        });
+
+        setTimeout(() => {
+          try {
+            expect(ctrl.triageByChannelId().get('sup-1')?.source).toBe('jev');
+            setEnabled(false);
+            expect(ctrl.engineStatus()).toBe('paused');
+            expect(ctrl.triageByChannelId().size).toBe(0);
+            dispose();
+            resolve();
+          } catch (err) {
+            dispose();
+            reject(err);
+          }
+        }, 30);
+      });
+    });
+  });
 });

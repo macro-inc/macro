@@ -383,6 +383,7 @@ export function createJevTriageController(options: {
   const triageByChannelId = createMemo<
     ReadonlyMap<string, ChannelTriageResult>
   >(() => {
+    if (!options.enabled()) return new Map();
     cacheVersion();
     const map = new Map<string, ChannelTriageResult>();
     for (const channel of options.channels()) {
