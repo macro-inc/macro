@@ -216,6 +216,9 @@ pub(crate) enum Mode {
 
 pub(crate) struct Case {
     pub(crate) terms: &'static [&'static str],
+    /// Words and phrases a minus left out: an entity one would match as a
+    /// term is not found.
+    pub(crate) left_out: &'static [&'static str],
     pub(crate) match_type: &'static str,
     /// Content searches of documents only; chats and calls always need every
     /// term.
@@ -224,15 +227,55 @@ pub(crate) struct Case {
 }
 
 pub(crate) const CASES: &[Case] = &[
-    // A crowded prefix, then the whole word.
+    // A minus leaves out an entity that the word would match as a term:
+    // `forecast` in another part, a phrase in one part, an exact word, a
+    // word in a name, and beside a passage match.
     Case {
-        terms: &["con"],
+        terms: &["quarterly"],
+        left_out: &["forecast"],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+        mode: Mode::Content,
+    },
+    Case {
+        terms: &["quarterly"],
+        left_out: &["revenue forecast"],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["conveyor"],
+        left_out: &["belt"],
+        match_type: "exact",
+        matching: DocumentTermMatching::All,
+        mode: Mode::Content,
+    },
+    Case {
+        terms: &["con"],
+        left_out: &["draft"],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+        mode: Mode::Name,
+    },
+    Case {
+        terms: &["quarterly", "revenue", "forecast"],
+        left_out: &["dashboard"],
+        match_type: "partial",
+        matching: DocumentTermMatching::Dynamic,
+        mode: Mode::Content,
+    },
+    // A crowded prefix, then the whole word.
+    Case {
+        terms: &["con"],
+        left_out: &[],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+        mode: Mode::Content,
+    },
+    Case {
+        terms: &["conveyor"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
@@ -240,30 +283,35 @@ pub(crate) const CASES: &[Case] = &[
     // An exact search matches whole tokens only.
     Case {
         terms: &["conveyor"],
+        left_out: &[],
         match_type: "exact",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["conv"],
+        left_out: &[],
         match_type: "exact",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["quarterly", "forecast"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["quarterly", "revenue", "forecast"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["quarterly", "revenue", "forecast"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::Dynamic,
         mode: Mode::Content,
@@ -271,6 +319,7 @@ pub(crate) const CASES: &[Case] = &[
     // Three of four counted terms in one part, the last one a prefix.
     Case {
         terms: &["quarterly", "revenue", "forecast", "dash"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::Dynamic,
         mode: Mode::Content,
@@ -278,72 +327,84 @@ pub(crate) const CASES: &[Case] = &[
     // A stopword in the middle is not counted; one typed last is.
     Case {
         terms: &["deal", "the", "review", "notes"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::Dynamic,
         mode: Mode::Content,
     },
     Case {
         terms: &["revenue", "q3", "the"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::Dynamic,
         mode: Mode::Content,
     },
     Case {
         terms: &["deal review"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["e-mail"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["e-ma"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["o'brien"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["node.js"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["café"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["cafe"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["zür"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["東京"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["q3"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
@@ -352,30 +413,35 @@ pub(crate) const CASES: &[Case] = &[
     // short-term rule counts the term as typed: a prefix, which finds `Q34`.
     Case {
         terms: &["「q3」"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["a"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["the"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["zeppelin"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["airship"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
@@ -384,18 +450,21 @@ pub(crate) const CASES: &[Case] = &[
     // the viewer's names past them.
     Case {
         terms: &["con"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Name,
     },
     Case {
         terms: &["shared", "man"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Name,
     },
     Case {
         terms: &["conv"],
+        left_out: &[],
         match_type: "exact",
         matching: DocumentTermMatching::All,
         mode: Mode::Name,
@@ -412,24 +481,28 @@ pub(crate) const CASES: &[Case] = &[
 pub(crate) const PUNCTUATED_OR_NON_ASCII_CASES: &[Case] = &[
     Case {
         terms: &["con."],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["c++"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["naï"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["nai\u{0308}"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
@@ -442,12 +515,14 @@ pub(crate) const PUNCTUATED_OR_NON_ASCII_CASES: &[Case] = &[
 pub(crate) const STILL_CAPPED_CASES: &[Case] = &[
     Case {
         terms: &["auto-con"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
     },
     Case {
         terms: &["co"],
+        left_out: &[],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Name,

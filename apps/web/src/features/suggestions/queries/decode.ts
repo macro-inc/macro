@@ -127,6 +127,9 @@ export function toSuggestion(
     stateChangedAt: suggestion.stateChangedAt,
     updatedAt: suggestion.updatedAt,
     about: suggestion.about.map(toTarget),
+    ...(suggestion.topic
+      ? { topic: { key: suggestion.topic.key, name: suggestion.topic.name } }
+      : {}),
     ...(suggestion.result ? { result: toTarget(suggestion.result) } : {}),
   };
 }
@@ -139,5 +142,10 @@ export function toFeed(feed: WireFeed): SuggestionFeed {
       return suggestion ? [suggestion] : [];
     }),
     counts: feed.counts,
+    topics: (feed.topics ?? []).map(({ key, name, reason }) => ({
+      key,
+      name,
+      ...(reason ? { reason: reason.text } : {}),
+    })),
   };
 }

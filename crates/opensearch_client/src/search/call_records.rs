@@ -100,6 +100,7 @@ impl CallRecordQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn channel_ids(mut self, channel_ids: Vec<String>) -> Self {
@@ -205,7 +206,37 @@ impl CallRecordQueryBuilder {
             }
         }
 
+        // A term a minus left out drops every call it would match: by its
+        // name, a segment, or either, as the mode reads.
+        if include_name {
+            for query in self
+                .inner
+                .excluded_field_queries(CallRecordSearchConfig::TITLE_KEY)?
+            {
+                bool_query.must_not(query);
+            }
+        }
+        if include_content {
+            for term in &self.inner.excluded_terms {
+                let has_child = HasChildQuery::new(CHILD_RELATION, self.segment_query(term));
+                bool_query.must_not(has_child.into());
+            }
+        }
+
         Ok(bool_query)
+    }
+
+    /// A segment matching `term`, spoken by one of the requested speakers
+    /// when any are.
+    fn segment_query<'a>(&'a self, term: &str) -> QueryType<'a> {
+        let term_query = child_content_query(term, &self.inner.match_type);
+        if self.speaker_ids.is_empty() {
+            return term_query;
+        }
+        let mut combined = BoolQueryBuilder::new();
+        combined.must(term_query);
+        combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
+        combined.build().into()
     }
 
     /// One `has_child` clause per term. The clauses split
@@ -230,16 +261,7 @@ impl CallRecordQueryBuilder {
             .iter()
             .enumerate()
             .map(|(idx, term)| {
-                let term_query = child_content_query(term, &self.inner.match_type);
-                let inner_query = if self.speaker_ids.is_empty() {
-                    term_query
-                } else {
-                    let mut combined = BoolQueryBuilder::new();
-                    combined.must(term_query);
-                    combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
-                    combined.build().into()
-                };
-                let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
+                let has_child = HasChildQuery::new(CHILD_RELATION, self.segment_query(term));
                 let Some(size) = budget.size_for_clause(idx) else {
                     return has_child.into();
                 };

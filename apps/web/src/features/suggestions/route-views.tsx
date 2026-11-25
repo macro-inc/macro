@@ -35,10 +35,22 @@ function ForYouPage() {
   return (
     <ForYouView
       feed={feed}
-      list={search.view ?? 'today'}
+      // A topic is of Today's rows, whatever list its link names.
+      list={search.topic ? 'today' : (search.view ?? 'today')}
       onSelectList={(list) =>
         setSearch(
-          { view: list === 'today' ? undefined : list, suggestion: undefined },
+          {
+            view: list === 'today' ? undefined : list,
+            topic: undefined,
+            suggestion: undefined,
+          },
+          { history: 'replace' }
+        )
+      }
+      topicKey={search.topic}
+      onSelectTopic={(topic) =>
+        setSearch(
+          { view: undefined, topic, suggestion: undefined },
           { history: 'replace' }
         )
       }

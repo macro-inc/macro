@@ -12,6 +12,7 @@ import {
   withSearchOperatorQuery,
 } from '../core/search-operator-filters';
 import {
+  leavesOutName,
   type SearchOperatorBinding,
   searchQueryParts,
 } from '../core/search-operators';
@@ -84,8 +85,10 @@ export function createEmbeddedSearchSource(options: {
     const inOperatorTypes = (operatorFilters()?.indexes ?? []).map((index) =>
       createSearchResultFilter(index, ALL)
     );
+    const leftOut = parts().leftOutWords;
     return (entity: EntityData) =>
       searchable(entity) &&
+      !leavesOutName(entity.name, leftOut) &&
       (inOperatorTypes.length === 0 ||
         inOperatorTypes.some((matchesType) => matchesType(entity)));
   });

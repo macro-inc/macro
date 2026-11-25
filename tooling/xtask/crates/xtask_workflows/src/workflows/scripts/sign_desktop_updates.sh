@@ -16,8 +16,9 @@ TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$(jq -r '.TAURI_SIGNING_PRIVATE_KEY_PASSWORD 
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 
 # Verify against the public key compiled into EVERY package before publishing.
-# The Intel Mac build is optional: a failed or skipped one must not hold back
-# the others, so it is checked only when it arrived.
+# The Intel Mac and Windows builds are optional: a failed, skipped or
+# unreleased one must not hold back the others, so each is checked only when it
+# arrived.
 shopt -s nullglob
 release_files=(release-artifacts/*.release.json)
 for required in darwin-aarch64 linux-x86_64; do
@@ -44,7 +45,7 @@ if ! gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --json assets >
   fi
   printf '{"assets":[]}' > "$credentials_dir/release.json"
 fi
-artifacts=(release-artifacts/*.app.tar.gz release-artifacts/*.AppImage)
+artifacts=(release-artifacts/*.app.tar.gz release-artifacts/*.AppImage release-artifacts/*-windows-setup.exe)
 # One updater package per build that arrived, and nothing else.
 if [ "${#artifacts[@]}" -ne "${#release_files[@]}" ]; then
   echo "Expected one updater artifact for each of ${release_files[*]}, found ${artifacts[*]}" >&2

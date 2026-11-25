@@ -167,7 +167,7 @@ each run.
   /scheduled-actions/draft-jobs` validates the request and waits only for
   its usage to be admitted (the find call's admission, or a session's
   prompt; the blocking route's 400/402/503,
-  plus 409 past `MAX_DRAFTING` drafting at once), then answers 202 with the
+  plus 409 past `MAX_DRAFTING` (3) drafting at once), then answers 202 with the
   job. The body carries a client-made `clientId`; a start sent again with
   it (the client resends when its connection drops) answers with the live
   job that start began and creates no session (`client_id` and a unique
@@ -459,6 +459,22 @@ each run.
   `src/swagger.rs`.
 - Change dispatch behavior: `src/outbound/pg_polling_dispatcher.rs` /
   `src/outbound/tokio_dispatcher.rs` → `src/domain/execution.rs`.
+
+- Active routines are capped by the owner's plan (`domain/routine_limit.rs`):
+  Free 10, Pro 1,000, Business 3,000, Max 10,000, enterprise teams as Max.
+  Active means `ScheduledAction::is_active`: enabled, and watching events or
+  holding a next run. Only a write that makes a routine active is checked
+  (create, enable, or rescheduling a finished one-off), through the
+  `RoutinePlans` port (`outbound/routine_plans.rs` calls
+  `EntitlementSource::user_plan`, so it does a single-row team-seat check
+  without loading a team's roster; defaults to `FreePlans` so an unwired host
+  fails closed). `PgScheduledActionRepo` takes a transaction-scoped advisory
+  lock per owner and runs a bounded count (`LIMIT limit`) backed by the
+  partial index `scheduled_action_active_owner_idx` so concurrent activations
+  cannot pass the cap and finished one-time routines are never scanned.
+  Refusal is 402 with `RoutineLimitErrorBody` (`code: "routine_limit_reached"`,
+  distinct from AI allowance codes). Paused saves, edits to already-active
+  routines, pauses, and deletes never look up a plan or hit the cap.
 
 ## Checks
 

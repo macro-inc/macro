@@ -85,6 +85,9 @@ again. Findings carry the phase they came from.
 `regressions.browser.e2e.ts` keeps the bugs the fuzzer found as fixed
 scenarios, delivering every message at once; run it with the same
 configuration and `regressions` as the test filter.
+The page also renders decorators and has a plain contenteditable named
+Composer, standing in for another split's composer: one scenario checks that a
+collaborator adding and resizing pictures never moves focus out of it.
 
 ## Known findings
 

@@ -1,5 +1,8 @@
 import { Model } from '@core/component/AI/constant/model';
-import { setPreferredSpeed } from '@core/component/AI/signal/speed';
+import {
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import type { DiscoverAgentCapabilitiesRequest } from '@service-agent-harness/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
@@ -304,6 +307,45 @@ it('keeps steering queued messages while the turn transitions', () => {
     setTurn(next);
     expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
   }
+});
+
+it('resets speed only after a confirmed in-memory model pick', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.selectModel.mockResolvedValue(undefined);
+  render(() => <AgentComposer />);
+  expect(await mocks.model?.onModel('new-model')).toBe(true);
+  expect(preferredSpeed()).toBe('standard');
+  setPreferredSpeed('priority');
+  mocks.session = () => ({ canEdit: true, harness: 'cursor' });
+  expect(await mocks.model?.onModel('cursor-model')).toBe(true);
+  expect(preferredSpeed()).toBe('priority');
+});
+
+it('preserves later speed picks across an asynchronous model change', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  let finish!: () => void;
+  mocks.selectModel.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  render(() => <AgentComposer />);
+  const change = mocks.model?.onModel('new-model');
+  expect(preferredSpeed()).toBe('priority');
+  setPreferredSpeed('ultrafast');
+  setPreferredSpeed('priority');
+  finish();
+  expect(await change).toBe(true);
+  expect(preferredSpeed()).toBe('priority');
+});
+
+it('does not reset speed after a rejected model pick', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.selectModel.mockRejectedValue(new Error('Unavailable'));
+  render(() => <AgentComposer />);
+  expect(await mocks.model?.onModel('new-model')).toBe(false);
+  expect(preferredSpeed()).toBe('priority');
 });
 
 it('retains an unsent draft when speed configuration is rejected', async () => {

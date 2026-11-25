@@ -15,6 +15,8 @@ contract and the multi-target verification commands.
   `OpfsOwner`, `OpfsSession`, or close/reset paths.
 - `src/browser.rs` (wasm32 only): `OpfsOwner`, `OpfsSession`, `ConnectedOpfsSession`,
   close/reset state types.
+- `src/browser/sidecar.rs` (wasm32 only): `Sidecar`, the file beside the pair
+  that a wipe leaves alone.
 - `src/state.rs`, `src/write_batch.rs`: target-independent lifecycle machine,
   compiled natively for unit tests.
 
@@ -51,6 +53,10 @@ contract and the multi-target verification commands.
 - `OpfsOwner::acquire` derives both the lock name and main/WAL paths from one
   canonical identity; there's no independent path input that could alias the
   same files to a different lock.
+- `connect` turns Turso's automatic WAL actions off (its checkpoint in COMMIT
+  and the log restart): every checkpoint drops the connection's page cache at
+  the next read, so cache-turso copies the WAL itself, at fewer points. A
+  caller that is not cache-turso must checkpoint on its own.
 - Local tests prove physical lock contention but not real cross-worker
   termination — don't read passing tests here as proof of that.
 

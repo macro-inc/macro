@@ -4,8 +4,9 @@
  * on, and nothing else: it loads its assets in a task of their own, takes the
  * database owner lock without queueing, reports a busy lock, waits for the
  * coordinator's storage grant and then for database files another context still
- * has open, wipes the database on a recovery open (as `recovery_wipe` does,
- * mutation queue included), asks for a reset when its storage breaks, refuses
+ * has open, wipes the database on a recovery open and carries its mutation queue
+ * across (as `wipe_keeping_queue` and `Crossing::finish` do, each step a task
+ * the engine may die before) unless it cannot be read, asks for a reset when its storage breaks, refuses
  * requests once draining, and waits for an in-flight open before a drain closes
  * storage. The runtime lets neither engine see a request after its drain.
  *
@@ -17,7 +18,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 import type { CacheRequest, CacheResponse } from '../protocol';
-import { databaseOwnerLockName } from '../worker/coordinator-protocol';
+import {
+  type CacheQueueState,
+  databaseOwnerLockName,
+} from '../worker/coordinator-protocol';
 import type { CacheWorkerCoreOptions } from '../worker/worker-core';
 import type { Sim, SimContext } from './sim';
 
@@ -33,6 +37,12 @@ export type StoredMutation = { uuid: string; enqueuedBy: string };
 
 type Database = {
   queue: Map<string, StoredMutation>;
+  /** The side file: a queue on its way from a wiped database to the next. */
+  salvaged: Map<string, StoredMutation>;
+  /** Noted in the side file: a queue that could not be read was wiped. */
+  incomplete: boolean;
+  /** Nothing in it can be read, or opened, until it is wiped. */
+  unreadable: boolean;
   wipes: number;
   openBy: string | undefined;
 };
@@ -43,6 +53,8 @@ export class DurableStorage {
   readonly openConflicts: string[] = [];
   /** Every mutation that reached a durable queue, with where it went. */
   readonly admitted = new Map<string, string>();
+  /** The tick of each mutation's wipe, for those whose queue could not be read. */
+  readonly unreadable = new Map<string, number>();
   /** By scope: settles when the context that has its files open lets go. */
   readonly filesFreed = new Map<string, Promise<void>>();
   /** How many of the next opens fail with a storage error. */
@@ -55,7 +67,14 @@ export class DurableStorage {
   database(scope: string): Database {
     let database = this.databases.get(scope);
     if (!database) {
-      database = { queue: new Map(), wipes: 0, openBy: undefined };
+      database = {
+        queue: new Map(),
+        salvaged: new Map(),
+        incomplete: false,
+        unreadable: false,
+        wipes: 0,
+        openBy: undefined,
+      };
       this.databases.set(scope, database);
     }
     return database;
@@ -71,10 +90,36 @@ export class DurableStorage {
     database.openBy = engine;
   }
 
-  wipe(scope: string): void {
+  /** Copies the queue to the side file, where a wipe leaves it alone. */
+  salvage(scope: string): void {
     const database = this.database(scope);
+    if (database.unreadable) {
+      database.incomplete = true;
+      return;
+    }
+    for (const [uuid, mutation] of database.queue)
+      database.salvaged.set(uuid, mutation);
+  }
+
+  /** Queues what is in the side file, which is then gone, and says whether
+   * that is the whole queue. As `queueAfterOpen` has it, a wiped database that
+   * had no queue counts as a reset one. */
+  restore(scope: string, wiped: boolean): CacheQueueState {
+    const database = this.database(scope);
+    const lost = database.incomplete || (wiped && database.salvaged.size === 0);
+    for (const [uuid, mutation] of database.salvaged)
+      database.queue.set(uuid, mutation);
+    database.salvaged.clear();
+    return lost ? 'reset' : 'preserved';
+  }
+
+  wipe(scope: string, tick: number): void {
+    const database = this.database(scope);
+    for (const uuid of database.unreadable ? database.queue.keys() : [])
+      if (!database.salvaged.has(uuid)) this.unreadable.set(uuid, tick);
     database.queue.clear();
     database.wipes += 1;
+    database.unreadable = false;
   }
 
   close(scope: string, engine: string): void {
@@ -230,6 +275,11 @@ export class FakeEngineCore {
       .otherwise(() => null);
   }
 
+  /** A note of what was lost stays in the side file until then. */
+  async queueLossTold(): Promise<void> {
+    if (this.serving !== undefined) this.database().incomplete = false;
+  }
+
   private database() {
     if (this.openedScope === undefined)
       throw new Error('cache engine is not initialized');
@@ -244,16 +294,29 @@ export class FakeEngineCore {
     }
     await this.options.onOwnerLockAcquired?.();
     await this.filesFree(scope);
-    if (this.options.recoveryOpen) this.storage.wipe(scope);
-    if (this.storage.failNextOpens > 0) {
-      this.storage.failNextOpens -= 1;
+    if (this.options.recoveryOpen) {
+      this.storage.salvage(scope);
+      await this.laterTask('engine-task');
+      this.storage.wipe(scope, this.sim.nextTick());
+      await this.laterTask('engine-task');
+    }
+    if (
+      this.storage.failNextOpens > 0 ||
+      this.storage.database(scope).unreadable
+    ) {
+      this.storage.failNextOpens = Math.max(this.storage.failNextOpens - 1, 0);
       this.releaseLock?.();
       throw new Error('storage error: unable to open database file');
     }
     this.storage.open(scope, this.context.id, this.context.buildTime);
+    const queue = this.storage.restore(
+      scope,
+      this.options.recoveryOpen === true
+    );
     this.openedScope = scope;
     this.options.onInitializationOutcome?.(
-      this.options.recoveryOpen ? 'reset-storage-uncertain' : 'opened-existing'
+      this.options.recoveryOpen ? 'reset-storage-uncertain' : 'opened-existing',
+      queue
     );
   }
 

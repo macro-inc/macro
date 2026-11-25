@@ -314,7 +314,9 @@ export function SearchbarInput(
           selection.deleteCharacter(true);
         }
       }
-      selection.insertText(row.insert);
+      // A whole operator is followed by a space, so the next word starts, as
+      // in Mail's field; an operator's name waits for its value.
+      selection.insertText(row.kind === 'name' ? row.insert : `${row.insert} `);
     });
   };
   const hasContent = () => !!markdown().trim();
@@ -383,7 +385,7 @@ export function SearchbarInput(
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-nowrap"
+          class="flex-1 min-w-0 whitespace-pre overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-pre **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-pre"
         >
           <MarkdownShell
             config={editor}
