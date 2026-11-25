@@ -1,10 +1,18 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
+  CacheHostDisposedError,
+  CacheHostFailedError,
+  CacheRequestTimeoutError,
+} from '@graphql-cache/host/errors';
+import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
+import { visibleTimeout } from '@graphql-cache/host/visible-timeout';
+import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
+import {
   isCacheSupersededError,
+  isOwnerEpochLostError,
   isOwnerHandoffBlockedError,
   isOwnerLockUnavailableError,
 } from '@graphql-cache/protocol';
-import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { createSignal } from 'solid-js';
 
 export type CacheRecoveryState =
@@ -13,32 +21,58 @@ export type CacheRecoveryState =
   | 'unavailable'
   | 'recovery-required';
 
-/** Relapses allowed in a row before the page stops retrying until reload: a
- * restart that succeeded but whose cache failed again before staying up. Such a
- * cache would otherwise rebuild the client for the rest of the page session.
- * Restarts that fail outright (a lock another context still holds) keep
- * retrying at the capped backoff. */
-export const MAX_RECOVERY_RELAPSES = 10;
+/** How long, while the page is visible, a cache may be off before it is
+ * reported. The page goes on retrying. */
+export const CACHE_OFF_LIMIT_MS = 5 * 60_000;
 
 /** How long a restarted cache must stay up before its failures count afresh. */
 export const RECOVERY_HEALTHY_MS = 60_000;
 
-/** Only known untouched/bootstrap or owner-handoff failures permit reopening.
- * A newer build that took the database over never hands it back to this one. */
-export function canRetryCacheFailure(error: unknown): boolean {
+/** The page replaced its host, or its session ended, during a restart. */
+export class CacheRecoverySupersededError extends Error {
+  constructor() {
+    super('Cache recovery was superseded.');
+    this.name = 'CacheRecoverySupersededError';
+  }
+}
+
+/** A restart ended without a cache to ask. */
+export class CacheNotRestartedError extends Error {
+  constructor() {
+    super('Local cache could not restart.');
+    this.name = 'CacheNotRestartedError';
+  }
+}
+
+/** Only these failures permit reopening: each leaves the database and its scope
+ * as they were. A newer build that took the database over never hands it back
+ * to this one, and a native engine reports its failures untyped. */
+export function canReopenCache(error: unknown): boolean {
   if (isCacheSupersededError(error)) return false;
   return (
-    error instanceof CacheBootstrapExhaustedError ||
+    error instanceof CacheHostFailedError ||
+    error instanceof CoordinatorRestartedError ||
     isOwnerLockUnavailableError(error) ||
     isOwnerHandoffBlockedError(error)
   );
 }
 
+/** Whether a failed cache may be asked, or built, again: also after a startup
+ * nobody answered, and when only the request was lost. */
+export function canRetryCacheFailure(error: unknown): boolean {
+  return (
+    canReopenCache(error) ||
+    isOwnerEpochLostError(error) ||
+    error instanceof CacheRequestTimeoutError ||
+    error instanceof CacheNavigationError ||
+    error instanceof CacheHostDisposedError ||
+    error instanceof CacheRecoverySupersededError ||
+    error instanceof CacheNotRestartedError
+  );
+}
+
 /** Why a page stopped retrying its cache until reload. */
-export type CacheRecoveryStopReason =
-  | 'superseded'
-  | 'relapses-exhausted'
-  | 'unrecoverable';
+export type CacheRecoveryStopReason = 'superseded' | 'unrecoverable';
 
 export type CacheRecoveryOptions = {
   /** Called when a cache fails again before it stayed up after a restart. */
@@ -49,12 +83,9 @@ export type CacheRecoveryOptions = {
     relapses: number,
     error: unknown
   ) => void;
+  /** Called once each time the cache stays off past CACHE_OFF_LIMIT_MS. */
+  onOffPastLimit?: (attempts: number, error: unknown) => void;
 };
-
-function stopReason(error: unknown): CacheRecoveryStopReason {
-  if (isCacheSupersededError(error)) return 'superseded';
-  return canRetryCacheFailure(error) ? 'relapses-exhausted' : 'unrecoverable';
-}
 
 /** Owns a page session's retry cycle, never the persisted cache or its scope. */
 export function createCacheRecovery(
@@ -74,6 +105,7 @@ export function createCacheRecovery(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let healthyTimer: ReturnType<typeof setTimeout> | undefined;
   let listening = false;
+  let cancelOffLimit: (() => void) | undefined;
 
   const clearTimer = () => {
     if (timer !== undefined) clearTimeout(timer);
@@ -82,6 +114,10 @@ export function createCacheRecovery(
   const clearHealthyTimer = () => {
     if (healthyTimer !== undefined) clearTimeout(healthyTimer);
     healthyTimer = undefined;
+  };
+  const clearOffLimit = () => {
+    cancelOffLimit?.();
+    cancelOffLimit = undefined;
   };
   const resume = () => {
     if (
@@ -118,19 +154,26 @@ export function createCacheRecovery(
       options.onRelapse?.(relapses, error);
     }
     clearHealthyTimer();
-    // Only these typed errors prove restarting cannot bypass a quarantined
-    // journal: nothing opened storage, or a read was refused while the database
-    // moved between owners. Unknown storage/transport failures stay closed, and
-    // so does a cache that kept failing after every restart.
-    const recoverable =
-      canRetryCacheFailure(error) && relapses < MAX_RECOVERY_RELAPSES;
+    // Retries are bounded in rate, never in number.
+    const recoverable = canRetryCacheFailure(error);
     const stopping = !recoverable && state() !== 'recovery-required';
     setState(recoverable ? 'unavailable' : 'recovery-required');
-    if (recoverable) schedule();
-    else {
+    if (recoverable) {
+      cancelOffLimit ??= visibleTimeout(
+        () => options.onOffPastLimit?.(attempt, failure),
+        CACHE_OFF_LIMIT_MS
+      );
+      schedule();
+    } else {
       clearTimer();
+      clearOffLimit();
       unlisten();
-      if (stopping) options.onStopped?.(stopReason(error), relapses, error);
+      if (stopping)
+        options.onStopped?.(
+          isCacheSupersededError(error) ? 'superseded' : 'unrecoverable',
+          relapses,
+          error
+        );
     }
   };
   async function run(epoch: number) {
@@ -139,6 +182,7 @@ export function createCacheRecovery(
       if (generation !== epoch) return;
       failure = undefined;
       clearTimer();
+      clearOffLimit();
       unlisten();
       setState('ready');
       clearHealthyTimer();
@@ -149,11 +193,31 @@ export function createCacheRecovery(
       }, RECOVERY_HEALTHY_MS);
     } catch (error) {
       if (generation !== epoch) return;
-      failed(error);
+      // A host that failed meanwhile has said why, which decides; what the
+      // restart then rejects with is only a consequence.
+      if (state() === 'recovering') failed(error);
+      else schedule();
       throw error;
     } finally {
       if (generation === epoch) pending = undefined;
     }
+  }
+  function begin(): Promise<void> {
+    clearTimer();
+    attempt += 1;
+    setState('recovering');
+    pending = run(generation);
+    return pending;
+  }
+  async function available(): Promise<void> {
+    const epoch = generation;
+    try {
+      await pending;
+    } catch {
+      // It asked before the host served again.
+    }
+    if (generation === epoch && state() === 'unavailable' && !pending)
+      await begin();
   }
   function retry(): Promise<void> {
     if (pending) return pending;
@@ -163,16 +227,14 @@ export function createCacheRecovery(
       return Promise.reject(
         new Error('Reconnect to retry draft synchronization.')
       );
-    clearTimer();
-    attempt += 1;
-    setState('recovering');
-    pending = run(generation);
-    return pending;
+    return begin();
   }
   return {
     state,
     failed,
     retry,
+    /** The host serves again: prove it at once, also offline or hidden. */
+    available,
     /** Restarts made since the cache last stayed up, for telemetry. */
     attempts: () => attempt,
     reset() {
@@ -183,6 +245,7 @@ export function createCacheRecovery(
       relapses = 0;
       clearTimer();
       clearHealthyTimer();
+      clearOffLimit();
       unlisten();
       setState('ready');
     },

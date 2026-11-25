@@ -1,6 +1,5 @@
 use crate::domain::models::{
-    Attachment, Contact, EmailThreadPreview, Label, PreviewCursorQuery, PreviewView,
-    PreviewViewStandardLabel,
+    Attachment, Contact, Label, PreviewCursorQuery, PreviewView, PreviewViewStandardLabel,
 };
 use doppleganger::{Doppleganger, Mirror};
 use either::Either;
@@ -20,7 +19,7 @@ pub(super) async fn previews_for_view_cursor(
     query: PreviewCursorQuery,
     user_id: MacroUserIdStr<'static>,
     discovery: Option<&RuleDiscoveryPort>,
-) -> Result<Vec<EmailThreadPreview>, PreviewReadError> {
+) -> Result<crate::domain::models::PreviewCursorPage, PreviewReadError> {
     let PreviewCursorQuery {
         view,
         link_ids,
@@ -30,10 +29,11 @@ pub(super) async fn previews_for_view_cursor(
     } = query;
 
     let query = query.split_option();
+    let mut continue_below = None;
 
-    Ok(match (view, query) {
+    let rows = match (view, query) {
         (view, Either::Right(dynamic_query)) => {
-            super::dynamic::dynamic_email_thread_cursor_with_discovery(
+            let (rows, below) = super::dynamic::dynamic_email_thread_page_with_discovery(
                 pool,
                 &link_ids,
                 limit,
@@ -43,7 +43,9 @@ pub(super) async fn previews_for_view_cursor(
                 team_id,
                 discovery,
             )
-            .await?
+            .await?;
+            continue_below = below;
+            rows
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox), Either::Left(query)) => {
             super::preview_views::new_inbox::new_inbox_preview_cursor(
@@ -106,10 +108,14 @@ pub(super) async fn previews_for_view_cursor(
             )
             .await?
         }
-    }
-    .into_iter()
-    .map(|row: ThreadPreviewCursorDbRow| row.into_preview())
-    .collect())
+    };
+    Ok(crate::domain::models::PreviewCursorPage {
+        previews: rows
+            .into_iter()
+            .map(|row: ThreadPreviewCursorDbRow| row.into_preview())
+            .collect(),
+        continue_below,
+    })
 }
 
 /// Attachments of the given threads, oldest first.

@@ -13,4 +13,4 @@ chmod u+w artifacts/*.dmg
 mkdir -p updater-app
 cp -a result/Macro.app updater-app/
 chmod -R u+w updater-app/Macro.app
-cp apps/web/tauri/desktop-release.json artifacts/darwin-aarch64.release.json
+cp apps/web/tauri/desktop-release.json "artifacts/darwin-${DESKTOP_ARCH:?}.release.json"

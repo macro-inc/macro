@@ -1,3 +1,4 @@
+import type { NotionImportReport } from '@queries/import';
 import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
@@ -15,6 +16,10 @@ export type ImportTaskFields = {
 
 /** One Notion object in an import plan. */
 export type ImportPlanEntry = {
+  /** Titles of planned objects requiring this linked source. */
+  linkedFrom?: string[];
+  /** Titles of planned objects displaying this source inline. */
+  inlineOn?: string[];
   id: string;
   parentId: string | null;
   kind:
@@ -75,9 +80,56 @@ export type ImportPlanCounts = {
 
 export type ImportReportItem = { id: string; title: string; reason: string };
 
+export type ReviewOmission = NonNullable<
+  NotionImportReport['details']
+>['notImported'][number];
+
+/** Count review skips by default, using samples only for older reports. */
+export function omissionTotals(
+  details: NotionImportReport['details'],
+  kind?: ReviewOmission['kind']
+) {
+  const includes = (choice: ReviewOmission['kind']) =>
+    kind ? choice === kind : choice !== 'by_hand';
+  const totals = { pages: 0, databases: 0, other: 0, total: 0 };
+  if (details?.omissionCounts) {
+    for (const count of details.omissionCounts) {
+      if (!includes(count.kind)) continue;
+      totals.pages += count.pages;
+      totals.databases += count.databases;
+      totals.other += count.other;
+    }
+  } else {
+    for (const omission of details?.notImported ?? []) {
+      if (!includes(omission.kind)) continue;
+      if (omission.item.kind === 'page') totals.pages += 1;
+      else if (omission.item.kind === 'data_source') totals.databases += 1;
+      else totals.other += 1;
+    }
+  }
+  totals.total = totals.pages + totals.databases + totals.other;
+  return totals;
+}
+
+/** Use the same noun for a choice's total and sample size. */
+export function omissionNoun(totals: ReturnType<typeof omissionTotals>) {
+  if (totals.total === totals.pages) return 'page';
+  if (totals.total === totals.databases) return 'database';
+  return 'item';
+}
+
+export function omissionCountLabel(
+  totals: ReturnType<typeof omissionTotals>
+): string {
+  const noun = omissionNoun(totals);
+  return plural(totals.total, noun, noun + 's');
+}
+
 /** Where the import run stands, as the server reports it. */
 export type ImportProgress = {
   warnings?: string[];
+  details?: NotionImportReport['details'];
+  confirmed?: NotionImportReport['confirmed'];
   reviewId: string | null;
   status:
     | 'running'
@@ -97,6 +149,7 @@ export type ImportProgress = {
   waiting: number;
   writing: number;
   failures: ImportReportItem[];
+  failureCount?: number;
   /** A HubSpot plan's owners and what it cannot carry over. */
   hubspot: HubspotPlanReport | null;
 };
@@ -297,7 +350,14 @@ export function setExcluded(
   const written = new Set(
     nodes.filter((node) => isWritten(node.decision)).map((node) => node.id)
   );
-  const affected = subtree(nodes, id).filter((entry) => written.has(entry));
+  const dependencies = new Set(
+    nodes.filter((node) => node.linkedFrom?.length).map((node) => node.id)
+  );
+  const affected = subtree(nodes, id).filter(
+    (entry) =>
+      written.has(entry) &&
+      (excluded || entry === id || !dependencies.has(entry))
+  );
   const next = draft.excluded.filter((entry) => !affected.includes(entry));
   return {
     ...draft,
@@ -645,7 +705,9 @@ export function planSummary(
     .join(', ');
   return [
     shared ? `${sourceLabel(source)} shared ${shared}` : '',
-    `importing ${volumeLabel(volume)}`,
+    counts.deciding > 0
+      ? 'Deciding what to import…'
+      : `importing ${volumeLabel(volume)}`,
   ]
     .filter(Boolean)
     .join(' — ')

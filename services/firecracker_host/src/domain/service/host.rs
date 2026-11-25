@@ -1,9 +1,18 @@
 //! The host as a whole: its goldens, its memory limits, and what it reports.
 
-use firecracker_host_api::{GoldenImage, GoldenKey, HostInfo, HostLimits, NetworkSlots};
+use firecracker_host_api::{
+    GoldenImage, GoldenKey, HostInfo, HostLimits, ImageFileName, NetworkSlots, StageImage,
+    StagedImage,
+};
 
 use super::{HostError, HostProbe, HostService, InvalidRequest, internal};
 use crate::domain::ports::{Disks, GoldenAvailability, Goldens, Machines, Store};
+
+#[cfg(test)]
+mod test;
+
+/// The largest image file staging accepts: a rootfs is 16 GiB today.
+const MAX_IMAGE_FILE_BYTES: u64 = 64 << 30;
 
 impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D, G, M, P> {
     /// Build a golden unless it is ready or building.
@@ -23,6 +32,38 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
     /// Every golden.
     pub fn goldens(&self) -> Vec<GoldenImage> {
         self.goldens.list()
+    }
+
+    /// Stage an image unless it is in place with these contents.
+    #[tracing::instrument(name = "firecracker_host.stage_image", skip_all, fields(image = %request.image), err)]
+    pub fn stage_image(&self, request: StageImage) -> Result<StagedImage, HostError> {
+        if !super::image_name_is_safe(request.image.as_str()) {
+            return Err(InvalidRequest::UnsafeImage(request.image).into());
+        }
+        let mut names: Vec<ImageFileName> = request.files.iter().map(|file| file.name).collect();
+        names.sort();
+        if names
+            != [
+                ImageFileName::Vmlinux,
+                ImageFileName::RootfsExt4,
+                ImageFileName::BootArgs,
+            ]
+        {
+            return Err(InvalidRequest::ImageFiles.into());
+        }
+        if let Some(file) = request
+            .files
+            .iter()
+            .find(|file| !file.url.0.starts_with("https://") || file.bytes > MAX_IMAGE_FILE_BYTES)
+        {
+            return Err(InvalidRequest::ImageSource(file.name).into());
+        }
+        Ok(self.goldens.stage_image(request))
+    }
+
+    /// Every image and where its staging stands.
+    pub fn images(&self) -> Vec<StagedImage> {
+        self.goldens.staged_images()
     }
 
     /// The control plane's memory limits, if set.

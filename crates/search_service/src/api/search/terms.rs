@@ -5,8 +5,9 @@
 //! AND-of-terms queries where each quoted span counts as a single phrase term.
 //! Used by both the unified dispatch and the channel-only endpoint.
 //! [`drop_wordless_terms`] then removes the terms no indexed text can match,
-//! and [`resolve_document_term_matching`] decides how the remaining terms
-//! combine on document content.
+//! [`take_left_out_terms`] reads the words a minus leaves out, and
+//! [`resolve_document_term_matching`] decides how the remaining terms combine
+//! on document content.
 
 use macro_user_id::user_id::MacroUserIdStr;
 use models_search::{MatchType, TermMatching};
@@ -88,6 +89,38 @@ pub(in crate::api::search) fn drop_wordless_terms(
         return terms;
     }
     terms.into_iter().filter(has_word).collect()
+}
+
+/// The word or phrase `term` leaves out of a search when a minus starts it:
+/// `draft` for `-draft`, `team lunch` for `-"team lunch"`. A minus inside a
+/// word (`e-mail`), a term starting with two (`--force`) and a minus before
+/// no letter or digit leave nothing out; they stay words.
+pub(in crate::api::search) fn left_out(term: &str) -> Option<&str> {
+    let body = term.strip_prefix('-')?;
+    let names_a_word = !body.starts_with('-') && body.chars().any(char::is_alphanumeric);
+    names_a_word.then_some(body)
+}
+
+/// Takes the words and phrases a minus leaves out ([`left_out`]) out of
+/// `terms`, for a match type that reads plain words. Returns the terms left
+/// and the words left out; regexp and query-string input keep every term,
+/// since a minus is syntax there.
+pub(in crate::api::search) fn take_left_out_terms(
+    terms: Vec<String>,
+    match_type: MatchType,
+) -> (Vec<String>, Vec<String>) {
+    if !matches!(match_type, MatchType::Exact | MatchType::Partial) {
+        return (terms, Vec::new());
+    }
+    let mut kept: Vec<String> = Vec::with_capacity(terms.len());
+    let mut left_out_terms: Vec<String> = Vec::new();
+    for term in terms {
+        match left_out(&term) {
+            Some(word) => left_out_terms.push(word.to_string()),
+            None => kept.push(term),
+        }
+    }
+    (kept, left_out_terms)
 }
 
 /// Records on `span` how many terms a search kept and how many

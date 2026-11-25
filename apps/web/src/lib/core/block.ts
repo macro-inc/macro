@@ -400,6 +400,14 @@ export type BlockDefinition<
   openTrackingEnabled?: boolean;
 
   /**
+   * Whether the block's view records the history row instead, once it knows
+   * the id it shows (`createOpenTracker` with `ownBlock`); mounting still
+   * sends the page view and `open_entity`. For a block whose id can name a
+   * record merged into another.
+   */
+  openHistoryFromView?: boolean;
+
+  /**
    * Whether mounting this block sends `open_entity`. Defaults to
    * `openTrackingEnabled`; set it on a block without a history row whose opens
    * are still a product signal, as `block-database` does.

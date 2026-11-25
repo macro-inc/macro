@@ -1106,10 +1106,11 @@ fn an_inbox_filter_matches_only_mail_into_the_inboxes_it_names() {
 }
 
 #[test]
-fn an_inbox_filter_is_only_for_received_mail_alone_in_its_filter() {
+fn an_inbox_filter_is_only_for_received_or_labeled_mail_alone_in_its_filter() {
     for value in [
         json!([{"events": ["document.created"], "inboxes": [INBOX]}]),
         json!([{"events": ["email.message_received", "document.created"], "inboxes": [INBOX]}]),
+        json!([{"events": ["email.message_received", "email.labeled"], "inboxes": [INBOX]}]),
         json!([{"events": ["email.message_received"], "inboxes": ["invalid"]}]),
         json!([{
             "events": ["email.message_received"],
@@ -1156,3 +1157,5 @@ fn no_run_keeps_the_inbox_and_a_run_of_a_routine_that_picks_one_still_starts() {
     document["inbox"] = json!(INBOX);
     assert!(serde_json::from_value::<EventReference>(document).is_err());
 }
+
+mod email_labels;

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { compileToAst, defineQueryFilters, queryStateFrom } from './compile';
+import {
+  bothTargetAsts,
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from './compile';
 import type { DocumentFilterExpression, QueryState } from './types';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -267,5 +272,30 @@ describe('compileToAst', () => {
         { l: { pd: 'def-2', v: { so: 'opt-2' } } },
       ],
     });
+  });
+});
+
+describe('bothTargetAsts', () => {
+  it("keeps both queries' filters on a target they share", () => {
+    const first = compileToAst(
+      queryStateFrom({ include: { channelId: ['first'] } })
+    );
+    const second = compileToAst(
+      queryStateFrom({ include: { channelId: ['second'] } })
+    );
+    const both = bothTargetAsts(first, second);
+    expect(both.chanf).toEqual({ '&': [first.chanf, second.chanf] });
+  });
+
+  it('keeps a target only one query filters', () => {
+    const first = compileToAst(
+      queryStateFrom({ include: { channelId: ['first'] } })
+    );
+    const second = compileToAst(
+      queryStateFrom({ include: { emailLinkId: ['inbox'] } })
+    );
+    const both = bothTargetAsts(first, second);
+    expect(both.chanf).toEqual(first.chanf);
+    expect(both.ef).toEqual(second.ef);
   });
 });

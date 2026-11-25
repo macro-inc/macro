@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT request_fingerprint, result FROM crm_merges WHERE team_id = $1 AND user_id = $2 AND request_key = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request_fingerprint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "result",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7d06543070867d40e3e2d6e0d84ac2746ffa380b97afd527509604b0b90c4b9e"
+}

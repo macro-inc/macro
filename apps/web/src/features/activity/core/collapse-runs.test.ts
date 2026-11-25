@@ -123,3 +123,19 @@ describe('collapseRuns', () => {
     });
   });
 });
+
+describe('merges', () => {
+  it('keeps each merge on its own line', () => {
+    const merge = (id: string) =>
+      event(id, {
+        action: {
+          kind: 'record-merged',
+          merged: [{ id: `old-${id}`, name: `Old ${id}` }],
+          dropped: [],
+        },
+      });
+    expect(collapseRuns([merge('m2'), merge('m1')]).map(entrySize)).toEqual([
+      1, 1,
+    ]);
+  });
+});

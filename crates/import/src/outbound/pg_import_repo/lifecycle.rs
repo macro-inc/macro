@@ -131,7 +131,7 @@ impl PgImportRepo {
                 team_id = NULL, waiting_on = NULL, review_id = NULL, last_error = $3,
                 metadata = CASE WHEN jsonb_typeof(metadata->'plan') = 'object'
                     THEN metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}'
-                    ELSE metadata END - 'personalFolderId' - 'separateFolder',
+                    ELSE metadata END - 'personalFolderId' - 'separateFolder' - 'warnings',
                 updated_at = NOW()
             WHERE id = $1
             "#,

@@ -4,6 +4,10 @@ import type {
   OpenWithSplitOptions,
   SplitContent,
 } from '@components/app/split-layout/layoutManager';
+import {
+  type ChannelDirectory,
+  useOptionalChannelDirectory,
+} from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { QueryAccountChangedError } from '@queries/auth/account-scope';
@@ -32,14 +36,16 @@ export type OpenDirectMessageChannel = (
  * Opens the conversation between `viewerId` and `recipientId` without
  * creating it: their existing DM, or a DM that doesn't exist yet, shown like
  * an empty one, whose first message creates it. Opening someone's profile
- * never leaves an empty DM in either person's list. For code outside
- * components (a notification's action); components use
+ * never leaves an empty DM in either person's list. A settled `directory`
+ * answers which DM exists when it can (`existingDirectMessage`). For code
+ * outside components (a notification's action); components use
  * `useOpenDirectMessage`.
  */
 export function openDirectMessage(
   viewerId: string | undefined,
   recipientId: string,
-  open: OpenDirectMessageChannel
+  open: OpenDirectMessageChannel,
+  directory?: Pick<ChannelDirectory, 'channels' | 'complete' | 'viewsCurrent'>
 ) {
   return Telemetry.span('channels.open_direct_message', async (span) => {
     // There is no DM with yourself; the server refuses to make one.
@@ -51,7 +57,11 @@ export function openDirectMessage(
     const channelId = await span.span(
       'channels.find_direct_message',
       async (lookup) => {
-        const existing = await existingDirectMessage(viewerId, recipientId);
+        const existing = await existingDirectMessage(
+          viewerId,
+          recipientId,
+          directory
+        );
         // A sign-in that changed under the lookup opens nothing: the DM
         // would open for someone else.
         if (
@@ -67,11 +77,14 @@ export function openDirectMessage(
           lookup.error(existing.error);
           return undefined;
         }
+        const { channelId, source } = existing.value;
         lookup.setAttr(
           'channels.find_direct_message.found',
-          existing.value !== undefined
+          channelId !== undefined
         );
-        return existing.value;
+        if (source)
+          lookup.setAttr('channels.find_direct_message.source', source);
+        return channelId;
       }
     );
 
@@ -96,17 +109,23 @@ export function openDirectMessage(
 export function useOpenDirectMessage() {
   const { openWithSplit } = useSplitLayout();
   const userId = useUserId();
+  const directory = useOptionalChannelDirectory();
 
   return (
     recipientId: string,
     { parentSpan, ...options }: OpenDirectMessageOptions = {}
   ) =>
     (parentSpan ?? Telemetry.captureContext()).run(() =>
-      openDirectMessage(userId(), recipientId, (content, existing) => {
-        openWithSplit(
-          content,
-          existing ? { ...options, reopen: 'latest' } : options
-        );
-      })
+      openDirectMessage(
+        userId(),
+        recipientId,
+        (content, existing) => {
+          openWithSplit(
+            content,
+            existing ? { ...options, reopen: 'latest' } : options
+          );
+        },
+        directory
+      )
     );
 }

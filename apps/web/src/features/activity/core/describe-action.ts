@@ -3,6 +3,18 @@ import { match } from 'ts-pattern';
 import { entryAction, entrySize, type FeedEntry } from './collapse-runs';
 import type { ActivityAction } from './event';
 
+type RecordMergedAction = Extract<ActivityAction, { kind: 'record-merged' }>;
+
+/** "Old Co", "Old Co and Other", "Old Co, Other and 2 more". */
+function mergedNames(action: RecordMergedAction): string {
+  const names = action.merged.map((record) => record.name ?? 'a company');
+  if (names.length === 0) return 'a company';
+  if (names.length === 1) return names[0];
+  if (names.length <= 3)
+    return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+}
+
 /**
  * How a feed entry reads: the action its line carries (a property run
  * collapses to its net change) and, for runs, the count suffix that follows
@@ -52,6 +64,10 @@ export function describeAction(action: ActivityAction, count = 1): string {
         { kind: 'time-logged' },
         (logged) => `logged ${formatLength(logged.minutes)}`
       )
+      .with(
+        { kind: 'record-merged' },
+        (merge) => `merged ${mergedNames(merge)} into this`
+      )
       .with({ kind: 'unknown' }, (unknown) => unknown.tag.replaceAll('_', ' '))
       .exhaustive();
   }
@@ -76,6 +92,7 @@ export function describeAction(action: ActivityAction, count = 1): string {
       { kind: 'time-logged' },
       (logged) => `logged ${formatLength(logged.minutes)} in ${count} entries`
     )
+    .with({ kind: 'record-merged' }, () => `made ${count} merges`)
     .with(
       { kind: 'unknown' },
       (unknown) => `${unknown.tag.replaceAll('_', ' ')} ${count} times`
@@ -138,6 +155,10 @@ export function describeActionForEntity(action: ActivityAction): {
     .with({ kind: 'time-logged' }, (logged) => ({
       verb: `logged ${formatLength(logged.minutes)}`,
       connector: 'on',
+    }))
+    .with({ kind: 'record-merged' }, (merge) => ({
+      verb: `merged ${mergedNames(merge)}`,
+      connector: 'into',
     }))
     .with({ kind: 'unknown' }, (unknown) => ({
       verb: unknown.tag.replaceAll('_', ' '),

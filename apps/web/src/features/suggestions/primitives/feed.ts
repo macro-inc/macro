@@ -15,6 +15,13 @@ import {
   settledState,
 } from '../core/lists';
 import { doneWhenTakenUp, type Suggestion } from '../core/suggestion';
+import {
+  groupByTopic,
+  inTopic,
+  type ShownTopic,
+  shownTopics,
+  type TopicGroup,
+} from '../core/topics';
 
 export type FeedView =
   | { kind: 'loading' }
@@ -148,6 +155,22 @@ export function createSuggestionsFeed(
     return entries.length > 0 ? { kind: 'rows', entries } : { kind: 'empty' };
   };
 
+  /** The topics that group Today's rows, in their order. */
+  const topics = createMemo((): ShownTopic[] =>
+    shownTopics(rows(), source.feed()?.topics ?? [])
+  );
+
+  /** One list's rows, under their topics in Today, or one topic's rows alone. */
+  const groups = (list: ForYouList, topic?: ShownTopic): TopicGroup[] => {
+    if (topic) return [{ entries: rows().filter(inTopic(topic.key)) }];
+
+    const current = view(list);
+    if (current.kind !== 'rows') return [];
+    if (list !== 'today') return [{ entries: current.entries }];
+
+    return groupByTopic(current.entries, topics());
+  };
+
   /** How many rows wait in each list; undefined until the feed is read. */
   const counts = (): ListCounts | undefined => {
     const feed = source.feed();
@@ -273,6 +296,8 @@ export function createSuggestionsFeed(
 
   return {
     view,
+    topics,
+    groups,
     counts,
     accept,
     /**

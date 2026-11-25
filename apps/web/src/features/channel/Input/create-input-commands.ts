@@ -1,4 +1,3 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { Accessor } from 'solid-js';
@@ -54,7 +53,6 @@ export function createInputCommands(
           'composer.voice_memos',
           current.attachments.filter((item) => item.kind === 'audio').length
         );
-        hapticImpact('light');
         deps.setIsSending(true);
         // Clear before delivery. The optimistic message paints as soon as
         // onSend mutates, and waiting for that promise lets the sent text

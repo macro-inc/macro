@@ -89,24 +89,52 @@ export function unreadable(
   return page.getByRole('alert').filter({ hasText: text });
 }
 
-/** The composer's banner asking for a reload to recover local storage. */
-export function reloadBanner(page: Page): Locator {
+/** The composer's banner that its edits wait on this device. */
+export function waitingNotice(page: Page): Locator {
   return page
     .getByRole('alert')
-    .filter({ hasText: 'Update or reload Macro to recover local storage.' });
+    .or(page.getByRole('status'))
+    .filter({ hasText: 'Saved on this device; waiting to sync' });
 }
 
 /**
  * Keeps the app's local cache from starting on the page's next load: the
  * worker that opens it cannot load, as when its script fails to download.
  * (A page route, so it runs before `loadAppSteadily`'s.) Returns what lets
- * it load again.
+ * it load again, how many of the cache's attempts it refused and how often
+ * it has loaded since, and how long after the last refusal it first loaded.
  */
-export async function cacheWorkerUnloadable(
-  page: Page
-): Promise<{ lift: () => Promise<void> }> {
+export async function cacheWorkerUnloadable(page: Page): Promise<{
+  lift: () => void;
+  refusedAttempts: () => number;
+  loads: () => number;
+  msFromRefusalToLoad: () => number;
+}> {
   const coordinator = /\/cache\.coordinator\.shared-worker-[^/]*\.js$/;
-  const refuse = (route: Route) => route.abort();
-  await page.route(coordinator, refuse);
-  return { lift: () => page.unroute(coordinator, refuse) };
+  let refused = true;
+  let refusedAttempts = 0;
+  let loads = 0;
+  let lastRefusal = 0;
+  let firstLoad = 0;
+  await page.route(coordinator, (route: Route) => {
+    if (refused) {
+      // One attempt asks up to three times, 100 and 200 ms apart
+      // (COORDINATOR_CONNECT_RETRY_DELAYS_MS); attempts are a second or more
+      // apart.
+      if (Date.now() - lastRefusal > 600) refusedAttempts += 1;
+      lastRefusal = Date.now();
+      return route.abort();
+    }
+    loads += 1;
+    firstLoad ||= Date.now();
+    return route.fallback();
+  });
+  return {
+    lift: () => {
+      refused = false;
+    },
+    refusedAttempts: () => refusedAttempts,
+    loads: () => loads,
+    msFromRefusalToLoad: () => firstLoad - lastRefusal,
+  };
 }

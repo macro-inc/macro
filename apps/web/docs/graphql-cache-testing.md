@@ -24,6 +24,7 @@ flashes, stale subscribers, and notifications to unrelated fields.
 | [Mail membership](../../../crates/soup_filter_cache_adapter/src/mail/test/reconciliation.rs) and [OPFS revisits](../src/lib/graphql-cache/worker/browser-test/mail-reconciliation.browser.e2e.ts) | Authoritative first-page gaps, timestamp/ID boundaries, empty pages, partial/backfill responses, optimistic edits, view revisits, engine/browser reopen | Contradicted facts stop matching without deleting normalized threads; later pages and unrelated filters remain intact. Backfill gaps are not negative membership evidence, nor is a gap that a prefix of the queued writes explains: a pending mark read does not keep a row the page left out, a pending Undo of an archive does. |
 | [Mail render transitions](../src/lib/queries/soup/graphql/browser-test/mail-flicker.browser.e2e.ts) | Real `createSoupLiveQuery` and normalized exchange over worker/WASM/OPFS; local evaluation and HTTP released separately; repeated Drafts → Inbox → Noise visits and reload | A `MutationObserver` records every row-ID change from cached baseline through local evaluation and network settlement. Repaired visits retain exactly the server IDs throughout, not merely at the end. The unrepaired first visit is a positive control. Each run attaches `rendered-row-transitions.json`. Only app singleton composition is replaced; the fixture uses a small Solid row renderer rather than the full Mail shell. |
 | [Refresh ordering](../src/lib/queries/trailing-refetch.test.ts) | Concurrent invalidations, failed earlier reads, owner disposal | A change during a pending read gets a trailing read; disposed owners stop requesting work. |
+| [Cache handover](../src/lib/graphql-cache/checker/README.md) | Schedules of one tab, two tabs, and an older and a newer tab with one fault at any step (hide, close, crash, freeze, back/forward cache, session expiry, coordinator restart, engine crash, busy lock, failed open, newer build, …), of a tab closing while a message reorders, of one message late past a timer, and of a database that cannot be read when its engine dies, over the real host, coordinator and engine runtime and a stand-in engine core | No page is left without its cache, no queued write is lost except with a database that cannot be read, pages are told of a lost queue and only of a lost one, one engine has the database open, and every request settles with an answer or a coded refusal, except the known violations listed, of which there are none. Code broken on purpose is caught. |
 
 The shared [Rust oracle](../../../crates/client/cache-core/tests/support/optimistic_model.rs)
 uses ordinary document lists and pending edits. It does not use
@@ -103,8 +104,8 @@ reconciliation reserves those names. This preserves correctness but gives up
 field-level reconciliation for those response shapes.
 
 A surviving exchange retains a successful server response while retrying failed
-local settlement under a fresh lease. It discards that response on a storage
-reset and fences late replies from the old storage generation. This is **not
+local settlement under a fresh lease. It discards that response when a storage
+reset is reported with `queue: reset`, and fences late replies from the old storage generation. This is **not
 exactly-once network execution**: process loss, another runner taking over, or a
 lost network response can still make the outcome unknown. Non-idempotent server
 mutations need server-supported idempotency keys or reconciliation before replay.

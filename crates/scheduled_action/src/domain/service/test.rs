@@ -3,6 +3,7 @@ mod appearance;
 mod check;
 mod inboxes;
 mod owned_purge;
+mod routine_limit;
 mod stop;
 mod sub_routines;
 mod user_cleanup;
@@ -149,6 +150,26 @@ impl SubRoutines for FakeRepo {
     }
 }
 
+fn check_active_limit(
+    actions: &[ScheduledAction],
+    action: &ScheduledAction,
+    activation: Option<RoutineLimit>,
+) -> Result<()> {
+    let Some(limit) = activation else {
+        return Ok(());
+    };
+    let active = actions
+        .iter()
+        .filter(|stored| {
+            stored.owner == action.owner && stored.id != action.id && stored.is_active()
+        })
+        .count();
+    if active >= limit.max_active() as usize {
+        return Err(ActionPolicyError::RoutineLimitReached(limit).into());
+    }
+    Ok(())
+}
+
 impl ScheduledActionRepo for FakeRepo {
     async fn set_appearance(
         &self,
@@ -186,9 +207,15 @@ impl ScheduledActionRepo for FakeRepo {
         })
     }
 
-    async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        mut action: ScheduledAction,
+        activation: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
+        let mut actions = self.actions.lock().unwrap();
+        check_active_limit(&actions, &action, activation)?;
         action.id = Some(generate_uuid_v7());
-        self.actions.lock().unwrap().push(action.clone());
+        actions.push(action.clone());
         Ok(action)
     }
 
@@ -221,8 +248,13 @@ impl ScheduledActionRepo for FakeRepo {
             .cloned())
     }
 
-    async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        action: ScheduledAction,
+        activation: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         let mut actions = self.actions.lock().unwrap();
+        check_active_limit(&actions, &action, activation)?;
         let stored = actions.iter_mut().find(|a| a.id == action.id).unwrap();
         if stored.configuration_revision.next()? != action.configuration_revision {
             return Err(ActionPolicyError::UpdateConflict.into());
@@ -2232,4 +2264,36 @@ async fn only_a_person_makes_a_routine_write_as_them() {
         .await,
         ActionPolicyError::OwnerIdentityNeedsPerson,
     );
+}
+
+#[tokio::test]
+async fn email_label_triggers_need_their_own_rollout() {
+    let enabled = service(true);
+    let mut config = configuration(true);
+    config.trigger = serde_json::from_value(json!({
+        "type": "events",
+        "filters": [{ "events": ["email.labeled"], "labels": [Uuid::now_v7()] }],
+    }))
+    .unwrap();
+    let labels_off = ScheduledActionServiceImpl::new(
+        enabled.repo.clone(),
+        enabled.executor.clone(),
+        enabled.dispatcher_tx.clone(),
+        grants(&enabled.repo),
+    )
+    .with_event_routines(crate::domain::event_runs::test_support::EmailLabelsOff);
+    assert_policy(
+        labels_off
+            .create_action(&user_principal(), config.clone())
+            .await,
+        ActionPolicyError::EmailLabelsDisabled,
+    );
+    labels_off
+        .create_action(&user_principal(), configuration(true))
+        .await
+        .unwrap();
+    enabled
+        .create_action(&user_principal(), config)
+        .await
+        .unwrap();
 }

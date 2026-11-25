@@ -101,6 +101,7 @@ impl CalendarEventQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
@@ -177,6 +178,17 @@ impl CalendarEventQueryBuilder {
         titles.should(self.inner.build_title_term_query()?);
         titles.should(self.inner.build_field_term_query(SOURCE_NAMES_KEY)?);
         bool_query.must(titles.build().into());
+
+        // A term a minus left out drops every event whose title or a copy's
+        // title it would match.
+        let excluded = [
+            self.inner
+                .excluded_field_queries(CalendarEventSearchConfig::TITLE_KEY)?,
+            self.inner.excluded_field_queries(SOURCE_NAMES_KEY)?,
+        ];
+        for query in excluded.into_iter().flatten() {
+            bool_query.must_not(query);
+        }
 
         Ok(bool_query)
     }

@@ -86,7 +86,11 @@ impl ScheduledActionRepo for FakeRepo {
         self.actions.lock().unwrap().retain(|a| a.id != Some(*id));
         Ok(())
     }
-    async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unreachable!()
     }
     async fn get_action(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
@@ -95,7 +99,11 @@ impl ScheduledActionRepo for FakeRepo {
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unreachable!()
     }
-    async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unreachable!()
     }
     async fn claim_action(

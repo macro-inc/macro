@@ -285,6 +285,15 @@ impl Selection {
     }
 }
 
+/// What a caller looks for among a user's connections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sought<'a> {
+    /// One app.
+    App(&'a ConnectorId),
+    /// The servers added by URL.
+    Servers,
+}
+
 /// Proof that a connection may be dialed for MCP tools: the user holds it,
 /// it is enabled and authorized, and it is the connection the rules count.
 #[derive(Clone)]

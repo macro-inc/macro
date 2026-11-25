@@ -47,17 +47,21 @@ export function AgentModelPicker(props: {
           selectedCatalog.currentModel(),
         models: models(),
         suggestedModels: suggestedModels(),
-        suggestedSelected: !macro() || props.selected?.id === MACRO_PERSONA_ID,
+        suggestedSelected: props.selected?.id === MACRO_PERSONA_ID,
         suggestedDisabled: Boolean(
           (macro() ?? props.selected)?.unavailableReason
         ),
         loading: props.loading,
         onModel: (model) => {
-          if (props.selected) props.onSelect(props.selected, model);
+          if (!props.selected) return false;
+          props.onSelect(props.selected, model);
+          return true;
         },
         onSuggestedModel: (model) => {
           const agent = macro() ?? props.selected;
-          if (agent && !agent.unavailableReason) props.onSelect(agent, model);
+          if (!agent || agent.unavailableReason) return false;
+          props.onSelect(agent, model);
+          return true;
         },
         onAgent: (agent) => props.onSelect(agent),
         onConnect: props.onConnect,

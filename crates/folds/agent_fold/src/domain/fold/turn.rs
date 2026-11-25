@@ -260,26 +260,7 @@ impl FoldState {
             return None;
         }
 
-        let new_message = self.turn.as_ref().is_some_and(|turn| turn.agent.is_none());
-        if let Some(turn) = self.turn.as_mut()
-            && turn.can_noop
-            && turn.noop_buffer != "<noop/>"
-        {
-            turn.can_noop = false;
-            let remaining = std::mem::take(&mut turn.noop_buffer);
-            let thought = std::mem::take(&mut turn.pending_thought);
-            if !thought.is_empty() {
-                self.append_thought(thought);
-            }
-            self.append_text(remaining);
-        }
-        self.close_turn(stop, logged_at).map(|changed| {
-            if new_message {
-                Changed::new(changed.message)
-            } else {
-                changed
-            }
-        })
+        self.close_turn(stop, logged_at)
     }
 
     /// End the open turn because its prompt was answered with an error.
@@ -339,18 +320,22 @@ impl FoldState {
         stop: Option<StopReason>,
         logged_at: Option<DateTime<Utc>>,
     ) -> Option<Changed> {
+        // Settling held text can open the agent message, which is still news.
+        let had_message = self.turn.as_ref().is_some_and(|turn| turn.agent.is_some());
+        self.settle_held_noop();
         let Some(stop) = stop else {
             // Nothing to record, so nothing to mint a message for.
             self.turn = None;
             return None;
         };
         let turn = self.turn.take()?;
-        if turn.notification && turn.can_noop && turn.noop_buffer == "<noop/>" {
+        if turn.answered_with_noop() {
             self.metadata.noop_turn = Some(turn.id.0);
             return None;
         }
         let (message, changed) = match turn.agent {
-            Some(message) => (message, Changed::updated(message)),
+            Some(message) if had_message => (message, Changed::updated(message)),
+            Some(message) => (message, Changed::new(message)),
             None => self.mint_agent_message(turn.id),
         };
         self.messages[message].stop = Some(stop);

@@ -94,6 +94,45 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
+  it('starts a record deletion in the context it was called in', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_delete_records'
+        ? { revision: '2', affectedOps: [] }
+        : null
+    );
+    let inCaller = false;
+    const openedInCaller: boolean[] = [];
+    const span = Telemetry.span.bind(Telemetry);
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      ...args: Parameters<typeof span>
+    ) => {
+      openedInCaller.push(inCaller);
+      return span(...args);
+    }) as typeof Telemetry.span);
+    vi.spyOn(Telemetry, 'captureContext').mockReturnValue({
+      run: (work) => {
+        inCaller = true;
+        try {
+          return work();
+        } finally {
+          inCaller = false;
+        }
+      },
+    });
+
+    await host.deleteRecords(['GraphqlSoupDocument:1'], 'generation-1');
+
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_delete_records', {
+      keys: ['GraphqlSoupDocument:1'],
+      generation: 'generation-1',
+      traceparent: undefined,
+    });
+    expect(openedInCaller).toEqual([true]);
+    host.dispose();
+  });
+
   it('coalesces identical pending reads, but preserves operation registration and write barriers', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.readQuery({ query: '{ warm }' });
@@ -346,7 +385,10 @@ describe('createTauriCacheHost', () => {
     notify({ payload: { revision: INITIAL_CACHE_REVISION } });
     expect(changed).not.toHaveBeenCalled();
     notify({ payload: { revision: INITIAL_CACHE_REVISION, reset: true } });
-    expect(changed).toHaveBeenCalledExactlyOnceWith({ storage: 'reset' });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({
+      storage: 'reset',
+      queue: 'reset',
+    });
     host.dispose();
   });
 

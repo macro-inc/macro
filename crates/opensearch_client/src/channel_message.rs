@@ -19,7 +19,15 @@ impl OpensearchClient {
 
 impl OpensearchClient {
     /// Upserts a channel message into the opensearch index
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(
+        skip_all,
+        err,
+        fields(
+            channel_id = %upsert_channel_message_args.channel_id,
+            message_id = %upsert_channel_message_args.message_id,
+            index_override = ?index_override,
+        )
+    )]
     pub async fn upsert_channel_message(
         &self,
         upsert_channel_message_args: &UpsertChannelMessageArgs,
