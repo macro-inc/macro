@@ -441,7 +441,8 @@ saved-date semantics do not change.
 Behind `enable-time-tracking`. A task's property row has a Time pill
 (`InlineTaskTimeLogged` in `Notebook.tsx`, from `features/time-tracking`)
 showing Time logged, the sum of the task's entries, or "Time" when nothing is
-logged. On desktop it opens a popover: a length input that reads `1h 30m`,
+logged. It wears the row's other chips' look (`secondary`, `xs`, a
+`size-3 touch:size-4` icon). On desktop it opens a popover: a length input that reads `1h 30m`,
 `1.5h`, `90m`, `1:30` or a bare number of hours and shows what it understood
 (Enter logs it for today), one-tap 15m/30m/1h/2h, Custom entry (length, day,
 optional start and end, note) and the entries by day with day totals. An
@@ -564,8 +565,11 @@ change. Editing them in place would need each task's permission, which the
 server checks one task at a time, on reports of up to thousands of tasks.
 They come from the summary's task (`TimeSummaryTaskFields`), the cached task
 document the Tasks list also reads, so a status or priority changed
-elsewhere shows on an open report. A task put on the sheet with Add task
-shows them once it has time logged.
+elsewhere shows on an open report. A task put on the sheet with Add task is
+not in the summary until it has time, so its row reads that one task in the
+same shape (`ReportTask`, through the same cached document) and shows them at
+once, their place held while a task the cache lacks is read; when its first
+time is logged the summary takes over and the row stays as it was.
 
 ## Import from Linear
 

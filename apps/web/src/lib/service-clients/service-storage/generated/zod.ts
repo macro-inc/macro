@@ -18515,7 +18515,13 @@ export const previewCrmRecordsResponse = zod
       .array(
         zod
           .object({
-            id: zod.uuid().describe('The company.'),
+            id: zod.uuid().describe('The requested company id.'),
+            mergedInto: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The company the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a company that was not merged.'
+              ),
             name: zod
               .string()
               .nullish()

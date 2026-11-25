@@ -461,6 +461,40 @@ describe('Quick Access local projection', () => {
     expect(list.isSearching()).toBe(false);
   });
 
+  it('asks again for a first answer that ended before any owner was ready', async () => {
+    const timedOut = new Error('cache search timeout');
+    let ownerReady = () => {};
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(timedOut)
+      .mockResolvedValueOnce(page(['seamus']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search,
+          onOwnerReady: (listener) => {
+            ownerReady = listener;
+            return () => {};
+          },
+        },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.error()).toBe(timedOut));
+
+    ownerReady();
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }])
+    );
+    ownerReady();
+    await Promise.resolve();
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
   it('stops reporting a refused search as pending after the limit, and still replays it when the engine arrives', async () => {
     vi.useFakeTimers();
     const refused = Object.assign(new Error('cache reads unavailable'), {

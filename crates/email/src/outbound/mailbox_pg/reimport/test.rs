@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 const REVISION: i16 = 1;
@@ -140,6 +141,7 @@ async fn inbox_and_sent_restart_alone_and_the_rest_waits_for_their_import(db: Pg
             position: StreamPosition::Checkpoint(StreamToken::new("fresh-delta".into())),
             reader_revision: REVISION,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();

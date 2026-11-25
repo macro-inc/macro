@@ -138,7 +138,12 @@ const runSolver = (needs: Needs, runId: string): Promise<SolveCaptchaResult> =>
       const attempts = recorded(await readOrMissing(record));
       span.set('captcha.attempts', attempts.length);
       const outcome = bestOutcome(attempts);
-      return outcome ?? { outcome: 'solverFailed', exitCode: ran.code };
+      if (outcome !== undefined) return outcome;
+      // An owner who took the screen mid-run holds the run's brain calls, so
+      // a run cut short then is theirs, not a solver failure.
+      if ((await needs.captcha.driving.driver()).kind === 'owner')
+        return { outcome: 'ownerDriving' };
+      return { outcome: 'solverFailed', exitCode: ran.code };
     } finally {
       await rm(home, { recursive: true, force: true });
     }

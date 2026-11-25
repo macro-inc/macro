@@ -1847,6 +1847,11 @@ export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
  */
 export type RoutineRunFinishedMetadata = {
     /**
+     * The apps the routine needs connected, by name, when the run failed
+     * because one of them is not. Empty for every other run.
+     */
+    appsToConnect?: Array<string>;
+    /**
      * How the run ended.
      */
     outcome: RoutineRunOutcome;

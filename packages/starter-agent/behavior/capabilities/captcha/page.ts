@@ -237,16 +237,23 @@ export const injectToken = (
       if (callback === null)
         return { filled, callback: 'none' as const, executeAnswered };
       // `data-callback` names a global function, possibly dotted (`app.onSolved`).
+      // It is called on the object that holds it, so a method keeps its `this`.
+      let parent: unknown;
       let target: unknown = scope;
-      for (const part of callback.split('.'))
+      for (const part of callback.split('.')) {
+        parent = target;
         target =
           target === null || target === undefined
             ? undefined
             : (target as Record<string, unknown>)[part];
+      }
       if (typeof target !== 'function')
         return { filled, callback: 'missing' as const, executeAnswered };
       try {
-        (target as (token: string) => unknown)(token);
+        (target as (this: unknown, token: string) => unknown).call(
+          parent,
+          token
+        );
         return { filled, callback: 'ran' as const, executeAnswered };
       } catch {
         return { filled, callback: 'threw' as const, executeAnswered };

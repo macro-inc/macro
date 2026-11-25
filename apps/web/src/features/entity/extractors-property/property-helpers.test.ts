@@ -44,6 +44,35 @@ describe('soupPropertyToProperty stage labels', () => {
   });
 });
 
+describe('soupPropertyToProperty tags', () => {
+  const tags = (dataType: 'TAG' | 'SELECT_STRING'): SoupProperty => {
+    const base = stageSoupProperty('launch');
+    return {
+      ...base,
+      definition: {
+        ...base.definition,
+        id: 'labels',
+        data_type: dataType,
+        is_system: false,
+      },
+    };
+  };
+
+  it('reads a tag set as a select marked as tags', () => {
+    expect(soupPropertyToProperty(tags('TAG'))).toMatchObject({
+      valueType: 'SELECT_STRING',
+      isTag: true,
+      value: ['launch'],
+    });
+  });
+
+  it('leaves other selects unmarked', () => {
+    expect(soupPropertyToProperty(tags('SELECT_STRING'))).not.toHaveProperty(
+      'isTag'
+    );
+  });
+});
+
 describe('withTaskProject', () => {
   const status = {
     propertyId: 'status-row',

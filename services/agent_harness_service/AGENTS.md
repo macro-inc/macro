@@ -439,7 +439,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `routine_run_finished` analytics and, for every run but one its owner
   stopped, an inbox-only `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`), which names a
-  sub-routine's run "<name> · from <parent>". Every instance listens for run
+  sub-routine's run "<name> · from <parent>" and, for a run refused for a
+  disconnected app, the apps to reconnect (`appsToConnect`). Every instance listens for run
   stops (`listen_for_stops`) and shares one `RunStops` between the executor
   and the service. `with_run_sessions` hands the
   scheduler the code-mode invocation lookup so a routine an Ask AI step's
@@ -732,3 +733,11 @@ attachment answers typed 503 before any command. macrod ingress keeps its
 existing authorization.
 Authentication checks the owning hosted host heartbeat per request, so its
 attachment observation can briefly differ from this service's operator presence.
+
+Import review actions reconcile external dependency defaults through the import
+service before saving. Record offered exclusions only after the review save
+succeeds. At approval, call `approve_workspace_dependencies` with the saved
+draft; it replaces review-scoped inclusion facts before starting the write.
+Do not compute or pass a second dependency whitelist: the domain reads the
+current review’s persisted consent on start and resume. The import domain owns consent, retry and source-stop policy;
+the host never queries import tables directly.

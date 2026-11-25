@@ -471,6 +471,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   a program with apps needs one. The owner must have each connected:
   `TargetValidation` checks on save and `RoutineSessions::prepare` checks
   again on every run, then adds them to an agent limited to selected apps.
+  A run that fails that check (`AppNotConnected`) reports the routine's app
+  names as `FinishedRoutineRun::apps_to_connect`, so its notification says
+  which to reconnect.
   The harness counts the grants connector dispatch would use: enabled rows,
   a Connect grant only where Macro Connect is configured, and for an owner
   on Connect alone only their Connect grants. An update that omits the key is rejected
