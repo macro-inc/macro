@@ -286,6 +286,12 @@ export function SearchbarInput(
         node.getTextContent().slice(0, end).endsWith(typed)
       ) {
         selection.setTextNodeRange(node, end - typed.length, node, end);
+      } else {
+        // Across text nodes, it is deleted one cluster at a time.
+        const clusters = [...new Intl.Segmenter().segment(typed)].length;
+        for (let index = 0; index < clusters; index++) {
+          selection.deleteCharacter(true);
+        }
       }
       selection.insertText(row.insert);
     });

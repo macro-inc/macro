@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isUnfinishedSearchOperator,
   readSearchOperators,
+  searchBindingsIn,
   searchOperatorIndexes,
   searchOperatorSpans,
   searchQueryParts,
@@ -145,6 +146,14 @@ describe('searchQueryParts', () => {
     expect(alone.serviceText).toBe('');
     expect(alone.read.operators).toBe(1);
 
+    // An `OR` left beside a bound token isn't a word to the service.
+    expect(searchQueryParts('budget tag:🔥 OR', bindings).serviceText).toBe(
+      'budget'
+    );
+    expect(searchQueryParts('budget OR tag:🔥', bindings).serviceText).toBe(
+      'budget'
+    );
+
     // Edited, a token is read as typed.
     expect(searchQueryParts('in:#"Ana Lim" budget', bindings).serviceText).toBe(
       'in:#"Ana Lim" budget'
@@ -161,6 +170,39 @@ describe('searchQueryParts', () => {
     expect(searchQueryParts('type:task subject:roadmap').nameText).toBe(
       'subject:roadmap'
     );
+  });
+
+  it('reads two bindings of one token as the ids of both', () => {
+    const parts = searchQueryParts('tag:work', [
+      {
+        token: 'tag:work',
+        tags: [{ propertyId: 'set-1', optionId: 'work-1' }],
+      },
+      {
+        token: 'tag:work',
+        tags: [{ propertyId: 'set-2', optionId: 'work-2' }],
+      },
+    ]);
+    expect(parts.read.groups[0]?.values).toEqual([
+      {
+        kind: 'tags',
+        tags: [
+          { propertyId: 'set-1', optionId: 'work-1' },
+          { propertyId: 'set-2', optionId: 'work-2' },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps only the bindings whose token is still in the text', () => {
+    const bindings = [
+      { token: 'tag:🔥', tags: [{ propertyId: 'tags-1', optionId: 'fire-1' }] },
+      { token: 'in:#"Ana Lima"', channelIds: ['dm-ana'] },
+    ];
+    expect(searchBindingsIn('in:#"Ana Lima" budget', bindings)).toEqual([
+      bindings[1],
+    ]);
+    expect(searchBindingsIn('', bindings)).toEqual([]);
   });
 
   it('keeps email operators for the service, which reads them alone', () => {

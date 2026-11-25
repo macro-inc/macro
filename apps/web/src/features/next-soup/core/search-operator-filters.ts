@@ -64,6 +64,14 @@ export type SearchOperatorLookup = {
   channels: (name: string) => string[];
 };
 
+/** A lookup no name reaches, for operators that carry their own ids. */
+export const NO_SEARCH_OPERATOR_NAMES: SearchOperatorLookup = {
+  userId: '',
+  tags: () => [],
+  inboxes: () => [],
+  channels: () => [],
+};
+
 export type SearchOperatorFilters = {
   state: SearchFiltersState;
   /** The types left to search, or undefined when the operators keep all. */

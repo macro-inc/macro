@@ -5,6 +5,7 @@ import {
 } from '@app/constants/list-views';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
+  NO_SEARCH_OPERATOR_NAMES,
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
@@ -13,6 +14,7 @@ import {
 } from '@app/features/next-soup/core/search-operator-filters';
 import {
   type SearchOperatorBinding,
+  searchBindingsIn,
   searchQueryParts,
 } from '@app/features/next-soup/core/search-operators';
 import { SEARCH_INDEX_SEEDS } from '@app/features/next-soup/core/search-query';
@@ -855,6 +857,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const [searchBindings, setSearchBindings] = useEntryState<
     SearchOperatorBinding[]
   >('search.bindings', { default: [] });
+  // A token edited or removed lets go of its ids for good.
+  createEffect(
+    on(searchText, (text) => {
+      const kept = searchBindingsIn(text, searchBindings());
+      if (kept.length !== searchBindings().length) setSearchBindings(kept);
+    })
+  );
   const searchParts = createMemo(() =>
     activeListView() === 'search'
       ? searchQueryParts(searchText(), searchBindings())
@@ -878,9 +887,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   // as filters by id, which it joins with the operators it reads.
   const boundFilters = createMemo(() => {
     const parts = searchParts();
+    if (!parts || parts.bound.groups.length === 0) return undefined;
+    // Bound values are ids; only names typed beside them need the lookup.
     const lookup = operatorLookup();
-    if (!parts || parts.bound.groups.length === 0 || !lookup) return undefined;
-    return searchOperatorFilters(parts.bound, lookup());
+    return searchOperatorFilters(
+      parts.bound,
+      lookup ? lookup() : NO_SEARCH_OPERATOR_NAMES
+    );
   });
 
   const soupBody = createMemo(() => {

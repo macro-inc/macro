@@ -113,14 +113,56 @@ export const isBoundSearchOperatorGroup = (group: SearchOperatorGroup) =>
       value.kind === 'inboxes'
   );
 
-/** The term each binding's token reads as, as the service splits it. */
-const boundTerms = (bindings: readonly SearchOperatorBinding[]) =>
-  new Map(
-    bindings.map((binding) => [
-      splitSearchTerms(binding.token)[0] ?? binding.token,
-      binding,
-    ])
-  );
+const bindingTerm = (binding: SearchOperatorBinding) =>
+  splitSearchTerms(binding.token)[0] ?? binding.token;
+
+/**
+ * The term each binding's token reads as, as the service splits it. Two
+ * bindings of one token, such as two tags of the same name from different
+ * tag sets, stand for the ids of both.
+ */
+function boundTerms(
+  bindings: readonly SearchOperatorBinding[]
+): Map<string, SearchOperatorBinding> {
+  const bound = new Map<string, SearchOperatorBinding>();
+  for (const binding of bindings) {
+    const term = bindingTerm(binding);
+    const known = bound.get(term);
+    bound.set(term, known ? mergedBindings(known, binding) : binding);
+  }
+  return bound;
+}
+
+function mergedBindings(
+  known: SearchOperatorBinding,
+  added: SearchOperatorBinding
+): SearchOperatorBinding {
+  if ('tags' in known && 'tags' in added)
+    return { token: known.token, tags: [...known.tags, ...added.tags] };
+  if ('channelIds' in known && 'channelIds' in added)
+    return {
+      token: known.token,
+      channelIds: [...known.channelIds, ...added.channelIds],
+    };
+  if ('inboxIds' in known && 'inboxIds' in added)
+    return {
+      token: known.token,
+      inboxIds: [...known.inboxIds, ...added.inboxIds],
+    };
+  return added;
+}
+
+/**
+ * The bindings whose token is still in `text`: one the person edited or
+ * removed no longer applies, even if they type the same token again later.
+ */
+export function searchBindingsIn(
+  text: string,
+  bindings: readonly SearchOperatorBinding[]
+): SearchOperatorBinding[] {
+  const terms = new Set(splitSearchTerms(text));
+  return bindings.filter((binding) => terms.has(bindingTerm(binding)));
+}
 
 const boundOperator = (
   binding: SearchOperatorBinding
@@ -629,6 +671,14 @@ export function searchQueryParts(
       .flat()
       .map((index) => readable[index])
   );
+  // An `OR` beside a bound token, which the reader drops, would reach the
+  // service as a word once the token is left out of its text.
+  readable.forEach((token, index) => {
+    const besideBound =
+      boundTokens.has(readable[index - 1]) ||
+      boundTokens.has(readable[index + 1]);
+    if (token.term === OR && besideBound) boundTokens.add(token);
+  });
   const boundGroups = read.groups.filter(isBoundSearchOperatorGroup);
   // Mail's operators are conditions only where email is searched.
   const words = searchesEmail

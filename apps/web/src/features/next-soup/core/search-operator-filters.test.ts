@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
 import {
+  NO_SEARCH_OPERATOR_NAMES,
   type SearchOperatorLookup,
   searchFiltersOperatorText,
   searchOperatorFilters,
@@ -10,6 +11,7 @@ import {
 import {
   readSearchOperators,
   type SearchOperatorBinding,
+  searchQueryParts,
   splitSearchTerms,
 } from './search-operators';
 
@@ -102,6 +104,24 @@ describe('searchOperatorFilters', () => {
       'fire-2',
     ]);
     expect(bound.state.channels.in).toEqual(['dm-ana']);
+
+    // Bound ids reach the query without a lookup for them.
+    const boundQuery = searchOperatorQuery(
+      searchOperatorFilters(
+        searchQueryParts('in:#"Ana Lima" tag:🔥 budget', [
+          {
+            token: 'tag:🔥',
+            tags: [{ propertyId: 'tags-2', optionId: 'fire-2' }],
+          },
+          { token: 'in:#"Ana Lima"', channelIds: ['dm-ana'] },
+        ]).bound,
+        NO_SEARCH_OPERATOR_NAMES
+      )
+    );
+    expect(boundQuery.include?.tagFilters).toEqual([
+      { propertyId: 'tags-2', type: 'select', value: 'fire-2' },
+    ]);
+    expect(boundQuery.include?.channelId).toEqual(['dm-ana']);
 
     const calendar = searchOperatorQuery(compile('type:calendar tag:finance'));
     expect(calendar.include?.tagFilters).toEqual([
