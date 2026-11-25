@@ -7,6 +7,13 @@ import {
   type SearchFiltersState,
   searchNeedsKeywords,
 } from '../core/search-filters';
+import {
+  type SearchOperatorLookup,
+  searchOperatorFilters,
+  searchOperatorQuery,
+  withSearchOperatorQuery,
+} from '../core/search-operator-filters';
+import { searchQueryParts } from '../core/search-operators';
 import { compileSearchQuery } from '../core/search-query';
 import { compileToAst, queryStateFrom } from '../filters/filter-store';
 import { createSearchResultFilter } from '../filters/search-results';
@@ -17,24 +24,43 @@ export function createEmbeddedSearchSource(options: {
   text: Accessor<string>;
   filters: Accessor<SearchFiltersState>;
   enabled: Accessor<boolean>;
+  /** What typed operator names reach; operators alone list with it. */
+  operatorLookup: Accessor<SearchOperatorLookup>;
 }) {
+  // Typed operators beside a word go to the search service, which reads
+  // them; operators alone, which it refuses, browse with the filters they set.
+  const parts = createMemo(() => searchQueryParts(options.text()));
+  const operatorFilters = createMemo(() =>
+    parts().read.operators > 0
+      ? searchOperatorFilters(parts().read, options.operatorLookup())
+      : undefined
+  );
   const needsKeywords = () =>
     searchNeedsKeywords(options.filters(), options.text());
   const enabled = () => options.enabled() && !needsKeywords();
   const query = createMemo(() =>
     queryStateFrom(compileSearchQuery(options.filters()))
   );
+  const browseQuery = createMemo(() => {
+    const operators = operatorFilters();
+    return operators
+      ? withSearchOperatorQuery(query(), searchOperatorQuery(operators))
+      : query();
+  });
   const filtered = () =>
-    options.filters().type !== 'all' || options.filters().tags.length > 0;
+    options.filters().type !== 'all' ||
+    options.filters().tags.length > 0 ||
+    parts().nameText === '';
   const matches = createMemo(() =>
     createSearchResultFilter(options.filters().type, query())
   );
   const entityPool = useOptionalSearchContext()?.entityPool(
-    () => enabled() && !filtered() && Boolean(options.text().trim())
+    () => enabled() && !filtered() && Boolean(parts().nameText.trim())
   );
   const search = createSearchState({
     surface: () => 'universal-input',
-    text: options.text,
+    text: () => parts().serviceText,
+    nameText: () => parts().nameText,
     enabled,
     disableLocalSearch: filtered,
     localPool: () =>
@@ -44,11 +70,11 @@ export function createEmbeddedSearchSource(options: {
       return { ...request, params: { page_size: 25 } };
     },
   });
-  const browsing = () => options.text().trim().length === 0;
+  const browsing = () => parts().serviceText.trim().length === 0;
   const browse = useSoupAstItemsQuery(
     () => ({
       params: { limit: 25, sort_method: 'updated_at' },
-      body: compileToAst(query()),
+      body: compileToAst(browseQuery()),
     }),
     () => ({
       enabled: enabled() && browsing(),
@@ -62,7 +88,9 @@ export function createEmbeddedSearchSource(options: {
         ? []
         : browsing()
           ? queryReadyGate(browse) && !browse.isPlaceholderData
-            ? browse.data.entities.filter(matches())
+            ? operatorFilters()?.matchesNothing
+              ? []
+              : browse.data.entities.filter(matches())
             : []
           : search.data().filter(matches()),
     loading: () =>

@@ -8,6 +8,7 @@ import {
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
+  searchTagOperator,
   withSearchOperatorQuery,
 } from '@app/features/next-soup/core/search-operator-filters';
 import { searchQueryParts } from '@app/features/next-soup/core/search-operators';
@@ -518,7 +519,18 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const tagFilter = createTagFilter(queryFilters);
-  const filterByTag = (optionId: string) => tagFilter.onChange([optionId]);
+  const filterByTag = (optionId: string) => {
+    // The Search view's query holds its filters as typed operators.
+    const label = tagFilter.optionsById().get(optionId)?.label;
+    if (activeListView() === 'search' && label) {
+      const typed = searchText().trim();
+      setSearchText(
+        [typed, searchTagOperator(label)].filter(Boolean).join(' ')
+      );
+      return;
+    }
+    tagFilter.onChange([optionId]);
+  };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const sourceSearchPaused = createMemo(
@@ -922,8 +934,16 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           },
           preferInitialFilters: options.preferInitialFilters,
         });
-        queryFilters.replace(filters.query ?? null);
-        soup.predicates.set(filters.predicates ?? {});
+        // Search holds its filters as typed operators, so only its preset
+        // applies: filters an older entry or session picked would be hidden
+        // from its field.
+        const preset = view === 'search' ? getViewPreset('search') : undefined;
+        queryFilters.replace(
+          preset ? (preset.filters ?? null) : (filters.query ?? null)
+        );
+        soup.predicates.set(
+          preset ? (preset.clientFilters ?? {}) : (filters.predicates ?? {})
+        );
         setSearchText(options.initialSearchText ?? '');
         setEnabled(true);
       });
