@@ -214,8 +214,11 @@ for user and team properties. The dialog reads the built-in definitions
 learns from the same list narrowed by `forEntityType`; `PropertyEditorDialog`
 passes the type the selected entities share, and a draft host supplies it
 through its `PropertiesProvider`. If the list has not loaded and the request
-goes out, the refusal (`isPropertyNameReserved`) shows the same sentence in
-place of the generic create error.
+goes out, the refusal (`isPropertyNameReserved`, a 409 whose reason is
+`RESERVED_NAME`) shows the same sentence in place of the generic create error.
+The server also refuses a name the owner already uses (`NAME_TAKEN`) and
+repeated option values (`OPTION_VALUE_TAKEN`); the dialog then says "A
+property with that name already exists" or "Duplicate values not allowed".
 
 ## Assignee selection
 

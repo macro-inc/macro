@@ -215,6 +215,16 @@ interface CreatePropertyModalProps {
   onUseBuiltIn?: (propertyDefinitionId: string) => void | Promise<void>;
 }
 
+/** What the dialog says when the server refuses a create. */
+function createErrorMessage(error: unknown, name: string): string {
+  if (isPropertyNameReserved(error)) return builtInNameMessage(name);
+  if (isCatalogConflict(error, 'NAME_TAKEN'))
+    return ERROR_MESSAGES.PROPERTY_NAME_TAKEN;
+  if (isCatalogConflict(error, 'OPTION_VALUE_TAKEN'))
+    return ERROR_MESSAGES.VALIDATION_DUPLICATE;
+  return ERROR_MESSAGES.PROPERTY_CREATE;
+}
+
 export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   props
 ) => {
@@ -267,15 +277,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       }
     },
     onError: (error, variables) => {
-      setError(
-        isPropertyNameReserved(error)
-          ? builtInNameMessage(variables.body.display_name)
-          : isCatalogConflict(error, 'NAME_TAKEN')
-            ? ERROR_MESSAGES.PROPERTY_NAME_TAKEN
-            : isCatalogConflict(error, 'OPTION_VALUE_TAKEN')
-              ? ERROR_MESSAGES.VALIDATION_DUPLICATE
-              : ERROR_MESSAGES.PROPERTY_CREATE
-      );
+      setError(createErrorMessage(error, variables.body.display_name));
     },
   });
 

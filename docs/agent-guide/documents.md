@@ -2663,7 +2663,10 @@ the type can't link to CRM records. **Create** still creates the property.
 A name that is exactly a built-in property's (`Contacts`, `Status`, `Owner`, in
 any case) cannot be used: the note says the name belongs to a built-in
 property, **Create** is disabled, and **Use <name>** appears when that property
-applies to the item being edited.
+applies to the item being edited. A name already used by another of your (or
+your team's) properties is refused on **Create** with "A property with that
+name already exists", and repeated option values with "Duplicate values not
+allowed".
 Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
