@@ -14,6 +14,7 @@ export type GraphqlDriveFolder = {
   parentId: string | null;
   userId: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 type GraphqlFoldersQuery = UrqlQueryResult<
@@ -33,6 +34,7 @@ function selectFolders(data: DriveFoldersQuery): GraphqlDriveFolder[] {
       parentId: folder.parentId ?? null,
       userId: folder.ownerId,
       createdAt: folder.createdAt,
+      updatedAt: folder.updatedAt,
     }));
 }
 

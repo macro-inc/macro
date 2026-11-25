@@ -614,6 +614,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
   })
   .fn('getDeletedItems', {
     description: 'Get the list of deleted items',
+    args: schemas.recentlyDeletedQueryParams.shape,
     result: schemas.recentlyDeletedResponse.shape.data.shape,
     throws: withFetchErrors(),
   })

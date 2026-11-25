@@ -2687,9 +2687,13 @@ export const storageServiceClient = {
       ).map((result) => result.data);
     },
   },
-  async getDeletedItems() {
+  async getDeletedItems(params) {
+    const query = new URLSearchParams();
+    if (params.limit !== undefined) query.set('limit', String(params.limit));
+    if (params.cursor) query.set('cursor', params.cursor);
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
     return (
-      await dssFetch<TypedSuccessResponse>('/recents/deleted', {
+      await dssFetch<TypedSuccessResponse>(`/recents/deleted${suffix}`, {
         method: 'GET',
       })
     ).map((result) => result.data);
