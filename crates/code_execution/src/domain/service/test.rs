@@ -454,7 +454,7 @@ fn a_string_outside_an_sdk_union_lists_the_values_it_takes() {
     // A type that isn't a union of strings gets no hint.
     let object = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
-        message: "TS2322 [ERROR]: Type 'string' is not assignable to type 'SearchNamespace'.\n    at main.ts:2:9".into(),
+        message: "TS2322 [ERROR]: Type '\"page\"' is not assignable to type 'SearchNamespace'.\n    at main.ts:2:9".into(),
     }]);
     assert!(!object.message.contains("is one of"), "{}", object.message);
 }

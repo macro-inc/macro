@@ -41,6 +41,8 @@ fn sdk_string_literals_lists_a_string_union_aliases_values() {
         sdk_string_literals("SortDirection").unwrap(),
         vec!["ascending", "descending"]
     );
+    // Generated with double quotes.
+    assert!(sdk_string_literals("RunStatus").is_some());
     assert_eq!(sdk_string_literals("SearchNamespace"), None);
     assert_eq!(sdk_string_literals("NoSuchType"), None);
 }

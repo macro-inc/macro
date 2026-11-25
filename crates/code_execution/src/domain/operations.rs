@@ -146,15 +146,18 @@ pub fn sdk_string_literals(name: &str) -> Option<Vec<&'static str>> {
         .flatten()
 }
 
-/// `'a' | 'b'` as `["a", "b"]`, or `None` when any member isn't a plain string.
+/// `'a' | 'b'` (or `"a" | "b"`) as `["a", "b"]`, or `None` when any member
+/// isn't a plain string.
 fn string_union(union: &'static str) -> Option<Vec<&'static str>> {
     union
         .split(" | ")
         .map(|member| {
-            member
-                .strip_prefix('\'')?
-                .strip_suffix('\'')
-                .filter(|value| !value.contains('\''))
+            ['\'', '"'].into_iter().find_map(|quote| {
+                member
+                    .strip_prefix(quote)?
+                    .strip_suffix(quote)
+                    .filter(|value| !value.contains(['\'', '"']))
+            })
         })
         .collect()
 }
