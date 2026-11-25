@@ -16,6 +16,7 @@ import {
   CalendarMutationError,
   committedEvent,
   createdCalendarEventId,
+  createdCalendarOccurrences,
   executeGraphqlCreate,
   executeGraphqlDelete,
   executeGraphqlInviteGuests,
@@ -876,6 +877,163 @@ describe('executeGraphqlCreate', () => {
       event: { id: 'server-1' },
     });
     expect(isCalendarEventCreating(clientId)).toBe(false);
+  });
+
+  it('queues a create on a calendar the caller holds without reading the calendar list', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-5', title: 'Away' }),
+    });
+    const query = vi.spyOn(client, 'query');
+
+    await executeGraphqlCreate(
+      {
+        title: 'Away',
+        calendarId: 'calendar-2',
+        calendar: {
+          id: 'calendar-2',
+          emailLinkId: 'link-2',
+          emailAddress: 'work@example.com',
+          capabilities: {
+            autoDecline: true,
+            customRecurrence: true,
+            emailReminders: true,
+            removeConference: true,
+            resetRsvp: true,
+            guestPolicy: true,
+          },
+        },
+        outOfOffice: { autoDeclineMode: 'decline_none' },
+        time: {
+          kind: 'timed',
+          startsAt: '2026-11-28T09:00:00Z',
+          endsAt: '2026-11-28T17:00:00Z',
+          timeZone: 'America/New_York',
+        },
+      },
+      client
+    );
+
+    expect(query).not.toHaveBeenCalled();
+    const call = calls[0]!;
+    expect(call.variables.input).not.toHaveProperty('calendar');
+    expect(call.variables.input).not.toHaveProperty('emailLinkId');
+    expect(response(call).event).toMatchObject({
+      calendarId: 'calendar-2',
+      linkId: 'link-2',
+      organizerEmail: 'work@example.com',
+      eventType: 'OUT_OF_OFFICE',
+      viewerCan: expect.objectContaining({ setGuestPolicy: true }),
+    });
+  });
+
+  it('reads the calendar list for a create on a calendar the caller does not hold', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-6' }),
+    });
+    const query = vi.spyOn(client, 'query');
+
+    await executeGraphqlCreate(
+      {
+        title: 'Lunch',
+        calendarId: 'calendar-1',
+        calendar: {
+          id: 'calendar-2',
+          emailLinkId: 'link-2',
+          emailAddress: 'work@example.com',
+          capabilities: {
+            autoDecline: true,
+            customRecurrence: true,
+            emailReminders: true,
+            removeConference: true,
+            resetRsvp: true,
+            guestPolicy: false,
+          },
+        },
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(response(calls[0]!).event).toMatchObject({
+      calendarId: 'calendar-1',
+      linkId: 'link-1',
+    });
+  });
+
+  it('gives the local occurrence no time zone, as the server’s carry none', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-7' }),
+    });
+
+    await executeGraphqlCreate(
+      {
+        title: 'Standup',
+        time: {
+          kind: 'timed',
+          startsAt: '2026-11-28T15:00:00Z',
+          endsAt: '2026-11-28T15:30:00Z',
+          timeZone: 'America/New_York',
+        },
+      },
+      client
+    );
+
+    const optimistic = response(calls[0]!);
+    expect(optimistic.event?.time).toMatchObject({
+      timeZone: 'America/New_York',
+    });
+    expect(optimistic.occurrences[0]?.time).toEqual({
+      __typename: 'GraphqlTimedEventTime',
+      startsAt: '2026-11-28T15:00:00+00:00',
+      endsAt: '2026-11-28T15:30:00+00:00',
+      timeZone: null,
+    });
+  });
+
+  it('keeps the server’s occurrences from the create’s answer for the event it landed as', async () => {
+    const event = graphqlEvent({ id: 'server-8', title: 'Offsite' });
+    const occurrence = graphqlOccurrence({
+      id: 'server-8:2026-11-28',
+      eventId: 'server-8',
+      occurrenceKey: '2026-11-28',
+      event,
+    });
+    const landed = vi.fn();
+    const stop = onCalendarEventCreated(landed);
+    const { calls, client } = fakeClient('committed', {
+      event,
+      occurrences: [occurrence],
+    });
+
+    await executeGraphqlCreate(
+      {
+        title: 'Offsite',
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    expect(landed).toHaveBeenCalledWith(clientId, 'server-8');
+    expect(createdCalendarOccurrences(clientId)).toEqual([
+      expect.objectContaining({
+        event: expect.objectContaining({ id: 'server-8', title: 'Offsite' }),
+        occurrence: expect.objectContaining({
+          eventId: 'server-8',
+          occurrenceKey: '2026-11-28',
+        }),
+      }),
+    ]);
+    stop();
   });
 
   it('leaves a create its own call still answers to that call when the alias is not readable yet', async () => {
