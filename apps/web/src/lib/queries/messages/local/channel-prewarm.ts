@@ -128,6 +128,15 @@ export interface ChannelPrewarmOutcome {
   unavailable: boolean;
 }
 
+/**
+ * A write the cache engine has been sent. Nothing recalls it, so a pass that is
+ * replaced ends only once it has: the next pass must not queue another behind it.
+ */
+const engineWrite = <T>(run: () => Promise<T>): Effect.Effect<T, unknown> =>
+  Effect.uninterruptible(
+    Effect.tryPromise({ try: run, catch: (error) => error })
+  );
+
 type ChannelResult = 'fetched' | 'held' | 'failed' | 'unsupported';
 
 /**
@@ -141,45 +150,46 @@ const warmChannel = (
   parent: Span,
   channelId: string
 ): Effect.Effect<ChannelResult> =>
-  Effect.tryPromise({
-    try: async (signal) => {
-      const epoch = deps.runtime.epoch();
-      const loaded = await parent.run(() =>
-        loadChannelPage(
-          {
-            host: deps.host,
-            touches: deps.touches,
-            fetchPage: deps.fetchPage,
-            now: deps.now,
-          },
-          { channelId, limit: PREWARM_PAGE_SIZE },
-          signal
-        )
-      );
-      if (loaded === 'unsupported') return 'unsupported' as const;
-      // Not stored: the next pass reads it again, under the new session.
-      if ((await loaded.stored) === 'session-changed') return 'failed' as const;
-      if (loaded.source === 'server') {
-        deps.runtime.noteServerRead(channelId, {
-          readSeq: loaded.readSeq,
-          epoch,
-        });
-        return 'fetched' as const;
-      }
-      // After awaits: the catch-up joins the pass's trace again. One a new
-      // connection ended is asked once more: a reconnect catches up only the
-      // channels on screen. Ended twice, the next pass warms it.
-      for (let ask = 0; ask < 2; ask += 1) {
-        // A replaced or stopped pass asks nothing more.
-        if (signal.aborted) return 'failed' as const;
-        const caughtUp = await parent.run(() =>
-          deps.runtime.ensureCurrent(channelId)
-        );
-        if (caughtUp !== 'skipped') return 'held' as const;
-      }
-      return 'failed' as const;
-    },
-    catch: (error) => error,
+  Effect.gen(function* () {
+    const epoch = deps.runtime.epoch();
+    const loaded = yield* Effect.tryPromise({
+      try: (signal) =>
+        parent.run(() =>
+          loadChannelPage(
+            {
+              host: deps.host,
+              touches: deps.touches,
+              fetchPage: deps.fetchPage,
+              now: deps.now,
+            },
+            { channelId, limit: PREWARM_PAGE_SIZE },
+            signal
+          )
+        ),
+      catch: (error) => error,
+    });
+    if (loaded === 'unsupported') return 'unsupported' as const;
+    const stored = yield* engineWrite(() => loaded.stored);
+    // Not stored: the next pass reads it again, under the new session.
+    if (stored === 'session-changed') return 'failed' as const;
+    if (loaded.source === 'server') {
+      deps.runtime.noteServerRead(channelId, {
+        readSeq: loaded.readSeq,
+        epoch,
+      });
+      return 'fetched' as const;
+    }
+    // After awaits: the catch-up joins the pass's trace again. One a new
+    // connection ended is asked once more: a reconnect catches up only the
+    // channels on screen. Ended twice, the next pass warms it.
+    for (let ask = 0; ask < 2; ask += 1) {
+      const caughtUp = yield* Effect.tryPromise({
+        try: () => parent.run(() => deps.runtime.ensureCurrent(channelId)),
+        catch: (error) => error,
+      });
+      if (caughtUp !== 'skipped') return 'held' as const;
+    }
+    return 'failed' as const;
   }).pipe(
     Effect.tapError((error) =>
       Effect.sync(() => Telemetry.error(error, { surface: 'channel-prewarm' }))
@@ -257,14 +267,14 @@ export const evictIdleChannels = (
     while (more && passes < MAX_EVICTION_PASSES) {
       yield* Effect.sleep(deps.paceMs ?? PREWARM_PACE_MS);
       yield* deps.idle;
-      const result = yield* Effect.tryPromise({
-        try: () =>
+      const result = yield* engineWrite(() =>
+        span.run(() =>
           host.channelTimelineEvict({
             touchedBeforeMs,
             maxChannels: MAX_EVICTED_CHANNELS,
-          }),
-        catch: (error) => error,
-      });
+          })
+        )
+      );
       passes += 1;
       more = result.kind !== 'unsupported' && result.hasMore;
       if (result.kind !== 'unsupported') evicted += result.channelIds.length;
@@ -291,22 +301,22 @@ export interface ChannelPrewarm {
 
 /**
  * Runs passes on demand, one at a time, each in its own fiber: a new request
- * interrupts the pass in flight, which stops at its next step, and disposing
- * interrupts it too, as when this tab stops leading or the host goes.
+ * interrupts the pass in flight and starts once that one has stopped, which a
+ * write it already sent the engine holds back. Disposing interrupts it too, as
+ * when this tab stops leading or the host goes.
  */
 export function createChannelPrewarm(deps: ChannelPrewarmDeps): ChannelPrewarm {
   let fiber: Fiber.Fiber<unknown, unknown> | undefined;
   let disposed = false;
-  const interrupt = () => {
-    if (fiber) Effect.runFork(Fiber.interrupt(fiber));
-    fiber = undefined;
-  };
+  // Not interrupted by the next pass in turn, which waits for this wait.
+  const stopped = (pass: typeof fiber): Effect.Effect<void> =>
+    pass ? Effect.uninterruptible(Fiber.interrupt(pass)) : Effect.void;
   return {
     run(delayMs = 0) {
       if (disposed) return;
-      interrupt();
       fiber = Effect.runFork(
-        Effect.sleep(delayMs).pipe(
+        stopped(fiber).pipe(
+          Effect.andThen(Effect.sleep(delayMs)),
           Effect.andThen(runChannelPrewarmPass(deps)),
           Effect.catchCause((cause) =>
             Effect.sync(() => {
@@ -320,7 +330,8 @@ export function createChannelPrewarm(deps: ChannelPrewarmDeps): ChannelPrewarm {
     },
     dispose() {
       disposed = true;
-      interrupt();
+      Effect.runFork(stopped(fiber));
+      fiber = undefined;
     },
   };
 }
@@ -355,13 +366,19 @@ export function createUserQuiet(
     });
     return Effect.sync(() => cancelIdleCallback(handle));
   });
-  const quiet: Effect.Effect<void> = Effect.suspend(() => {
-    const quietFor = Date.now() - lastInputAt;
-    if (quietFor >= quietMs) return Effect.void;
-    return Effect.sleep(quietMs - quietFor).pipe(Effect.andThen(quiet));
+  const quietFor = () => Date.now() - lastInputAt;
+  const idle: Effect.Effect<void> = Effect.suspend(() => {
+    if (quietFor() < quietMs) {
+      return Effect.andThen(Effect.sleep(quietMs - quietFor()), idle);
+    }
+    return Effect.andThen(
+      browserIdle,
+      // The person may be back by the time the browser is idle.
+      Effect.suspend(() => (quietFor() < quietMs ? idle : Effect.void))
+    );
   });
   return {
-    idle: Effect.andThen(quiet, browserIdle),
+    idle,
     dispose() {
       for (const event of INPUT_EVENTS) {
         target.removeEventListener(event, noteInput, { capture: true });

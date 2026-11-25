@@ -15,12 +15,21 @@ import {
   runChannelPrewarmPass,
 } from '../channel-prewarm';
 
+const trace = vi.hoisted(() => ({ inSpan: false }));
+
 vi.mock('@macro-inc/observability', async (importOriginal) => {
   const span = {
     setAttr: vi.fn(),
     error: vi.fn(),
     end: vi.fn(),
-    run: <T>(operation: () => T) => operation(),
+    run: <T>(operation: () => T) => {
+      trace.inSpan = true;
+      try {
+        return operation();
+      } finally {
+        trace.inSpan = false;
+      }
+    },
   };
   return {
     ...(await importOriginal<typeof import('@macro-inc/observability')>()),
@@ -197,6 +206,7 @@ describe('evictIdleChannels', () => {
       left -= 1;
       return {
         kind: 'evicted' as const,
+        revision: 1 as never,
         changed: [],
         channelIds: [`c${left}`],
         hasMore: left > 0,
@@ -255,6 +265,26 @@ describe('evictIdleChannels', () => {
       held[passes]?.();
     }
     expect(await done).toBe(3);
+  });
+
+  it('asks within its span, after the awaits too', async () => {
+    const inSpan: boolean[] = [];
+    const pass = evictsOneAtATime(2);
+    await Effect.runPromise(
+      evictIdleChannels({
+        host: {
+          channelTimelineEvict: () => {
+            inSpan.push(trace.inSpan);
+            return pass();
+          },
+        },
+        idle: Effect.void,
+        now: () => 0,
+        paceMs: 0,
+      })
+    );
+
+    expect(inSpan).toEqual([true, true]);
   });
 
   it('pauses before each pass, so a write that waits goes first', async () => {
@@ -333,6 +363,68 @@ describe('createChannelPrewarm', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(signals).toHaveLength(2);
   });
+
+  it('starts no write of the engine while one of a pass it replaced runs', async () => {
+    load.mockResolvedValue(page('device'));
+    const answers: (() => void)[] = [];
+    const evict = vi.fn(
+      () =>
+        new Promise<ChannelTimelineEvictCacheResult>((resolve) => {
+          answers.push(() =>
+            resolve({
+              kind: 'evicted',
+              revision: 1 as never,
+              changed: [],
+              channelIds: ['old'],
+              hasMore: false,
+            })
+          );
+        })
+    );
+    const lists = vi.fn(async () => ['a']);
+    const prewarm = createChannelPrewarm(
+      deps([], {
+        host: { channelTimelineEvict: evict } as never,
+        listChannels: lists,
+      }).deps
+    );
+
+    prewarm.run();
+    await vi.waitFor(() => expect(evict).toHaveBeenCalledTimes(1));
+    // Twice: the round in the middle waits too, and is itself replaced.
+    prewarm.run();
+    prewarm.run();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(evict).toHaveBeenCalledTimes(1);
+    expect(lists).toHaveBeenCalledTimes(1);
+
+    answers[0]?.();
+    await vi.waitFor(() => expect(evict).toHaveBeenCalledTimes(2));
+    expect(lists).toHaveBeenCalledTimes(2);
+    prewarm.dispose();
+  });
+
+  it('waits for a page a replaced pass is storing', async () => {
+    let stored = (_: 'held') => {};
+    load.mockResolvedValueOnce({
+      ...page('server'),
+      stored: new Promise((resolve) => {
+        stored = resolve;
+      }),
+    });
+    load.mockResolvedValue(page('device'));
+    const prewarm = createChannelPrewarm(deps(['a']).deps);
+
+    prewarm.run();
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    prewarm.run();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(load).toHaveBeenCalledTimes(1);
+
+    stored('held');
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    prewarm.dispose();
+  });
 });
 
 describe('createUserQuiet', () => {
@@ -346,6 +438,41 @@ describe('createUserQuiet', () => {
 
     expect(performance.now() - start).toBeGreaterThanOrEqual(50);
     quiet.dispose();
+  });
+
+  it('holds work again when the person came back while the browser was busy', async () => {
+    const callbacks: (() => void)[] = [];
+    vi.stubGlobal('requestIdleCallback', (callback: () => void) =>
+      callbacks.push(callback)
+    );
+    vi.stubGlobal('cancelIdleCallback', () => {});
+    try {
+      const target = new EventTarget();
+      const quiet = createUserQuiet(target as never, 60);
+      let through = false;
+      const idle = Effect.runPromise(
+        Effect.andThen(
+          quiet.idle,
+          Effect.sync(() => {
+            through = true;
+          })
+        )
+      );
+      await vi.waitFor(() => expect(callbacks).toHaveLength(1));
+
+      target.dispatchEvent(new Event('keydown'));
+      callbacks[0]?.();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(through).toBe(false);
+
+      await vi.waitFor(() => expect(callbacks).toHaveLength(2));
+      callbacks[1]?.();
+      await idle;
+      expect(through).toBe(true);
+      quiet.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('lets work through at once when the person is away', async () => {
