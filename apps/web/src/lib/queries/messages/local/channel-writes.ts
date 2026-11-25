@@ -12,6 +12,7 @@ import type { CacheGenerationChange } from '@graphql-cache/host/types';
 import type { CacheHost } from '@graphql-cache/index';
 import {
   isAdmittedEnqueueUncertainError,
+  isWriteNotAdmittedError,
   LOCAL_COMMIT_FAILED,
   type MutationSettlement,
 } from '@graphql-cache/protocol';
@@ -69,8 +70,6 @@ const RETIRED_ANSWER_BUDGET_MS = 10_000;
  * committed before it could not read the answer back.
  */
 const SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE';
-/** The cache's code for a write it dropped before any queue got it. */
-const WRITE_NOT_ADMITTED = 'write-not-admitted';
 /** Waits before asking the server again whether it has a send. */
 const SERVER_LOOKUP_RETRIES_MS = [500, 1_000];
 /**
@@ -338,9 +337,10 @@ const unknownDelivery = () =>
 
 const cacheRetired = () => refusal('CACHE_RETIRED', 'device cache was retired');
 
-/** Whether the queue refused a write, which then goes nowhere. */
-const notQueued = (result: OperationResult<unknown, AnyVariables>) =>
-  result.error?.networkError instanceof MutationNotQueuedError;
+/** Whether a write never reached the queue, and so goes nowhere. */
+const notQueued = (error: CombinedError | undefined) =>
+  error?.networkError instanceof MutationNotQueuedError ||
+  isWriteNotAdmittedError(error?.networkError);
 
 /** What became of a write nothing more will be heard of. */
 const unanswered = (write: { operation: string }) =>
@@ -352,21 +352,15 @@ const unanswered = (write: { operation: string }) =>
  * back what it had committed.
  */
 function mayHaveArrived(error: CombinedError): boolean {
-  if (error.networkError) {
-    if (error.networkError instanceof MutationNotQueuedError) return false;
-    return !(
-      'errorCode' in error.networkError &&
-      error.networkError.errorCode === WRITE_NOT_ADMITTED
-    );
-  }
+  if (notQueued(error)) return false;
+  if (error.networkError) return true;
   return error.graphQLErrors.some(
     ({ extensions }) => extensions.code === SERVICE_UNAVAILABLE
   );
 }
 
 function refusalOf(error: CombinedError): ThrownResultError {
-  if (error.networkError instanceof MutationNotQueuedError)
-    return refusal('NOT_QUEUED', error.message);
+  if (notQueued(error)) return refusal('NOT_QUEUED', error.message);
   const code = error.graphQLErrors[0]?.extensions.code;
   return refusal(
     typeof code === 'string' ? code : error.networkError && 'NETWORK_ERROR',
@@ -1193,8 +1187,8 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   /**
    * Hands a write over in its turn, and again when it found the database away
    * and waited for it. A write that outlasted its host or its sign-in is not
-   * handed over: `client` then answers for another. One the queue refuses
-   * though the database is there goes nowhere, and fails.
+   * handed over: `client` then answers for another. One that does not reach
+   * the queue though the database is there goes nowhere, and fails.
    */
   async function handOver<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>,
@@ -1215,14 +1209,14 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           const answer = await handedOver(write, root, handOff);
           span.setAttr(
             'write.disposition',
-            notQueued(answer)
+            notQueued(answer.error)
               ? 'not_queued'
               : (optimisticMutationDispositionOf(answer)?.kind ?? 'direct')
           );
           return answer;
         })
       );
-      if (!notQueued(result)) return result;
+      if (!notQueued(result.error)) return result;
       if (!handOff.stands()) throw cacheRetired();
       if (!away()) return result;
     }

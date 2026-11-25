@@ -68,10 +68,6 @@ const claimed: CacheHost['enqueueOptimisticMutation'] = async (args) => ({
   },
 });
 
-const refusing: CacheHost['enqueueOptimisticMutation'] = async () => {
-  throw new Error('the queue refused it');
-};
-
 type Request = {
   id: string;
   signal: AbortSignal | undefined;
@@ -147,7 +143,18 @@ const settle = () => vi.advanceTimersByTimeAsync(1);
 const root = graphqlMessage(1);
 const other = graphqlMessage(8);
 
-describe('a write the queue refuses', () => {
+describe.each([
+  ['the queue refuses', () => new Error('the queue refused it')],
+  [
+    'no engine admitted',
+    () =>
+      Object.assign(new Error('no owner took the write'), {
+        errorCode: 'write-not-admitted',
+      }),
+  ],
+])('a write %s', (_name, failure) => {
+  const refusing = () => Promise.reject(failure());
+
   it('goes nowhere, and lets the writes after it go', async () => {
     vi.useFakeTimers();
     const fixture = setup(
@@ -179,7 +186,7 @@ describe('a write the queue refuses', () => {
     const sending = fixture.writes.send(send(root.id));
     await settle();
     fixture.availability.paused = true;
-    refused.reject(new Error('the queue refused it'));
+    refused.reject(failure());
     await settle();
     expect(fixture.sent()).toEqual([]);
     expect(fixture.writes.pendingCount(CHANNEL_ID)).toBe(1);
@@ -200,7 +207,7 @@ describe('a write the queue refuses', () => {
     const sending = outcome(fixture.writes.send(send(root.id)));
     await settle();
     fixture.signInAgain();
-    refused.reject(new Error('the queue refused it'));
+    refused.reject(failure());
     await settle();
     expect(await sending).toBe('CACHE_RETIRED');
     expect(fixture.sent()).toEqual([]);

@@ -1079,7 +1079,7 @@ export function getGraphqlSoupClient(): Client {
       if (!(await startSubscriptions(target))) return;
       // Soup updates were off meanwhile, as while a socket is down, and a
       // query mounted before that shows, and holds cached, what came before.
-      subscriptionsLifecycle.connected();
+      subscriptionsLifecycle.updatesMissed();
       refetchMissed();
       try {
         await cacheRecovery.available();

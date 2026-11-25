@@ -18,6 +18,11 @@ vi.mock('@core/mobile/native-network-status', () => ({
   },
 }));
 
+const startChannelStream = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/messages/local/channel-sync', () => ({
+  startChannelStream,
+}));
+
 function setNativeStatus(status: string) {
   for (const listener of [...nativeStatus.listeners]) listener(status);
 }
@@ -435,6 +440,33 @@ describe('GraphQL Soup subscription lifecycle', () => {
     lifecycle.dispose();
     dispatchEvent(new Event('online'));
     expect(client.subscription).toHaveBeenCalledTimes(4);
+  });
+
+  it('tells the channel stream of the socket alone', () => {
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+      })),
+    };
+    const stream = {
+      connected: vi.fn(),
+      disconnected: vi.fn(),
+      dispose: vi.fn(),
+    };
+    startChannelStream.mockReturnValue(stream);
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    const host = {
+      disabled: false,
+      onCacheGenerationChanged: () => () => {},
+    };
+    lifecycle.replace(client as never, host as never);
+    // A cache that serves again says nothing of a socket that is down.
+    lifecycle.updatesMissed();
+    expect(stream.connected).not.toHaveBeenCalled();
+    lifecycle.connected();
+    expect(stream.connected).toHaveBeenCalledOnce();
+    startChannelStream.mockReset();
+    lifecycle.dispose();
   });
 
   it('refreshes activity when it subscribes the same client again', async () => {

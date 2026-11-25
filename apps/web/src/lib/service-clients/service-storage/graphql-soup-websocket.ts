@@ -300,6 +300,8 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   ): void;
   connected(): void;
   disconnected(): void;
+  /** Updates were off for another reason than the socket. */
+  updatesMissed(): void;
   dispose(): void;
 } {
   let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
@@ -462,14 +464,17 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     },
     connected: () => {
       socketConnected = true;
-      signaledFailure = false;
-      activity?.reconnect();
-      channels?.reconnect();
+      lifecycle.updatesMissed();
       channelStream?.connected();
     },
     disconnected: () => {
       socketConnected = false;
       channelStream?.disconnected();
+    },
+    updatesMissed: () => {
+      signaledFailure = false;
+      activity?.reconnect();
+      channels?.reconnect();
     },
     dispose() {
       if (options.suspendOnPagehide) {

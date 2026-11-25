@@ -70,14 +70,17 @@ with the watermark after it.
   view on screen reads over REST keeps its writes on REST (`keepChannelOnRest`),
   as does a message with an anchor; not one whose only REST view is a thread of
   more than `MAX_THREAD_PAGES` pages.
-- Outage: while the host is `paused` (or being proven readable again after it
-  answered, or was away, before: `sessionChannelHost` in `channel-flag.ts`),
-  open channels keep what they show, new ones load from the server unheld, and
-  writes wait (`channel.write.await_cache`). `restartCache` in
-  `graphql-soup.ts` ends it by calling `resumed()` on the host's runtime and
-  writes; an engine replaced over its storage without a pause resumes them too
-  (`channel-sync.ts`). A host the page stops trying to prove
-  (`recovery-required`) is retired, and channels go over REST until a reload.
+- Outage: while the host is `paused`, open channels keep what they show, new
+  ones load from the server unheld, and writes wait
+  (`channel.write.await_cache`). Once it serves again the session proves it
+  readable: channels stay with a host that answered, or was away, before
+  (`sessionChannelHost` in `channel-flag.ts`), reads and pushed frames go to
+  it, and writes still wait until its queue has been read. `restartCache` in
+  `graphql-soup.ts` then calls `resumed()` on its runtime and writes; an engine
+  replaced over its storage without a pause resumes them too
+  (`channel-sync.ts`). Once the page stops trying to prove a host
+  (`recovery-required`) its writes are retired and channels go over REST until
+  a reload; the stream, like Soup's, only goes on storing what is pushed.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
   person is idle, and evicts channels untouched for 30 days.
 
@@ -88,7 +91,7 @@ asked for in its channel (`takeTurn`), under the sign-in it was asked for under.
 
 | What happened | Send | Edit, delete, reaction |
 | --- | --- | --- |
-| Never reached the queue, or the queue refused it (`NOT_QUEUED`) | fails as not sent, draft restored | fails |
+| Never reached the queue, which was there (`NOT_QUEUED`) | fails as not sent, draft restored | fails |
 | Its sign-in ended before its turn, or no sign-in said who it is | `CACHE_RETIRED` | `CACHE_RETIRED` |
 | The host retired, or its storage was reset, with the write in the queue | `DELIVERY_UNKNOWN` | `CACHE_RETIRED`, `CACHE_RESET` |
 | The enqueue's acknowledgement was lost | still queued: its settlement; settled: device copy, then the server's (`ChannelMessage`), else `DELIVERY_UNKNOWN` | still queued: its settlement; settled: applied if the device shows it, else `NOT_APPLIED` |

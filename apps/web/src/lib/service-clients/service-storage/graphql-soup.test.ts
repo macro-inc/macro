@@ -400,7 +400,7 @@ const mocks = vi.hoisted(() => {
   const plainClient = { kind: 'plain' };
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
-  const subscriptionsConnected = vi.fn();
+  const subscriptionsMissed = vi.fn();
   const platformFetch = vi.fn();
   const toastFailure = vi.fn();
   return {
@@ -447,7 +447,7 @@ const mocks = vi.hoisted(() => {
     plainClient,
     realtimeClient,
     replaceSubscriptions,
-    subscriptionsConnected,
+    subscriptionsMissed,
     initializeCrmCacheOwner: vi.fn(async () => {}),
     cachedQuery: vi.fn(),
     platformFetch,
@@ -648,7 +648,9 @@ vi.mock('./graphql-soup-websocket', () => ({
   }),
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: mocks.replaceSubscriptions,
-    connected: mocks.subscriptionsConnected,
+    connected: vi.fn(),
+    disconnected: vi.fn(),
+    updatesMissed: mocks.subscriptionsMissed,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
 }));
@@ -2519,7 +2521,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
 
       const order: string[] = [];
-      mocks.subscriptionsConnected.mockImplementation(() => {
+      mocks.subscriptionsMissed.mockImplementation(() => {
         order.push('subscribed');
       });
       const refetch = vi.fn(() => {
@@ -2544,14 +2546,14 @@ describe('GraphQL Soup browser cache session gate', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(reconnected).not.toHaveBeenCalled();
       expect(refetch).not.toHaveBeenCalled();
-      expect(mocks.subscriptionsConnected).not.toHaveBeenCalled();
+      expect(mocks.subscriptionsMissed).not.toHaveBeenCalled();
 
       pause(false);
       mocks.available();
       await vi.advanceTimersByTimeAsync(0);
 
       // What arrived meanwhile was missed, as while a socket is down.
-      expect(mocks.subscriptionsConnected).toHaveBeenCalledOnce();
+      expect(mocks.subscriptionsMissed).toHaveBeenCalledOnce();
       expect(throwing).toHaveBeenCalledOnce();
       expect(order).toEqual([
         'subscribed',
@@ -2581,7 +2583,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       unbind?.();
     } finally {
       pause(false);
-      mocks.subscriptionsConnected.mockReset();
+      mocks.subscriptionsMissed.mockReset();
       dispose();
       vi.useRealTimers();
     }
