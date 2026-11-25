@@ -2,6 +2,7 @@
 //! (`outlook.sync.*` spans). Each claimed unit of work gets one root span;
 //! idle polls get none.
 
+use super::claim::StreamClaim;
 use super::drafts::models::{DraftChange, DraftFailure, DraftLease};
 use super::{MailboxError, StreamLease};
 use email_api_client::domain::models::{EmailApiError, GateLimit, RateLimitOrigin};
@@ -38,15 +39,17 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
 }
 
 /// The root span of one claimed folder stream. `outlook.due_ms` is how long
-/// the stream waited in line after it came due, and `outlook.import_round`
-/// whether it was claimed in its import round rather than as a poll.
-pub(super) fn enumerate_span(lease: &StreamLease) -> Span {
+/// the stream waited in line after it came due, `outlook.import_round`
+/// whether it was claimed in its import round rather than as a poll, and
+/// `outlook.claim` the claim that took it, so claims can be counted by kind.
+pub(super) fn enumerate_span(lease: &StreamLease, claim: StreamClaim) -> Span {
     tracing::info_span!(
         "outlook.sync.enumerate",
         mailbox.link_id = %lease.mailbox.link_id,
         mailbox.sync_generation = lease.mailbox.sync_generation,
         outlook.stream_kind = lease.pass.kind().as_str(),
         outlook.stream_id = %lease.id,
+        outlook.claim = claim.as_str(),
         outlook.import_round = !lease.initial_complete,
         outlook.due_ms = since_ms(lease.due_at),
         outlook.poll_interval_seconds = tracing::field::Empty,

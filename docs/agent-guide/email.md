@@ -54,6 +54,17 @@ mailbox tab. On All, selected tag names appear in the header and breadcrumb.
 A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag filter
 on any other tab keeps that tab's title.
 
+Gmail labels and Outlook categories that people made show read-only, after a
+row's tags under the same limit of three, with a label icon where a tag has its
+color dot. A nested Gmail label shows its own name on the row and its whole
+name (`Customers / Larkspur`) on hover. Gmail's system labels and labels it hides
+from the message list never show, and phone rows show neither tags nor labels.
+An open thread shows them as one pill after its tags (`3 Labels`, or a sole
+label's name) listing their whole names, and in a Labels section of the side
+panel, which the phone's Info sheet shares. Someone a thread is shared with sees
+none of the owner's labels: the server leaves out labels of inboxes the reader
+doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
+
 Mail lists can be filtered by a Gmail label or Outlook category of the
 viewer's own or managed inboxes (the `Label` condition). A label in an inbox
 the viewer doesn't own or manage matches nothing, shared threads included. A
@@ -148,9 +159,15 @@ spinner. Once its own results arrive, a new search starts at the top of the list
 wherever the list was scrolled. With the field focused, up to five recent searches containing the
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
-result. A search is remembered when the field is left with words in it, with
-its `in:` filter, at most eight per person, in this browser only and not per
-inbox. Typing `in:` lists the views instead (only those the person has, so
+result. A search is remembered, with its `in:` filter, once the person settles
+on it: `Enter` (the phone's Search key too), a picked recent search, opening a
+thread from its results, or leaving the field with that search's own results on
+screen. Leaving before they arrive, another window or app taking the focus, or
+leaving on a last word the field offers to finish as an operator (`bef` for
+`before:`) remembers nothing; an
+operator still being typed is left out of what is remembered. A remembered
+search drops the earlier ones it starts with (`bud` once `budget` is), and at
+most eight are kept per person, in this browser only and not per inbox. Typing `in:` lists the views instead (only those the person has, so
 Focus only with its flag), narrowed as the name is typed, and `-in:` lists the
 views a search can leave out, then the labels and tags whose names hold what
 follows `in:` (not one that reads as a view, such as Archive, which

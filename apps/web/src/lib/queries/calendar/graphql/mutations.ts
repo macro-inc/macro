@@ -9,6 +9,7 @@ import {
   selectRecords,
 } from '@graphql-cache/index';
 import type { CalendarEvent } from '@service-calendar/generated/schemas/calendarEvent';
+import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import {
   type CalendarEventFieldsFragment,
   CalendarEventFieldsFragmentDoc,
@@ -49,10 +50,11 @@ import type {
   RsvpCalendarEventArgs,
   UpdateCalendarEventArgs,
 } from '../mutations';
-import { mapCalendarEvent } from './map';
+import { mapCalendarEvent, mapCalendarOccurrence } from './map';
 import {
   deletionPlan,
   graphqlEnum,
+  graphqlOccurrenceTimeRecord,
   graphqlReminders,
   graphqlTimeInput,
   graphqlTimeRecord,
@@ -116,6 +118,13 @@ const pendingCreates = new Set<string>();
 const answeringCreates = new Set<string>();
 /** The server id each confirmed create replaced its local id with. */
 const landedCreates = new Map<string, string>();
+/**
+ * The occurrence each of the latest creates' answers carried for the one
+ * drawn locally, by local id: open details move to it before the calendar's
+ * own reads draw it. Sign-out reloads the app, which drops them.
+ */
+const landedReplies = new Map<string, CalendarOccurrenceItem>();
+const LANDED_REPLY_LIMIT = 16;
 const landedListeners = new Set<(localId: string, serverId: string) => void>();
 
 /** Whether `eventId` is a local event the server has not confirmed yet. */
@@ -128,6 +137,16 @@ export function createdCalendarEventId(eventId: string): string | undefined {
   return landedCreates.get(eventId);
 }
 
+/**
+ * The server's copy of the occurrence created under the local id `eventId`,
+ * from the create's own answer, when it carried one.
+ */
+export function createdCalendarOccurrence(
+  eventId: string
+): CalendarOccurrenceItem | undefined {
+  return landedReplies.get(eventId);
+}
+
 /** Calls `listener` when a create made here lands under its server id. */
 export function onCalendarEventCreated(
   listener: (localId: string, serverId: string) => void
@@ -136,10 +155,20 @@ export function onCalendarEventCreated(
   return () => landedListeners.delete(listener);
 }
 
-function landCreate(localId: string, serverId: string | undefined) {
+function landCreate(
+  localId: string,
+  serverId: string | undefined,
+  answered?: OccurrenceRecord
+) {
   pendingCreates.delete(localId);
   if (!serverId || serverId === localId) return;
   landedCreates.set(localId, serverId);
+  if (answered) {
+    landedReplies.set(localId, mapCalendarOccurrence(answered));
+    const oldest = landedReplies.keys().next().value;
+    if (landedReplies.size > LANDED_REPLY_LIMIT && oldest !== undefined)
+      landedReplies.delete(oldest);
+  }
   for (const listener of [...landedListeners]) listener(localId, serverId);
 }
 
@@ -484,7 +513,7 @@ export async function executeGraphqlUpdate(
           .map((occurrence) => ({
             __typename: occurrence.__typename,
             id: occurrence.id,
-            time: graphqlTimeRecord(time),
+            time: graphqlOccurrenceTimeRecord(time),
           }))
       : [];
   // A recurring series' instances are expanded by the provider, so a time
@@ -620,15 +649,51 @@ export async function executeGraphqlDelete(
   return settle(host, result, result.data?.deleteCalendarEvent ?? undefined);
 }
 
-/** The calendar a new event lands on, as the server picks it. */
-async function targetCalendar(client: Client, calendarId: string | undefined) {
+/** What a new event's local copy takes from the calendar it lands on. */
+interface TargetCalendar {
+  id: string;
+  linkId: string;
+  emailAddress: string;
+  guestPolicy: boolean;
+}
+
+/**
+ * The calendar a new event lands on, as the server picks it. A calendar the
+ * caller already holds needs no read: the cache answers the list only after
+ * every read queued before it, which can take seconds.
+ */
+async function targetCalendar(
+  client: Client,
+  {
+    calendarId,
+    calendar,
+  }: Pick<CreateCalendarEventArgs, 'calendarId' | 'calendar'>
+): Promise<TargetCalendar | undefined> {
+  if (calendar && calendar.id === calendarId) {
+    return {
+      id: calendar.id,
+      linkId: calendar.emailLinkId,
+      emailAddress: calendar.emailAddress,
+      guestPolicy: calendar.capabilities.guestPolicy,
+    };
+  }
   const result = await client
     .query(CalendarsDocument, {}, { requestPolicy: 'cache-only' })
     .toPromise();
   const calendars = result.data?.user.calendars ?? [];
-  return calendarId
-    ? calendars.find((calendar) => calendar.id === calendarId)
-    : calendars.find((calendar) => calendar.isPrimary && calendar.isWritable);
+  const listed = calendarId
+    ? calendars.find((candidate) => candidate.id === calendarId)
+    : calendars.find(
+        (candidate) => candidate.isPrimary && candidate.isWritable
+      );
+  return (
+    listed && {
+      id: listed.id,
+      linkId: listed.linkId,
+      emailAddress: listed.emailAddress,
+      guestPolicy: listed.capabilities.guestPolicy,
+    }
+  );
 }
 
 /**
@@ -658,12 +723,15 @@ export async function executeGraphqlCreate(
 }
 
 async function createThroughQueue(
-  { onAccepted, ...args }: CreateCalendarEventArgs,
+  { onAccepted, calendar: knownCalendar, ...args }: CreateCalendarEventArgs,
   client: Client,
   host: Pick<CacheHost, 'readRecordsByKeys'> | undefined
 ): Promise<{ outcome: CalendarMutationOutcome; event?: CalendarEvent }> {
   const clientId = args.idempotencyKey ?? uuidv4();
-  const calendar = await targetCalendar(client, args.calendarId ?? undefined);
+  const calendar = await targetCalendar(client, {
+    calendarId: args.calendarId ?? undefined,
+    calendar: knownCalendar,
+  });
   const now = new Date().toISOString();
   const time = graphqlTimeRecord(args.time);
   const reminders = args.reminders
@@ -743,7 +811,7 @@ async function createThroughQueue(
       editDetails: true,
       inviteGuests: true,
       removeGuests: true,
-      setGuestPolicy: calendar?.capabilities.guestPolicy ?? false,
+      setGuestPolicy: calendar?.guestPolicy ?? false,
       rsvp: false,
       organize: true,
     },
@@ -759,7 +827,7 @@ async function createThroughQueue(
     occurrenceKey,
     recurrenceId: null,
     isCancelled: false,
-    time,
+    time: graphqlOccurrenceTimeRecord(args.time),
     overrideTitle: null,
     overrideDescription: null,
     overrideLocation: null,
@@ -868,7 +936,13 @@ async function createThroughQueue(
     if (!serverId) return { outcome };
     return { outcome, event: mapCalendarEvent({ ...event, id: serverId }) };
   }
-  landCreate(clientId, outcome.payload.event.id);
+  const answered = outcome.payload.occurrences;
+  landCreate(
+    clientId,
+    outcome.payload.event.id,
+    answered.find((item) => item.occurrenceKey === occurrenceKey) ??
+      (answered.length === 1 ? answered[0] : undefined)
+  );
   return {
     outcome,
     event: mapCalendarEvent(outcome.payload.event),
