@@ -11,11 +11,17 @@ use crate::api::context::ApiContext;
 
 use super::middleware;
 
+pub(in crate::api) mod code_challenge;
 pub(in crate::api) mod session_creation;
 pub(in crate::api) mod session_login;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
+        .route(
+            "/login",
+            post(session_login::verified_handler)
+                .layer(ServiceBuilder::new().layer(CookieManagerLayer::new())),
+        )
         .route(
             "/login/{session_code}",
             get(session_login::handler)

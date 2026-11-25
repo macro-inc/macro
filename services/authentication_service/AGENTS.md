@@ -336,6 +336,14 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   token refresh puts it back for the rest of its 5 minutes, so client retries
   of a 500 work. Never record the code, the redirect URL carrying `token=`, or
   a refresh token in spans, logs, or `Debug`; the span records `outcome`.
+- `POST /session` mints a code for the caller's own session bound to a PKCE
+  `S256` challenge (`session/code_challenge.rs`); the native app redeems it with
+  the verifier at `POST /session/login`. A signed-in browser sign-up hands the
+  session to the app this way, through a `macro://` link another app could
+  claim. A bound code is stored under its own key (`mbl_login_bound:`), so
+  `GET /session/login/{code}`, and an instance that predates binding, cannot
+  redeem it; a wrong or missing verifier answers 400 like an unknown code and
+  leaves the code for the right one (`outcome = "challenge_mismatch"`).
 - When the FusionAuth JWT populate lambda fails (its `fetch` to
   `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
   issues the access token, just without the Macro claims. `/jwt/refresh`

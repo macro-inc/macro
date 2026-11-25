@@ -5,12 +5,14 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use macro_cache_client::MacroCache;
+use macro_cache_client::{MacroCache, auth::MobileLoginRedemption};
 use tower_cookies::Cookies;
 use tracing::field::Empty;
+use utoipa::ToSchema;
 
 use crate::api::{
     context::ApiContext,
+    session::code_challenge::{CodeChallenge, CodeVerifier},
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
 
@@ -45,9 +47,60 @@ pub async fn handler(
     Path(Params { session_code }): Path<Params>,
     cookies: Cookies,
 ) -> Result<Response, Response> {
+    sign_in_with_session_code(&ctx, &session_code, None, cookies).await
+}
+
+/// A session code and the verifier of the challenge it was minted with.
+#[derive(serde::Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifiedSessionLoginRequest {
+    pub session_code: String,
+    /// The PKCE verifier whose `S256` challenge the code was minted with.
+    pub verifier: String,
+}
+
+/// Performs a login via a session code bound to a challenge
+/// (`POST /session`), presenting the challenge's verifier.
+#[utoipa::path(
+        post,
+        operation_id = "session_login_verified",
+        path = "/session/login",
+        request_body = VerifiedSessionLoginRequest,
+        responses(
+            (status = 200, body=UserTokensResponse),
+            (status = 400, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
+        )
+    )]
+#[axum::debug_handler]
+pub async fn verified_handler(
+    State(ctx): State<ApiContext>,
+    cookies: Cookies,
+    Json(request): Json<VerifiedSessionLoginRequest>,
+) -> Result<Response, Response> {
+    let verifier = CodeVerifier::parse(request.verifier).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: e.to_string().into(),
+            }),
+        )
+            .into_response()
+    })?;
+    let challenge = CodeChallenge::of(&verifier);
+    sign_in_with_session_code(&ctx, &request.session_code, Some(&challenge), cookies).await
+}
+
+async fn sign_in_with_session_code(
+    ctx: &ApiContext,
+    session_code: &str,
+    challenge: Option<&CodeChallenge>,
+    cookies: Cookies,
+) -> Result<Response, Response> {
     let (access_token, refresh_token) = redeem_session_code(
         &ctx.macro_cache_client,
-        &session_code,
+        session_code,
+        challenge,
         async |refresh_token| ctx.auth_client.refresh_token("", refresh_token).await,
     )
     .await
@@ -103,22 +156,26 @@ impl IntoResponse for RedeemError {
 /// success. If the token refresh then fails, the code is put back for the
 /// rest of its lifetime so the client's retry can succeed.
 ///
-/// The span never records the code or tokens, only the outcome. No `err`:
+/// A code minted bound to a challenge redeems only when `challenge` matches
+/// it; a caller without it leaves the code for the one that has it.
+///
+/// The span never records the code, tokens or challenge, only the outcome. No `err`:
 /// each failure already logs once with its `auth_handoff_failure`, and an
 /// unknown code is the client's error, not ours.
 #[tracing::instrument(
     name = "auth.session_code.redeem",
     skip_all,
-    fields(outcome = Empty, code_restored = Empty)
+    fields(outcome = Empty, bound = Empty, code_restored = Empty)
 )]
 async fn redeem_session_code<E: std::fmt::Debug>(
     cache: &MacroCache,
     session_code: &str,
+    challenge: Option<&CodeChallenge>,
     refresh: impl AsyncFnOnce(&str) -> Result<(String, String), E>,
 ) -> Result<(String, String), RedeemError> {
     let span = tracing::Span::current();
-    let session = cache
-        .take_mobile_login_session(session_code)
+    let redemption = cache
+        .take_mobile_login_session(session_code, challenge.map(CodeChallenge::as_str))
         .await
         .map_err(|e| {
             span.record("outcome", "lookup_failed");
@@ -130,14 +187,28 @@ async fn redeem_session_code<E: std::fmt::Debug>(
             RedeemError::Lookup
         })?;
 
-    let Some(session) = session else {
-        span.record("outcome", "invalid");
-        tracing::warn!(
-            auth_handoff_failure = "session_code_invalid",
-            "mobile session code not found, expired or already redeemed"
-        );
-        return Err(RedeemError::Invalid);
+    let session = match redemption {
+        MobileLoginRedemption::Taken(session) => session,
+        MobileLoginRedemption::Missing => {
+            span.record("outcome", "invalid");
+            tracing::warn!(
+                auth_handoff_failure = "session_code_invalid",
+                "mobile session code not found, expired or already redeemed"
+            );
+            return Err(RedeemError::Invalid);
+        }
+        // Answered like an unknown code: the caller learns nothing about
+        // a code it cannot redeem.
+        MobileLoginRedemption::ChallengeMismatch => {
+            span.record("outcome", "challenge_mismatch");
+            tracing::warn!(
+                auth_handoff_failure = "session_code_challenge_mismatch",
+                "bound session code presented without its verifier"
+            );
+            return Err(RedeemError::Invalid);
+        }
     };
+    span.record("bound", session.is_bound());
 
     match refresh(session.refresh_token()).await {
         Ok(tokens) => {
