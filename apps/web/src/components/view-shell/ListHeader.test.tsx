@@ -539,6 +539,35 @@ it('reports a wide field open, and closed once it is left empty', () => {
   expect(view.queryByRole('searchbox')).toBeNull();
 });
 
+it('keeps an empty wide field open while focus moves to another header control', async () => {
+  const [search, setSearch] = createSignal('');
+  const view = render(() => (
+    <div>
+      <header data-view-shell-header="">
+        <button type="button">Search tips</button>
+        <ListHeaderSearch
+          label="Search email"
+          value={search()}
+          onValueChange={setSearch}
+          registerFocus={() => {}}
+          wide
+        />
+      </header>
+      <button type="button">Outside</button>
+    </div>
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Search email' }));
+  await Promise.resolve();
+  const field = view.getByRole('searchbox', { name: 'Search email' });
+  expect(document.activeElement).toBe(field);
+
+  view.getByRole('button', { name: 'Search tips' }).focus();
+  expect(view.queryByRole('searchbox')).not.toBeNull();
+
+  view.getByRole('button', { name: 'Outside' }).focus();
+  expect(view.queryByRole('searchbox')).toBeNull();
+});
+
 it('closes a wide field when the view clears its search from outside', () => {
   const { view, field, setSearch, open } = setupSuggestions([]);
   field.blur();

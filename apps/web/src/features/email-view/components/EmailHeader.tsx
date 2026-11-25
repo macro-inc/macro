@@ -39,6 +39,7 @@ import {
   useEmailSavedViewTitle,
 } from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
+import { EmailSearchTipsButton } from './EmailSearchTips';
 
 /**
  * What the header gives up, in order, when its actions would overflow it:
@@ -236,6 +237,9 @@ export function EmailHeader(props: EmailHeaderProps) {
               </h2>
             </Show>
           </div>
+          <Show when={searchOwnsHeader()}>
+            <EmailSearchTipsButton />
+          </Show>
           <Show when={savedViewActive()}>
             <EmailSavedViewMenu />
           </Show>
