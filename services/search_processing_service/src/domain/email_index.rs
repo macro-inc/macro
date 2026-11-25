@@ -33,6 +33,15 @@ mod test;
 /// one wait.
 pub const LEASE_DEADLINE: Duration = Duration::from_secs(120);
 
+/// How long a thread reindex works under one lease before it renews the
+/// lease, between two pages, to go on: well inside [`LEASE_DEADLINE`], so a
+/// thread of any size finishes, each lease's work within its deadline.
+const LEASE_RENEWAL: Duration = Duration::from_secs(60);
+
+/// Most times one reconcile widens its lease to other threads: to a thread a
+/// message moved to, or to threads holding copies it must delete.
+const MAX_LEASE_WIDENINGS: usize = 2;
+
 /// Messages read and written per page of a single thread.
 const THREAD_PAGE_MESSAGES: i64 = 100;
 
@@ -80,8 +89,8 @@ impl std::ops::AddAssign for LeaseWait {
 
 /// Leases on a set of threads and the version their writes carry.
 pub struct GrantedThreads<L> {
-    /// Held until the writer's last request returns; dropping it releases
-    /// every thread.
+    /// Held until the writer's last request returns, then released; dropping
+    /// it releases every thread too, a moment later.
     pub lease: L,
     /// The database time of the grant. Leases on a thread never overlap and
     /// one clock serves every worker, so each grant is later than the last.
@@ -91,7 +100,7 @@ pub struct GrantedThreads<L> {
 
 /// Cross-process leases on email threads.
 pub trait EmailThreadLeases: Send + Sync + 'static {
-    /// Released when dropped.
+    /// Released by [`Self::release`], or when dropped.
     type Lease: Send;
 
     /// Lease every thread in `thread_ids` at once. Every writer takes its
@@ -102,6 +111,10 @@ pub trait EmailThreadLeases: Send + Sync + 'static {
         pool: LeasePool,
         writer: EmailWriter,
     ) -> impl Future<Output = Result<GrantedThreads<Self::Lease>, Report>> + Send;
+
+    /// Release every thread of `lease` before returning, so the next writer
+    /// of those threads starts at once.
+    fn release(&self, lease: Self::Lease) -> impl Future<Output = ()> + Send;
 }
 
 /// A thread's indexed property, as every one of its message documents
@@ -250,11 +263,51 @@ pub struct EmailReconciled {
     pub waited: LeaseWait,
 }
 
-/// Where a message reconcile got to under its lease.
-enum MessageStep {
-    Written(EmailWrites),
-    /// The message is in a thread the lease does not hold.
-    Moved(Uuid),
+/// What a thread reindex finished under one lease: every page before
+/// `offset`.
+#[derive(Default)]
+struct Progress {
+    offset: i64,
+    writes: EmailWrites,
+    items_failed: Option<Report>,
+}
+
+/// Where a reconcile got to under one lease.
+enum LeaseStep<T> {
+    Done(T),
+    /// The reconcile must also write under `extra`: a thread a message moved
+    /// to, or one holding a copy to delete. Nothing was written under this
+    /// lease's version after finding out.
+    Widen {
+        extra: Vec<Uuid>,
+        progress: Progress,
+    },
+    /// A thread reindex used up its lease's time and goes on under a new one.
+    Renew(Progress),
+}
+
+impl<T> LeaseStep<T> {
+    fn widen(extra: Vec<Uuid>) -> Self {
+        Self::Widen {
+            extra,
+            progress: Progress::default(),
+        }
+    }
+}
+
+/// The threads in `found` that `leased` does not hold, sorted and once each.
+fn outside(leased: &[Uuid], found: impl IntoIterator<Item = Uuid>) -> Vec<Uuid> {
+    let extra: BTreeSet<Uuid> = found
+        .into_iter()
+        .filter(|thread| !leased.contains(thread))
+        .collect();
+    extra.into_iter().collect()
+}
+
+/// `leased` with `extra` added, in the order every writer leases threads.
+fn widened(leased: &[Uuid], extra: Vec<Uuid>) -> Vec<Uuid> {
+    let threads: BTreeSet<Uuid> = leased.iter().copied().chain(extra).collect();
+    threads.into_iter().collect()
 }
 
 /// The writes one batch of messages needs.
@@ -319,6 +372,10 @@ fn deadline_passed() -> Report {
     report!("the email reconcile passed its lease deadline")
 }
 
+fn kept_widening() -> Report {
+    report!("the email reconcile kept finding more threads to lease")
+}
+
 impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexService<S, L, I> {
     /// Bring one message's documents in line with the source: indexed under
     /// its current thread, or removed under every thread once it is deleted
@@ -331,7 +388,7 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
             message_id = %request.message_id,
             thread_id = %request.thread_id,
             writer = <&'static str>::from(request.writer),
-            moved = tracing::field::Empty,
+            leased_threads = tracing::field::Empty,
             indexed = tracing::field::Empty,
             deleted = tracing::field::Empty,
             refused_stale = tracing::field::Empty,
@@ -343,7 +400,7 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
     ) -> Result<EmailReconciled, Report> {
         let mut threads = vec![request.thread_id];
         let mut waited = LeaseWait::default();
-        loop {
+        for _ in 0..=MAX_LEASE_WIDENINGS {
             let granted = self
                 .leases
                 .lease(&threads, request.pool, request.writer)
@@ -353,29 +410,25 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
                 LEASE_DEADLINE,
                 self.message_under_lease(&request, &threads, granted.version),
             )
-            .await
-            .map_err(|_| deadline_passed())??;
-            drop(granted.lease);
+            .await;
+            self.leases.release(granted.lease).await;
 
-            match step {
-                MessageStep::Written(writes) => {
+            match step.map_err(|_| deadline_passed())?? {
+                LeaseStep::Done(writes) => {
+                    let span = tracing::Span::current();
+                    span.record("leased_threads", threads.len());
                     record_writes(writes);
                     return Ok(EmailReconciled { writes, waited });
                 }
-                // A draft moved to another thread since its event: lease both
-                // threads, in the order every writer takes them, and reread.
-                MessageStep::Moved(current) if threads.len() == 1 => {
-                    tracing::Span::current().record("moved", true);
-                    threads.push(current);
-                    threads.sort_unstable();
-                }
-                MessageStep::Moved(_) => {
-                    return Err(report!(
-                        "the email message moved again while its threads were leased"
-                    ));
+                // The message moved, or has copies under threads this lease
+                // does not hold: lease them too and reread.
+                LeaseStep::Widen { extra, .. } => threads = widened(&threads, extra),
+                LeaseStep::Renew(_) => {
+                    return Err(report!("a message reconcile does not renew its lease"));
                 }
             }
         }
+        Err(kept_widening())
     }
 
     async fn message_under_lease(
@@ -383,23 +436,29 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
         request: &MessageReconcile,
         leased: &[Uuid],
         version: ProjectionVersion,
-    ) -> Result<MessageStep, Report> {
+    ) -> Result<LeaseStep<EmailWrites>, Report> {
         let message = self.source.message(request.message_id).await?;
         let thread_id = message
             .as_ref()
             .map_or(request.thread_id, |message| message.thread_db_id);
         if !leased.contains(&thread_id) {
-            return Ok(MessageStep::Moved(thread_id));
+            return Ok(LeaseStep::widen(vec![thread_id]));
         }
 
         let threads = self.source.threads(&[thread_id]).await?;
         let mut plan = PagePlan::default();
         let mut keep_copies_under = None;
         match message {
-            None => plan.remove(EmailDocumentKey {
-                thread_id,
-                message_id: request.message_id,
-            }),
+            // A deleted message goes under every thread it was seen under,
+            // including one whose document is too new for the copy search.
+            None => {
+                for thread_id in leased {
+                    plan.remove(EmailDocumentKey {
+                        thread_id: *thread_id,
+                        message_id: request.message_id,
+                    });
+                }
+            }
             Some(message) => {
                 plan.place(message, &threads);
                 if request.remove_moved_copies && plan.removed.is_empty() {
@@ -415,17 +474,16 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
                     .await?,
             );
         }
-        let writes = self
-            .write_plan(version, plan, None, request.writer)
+        self.write_plan(version, plan, leased, None, request.writer)
             .await
-            .map_err(IndexWriteError::into_report)?;
-        Ok(MessageStep::Written(writes))
+            .map_err(IndexWriteError::into_report)
     }
 
     /// Bring every document of `thread_ids` in line with the source: each
     /// searchable message indexed, each excluded one removed under every
-    /// thread. One thread is read and written a page at a time; several are
-    /// read and written together.
+    /// thread. One thread is read and written a page at a time, renewing its
+    /// lease between pages when the reindex runs long; several are read and
+    /// written together.
     #[tracing::instrument(
         name = "search.email.reconcile_threads",
         err,
@@ -434,6 +492,7 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
             threads = thread_ids.len(),
             thread_id = tracing::field::Empty,
             writer = <&'static str>::from(writer),
+            leases = tracing::field::Empty,
             indexed = tracing::field::Empty,
             deleted = tracing::field::Empty,
             refused_stale = tracing::field::Empty,
@@ -446,72 +505,141 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
         writer: EmailWriter,
         pool: LeasePool,
     ) -> Result<EmailReconciled, Report> {
-        let mut threads = thread_ids.to_vec();
-        threads.sort_unstable();
-        threads.dedup();
-        if let [thread_id] = threads.as_slice() {
+        let mut reindexed = thread_ids.to_vec();
+        reindexed.sort_unstable();
+        reindexed.dedup();
+        if reindexed.is_empty() {
+            return Ok(EmailReconciled::default());
+        }
+        if let [thread_id] = reindexed.as_slice() {
             tracing::Span::current().record("thread_id", tracing::field::display(thread_id));
         }
 
-        let granted = self.leases.lease(&threads, pool, writer).await?;
-        let writes = tokio::time::timeout(
-            LEASE_DEADLINE,
-            self.threads_under_lease(&threads, granted.version, index_override, writer),
-        )
-        .await
-        .map_err(|_| deadline_passed())??;
-        drop(granted.lease);
+        let mut leased = reindexed.clone();
+        let mut reconciled = EmailReconciled::default();
+        let mut items_failed = None;
+        let mut offset = 0;
+        let mut leases = 0_u32;
+        let mut widenings = 0;
+        loop {
+            let granted = self.leases.lease(&leased, pool, writer).await?;
+            leases += 1;
+            reconciled.waited += granted.waited;
+            let step = tokio::time::timeout(
+                LEASE_DEADLINE,
+                self.threads_under_lease(
+                    &reindexed,
+                    &leased,
+                    offset,
+                    granted.version,
+                    index_override,
+                    writer,
+                ),
+            )
+            .await;
+            self.leases.release(granted.lease).await;
 
-        record_writes(writes);
-        Ok(EmailReconciled {
-            writes,
-            waited: granted.waited,
-        })
+            let mut finished = |progress: Progress| {
+                reconciled.writes += progress.writes;
+                items_failed = items_failed.take().or(progress.items_failed);
+                progress.offset
+            };
+            match step.map_err(|_| deadline_passed())?? {
+                LeaseStep::Done(progress) => {
+                    finished(progress);
+                    break;
+                }
+                LeaseStep::Renew(progress) => offset = finished(progress),
+                // Copies to delete under threads this lease does not hold:
+                // lease them too and redo the page that found them.
+                LeaseStep::Widen { extra, progress } => {
+                    offset = finished(progress);
+                    widenings += 1;
+                    if widenings > MAX_LEASE_WIDENINGS {
+                        return Err(kept_widening());
+                    }
+                    leased = widened(&leased, extra);
+                }
+            }
+        }
+
+        tracing::Span::current().record("leases", leases);
+        record_writes(reconciled.writes);
+        items_failed.map_or(Ok(reconciled), Err)
     }
 
+    /// One lease's work on `reindexed`, from `offset` for a single thread.
+    /// Items one page failed must not keep the later pages out of the index;
+    /// a failure of a whole request stops the reconcile, since the later pages
+    /// would meet the same trouble.
     async fn threads_under_lease(
         &self,
-        threads: &[Uuid],
+        reindexed: &[Uuid],
+        leased: &[Uuid],
+        offset: i64,
         version: ProjectionVersion,
         index_override: Option<&str>,
         writer: EmailWriter,
-    ) -> Result<EmailWrites, Report> {
-        let facts = self.source.threads(threads).await?;
-        let [thread_id] = threads else {
-            let messages = self.source.threads_messages(threads).await?;
-            return self
-                .write_messages(version, messages, &facts, index_override, writer)
+    ) -> Result<LeaseStep<Progress>, Report> {
+        let facts = self.source.threads(reindexed).await?;
+        let [thread_id] = reindexed else {
+            let messages = self.source.threads_messages(reindexed).await?;
+            let mut progress = Progress::default();
+            return match self
+                .write_messages(version, messages, &facts, leased, index_override, writer)
                 .await
-                .map_err(IndexWriteError::into_report);
+            {
+                Ok(LeaseStep::Done(writes)) => {
+                    progress.writes = writes;
+                    Ok(LeaseStep::Done(progress))
+                }
+                Ok(LeaseStep::Widen { extra, .. }) => Ok(LeaseStep::widen(extra)),
+                Ok(LeaseStep::Renew(_)) => Err(report!("a page write does not renew a lease")),
+                Err(IndexWriteError::ItemsFailed(report)) => {
+                    progress.items_failed = Some(report);
+                    Ok(LeaseStep::Done(progress))
+                }
+                Err(IndexWriteError::Failed(report)) => Err(report),
+            };
         };
 
-        // Items one page failed must not keep the later pages out of the
-        // index; a failure of a whole request stops the thread, since the
-        // later pages would meet the same trouble.
-        let mut writes = EmailWrites::default();
-        let mut items_failed = None;
-        let mut offset = 0;
+        let started = tokio::time::Instant::now();
+        let mut progress = Progress {
+            offset,
+            ..Progress::default()
+        };
         loop {
             let messages = self
                 .source
-                .thread_page(*thread_id, offset, THREAD_PAGE_MESSAGES)
+                .thread_page(*thread_id, progress.offset, THREAD_PAGE_MESSAGES)
                 .await?;
             if messages.is_empty() {
-                break;
+                return Ok(LeaseStep::Done(progress));
             }
             match self
-                .write_messages(version, messages, &facts, index_override, writer)
+                .write_messages(version, messages, &facts, leased, index_override, writer)
                 .await
             {
-                Ok(page) => writes += page,
+                Ok(LeaseStep::Done(page)) => progress.writes += page,
+                // Pages before this one stay written; the wider lease redoes
+                // this one.
+                Ok(LeaseStep::Widen { extra, .. }) => {
+                    return Ok(LeaseStep::Widen { extra, progress });
+                }
+                Ok(LeaseStep::Renew(_)) => {
+                    return Err(report!("a page write does not renew a lease"));
+                }
                 Err(IndexWriteError::ItemsFailed(report)) => {
-                    items_failed.get_or_insert(report);
+                    progress.items_failed.get_or_insert(report);
                 }
                 Err(IndexWriteError::Failed(report)) => return Err(report),
             }
-            offset += THREAD_PAGE_MESSAGES;
+            progress.offset += THREAD_PAGE_MESSAGES;
+            // Each lease writes at least one page, so a renewal always moves on.
+            if started.elapsed() >= LEASE_RENEWAL {
+                return Ok(LeaseStep::Renew(progress));
+            }
         }
-        items_failed.map_or(Ok(writes), Err)
     }
 
     async fn write_messages(
@@ -519,25 +647,31 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
         version: ProjectionVersion,
         messages: Vec<ParsedSearchMessage>,
         threads: &HashMap<Uuid, ThreadFacts>,
+        leased: &[Uuid],
         index_override: Option<&str>,
         writer: EmailWriter,
-    ) -> Result<EmailWrites, IndexWriteError> {
+    ) -> Result<LeaseStep<EmailWrites>, IndexWriteError> {
         let mut plan = PagePlan::default();
         for message in messages {
             plan.place(message, threads);
         }
-        self.write_plan(version, plan, index_override, writer).await
+        self.write_plan(version, plan, leased, index_override, writer)
+            .await
     }
 
     /// Send a plan's writes: its documents, its deletes, and every copy of
-    /// its removed messages that the index can find under other threads.
+    /// its removed messages that the index can find under other threads. A
+    /// write under a thread the lease does not hold could undo that thread's
+    /// own writer, so when the plan reaches one it writes nothing and asks
+    /// for a wider lease.
     async fn write_plan(
         &self,
         version: ProjectionVersion,
         mut plan: PagePlan,
+        leased: &[Uuid],
         index_override: Option<&str>,
         writer: EmailWriter,
-    ) -> Result<EmailWrites, IndexWriteError> {
+    ) -> Result<LeaseStep<EmailWrites>, IndexWriteError> {
         if !plan.removed.is_empty() {
             let copies = self
                 .index
@@ -546,8 +680,12 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
                 .map_err(IndexWriteError::Failed)?;
             plan.deletes.extend(copies);
         }
+        let extra = outside(leased, plan.deletes.iter().map(|key| key.thread_id));
+        if !extra.is_empty() {
+            return Ok(LeaseStep::widen(extra));
+        }
         if plan.documents.is_empty() && plan.deletes.is_empty() {
-            return Ok(EmailWrites::default());
+            return Ok(LeaseStep::Done(EmailWrites::default()));
         }
         self.index
             .write(
@@ -558,6 +696,7 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
                 writer,
             )
             .await
+            .map(LeaseStep::Done)
     }
 }
 

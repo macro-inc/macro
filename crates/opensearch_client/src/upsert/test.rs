@@ -343,6 +343,46 @@ fn an_unversioned_bulk_still_fails_on_a_version_conflict() {
 }
 
 #[test]
+fn a_bulk_answer_that_is_not_an_object_fails_instead_of_panicking() {
+    let result = super::classify_versioned_bulk_response(
+        200,
+        "[]",
+        OpensearchOperation::WriteEmailDocuments,
+    );
+
+    assert!(
+        matches!(
+            result,
+            Err(OpensearchClientError::DeserializationFailed { .. })
+        ),
+        "{result:?}"
+    );
+}
+
+/// A mapping error quotes the start of the value it could not parse, which
+/// can be a message's text; the error keeps the field and the problem only.
+#[test]
+fn a_failed_item_s_error_leaves_out_the_value_it_quotes() {
+    let body = r#"{"took":1,"errors":true,"items":[{"index":{"_id":"thread-1:message-1","status":400,"error":{"type":"mapper_parsing_exception","reason":"failed to parse field [sent_at_millis] of type [long] in document with id 'thread-1:message-1'. Preview of field's value: 'private words'"}}}]}"#;
+
+    let result = super::classify_versioned_bulk_response(
+        200,
+        body,
+        OpensearchOperation::WriteEmailDocuments,
+    );
+
+    let Err(OpensearchClientError::BulkItemsFailed { errors, .. }) = result else {
+        panic!("a failed item must fail the call: {result:?}");
+    };
+    assert_eq!(
+        errors,
+        [
+            "mapper_parsing_exception: failed to parse field [sent_at_millis] of type [long] in document with id 'thread-1:message-1'"
+        ]
+    );
+}
+
+#[test]
 fn a_bulk_answer_without_items_acknowledges_nothing() {
     let result = super::classify_bulk_response(
         200,

@@ -20,10 +20,12 @@ use crate::domain::{
 /// lane, and up to ten more on the live lane handling thread property events.
 pub const LIVE_LOCK_CONNECTIONS: u32 = 20;
 
-/// Longest a lease waits for another writer's locks. A holder works at most
+/// Longest a lease waits for another writer's locks: per lock
+/// (`lock_timeout`) and for the whole statement (`statement_timeout`), since a
+/// batch waits for each of its threads in turn. A holder works at most
 /// [`crate::domain::email_index::LEASE_DEADLINE`] (120 s), so a longer wait
-/// means a lock that is not coming back; the attempt fails and retries.
-const LOCK_TIMEOUT: &str = "150s";
+/// means locks that are not coming back; the attempt fails and retries.
+const LEASE_WAIT_LIMIT: &str = "150s";
 
 #[cfg(test)]
 mod test;
@@ -33,7 +35,7 @@ pub const LEASE_WAIT: &str = "search.index.lease_wait_ms";
 
 /// [`LEASE_WAIT`] bucket bounds in ms: a free lease takes a few, a live write
 /// behind a queue batch waits for the batch (9.8 s p95 in production on
-/// 24 Nov), and nothing waits past the 150 s lock timeout.
+/// 24 Nov), and nothing waits past the 150 s limit.
 const LEASE_WAIT_BOUNDARIES_MS: [f64; 16] = [
     1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 10_000.0,
     30_000.0, 60_000.0, 150_000.0,
@@ -53,7 +55,10 @@ impl PgEmailThreadLeases {
     /// `bulk_connections` should match the backfill gate's in-flight cap: each
     /// queue message or direct backfill write holds one lease.
     pub fn new(primary: PgConnectOptions, bulk_connections: u32) -> Self {
-        let options = primary.options([("lock_timeout", LOCK_TIMEOUT)]);
+        let options = primary.options([
+            ("lock_timeout", LEASE_WAIT_LIMIT),
+            ("statement_timeout", LEASE_WAIT_LIMIT),
+        ]);
         let pool = |connections| {
             PgPoolOptions::new()
                 .max_connections(connections)
@@ -152,5 +157,13 @@ impl EmailThreadLeases for PgEmailThreadLeases {
             version: ProjectionVersion::from_grant(granted_at)?,
             waited: LeaseWait { connection, lock },
         })
+    }
+
+    async fn release(&self, lease: Self::Lease) {
+        // A rollback that fails leaves the connection to be closed, which
+        // releases the locks as well.
+        if let Err(error) = lease.rollback().await {
+            tracing::warn!(error = ?error, "could not release email thread leases");
+        }
     }
 }

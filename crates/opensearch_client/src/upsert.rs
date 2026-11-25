@@ -55,8 +55,8 @@ fn bulk_items(
         operation,
     })?;
     // A success without per-item results acknowledges nothing.
-    match response["items"].take() {
-        serde_json::Value::Array(items) => Ok(items),
+    match response.get_mut("items").map(serde_json::Value::take) {
+        Some(serde_json::Value::Array(items)) => Ok(items),
         _ => Err(OpensearchClientError::DeserializationFailed {
             details: "bulk response has no items array".to_owned(),
             operation,
@@ -104,7 +104,7 @@ impl FailedItems {
         let described = format!(
             "{}: {}",
             error["type"].as_str().unwrap_or("unknown"),
-            error["reason"].as_str().unwrap_or_default()
+            without_field_preview(error["reason"].as_str().unwrap_or_default())
         );
         if self.errors.len() < REPORTED_ITEM_ERRORS && !self.errors.contains(&described) {
             self.errors.push(described);
@@ -124,6 +124,14 @@ impl FailedItems {
             operation,
         })
     }
+}
+
+/// A mapping error's reason ends with a preview of the value it could not
+/// parse, which can be a document's text: keep it out of errors and traces.
+fn without_field_preview(reason: &str) -> &str {
+    reason
+        .split_once(". Preview of field's value")
+        .map_or(reason, |(kept, _)| kept)
 }
 
 /// Classify a `_bulk` answer. OpenSearch answers 200 while failing items, for

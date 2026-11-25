@@ -329,16 +329,19 @@ fn describe_error(error: &serde_json::Value) -> String {
     }
 }
 
-/// Most documents one copy search returns. A message has a document under
-/// each thread it was ever indexed under, a handful at most, and a search names
-/// the excluded or moved messages of one thread page.
-pub(crate) const MESSAGE_DOCUMENTS_PER_SEARCH: usize = 1_000;
+/// Documents one page of a copy search returns. A message has a document
+/// under each thread it was ever indexed under, a handful at most; a search
+/// names the removed messages of one thread page or batch, and pages on until
+/// it has every match.
+pub(crate) const MESSAGE_DOCUMENTS_PER_PAGE: usize = 1_000;
 
 /// The documents of `message_ids` under any thread but `keep_thread_ids`, as of
 /// the index's last refresh: the copies a message leaves when it moves to
 /// another thread, and every copy of a deleted message when `keep_thread_ids`
-/// is empty. A copy written within the last refresh interval is not found and
-/// stays until the message's next delete.
+/// is empty. It pages through every match, and fails rather than return part
+/// of them when a shard fails or the search times out. A copy written within
+/// the last refresh interval is not found and stays until the message's next
+/// delete.
 pub(crate) async fn email_message_documents(
     client: &opensearch::OpenSearch,
     message_ids: &[String],
@@ -350,46 +353,80 @@ pub(crate) async fn email_message_documents(
         return Ok(Vec::new());
     }
     let index = resolve_destination(index_override);
-    let response = client
-        .search(opensearch::SearchParts::Index(&[index]))
-        .body(message_documents_query(message_ids, keep_thread_ids))
-        .send()
-        .await
-        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
-    let status_code = response.status_code();
-    let body = response
-        .text()
-        .await
-        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
-    if !status_code.is_success() {
-        tracing::error!(status_code = ?status_code, body = ?body, "error finding an email message's documents");
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            operation: OPERATION,
-        });
+    let mut found = Vec::new();
+    let mut after = None;
+    loop {
+        let response = client
+            .search(opensearch::SearchParts::Index(&[index]))
+            .allow_partial_search_results(false)
+            .body(message_documents_query(
+                message_ids,
+                keep_thread_ids,
+                after.as_ref(),
+            ))
+            .send()
+            .await
+            .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
+        let status_code = response.status_code();
+        let body = response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
+        if !status_code.is_success() {
+            tracing::error!(status_code = ?status_code, body = ?body, "error finding an email message's documents");
+            return Err(OpensearchClientError::Unknown {
+                details: body,
+                operation: OPERATION,
+            });
+        }
+        let page = parse_message_documents(&body)?;
+        let full = page.keys.len() >= MESSAGE_DOCUMENTS_PER_PAGE;
+        found.extend(page.keys);
+        match (full, page.last) {
+            (true, Some(last)) => after = Some(last),
+            _ => return Ok(found),
+        }
     }
-    parse_message_documents(&body)
 }
+
+/// The sort values of a page's last hit, where the next page starts.
+type SearchAfter = serde_json::Value;
 
 pub(crate) fn message_documents_query(
     message_ids: &[String],
     keep_thread_ids: &[String],
+    after: Option<&SearchAfter>,
 ) -> serde_json::Value {
-    serde_json::json!({
-        "size": MESSAGE_DOCUMENTS_PER_SEARCH,
+    let mut query = serde_json::json!({
+        "size": MESSAGE_DOCUMENTS_PER_PAGE,
         "_source": ["entity_id", "message_id"],
+        "sort": [{ "message_id": "asc" }, { "entity_id": "asc" }],
         "query": {
             "bool": {
                 "filter": [{ "terms": { "message_id": message_ids } }],
                 "must_not": [{ "terms": { "entity_id": keep_thread_ids } }]
             }
         }
-    })
+    });
+    if let Some(after) = after {
+        query["search_after"] = after.clone();
+    }
+    query
 }
 
 #[derive(serde::Deserialize)]
 struct MessageDocumentHits {
+    #[serde(default)]
+    timed_out: bool,
+    #[serde(rename = "_shards")]
+    shards: Option<ShardCounts>,
     hits: MessageDocumentHitList,
+}
+
+#[derive(serde::Deserialize)]
+struct ShardCounts {
+    #[serde(default)]
+    failed: u64,
 }
 
 #[derive(serde::Deserialize)]
@@ -401,6 +438,8 @@ struct MessageDocumentHitList {
 struct MessageDocumentHit {
     #[serde(rename = "_source")]
     source: MessageDocumentSource,
+    #[serde(default)]
+    sort: Option<SearchAfter>,
 }
 
 #[derive(serde::Deserialize)]
@@ -409,27 +448,43 @@ struct MessageDocumentSource {
     message_id: String,
 }
 
-pub(crate) fn parse_message_documents(body: &str) -> Result<Vec<EmailDocumentKey>> {
+/// One page of a copy search.
+pub(crate) struct MessageDocumentsPage {
+    pub(crate) keys: Vec<EmailDocumentKey>,
+    /// The last hit's sort values.
+    pub(crate) last: Option<SearchAfter>,
+}
+
+pub(crate) fn parse_message_documents(body: &str) -> Result<MessageDocumentsPage> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::FindEmailMessageDocuments;
     let found: MessageDocumentHits =
         serde_json::from_str(body).map_err(|err| OpensearchClientError::DeserializationFailed {
             details: err.to_string(),
-            operation: OpensearchOperation::FindEmailMessageDocuments,
+            operation: OPERATION,
         })?;
-    if found.hits.hits.len() >= MESSAGE_DOCUMENTS_PER_SEARCH {
-        tracing::warn!(
-            found = found.hits.hits.len(),
-            "an email copy search filled its page; the rest go on a later delete"
-        );
+    let failed_shards = found.shards.map_or(0, |shards| shards.failed);
+    if found.timed_out || failed_shards > 0 {
+        return Err(OpensearchClientError::Unknown {
+            details: format!(
+                "incomplete copy search: timed_out {}, failed shards {failed_shards}",
+                found.timed_out
+            ),
+            operation: OPERATION,
+        });
     }
-    Ok(found
-        .hits
-        .hits
-        .into_iter()
-        .map(|hit| EmailDocumentKey {
-            thread_id: hit.source.entity_id,
-            message_id: hit.source.message_id,
-        })
-        .collect())
+    let last = found.hits.hits.last().and_then(|hit| hit.sort.clone());
+    Ok(MessageDocumentsPage {
+        keys: found
+            .hits
+            .hits
+            .into_iter()
+            .map(|hit| EmailDocumentKey {
+                thread_id: hit.source.entity_id,
+                message_id: hit.source.message_id,
+            })
+            .collect(),
+        last,
+    })
 }
 
 pub(crate) async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {

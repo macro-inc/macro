@@ -45,11 +45,18 @@ fn delete_by_query_counts_default_to_zero_and_failures_fail_the_call() {
 
 #[test]
 fn a_copy_search_finds_a_message_s_documents_outside_the_kept_threads() {
+    let after = serde_json::json!(["message-1", "thread-1"]);
     assert_eq!(
-        message_documents_query(&["message-1".to_owned()], &["thread-2".to_owned()]),
+        message_documents_query(
+            &["message-1".to_owned()],
+            &["thread-2".to_owned()],
+            Some(&after)
+        ),
         serde_json::json!({
-            "size": MESSAGE_DOCUMENTS_PER_SEARCH,
+            "size": MESSAGE_DOCUMENTS_PER_PAGE,
             "_source": ["entity_id", "message_id"],
+            "sort": [{ "message_id": "asc" }, { "entity_id": "asc" }],
+            "search_after": ["message-1", "thread-1"],
             "query": {
                 "bool": {
                     "filter": [{ "terms": { "message_id": ["message-1"] } }],
@@ -60,14 +67,26 @@ fn a_copy_search_finds_a_message_s_documents_outside_the_kept_threads() {
     );
 }
 
+fn hit(thread_id: &str, message_id: &str) -> String {
+    format!(
+        r#"{{"_id":"{thread_id}:{message_id}","_source":{{"entity_id":"{thread_id}","message_id":"{message_id}"}},"sort":["{message_id}","{thread_id}"]}}"#
+    )
+}
+
+fn page(hits: &[String]) -> &'static str {
+    let body = format!(
+        r#"{{"took":1,"timed_out":false,"_shards":{{"total":3,"successful":3,"failed":0}},"hits":{{"hits":[{}]}}}}"#,
+        hits.join(",")
+    );
+    Box::leak(body.into_boxed_str())
+}
+
 #[tokio::test]
 async fn a_copy_search_returns_each_document_s_thread_and_message() {
-    let (url, server) = crate::test_support::serve_once(
+    let (url, server) = serve_script(vec![Reply::Respond(
         "200 OK",
-        r#"{"took":1,"hits":{"total":{"value":2,"relation":"eq"},"hits":[
-{"_index":"emails_v1","_id":"thread-1:message-1","_source":{"entity_id":"thread-1","message_id":"message-1"}},
-{"_index":"emails_v1","_id":"old-thread:message-1","_source":{"entity_id":"old-thread","message_id":"message-1"}}]}}"#,
-    );
+        page(&[hit("thread-1", "message-1"), hit("old-thread", "message-1")]),
+    )]);
     let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
 
     let found = client
@@ -75,10 +94,13 @@ async fn a_copy_search_returns_each_document_s_thread_and_message() {
         .await
         .unwrap();
 
-    let (request_line, _) = server.join().unwrap();
+    let requests = server.join().unwrap();
     assert!(
-        request_line.starts_with("POST /emails/_search "),
-        "{request_line}"
+        requests[0]
+            .0
+            .starts_with("POST /emails/_search?allow_partial_search_results=false "),
+        "{}",
+        requests[0].0
     );
     assert_eq!(
         found,
@@ -93,6 +115,43 @@ async fn a_copy_search_returns_each_document_s_thread_and_message() {
             },
         ]
     );
+}
+
+/// A search with more matches than a page goes on from the last hit until a
+/// page comes back short, so no copy is left behind.
+#[tokio::test]
+async fn a_copy_search_pages_through_every_match() {
+    let first: Vec<String> = (0..MESSAGE_DOCUMENTS_PER_PAGE)
+        .map(|n| hit(&format!("thread-{n:04}"), "message-1"))
+        .collect();
+    let (url, server) = serve_script(vec![
+        Reply::Respond("200 OK", page(&first)),
+        Reply::Respond("200 OK", page(&[hit("thread-9999", "message-1")])),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let found = client
+        .email_message_documents(&["message-1".to_owned()], &[], None)
+        .await
+        .unwrap();
+
+    let requests = server.join().unwrap();
+    assert_eq!(found.len(), MESSAGE_DOCUMENTS_PER_PAGE + 1);
+    let second: serde_json::Value = serde_json::from_str(&requests[1].1).unwrap();
+    assert_eq!(
+        second["search_after"],
+        serde_json::json!(["message-1", "thread-0999"])
+    );
+}
+
+#[test]
+fn a_copy_search_with_a_failed_shard_or_a_timeout_fails() {
+    for body in [
+        r#"{"timed_out":false,"_shards":{"total":3,"successful":2,"failed":1},"hits":{"hits":[]}}"#,
+        r#"{"timed_out":true,"_shards":{"total":3,"successful":3,"failed":0},"hits":{"hits":[]}}"#,
+    ] {
+        assert!(parse_message_documents(body).is_err(), "{body}");
+    }
 }
 
 #[tokio::test]
@@ -161,7 +220,7 @@ async fn a_stale_reindex_cannot_bring_back_a_deleted_message() {
         let first = client
             .write_email_documents(100, &[args("thread-1", "message-1")], &[], Some(&index))
             .await?;
-        assert_eq!(first.indexed, 1);
+        anyhow::ensure!(first.indexed == 1, "the first write was not applied");
 
         let removed = EmailDocumentKey {
             thread_id: "thread-1".to_owned(),
@@ -170,18 +229,19 @@ async fn a_stale_reindex_cannot_bring_back_a_deleted_message() {
         let delete = client
             .write_email_documents(300, &[], std::slice::from_ref(&removed), Some(&index))
             .await?;
-        assert_eq!(delete.deleted, 1);
+        anyhow::ensure!(delete.deleted == 1, "the delete was not applied");
 
         let stale = client
             .write_email_documents(200, &[args("thread-1", "message-1")], &[], Some(&index))
             .await?;
-        assert_eq!(
-            stale,
-            crate::upsert::email::EmailWrites {
-                indexed: 0,
-                deleted: 0,
-                refused_stale: 1,
-            }
+        anyhow::ensure!(
+            stale
+                == crate::upsert::email::EmailWrites {
+                    indexed: 0,
+                    deleted: 0,
+                    refused_stale: 1,
+                },
+            "the stale write was not refused: {stale:?}"
         );
         client
             .inner
@@ -190,7 +250,7 @@ async fn a_stale_reindex_cannot_bring_back_a_deleted_message() {
             .send()
             .await?
             .error_for_status_code()?;
-        assert!(
+        anyhow::ensure!(
             client
                 .email_message_documents(&["message-1".to_owned()], &[], Some(&index))
                 .await?
@@ -201,7 +261,7 @@ async fn a_stale_reindex_cannot_bring_back_a_deleted_message() {
         let later = client
             .write_email_documents(400, &[args("thread-1", "message-1")], &[], Some(&index))
             .await?;
-        assert_eq!(later.indexed, 1, "a later writer must still apply");
+        anyhow::ensure!(later.indexed == 1, "a later writer must still apply");
         Ok(())
     }
     .await;

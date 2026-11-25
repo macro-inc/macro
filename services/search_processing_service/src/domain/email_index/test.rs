@@ -60,6 +60,8 @@ struct HeldRead {
 struct FakeSource {
     messages: Mutex<BTreeMap<Uuid, ParsedSearchMessage>>,
     held: Mutex<Option<HeldRead>>,
+    /// How long each thread page takes to read, on the test's paused clock.
+    page_time: Mutex<Option<std::time::Duration>>,
 }
 
 impl FakeSource {
@@ -71,7 +73,7 @@ impl FakeSource {
         self.messages.lock().unwrap().remove(&id);
     }
 
-    /// Hold the next thread read after it reads, until `resume` is notified.
+    /// Hold the next read after it reads, until `resume` is notified.
     fn hold_next_read(&self) -> (oneshot::Receiver<()>, Arc<Notify>) {
         let (read, read_done) = oneshot::channel();
         let resume = Arc::new(Notify::new());
@@ -103,7 +105,9 @@ impl FakeSource {
 
 impl EmailIndexSource for Arc<FakeSource> {
     async fn message(&self, message_id: Uuid) -> Result<Option<ParsedSearchMessage>, Report> {
-        Ok(self.messages.lock().unwrap().get(&message_id).cloned())
+        let message = self.messages.lock().unwrap().get(&message_id).cloned();
+        self.release_held().await;
+        Ok(message)
     }
 
     async fn thread_page(
@@ -119,6 +123,10 @@ impl EmailIndexSource for Arc<FakeSource> {
             .take(usize::try_from(limit).unwrap())
             .collect();
         self.release_held().await;
+        let page_time = *self.page_time.lock().unwrap();
+        if let Some(page_time) = page_time {
+            tokio::time::sleep(page_time).await;
+        }
         Ok(page)
     }
 
@@ -207,6 +215,10 @@ impl EmailThreadLeases for Arc<FakeLeases> {
             .unwrap(),
             waited: LeaseWait::default(),
         })
+    }
+
+    async fn release(&self, lease: Self::Lease) {
+        drop(lease);
     }
 }
 
@@ -434,10 +446,11 @@ async fn a_delete_event_for_a_message_still_searchable_indexes_it() {
 }
 
 /// A deleted message goes under every thread it was indexed under, including
-/// a thread it moved away from.
+/// a thread it moved away from, and the writer leases that thread before it
+/// deletes there.
 #[tokio::test]
 async fn a_deleted_message_goes_under_every_thread() {
-    let (service, _, _, index) = service(true);
+    let (service, _, leases, index) = service(true);
     index.holds(key(THREAD, MESSAGE), "current copy");
     index.holds(key(OTHER_THREAD, MESSAGE), "old copy");
     index.holds(key(THREAD, SECOND_MESSAGE), "another message");
@@ -447,10 +460,45 @@ async fn a_deleted_message_goes_under_every_thread() {
         .await
         .unwrap();
 
+    assert_eq!(
+        *leases.taken.lock().unwrap(),
+        [vec![THREAD], vec![THREAD, OTHER_THREAD]]
+    );
     assert_eq!(reconciled.writes.deleted, 2);
     assert_eq!(
         index.live(),
         BTreeMap::from([(key(THREAD, SECOND_MESSAGE), "another message".to_owned())])
+    );
+}
+
+/// A message that moved and was then deleted goes under both threads, even
+/// where its document is too new for the copy search to find.
+#[tokio::test]
+async fn a_message_deleted_after_it_moved_goes_under_both_threads() {
+    let (service, source, _, index) = service(true);
+    source.put(message(MESSAGE, OTHER_THREAD, Some("moved")));
+    let (read, resume) = source.hold_next_read();
+    // The first read sees the message under OTHER_THREAD; it is deleted
+    // before the reread under both leases.
+    let reconcile = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service
+                .reconcile_message(delete_event(MESSAGE, THREAD))
+                .await
+        }
+    });
+    read.await.unwrap();
+    source.delete(MESSAGE);
+    resume.notify_one();
+    reconcile.await.unwrap().unwrap();
+
+    assert_eq!(
+        *index.documents.lock().unwrap(),
+        BTreeMap::from([
+            (key(THREAD, MESSAGE), (1_001, None)),
+            (key(OTHER_THREAD, MESSAGE), (1_001, None)),
+        ])
     );
 }
 
@@ -486,27 +534,77 @@ async fn a_sent_message_that_moved_threads_is_written_under_its_current_thread()
 }
 
 /// A thread reindex indexes its searchable messages and removes its excluded
-/// ones under every thread, and leaves a message without a parsed body alone.
+/// ones under every thread, leasing the other thread before it deletes there,
+/// and leaves a message without a parsed body as the index holds it.
 #[tokio::test]
 async fn a_thread_reindex_removes_excluded_messages_everywhere() {
-    let (service, source, _, index) = service(true);
+    let (service, source, leases, index) = service(true);
+    let unparsed = Uuid::from_u128(0x32);
     source.put(message(MESSAGE, THREAD, Some("kept")));
     source.put(excluded(SECOND_MESSAGE, THREAD));
-    source.put(message(Uuid::from_u128(0x32), THREAD, None));
+    source.put(message(unparsed, THREAD, None));
     index.holds(key(THREAD, SECOND_MESSAGE), "trashed");
     index.holds(key(OTHER_THREAD, SECOND_MESSAGE), "trashed, old thread");
+    index.holds(
+        key(THREAD, unparsed),
+        "indexed before its body went missing",
+    );
 
     let reconciled = service
         .reconcile_threads(&[THREAD], None, EmailWriter::Live, LeasePool::Live)
         .await
         .unwrap();
 
+    assert_eq!(
+        *leases.taken.lock().unwrap(),
+        [vec![THREAD], vec![THREAD, OTHER_THREAD]]
+    );
     assert_eq!(reconciled.writes.indexed, 1);
     assert_eq!(reconciled.writes.deleted, 2);
     assert_eq!(
         index.live(),
-        BTreeMap::from([(key(THREAD, MESSAGE), "kept".to_owned())])
+        BTreeMap::from([
+            (key(THREAD, MESSAGE), "kept".to_owned()),
+            (
+                key(THREAD, unparsed),
+                "indexed before its body went missing".to_owned()
+            ),
+        ])
     );
+}
+
+/// A reindex request naming no thread has nothing to lease or write.
+#[tokio::test]
+async fn a_reindex_of_no_thread_does_nothing() {
+    let (service, _, leases, _) = service(true);
+
+    let reconciled = service
+        .reconcile_threads(&[], None, EmailWriter::Bulk, LeasePool::Live)
+        .await
+        .unwrap();
+
+    assert_eq!(reconciled, EmailReconciled::default());
+    assert!(leases.taken.lock().unwrap().is_empty());
+}
+
+/// A thread too long for one lease's time renews its lease between pages and
+/// goes on from the next page, so every message is written.
+#[tokio::test(start_paused = true)]
+async fn a_long_thread_reindex_renews_its_lease_and_finishes() {
+    let (service, source, leases, index) = service(true);
+    for n in 0..300 {
+        source.put(message(Uuid::from_u128(0x1000 + n), THREAD, Some("body")));
+    }
+    *source.page_time.lock().unwrap() = Some(std::time::Duration::from_secs(31));
+
+    let reconciled = service
+        .reconcile_threads(&[THREAD], None, EmailWriter::Bulk, LeasePool::Bulk)
+        .await
+        .unwrap();
+
+    assert_eq!(leases.taken.lock().unwrap().len(), 2);
+    assert_eq!(reconciled.writes.indexed, 300);
+    assert_eq!(index.live().len(), 300);
 }
 
 /// A batch leases its threads once, in order, whatever order they came in.

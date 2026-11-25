@@ -30,7 +30,7 @@ async fn a_lease_holds_every_thread_until_it_is_dropped(pool: PgPool) {
     assert!(!thread_is_free(&pool, first).await);
     assert!(!thread_is_free(&pool, second).await);
     assert!(thread_is_free(&pool, unleased).await);
-    drop(granted.lease);
+    leases.release(granted.lease).await;
     assert!(thread_is_free(&pool, first).await);
     assert!(thread_is_free(&pool, second).await);
 }
@@ -45,7 +45,7 @@ async fn each_lease_of_a_thread_carries_a_later_version(pool: PgPool) {
         .await
         .unwrap();
     let first_version = first.version;
-    drop(first.lease);
+    leases.release(first.lease).await;
     let second = leases
         .lease(&[thread], LeasePool::Bulk, EmailWriter::Bulk)
         .await
@@ -69,7 +69,7 @@ async fn overlapping_batches_leased_in_opposite_orders_both_complete(pool: PgPoo
                 let granted = leases
                     .lease(&threads, LeasePool::Bulk, EmailWriter::Bulk)
                     .await?;
-                drop(granted.lease);
+                leases.release(granted.lease).await;
                 Ok::<_, Report>(())
             })
         };
