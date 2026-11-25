@@ -6411,6 +6411,54 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
+    it('enqueues, attempts and sends a traced optimistic mutation in its trace', async () => {
+      const parent = { run: <T>(work: () => T) => work() };
+      const enqueued: unknown[] = [];
+      const sent: Array<{ mode: string; parent: unknown }> = [];
+      let inAttempt = false;
+      const fetchedInAttempt: boolean[] = [];
+      const { ops, forwarded } = harness(host, undefined, {
+        mutationQueueTelemetry: {
+          ...NOOP_MUTATION_QUEUE_TELEMETRY,
+          enqueue: (item) => {
+            enqueued.push(item.parent);
+            return NOOP_MUTATION_QUEUE_TELEMETRY.enqueue(item);
+          },
+          attempt: () => ({
+            run: (send) => {
+              inAttempt = true;
+              try {
+                return send();
+              } finally {
+                inAttempt = false;
+              }
+            },
+            sent: (mode, sentParent) => sent.push({ mode, parent: sentParent }),
+            finish: () => undefined,
+          }),
+        },
+      });
+      const base = makeMutationOp(30, optimistic);
+
+      ops.next(
+        makeOperation(base.kind, base, {
+          ...base.context,
+          [TRACE_PARENT_CONTEXT_KEY]: parent,
+          fetch: async () => {
+            fetchedInAttempt.push(inAttempt);
+            return new Response('{}');
+          },
+        })
+      );
+      await tick();
+
+      expect(enqueued).toEqual([parent]);
+      expect(sent).toEqual([{ mode: 'live', parent }]);
+      const mutation = forwarded.find((op) => op.kind === 'mutation');
+      await mutation?.context.fetch?.('http://test');
+      expect(fetchedInAttempt).toEqual([true]);
+    });
+
     describe('a traced mutation without optimism', () => {
       afterEach(() => {
         vi.restoreAllMocks();

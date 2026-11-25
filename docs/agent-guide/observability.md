@@ -449,9 +449,11 @@ join no trace. A write without an optimistic response sends `graphql.transport`
 under it, then applies the response's cache effects in
 `graphql.mutation.cache_effects` (`cache.effect_count`,
 `cache.deleted_record_count`, `cache.effects_applied`, `cache.failure`), with a
-`graphql.mutation.cache_write` or `cache_delete` child per effect and, on
-desktop, the native `graphql_cache.ipc.request` spans under those. The caller
-waits for both phases. A queued write (`entity.move`, `entity.rename`) holds
+`graphql.mutation.cache_write` or `cache_delete` child per effect and, in the
+native apps, the `graphql_cache.ipc.request` spans for each host call under
+those (subscription effects nest theirs the same way). The caller waits for
+both phases. An IPC span exported inside such a trace keeps its own `perf`
+class and rate tags, so don't weight those by `1 / macro.sampling.rate`. A queued write (`entity.move`, `entity.rename`) holds
 `graphql.mutation_queue.enqueue` and, when the page that queued it sends it,
 `graphql.mutation_queue.attempt`, which can end after its parent; a replay
 after a reload starts its own trace, found by `mutation_queue.item_id`.

@@ -182,9 +182,15 @@ function graphqlRenameType(
 async function performGraphqlRenames(
   operations: EntityRenameOperation[]
 ): Promise<RenameDssEntityMutationData[]> {
-  return await Telemetry.span('entity.rename', (span) =>
-    sendGraphqlRenames(span, operations)
-  );
+  return await Telemetry.span('entity.rename', async (span) => {
+    try {
+      return await sendGraphqlRenames(span, operations);
+    } catch (error) {
+      // A fixed message: server errors can echo the requested name.
+      span.error('Entity rename failed');
+      throw error;
+    }
+  });
 }
 
 /** Its enqueue, queue attempt and request join `span`'s trace. */

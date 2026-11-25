@@ -45,7 +45,11 @@ import { externalWriteVersion, predatesExternalWrite } from './external-writes';
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -1685,21 +1689,16 @@ export function normalizedCacheExchange(
 
       /**
        * A successful unqueued mutation's cache effects and reported
-       * deletions. When its caller named a trace, they are one
-       * `graphql.mutation.cache_effects` phase of it, so a trace shows how
-       * long the caller waited on the cache after the server answered.
+       * deletions, as one `graphql.mutation.cache_effects` phase of the trace
+       * its caller named, so a trace shows how long the caller waited on the
+       * cache after the server answered.
        */
-      async function applyMutationCacheEffects(
-        result: OperationResult
+      async function applyTracedMutationCacheEffects(
+        result: OperationResult,
+        parent: TraceContext
       ): Promise<void> {
         const op = result.operation;
         const effects = operationCacheEffects(result.data);
-        const parent = mutationTraceParentOf(op);
-        if (!parent) {
-          await applyOperationCacheEffects(op, effects);
-          await deleteReportedRecords(result);
-          return;
-        }
         await parent.run(() =>
           Telemetry.span('graphql.mutation.cache_effects', async (span) => {
             span.setAttr(
@@ -1939,8 +1938,15 @@ export function normalizedCacheExchange(
           if (attempt) return await mutationQueue.settle(result, attempt);
 
           const optimistic = optimisticContextOf(op);
-          if (result.data != null && !result.error) {
-            await applyMutationCacheEffects(result);
+          const parent = mutationTraceParentOf(op);
+          if (result.data != null && !result.error && parent) {
+            await applyTracedMutationCacheEffects(result, parent);
+          } else if (result.data != null && !result.error) {
+            await applyOperationCacheEffects(
+              op,
+              operationCacheEffects(result.data)
+            );
+            await deleteReportedRecords(result);
           }
           if (optimistic) {
             return withOptimisticMutationDisposition(result, {
