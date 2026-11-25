@@ -1,5 +1,7 @@
+import * as path from 'node:path';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
+import * as command from '@pulumi/command';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
@@ -38,6 +40,15 @@ const BACKLOG_METRIC = 'OldestPendingSeconds';
 // minutes a scale-out needs. Email carries mailbox imports, so any email
 // backlog over a minute scales out.
 const BACKLOG_TARGETS = { live: 30, email: 60 } as const;
+// The release that fences every email index write must not run a fenced task
+// beside an old one, which writes without versions. Before its service update
+// a command stops every old task (autoscaling suspended), and after it a
+// second one restores the task count and resumes autoscaling
+// (`email-fence/`). Their trigger is this fixed epoch, not the image, so they
+// run once per stack and later deploys roll as usual. Retire them in a later
+// release by deleting both commands and the scripts; deleting runs nothing.
+const EMAIL_FENCE_EPOCH = 'email-write-fence-1';
+const EMAIL_FENCE_SCRIPTS = path.join(__dirname, 'email-fence');
 
 type Args = {
   clusterName: pulumi.Output<string> | string;
@@ -230,6 +241,21 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const region = aws.config.requireRegion();
+    const stopForEmailFence = new command.local.Command(
+      `${BASE_NAME}-stop-for-email-fence`,
+      {
+        create: `bash ${path.join(EMAIL_FENCE_SCRIPTS, 'stop-old-tasks.sh')}`,
+        environment: {
+          CLUSTER: ecsClusterArn,
+          SERVICE_PREFIX: `${BASE_NAME}-`,
+          AWS_REGION: region,
+        },
+        triggers: [EMAIL_FENCE_EPOCH],
+      },
+      { parent: this }
+    );
+
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -240,14 +266,6 @@ export class SearchProcessingService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
-        // Stop every old task before a new one starts, for the release that
-        // fences email index writes: an old task's unversioned write could
-        // otherwise undo a fenced task's newer one, or bring back a message it
-        // deleted. Indexing pauses while the new tasks boot; Kafka and the
-        // queue hold the events. Restore rolling deploys (the defaults, 100
-        // and 200) in the next release, once every task writes fenced.
-        deploymentMinimumHealthyPercent: 0,
-        deploymentMaximumPercent: 100,
         continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
@@ -319,16 +337,34 @@ export class SearchProcessingService extends pulumi.ComponentResource {
         // ECS refuses a service whose target group is not yet associated with
         // a load balancer; it is the listener rule that creates that
         // association
-        dependsOn: [gatewayTargetGroup.listener_rule],
+        dependsOn: [gatewayTargetGroup.listener_rule, stopForEmailFence],
       }
     );
 
     this.service = service;
 
-    this.setupAutoScaling({
+    const scalableTarget = this.setupAutoScaling({
       gatewayAlbArnSuffix: gatewayLoadBalancer.albArnSuffix,
       gatewayTargetGroup: gatewayTargetGroup.target_group,
     });
+
+    new command.local.Command(
+      `${BASE_NAME}-resume-after-email-fence`,
+      {
+        create: `bash ${path.join(EMAIL_FENCE_SCRIPTS, 'resume-after-fence.sh')}`,
+        environment: {
+          CLUSTER: ecsClusterArn,
+          SERVICE: service.service.name,
+          MIN_TASKS: `${MIN_TASKS}`,
+          AWS_REGION: region,
+        },
+        triggers: [EMAIL_FENCE_EPOCH],
+      },
+      {
+        parent: this,
+        dependsOn: [service, ...(scalableTarget ? [scalableTarget] : [])],
+      }
+    );
 
     this.setupServiceAlarms();
   }
@@ -478,6 +514,8 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+
+    return serviceScalableTarget;
   }
 
   setupServiceAlarms() {
