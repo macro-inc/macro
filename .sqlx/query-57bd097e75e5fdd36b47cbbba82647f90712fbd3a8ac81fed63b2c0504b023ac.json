@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT entity.id\n               FROM import_entity AS entity\n               WHERE entity.id = $2\n                 AND (SELECT entity.user_id = $1 AND entity.source = 'notion'\n                      AND entity.kind = 'data_source' OFFSET 0)\n               FOR UPDATE OF entity",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "57bd097e75e5fdd36b47cbbba82647f90712fbd3a8ac81fed63b2c0504b023ac"
+}

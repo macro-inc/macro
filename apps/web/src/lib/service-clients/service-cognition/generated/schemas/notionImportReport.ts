@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { NotionImporter } from './notionImporter';
+import type { NotionImportReportConfirmed } from './notionImportReportConfirmed';
+import type { NotionImportReportDetails } from './notionImportReportDetails';
 import type { NotionImportReportError } from './notionImportReportError';
 import type { NotionImportReportHubspot } from './notionImportReportHubspot';
 import type { NotionImportReportReviewId } from './notionImportReportReviewId';
@@ -24,6 +26,7 @@ they link to that copy and are not counted as copies.
    * @minimum 0
    */
   alreadyInMacro?: number;
+  confirmed?: NotionImportReportConfirmed;
   /**
    * Objects to copy as they are.
    * @minimum 0
@@ -35,7 +38,7 @@ they link to that copy and are not counted as copies.
    */
   dataSources: number;
   /**
-   * Rows those databases hold, every one counted while planning.
+   * Estimated database rows while planning, confirmed rows once completed.
    * @minimum 0
    */
   databaseRows: number;
@@ -50,6 +53,7 @@ planning is still `running`.
    * @minimum 0
    */
   deciding?: number;
+  details?: NotionImportReportDetails;
   /**
    * Pages written as documents.
    * @minimum 0
@@ -57,6 +61,11 @@ planning is still `running`.
   documents: number;
   /** Why the run failed, when it did. */
   error?: NotionImportReportError;
+  /**
+   * Total objects that failed, including those outside the sample.
+   * @minimum 0
+   */
+  failureCount?: number;
   /** Objects that failed to import, with the failure. */
   failures?: NotionReportItem[];
   /**
@@ -68,7 +77,7 @@ planning is still `running`.
   handItems?: NotionReportItem[];
   hubspot?: NotionImportReportHubspot;
   /**
-   * Plan objects already imported.
+   * Plan objects finished so far, or confirmed new copies once completed.
    * @minimum 0
    */
   imported: number;

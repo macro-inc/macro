@@ -125,6 +125,11 @@ pub enum EmailLiteral {
     CalendarOnly(bool),
     /// Threads with at least one attachment of this kind on any message.
     Attachment(AttachmentKind),
+    /// Threads with at least one message carrying this label
+    /// (`email_labels.id`). Only labels of inboxes the reader owns or manages
+    /// match, so the label of an inbox a thread was shared from never does.
+    /// Several `Label` literals OR together.
+    Label(Uuid),
     /// Filter by thread created_at timestamp
     #[serde(rename = "ca")]
     CreatedAt(DateLiteral),

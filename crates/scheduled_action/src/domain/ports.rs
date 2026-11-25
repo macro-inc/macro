@@ -1315,6 +1315,9 @@ pub struct FinishedRoutineRun {
     pub target: RunTarget,
     pub end: RunEnd,
     pub duration: chrono::Duration,
+    /// The apps the routine needs connected, by name, when the run failed
+    /// because one of them is not; empty otherwise.
+    pub apps_to_connect: Vec<String>,
 }
 
 /// Told about every finished routine run, e.g. for product analytics.

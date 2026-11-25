@@ -47,6 +47,12 @@ export const Act = z.object({
   wake: z.string().min(1).optional(),
   /** Do nothing until this file exists; then act once, and remove the schedule. */
   ifFile: z.string().min(1).optional(),
+  /** The trace whatever set the schedule ran in (W3C `traceparent`): a wake joins it. */
+  traceparent: z
+    .string()
+    .regex(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
+    .optional()
+    .catch(undefined),
 });
 export type Act = z.infer<typeof Act>;
 
@@ -56,6 +62,8 @@ export type Action =
   | {
       readonly kind: 'dm' | 'wake';
       readonly text: string;
+      /** The trace a wake joins, if whatever set the schedule recorded one. */
+      readonly traceparent?: string;
       /** The schedule is a watch that has now seen its file: it ends itself once it has acted. */
       readonly thenRemove: boolean;
     };
@@ -70,10 +78,16 @@ export const watched = ({ data }: Fired): string | undefined => {
 export const actionOf = ({ data }: Fired, fileExists: boolean): Action => {
   const act = Act.safeParse(data);
   if (!act.success) return { kind: 'none' };
-  const { dmOwner, wake, ifFile } = act.data;
+  const { dmOwner, wake, ifFile, traceparent } = act.data;
   if (ifFile !== undefined && !fileExists) return { kind: 'none' };
   const thenRemove = ifFile !== undefined;
   if (dmOwner !== undefined) return { kind: 'dm', text: dmOwner, thenRemove };
-  if (wake !== undefined) return { kind: 'wake', text: wake, thenRemove };
+  if (wake !== undefined)
+    return {
+      kind: 'wake',
+      text: wake,
+      thenRemove,
+      ...(traceparent === undefined ? {} : { traceparent }),
+    };
   return { kind: 'none' };
 };

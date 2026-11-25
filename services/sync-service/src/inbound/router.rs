@@ -19,8 +19,8 @@ use worker::send::SendWrapper;
 
 use super::{
     auth::{
-        AdminAccess, EditAccess, InternalAccess, SignedDocumentAccess, SocketAccess, SurfaceAccess,
-        ViewAccess,
+        AdminAccess, EditAccess, ImportLinkAccess, InternalAccess, SignedDocumentAccess,
+        SocketAccess, SurfaceAccess, ViewAccess,
     },
     durable_object::SyncSession,
 };
@@ -69,6 +69,10 @@ pub fn document_router(session: Rc<SyncSession>) -> Router {
         .route("/document/{document_id}/initialize", post(initialize))
         .route("/document/{document_id}/state", get(document_state))
         .route("/document/{document_id}/update", post(document_update))
+        .route(
+            "/document/{document_id}/import-links",
+            post(import_document_links),
+        )
         .route("/document/{document_id}/delete", delete(delete_document))
         .route(
             "/document/{document_id}/debug_dump_operations",
@@ -284,7 +288,7 @@ pub(crate) async fn document_state(
         .document_handler(
             worker::Request::try_from(req)?,
             &access.document_id,
-            false,
+            super::durable_object::document_api::DocumentOperation::Read,
             access.access,
             access.claims,
         )
@@ -310,7 +314,29 @@ pub(crate) async fn document_update(
         .document_handler(
             worker::Request::try_from(req)?,
             &access.document_id,
-            true,
+            super::durable_object::document_api::DocumentOperation::Edit,
+            access.access,
+            access.claims,
+        )
+        .await?
+        .into())
+}
+
+// Import orchestration has already fenced the document and its initial
+// revision against the active ledger generation. Both credentials are
+// required here: a browser Edit grant cannot select this operation.
+#[worker::send]
+async fn import_document_links(
+    State(state): State<RouterState>,
+    ImportLinkAccess(access): ImportLinkAccess,
+    req: Request,
+) -> HandlerResult {
+    Ok(state
+        .session
+        .document_handler(
+            worker::Request::try_from(req)?,
+            &access.document_id,
+            super::durable_object::document_api::DocumentOperation::ImportLinks,
             access.access,
             access.claims,
         )

@@ -3,13 +3,13 @@ import { t } from '@app/lib/i18n';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { Button } from '@ui/components/Button';
 import { type JSX, Match, Show, Switch } from 'solid-js';
-import { EntryList } from '../../components/entry-list';
+import { EntryList, type EntryPerson } from '../../components/entry-list';
 import type { TaskTime } from '../../primitives/create-task-time';
 
 type EntriesSectionProps = {
   time: TaskTime;
   today: string;
-  person: (userId: string) => JSX.Element;
+  person: EntryPerson;
   row?: (entry: TimeEntryFieldsFragment, content: JSX.Element) => JSX.Element;
   actions?: (entry: TimeEntryFieldsFragment) => JSX.Element;
 };

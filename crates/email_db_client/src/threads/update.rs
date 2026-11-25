@@ -305,7 +305,9 @@ pub async fn backfill_attachment_kind_flags_in_blocks(
 /// One statement reads the whole mailbox and holds the row locks of every
 /// thread it flags until it commits, so it refuses a mailbox of more than
 /// `max_threads` threads; [`backfill_attachment_kind_flags_in_blocks`] covers
-/// those.
+/// those. It looks up each of the mailbox's messages' attachments by
+/// `message_id`: joined directly, the planner sizes the mailbox at the table
+/// average and hash-joins a full scan of `email_attachments`.
 #[tracing::instrument(skip(pool), err)]
 pub async fn backfill_link_attachment_kind_flags(
     pool: &sqlx::PgPool,
@@ -343,12 +345,18 @@ pub async fn backfill_link_attachment_kind_flags(
         FROM (
             SELECT
                 m.thread_id,
-                COALESCE(bool_or(a.mime_type LIKE ANY($2::text[])), false) AS has_pdf,
-                COALESCE(bool_or(a.mime_type LIKE ANY($3::text[])), false) AS has_image,
-                COALESCE(bool_or(a.mime_type LIKE ANY($4::text[])), false) AS has_document
-            FROM email_messages m
-            JOIN email_attachments a ON a.message_id = m.id
-            WHERE m.link_id = $1
+                COALESCE(bool_or(per_message.has_pdf), false) AS has_pdf,
+                COALESCE(bool_or(per_message.has_image), false) AS has_image,
+                COALESCE(bool_or(per_message.has_document), false) AS has_document
+            FROM (SELECT id, thread_id FROM email_messages WHERE link_id = $1 OFFSET 0) m
+            CROSS JOIN LATERAL (
+                SELECT
+                    bool_or(a.mime_type LIKE ANY($2::text[])) AS has_pdf,
+                    bool_or(a.mime_type LIKE ANY($3::text[])) AS has_image,
+                    bool_or(a.mime_type LIKE ANY($4::text[])) AS has_document
+                FROM email_attachments a
+                WHERE a.message_id = m.id
+            ) per_message
             GROUP BY m.thread_id
         ) kinds
         WHERE t.id = kinds.thread_id

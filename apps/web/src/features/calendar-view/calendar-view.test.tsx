@@ -10,15 +10,23 @@ const mocks = vi.hoisted(() => ({
   markRead: vi.fn(async () => {}),
   setSearch: vi.fn(),
   notificationSource: { id: 'notification-source' },
-  focusEvent: (_eventId: string | undefined) => {},
+  focusEvent: (
+    _eventId: string | undefined,
+    _landedOccurrenceKey?: string
+  ) => {},
   isInlinePreview: false,
   contentParams: undefined as Record<string, unknown> | undefined,
   searchEventId: '',
+  searchOccurrenceKey: '',
+  searchStartDate: '',
 }));
 
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
   CalendarViewContextProvider: (props: {
-    onFocusedEventIdChange: (eventId: string | undefined) => void;
+    onFocusedEventIdChange: (
+      eventId: string | undefined,
+      landedOccurrenceKey?: string
+    ) => void;
     children: JSX.Element;
   }) => {
     mocks.focusEvent = props.onFocusedEventIdChange;
@@ -38,8 +46,8 @@ vi.mock('@app/lib/split-router', () => ({
   createSearchParams: () => [
     {
       eventId: mocks.searchEventId,
-      occurrenceKey: '',
-      startDate: '',
+      occurrenceKey: mocks.searchOccurrenceKey,
+      startDate: mocks.searchStartDate,
       endDate: '',
     },
     mocks.setSearch,
@@ -69,6 +77,10 @@ vi.mock('@notifications/notification-helpers', () => ({
 }));
 vi.mock('@queries/calendar/occurrences', () => ({
   useCalendarOccurrencesQuery: () => ({}),
+  createCalendarOccurrenceQueryRange: (start: Date, end: Date) => ({
+    start: start.toISOString(),
+    end: end.toISOString(),
+  }),
 }));
 vi.mock('./calendar-focus-target', () => ({
   CalendarFocusContextProvider: (props: { children: JSX.Element }) =>
@@ -100,6 +112,8 @@ beforeEach(() => {
   mocks.isInlinePreview = false;
   mocks.contentParams = undefined;
   mocks.searchEventId = '';
+  mocks.searchOccurrenceKey = '';
+  mocks.searchStartDate = '';
 });
 
 afterEach(cleanup);
@@ -166,5 +180,58 @@ describe('marking an event read when Calendar lands on it', () => {
       mocks.notificationSource,
       { type: 'calendar_event', id: 'next-event' }
     );
+  });
+});
+
+describe('the URL of details that followed a moved event', () => {
+  const FROM = '2026-11-28T15:00:00+00:00';
+
+  it('drops a link’s locator for the occurrence the move replaced', () => {
+    mocks.searchEventId = 'event';
+    mocks.searchOccurrenceKey = FROM;
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', '2026-11-28T16:00:00+00:00');
+
+    expect(mocks.setSearch).toHaveBeenCalledExactlyOnceWith(
+      { eventId: 'event' },
+      { mode: 'replace', history: 'replace' }
+    );
+  });
+
+  it('drops a Home row’s dates, which carry no occurrence key', () => {
+    mocks.searchEventId = 'event';
+    mocks.searchStartDate = '2026-11-28';
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', '2026-11-29T16:00:00+00:00');
+
+    expect(mocks.setSearch).toHaveBeenCalledExactlyOnceWith(
+      { eventId: 'event' },
+      { mode: 'replace', history: 'replace' }
+    );
+  });
+
+  it('keeps the URL of details opened from the grid, which names only the event', () => {
+    mocks.searchEventId = 'event';
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', '2026-11-29T16:00:00+00:00');
+
+    expect(mocks.setSearch).not.toHaveBeenCalled();
+  });
+
+  it('keeps a link’s locator for the occurrence it still names', () => {
+    mocks.searchEventId = 'event';
+    mocks.searchOccurrenceKey = FROM;
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', FROM);
+
+    expect(mocks.setSearch).not.toHaveBeenCalled();
   });
 });

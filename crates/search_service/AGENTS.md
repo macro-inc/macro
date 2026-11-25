@@ -50,6 +50,12 @@ per-entity-type search plus a unified search across them — mounted into
 ## Checks
 
 - `cargo test -p search_service` (`SQLX_OFFLINE` unset).
+- `simple_unified/test/delegated_inbox.rs` searches through both routes
+  against Postgres and OpenSearch, so it is ignored: run it with
+  `SEARCH_TEST_OPENSEARCH_URL` set to an OpenSearch with the search indices
+  (set up as `opensearch_client`'s AGENTS.md describes) and `--ignored`. It
+  cleans up the mail it indexes, so the content search tests can run after
+  it on the same node.
 - `SQLX_OFFLINE=true cargo check` (`just check` recipe in `justfile`).
 
 ## Gotchas
@@ -196,6 +202,35 @@ per-entity-type search plus a unified search across them — mounted into
   is an operator; these tests and Mail's search field
   (`apps/web/src/features/email-view/search/email-search-operators.ts`, which
   draws and completes operators) both check it, so change it with the parser.
+- Typed search operators that choose kinds and narrow them are read out of
+  the query before the email operators, for every caller of the unified
+  search (`api/search/search_operators.rs`): `type:doc|task|email|channel|
+  call|folder|agent|calendar` names the kinds (`doc` leaves tasks out through
+  `excluded_sub_types`); `status:` (task statuses, or `missed`, `attended`,
+  `unattended` for calls), `priority:`, `assignee:` and `author:` narrow to
+  tasks (`author:` beside `type:doc` to documents); `tag:` to the tagged
+  kinds; `inbox:<address>` to email; `in:#<channel>` (the whole name the
+  caller sees, DMs left out, reading up to `MAX_CANDIDATE_PAGES` pages of
+  candidates since an unnamed group matches by one member's name) to
+  channels and calls, and where the request or the other operators leave
+  neither it stays Mail's label operator; `from:` is the email
+  operator unless `type:` leaves email out and names channels or calls,
+  where it names senders and speakers, and then channel and call names no
+  longer match (a name says nothing of who posted or spoke). People are `me`
+  or an address. `OR` between two of the same operator joins their values,
+  and an `OR` beside an operator that joins nothing is dropped; repeated
+  without it, each must hold, and kinds that cannot meet them all are left
+  out. Status, priority, assignees and authors need no lookup; tag, inbox and
+  channel names resolve for the caller inside their lane turn
+  (`domain/operator_names.rs`) through the queries tag, inbox and channel
+  name search already run, and a name reaching nothing matches nothing.
+  Refused with a 400, and not logged as errors: an `OR` tag group beside
+  another tag (`TagConditionsDontCombine`; the search applies one any-of or
+  all-of list), two `from:` on calls (`SpeakersDontCombine`), operators
+  leaving no word unless only email is searched (`OperatorsNeedAWord`), more
+  than `MAX_CHANNEL_NAMES` channel names. An unknown name or invalid value
+  stays a word. `search_operators/typed_operators.json` lists typed queries
+  and how many operators each holds; change it with the parser.
 - The typed conditions that are not thread states run in OpenSearch: text
   matches, labels and tags (`labels` terms or the nested tag filter, each name
   resolved for the caller in Postgres; a required name naming nothing matches
@@ -210,12 +245,20 @@ per-entity-type search plus a unified search across them — mounted into
   reaches), for `label:`, `in:<name>`, `include_labels` and `exclude_labels`
   alike, and a hit from any other inbox (a thread shared with the caller)
   comes back with no labels: the labels people make are theirs.
-- Email search scopes by the owners of the inboxes the caller can reach
-  (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
-  documents are deleted. An inbox whose disconnect has started (`deleting_at`)
-  is excluded by `link_id` at once, because search-processing deletes its
-  documents only after the email service purges its rows. Threads someone
-  else shared from such an inbox are not excluded.
+- Email search reaches mail by the inbox holding it (`link_id`), in the
+  inboxes the caller can reach (`fetch_search_inboxes_for_macro_id`: the set
+  `fetch_inboxes_for_macro_id` returns, their own and those delegated to
+  them), plus the threads it names by id (shares, folders, view allowlists).
+  Never scope it by owner: the index files every inbox of one person under
+  that person's `user_id`, and inboxes are delegated one at a time, so the
+  owner's id reaches inboxes the caller was never given. These are
+  `UnifiedEmailSearchArgs::inbox_link_ids`, empty when a search reaches
+  threads by id alone (folders, view allowlists, shares only), unlike
+  `label_link_ids`, which keeps the caller's own labels matching there. An inbox whose
+  disconnect has started (`deleting_at`) is excluded by `link_id` at once,
+  because search-processing deletes its documents only after the email
+  service purges its rows. Threads someone else shared from such an inbox
+  are not excluded.
 - Email filters mean what the Email list query means by them, applied before
   pagination (`domain/email_search.rs`). Shared threads are resolved from
   `entity_access` grants to the caller's sources, leaving out their own

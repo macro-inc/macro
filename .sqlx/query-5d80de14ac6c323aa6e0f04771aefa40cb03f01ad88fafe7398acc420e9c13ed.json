@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM computer_move\n                WHERE computer_id = $1 AND stage IN ('cutting_over', 'rolling_back')\n            ) OR EXISTS (\n                SELECT 1 FROM image_upgrade_computer\n                WHERE computer_id = $1 AND state IN ('replacing', 'verifying', 'rolling_back')\n            ) AS \"held!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "held!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5d80de14ac6c323aa6e0f04771aefa40cb03f01ad88fafe7398acc420e9c13ed"
+}

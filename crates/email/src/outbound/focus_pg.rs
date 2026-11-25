@@ -26,6 +26,10 @@ const BODY_CHARS: i32 = 6_000;
 const SENT_NOTES: i64 = 100;
 /// Characters of each sent message read.
 const SENT_NOTE_CHARS: i32 = 2_000;
+/// How many messages may name a sender as a recipient before `stale_threads`
+/// stops looking them up one message at a time and reads the owner's recent
+/// sent mail once instead: a mailing list is on every message through it.
+const ADDRESSED_PROBE_LIMIT: i64 = 200;
 
 /// Focus storage on the Macro database.
 #[derive(Clone)]
@@ -375,34 +379,29 @@ impl FocusStore for FocusPgRepository {
         sqlx::query!("SET LOCAL statement_timeout = '30s'")
             .execute(&mut *tx)
             .await?;
-        // The inner query reads only the inbox's threads with mail in the
-        // window, through its indexes on latest inbound and latest outbound
-        // time, and drops those already classified at their latest mail. The
-        // `OFFSET 0` keeps the calendar and recent contact checks, a subquery
-        // each per thread, off everything else. A thread below the cursor has
-        // both times at or below it, so a later page starts each index range
-        // at the cursor instead of reading the window from the top again.
+        // `stale` reads only the inbox's threads with mail in the window,
+        // through its indexes on latest inbound and latest outbound time, and
+        // drops those already classified at their latest mail; it is
+        // materialized so the calendar and recent contact checks, a subquery
+        // each per thread, never run on anything else. A thread below the
+        // cursor has both times at or below it, so a later page starts each
+        // index range at the cursor instead of reading the window from the
+        // top again.
         //
-        // The people the owner wrote to lately are read once, from the
-        // owner's own sent mail, and each thread only looks its senders up
-        // in that set. Looking each sender up through every message
-        // addressed to them instead costs a probe per message: a mailing
-        // list is both the sender and a recipient of every message through
-        // it, so each of its threads read the whole list's history, and a
-        // busy inbox's first page passed the statement timeout.
+        // Whether a sender is someone the owner wrote to lately is decided
+        // once per distinct sender of the threads nothing cheaper keeps, not
+        // once per thread. A sender named on few messages is looked up
+        // through them (`ADDRESSED_PROBE_LIMIT`), stopping at the first the
+        // owner sent in the look-back. A sender named on more, such as a
+        // mailing list, which is both the sender and a recipient of all its
+        // mail, is looked up in the owner's recipients of the look-back
+        // instead, read once and only when such a sender comes up: probing
+        // through a list's history costs a page per message, and reading the
+        // owner's sent mail on every page costs thousands of cold pages,
+        // which pushed the sweep's pages toward the statement timeout.
         let rows = sqlx::query!(
             r#"
-            WITH recent_contact AS MATERIALIZED (
-                SELECT DISTINCT r.contact_id
-                FROM email_messages sent
-                JOIN email_message_recipients r ON r.message_id = sent.id
-                WHERE sent.link_id = $1
-                  AND sent.is_sent
-                  AND NOT sent.is_draft
-                  AND sent.internal_date_ts >= $5
-            )
-            SELECT s.id AS "id!", s.latest_at AS "latest_at!"
-            FROM (
+            WITH stale AS MATERIALIZED (
                 SELECT t.id, t.is_signal, t.latest_inbound_message_ts,
                        t.latest_outbound_message_ts,
                        GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
@@ -433,8 +432,60 @@ impl FocusStore for FocusPgRepository {
                   AND (GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts), t.id)
                       < (COALESCE($7, 'infinity'::timestamptz),
                          COALESCE($8, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
-                OFFSET 0
-            ) s
+            ),
+            sender AS MATERIALIZED (
+                SELECT DISTINCT inbound.from_contact_id AS contact_id
+                FROM stale s
+                JOIN email_messages inbound ON inbound.thread_id = s.id
+                -- Only threads the checks before the contact check don't keep.
+                WHERE NOT COALESCE(
+                          s.is_signal
+                          OR s.latest_outbound_message_ts > s.latest_inbound_message_ts
+                          OR s.rule_version < $4,
+                          false
+                      )
+                  AND NOT inbound.is_sent
+                  AND NOT inbound.is_draft
+                  AND inbound.from_contact_id IS NOT NULL
+            ),
+            sent_recipient AS MATERIALIZED (
+                SELECT DISTINCT r.contact_id
+                FROM email_messages sent
+                JOIN email_message_recipients r ON r.message_id = sent.id
+                WHERE sent.link_id = $1
+                  AND sent.is_sent
+                  AND NOT sent.is_draft
+                  AND sent.internal_date_ts >= $5
+            ),
+            recent_contact AS MATERIALIZED (
+                SELECT c.contact_id
+                FROM sender c
+                WHERE CASE
+                    WHEN (
+                        SELECT count(*)
+                        FROM (
+                            SELECT 1 FROM email_message_recipients r
+                            WHERE r.contact_id = c.contact_id
+                            LIMIT $9::bigint + 1
+                        ) addressed
+                    ) <= $9::bigint
+                    -- A scalar, not EXISTS: the planner turns an EXISTS into
+                    -- a hashed read of everyone's sent mail.
+                    THEN COALESCE((
+                        SELECT true
+                        FROM email_message_recipients r
+                        JOIN email_messages sent ON sent.id = r.message_id
+                        WHERE r.contact_id = c.contact_id
+                          AND sent.is_sent
+                          AND NOT sent.is_draft
+                          AND sent.internal_date_ts >= $5
+                        LIMIT 1
+                    ), false)
+                    ELSE c.contact_id IN (SELECT contact_id FROM sent_recipient)
+                END
+            )
+            SELECT s.id AS "id!", s.latest_at AS "latest_at!"
+            FROM stale s
             WHERE s.is_signal
                OR s.latest_outbound_message_ts > s.latest_inbound_message_ts
                OR s.rule_version < $4
@@ -484,6 +535,7 @@ impl FocusStore for FocusPgRepository {
             change_subject_pattern(),
             after.map(|after| after.latest_at),
             after.map(|after| after.thread_id),
+            ADDRESSED_PROBE_LIMIT,
         )
         .fetch_all(&mut *tx)
         .await?;

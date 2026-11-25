@@ -1,5 +1,6 @@
 use super::SimpleMessage;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +104,37 @@ pub struct StagedLabelChange {
     pub messages: Vec<SimpleMessage>,
     /// The messages that gained or lost the label.
     pub changed_ids: Vec<Uuid>,
+    /// Whether the thread gained the label: it is one someone made, and no
+    /// message of the thread, drafts aside, carried it before.
+    pub thread_gained: bool,
+}
+
+/// User labels a thread gained in one write, kept with the write until it is
+/// published.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelsGained {
+    /// Published as the event's id, so a retried projection repeats it.
+    pub event_id: Uuid,
+    /// Label row ids.
+    pub label_ids: Vec<Uuid>,
+    /// The message the labels were seen on; `None` for a whole thread.
+    #[serde(default)]
+    pub message_id: Option<Uuid>,
+    /// Whether an agent or a routine added them.
+    #[serde(default)]
+    pub automated: bool,
+}
+
+impl LabelsGained {
+    /// Labels first seen on a message read from the provider.
+    pub fn from_provider(label_ids: Vec<Uuid>, message_id: Uuid) -> Option<Self> {
+        (!label_ids.is_empty()).then(|| Self {
+            event_id: macro_uuid::generate_uuid_v7(),
+            label_ids,
+            message_id: Some(message_id),
+            automated: false,
+        })
+    }
 }
 
 /// The most threads one bulk archive request may change.

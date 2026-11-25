@@ -50,6 +50,11 @@ Set `max_locks_per_transaction = 8192` on that dedicated server, as in
 and restart PostgreSQL before testing; replacing a pre-migrated schema can exceed
 the default lock capacity.
 
+Give dedicated PostgreSQL test containers enough shared memory (for example,
+`--shm-size=2g`) when parallel migrations or SQLx schema checks exhaust
+`/dev/shm`, and keep test threads low. Move the tests to that dedicated server;
+never restart, resize, or reset a shared server to recover test resources.
+
 Tests that build their own schema (`#[sqlx::test(migrations = false)]`, or a
 crate's test-only schema fixture) must first run
 `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`, since their database may

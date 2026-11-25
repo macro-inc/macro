@@ -41,8 +41,8 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
 
 ## Checks
 
-- `bun test test/tests.ts` and the `*.test.ts` files beside their endpoints
-  (`bun test`).
+- From this directory: `bun test --preload ./src/polyfills/prism.ts` (preload
+  the headless Prism global before any test imports Lexical grammars).
 - `bun run check` (`tsc --noEmit --project tsconfig.check.json`).
 - `bun run plaintext|search|cognition <document-id>` against the local stack's
   `lexical_service` (port 8096) to sanity-check an endpoint end to end.
@@ -61,3 +61,16 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
 ## Related
 
 - Docs: `packages/lexical-core` (shared node/utility source of truth)
+
+`POST /snapshot/notion` accepts optional `links.databases` occurrences:
+`{containerId, ordinal, target}`, where `target` is
+`{databaseId, tableId, viewId?}` or `{reason}` (`noAccess`, `notFound`,
+`notImported`, `unresolved`). Container IDs are dashless lowercase IDs from the
+URL path; ordinals count that container's placements in page-body order.
+Resolved placements produce database cards; failed placements retain named
+Notion links. Old callers may omit the array.
+
+`POST /snapshot/notion-links` is an internal snapshot operation. It inventories
+exact Notion references in link and autolink nodes and can prepare an href-only
+Loro update for the destinations the importer has verified. Keep code, block
+anchors without mappings, and unresolved references out of the update.

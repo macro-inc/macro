@@ -13,6 +13,8 @@ This crate owns saved-view definitions, shared icon/color appearance, revisions,
 - Appearance uses the shared `model_entity::EntityAppearance` value outside consumer config; only owners write it, and metadata writes preserve definition revisions and timestamps. Initial appearance is validated and inserted atomically on create. Keep SQLx JSON wrappers in the PostgreSQL adapter, never the domain.
 - Order is personal: `saved_view_position` holds each viewer's position per visible view, outside the definition and its revision. Lists sort placed views first, then by creation time and ID, and the cursor carries all three. `reorder` replaces one kind's order whole (views left out become unplaced) under a per-viewer, per-kind advisory lock.
 
+- `merge::retarget_crm_list_companies_in` points CRM lists at the company that stays when companies merge, keeping each list's order, under each view's own lock and in the caller's transaction. The caller passes the team's members.
+
 ## Checks
 
 Run `cargo test -p saved_views` with a local migrated MacroDB and `SQLX_OFFLINE` unset. Run `nix develop --command just prepare_db` after changing SQL or migrations. Never query `team_user` from this crate; the Teams-owned evidence adapter belongs at composition. For migration checks, use a fresh disposable local database. Run each concurrent-index migration separately with `PGOPTIONS="-c lock_timeout=2s"`. Owner departure disables sharing; owner rejoining restores it.

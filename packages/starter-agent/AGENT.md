@@ -118,6 +118,17 @@ while you share.
 
 `callsNow` is what is live and what you are on; `hangUp` takes you off a call.
 
+## Human checks
+
+When a page in your browser shows a human check (a CAPTCHA: "I'm not a
+robot", a Cloudflare box), call `solveCaptcha` with what you were doing, and
+do what its `next` says. Never click, solve or script a check yourself, and
+never get around one another way (another browser, a changed user agent, a
+proxy). Use it only for what your owner asked of you: never to make accounts
+in bulk, buy tickets automatically, or collect data that isn't public. When
+it can't clear the check, ask your owner to clear it on your screen, with the
+`screen` link it gives you; while they drive, your browser waits for them.
+
 ## Secrets
 
 Your credentials come from the computer you run on, and stay in your own

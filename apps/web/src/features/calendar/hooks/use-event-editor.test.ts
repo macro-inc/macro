@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   quickCalls: true,
   quickCallsLoading: false,
   queuedIds: new Set<string>(),
+  calendars: [] as unknown[],
 }));
 
 vi.mock('@core/util/webOrigin', () => ({
@@ -32,7 +33,12 @@ vi.mock('@core/user', () => ({
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@queries/calendar/calendars', () => ({
-  useVisibleCalendarsQuery: () => ({ data: [], isSuccess: true }),
+  useVisibleCalendarsQuery: () => ({
+    get data() {
+      return mocks.calendars;
+    },
+    isSuccess: true,
+  }),
 }));
 vi.mock('@queries/calendar/mutations', () => ({
   useCreateCalendarEventMutation: () => ({
@@ -103,6 +109,7 @@ const savedEvent: CalendarEvent = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.calendars = [];
   mocks.quickCalls = true;
   mocks.quickCallsLoading = false;
   mocks.createEvent.mockResolvedValue({
@@ -1126,6 +1133,36 @@ describe('closing once a save is queued', () => {
       });
       expect(saved).toHaveBeenCalledOnce();
       expect(mocks.failure).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('hands the create the calendar the dialog shows, so it queues without reading the calendar list', async () => {
+    const work = {
+      id: 'calendar-2',
+      emailLinkId: 'link-2',
+      emailAddress: 'work@example.com',
+      isWritable: true,
+      isPrimary: true,
+      name: 'Work',
+      provider: 'google',
+      defaultReminders: [],
+      capabilities: { guestPolicy: true },
+    };
+    mocks.calendars = [work];
+    const { hook, dispose } = editor();
+    try {
+      await hook.save({ ...values, calendarId: 'calendar-2' });
+      await hook.save({ ...values, calendarId: 'calendar-3' });
+
+      expect(mocks.createEvent).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ calendarId: 'calendar-2', calendar: work })
+      );
+      expect(mocks.createEvent.mock.calls[1]?.[0]).not.toHaveProperty(
+        'calendar'
+      );
     } finally {
       dispose();
     }
