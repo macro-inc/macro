@@ -13,8 +13,8 @@ import { makeSetCompanyPropertyAction } from './crm-actions';
 import { makeHideCompanyAction } from './crm-hide-action';
 import {
   mergeCandidates,
+  openMergeCompanies,
   useCanMergeCompanies,
-  useOpenMergeCompanies,
 } from './crm-merge';
 import { useSetCompanyHiddenMutation } from './record-adapter';
 
@@ -35,7 +35,6 @@ export function createCrmEntityActionItems() {
   });
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
   const canMerge = useCanMergeCompanies();
-  const openMerge = useOpenMergeCompanies();
 
   return (
     entities: EntityData[],
@@ -88,7 +87,8 @@ export function createCrmEntityActionItems() {
         icon: GitMergeIcon,
         label:
           merging.length > 1 ? t('crm.mergeCompanies') : t('crm.mergeWith'),
-        onClick: () => openMerge(merging, () => soup.selection.clear()),
+        onClick: () =>
+          openMergeCompanies(merging, () => soup.selection.clear()),
       });
     }
 

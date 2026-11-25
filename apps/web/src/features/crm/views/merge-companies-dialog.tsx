@@ -196,7 +196,7 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
                 variant="cards"
                 size="md"
                 aria-label={t('crm.mergeKeepLabel')}
-                class="grid gap-2"
+                class="grid grid-cols-1 gap-2"
                 value={keepId()}
                 onChange={setKeepId}
               >
@@ -288,21 +288,15 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
             </Match>
           </Switch>
         </ActionDialogShell.Body>
-        <ActionDialogShell.Footer class="touch:gap-3">
+        <ActionDialogShell.Footer>
           <Switch>
             <Match when={step() === 'pick'}>
-              <Button
-                variant="ghost"
-                size={size()}
-                class="touch:min-w-0 touch:flex-1"
-                onClick={close}
-              >
+              <Button variant="ghost" size={size()} onClick={close}>
                 {t('common.cancel')}
               </Button>
               <Button
                 variant="primary"
                 size={size()}
-                class="touch:min-w-0 touch:flex-1"
                 disabled={picked().length < 2 || tooMany()}
                 onClick={() => setStep('keep')}
               >
@@ -313,7 +307,6 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
               <Button
                 variant="ghost"
                 size={size()}
-                class="touch:min-w-0 touch:flex-1"
                 onClick={() => (startsFromOne ? setStep('pick') : close())}
               >
                 {startsFromOne ? t('common.back') : t('common.cancel')}
@@ -321,7 +314,6 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
               <Button
                 variant="primary"
                 size={size()}
-                class="touch:min-w-0 touch:flex-1"
                 disabled={!survivor() || tooMany()}
                 onClick={openReview}
               >
@@ -332,7 +324,6 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
               <Button
                 variant="ghost"
                 size={size()}
-                class="touch:min-w-0 touch:flex-1"
                 disabled={pending()}
                 onClick={() => setStep('keep')}
               >
@@ -341,12 +332,7 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
               <Show
                 when={ready() || review().t === 'loading'}
                 fallback={
-                  <Button
-                    variant="primary"
-                    size={size()}
-                    class="touch:min-w-0 touch:flex-1"
-                    onClick={close}
-                  >
+                  <Button variant="primary" size={size()} onClick={close}>
                     {t('common.close')}
                   </Button>
                 }
@@ -354,7 +340,6 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
                 <Button
                   variant="danger"
                   size={size()}
-                  class="touch:min-w-0 touch:flex-1"
                   disabled={!ready() || pending()}
                   onClick={() => fireAndForget(merge(), 'crm')}
                 >

@@ -1,16 +1,13 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { formatLocale, t } from '@app/lib/i18n';
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { toast } from '@core/component/Toast/Toast';
+import { t } from '@app/lib/i18n';
 import { enableCrmMerge } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
-import { fireAndForget } from '@core/util/fireAndForget';
+import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { Button, openDialog } from '@ui';
-import { Show } from 'solid-js';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+import { Button } from '@ui';
+import { createSignal, Show } from 'solid-js';
 import { MAX_MERGE_SOURCES } from './core/merge';
 
 /** A company offered for a merge, with the domains that tell it apart. */
@@ -42,48 +39,33 @@ export function useCanMergeCompanies() {
   return () => flag().enabled && admin();
 }
 
+type MergeRequest = { companies: MergeCandidate[]; onMerged?: () => void };
+
+// Menus and toolbars hand the merge to the one dialog the app layout mounts,
+// where the app's CRM wiring is available, as the CRM create dialogs do.
+const [mergeRequest, setMergeRequest] = createSignal<MergeRequest>();
+const [mergeOpen, setMergeOpen] = createSignal(false);
+const mergeLock = useFocusLock('crm-merge-companies');
+
+/** The merge the layout's dialog shows; it stays set while the dialog closes. */
+export const companyMerge = {
+  request: mergeRequest,
+  open: mergeOpen,
+  close() {
+    mergeLock.release();
+    setMergeOpen(false);
+  },
+};
+
 /** Opens a merge of `companies`; one starts by picking the others. */
-export function useOpenMergeCompanies() {
-  const { openWithSplit } = useSplitLayout();
-  // Loaded on open: the dialog's CRM wiring imports soup, which imports the
-  // shared menus this is offered from.
-  return async (companies: MergeCandidate[], onMerged?: () => void) => {
-    const { AppMergeCompaniesDialog } = await import('./crm-merge-dialog');
-    openDialog(
-      AppMergeCompaniesDialog,
-      {
-        companies,
-        onMerged: ({ survivor, merged }) => {
-          onMerged?.();
-          const names = new Intl.ListFormat(formatLocale(), {
-            style: 'long',
-            type: 'conjunction',
-          }).format(merged.map((company) => company.name));
-          const notice = toast.success(t('crm.mergeDone'), {
-            subtext: t('crm.mergeDoneDetail', {
-              count: merged.length,
-              names,
-              name: survivor.name,
-            }),
-            duration: isMobile() ? undefined : 8000,
-            dismissStyle: 'icon',
-            actions: [
-              {
-                label: t('crm.mergeOpen'),
-                icon: ArrowSquareOutIcon,
-                trailingIcon: true,
-                onClick: () => {
-                  if (notice !== undefined) toast.dismiss(notice);
-                  openWithSplit({ type: 'company', id: survivor.id });
-                },
-              },
-            ],
-          });
-        },
-      },
-      { key: 'crm-merge-companies' }
-    );
-  };
+export function openMergeCompanies(
+  companies: MergeCandidate[],
+  onMerged?: () => void
+) {
+  if (!crmAccessAllowed()) return;
+  mergeLock.acquire();
+  setMergeRequest({ companies, onMerged });
+  setMergeOpen(true);
 }
 
 /** The selection toolbar's Merge, for two or more companies. */
@@ -92,16 +74,13 @@ export function CrmMergeSelectionButton(props: {
   onMerged: () => void;
 }) {
   const canMerge = useCanMergeCompanies();
-  const openMerge = useOpenMergeCompanies();
   const companies = () => mergeCandidates(props.selected);
   return (
     <Show when={canMerge() && companies().length > 1}>
       <Button
         variant="secondary"
         class="p-1 px-2 bg-surface"
-        onClick={() =>
-          fireAndForget(openMerge(companies(), props.onMerged), 'crm')
-        }
+        onClick={() => openMergeCompanies(companies(), props.onMerged)}
       >
         <GitMergeIcon class="size-4" />
         {t('crm.mergeButton')}
