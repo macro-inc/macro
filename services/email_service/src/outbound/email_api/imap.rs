@@ -202,6 +202,9 @@ impl MailboxGateway for ImapMailboxGateway {
             folder_id: Some(folder),
             tags: source.tags,
             version: Some(source.version),
+            // Per-version draft content is an Outlook baseline; IMAP drafts
+            // keep comparing versions.
+            draft_content: None,
         }))
     }
     async fn admitted_requests(&self, _mailbox: MailboxKey) -> Option<u64> {

@@ -2,8 +2,11 @@ import { expect, test } from '@playwright/test';
 
 // Class web-cal-create-latency: when this fails, a calendar create is not
 // handed back as saved until the server answers (the event dialog closes on
-// that hand-back), a create the server refuses stays on the calendar, or a
-// landed create's local id no longer leads to the id the server gave it.
+// that hand-back), a create on the dialog's calendar waits on a calendar list
+// read, a create the server refuses stays on the calendar, a landed create's
+// local id no longer leads to the id the server gave it or to the copy its
+// answer carried (open details show it), or the local copy names a time zone
+// the server's never does (its details then show an "Original time").
 test.describe('a calendar create through the real cache and queue', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('calendar-create.html');
@@ -21,9 +24,38 @@ test.describe('a calendar create through the real cache and queue', () => {
       window.calendarCreate.run('create')
     );
     expect(outcome).toEqual({
-      beforeAnswer: { settled: false, creating: true },
+      beforeAnswer: {
+        settled: false,
+        creating: true,
+        calendarListReads: 1,
+        localTimeZone: null,
+      },
       landedUnder: true,
+      answeredWithServerCopy: true,
       creating: false,
+    });
+  });
+
+  test.describe('in a browser outside UTC', () => {
+    test.use({ timezoneId: 'America/New_York' });
+
+    test('queues the dialog’s calendar without reading the calendar list, with no time zone on the local occurrence', async ({
+      page,
+    }) => {
+      const outcome = await page.evaluate(() =>
+        window.calendarCreate.run('create', { knownCalendar: true })
+      );
+      expect(outcome).toEqual({
+        beforeAnswer: {
+          settled: false,
+          creating: true,
+          calendarListReads: 0,
+          localTimeZone: null,
+        },
+        landedUnder: true,
+        answeredWithServerCopy: true,
+        creating: false,
+      });
     });
   });
 
@@ -32,7 +64,12 @@ test.describe('a calendar create through the real cache and queue', () => {
       window.calendarCreate.run('refuse')
     );
     expect(outcome).toEqual({
-      beforeAnswer: { settled: false, creating: true },
+      beforeAnswer: {
+        settled: false,
+        creating: true,
+        calendarListReads: 1,
+        localTimeZone: null,
+      },
       refused: 'read_only',
       creating: false,
     });

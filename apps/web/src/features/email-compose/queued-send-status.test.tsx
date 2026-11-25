@@ -4,6 +4,10 @@ import {
   setServerSendSession,
 } from '@queries/email/server-sends';
 import { readPendingEmailSends } from '@service-storage/email-send';
+import type {
+  EmailMessageOperationIssue,
+  EmailSendAttemptFieldsFragment,
+} from '@service-storage/graphql/generated/graphql';
 import {
   cleanup,
   fireEvent,
@@ -70,6 +74,7 @@ function queuedIntent(
     cancellationPending = false,
     sendTime = null as string | null,
     failures = 0,
+    issue = undefined as EmailMessageOperationIssue | undefined,
   } = {}
 ): EmailSendIntent {
   return {
@@ -109,11 +114,23 @@ function queuedIntent(
           status,
           sendTime: null,
           threadId: 'thread',
-          message: null,
+          message: issue ? failedMessage(issue) : null,
         },
       },
     },
   };
+}
+
+/** A failed attempt's message, as far as the row reads it. */
+function failedMessage(issue: EmailMessageOperationIssue) {
+  return {
+    operationStatus: {
+      state: 'CONFLICT',
+      revision: '1',
+      remoteVersion: null,
+      issue,
+    },
+  } as EmailSendAttemptFieldsFragment['message'];
 }
 
 it('stays silent while an immediate send is accepted and delivering', () => {
@@ -141,6 +158,44 @@ it('shows a cancellation that cannot reach the server', () => {
     screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')
   ).toBe(true);
   expect(mocks.cancel).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['DRAFT_CONFLICT', 'This draft changed in your mailbox'],
+  ['SEND_REJECTED', 'Your mail provider rejected this send'],
+  ['ACCESS_REVOKED', 'Access to this inbox has changed'],
+  ['INVALID_CONTENT', 'Your mail provider could not save this draft'],
+] as const)('says why a send failed (%s)', (issue, reason) => {
+  showStatus('FAILED', { issue });
+  expect(screen.getByRole('status').textContent).toContain(reason);
+  expect(screen.getByRole('status').textContent).toContain('Cancel');
+});
+
+it('says why a send made on another device failed', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue({
+    id: 'owner',
+    pendingEmailSends: {
+      nextCursor: null,
+      attempts: [
+        {
+          linkId: 'inbox',
+          attempt: {
+            attemptId: 'elsewhere',
+            status: 'FAILED' as const,
+            message: failedMessage('DRAFT_CONFLICT'),
+            threadId: 'thread',
+            sendTime: null,
+          },
+        },
+      ],
+    },
+  });
+  mocks.intents = [];
+  setServerSendSession('owner');
+  render(() => <QueuedSendStatus />);
+  expect((await screen.findByRole('status')).textContent).toContain(
+    'This draft changed in your mailbox'
+  );
 });
 
 it('explains a failure before delivery and offers cancellation for recovery', async () => {

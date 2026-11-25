@@ -43,7 +43,11 @@ impl PgMailboxSync {
                     AND s.parked_at IS NULL
                     AND s.provider = $3::text::email_user_provider_enum
                     AND l.provider = s.provider AND l.sync_generation = s.generation
-                    AND l.is_sync_active AND NOT l.needs_reauth
+                    -- Outlook discovery takes a link flagged `needs_reauth`: it
+                    -- is the probe that asks for a token again, and the token
+                    -- that works clears the flag and resumes the others. IMAP
+                    -- waits for a reconnect instead of retrying a rejected login.
+                    AND l.is_sync_active AND (NOT l.needs_reauth OR s.provider = 'OUTLOOK')
                     AND GREATEST(s.next_run_at,
                         COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
                         COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()

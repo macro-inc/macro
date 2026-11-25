@@ -152,8 +152,9 @@ async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_
     db: PgPool,
 ) {
     let importing = mailbox(&db, "importing", false, "7 minutes").await;
-    // Due after the importing folder's first page and before its next one,
-    // which is claimed as if due five minutes earlier than it is.
+    // The loop's first turn reads the import round's first page; its next
+    // turn takes the longest-due folder, this one, before the round's next
+    // page.
     mailbox(&db, "synced", true, "6 minutes").await;
     // Each queued message is read once more and then recorded as gone.
     sqlx::query!(

@@ -120,7 +120,7 @@ async fn imap_startup_catchup_wakes_current_cursors_without_stealing_leases(db: 
     .await
     .unwrap();
     let next = repo
-        .claim_stream(Uuid::from_u128(1000), StreamKind::MailFolder)
+        .claim_stream(Uuid::from_u128(1000), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -167,7 +167,7 @@ async fn successful_imap_commits_preserve_hints_even_when_their_timestamps_prece
     .await
     .unwrap();
     let stream = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()

@@ -1,0 +1,15 @@
+query EmailThreadLabels($threadId: ID!) {
+	user {
+		id
+		emailThread(input: { threadId: $threadId }) {
+			id
+			labels {
+				id
+				linkId
+				name
+				type
+				messageListVisibility
+			}
+		}
+	}
+}

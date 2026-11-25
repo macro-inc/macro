@@ -1,5 +1,6 @@
 //! Postgres implementation of durable mailbox stream and reconciliation leases.
 
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::live_pass::{FolderPass, StreamKind};
 use crate::domain::mailbox::progress::ImportCompleted;
 use crate::domain::mailbox::schedule::PollIntervals;
@@ -204,9 +205,9 @@ impl MailboxSyncRepository for PgMailboxSync {
     async fn claim_stream(
         &self,
         lease_id: Uuid,
-        kind: StreamKind,
+        claim: StreamClaim,
     ) -> Result<SyncClaim<StreamLease>, MailboxError> {
-        self.claim_stream_lease(lease_id, kind).await
+        self.claim_stream_lease(lease_id, claim).await
     }
 
     async fn commit_page(

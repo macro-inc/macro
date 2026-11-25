@@ -198,7 +198,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
     let first = repo
         .claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder,
+            crate::domain::mailbox::claim::StreamClaim::LongestDue,
         )
         .await
         .unwrap()
@@ -246,7 +246,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
     assert!(
         repo.claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder
+            crate::domain::mailbox::claim::StreamClaim::LongestDue
         )
         .await
         .unwrap()
@@ -265,7 +265,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
     let consumed = repo
         .claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder,
+            crate::domain::mailbox::claim::StreamClaim::LongestDue,
         )
         .await
         .unwrap()
@@ -285,7 +285,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
     assert!(
         repo.claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder
+            crate::domain::mailbox::claim::StreamClaim::LongestDue
         )
         .await
         .unwrap()
@@ -296,7 +296,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
     let prompt = repo
         .claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder,
+            crate::domain::mailbox::claim::StreamClaim::LongestDue,
         )
         .await
         .unwrap()
@@ -373,7 +373,7 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
     let stream = repo
         .claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder,
+            crate::domain::mailbox::claim::StreamClaim::LongestDue,
         )
         .await
         .unwrap()
@@ -394,7 +394,7 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
     let other = repo
         .claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder,
+            crate::domain::mailbox::claim::StreamClaim::LongestDue,
         )
         .await
         .unwrap()
@@ -404,7 +404,7 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
     assert!(
         repo.claim_stream(
             Uuid::now_v7(),
-            crate::domain::mailbox::live_pass::StreamKind::MailFolder
+            crate::domain::mailbox::claim::StreamClaim::LongestDue
         )
         .await
         .unwrap()

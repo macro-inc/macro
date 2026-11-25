@@ -73,6 +73,17 @@ mailbox tab. On All, selected tag names appear in the header and breadcrumb.
 A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag filter
 on any other tab keeps that tab's title.
 
+Gmail labels and Outlook categories that people made show read-only, after a
+row's tags under the same limit of three, with a label icon where a tag has its
+color dot. A nested Gmail label shows its own name on the row and its whole
+name (`Customers / Larkspur`) on hover. Gmail's system labels and labels it hides
+from the message list never show, and phone rows show neither tags nor labels.
+An open thread shows them as one pill after its tags (`3 Labels`, or a sole
+label's name) listing their whole names, and in a Labels section of the side
+panel, which the phone's Info sheet shares. Someone a thread is shared with sees
+none of the owner's labels: the server leaves out labels of inboxes the reader
+doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
@@ -379,9 +390,13 @@ organization notices and inbox settings show pending or failed changes; the
 mark-as-read from opening a thread is announced only if it fails. Draft sync and
 delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
-unsavable content, or an inbox move. Use its recovery actions and check the
-provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. A draft whose sync failed or could not be
+unsavable content, or an inbox move. A draft conflicts when its content was
+edited in Outlook: a version the mailbox moved on its own (an add-in, a label
+policy) or that Macro's own archive moved still syncs and sends, as long as Macro
+recorded the content of the version it last read. Without that record (a draft
+last written by an older build), any moved version conflicts. Use its recovery
+actions and check the provider copy before choosing an explicit resend; a resend
+in flight shows as the send button's pending state. A draft whose sync failed or could not be
 confirmed (the "Draft could not be synced" banner) still sends: Send carries the
 editor's latest text through the outbox. Check that it sends once, with the
 latest text, and that Undo brings the draft back. A new-email draft locked by a conflict or an
@@ -1571,7 +1586,9 @@ header. Only one active send can own a draft across tabs; queued composers
 remain read-only.
 
 Queued sends remain visible in **Drafts** and their conversation with a persistent
-status and **Cancel** action. A never-attempted send can be cancelled offline.
+status and **Cancel** action. A failed send says why when its draft does: it
+changed in the mailbox, the provider rejected it or could not save it, or access
+to the inbox changed. A never-attempted send can be cancelled offline.
 If admission may have reached the server, **Cancellation pending** keeps it locked
 until the server confirms cancellation. A definitive inbox-access rejection of
 the first submission permits restoring the saved draft locally. Verify this still

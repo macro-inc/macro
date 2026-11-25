@@ -3,7 +3,7 @@
 
 use super::{fixture, page, snapshot};
 use crate::domain::events::EmailMacroEvent;
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::projection::ProjectionClaim;
 use crate::domain::mailbox::projection::*;
 use crate::domain::mailbox::schedule::POLL_INTERVALS;
@@ -368,7 +368,7 @@ async fn failed_refresh_preserves_independent_message_effects_and_durable_retry(
     let _guard = telemetry.install();
     let (repo, link) = fixture(&db).await;
     let stream = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()

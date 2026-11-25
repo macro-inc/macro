@@ -7,9 +7,9 @@
 //! the Inbox is not a missing mailbox.
 
 use super::outlook_import::{ADA, connected, gateway};
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::commands::MailboxCommandRepository;
 use crate::domain::mailbox::contacts::AddressBookRepository;
-use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::progress::MailboxProgressRepository;
 use crate::domain::mailbox::settings::MailboxSettingsRepository;
 use crate::domain::mailbox::watches::MailboxWatchRepository;
@@ -133,7 +133,7 @@ async fn claimable(repo: &PgMailboxSync) -> Vec<&'static str> {
     let lease = macro_uuid::generate_uuid_v7;
     let mut kinds = Vec::new();
     if repo
-        .claim_stream(lease(), StreamKind::MailFolder)
+        .claim_stream(lease(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()

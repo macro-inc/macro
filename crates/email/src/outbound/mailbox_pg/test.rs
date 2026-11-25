@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::projection::ProjectionClaim;
 use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use email_api_client::domain::models::FolderRole;
@@ -23,6 +23,7 @@ mod projection_concurrency;
 mod projection_order;
 mod projection_retries;
 mod provider_routing;
+mod reauthorization;
 mod retries;
 mod unstorable_values;
 
@@ -69,7 +70,7 @@ pub(super) fn page() -> MailboxChangePage {
 async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let first = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -87,7 +88,7 @@ async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
     .await
     .unwrap();
     let next = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -123,7 +124,7 @@ async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
 async fn checkpoint_commits_with_deduplicated_changes_and_folder_removals(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let lease = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -155,7 +156,7 @@ async fn checkpoint_commits_with_deduplicated_changes_and_folder_removals(db: Pg
 async fn stale_worker_cannot_advance_cursor_or_enqueue_work(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let stale = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -168,7 +169,7 @@ async fn stale_worker_cannot_advance_cursor_or_enqueue_work(db: PgPool) {
     .await
     .unwrap();
     let current = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -195,7 +196,7 @@ async fn stale_worker_cannot_advance_cursor_or_enqueue_work(db: PgPool) {
 async fn wakeup_arriving_during_reconciliation_survives_old_acknowledgement(db: PgPool) {
     let (repo, _) = fixture(&db).await;
     let stream = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -217,7 +218,7 @@ async fn wakeup_arriving_during_reconciliation_survives_old_acknowledgement(db: 
     .await
     .unwrap();
     let stream = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -236,7 +237,7 @@ async fn wakeup_arriving_during_reconciliation_survives_old_acknowledgement(db: 
 async fn expired_stream_reset_preserves_other_streams_and_pending_work(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let stream = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -265,7 +266,7 @@ async fn expired_stream_reset_preserves_other_streams_and_pending_work(db: PgPoo
     .await
     .unwrap();
     let lease = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -382,6 +383,7 @@ pub(super) fn snapshot(
         folder_id: Some(ProviderId::new("folder").unwrap()),
         tags: vec!["TRASH".into()],
         version: Some(version.into()),
+        draft_content: None,
     }
 }
 
@@ -392,7 +394,7 @@ async fn ingestion_commits_content_state_and_outbox_without_treating_categories_
     use email_api_client::domain::models::{Attention, MailboxState};
     let (repo, link) = fixture(&db).await;
     let stream = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -447,7 +449,7 @@ async fn ingestion_commits_content_state_and_outbox_without_treating_categories_
 async fn stale_ingestion_cannot_overwrite_a_reconnected_mailbox(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let stream = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -493,7 +495,7 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
     use crate::domain::mailbox::projection::MailboxProjectionRepository;
     let (repo, link) = fixture(&db).await;
     let stream = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -605,7 +607,7 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
     use models_pagination::{Query, SimpleSortMethod};
     let (sync, link) = fixture(&db).await;
     let stream = sync
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -913,7 +915,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
     let (repo, link) = fixture(&db).await;
     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,initial_complete) VALUES($1,$2,1,'folder_catalog','mail',true)",Uuid::new_v4(),link).execute(&db).await.unwrap();
     let stream = repo
-        .claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+        .claim_stream(Uuid::new_v4(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()

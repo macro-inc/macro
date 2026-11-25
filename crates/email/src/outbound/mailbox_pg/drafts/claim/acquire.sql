@@ -68,7 +68,7 @@ claimed AS (
 SELECT d.message_id AS "message_id!",d.link_id AS "link_id!",d.generation AS "generation!",
     d.grant_generation AS "grant_generation!",d.revision AS "revision!",d.actor_id AS "actor_id!",
     CASE WHEN EXISTS(SELECT 1 FROM claimed) THEN d.desired_content ELSE '{}'::jsonb END AS "desired_content!",
-    d.provider_id,d.base_version,
+    d.provider_id,d.base_version,d.base_content,
     d.delete_requested AS "delete_requested!",
     CASE WHEN EXISTS(SELECT 1 FROM claimed) THEN d.checkpoint ELSE NULL END AS checkpoint,
     CASE WHEN d.evaluate THEN LEAST(d.scope_leases,$5::bigint) ELSE 0 END AS "probe_count!",

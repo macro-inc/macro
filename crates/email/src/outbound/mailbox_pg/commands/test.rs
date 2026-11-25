@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::{models::mailbox_action::MailboxAction, ports::EmailRepo};
 use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
@@ -33,7 +33,7 @@ async fn setup_for_provider(
 ) {
     let (sync, link) = super::super::test::fixture_for_provider(db, provider).await;
     let stream = sync
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()

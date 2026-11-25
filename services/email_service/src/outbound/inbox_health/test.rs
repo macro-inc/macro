@@ -1,5 +1,5 @@
 use super::*;
-use email::domain::mailbox::{MailboxSyncRepository, SyncRetry, live_pass::StreamKind};
+use email::domain::mailbox::{MailboxSyncRepository, SyncRetry, claim::StreamClaim};
 use email::outbound::mailbox_pg::PgMailboxSync;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -32,7 +32,7 @@ async fn an_inbox_health_wake_preserves_imap_provider_pacing(db: sqlx::PgPool) {
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(email::domain::models::UserProvider::Imap);
     let lease = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -42,7 +42,7 @@ async fn an_inbox_health_wake_preserves_imap_provider_pacing(db: sqlx::PgPool) {
         .unwrap();
     wake_bound_streams(&db, link, 1, 1).await.unwrap();
     assert!(
-        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .into_lease()

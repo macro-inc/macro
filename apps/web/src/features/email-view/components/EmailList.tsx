@@ -43,6 +43,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   EntitySelectionToolbar,
+  isEmailEntity,
   ListEntity,
   ListLayoutProvider,
   type WithNotification,
@@ -83,6 +84,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailRowLabels } from '../primitives/create-email-row-labels';
 import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
 import { emailRowStyle } from '../primitives/email-row-style';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
@@ -152,6 +154,9 @@ export function EmailList(props: EmailListProps) {
   } = useEmailView();
   // Query loading can replace the empty state without ending the connect flow.
   const connectInbox = useAddInboxFlow();
+  const emailRowLabels = createEmailRowLabels();
+  const rowLabelsFor = (entity: EntityData) =>
+    isEmailEntity(entity) ? emailRowLabels(entity) : undefined;
   const analytics = useAnalytics();
   // Results of a search that reaches beyond the inbox say which are archived.
   const searchReachesArchived = () => {
@@ -924,6 +929,7 @@ export function EmailList(props: EmailListProps) {
                                         rows()[index() - 1]?.kind !== 'entity'
                                       }
                                       onFilterByTag={filterByTag}
+                                      labels={rowLabelsFor(entityRow().entity)}
                                       meta={
                                         <>
                                           <EmailSearchLocation

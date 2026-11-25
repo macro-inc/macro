@@ -3,6 +3,7 @@ import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated
 import { Key } from '@solid-primitives/keyed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createSignal,
@@ -72,7 +73,7 @@ function EntryNote(props: { text: string }): JSX.Element {
     <div class="flex min-w-0 flex-col items-start">
       <p
         ref={ref}
-        class="w-full whitespace-pre-wrap text-base text-ink wrap-anywhere"
+        class="w-full whitespace-pre-wrap text-sm text-ink wrap-anywhere"
         classList={{ 'line-clamp-3': !expanded() }}
       >
         {props.text}
@@ -113,13 +114,18 @@ function EntryRow(props: {
       .filter(Boolean)
       .join(' · ');
   return (
-    <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] content-center items-start gap-x-2 gap-y-1 px-2 py-1.5 text-sm touch:min-h-[44px]">
+    <div
+      class={cn(
+        'grid w-full grid-cols-[auto_minmax(0,1fr)_auto] content-center items-start gap-x-2 px-2 text-sm touch:min-h-[44px]',
+        props.entry.note ? 'pt-1.5 pb-2.5' : 'py-1.5'
+      )}
+    >
       <div class="flex h-7 shrink-0 items-center">
         {props.person.avatar(props.entry.userId)}
       </div>
       {/* Details that do not fit beside the name wrap under it, never cut. */}
       <div class="flex min-w-0 flex-wrap items-baseline gap-x-1 py-1">
-        <span class="min-w-0 truncate font-medium text-ink">
+        <span class="min-w-0 truncate text-ink-muted">
           {props.person.name(props.entry.userId)}
         </span>
         <Show when={detail()}>

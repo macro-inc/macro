@@ -27,7 +27,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
     let imap =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     let immediate = imap
-        .claim_stream(Uuid::from_u128(44), StreamKind::MailFolder)
+        .claim_stream(Uuid::from_u128(44), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -37,7 +37,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
         .await
         .unwrap();
     let lease = outlook
-        .claim_stream(Uuid::from_u128(45), StreamKind::MailFolder)
+        .claim_stream(Uuid::from_u128(45), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -45,7 +45,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
     assert_eq!(lease.mailbox.link_id, outlook_link);
     assert!(
         outlook
-            .claim_stream(Uuid::from_u128(46), StreamKind::MailFolder)
+            .claim_stream(Uuid::from_u128(46), StreamClaim::LongestDue)
             .await
             .unwrap()
             .into_lease()
@@ -67,7 +67,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
     .await
     .unwrap();
     let lease = imap
-        .claim_stream(Uuid::from_u128(47), StreamKind::MailFolder)
+        .claim_stream(Uuid::from_u128(47), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -87,7 +87,7 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     let stream = repo
-        .claim_stream(Uuid::from_u128(100), StreamKind::MailFolder)
+        .claim_stream(Uuid::from_u128(100), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -965,7 +965,7 @@ async fn an_imap_checkpoint_polls_every_two_minutes_unless_a_newer_revision_arri
     .await
     .unwrap();
     let stream = repo
-        .claim_stream(Uuid::from_u128(201), StreamKind::MailFolder)
+        .claim_stream(Uuid::from_u128(201), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -1001,7 +1001,7 @@ async fn an_imap_checkpoint_polls_every_two_minutes_unless_a_newer_revision_arri
     .await
     .unwrap();
     let stream = repo
-        .claim_stream(Uuid::from_u128(202), StreamKind::MailFolder)
+        .claim_stream(Uuid::from_u128(202), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -1035,4 +1035,85 @@ async fn an_imap_checkpoint_polls_every_two_minutes_unless_a_newer_revision_arri
         due,
         "a revision that arrived during the read keeps the folder due"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_discovery_skips_a_mailbox_that_needs_reauth_while_outlook_probes_it(db: PgPool) {
+    use crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository;
+    use crate::domain::models::UserProvider;
+
+    let (imap, imap_link) = fixture_for_provider(&db, UserProvider::Imap).await;
+    let outlook_link = Uuid::from_u128(300);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, grant_generation)
+            VALUES ($1, 'macro|outlook-reauth@example.com', 'outlook-owner', 'outlook-reauth@example.com', 'OUTLOOK', 1)
+        "#,
+        outlook_link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    for link in [imap_link, outlook_link] {
+        sqlx::query!(
+            "INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id) VALUES ($1, $2, 1, 'folder_catalog', 'mail')",
+            Uuid::now_v7(),
+            link,
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE email_links SET needs_reauth = true WHERE id = ANY($1)",
+        &[imap_link, outlook_link],
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let outlook = PgMailboxSync::new(db.clone()).with_provider(UserProvider::Outlook);
+
+    // A rejected IMAP login is not retried: its catalog is parked, never leased.
+    let mut claims = 0;
+    loop {
+        match imap.claim_catalog(Uuid::now_v7()).await.unwrap() {
+            SyncClaim::Acquired(lease) => panic!("claimed {:?}", lease.mailbox),
+            SyncClaim::Progress => claims += 1,
+            SyncClaim::Idle => break,
+        }
+        assert!(claims < 4, "the window kept maintaining the same stream");
+    }
+    let parked = sqlx::query_scalar!(
+        r#"SELECT parked_at IS NOT NULL AS "parked!" FROM email_sync_streams WHERE link_id = $1 AND kind = 'folder_catalog'"#,
+        imap_link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(parked);
+    // Outlook discovery is the probe that asks for a token again.
+    let probe = outlook
+        .claim_catalog(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(probe.mailbox.link_id, outlook_link);
+
+    // Clearing the flag resumes IMAP discovery after the bounded sweep.
+    sqlx::query!(
+        "UPDATE email_links SET needs_reauth = false WHERE id = $1",
+        imap_link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    imap.recover_page(64).await.unwrap().unwrap();
+    let lease = imap
+        .claim_catalog(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(lease.mailbox.link_id, imap_link);
 }

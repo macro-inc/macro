@@ -12,6 +12,8 @@ fn draft(source: models::Draft) -> Result<ProviderDraft, EmailApiError> {
         is_draft: source.is_draft,
         app_revision: Some(source.app_revision),
         content_fingerprint: Some(source.content_fingerprint),
+        // The engine digests a draft's content as a whole, not per field.
+        field_digests: Default::default(),
     })
 }
 fn input(request: &DraftRequest) -> Result<models::DraftInput, EmailApiError> {

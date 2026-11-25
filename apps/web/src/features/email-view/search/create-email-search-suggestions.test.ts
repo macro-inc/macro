@@ -68,24 +68,29 @@ function setup(initialSearch = '') {
   return { search, setSearch, setHasResults, openThread, suggestions };
 }
 
-/** The recent searches the empty field lists. */
-function remembered(
+/**
+ * The recent searches the empty field lists. Leaving the field saves its
+ * search a microtask later, so this waits a microtask first.
+ */
+async function remembered(
   setSearch: (search: string) => void,
   suggestions: EmailSearchSuggestions
 ) {
+  await Promise.resolve();
   setSearch('');
   suggestions.setFocused(true);
   return recentListed(suggestions);
 }
 
 it('remembers a search once the field is left with it', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup();
 
     suggestions.setFocused(true);
     setSearch('bud');
     setSearch('budget');
     suggestions.setFocused(false);
+    await Promise.resolve();
 
     setSearch('');
     suggestions.setFocused(true);
@@ -94,36 +99,64 @@ it('remembers a search once the field is left with it', () => {
   });
 });
 
-it('does not remember a restored search when its untouched field unmounts', () => {
-  createRoot((dispose) => {
-    const { setSearch, suggestions } = setup('restored query');
-
-    suggestions.setFocused(false);
-
-    expect(remembered(setSearch, suggestions)).toEqual([]);
-    dispose();
-  });
-});
-
 it('remembers a search left with its results on screen, not one left before they arrive', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, setHasResults, suggestions } = setup();
     setHasResults(false);
     suggestions.setFocused(true);
     setSearch('budg');
     suggestions.setFocused(false);
-    expect(remembered(setSearch, suggestions)).toEqual([]);
+    expect(await remembered(setSearch, suggestions)).toEqual([]);
 
     setSearch('budget');
     setHasResults(true);
     suggestions.setFocused(false);
-    expect(remembered(setSearch, suggestions)).toEqual(['budget']);
+    expect(await remembered(setSearch, suggestions)).toEqual(['budget']);
+    dispose();
+  });
+});
+
+it('remembers nothing when a field without the focus goes away', () => {
+  return createRoot(async (dispose) => {
+    const { setSearch, suggestions } = setup('budget');
+    suggestions.setFocused(false);
+
+    expect(await remembered(setSearch, suggestions)).toEqual([]);
+    dispose();
+  });
+});
+
+// The field also says it was left as it unmounts, while the view whose list
+// holds the results is torn down; reading the list then fails the
+// navigation that is leaving the view.
+it('reads the list for results only once leaving the field is over, and remembers what the field held', () => {
+  return createRoot(async (dispose) => {
+    const [search, setSearch] = createSignal('');
+    const hasResults = vi.fn(() => true);
+    const suggestions = createEmailSearchSuggestions({
+      userId: () => 'user-a',
+      search,
+      setSearch,
+      hasResults,
+      openedThread: () => undefined,
+      isResult: () => true,
+      scopeAvailable: () => true,
+    });
+    suggestions.setFocused(false);
+    suggestions.setFocused(true);
+    setSearch('budget');
+    suggestions.setFocused(false);
+    setSearch('budget plans');
+    expect(hasResults).not.toHaveBeenCalled();
+
+    expect(await remembered(setSearch, suggestions)).toEqual(['budget']);
+    expect(hasResults).toHaveBeenCalledTimes(1);
     dispose();
   });
 });
 
 it('does not remember a search when another window takes the focus from the page', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup();
     suggestions.setFocused(true);
     setSearch('budg');
@@ -131,46 +164,50 @@ it('does not remember a search when another window takes the focus from the page
     suggestions.setFocused(false);
 
     vi.mocked(document.hasFocus).mockReturnValue(true);
-    expect(remembered(setSearch, suggestions)).toEqual([]);
+    expect(await remembered(setSearch, suggestions)).toEqual([]);
     dispose();
   });
 });
 
 it('remembers a search on Enter, before its results arrive', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, setHasResults, suggestions } = setup();
     setHasResults(false);
     suggestions.setFocused(true);
     setSearch('budget before:2026/1');
     suggestions.commit();
 
-    expect(remembered(setSearch, suggestions)).toEqual(['budget']);
+    expect(await remembered(setSearch, suggestions)).toEqual(['budget']);
     dispose();
   });
 });
 
 it('leaves a word on its way to an operator unremembered, unless Enter runs it', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup();
     for (const typed of ['bef', 'befo', 'invoice ne', '-sub']) {
       suggestions.setFocused(true);
       setSearch(typed);
       suggestions.setFocused(false);
     }
-    expect(remembered(setSearch, suggestions)).toEqual([]);
+    expect(await remembered(setSearch, suggestions)).toEqual([]);
 
     // A space after the word, or Enter, says it is the word searched for.
     setSearch('invoice new ');
     suggestions.setFocused(false);
+    await Promise.resolve();
     suggestions.setFocused(true);
     setSearch('new');
     suggestions.commit();
-    expect(remembered(setSearch, suggestions)).toEqual(['new', 'invoice new']);
+    expect(await remembered(setSearch, suggestions)).toEqual([
+      'new',
+      'invoice new',
+    ]);
     dispose();
   });
 });
 
-it('remembers a search when the list opens a thread from it, the field still focused', () => {
+it('remembers a search when the list opens a thread from it, the field still focused', async () => {
   // Mounted first, as the view is, so its effects run before the person acts.
   const { dispose, setSearch, setHasResults, openThread, suggestions } =
     createRoot((dispose) => ({ dispose, ...setup() }));
@@ -180,16 +217,19 @@ it('remembers a search when the list opens a thread from it, the field still foc
   setSearch('flights la');
   openThread('thread-1');
   suggestions.setFocused(false);
-  expect(remembered(setSearch, suggestions)).toEqual(['flights la']);
+  expect(await remembered(setSearch, suggestions)).toEqual(['flights la']);
 
   // The same thread opened again from another search counts again.
   setSearch('lisbon');
   openThread('thread-1');
-  expect(remembered(setSearch, suggestions)).toEqual(['lisbon', 'flights la']);
+  expect(await remembered(setSearch, suggestions)).toEqual([
+    'lisbon',
+    'flights la',
+  ]);
   dispose();
 });
 
-it('does not remember a search for a thread it did not find', () => {
+it('does not remember a search for a thread it did not find', async () => {
   const { dispose, setSearch, setHasResults, openThread, suggestions } =
     createRoot((dispose) => ({ dispose, ...setup() }));
   setHasResults(false);
@@ -199,7 +239,7 @@ it('does not remember a search for a thread it did not find', () => {
   openThread('kept-thread');
   suggestions.setFocused(false);
 
-  expect(remembered(setSearch, suggestions)).toEqual([]);
+  expect(await remembered(setSearch, suggestions)).toEqual([]);
   dispose();
 });
 
@@ -208,7 +248,7 @@ it('puts a picked recent search first', () => {
     'macro:email:recent-searches:v1:user-a',
     JSON.stringify(['budget', 'invoice'])
   );
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { search, setSearch, setHasResults, suggestions } = setup();
     setHasResults(false);
     suggestions.setFocused(true);
@@ -216,16 +256,20 @@ it('puts a picked recent search first', () => {
     expect(search()).toBe('invoice');
     suggestions.setFocused(false);
 
-    expect(remembered(setSearch, suggestions)).toEqual(['invoice', 'budget']);
+    expect(await remembered(setSearch, suggestions)).toEqual([
+      'invoice',
+      'budget',
+    ]);
     dispose();
   });
 });
 
 it('lists recent searches only while the field has focus', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup('invoice');
     suggestions.setFocused(true);
     suggestions.setFocused(false);
+    await Promise.resolve();
     setSearch('');
 
     expect(recentListed(suggestions)).toEqual([]);
@@ -238,13 +282,14 @@ it('lists recent searches only while the field has focus', () => {
 });
 
 it('runs the picked search, and forgets the active row when typing changes the rows', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { search, setSearch, suggestions } = setup('quarterly budget');
     suggestions.setFocused(true);
     suggestions.setFocused(false);
     setSearch('budget');
     suggestions.setFocused(true);
     suggestions.setFocused(false);
+    await Promise.resolve();
     setSearch('');
     suggestions.setFocused(true);
     expect(recentListed(suggestions)).toEqual(['budget', 'quarterly budget']);
@@ -264,10 +309,11 @@ it('runs the picked search, and forgets the active row when typing changes the r
 });
 
 it('waits for a picked search until its results are taken or the field is used again', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup('budget');
     suggestions.setFocused(true);
     suggestions.setFocused(false);
+    await Promise.resolve();
     setSearch('');
     suggestions.setFocused(true);
 
@@ -321,11 +367,12 @@ it('lists the views an in: being typed can name, leaving out ones the person lac
 });
 
 it('remembers a search as it ran, leaving out an in: still being typed', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup();
     suggestions.setFocused(true);
     setSearch('invoice in:s');
     suggestions.setFocused(false);
+    await Promise.resolve();
 
     setSearch('');
     suggestions.setFocused(true);
@@ -335,7 +382,7 @@ it('remembers a search as it ran, leaving out an in: still being typed', () => {
 });
 
 it('remembers a search with its in: filter, and never the filter alone', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup();
     suggestions.setFocused(true);
     setSearch('in:sent ');
@@ -344,6 +391,7 @@ it('remembers a search with its in: filter, and never the filter alone', () => {
     suggestions.setFocused(true);
     setSearch('in:sent invoice');
     suggestions.setFocused(false);
+    await Promise.resolve();
 
     setSearch('');
     suggestions.setFocused(true);
@@ -353,10 +401,11 @@ it('remembers a search with its in: filter, and never the filter alone', () => {
 });
 
 it('offers the operators a typed word starts, above recent searches, and finishes one in place', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { search, setSearch, suggestions } = setup('budget subject:lunch');
     suggestions.setFocused(true);
     suggestions.setFocused(false);
+    await Promise.resolve();
     setSearch('');
     suggestions.setFocused(true);
 
@@ -388,11 +437,12 @@ it('offers the values of is: and keeps a minus typed before it', () => {
 });
 
 it('remembers a search without an operator still being typed', () => {
-  createRoot((dispose) => {
+  return createRoot(async (dispose) => {
     const { setSearch, suggestions } = setup();
     suggestions.setFocused(true);
     setSearch('invoice from:ana is:');
     suggestions.setFocused(false);
+    await Promise.resolve();
 
     setSearch('');
     suggestions.setFocused(true);

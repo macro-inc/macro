@@ -3,15 +3,6 @@
 use super::*;
 use tracing::Instrument;
 
-/// How far ahead of finished folders' polls a mail folder's import round is
-/// claimed. Polls of every finished folder of every mailbox share the sync
-/// workers, so they run minutes late; an import round that waited behind them
-/// would read a page only every few minutes and leave its import idle. Import
-/// rounds read at most a page per hundred imported messages (`pace_import`),
-/// so going first costs the polls little, and a poll due longer than this
-/// still goes ahead of every round that came due after it.
-const IMPORT_ROUND_HEAD_START_SECONDS: u32 = 300;
-
 /// The stream row a claim returns, from either kind's claim.
 struct ClaimedStream {
     id: Uuid,
@@ -32,8 +23,12 @@ impl PgMailboxSync {
     pub(super) async fn claim_stream_lease(
         &self,
         lease_id: Uuid,
-        kind: StreamKind,
+        claim: StreamClaim,
     ) -> Result<SyncClaim<StreamLease>, MailboxError> {
+        let kind = match claim {
+            StreamClaim::LivePass => StreamKind::LivePass,
+            StreamClaim::LongestDue | StreamClaim::ImportFirst => StreamKind::MailFolder,
+        };
         let mut tx = self.begin_claim().await?;
         let work = match kind {
             StreamKind::MailFolder => StreamWork::Folder,
@@ -82,11 +77,14 @@ impl PgMailboxSync {
                         COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()
                     LIMIT 1
                 ) s
-                ORDER BY GREATEST(s.next_run_at,
+                -- An import-first claim takes the window's longest-due import
+                -- round, else its longest-due folder; the others take the
+                -- longest-due stream of the kind.
+                ORDER BY CASE WHEN $5 AND s.kind = 'mail_folder' AND NOT s.initial_complete
+                        THEN 0 ELSE 1 END,
+                    GREATEST(s.next_run_at,
                         COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
-                        COALESCE(s.lease_until, '-infinity'::timestamptz))
-                    - CASE WHEN s.kind = 'mail_folder' AND NOT s.initial_complete
-                        THEN make_interval(secs => $5) ELSE interval '0' END,
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)),
                     s.id
                 LIMIT 1
             )
@@ -106,7 +104,7 @@ impl PgMailboxSync {
                 lease_id,
                 kind.as_str(),
                 self.provider.as_str(),
-                f64::from(IMPORT_ROUND_HEAD_START_SECONDS),
+                claim == StreamClaim::ImportFirst,
             )
             .fetch_optional(&mut *tx)
             .await
@@ -182,8 +180,7 @@ impl PgMailboxSync {
                 SELECT s.id,
                     GREATEST(s.next_run_at,
                         COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
-                        COALESCE(s.lease_until, '-infinity'::timestamptz))
-                        - make_interval(secs => $5) AS claim_order
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) AS claim_order
                 FROM email_sync_streams s
                 WHERE $3 AND s.provider = $1::text::email_user_provider_enum
                     AND s.kind = 'mail_folder' AND NOT s.initial_complete
@@ -199,9 +196,7 @@ impl PgMailboxSync {
                 SELECT s.id,
                     GREATEST(s.next_run_at,
                         COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
-                        COALESCE(s.lease_until, '-infinity'::timestamptz))
-                        - CASE WHEN $3 AND NOT s.initial_complete
-                            THEN make_interval(secs => $5) ELSE interval '0' END AS claim_order
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) AS claim_order
                 FROM email_sync_streams s
                 WHERE s.provider = $1::text::email_user_provider_enum
                     AND s.kind = $2 AND s.parked_at IS NULL
@@ -222,7 +217,8 @@ impl PgMailboxSync {
                     SELECT l.id, l.sync_generation, l.is_sync_active,
                         l.needs_reauth, l.mailbox_unavailable_at
                     FROM email_links l WHERE l.id = s.link_id AND (
-                        NOT l.is_sync_active OR l.needs_reauth
+                        NOT l.is_sync_active
+                        OR (l.needs_reauth AND NOT ($2 = 'folder_catalog' AND s.provider = 'OUTLOOK'))
                         OR ($2 <> 'folder_catalog' AND l.mailbox_unavailable_at IS NOT NULL)
                         OR l.sync_generation <> s.generation)
                     FOR SHARE OF l SKIP LOCKED
@@ -235,7 +231,8 @@ impl PgMailboxSync {
                 WHERE s.id = d.id AND l.id = s.link_id
                     AND (s.provider IS DISTINCT FROM l.provider OR (
                         i.id IS NOT NULL AND (
-                        NOT i.is_sync_active OR i.needs_reauth
+                        NOT i.is_sync_active
+                        OR (i.needs_reauth AND NOT ($2 = 'folder_catalog' AND s.provider = 'OUTLOOK'))
                         OR ($2 <> 'folder_catalog' AND i.mailbox_unavailable_at IS NOT NULL)
                         OR i.sync_generation <> s.generation)))
                 RETURNING s.id
@@ -247,7 +244,6 @@ impl PgMailboxSync {
             kind,
             imports,
             if imports { 32i64 } else { 64i64 },
-            f64::from(IMPORT_ROUND_HEAD_START_SECONDS),
         )
         .fetch_one(connection)
         .await

@@ -321,7 +321,9 @@ for (const provider of PROVIDERS) {
       );
       await expect(
         page.getByText(
-          'Message not sent. See its conversation or Drafts for details.'
+          provider === 'GMAIL'
+            ? 'Message not sent. See its conversation or Drafts for details.'
+            : 'Send failed before delivery. Your mail provider rejected this send. Cancel to recover this draft.'
         )
       ).toBeVisible();
       saw('STC-977');

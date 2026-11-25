@@ -4,6 +4,7 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { SEARCH_INDEX_SEEDS } from '@app/features/next-soup/core/search-query';
 import {
   createSoupState,
   type GroupMeta,
@@ -33,6 +34,7 @@ import { createSearchState } from '@app/features/next-soup/soup-view/create-sear
 import {
   featuredDocumentIds,
   featureSearchResults,
+  rankBestMatches,
   withFeaturedDocumentData,
 } from '@app/features/next-soup/soup-view/featured-search-results';
 import {
@@ -182,6 +184,9 @@ export interface SoupViewContextValues {
   searchPaused: Accessor<boolean>;
   setSearchPaused: Setter<boolean>;
   featuredIds: Accessor<string[]>;
+  /** Search's other matching chats, waiting behind one row under its best matches. */
+  moreChatCount: Accessor<number>;
+  showMoreChats: () => void;
   items: Accessor<SoupEntity[]>;
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
@@ -1154,11 +1159,49 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     return soup.positions.apply(transformed);
   };
 
-  const featuredSearch = createLazyMemo(() =>
-    ENABLE_FEATURED_SEARCH_RESULTS && search.isSearching()
-      ? featureSearchResults(baseEntities(), search.featuredIds())
-      : undefined
-  );
+  // Search leads with its best few name matches and folds the other chats
+  // behind one row, unless it is narrowed to one kind; other views feature
+  // every name match.
+  const [chatsShownFor, setChatsShownFor] = createSignal<string>();
+  const featuredSearch = createLazyMemo(() => {
+    if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return;
+    const entities = baseEntities();
+    if (activeListView() !== 'search')
+      return {
+        ...featureSearchResults(entities, search.featuredIds()),
+        moreChats: [],
+      };
+    const shown = new Set(entities.map((entity) => entity.id));
+    const ranked = rankBestMatches(
+      search.localFuzzyResults().filter((entity) => shown.has(entity.id)),
+      search.localSearchText()
+    );
+    const fold =
+      chatsShownFor() !== search.localSearchText() &&
+      !soup.predicates.orIds().some((id) => id in SEARCH_INDEX_SEEDS);
+    if (!fold)
+      return {
+        ...featureSearchResults(
+          entities,
+          [...ranked.best, ...ranked.moreChats],
+          [],
+          ranked.others
+        ),
+        moreChats: [],
+      };
+    return {
+      ...featureSearchResults(
+        entities,
+        ranked.best,
+        ranked.moreChats,
+        ranked.others
+      ),
+      moreChats: ranked.moreChats,
+    };
+  });
+  const moreChatCount = () => featuredSearch()?.moreChats.length ?? 0;
+  const showMoreChats = () => setChatsShownFor(search.localSearchText());
+
   const entities = () => featuredSearch()?.entities ?? baseEntities();
   const featuredIds = createMemo(
     () => featuredSearch()?.featuredIds ?? [],
@@ -1604,6 +1647,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     searchPaused: sourceSearchPaused,
     setSearchPaused,
     featuredIds,
+    moreChatCount,
+    showMoreChats,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
     queryFilters,

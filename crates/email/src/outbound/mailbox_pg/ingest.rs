@@ -16,6 +16,7 @@ impl PgMailboxSync {
             folder_id,
             tags,
             version,
+            draft_content,
             ..
         } = snapshot;
         let mut message = content.message;
@@ -130,7 +131,12 @@ impl PgMailboxSync {
                     .as_ref()
                     .is_some_and(|s| !s.dirty && !s.delete_requested)
             {
-                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version).execute(&mut *tx).await.map_err(db_error)?;
+                let base_content = draft_content
+                    .map(serde_json::to_value)
+                    .transpose()
+                    .map_err(|_| MailboxError::Persistence)?;
+                // The content of the version adopted, edited or not.
+                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,base_content = $3,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version,base_content).execute(&mut *tx).await.map_err(db_error)?;
             }
         }
         // A sent snapshot is authoritative even after a timeout, cancellation or

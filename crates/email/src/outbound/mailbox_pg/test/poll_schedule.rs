@@ -2,7 +2,7 @@
 //! mailbox has a working Graph subscription.
 
 use super::{fixture, page};
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::mailbox::{MailboxSyncRepository, StreamLease};
 use crate::outbound::mailbox_pg::PgMailboxSync;
@@ -46,7 +46,7 @@ async fn subscribe(
 }
 
 async fn claim(repo: &PgMailboxSync) -> StreamLease {
-    repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+    repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()

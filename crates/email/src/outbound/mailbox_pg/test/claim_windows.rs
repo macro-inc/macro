@@ -57,7 +57,7 @@ async fn activation_unparks_a_window_committed_by_a_concurrent_parker(db: PgPool
     );
     activation.commit().await.unwrap();
     assert!(matches!(
-        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
             .await
             .unwrap(),
         SyncClaim::Acquired(_)
@@ -96,7 +96,7 @@ async fn activation_unparks_a_window_committed_by_a_concurrent_parker(db: PgPool
     );
     activation.commit().await.unwrap();
     let lease = second
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()
@@ -130,13 +130,13 @@ async fn corrupt_stream_routing_is_parked_without_relabeling(db: PgPool) {
     .unwrap();
     let repo = PgMailboxSync::new(db.clone()).with_provider(UserProvider::Imap);
     assert!(matches!(
-        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
             .await
             .unwrap(),
         SyncClaim::Progress
     ));
     assert!(matches!(
-        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
             .await
             .unwrap(),
         SyncClaim::Idle
@@ -154,7 +154,7 @@ async fn sync_claims_do_not_serialize_on_a_provider_advisory_key(db: PgPool) {
     sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.mailbox.sync-claims:OUTLOOK',0))")
         .fetch_one(&mut *other).await.unwrap();
     let claimed = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await;
     other.rollback().await.unwrap();
     assert!(
@@ -265,7 +265,7 @@ async fn a_claim_routes_legacy_rows_by_the_link_without_background_repair(db: Pg
 async fn renewing_a_fresh_stream_lease_does_not_rewrite_its_indexed_deadline(db: PgPool) {
     let (repo, _) = fixture(&db).await;
     let lease = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .into_lease()

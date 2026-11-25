@@ -15,7 +15,7 @@
   color: var(--feature-copy-color, var(--color-ink-muted));
   font: 370 17.5px/1.8 'Inter Variable', Inter, sans-serif;
   letter-spacing: normal;
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 .homepage-founder-letter-signature {
@@ -51,7 +51,7 @@
 
 @media (max-width: 699px) {
   .homepage-founder-letter {
-    width: min(524px, calc(100% - 48px));
+    width: min(540px, calc(100% - 32px));
     margin: 36px auto 48px;
   }
 

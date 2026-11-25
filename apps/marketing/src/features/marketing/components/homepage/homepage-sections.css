@@ -79,5 +79,5 @@
   .macro-homepage .product-feature-intro p,
   .macro-homepage .homepage-section-caption { font-size: 15px; line-height: 1.6; }
   .macro-homepage .homepage-section-caption { margin-top: 20px; }
-  .homepage-modules { width: calc(100% - 16px); column-gap: 24px; }
+  .homepage-modules { width: 100%; column-gap: 24px; }
 }
