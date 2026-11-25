@@ -4,7 +4,8 @@
  * instead of fetching it again on every mount (TanStack's `staleTime` for the
  * REST list). Keyed by client: a new session's client starts with nothing.
  * A Soup write forgets every answer, as invalidating the REST lists marked
- * them stale: a list that mounts after it reads the server again.
+ * them stale: a list that mounts after it reads the server again. So does the
+ * cache serving again after an outage, which never stored those answers.
  */
 const MAX_ANSWERS_PER_CLIENT = 256;
 type Answer = { at: number; writes: number };
