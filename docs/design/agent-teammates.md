@@ -58,6 +58,13 @@ Team admins and owners can read the repo with their Macro credential.
    event sources and records the healthy HEAD. With no identity, its first
    wake DMs its owner to ask who it should be; otherwise it introduces itself.
 
+In the invite UI, the agent reporting online starts the DM access check.
+The web app resolves the canonical channel and reads both its detail and
+timeline with the inviting account before navigating. The handoff is bound
+to the invite and its originating navigation. The greeting is still sent by
+the agent. The web app attaches the optional Claude sign-in action to the
+first teammate-authored message when the start of the timeline is known.
+
 `create_default_agent` at the computer's first connection keeps creating the
 default coding agent only on computers without an agent teammate.
 

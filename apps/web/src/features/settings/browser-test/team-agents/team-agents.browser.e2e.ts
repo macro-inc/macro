@@ -158,6 +158,9 @@ async function scriptAuthService(
     reads: 0,
     // The read on which an agent's computer came up.
     startedAt: 0,
+    allowDmRead: true,
+    dmDetailReads: 0,
+    dmTimelineReads: 0,
     step: 'creating' as SetupStep,
     voices: {} as Record<string, string>,
     voiceSaves: [] as unknown[],
@@ -424,7 +427,101 @@ async function scriptAuthService(
         crm_member_access: backend.crmAccess,
       });
 
-    // Message <name> opens the agent's real DM, made on the spot.
+    if (path.endsWith('/items/soup/graphql')) {
+      const { query, variables } = request.postDataJSON();
+      if (query.includes('query ChannelDetailSoup')) {
+        const id =
+          variables.input.initial.filters.channelFilter.literal.channelId;
+        backend.dmDetailReads += 1;
+        return json(200, {
+          data: {
+            user: {
+              soup: {
+                items: backend.allowDmRead
+                  ? [
+                      {
+                        __typename: 'GraphqlSoupChannel',
+                        id,
+                        channelName: null,
+                        channelType: 'DIRECT_MESSAGE',
+                        ownerId: ADA,
+                        createdAt: '2026-11-11T09:00:00Z',
+                        updatedAt: '2026-11-11T09:00:00Z',
+                        isParticipant: true,
+                        participants: [],
+                        notifications: [],
+                        unreadNotifications: [],
+                        unreadMentions: [],
+                      },
+                    ]
+                  : [],
+                nextCursor: null,
+              },
+            },
+          },
+        });
+      }
+    }
+
+    if (path.endsWith('/user/get_names_with_email')) {
+      const { user_ids: userIds } = request.postDataJSON();
+      return json(200, {
+        names: userIds.map((id: string) => ({ id, is_agent: id === ADA })),
+      });
+    }
+
+    const viewer = new URL(page.url()).searchParams.get('viewer') ?? OWNER;
+    const date = '2026-11-11T09:00:00Z';
+    if (path.endsWith('/participants')) {
+      return json(
+        200,
+        [viewer, ADA].map((user_id) => ({
+          channel_id: `dm-${ADA}`,
+          user_id,
+          role: user_id === ADA ? 'owner' : 'member',
+          joined_at: date,
+        }))
+      );
+    }
+
+    if (path.includes('/messages/channel/') && path.endsWith('/timeline')) {
+      backend.dmTimelineReads += 1;
+      const entries = [
+        {
+          id: 'later-message',
+          content: 'What should I work on?',
+          created_at: '2026-11-11T09:01:00Z',
+        },
+        { id: 'agent-greeting', content: 'Hi, I’m Ada.', created_at: date },
+      ].map(({ id, content, created_at }) => ({
+        type: 'message',
+        message: {
+          id,
+          content,
+          created_at,
+          updated_at: created_at,
+          parent: { type: 'channel', id: `dm-${ADA}` },
+          thread_id: null,
+          kind: 'message',
+          sender_id: ADA,
+          mentions: [],
+          attachments: [],
+          reactions: [],
+          state: {
+            root_id: id,
+            user_id: ADA,
+            resolved: false,
+            anchor: null,
+            created_at,
+            updated_at: created_at,
+          },
+          thread: { reply_count: 0, latest_reply_at: null, preview: [] },
+        },
+      }));
+      return json(200, { entries, next_cursor: null, previous_cursor: null });
+    }
+
+    // Resolves the agent's canonical DM independently from its read paths.
     if (
       path.endsWith('/channels/get_or_create_dm') &&
       request.method() === 'POST'
@@ -560,10 +657,11 @@ async function fillAda(page: Page) {
   await dialog.getByRole('textbox', { name: 'Name it' }).fill('Ada');
 }
 
-test('adding an agent waits in the dialog until it is online, then closes into its DM', async ({
+test('adding an agent waits for the owner to be able to read the canonical DM', async ({
   page,
 }, testInfo) => {
   const backend = await scriptAuthService(page, 2);
+  backend.allowDmRead = false;
   await page.goto('/');
   const dialog = await openInviteAgent(page);
 
@@ -612,8 +710,21 @@ test('adding an agent waits in the dialog until it is online, then closes into i
     dialog.getByRole('button', { name: /Adding Ada/ })
   ).toBeVisible();
   await screenshot(page, testInfo, 'add-agent-adding');
-  // It closes once the agent reports itself online: no notice, no setup card.
+  await expect
+    .poll(() => backend.dmDetailReads, { timeout: 12_000 })
+    .toBeGreaterThan(0);
+  await expect(dialog).toBeVisible();
+  expect(backend.dmTimelineReads).toBe(0);
+  expect(await page.evaluate(() => window.teamAgentsFixture.opened)).toEqual(
+    []
+  );
+  backend.allowDmRead = true;
+  // The same detail read the channel route uses now confirms access.
   await expect(dialog).toBeHidden({ timeout: 10_000 });
+  expect(backend.dmTimelineReads).toBe(1);
+  expect(await page.evaluate(() => window.teamAgentsFixture.opened)).toEqual([
+    { type: 'channel', id: `dm-${ADA}` },
+  ]);
   await expect(
     page.getByText("Ada is being set up. We'll let you know when it's ready.")
   ).toHaveCount(0);
@@ -679,7 +790,7 @@ test("an agent's row draws one letter however many words its name has", async ({
   await expect(row.locator('[data-slot="avatar"]').first()).toHaveText('A');
 });
 
-test('an agent still starting after five seconds closes the dialog, and its row shows the setup step', async ({
+test('the invite stays open while the agent starts and can be dismissed', async ({
   page,
 }, testInfo) => {
   await scriptAuthService(page, 40);
@@ -692,7 +803,12 @@ test('an agent still starting after five seconds closes the dialog, and its row 
   ).toBeVisible();
   await expect(dialog).toBeVisible();
 
-  await expect(dialog).toBeHidden({ timeout: 10_000 });
+  await expect(dialog.getByRole('status')).toContainText('Starting your agent');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => window.teamAgentsFixture.opened)).toEqual(
+    []
+  );
   const agentRow = page.locator('[data-member-kind="agent"]');
   await expect(agentRow.getByRole('status')).toHaveText('Setting up');
   await expect(agentRow.locator('[data-agent-setup-step]')).toHaveText(
@@ -840,39 +956,40 @@ test('a size with no room is marked and another size can be added', async ({
   await expect(dialog).toBeHidden({ timeout: 10_000 });
 });
 
-test('the inviter hears when the agent is ready: Message Ada, and Connect Claude plan, closable', async ({
+test('the inviter can connect Claude from the first teammate message, with no ready toast', async ({
   page,
 }, testInfo) => {
   const backend = await scriptAuthService(page, 0, {
     agents: [ada('running')],
     computerConnected: true,
   });
-  await page
-    .context()
-    .route('https://claude.com/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'text/html', body: '' })
-    );
-  await page.goto('/');
+  await page.goto('/?greeting');
   await expect(page.locator('[data-member-kind="agent"]')).toContainText('Ada');
-
   await notify(page, 'ready');
-  await expect(page.getByText('Ada is ready')).toBeVisible();
-  await expect(page.getByText('Message Ada to get started.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Message Ada' })).toBeVisible();
-  await expect(
-    page
-      .getByLabel('Ada is ready')
-      .getByRole('button', { name: 'Connect Claude plan' })
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Try it' })).toHaveCount(0);
-  await screenshot(page, testInfo, 'ready-notification-admin');
+  await page.evaluate((agent) => window.teamAgentsFixture.openDm(agent), ADA);
 
-  // Connect Claude plan opens the sign-in on Ada's row, never blocking; the
-  // agent stays on Macro credits when it closes.
-  await page
-    .getByLabel('Ada is ready')
-    .getByRole('button', { name: 'Connect Claude plan' })
-    .click();
+  const dm = page.getByRole('region', { name: 'Direct message' });
+  const action = dm.getByRole('button', { name: 'Connect Claude plan' });
+  await expect(action).toHaveCount(1);
+  await expect(
+    dm
+      .locator('[data-channel-thread-row]')
+      .filter({ hasText: 'Hi, I’m Ada.' })
+      .getByRole('button', { name: 'Connect Claude plan' })
+  ).toHaveCount(1);
+  await expect(
+    dm
+      .getByRole('article', { name: 'What should I work on?' })
+      .getByRole('button')
+  ).toHaveCount(0);
+  await expect(page.getByText('Ada is ready')).toHaveCount(0);
+
+  await page.reload();
+  await page.evaluate((agent) => window.teamAgentsFixture.openDm(agent), ADA);
+  await expect(action).toHaveCount(1);
+  await screenshot(page, testInfo, 'connect-claude-from-greeting');
+  await action.click();
+
   const signIn = page.getByRole('dialog');
   await expect(
     signIn.getByRole('heading', { name: 'Connect Ada to your Claude plan' })
@@ -880,31 +997,12 @@ test('the inviter hears when the agent is ready: Message Ada, and Connect Claude
   await expect(
     signIn.getByRole('link', { name: 'Open claude.ai' })
   ).toHaveAttribute('href', /claude\.com/);
-  await screenshot(page, testInfo, 'connect-claude-from-notification');
   expect(backend.claudeCalls).toContain('harness-ada claude-sign-in');
   await signIn
     .getByRole('button', { name: 'Keep using Macro credits' })
     .click();
   await expect(signIn).toBeHidden();
   expect(backend.claudeCalls).not.toContain('harness-ada claude-sign-out');
-
-  // Message Ada opens the DM with the agent.
-  await notify(page, 'ready');
-  await page.getByRole('button', { name: 'Message Ada' }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.teamAgentsFixture.opened.map((content) => content.type)
-      )
-    )
-    .toContain('channel');
-  expect(
-    await page.evaluate(() =>
-      window.teamAgentsFixture.opened.find(
-        (content) => content.type === 'channel'
-      )
-    )
-  ).toEqual({ type: 'channel', id: `dm-${ADA}` });
 });
 
 test("an admin signs the agent's computer in to Claude from its row", async ({
@@ -1198,17 +1296,16 @@ test('an unreachable computer says so, and Try again starts the sign-in', async 
   ).toHaveLength(1);
 });
 
-test('a member hears the agent is ready, without Connect Claude plan', async ({
+test('a member gets neither a ready toast nor the greeting’s Claude action', async ({
   page,
-}, testInfo) => {
+}) => {
   await scriptAuthService(page, 0, {
     agents: [ada('running')],
     computerConnected: true,
     viewerOwnsRuntimes: false,
   });
-  await page.goto(`/?viewer=${encodeURIComponent(MEMBER)}`);
+  await page.goto(`/?greeting&viewer=${encodeURIComponent(MEMBER)}`);
   await expect(page.locator('[data-member-kind="agent"]')).toContainText('Ada');
-  // Members invite people; only admins and owners add agents.
   await expect(
     page.getByRole('button', { name: 'Invite Human' })
   ).toBeVisible();
@@ -1217,14 +1314,13 @@ test('a member hears the agent is ready, without Connect Claude plan', async ({
   );
 
   await notify(page, 'ready');
-  await expect(page.getByText('Ada is ready')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Message Ada' })).toBeVisible();
+  await page.evaluate((agent) => window.teamAgentsFixture.openDm(agent), ADA);
+  const dm = page.getByRole('region', { name: 'Direct message' });
+  await expect(dm.getByText('Hi, I’m Ada.')).toBeVisible();
   await expect(
-    page
-      .getByLabel('Ada is ready')
-      .getByRole('button', { name: 'Connect Claude plan' })
+    dm.getByRole('button', { name: 'Connect Claude plan' })
   ).toHaveCount(0);
-  await screenshot(page, testInfo, 'ready-notification-member');
+  await expect(page.getByText('Ada is ready')).toHaveCount(0);
 });
 
 test('a failed setup notifies with Retry, which sets the same computer up again', async ({

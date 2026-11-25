@@ -4,16 +4,21 @@ import { fetchGraphqlSoup } from '@service-storage/graphql-soup';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import { mapApiSoupItemToEntity } from '../soup/transform-utils';
 
-/** Resolve an uncached favorite with membership and its complete unread edge. */
+/** Read one channel with current membership and its complete unread edge. */
 export async function fetchChannelSelectionById(
-  channelId: string
+  channelId: string,
+  signal?: AbortSignal
 ): Promise<ChannelEntity> {
   const input = buildGraphqlEntitySoupInput('CHANNEL', channelId);
   if (!input) throw new Error('Invalid channel selection');
   const page = await fetchGraphqlSoup(
     ChannelDetailSoupDocument,
     { input },
-    { requestPolicy: 'network-only', allowOfflineFallback: false }
+    {
+      requestPolicy: 'network-only',
+      allowOfflineFallback: false,
+      ...(signal && { signal }),
+    }
   );
   const item = page.items.find(
     (item) => item.tag === 'channel' && item.data.channel.id === channelId

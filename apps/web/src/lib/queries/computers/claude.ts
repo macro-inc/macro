@@ -28,8 +28,7 @@ export type ClaudeSignInEntry =
   | 'computer_setup'
   | 'computer_row'
   | 'team_agent_row'
-  /** A team agent's ready notification. */
-  | 'notification';
+  | 'team_agent_dm';
 
 export function useClaudeSignInMutation() {
   return useMutation(() => ({

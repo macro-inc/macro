@@ -6,18 +6,13 @@ import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
-import { useMacroComputersRollout } from '@queries/computers/computers';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { confirmDialog } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { TeamAgentClaudeStatus } from '../components/team-agent-claude-status';
 import { computerFailureMessage } from '../computers/core/computer-display';
-import {
-  agentClaudeMode,
-  agentClaudeState,
-  agentComputerHarness,
-} from '../core/team-agent-claude';
+import { agentClaudeMode, agentClaudeState } from '../core/team-agent-claude';
+import { useOwnedAgentComputerHarness } from '../primitives/owned-agent-computer-harness';
 import {
   agentClaudeRequest,
   consumeAgentClaudeRequest,
@@ -32,16 +27,7 @@ import { AgentClaudeDialog } from './agent-claude-step';
  * everyone else.
  */
 export function TeamAgentClaude(props: { agent: TeamAgent }) {
-  const computers = useMacroComputersRollout();
-  const harnesses = useHarnessesQuery();
-  const harness = () => {
-    if (!computers().enabled) return undefined;
-    const found = agentComputerHarness(
-      props.agent.computerId,
-      harnesses.isSuccess ? harnesses.data : undefined
-    );
-    return found?.access === 'owner' ? found : undefined;
-  };
+  const harness = useOwnedAgentComputerHarness(() => props.agent.computerId);
   const harnessId = () => harness()?.id;
   // Only a computer on its own account has an expiry to read.
   const login = useClaudeModeQuery(() =>
@@ -51,14 +37,14 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
   // Where Connect Claude plan was opened from, while it is open.
   const [signingIn, setSigningIn] = createSignal<ClaudeSignInEntry>();
 
-  // The agent's ready notification asks for Connect Claude plan; it opens once
+  // The greeting's chip asks for Connect Claude plan; it opens once
   // the computer's runtime is listed as connected and the viewer's own.
   createEffect(() => {
     const request = agentClaudeRequest();
     if (!request || request.agentUserId !== props.agent.userId) return;
     if (!harness()?.connected) return;
     consumeAgentClaudeRequest(request.id);
-    setSigningIn('notification');
+    setSigningIn('team_agent_dm');
   });
 
   const useCredits = async (id: string) => {

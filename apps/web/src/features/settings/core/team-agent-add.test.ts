@@ -16,13 +16,6 @@ describe('addedAgentProgress', () => {
     );
   });
 
-  it('stops at a started computer when the wait ends there', () => {
-    expect(
-      addedAgentProgress([{ ...ada, status: 'starting' }], 'ada', 'computer_up')
-    ).toBe('online');
-    expect(addedAgentProgress([ada], 'ada', 'computer_up')).toBe('waiting');
-  });
-
   it('is online once the agent reported itself running', () => {
     expect(addedAgentProgress([{ ...ada, status: 'running' }], 'ada')).toBe(
       'online'
@@ -69,7 +62,7 @@ describe('addRefusal', () => {
 });
 
 describe('a status this build does not know', () => {
-  it('keeps waiting, so the dialog falls back to the slow path', () => {
+  it('keeps waiting for a recognized status', () => {
     const unknown = JSON.parse('{"userId":"ada","status":"hibernating"}');
     expect(addedAgentProgress([unknown], 'ada')).toBe('waiting');
   });

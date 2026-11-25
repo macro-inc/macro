@@ -456,16 +456,15 @@ regression over the production `ThreadList` is
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
-Adding an agent teammate from Team → Members (its Invite Agent button,
-behind `enable-agent-teammates`; members see only Invite Human): the dialog waiting until the agent is
-online, falling back to the row after five seconds, a declined card and a size
-with no room in place, its row's Setting up step and failed Retry, the ready and failed notifications (Message, Connect Claude plan for
-admins only, Retry), Connect Claude plan's one-screen sign-in with its
-expired, rejected and unreachable states, its row's Claude sign-in and switch
-back to credits, the DM status banner, and its removal have a backend-free
-browser regression at desktop 1440 and phone 390 over a scripted auth
-service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It launches Chromium with
-`--disable-web-security` because the scripted services answer for other origins:
+Adding an agent teammate from Team → Members has a backend-free browser
+regression at desktop 1440 and phone 390. The suite checks that the invite
+waits for runtime readiness and the signed-in owner's channel detail and
+message timeline reads before opening the canonical DM. It also covers the
+inline purchase failures, the Members status and retries, the failure
+notification, the first teammate message's Claude action and sign-in, and
+removal. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there.
+Chromium launches with `--disable-web-security` so scripted services can
+answer for other origins:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
 Members rows (owners, admins, members and agents) share one shape at every width, like a Machines row: picture, name, email, one summary line (role · plan, plus **Pro at renewal** or **No CRM access** when they apply; an agent's status), and a ⋯ that holds everything the viewer can change in the order plan, role, CRM access (named `CRM access for <name>`), Remove. The ⋯ is a `Dropdown` on desktop and a `MobileDrawer` sheet on touch, switched in `TeamMembers.tsx`. A setting the viewer can't change stays in place, disabled, with its reason written under it; don't use `disabledReason` there, whose tooltip takes the Escape that should close the menu. Names and emails wrap on rows under 480px, as Machines' names do, breaking an address before its `@`. Person rows are keyed by `user_id` (`Key`), so a refetch keeps each row and an open ⋯; don't give `useTeamQuery` `reconcile`, which writes into TanStack's cached object and so into the remove mutation's rollback snapshot. The same suite checks the rows at 1440, 820 (touch), 390, 360 and 320px, and each ⋯ item for owner, admin, member and agent rows. CRM settings' **Who can use CRM** (`views/crm-member-access.tsx`, which CRM receives as `CrmContext.MemberAccess`) lists the same person rows with `TeamMemberRow` and a CRM access switch, sharing Members' roster helpers in `primitives/team-roster.ts`; keep the two lists on those helpers. The suite's `?crm` page checks a change there seen in the ⋯ and back, a failed save and its retry, admins, and that members and flag-off owners see no list.
@@ -1160,7 +1159,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   team membership and exposes `canPurchase` separately. Members read; admins
   buy and manage. Show the exact price before buying, send one `purchaseKey`
   per Buy dialog on every retry and a new one only after a declined card,
-  wait in the dialog up to five seconds for the computer (or agent) to come
+  wait in the Buy dialog up to five seconds for the computer to come
   up (`computers/primitives/wait-for-progress.ts`), offer no power,
   billing or release while `purchasing`, confirm Restore before billing again,
   and release only after the computer's name is typed. A row's usage line

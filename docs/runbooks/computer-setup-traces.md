@@ -1,14 +1,14 @@
 # Macro computer setup traces
 
 Use this to find where the time goes between Buy computer (or adding an agent
-teammate) and the computer being Ready, and for an agent teammate, until the
-agent is online.
+teammate) and the computer being Ready. For a teammate, use the same trace to
+see when the inviter could read the canonical DM.
 
 ## What one trace contains
 
 The purchase request is the root (for an agent teammate, the web app's
 `team-agent.add`). Every later step joins it during the first start, which for
-an agent teammate lasts until the agent reports online ([Macro computers: Observability](../architecture/macro-computers.md#observability)):
+an agent teammate includes the online report ([Macro computers: Observability](../architecture/macro-computers.md#observability)):
 
 | Span | Service | Meaning |
 | --- | --- | --- |
@@ -29,6 +29,8 @@ an agent teammate lasts until the agent reports online ([Macro computers: Observ
 | `computer.setup.agent_start` | agent_harness_service | Hand-off until the agent reports online: guest install, `start-agent` (clone, lock check), the runtime's start. Missing if the agent came online before its hand-off was recorded as finished. |
 | `agent.start` → `agent.launch` → `agent.launch.*` | macro-agent | `start-agent`'s steps (`settings`, `clone` on a first start, `configure`, `rollback`, `packages`, `compatibility` (the muppet API check)) until it execs the runtime; the script times them and the runtime exports them. |
 | `agent.start` → `agent.start.*`, `agent.online.report` | macro-agent | The agent's start, from `start-agent`'s start (its own process start without one), and its online report (`team_agents.agent_online` joins). |
+| `team-agent.add.wait_ready` → `team-agent.add.read_conversation` | web-app | The invite waits for runtime readiness and then checks the canonical DM on both the channel detail and message timeline paths. The parent carries `channel.id` once resolved and `add.outcome` at completion. |
+
 
 The control-plane wait spans are exported with their recorded start and end
 times when the next milestone arrives, so a still-running wait is not visible

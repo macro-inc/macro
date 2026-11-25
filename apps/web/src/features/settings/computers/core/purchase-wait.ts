@@ -2,8 +2,7 @@ import type { ComputerStatus } from '@service-auth/computers';
 import { match } from 'ts-pattern';
 
 /**
- * How long a Buy or Add waits in its dialog for the computer (or agent) to
- * come up. Past it, the dialog closes and setup carries on where it shows.
+ * How long Buy waits in its dialog for the computer to come up. Past it, the dialog closes and setup carries on where it shows.
  */
 export const PURCHASE_WAIT_MS = 5000;
 
