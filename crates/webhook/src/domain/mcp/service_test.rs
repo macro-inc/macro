@@ -279,6 +279,7 @@ impl McpSecretCipher for FakeCipher {
     async fn encrypt(
         &self,
         _user_id: &MacroUserIdStr<'static>,
+        _profile: McpDeliveryProfile,
         _secret: &SigningSecret,
     ) -> Result<McpSecretCiphertext, FakeError> {
         Ok(ciphertext())

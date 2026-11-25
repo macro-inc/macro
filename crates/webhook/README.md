@@ -451,8 +451,11 @@ encrypts the secret before calling it.
   ingested event.
 - **Secret.** The client supplies the `whsec_` secret. The MCP server
   encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
-  bound to the user); this service only decrypts it: per delivery, and on a
-  refresh to tell whether the secret changed. A refresh with a new secret
+  bound to the user and to an encryption version: 1 for `mcp` rows, 2 for
+  `chatgpt` rows, which a build from before delivery profiles refuses to
+  open, so it cannot send a ChatGPT row's events unredacted); this service
+  only decrypts it: per delivery, and on a refresh to tell whether the
+  secret changed. A refresh with a new secret
   keeps the old one in `previous_secret_*` for 10 minutes
   (`SECRET_ROTATION_WINDOW`), and deliveries in that window carry both
   signatures (space-separated in `webhook-signature`), so a receiver still

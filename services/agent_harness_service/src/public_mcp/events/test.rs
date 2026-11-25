@@ -270,6 +270,7 @@ impl SecretSealer for FakeSealer {
     async fn seal(
         &self,
         _: &MacroUserIdStr<'static>,
+        _: McpDeliveryProfile,
         _: &SigningSecret,
     ) -> Result<McpSecretCiphertext, rootcause::Report> {
         *self.sealed.lock().unwrap() += 1;

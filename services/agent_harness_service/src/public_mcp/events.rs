@@ -63,6 +63,7 @@ pub(crate) trait SecretSealer: Send + Sync {
     async fn seal(
         &self,
         user: &MacroUserIdStr<'static>,
+        profile: McpDeliveryProfile,
         secret: &SigningSecret,
     ) -> Result<McpSecretCiphertext, rootcause::Report>;
 }
@@ -75,9 +76,10 @@ where
     async fn seal(
         &self,
         user: &MacroUserIdStr<'static>,
+        profile: McpDeliveryProfile,
         secret: &SigningSecret,
     ) -> Result<McpSecretCiphertext, rootcause::Report> {
-        webhook::domain::mcp::ports::McpSecretCipher::encrypt(self, user, secret)
+        webhook::domain::mcp::ports::McpSecretCipher::encrypt(self, user, profile, secret)
             .await
             .map_err(|error| rootcause::Report::new(error).into_dynamic())
     }
@@ -302,7 +304,7 @@ impl McpEvents {
         let compiled = self.compile(user, &selection).await?;
         let secret_ciphertext = self
             .sealer
-            .seal(user, &request.secret)
+            .seal(user, request.profile, &request.secret)
             .await
             .map_err(EventsError::Internal)?;
         let body = McpSubscribeRequest {
@@ -316,11 +318,11 @@ impl McpEvents {
             profile: request.profile,
         };
         let result = self.store.subscribe(user, &body).await?;
-        // Document storage from before delivery profiles ignores the field
-        // and stores an MCP subscription; its deliveries would then reach a
-        // ChatGPT endpoint unredacted. Refuse, rather than answer as if it
-        // were ChatGPT's (the row stays, and delivers what MCP's would, only
-        // to an endpoint that checks the draft's ids and so drops it).
+        // Document storage from before delivery profiles refuses the field,
+        // so this is a second guard: a row stored under another profile
+        // would deliver to a ChatGPT endpoint unredacted. Refuse, rather than
+        // answer as if it were ChatGPT's (its secret is sealed for ChatGPT,
+        // which an MCP delivery cannot open).
         if result.profile != request.profile {
             return Err(EventsError::Internal(rootcause::report!(
                 "document storage stored delivery profile {} for a {} subscription",

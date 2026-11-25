@@ -123,10 +123,11 @@ pub trait McpSecretCipher: Clone + Send + Sync + 'static {
     /// Cipher error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Encrypt `secret` so only `user_id`'s rows decrypt it.
+    /// Encrypt `secret` so only `user_id`'s rows of `profile` decrypt it.
     fn encrypt(
         &self,
         user_id: &MacroUserIdStr<'static>,
+        profile: McpDeliveryProfile,
         secret: &SigningSecret,
     ) -> impl Future<Output = Result<McpSecretCiphertext, Self::Err>> + Send;
 

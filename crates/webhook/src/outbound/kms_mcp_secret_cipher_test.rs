@@ -53,7 +53,10 @@ async fn a_secret_decrypts_only_for_its_subscriber() {
     let cipher = KmsMcpSecretCipher::new(FakeKms::default());
     let me = user("macro|me@example.com");
     let secret = SigningSecret::parse(SECRET).expect("valid secret");
-    let encrypted = cipher.encrypt(&me, &secret).await.expect("encrypted");
+    let encrypted = cipher
+        .encrypt(&me, McpDeliveryProfile::Mcp, &secret)
+        .await
+        .expect("encrypted");
     assert_eq!(encrypted.kms_key_id, "fake-kms-key");
     assert_eq!(encrypted.encryption_version, ENCRYPTION_VERSION);
 
@@ -74,7 +77,33 @@ async fn an_unknown_scheme_is_refused() {
     let cipher = KmsMcpSecretCipher::new(FakeKms::default());
     let me = user("macro|me@example.com");
     let secret = SigningSecret::parse(SECRET).expect("valid secret");
-    let mut encrypted = cipher.encrypt(&me, &secret).await.expect("encrypted");
-    encrypted.encryption_version = ENCRYPTION_VERSION + 1;
+    let mut encrypted = cipher
+        .encrypt(&me, McpDeliveryProfile::Mcp, &secret)
+        .await
+        .expect("encrypted");
+    encrypted.encryption_version = CHATGPT_ENCRYPTION_VERSION + 1;
+    assert!(cipher.decrypt(&me, &encrypted).await.is_err());
+}
+
+/// A ChatGPT secret is sealed under its own version, which a build from
+/// before delivery profiles (accepting only version 1) refuses, so it can
+/// never deliver a ChatGPT row unredacted. This build opens both.
+#[tokio::test]
+async fn a_chatgpt_secret_needs_a_profile_aware_build() {
+    let cipher = KmsMcpSecretCipher::new(FakeKms::default());
+    let me = user("macro|me@example.com");
+    let secret = SigningSecret::parse(SECRET).expect("valid secret");
+    let mut encrypted = cipher
+        .encrypt(&me, McpDeliveryProfile::Chatgpt, &secret)
+        .await
+        .expect("encrypted");
+    assert_eq!(encrypted.encryption_version, CHATGPT_ENCRYPTION_VERSION);
+    assert_ne!(encrypted.encryption_version, ENCRYPTION_VERSION);
+
+    let decrypted = cipher.decrypt(&me, &encrypted).await.expect("decrypts");
+    assert_eq!(decrypted.expose().as_str(), SECRET);
+
+    // The version is bound into the context: relabelled, it does not open.
+    encrypted.encryption_version = ENCRYPTION_VERSION;
     assert!(cipher.decrypt(&me, &encrypted).await.is_err());
 }
