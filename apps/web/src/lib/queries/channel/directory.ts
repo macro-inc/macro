@@ -9,7 +9,11 @@
  * the channel on screen loads before the rest.
  */
 
-import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_GRAPHQL_BACKFILL,
+  enableStreamedCacheSync,
+} from '@core/constant/featureFlags';
 import {
   anyAbortSignal,
   firstOrAborted,
@@ -68,13 +72,7 @@ import {
   readContactCacheScope,
 } from '../contacts/cache-scope';
 import { queryReadyGate } from '../gate';
-import {
-  loadSoupBackfillCheckpoint,
-  type SoupBackfillCheckpoint,
-  soupBackfillLaneCompleted,
-  soupBackfillLaneFailed,
-  watchSoupBackfillCheckpoint,
-} from '../soup/backfill-checkpoint';
+import { isSyncHost } from '../soup/sync/host';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
 import {
   ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
@@ -99,10 +97,15 @@ import {
   createDepartureRecheck,
   type RemoveUnreadableResult,
 } from './directory-departures';
+import { CHANNEL_DIRECTORY_INPUT } from './directory-lane';
 import {
-  CHANNEL_DIRECTORY_INPUT,
-  CHANNEL_DIRECTORY_LANE,
-} from './directory-lane';
+  checkpointLaneProgress,
+  LANE_NOT_STARTED,
+  type LaneProgress,
+  type LaneProgressSource,
+  sameLaneProgress,
+  streamedLaneProgress,
+} from './directory-lane-progress';
 import {
   readableChannelsInput,
   removeChannelsGoneOnPrimary,
@@ -1584,6 +1587,10 @@ type CachedDirectoryDeps = {
    * lane reread after it show views as current as `ChannelDirectory`
    * promises. `performance.timeOrigin` when left out. */
   sessionStartedAt?: number;
+  /** Whether the backfill that fills the cache has finished a pass: the
+   * paged channel lane's checkpoint when left out, or the streamed sync's
+   * lane (`streamedLaneProgress`). */
+  laneProgress?: LaneProgressSource;
 };
 
 /** The joined channels paged from the network once the channel lane gave
@@ -1611,54 +1618,6 @@ type FallbackReason =
   | 'retry'
   // The storage reset or the cache changed hands under it.
   | 'scope_changed';
-
-/** What the channel lane's checkpoint says of the current storage
- * generation. `viewsCurrent`: a pass that started at or after
- * `sessionStartedAt` has finished, so it reread every record. */
-type LaneProgress = {
-  complete: boolean;
-  failed: boolean;
-  viewsCurrent: boolean;
-};
-
-const LANE_NOT_STARTED: LaneProgress = {
-  complete: false,
-  failed: false,
-  viewsCurrent: false,
-};
-
-function readLaneProgress(
-  userId: string,
-  storageGeneration: string,
-  sessionStartedAt: number
-): LaneProgress {
-  const complete = soupBackfillLaneCompleted(
-    userId,
-    CHANNEL_DIRECTORY_LANE,
-    storageGeneration
-  );
-  return {
-    complete,
-    failed:
-      !complete &&
-      soupBackfillLaneFailed(userId, CHANNEL_DIRECTORY_LANE, storageGeneration),
-    viewsCurrent:
-      complete &&
-      laneReadSince(
-        loadSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_LANE),
-        sessionStartedAt
-      ),
-  };
-}
-
-/** Whether the lane's last finished pass started at or after `time`: a
- * finished pass leaves its own start as the watermark. */
-function laneReadSince(checkpoint: SoupBackfillCheckpoint, time: number) {
-  if (checkpoint.completedAt === null || checkpoint.updatedSince === null)
-    return false;
-  const started = Date.parse(checkpoint.updatedSince);
-  return Number.isFinite(started) && started >= time;
-}
 
 /** A channel's record as the cache showed it after a change, or null once
  * the cache removed it. */
@@ -1855,6 +1814,8 @@ export function createCachedChannelDirectory(
   // The lane as the read `lastRead` came from found it.
   let publishedLane = LANE_NOT_STARTED;
   const sessionStartedAt = deps.sessionStartedAt ?? performance.timeOrigin;
+  const laneProgress =
+    deps.laneProgress ?? checkpointLaneProgress(userId, sessionStartedAt);
   // Written only by `render`, from the read shown.
   const [viewsCurrent, setViewsCurrent] = createSignal(false);
   // A full read lists every cached record; a keys read rereads only the
@@ -2293,7 +2254,9 @@ export function createCachedChannelDirectory(
       // Read before the scan: a pass that finishes during it may have
       // written records the scan missed, and its save reads again. Past the
       // first await, calls run in the span only through `span.run`.
-      lane = readLaneProgress(userId, scope, sessionStartedAt);
+      const progress = await span.run(() => laneProgress.read(scope));
+      signal.throwIfAborted();
+      lane = progress;
       const read = await span.run(() => index.refresh(scope, signal));
       // The cache may have changed hands while it was read.
       await span.run(() =>
@@ -2415,19 +2378,18 @@ export function createCachedChannelDirectory(
       refreshNow();
     })
   );
-  // Every page saves the checkpoint; only a finished pass, or the lane giving
-  // up, changes what the directory can answer.
+  // Every page saves progress; only a finished pass, or the lane giving up,
+  // changes what the directory can answer.
+  const readLaneChange = async () => {
+    const scope = generation;
+    if (scope === undefined) return;
+    const next: LaneProgress = await laneProgress.read(scope);
+    if (scope === generation && !sameLaneProgress(next, lane)) refreshNow();
+  };
   onCleanup(
-    watchSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_LANE, () => {
+    laneProgress.watch(() => {
       laneStalled();
-      if (generation === undefined) return;
-      const next = readLaneProgress(userId, generation, sessionStartedAt);
-      if (
-        next.complete !== lane.complete ||
-        next.failed !== lane.failed ||
-        next.viewsCurrent !== lane.viewsCurrent
-      )
-        refreshNow();
+      fireAndForget(readLaneChange(), 'channel-directory-lane-progress');
     })
   );
   laneStalled();
@@ -2663,6 +2625,10 @@ export function staticChannelDirectory(
 export function createAppChannelDirectory(): ChannelDirectory {
   const account = useQueryAccount();
   const queryClient = useQueryClient();
+  const streamedSyncFlag = useFeatureFlag(enableStreamedCacheSync);
+  // The backfill streams under the same condition (`runCacheSync`); only
+  // `enabled` counts, so PostHog finishing loading starts nothing over.
+  const streamedSync = createMemo(() => streamedSyncFlag().enabled);
   const accountKey = createMemo(() => {
     const current = account();
     return current ? `${current.session}:${current.userId}` : undefined;
@@ -2680,6 +2646,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
     if (!current?.userId) return EMPTY_CHANNEL_DIRECTORY;
     const { userId, session } = current;
     const cache = host();
+    const streamed = streamedSync();
     if (!cache)
       return createMemoryChannelDirectory({
         userId,
@@ -2691,6 +2658,10 @@ export function createAppChannelDirectory(): ChannelDirectory {
       host: cache,
       userId,
       session,
+      laneProgress:
+        streamed && isSyncHost(cache)
+          ? streamedLaneProgress(cache, performance.timeOrigin)
+          : undefined,
       hydrate: (input, options) =>
         hydrateGraphqlSoup(
           SoupChannelDirectoryBackfillDocument,

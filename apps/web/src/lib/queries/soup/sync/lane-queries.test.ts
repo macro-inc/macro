@@ -32,6 +32,17 @@ describe('sync lane queries', () => {
     expect(readFileSync(FIXTURE, 'utf8')).toBe(contents);
   });
 
+  // A channel record missing a field the directory reads is left out of it,
+  // so a streamed channel page must write every one.
+  it('write every field the channel directory reads', () => {
+    expect(syncLaneQueries().SoupBackfillSyncChannels).toContain(
+      '...ChannelDirectoryFields'
+    );
+    expect(syncLaneQueries().SoupBackfillSyncChannels).toContain(
+      'fragment ChannelDirectoryFields on GraphqlSoupChannel'
+    );
+  });
+
   it('carry no client-only directives', () => {
     for (const [operation, query] of Object.entries(syncLaneQueries())) {
       expect(query, operation).not.toMatch(/@cacheOnly/);

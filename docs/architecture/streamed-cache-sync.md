@@ -389,6 +389,16 @@ time. Channel messages and threads, and calls, are not synced. Contacts are
 not a lane: the app's contact directory backfill (`queries/contacts`) keeps
 them, beside the sync.
 
+The `channels` lane selects every field the channel directory reads
+(`ChannelDirectoryFields`), since a record missing one is left out of it. The
+directory (`queries/channel/directory.ts`) learns that a pass finished from
+that lane's saved state (`streamedLaneProgress` in
+`directory-lane-progress.ts`, read through `syncState`) instead of the paged
+lane's checkpoint, which the stream never writes. It polls the state every
+2 s until a pass that started this session has finished, and again after a
+storage reset; without progress for 30 s it pages the network itself, as it
+does for a stalled paged lane.
+
 ## App
 
 `useSoupBackfills` (`apps/web/src/lib/queries/soup/backfill.ts`) runs the
