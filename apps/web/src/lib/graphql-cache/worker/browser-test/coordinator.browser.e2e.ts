@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 const harnessPath = (projectName: string, path = ''): string =>
   projectName.includes('production') ? `/app/${path}` : `/${path}`;
@@ -371,6 +371,103 @@ test('pages left by the crash of the one that started the coordinator get their 
     ).toBe(generation);
   }
   expect(left.flatMap((target) => target.workers())).toHaveLength(1);
+});
+
+/**
+ * What a page's cache answers, which the development server's reload of a page
+ * whose dependencies it just bundled may interrupt.
+ */
+const startAndRead = (page: Page): Promise<unknown> =>
+  page.evaluate(async () => {
+    try {
+      await window.cacheLifecycleHarness.startSingle();
+      return await window.cacheLifecycleHarness.read();
+    } catch (error) {
+      return String(error);
+    }
+  });
+
+test('pages whose coordinator answers nobody meet at another', async ({
+  context,
+  page,
+}, testInfo) => {
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&unanswered=true&scope=${crypto.randomUUID()}`;
+  const pages = [page, await context.newPage(), await context.newPage()];
+  for (const target of pages) await target.goto(path);
+  await Promise.all(
+    pages.map((target) =>
+      expect(async () => {
+        expect(await startAndRead(target)).toEqual({ kind: 'miss' });
+      }).toPass({ timeout: 40_000 })
+    )
+  );
+  await expect
+    .poll(() => pages.flatMap((target) => target.workers()).length)
+    .toBe(1);
+
+  // One database: what a page writes, the others read.
+  await page.evaluate(() => window.cacheLifecycleHarness.write('shared'));
+  for (const target of pages)
+    expect(await startAndRead(target)).toMatchObject({ kind: 'hit' });
+});
+
+test('a page that is not answered brings the pages of a running coordinator with it', async ({
+  context,
+  page,
+}, testInfo) => {
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&scope=${crypto.randomUUID()}`;
+  await page.goto(path);
+  await expect(async () => {
+    expect(await startAndRead(page)).toEqual({ kind: 'miss' });
+  }).toPass();
+  const coordinators = () =>
+    page.evaluate(async () => {
+      const { held = [] } = await navigator.locks.query();
+      return held.flatMap(({ name = '' }) =>
+        name.startsWith('graphql-cache-coordinator:') ? [name] : []
+      );
+    });
+  const before = await coordinators();
+  expect(before).toHaveLength(1);
+  const generation = await page.evaluate(() =>
+    window.cacheLifecycleHarness.storageGeneration()
+  );
+  const refusals = page.evaluate(() =>
+    window.cacheLifecycleHarness.queueWrites()
+  );
+  const accepted = () =>
+    page.evaluate(() => window.cacheLifecycleHarness.acceptedWriteCount());
+  await expect.poll(accepted).toBeGreaterThan(3);
+
+  const unanswered = await context.newPage();
+  await unanswered.goto(`${path}&unanswered=true`);
+  await expect(async () => {
+    expect(await startAndRead(unanswered)).toEqual({ kind: 'miss' });
+  }).toPass({ timeout: 40_000 });
+  const atMove = await accepted();
+  await expect.poll(accepted, { timeout: 20_000 }).toBeGreaterThan(atMove + 3);
+  await page.evaluate(() => window.cacheLifecycleHarness.stopQueueing());
+
+  const after = await coordinators();
+  expect(after).toHaveLength(1);
+  expect(after).not.toEqual(before);
+  expect([page, unanswered].flatMap((target) => target.workers())).toHaveLength(
+    1
+  );
+  // At most the one in flight, whose outcome only the old engine knew.
+  expect([[], ['admitted-enqueue-uncertain']]).toContainEqual(await refusals);
+  const queued = new Set(
+    await unanswered.evaluate(() => window.cacheLifecycleHarness.queuedWrites())
+  );
+  const kept = await page.evaluate(() =>
+    window.cacheLifecycleHarness.acceptedWrites()
+  );
+  expect(kept.filter((uuid) => !queued.has(uuid))).toEqual([]);
+  expect(
+    await unanswered.evaluate(() =>
+      window.cacheLifecycleHarness.storageGeneration()
+    )
+  ).toBe(generation);
 });
 
 test('a silently terminated engine still recovers after releasing its owner lock', async ({

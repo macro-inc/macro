@@ -19,6 +19,10 @@ const parameters = new URLSearchParams(location.search);
 const treatment = parameters.get('treatment') === 'true';
 const scope =
   parameters.get('scope') ?? `cache-lifecycle-${crypto.randomUUID()}`;
+/** The coordinator's first name answers nobody, as after a Firefox crash. */
+const unanswered = parameters.get('unanswered') === 'true';
+const UNANSWERED_TIMEOUT_MS = 2_000;
+const FIRST_COORDINATOR_NAME = /^graphql-cache-coordinator:[^:]+:\d+$/;
 const NativeWorker = globalThis.Worker;
 const NativeSharedWorker = globalThis.SharedWorker;
 const engineWorkers: Worker[] = [];
@@ -36,6 +40,10 @@ globalThis.Worker = new Proxy(NativeWorker, {
 globalThis.SharedWorker = new Proxy(NativeSharedWorker, {
   construct(target, args: ConstructorParameters<typeof SharedWorker>) {
     constructedWorkerUrls.push(String(args[0]));
+    const [, options] = args;
+    const name = typeof options === 'string' ? options : options?.name;
+    if (unanswered && FIRST_COORDINATOR_NAME.test(name ?? ''))
+      return { port: new MessageChannel().port1 };
     return Reflect.construct(target, args) as SharedWorker;
   },
 });
@@ -101,6 +109,7 @@ async function startOwner(registerForLogout = false): Promise<void> {
   owner = createWorkerCacheHost({
     scope,
     requestTimeoutMs: 20_000,
+    ...(unanswered ? { initializationTimeoutMs: UNANSWERED_TIMEOUT_MS } : {}),
     rolloutCohort: 'treatment',
   });
   if (registerForLogout) unregisterOwner = registerCacheHost(owner);
