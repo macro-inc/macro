@@ -34,6 +34,11 @@ fn auto_defaults_to_gemini() {
 }
 
 #[test]
+fn litellm_models_display_without_provider_prefix() {
+    assert_eq!(display_name("litellm/gpt-4o"), "gpt-4o");
+}
+
+#[test]
 fn routed_models_have_house_names() {
     assert_eq!(display_name("fireworks/kimi-k3"), "Kimi K3");
     assert_eq!(

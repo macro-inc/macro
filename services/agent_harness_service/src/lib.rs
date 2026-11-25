@@ -268,6 +268,50 @@ fn internal_mcp_handler(
     })
 }
 
+/// Fetch the model ids a deployment's LiteLLM proxy serves. `None` when the
+/// proxy is not configured or the request failed; the rest of the service
+/// keeps its built-in model catalog either way.
+async fn fetch_litellm_models() -> Option<Vec<String>> {
+    let base_url = std::env::var("LITELLM_BASE_URL").ok()?;
+    let api_key = std::env::var("LITELLM_API_KEY").ok()?;
+    if base_url.trim().is_empty() || api_key.trim().is_empty() {
+        return None;
+    }
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .ok()?;
+    let response = match client.get(&url).bearer_auth(api_key.trim()).send().await {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::warn!(%error, "litellm model discovery failed");
+            return None;
+        }
+    };
+    if !response.status().is_success() {
+        tracing::warn!(status = %response.status(), "litellm model discovery failed");
+        return None;
+    }
+    let body: serde_json::Value = match response.json().await {
+        Ok(body) => body,
+        Err(error) => {
+            tracing::warn!(%error, "litellm model discovery returned invalid json");
+            return None;
+        }
+    };
+    let mut models = Vec::new();
+    for model in body.get("data")?.as_array()? {
+        if let Some(id) = model.get("id").and_then(|id| id.as_str()) {
+            let id = id.trim();
+            if !id.is_empty() && !models.iter().any(|model: &String| model == id) {
+                models.push(id.to_owned());
+            }
+        }
+    }
+    Some(models)
+}
+
 pub async fn run() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     // AWS first, because the config's secrets resolve through Secrets Manager.
@@ -279,6 +323,10 @@ pub async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
         .await
         .context("failed to resolve agent harness service secrets")?;
+    if let Some(models) = fetch_litellm_models().await {
+        tracing::info!(count = models.len(), "litellm models advertised");
+        agent_inmem::domain::models::set_litellm_models(models);
+    }
     let computer_fleet = config.computer_fleet()?;
     let non_user_owners = config.non_user_owners()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
