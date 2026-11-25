@@ -165,17 +165,23 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
     );
   };
 
-  const openMerged = useOpenMergedCompany((survivorId) =>
+  const openMerged = useOpenMergedCompany((survivorId) => {
+    const before = records().slice(0, -1);
+    // A trail that passed the company that stays goes back to it.
+    const earlier = before.findIndex(
+      (record) =>
+        record.type === 'company' &&
+        record.id.toLowerCase() === survivorId.toLowerCase()
+    );
     showRecord(
-      [
-        ...records().slice(0, -1),
-        { type: 'company', id: survivorId, name: '' },
-      ],
+      earlier === -1
+        ? [...before, { type: 'company', id: survivorId, name: '' }]
+        : before.slice(0, earlier + 1),
       undefined,
       true,
       true
-    )
-  );
+    );
+  });
 
   const showList = (next: string, replace?: boolean) => {
     const pipelineId = pipelineIdOfTab(next);

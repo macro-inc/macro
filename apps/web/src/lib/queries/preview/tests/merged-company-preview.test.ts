@@ -49,7 +49,8 @@ afterEach(() => {
 function preview(
   id: string,
   type: 'crm_company' | 'document',
-  requests: string[]
+  requests: string[],
+  offline = false
 ) {
   const client = new QueryClient();
   cleanups.push(() => client.clear());
@@ -59,6 +60,7 @@ function preview(
     preferGetMethod: false,
     fetch: async (_url, init) => {
       requests.push(String(init?.body));
+      if (offline) throw new TypeError('Failed to fetch');
       return Response.json({
         data: { user: { id: 'viewer', soup: { items: [] } } },
       });
@@ -78,8 +80,7 @@ function preview(
   });
 }
 
-it("names a merged company's chip after the company that stays, not its cached title", async () => {
-  vi.useFakeTimers();
+function cachedOldCompany() {
   fixture.cached = [
     {
       recordKey: `GraphqlSoupCrmCompany:${MERGED}`,
@@ -92,6 +93,11 @@ it("names a merged company's chip after the company that stays, not its cached t
       },
     },
   ];
+}
+
+it("names a merged company's chip after the company that stays, not its cached title", async () => {
+  vi.useFakeTimers();
+  cachedOldCompany();
   fixture.load.mockResolvedValue({
     id: MERGED,
     type: 'crm_company',
@@ -135,4 +141,15 @@ it('keeps a cached document title when the server answers without it', async () 
   await vi.advanceTimersByTimeAsync(30);
   expect(fixture.load).not.toHaveBeenCalled();
   expect(shown()).toMatchObject({ name: 'Roadmap' });
+});
+
+it("keeps a company chip's cached title when the read fails offline", async () => {
+  vi.useFakeTimers();
+  cachedOldCompany();
+  fixture.load.mockReset();
+  const shown = preview(MERGED, 'crm_company', [], true);
+
+  await vi.advanceTimersByTimeAsync(30);
+  expect(fixture.load).not.toHaveBeenCalled();
+  expect(shown()).toMatchObject({ name: 'Old Co' });
 });

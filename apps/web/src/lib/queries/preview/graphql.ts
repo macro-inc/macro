@@ -711,6 +711,7 @@ export function createGraphqlItemPreviewQuery(
       !!query?.isFetched &&
       !query.isFetching &&
       !query.stale &&
+      !query.isError &&
       livePreview() === undefined
     );
   };

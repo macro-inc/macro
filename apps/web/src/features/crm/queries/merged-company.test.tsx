@@ -64,13 +64,23 @@ it("caches a merged company's read under the company that stays and forgets its 
 
 it('leaves a fresher read of the company that stays in place', async () => {
   const fresher = { ...kept, name: 'Renamed' };
-  client.setQueryData(crmKeys.company(KEPT).queryKey, fresher);
+  client.setQueryData(crmKeys.company(KEPT).queryKey, fresher, {
+    updatedAt: 1,
+  });
   vi.mocked(storageServiceClient.getCompany).mockResolvedValue(ok(kept));
+
+  vi.mocked(storageServiceClient.getCompany).mockClear();
 
   const shown = read(MERGED);
 
+  await vi.waitFor(() =>
+    expect(storageServiceClient.getCompany).toHaveBeenCalled()
+  );
   await vi.waitFor(() => expect(shown.company()?.id).toBe(KEPT));
   expect(client.getQueryData(crmKeys.company(KEPT).queryKey)).toBe(fresher);
+  expect(
+    client.getQueryState(crmKeys.company(KEPT).queryKey)?.dataUpdatedAt
+  ).toBe(1);
 });
 
 it('answers a company read under its own id without forgetting anything', async () => {

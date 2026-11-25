@@ -230,6 +230,18 @@ it("shows the company a merged one went into in the merged one's place", async (
   expect(canGo(-1)).toBe(false);
 });
 
+it('goes back to the company that stays when the trail already passed it', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme, maya, { type: 'company', id: 'merged', name: '' }]);
+  await shows(
+    'tab:active section:- records:company:acme:Acme,contact:maya:Maya,company:merged:'
+  );
+
+  route.openMerged('acme');
+  await shows('tab:active section:- records:company:acme:Acme');
+  expect(url()).toBe('/companies/company/acme');
+});
+
 it('steps back to where a merged company was opened from when another split shows the one it went into', async () => {
   const { activated, paneAt, settled } = renderCustomers(
     '/companies/company/acme/~/companies/contact/maya'

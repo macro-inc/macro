@@ -49,10 +49,10 @@ function companyQueryOptions(deps: CrmRecordDependencies, companyId: string) {
       // A merged company's id answers with the company it was merged into,
       // which its view then opens under that company's own id.
       if (company.id.toLowerCase() !== companyId.toLowerCase() && canCache()) {
-        deps.client.setQueryData(
-          crmKeys.company(company.id).queryKey,
-          (current: CrmCompanyResponse | undefined) => current ?? company
-        );
+        const survivor = crmKeys.company(company.id).queryKey;
+        // An entry already there is as fresh as its own read made it.
+        if (deps.client.getQueryData(survivor) === undefined)
+          deps.client.setQueryData(survivor, company);
         fireAndForget(
           forgetMergedCrmCompanies([companyId.toLowerCase()]),
           'crm'
