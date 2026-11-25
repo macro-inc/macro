@@ -89,6 +89,7 @@ const solveWith = async (during: (advisory: string) => Promise<void>) => {
 };
 
 test('a run the owner cut short by taking the screen answers ownerDriving', async () => {
+  const before = fixture.seen.length;
   const { answer, driving } = await solveWith((advisory) =>
     writeFile(advisory, 'human')
   );
@@ -97,10 +98,11 @@ test('a run the owner cut short by taking the screen answers ownerDriving', asyn
     next: 'Your owner is driving your screen. Wait until they hand it back.',
   });
   expect(
-    fixture.seen.filter(
-      ({ path }) => path === `/brain/captcha/runs/${standInRunId}/end`
-    ).length
-  ).toBeGreaterThan(0);
+    fixture.seen
+      .slice(before)
+      .filter(({ path }) => path === `/brain/captcha/runs/${standInRunId}/end`)
+      .length
+  ).toBe(1);
   expect(await driving.driver()).toEqual({ kind: 'owner' });
 });
 
