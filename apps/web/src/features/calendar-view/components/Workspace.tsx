@@ -118,6 +118,10 @@ function CalendarPages() {
   const fixedTimeAxis = () =>
     isMobile() && calendarPager.periodView() !== 'dayGridMonth';
   const mountedPages = createCalendarPageMounts(calendarPager.pager);
+  // Start the visible read before neighbors without reordering scrolling pages.
+  const preloadPages = [...calendarPager.pager.pages()].sort(
+    (a, b) => Math.abs(a.offset()) - Math.abs(b.offset())
+  );
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const viewportSize = createElementSize(viewport);
@@ -151,6 +155,9 @@ function CalendarPages() {
 
   return (
     <div class="flex min-w-0 min-h-0 flex-1 flex-col">
+      <For each={preloadPages}>
+        {(page) => <CalendarPagePreload id={page.key} />}
+      </For>
       <SyncStatus syncing={calendarPager.activeData()?.isSyncing() ?? false} />
       <RangeUnavailableBanner
         class={isMobile() ? 'order-last' : undefined}
@@ -183,17 +190,14 @@ function CalendarPages() {
         >
           <For each={calendarPager.pager.pages()}>
             {(page) => (
-              <>
-                <CalendarPagePreload id={page.key} />
-                <SnapPager.Page page={page}>
-                  <Show when={mountedPages().includes(page.key)}>
-                    <CalendarPeriodPage
-                      id={page.key}
-                      useNarrowDayHeaders={useNarrowDayHeaders()}
-                    />
-                  </Show>
-                </SnapPager.Page>
-              </>
+              <SnapPager.Page page={page}>
+                <Show when={mountedPages().includes(page.key)}>
+                  <CalendarPeriodPage
+                    id={page.key}
+                    useNarrowDayHeaders={useNarrowDayHeaders()}
+                  />
+                </Show>
+              </SnapPager.Page>
             )}
           </For>
         </SnapPager.Viewport>
