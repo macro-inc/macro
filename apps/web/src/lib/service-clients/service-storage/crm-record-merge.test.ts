@@ -94,6 +94,25 @@ it('drops a merged record once per cache', async () => {
   ]);
 });
 
+it('drops a merged record once when two reports of it overlap', async () => {
+  await Promise.all([
+    forgetMergedCrmRecords({ companies: [], contacts: ['contact-1'] }),
+    forgetMergedCrmRecords({
+      companies: [],
+      contacts: ['contact-1', 'contact-2'],
+    }),
+  ]);
+  await forgetMergedCrmRecords({
+    companies: [],
+    contacts: ['contact-1', 'contact-2'],
+  });
+
+  expect(mocks.host.deleteRecords.mock.calls).toEqual([
+    [['GraphqlSoupCrmContact:contact-1']],
+    [['GraphqlSoupCrmContact:contact-2']],
+  ]);
+});
+
 it('drops nothing when nothing was merged, or from a disabled cache', async () => {
   await forgetMergedCrmRecords({ companies: [], contacts: [] });
   mocks.host.disabled = true;
@@ -122,6 +141,13 @@ it('reports an owner that cannot answer and drops nothing', async () => {
 
   expect(mocks.error).toHaveBeenCalledExactlyOnceWith(failure);
   expect(mocks.host.deleteRecords).not.toHaveBeenCalled();
+
+  // Once the owner answers, a later report drops it.
+  mocks.host.authority.current.mockResolvedValue(undefined);
+  await forgetMergedCrmRecords({ companies: [], contacts: ['contact-1'] });
+  expect(mocks.host.deleteRecords).toHaveBeenCalledExactlyOnceWith([
+    'GraphqlSoupCrmContact:contact-1',
+  ]);
 });
 
 it('reports a refused removal and drops the record again next time', async () => {
