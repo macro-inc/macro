@@ -5,8 +5,8 @@ use models_properties::service::property_definition_with_options::PropertyDefini
 use properties::domain::model::{TagScope, TagSet};
 
 use crate::{
-    EntityPropertiesDataLoader, EntityPropertyReader, GraphqlPropertyDefinition, GraphqlPropertyOption,
-    definitions::catalog_read_error,
+    EntityPropertiesDataLoader, EntityPropertyReader, GraphqlPropertyDefinition,
+    GraphqlPropertyOption, definitions::catalog_read_error,
 };
 
 /// Which owner a tag set belongs to.
