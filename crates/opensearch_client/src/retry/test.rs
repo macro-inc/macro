@@ -27,7 +27,8 @@ use crate::{
     upsert::{agent_session::ReconcileAgentSessionArgs, email::UpsertEmailArgs},
 };
 
-const OK_BODY: &str = r#"{"errors":false,"items":[],"failures":[],"timed_out":false}"#;
+/// One applied item, as the answer to each email write's single action.
+const OK_BODY: &str = r#"{"errors":false,"items":[{"index":{"_id":"thread-1:message-1","status":201,"result":"created"}}],"failures":[],"timed_out":false}"#;
 
 /// When the server closes a connection with requests still waiting on it.
 #[derive(Clone, Copy)]

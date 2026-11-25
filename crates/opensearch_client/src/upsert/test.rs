@@ -315,6 +315,29 @@ async fn a_versioned_email_write_with_a_refused_item_still_fails() {
 }
 
 #[tokio::test]
+async fn a_versioned_email_write_answered_for_fewer_actions_fails() {
+    let (url, server) = serve_once("200 OK", r#"{"took":1,"errors":false,"items":[]}"#);
+
+    let result = client(url)
+        .write_email_documents(
+            1,
+            &[email("message-1")],
+            &[deleted("thread-1", "message-2")],
+            None,
+        )
+        .await;
+    server.join().unwrap();
+
+    assert!(
+        matches!(
+            result,
+            Err(OpensearchClientError::DeserializationFailed { .. })
+        ),
+        "{result:?}"
+    );
+}
+
+#[tokio::test]
 async fn an_empty_versioned_email_write_sends_nothing() {
     let writes = client("http://127.0.0.1:9".to_owned())
         .write_email_documents(1, &[], &[], None)

@@ -604,11 +604,13 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
         };
 
         let started = tokio::time::Instant::now();
+        let mut slowest_page = Duration::ZERO;
         let mut progress = Progress {
             offset,
             ..Progress::default()
         };
         loop {
+            let page_started = tokio::time::Instant::now();
             let messages = self
                 .source
                 .thread_page(*thread_id, progress.offset, THREAD_PAGE_MESSAGES)
@@ -635,8 +637,12 @@ impl<S: EmailIndexSource, L: EmailThreadLeases, I: EmailSearchIndex> EmailIndexS
                 Err(IndexWriteError::Failed(report)) => return Err(report),
             }
             progress.offset += THREAD_PAGE_MESSAGES;
-            // Each lease writes at least one page, so a renewal always moves on.
-            if started.elapsed() >= LEASE_RENEWAL {
+            // Renew before a page that, as slow as the slowest so far, would
+            // end past the renewal point, so each page starts with at least
+            // the rest of the deadline ahead of it. Each lease writes at
+            // least one page, so a renewal always moves on.
+            slowest_page = slowest_page.max(page_started.elapsed());
+            if started.elapsed() + slowest_page >= LEASE_RENEWAL {
                 return Ok(LeaseStep::Renew(progress));
             }
         }

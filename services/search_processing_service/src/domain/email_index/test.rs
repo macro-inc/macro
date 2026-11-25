@@ -60,8 +60,9 @@ struct HeldRead {
 struct FakeSource {
     messages: Mutex<BTreeMap<Uuid, ParsedSearchMessage>>,
     held: Mutex<Option<HeldRead>>,
-    /// How long each thread page takes to read, on the test's paused clock.
-    page_time: Mutex<Option<std::time::Duration>>,
+    /// How long each thread page takes to read, in turn, on the test's paused
+    /// clock; pages after these take no time.
+    page_times: Mutex<VecDeque<std::time::Duration>>,
 }
 
 impl FakeSource {
@@ -123,7 +124,7 @@ impl EmailIndexSource for Arc<FakeSource> {
             .take(usize::try_from(limit).unwrap())
             .collect();
         self.release_held().await;
-        let page_time = *self.page_time.lock().unwrap();
+        let page_time = self.page_times.lock().unwrap().pop_front();
         if let Some(page_time) = page_time {
             tokio::time::sleep(page_time).await;
         }
@@ -595,7 +596,7 @@ async fn a_long_thread_reindex_renews_its_lease_and_finishes() {
     for n in 0..300 {
         source.put(message(Uuid::from_u128(0x1000 + n), THREAD, Some("body")));
     }
-    *source.page_time.lock().unwrap() = Some(std::time::Duration::from_secs(31));
+    *source.page_times.lock().unwrap() = [25, 25, 25].map(std::time::Duration::from_secs).into();
 
     let reconciled = service
         .reconcile_threads(&[THREAD], None, EmailWriter::Bulk, LeasePool::Bulk)
@@ -605,6 +606,27 @@ async fn a_long_thread_reindex_renews_its_lease_and_finishes() {
     assert_eq!(leases.taken.lock().unwrap().len(), 2);
     assert_eq!(reconciled.writes.indexed, 300);
     assert_eq!(index.live().len(), 300);
+}
+
+/// A lease is renewed before a page that, as slow as the pages before it,
+/// would end past the renewal point, so a slower page still ends within the
+/// deadline instead of timing out on every retry.
+#[tokio::test(start_paused = true)]
+async fn a_thread_reindex_renews_before_a_page_that_would_end_past_its_deadline() {
+    let (service, source, leases, index) = service(true);
+    for n in 0..200 {
+        source.put(message(Uuid::from_u128(0x1000 + n), THREAD, Some("body")));
+    }
+    *source.page_times.lock().unwrap() = [59, 62].map(std::time::Duration::from_secs).into();
+
+    let reconciled = service
+        .reconcile_threads(&[THREAD], None, EmailWriter::Bulk, LeasePool::Bulk)
+        .await
+        .unwrap();
+
+    assert_eq!(leases.taken.lock().unwrap().len(), 3);
+    assert_eq!(reconciled.writes.indexed, 200);
+    assert_eq!(index.live().len(), 200);
 }
 
 /// A batch leases its threads once, in order, whatever order they came in.

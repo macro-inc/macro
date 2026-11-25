@@ -30,6 +30,9 @@ const LEASE_WAIT_LIMIT: &str = "150s";
 #[cfg(test)]
 mod test;
 
+/// Longest a release waits for the database to answer its rollback.
+const RELEASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 const METER_NAME: &str = "search_processing_service";
 pub const LEASE_WAIT: &str = "search.index.lease_wait_ms";
 
@@ -160,10 +163,14 @@ impl EmailThreadLeases for PgEmailThreadLeases {
     }
 
     async fn release(&self, lease: Self::Lease) {
-        // A rollback that fails leaves the connection to be closed, which
-        // releases the locks as well.
-        if let Err(error) = lease.rollback().await {
-            tracing::warn!(error = ?error, "could not release email thread leases");
+        // A rollback that fails, or a connection that stops answering, leaves
+        // the connection to be closed, which releases the locks as well.
+        match tokio::time::timeout(RELEASE_TIMEOUT, lease.rollback()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(error = ?error, "could not release email thread leases");
+            }
+            Err(_) => tracing::warn!("releasing email thread leases timed out"),
         }
     }
 }

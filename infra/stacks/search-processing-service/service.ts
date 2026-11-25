@@ -48,6 +48,7 @@ const BACKLOG_TARGETS = { live: 30, email: 60 } as const;
 // run once per stack and later deploys roll as usual. Retire them in a later
 // release by deleting both commands and the scripts; deleting runs nothing.
 const EMAIL_FENCE_EPOCH = 'email-write-fence-1';
+const EMAIL_FENCE_TAG = 'email-write-fence';
 const EMAIL_FENCE_SCRIPTS = path.join(__dirname, 'email-fence');
 
 type Args = {
@@ -280,6 +281,10 @@ export class SearchProcessingService extends pulumi.ComponentResource {
           },
         ],
         taskDefinitionArgs: {
+          // Marks a task definition whose code fences email writes;
+          // `email-fence/resume-after-fence.sh` raises the task count only
+          // for a service that runs one.
+          tags: { ...tags, [EMAIL_FENCE_TAG]: EMAIL_FENCE_EPOCH },
           taskRole: {
             roleArn: this.role.arn,
           },
@@ -356,6 +361,8 @@ export class SearchProcessingService extends pulumi.ComponentResource {
           CLUSTER: ecsClusterArn,
           SERVICE: service.service.name,
           MIN_TASKS: `${MIN_TASKS}`,
+          EMAIL_FENCE_TAG,
+          EMAIL_FENCE_EPOCH,
           AWS_REGION: region,
         },
         triggers: [EMAIL_FENCE_EPOCH],

@@ -384,7 +384,16 @@ pub(crate) async fn email_message_documents(
         found.extend(page.keys);
         match (full, page.last) {
             (true, Some(last)) => after = Some(last),
-            _ => return Ok(found),
+            // A full page may have more after it; without its last hit's sort
+            // values the rest cannot be found, so stopping would leave copies.
+            (true, None) => {
+                return Err(OpensearchClientError::DeserializationFailed {
+                    details: "a full copy-search page carries no sort values to go on from"
+                        .to_owned(),
+                    operation: OPERATION,
+                });
+            }
+            (false, _) => return Ok(found),
         }
     }
 }

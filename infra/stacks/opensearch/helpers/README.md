@@ -79,7 +79,10 @@ versioning, so the copies start at version 1 and the new index remembers none
 of the old one's deletes. For an email index:
 
 1. Pause email writes: stop search-processing's email consumers and queue
-   workers.
+   workers, and pause direct backfills (`PUT /internal/backfill/pause` with
+   `{"paused": true}`), which rewrite email threads for property backfills.
+   Then wait 2 minutes, the longest a writer works under one lease, so the
+   writes already admitted have finished.
 2. Create the new index with `create_indices.ts`, then copy and swap.
 3. Before email writes resume, check the new index's setting with
    `GET <new index>/_settings/index.gc_deletes`. When it does not say `15m`

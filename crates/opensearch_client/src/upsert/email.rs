@@ -141,6 +141,17 @@ pub(crate) async fn write_email_documents(
         .map_err(|err| OpensearchClientError::deserialization_failed(operation, &err))?;
 
     let items = super::classify_versioned_bulk_response(status, &text, operation)?;
+    // Every action gets one item in the answer; fewer means some were not
+    // applied or not reported, and a delete that did not happen must not pass
+    // for done.
+    let answered = items.indexed + items.deleted + items.refused_stale;
+    let sent = documents.len() + deletes.len();
+    if answered != sent {
+        return Err(OpensearchClientError::DeserializationFailed {
+            details: format!("the bulk answer has {answered} items for {sent} actions"),
+            operation,
+        });
+    }
     Ok(EmailWrites {
         indexed: items.indexed,
         deleted: items.deleted,

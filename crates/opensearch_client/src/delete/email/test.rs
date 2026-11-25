@@ -135,13 +135,35 @@ async fn a_copy_search_pages_through_every_match() {
         .await
         .unwrap();
 
-    let requests = server.join().unwrap();
+    // Checked before joining the server, which would wait for a second
+    // request that never comes.
     assert_eq!(found.len(), MESSAGE_DOCUMENTS_PER_PAGE + 1);
+    let requests = server.join().unwrap();
     let second: serde_json::Value = serde_json::from_str(&requests[1].1).unwrap();
     assert_eq!(
         second["search_after"],
         serde_json::json!(["message-1", "thread-0999"])
     );
+}
+
+#[tokio::test]
+async fn a_full_copy_search_page_without_sort_values_fails() {
+    let hits: Vec<String> = (0..MESSAGE_DOCUMENTS_PER_PAGE)
+        .map(|n| {
+            format!(
+                r#"{{"_id":"thread-{n:04}:message-1","_source":{{"entity_id":"thread-{n:04}","message_id":"message-1"}}}}"#
+            )
+        })
+        .collect();
+    let (url, server) = serve_script(vec![Reply::Respond("200 OK", page(&hits))]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let result = client
+        .email_message_documents(&["message-1".to_owned()], &[], None)
+        .await;
+
+    assert!(result.is_err(), "{result:?}");
+    server.join().unwrap();
 }
 
 #[test]
