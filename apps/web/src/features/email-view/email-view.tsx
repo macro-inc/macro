@@ -402,8 +402,10 @@ export function EmailMobileLayout(props: ParentProps) {
                   size="icon-md"
                   finish="island"
                   class="shrink-0"
-                  // Keep focus where it is until the search field takes it.
+                  // Keep focus where it is until the search field takes it;
+                  // iOS still fires mousedown after a cancelled pointerdown.
                   onPointerDown={(event) => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={openSearch}
                 >
                   <SearchIcon class="size-6 shrink-0" />
