@@ -155,9 +155,13 @@ impl SalvagedQueue {
         for row in &mut self.rows {
             next = next.checked_add(1).ok_or_else(invariant)?;
             ids.insert(required_i64(row, 0)?, next);
-            row[0] = Value::from_i64(next);
-            row[LEASE_OWNER_COLUMN] = Value::Null;
-            row[LEASE_EXPIRY_COLUMN] = Value::Null;
+            for (column, value) in [
+                (0, Value::from_i64(next)),
+                (LEASE_OWNER_COLUMN, Value::Null),
+                (LEASE_EXPIRY_COLUMN, Value::Null),
+            ] {
+                *row.get_mut(column).ok_or_else(invariant)? = value;
+            }
         }
         for shadow in &mut self.shadows {
             shadow.owner = *ids.get(&shadow.owner).ok_or_else(invariant)?;
@@ -255,12 +259,15 @@ impl ImportMarker {
     }
 
     fn parse(value: &str) -> Option<Self> {
-        let mut parts = value.split(' ');
+        let fields: Vec<&str> = value.split(' ').collect();
+        let [id, rounds, imported_at_ms, complete] = fields.as_slice() else {
+            return None;
+        };
         Some(Self {
-            id: parts.next()?.parse().ok()?,
-            rounds: parts.next()?.parse().ok()?,
-            imported_at_ms: parts.next()?.parse().ok()?,
-            complete: parts.next()?.parse().ok()?,
+            id: id.parse().ok()?,
+            rounds: rounds.parse().ok()?,
+            imported_at_ms: imported_at_ms.parse().ok()?,
+            complete: complete.parse().ok()?,
         })
     }
 }
