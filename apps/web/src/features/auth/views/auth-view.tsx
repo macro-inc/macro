@@ -49,6 +49,8 @@ export function AuthView(props: {
   ssoFallbackNotice?: string;
   /** The session code an SSO return put on the URL. */
   token?: string;
+  /** Native apps: the browser sign-up that handed `token` back. */
+  appHandoffId?: string;
   onVerified?: () => void;
   /** Desktop sign-up: onboarding's slides host Google and the email form. */
   signupJourney?: (slots: SignupJourneySlots) => JSX.Element;
@@ -73,7 +75,11 @@ export function AuthView(props: {
     fallbackNotice: props.ssoFallbackNotice,
   });
   createSessionIdentity(context);
-  redeemSessionToken(context, () => props.token);
+  redeemSessionToken(
+    context,
+    () => props.token,
+    () => props.appHandoffId
+  );
   onMount(() => context.pageView(props.intent));
 
   const user = () => {

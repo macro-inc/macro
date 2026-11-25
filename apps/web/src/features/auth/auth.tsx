@@ -1,9 +1,14 @@
+import { APP_HANDOFF_PARAMS } from '@app/features/onboarding/core/app-handoff';
 import {
   clearSignupDraft,
   Onboarding,
+  OnboardingAppHandoff,
   OnboardingPending,
   OnboardingSignup,
+  pendingAppHandoff,
+  rememberAppHandoff,
 } from '@app/features/onboarding/onboarding';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableMicrosoftSignup } from '@core/constant/featureFlags';
@@ -24,6 +29,7 @@ import {
 import { ssoFallbackNotice } from './core/sso-fallback';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
+import { NativeWelcomeView } from './views/native-welcome-view';
 
 /**
  * /login and /signup. Once authenticated, first-time web users (desktop and
@@ -37,6 +43,9 @@ export function Login(props: { signupMode?: boolean }) {
   const microsoftSignup = useFeatureFlag(enableMicrosoftSignup);
   const webSignup = () =>
     props.signupMode === true && !isNativeMobilePlatform();
+  // Before anything renders: a signed-in visitor goes straight to the gate,
+  // which reads it.
+  if (!isNativeMobilePlatform()) rememberAppHandoff(params);
   return (
     <AuthProvider value={createAppAuthContext()}>
       <AuthView
@@ -48,6 +57,11 @@ export function Login(props: { signupMode?: boolean }) {
         // Dev persona links (`?email=`) sign straight in against a local backend.
         autoStart={import.meta.env.DEV && email !== undefined}
         token={sessionTokenParam(params.token)}
+        appHandoffId={
+          isNativeMobilePlatform()
+            ? sessionTokenParam(params[APP_HANDOFF_PARAMS.handoffId])
+            : undefined
+        }
         ssoFallbackNotice={ssoFallbackNotice(
           typeof params.sso_error === 'string' ? params.sso_error : undefined
         )}
@@ -70,6 +84,25 @@ export function Login(props: { signupMode?: boolean }) {
             redirect={readRedirectParam(params.redirect)}
           />
         )}
+      />
+    </AuthProvider>
+  );
+}
+
+/**
+ * The native apps' signed-out entry (`/welcome`): Create new account opens
+ * the web sign-up in the system browser, which hands the session back to the
+ * app; Log in opens /login.
+ */
+export function NativeWelcome() {
+  const navigate = useNavigate();
+  const analytics = useAnalytics();
+  onMount(() => analytics.pageView('mobile_auth_welcome'));
+  return (
+    <AuthProvider value={createAppAuthContext()}>
+      <NativeWelcomeView
+        compact={virtualKeyboardVisible()}
+        onLogIn={() => navigate('/login')}
       />
     </AuthProvider>
   );
@@ -114,9 +147,13 @@ function needsAgentSetup(user: AuthUser) {
 /**
  * Pages that need an account (team and channel invites, meetings) link to
  * `/login?redirect=`; honor it once signed in, opening an invite before
- * onboarding so the invitee joins first.
+ * onboarding so the invitee joins first. A sign-up the native app started in
+ * this tab ends by handing the session back to the app instead of entering
+ * the web app, whether the account is new (once onboarding completes) or
+ * already existed.
  */
 function PostAuthGate(props: { user: AuthUser; redirect: unknown }) {
+  const appHandoff = isNativeMobilePlatform() ? undefined : pendingAppHandoff();
   // Compared by value so a refreshed user object never remounts onboarding.
   const target = createMemo(
     () =>
@@ -133,7 +170,13 @@ function PostAuthGate(props: { user: AuthUser; redirect: unknown }) {
     <>
       {match(target())
         .with({ t: 'onboarding' }, ({ next }) => <Onboarding next={next} />)
-        .with({ t: 'navigate' }, ({ to }) => <PostLoginRedirect target={to} />)
+        .with({ t: 'navigate' }, ({ to }) =>
+          appHandoff ? (
+            <OnboardingAppHandoff handoff={appHandoff} />
+          ) : (
+            <PostLoginRedirect target={to} />
+          )
+        )
         .exhaustive()}
     </>
   );

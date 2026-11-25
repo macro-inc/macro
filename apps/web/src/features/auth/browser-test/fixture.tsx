@@ -18,6 +18,7 @@ import {
   type FakeAuthWorld,
 } from '../tests/fake-auth-context';
 import { AuthView } from '../views/auth-view';
+import { NativeWelcomeView } from '../views/native-welcome-view';
 import { FIXTURE_KEYS } from './fixture-keys';
 
 /**
@@ -194,6 +195,12 @@ function Fixture() {
             Entered Macro at {read<string>(FIXTURE_KEYS.landed)}
           </main>
         </Match>
+        <Match when={page === 'welcome'}>
+          <NativeWelcomeView
+            compact={false}
+            onLogIn={() => location.assign(`${location.pathname}?page=login`)}
+          />
+        </Match>
         <Match when={true}>
           <AuthView
             intent={page === 'signup' ? 'signup' : 'login'}
@@ -203,6 +210,7 @@ function Fixture() {
             compact={false}
             initialEmail={params.email}
             token={sessionTokenParam(params.token)}
+            appHandoffId={params.app_handoff}
             ssoFallbackNotice={ssoFallbackNotice(params.sso_error)}
             signupJourney={
               page === 'signup'

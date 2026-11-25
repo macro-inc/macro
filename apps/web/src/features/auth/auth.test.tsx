@@ -57,7 +57,10 @@ vi.mock('@app/features/onboarding/onboarding', async () => {
     ),
     OnboardingPending: () => null,
     Onboarding: () => null,
+    OnboardingAppHandoff: () => null,
     clearSignupDraft: () => {},
+    rememberAppHandoff: () => {},
+    pendingAppHandoff: () => undefined,
   };
 });
 
