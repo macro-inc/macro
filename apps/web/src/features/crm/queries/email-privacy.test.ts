@@ -252,6 +252,39 @@ describe('CRM email privacy query adapter', () => {
     expect(h.feedback.failure).toHaveBeenLastCalledWith('Resource conflict');
   });
 
+  it('rereads the list after a team domain is refused for an archived company', async () => {
+    const company = '00000000-0000-4000-8000-000000000060';
+    const h = mount({
+      team_domains: ['archived.example.com'],
+      can_remove_team_domains: true,
+    });
+    await signIn(h);
+    expect(h.source.query.data?.archivedTeamDomains).toEqual({});
+    h.privacy.get.mockResolvedValue(
+      ok({
+        ...settings,
+        team_domains: ['archived.example.com'],
+        archived_team_domains: { 'archived.example.com': company },
+        can_remove_team_domains: true,
+      })
+    );
+    h.privacy.update.mockResolvedValue(
+      err([{ code: 'CONFLICT', message: 'Resource conflict' }])
+    );
+    await expect(
+      h.source.update.mutateAsync({
+        action: 'remove_domain',
+        scope: 'team',
+        domain: 'archived.example.com',
+      })
+    ).rejects.toThrow();
+    await waitFor(() =>
+      expect(h.source.query.data?.archivedTeamDomains).toEqual({
+        'archived.example.com': company,
+      })
+    );
+  });
+
   it('does not replace another user’s settings when an earlier mutation finishes', async () => {
     const h = mount();
     await signIn(h);
