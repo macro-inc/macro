@@ -15,7 +15,11 @@ import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ListEntity, ListLayoutProvider } from '../composed/ListEntity';
 import { SearchContentHitRow } from '../extractors-search/search-content-hit-row';
-import type { ChannelMessageEntity, DocumentEntity } from '../types/entity';
+import type {
+  CallEntity,
+  ChannelMessageEntity,
+  DocumentEntity,
+} from '../types/entity';
 import type { ContentHitData, WithSearch } from '../types/search';
 
 const SENT_AT = '2026-11-01T10:00:00Z';
@@ -68,13 +72,33 @@ const documentResult: WithSearch<DocumentEntity> = {
   },
 };
 
+/** A call found by a word inside the link its name holds. */
+const callResult: WithSearch<CallEntity> = {
+  id: 'call-1',
+  type: 'call',
+  name: 'Standup https://meet.dialtone.example/r/42',
+  ownerId: 'macro|viewer@example.com',
+  updatedAt: SENT_AT,
+  isActive: false,
+  status: 'ATTENDED',
+  attended: true,
+  participantIds: [],
+  search: {
+    nameHighlight:
+      'Standup https://meet.<macro_em>dialtone</macro_em>.example/r/42',
+    senderHighlightTerms: null,
+    source: 'service',
+    contentHitData: null,
+  },
+};
+
 /** A further match listed under a result's Show more. */
 const contentHit: ContentHitData = {
   content: 'notes in https://docs.<macro_em>planbook</macro_em>.example/d/1',
 };
 
-/** Search rows for the message and the document, wide, narrow and single
- * line, and a content hit row, each recording what a press opened. */
+/** Search rows for the message, the document and the call, wide, narrow and
+ * single line, and a content hit row, each recording what a press opened. */
 function Fixture() {
   const [opened, setOpened] = createSignal<string[]>([]);
   const record = (what: string) => setOpened((all) => [...all, what]);
@@ -106,6 +130,18 @@ function Fixture() {
       width: 'w-[900px]',
       layout: 'inbox',
       entity: documentResult,
+    },
+    {
+      name: 'call-narrow',
+      width: 'w-[480px]',
+      layout: 'inbox',
+      entity: callResult,
+    },
+    {
+      name: 'call-wide',
+      width: 'w-[900px]',
+      layout: 'inbox',
+      entity: callResult,
     },
   ] as const;
 

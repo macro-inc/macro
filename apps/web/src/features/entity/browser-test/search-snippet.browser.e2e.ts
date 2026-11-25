@@ -7,8 +7,8 @@ declare global {
   }
 }
 
-/** Each search row, the link its snippet or highlighted title shows, and what
- * pressing it opens. */
+/** Each search row, the link its snippet or highlighted name shows, and what
+ * pressing it opens. The screen-wide phone row only exists on a phone. */
 const ROWS = [
   { section: 'list-narrow', href: 'https://app', opens: 'row-narrow' },
   {
@@ -17,7 +17,12 @@ const ROWS = [
     opens: 'row-single-line',
   },
   { section: 'list-wide', href: 'https://app', opens: 'row-wide' },
-  { section: 'list-phone', href: 'https://app', opens: 'row-phone' },
+  {
+    section: 'list-phone',
+    href: 'https://app',
+    opens: 'row-phone',
+    phoneOnly: true,
+  },
   { section: 'content-hit', href: 'https://docs', opens: 'content-hit' },
   {
     section: 'list-title-single-line',
@@ -25,6 +30,34 @@ const ROWS = [
     opens: 'row-title-single-line',
   },
   { section: 'list-title-wide', href: 'https://app', opens: 'row-title-wide' },
+  {
+    section: 'list-call-narrow',
+    href: 'https://meet',
+    opens: 'row-call-narrow',
+  },
+  { section: 'list-call-wide', href: 'https://meet', opens: 'row-call-wide' },
+];
+
+const DESKTOP_ROWS = ROWS.filter((row) => !row.phoneOnly);
+
+/** Each wide row, the whole URL a screen reader should read in it, and the
+ * highlighted match inside that URL. */
+const READ_TEXT = [
+  {
+    section: 'list-wide',
+    text: 'https://app.sketchpad.example/file/0ABC',
+    match: 'sketchpad',
+  },
+  {
+    section: 'list-title-wide',
+    text: 'https://app.planbook.example/roadmap',
+    match: 'planbook',
+  },
+  {
+    section: 'list-call-wide',
+    text: 'https://meet.dialtone.example/r/42',
+    match: 'dialtone',
+  },
 ];
 
 async function openFixture(page: Page) {
@@ -53,36 +86,59 @@ function highlight(section: Locator) {
   return section.locator('.markdown-content').getByText('sketchpad');
 }
 
-/** The part of the snippet markdown turns into a link: the URL up to the
+/** The part of the text markdown turns into a link: the URL up to the
  * highlight that splits it. */
-function snippetLink(page: Page, row: (typeof ROWS)[number]) {
+function rowLink(page: Page, row: (typeof ROWS)[number]) {
   return page.getByTestId(row.section).locator(`a[href^="${row.href}"]`);
 }
 
-/** Where a user would press a row's snippet link: the middle of the part of
- * it the row shows, inside every box that clips it. Fails unless that point
- * reaches the link or, when the link is inert, the snippet holding it, rather
- * than something laid over the row. */
+/** Where a user would press a row's link: the middle of the part of its first
+ * line the row shows, inside every box that clips it. Fails unless that point
+ * reaches the link itself or, when the link is inert, the element its inert
+ * text sits in, rather than anything else on or over the row. */
 async function pressPoint(page: Page, row: (typeof ROWS)[number]) {
-  const point = await snippetLink(page, row).evaluate((anchor) => {
-    const box = anchor.getBoundingClientRect();
-    let left = Math.max(box.left, 0);
-    let right = Math.min(box.right, window.innerWidth);
+  const point = await rowLink(page, row).evaluate((anchor) => {
+    const line = anchor.getClientRects()[0];
+    if (!line) return null;
+    let { left, right, top, bottom } = line;
+    left = Math.max(left, 0);
+    top = Math.max(top, 0);
+    right = Math.min(right, window.innerWidth);
+    bottom = Math.min(bottom, window.innerHeight);
     for (let el = anchor.parentElement; el; el = el.parentElement) {
-      if (getComputedStyle(el).overflowX === 'visible') continue;
+      const style = getComputedStyle(el);
+      if (style.overflowX === 'visible' && style.overflowY === 'visible')
+        continue;
       const clip = el.getBoundingClientRect();
       left = Math.max(left, clip.left);
       right = Math.min(right, clip.right);
+      top = Math.max(top, clip.top);
+      bottom = Math.min(bottom, clip.bottom);
     }
-    if (right - left < 4) return null;
+    if (right - left < 4 || bottom - top < 4) return null;
     const x = (left + right) / 2;
-    const y = (box.top + box.bottom) / 2;
+    const y = (top + bottom) / 2;
     const target = document.elementFromPoint(x, y);
     if (!target) return null;
-    return anchor.contains(target) || target.contains(anchor) ? { x, y } : null;
+    const inertHolder = anchor.closest('[inert]')?.parentElement;
+    return anchor.contains(target) || target === inertHolder ? { x, y } : null;
   });
   if (!point) throw new Error('no shown part of the link takes the press');
   return point;
+}
+
+/** Chromium's own accessibility tree, which leaves out inert content;
+ * Playwright's aria snapshot does not. */
+async function accessibilityTree(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  await cdp.detach();
+  return nodes
+    .filter((node) => !node.ignored)
+    .map((node) => ({
+      role: String(node.role?.value ?? ''),
+      name: String(node.name?.value ?? ''),
+    }));
 }
 
 const opened = (page: Page) => page.getByLabel('Opened');
@@ -91,8 +147,8 @@ const windowOpens = (page: Page) => page.evaluate(() => window.__windowOpens);
 test.describe('desktop', () => {
   test.use({ viewport: { width: 1100, height: 900 } });
 
-  for (const row of ROWS) {
-    test(`pressing the link in a ${row.section} snippet opens the result`, async ({
+  for (const row of DESKTOP_ROWS) {
+    test(`pressing the link in the ${row.section} row opens the result`, async ({
       page,
     }) => {
       await openFixture(page);
@@ -107,7 +163,7 @@ test.describe('desktop', () => {
     });
   }
 
-  test('a modified or middle click on a snippet link opens no tab', async ({
+  test('a modified or middle click on a row link opens no tab', async ({
     page,
     context,
   }) => {
@@ -115,7 +171,7 @@ test.describe('desktop', () => {
     const tabs: string[] = [];
     context.on('page', (tab) => tabs.push(tab.url()));
 
-    for (const row of ROWS) {
+    for (const row of DESKTOP_ROWS) {
       const { x, y } = await pressPoint(page, row);
       await page.keyboard.down('ControlOrMeta');
       await page.mouse.click(x, y);
@@ -127,13 +183,28 @@ test.describe('desktop', () => {
     expect(tabs).toEqual([]);
   });
 
-  test('a snippet still reads as its text, highlight included', async ({
+  test('a link still shows as link text with its highlight', async ({
     page,
   }) => {
     await openFixture(page);
-    const wide = page.getByTestId('list-wide');
-    await expect(highlight(wide)).toBeVisible();
-    await expect(wide).toContainText('https://app.sketchpad.example/file/0ABC');
+    for (const { section, match } of READ_TEXT) {
+      const shown = page.getByTestId(section).locator('.markdown-content');
+      await expect(shown.locator('a[href^="https://"]')).toBeVisible();
+      await expect(shown.getByText(match)).toBeVisible();
+    }
+  });
+
+  test('a screen reader reads each link as its text, not as a link', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    const tree = await accessibilityTree(page);
+    for (const { text } of READ_TEXT) {
+      expect(tree.some((node) => node.name.includes(text))).toBe(true);
+    }
+    expect(
+      tree.filter((node) => node.role === 'link' && /^https?:/.test(node.name))
+    ).toEqual([]);
   });
 });
 
@@ -151,7 +222,7 @@ test.describe('phone', () => {
   });
 
   for (const row of ROWS) {
-    test(`tapping the link in a ${row.section} snippet opens the result`, async ({
+    test(`tapping the link in the ${row.section} row opens the result`, async ({
       page,
     }) => {
       await openFixture(page);
