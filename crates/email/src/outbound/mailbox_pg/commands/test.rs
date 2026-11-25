@@ -739,17 +739,18 @@ async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
         .unwrap();
 
     let blocked = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(3),
         sync.claim_command(macro_uuid::generate_uuid_v7()),
     )
-    .await;
+    .await
+    .expect("a command claim must return before the five-second link writer timeout");
     assert!(
         matches!(
             &blocked,
-            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+            Err(MailboxError::Database(DatabaseFailure::DeadlineExceeded))
         ),
         "{:?}",
-        blocked.as_ref().map(|result| result.as_ref().err())
+        blocked.as_ref().err()
     );
 
     claim.rollback().await.unwrap();
