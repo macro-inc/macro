@@ -105,7 +105,9 @@ cues. The shared volume slider and quiet-hours schedule apply. Guest browser
 calls use the default settings because they have no signed-in device profile.
 
 Call cues follow the speaker selected in the call controls; notification sounds
-and settings previews still use the system-default output. Mouse, touch, Enter,
+and settings previews still use the system-default output. Outside a call, or
+with no speaker selected, cues play without taking the device's audio session,
+so music or podcasts from other apps keep playing on iPhone. Mouse, touch, Enter,
 and Space activation unlock audio, including when enabling sounds. A browser
 that cannot resume audio promptly drops the cue rather than replaying it on a
 later click.
