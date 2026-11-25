@@ -66,7 +66,11 @@ impl ScheduledActionRepo for FakeRepository {
         anyhow::bail!("appearance writes are not supported by this execution-only adapter")
     }
 
-    async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        action: ScheduledAction,
+        _activation: Option<crate::domain::routine_limit::RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         Ok(action)
     }
 
@@ -93,7 +97,11 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(self.candidates.lock().unwrap().clone())
     }
 
-    async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        action: ScheduledAction,
+        _activation: Option<crate::domain::routine_limit::RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         Ok(action)
     }
 

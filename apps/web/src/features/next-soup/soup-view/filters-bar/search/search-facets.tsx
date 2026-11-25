@@ -16,6 +16,7 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { macroIdToEmail, tryMacroId } from '@core/user/macroId';
 import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
+import { arrayEquals } from '@core/util/compareUtils';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { createContactResolution } from '@queries/contacts/lookup-query';
@@ -185,10 +186,18 @@ function usePersonPicker(
   selected: Accessor<string[]>
 ): Accessor<SearchableOption[]> {
   const currentUserId = useUserId();
+  // A name no one person was matched to stays as typed. Only ids resolve:
+  // looking a name up fails, and reading a failed lookup suspends the view
+  // around the picker.
+  const ids = createMemo(
+    () => selected().filter((id) => tryMacroId(id.toLowerCase()) !== undefined),
+    [],
+    { equals: arrayEquals }
+  );
   const resolution = createContactResolution(
     useContactDirectoryScope(),
-    () => ({ kind: 'ids', values: selected() }),
-    () => selected().length > 0
+    () => ({ kind: 'ids', values: ids() }),
+    () => ids().length > 0
   );
   return createMemo(() => {
     const known = new Map(

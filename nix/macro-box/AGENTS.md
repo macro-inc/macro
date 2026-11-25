@@ -113,8 +113,9 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   agent (`ConditionPathExists`). `start-agent` exports the file's
   `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry, not a credential) to the runtime,
   with `OTEL_EXPORTER_OTLP_HEADERS=x-macro-computer-id=<MACRO_COMPUTER_ID>`
-  (unauthenticated, so the analytics proxy ignores it until the id is signed); everything else stays
-  a credential. `macro-agent-apply` also installs the
+  (unauthenticated, so the analytics proxy ignores it until the id is signed),
+  and with it the file's `OTEL_DEPLOYMENT_ENVIRONMENT` (`[a-z]{1,16}`, else
+  left out); everything else stays a credential. `macro-agent-apply` also installs the
   setup traceparent macrod staged (`setup-traceparent` in the inbox) once, as
   `/run/macrod/agent-traceparent` (root, 0644, at most 128 bytes; a failure
   never stops the environment's install), and `start-agent` exports it as

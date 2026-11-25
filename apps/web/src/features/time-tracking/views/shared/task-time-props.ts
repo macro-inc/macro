@@ -1,4 +1,4 @@
-import type { JSX } from 'solid-js';
+import type { EntryPerson } from '../../components/entry-list';
 
 export type TaskTimeViewProps = {
   taskId: string;
@@ -6,6 +6,6 @@ export type TaskTimeViewProps = {
   minutes: number;
   /** Whether the viewer may log time: edit access on the task. */
   canEdit: boolean;
-  /** The person who logged an entry: avatar and name. */
-  person: (userId: string) => JSX.Element;
+  /** Who logged an entry: avatar and name. */
+  person: EntryPerson;
 };

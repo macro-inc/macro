@@ -1,12 +1,15 @@
 import {
   createClient,
+  createRequest,
   fetchExchange,
   gql,
+  makeOperation,
   type OperationResult,
 } from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   captureTraceParentExchange,
+  mutationTraceParentOf,
   TRACE_PARENT_CONTEXT_KEY,
   traceParentExchange,
 } from './trace-parent-exchange';
@@ -33,6 +36,14 @@ function within<T>(name: string, work: () => T): T {
     active.pop();
   }
 }
+
+const mutation = gql`
+  mutation Trash($id: ID!) {
+    trash(id: $id) {
+      id
+    }
+  }
+`;
 
 const query = gql`
   query Viewer($first: Int) {
@@ -86,5 +97,33 @@ describe('trace parent exchanges', () => {
     subscription.unsubscribe();
 
     expect(sentIn).toEqual(['crm.contacts', undefined]);
+  });
+
+  it('sends a mutation in the trace its caller named, and only then', async () => {
+    const sentIn: (string | undefined)[] = [];
+    const client = clientRecording(sentIn);
+    const parent = { run: <T>(work: () => T) => within('entity.trash', work) };
+
+    await client
+      .mutation(mutation, { id: '1' }, { [TRACE_PARENT_CONTEXT_KEY]: parent })
+      .toPromise();
+    await within('unrelated', () =>
+      client.mutation(mutation, { id: '2' }).toPromise()
+    );
+
+    expect(sentIn).toEqual(['entity.trash', undefined]);
+  });
+
+  it('exposes only a mutation’s named trace', () => {
+    const parent = { run: <T>(work: () => T) => work() };
+    const context = { [TRACE_PARENT_CONTEXT_KEY]: parent } as never;
+    const request = createRequest(mutation, { id: '1' });
+
+    expect(
+      mutationTraceParentOf(makeOperation('mutation', request, context))
+    ).toBe(parent);
+    expect(
+      mutationTraceParentOf(makeOperation('query', request, context))
+    ).toBeUndefined();
   });
 });

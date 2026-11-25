@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET web_subscription=$2 WHERE id=$1 AND web_subscription<>$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5dab7919c1cbd7d7b63d8d718e5205bdfecc940663ec3d3f8744bb64452e6e44"
+}

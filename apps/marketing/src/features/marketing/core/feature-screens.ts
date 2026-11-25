@@ -1011,7 +1011,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The Mail inbox on a phone with the Signal filter selected: unread emails from people, such as the Q4 launch plan and a calendar sync report, each with its sender, subject, preview and date.',
       title: 'Signal first',
-      text: 'Your important email, in touch-sized rows.',
+      text: 'Your important email in fast touch-sized rows.',
     },
     {
       src: mailPhoneThread,
@@ -1026,8 +1026,8 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       width: 390,
       height: 770,
       alt: 'The Mail inbox on a phone with the Noise filter selected: digests, notifications, receipts and newsletters from automated senders.',
-      title: 'Noise, for later',
-      text: 'The newsletters, receipts, and inbound you don’t need to see first.',
+      title: 'Noise for later',
+      text: 'Newsletters, receipts, and promos stay out of your way.',
     },
   ],
   tasks: [
@@ -1036,16 +1036,16 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       width: 390,
       height: 770,
       alt: 'The mobile task list, All tasks, grouped Urgent / High / Medium / Low.',
-      title: 'Every task, by priority',
-      text: 'Your tasks grouped by priority, with status, tags, project and assignee on each row.',
+      title: 'Every task by priority',
+      text: 'Tasks grouped by priority with status, tags, project, and assignee on each row.',
     },
     {
       src: tasksPDetail,
       width: 390,
       height: 770,
       alt: "The mobile task page 'Fix calendar sync for shared inboxes': 2 Tags, In review, Urgent, Nov 5, 2026, Platform, 2 assignees, the pull request pill macro-inc/macro#8419 +23 / -4 and the description.",
-      title: 'A task and its pull request',
-      text: 'Open a task to see its status, assignees and the linked pull request.',
+      title: 'Tasks linked to PRs',
+      text: 'See status, assignees, and the linked PR in one view.',
     },
     {
       src: tasksPDetailsSheet,
@@ -1053,7 +1053,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The same task with its details sheet open: Owner, Created, Last updated.',
       title: 'Properties in one sheet',
-      text: "Tags, status, priority, assignees, project and due date sit in the task's details sheet.",
+      text: 'Tags, status, priority, assignees, and due date sit in one details sheet.',
     },
   ],
   channels: [
@@ -1063,7 +1063,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'Home on a phone, Signal tab with the Signal / Noise switch at the top.',
       title: 'Signal and Noise',
-      text: 'Channels with new messages sit next to your email, with Signal and Noise one tap apart.',
+      text: 'Channels with new messages sit beside your email with Signal and Noise one tap apart.',
     },
     {
       src: chatPhoneChannel,
@@ -1071,7 +1071,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: '#launch-team on a phone: Julia\'s message with the Press kit document pill, Peter\'s message with three inline replies and "2 more replies", Teo and Julia after it.',
       title: 'Replies stay inline',
-      text: 'The first replies show under the message and the rest open in place.',
+      text: 'First replies show inline and the rest open in place.',
     },
     {
       src: chatPhoneMention,
@@ -1079,7 +1079,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: '#launch-team on a phone with the composer holding "Here\'s the plan @l" and the mention menu open: Julia, Peter, documents Launch FAQ and Launch week plan, task Record the launch video voiceover.',
       title: '@mention anything',
-      text: 'Type @ to bring a person, a document or a task into the channel.',
+      text: 'Type @ to drop a person, doc, or task right into the channel.',
     },
   ],
   documents: [
@@ -1089,15 +1089,15 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The Northpeak pilot PRD in the mobile layout.',
       title: 'Docs on your phone',
-      text: 'Read and edit the same doc, with every @mention a tap away.',
+      text: 'Read and edit the same markdown doc with every @mention one tap away.',
     },
     {
       src: docsPhoneAgent,
       width: 390,
       height: 770,
       alt: 'The same doc on a phone, scrolled down, with Claude writing the Week 2 section.',
-      title: 'Agents write alongside you',
-      text: 'Claude and ChatGPT edit the doc live, each with its own cursor.',
+      title: 'Live agent cursors',
+      text: 'Claude and ChatGPT edit your doc live beside you.',
     },
     {
       src: docsPhoneDetails,
@@ -1105,7 +1105,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The doc's details bottom sheet on a phone: owner, created and last updated dates, word and character counts, then Tags, Properties and Activity.",
       title: 'Details in one sheet',
-      text: 'Owner, dates, word count, tags and properties sit behind the info button.',
+      text: 'Owner, dates, word count, and tags sit behind one tap.',
     },
   ],
   calls: [
@@ -1114,8 +1114,8 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       width: 390,
       height: 770,
       alt: "The 'Launch standup' call on a phone: date and duration, four participants, the full Summary, and the top of the Recording.",
-      title: 'Every call, summarized',
-      text: 'Open a finished call to see who was on it and what was decided.',
+      title: 'Every call summarized',
+      text: 'Open any finished call to see who joined and what was decided.',
     },
     {
       src: callsPhoneTranscript,
@@ -1123,7 +1123,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The same call scrolled to its Transcript: lines from Julia, Jacob and Peter with photos and times, the recording's player bar above, 'Call chat' below.",
       title: 'Who said what',
-      text: "The transcript puts each line under its speaker's name and photo.",
+      text: 'Transcripts label every line with speaker and photo.',
     },
   ],
   crm: [
@@ -1132,8 +1132,8 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       width: 390,
       height: 770,
       alt: 'Customers on a phone: Companies / People / Q4 deals / Design partners pills, the Visible filter, companies grouped Lead, Demo, Customer, Churned with last-interaction dates.',
-      title: 'Every company, by stage',
-      text: 'Your companies grouped by stage, with the last time anyone on the team talked to them.',
+      title: 'Companies by stage',
+      text: 'Companies grouped by stage with last contact dates.',
     },
     {
       src: crmPhoneRecord,
@@ -1141,7 +1141,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The Northpeak record on a phone: breadcrumb, Overview section menu, summary with Show more, the Q4 deals entry and Julia's comment.",
       title: 'The whole record',
-      text: "The summary, the deal and the team's discussion on one screen.",
+      text: 'See the summary, deal stage, and discussion together.',
     },
     {
       src: crmPhoneProperties,
@@ -1149,7 +1149,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The record's details bottom sheet on a phone over the blurred record: Name, Website, References, Properties, Email sharing.",
       title: 'Edit fields anywhere',
-      text: "Change a stage, an owner or any property from the record's details sheet.",
+      text: 'Change stage, owner, or custom fields from one sheet.',
     },
   ],
   agents: [
@@ -1166,8 +1166,8 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       width: 390,
       height: 770,
       alt: 'The Routines list on a phone: templates such as Sort my inbox and Triage new tasks, then routines grouped by when they run, each with its on switch.',
-      title: 'Routines that keep running',
-      text: 'Agents run on triggers and schedules, even with the app closed.',
+      title: 'Always-on routines',
+      text: 'Agents keep running on triggers and schedules even when you close the app.',
     },
     {
       src: mailAgPRoutine,
@@ -1175,7 +1175,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The "Urgent support alerts" routine on a phone: enabled, triggered by a new email in the inbox when it is an urgent support request, followed by its AI step.',
       title: 'Triggered by your work',
-      text: 'A new email, task or message can start an agent.',
+      text: 'A new email, task, or message can start an agent.',
     },
   ],
   calendar: [
@@ -1185,7 +1185,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The public booking page on a phone, scrolled to the month and its nine available times.',
       title: 'Pick an open time',
-      text: 'Guests choose a day and one of your open times, shown in their own time zone.',
+      text: 'Guests pick a day and slot shown in their time zone.',
     },
     {
       src: schedulingPgPhoneDetails,
@@ -1193,7 +1193,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'Step 2 of the public booking page on a phone: the selected time, Name and Email address filled with a made-up guest, and Confirm booking.',
       title: 'Book without an account',
-      text: 'A name and an email address are all a guest needs to confirm the meeting.',
+      text: 'Guests only need a name and email to confirm their meeting.',
     },
   ],
   github: [
@@ -1202,16 +1202,16 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       width: 390,
       height: 770,
       alt: "The pull request view at 390 px: 'chore: shorten the team invite step', Open, jacob-macro, macro-inc/macro#8398, +41 -77, the onboarding label, the Why text and julia-macro's comment under Discussion.",
-      title: 'Comments on your pull requests',
-      text: 'Open your pull request on your phone and read the comment that sent you there.',
+      title: 'PR comments in Macro',
+      text: 'Open any pull request on your phone and read the comments inline.',
     },
     {
       src: githubPgPPr,
       width: 390,
       height: 770,
       alt: "The pull request view at 390 px: 'fix: keep all-day events on the right day', Open, teo-macro, macro-inc/macro#8412, +214 -38, the calendar label, Why / What, and the start of the Discussion.",
-      title: 'Review and merge anywhere',
-      text: 'Read the description and the discussion, then merge without opening GitHub.',
+      title: 'Review and merge',
+      text: 'Read the description and discussion then merge without opening GitHub.',
     },
   ],
   drive: [
@@ -1221,7 +1221,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'Drive on a phone, My Files tab: the filter button and the Recent / My Files / Shared with me / Folders pills over the file list with times.',
       title: 'All your files',
-      text: 'Every file you own, newest first, with tabs for recent, shared and folders.',
+      text: 'Every file you own sorted newest first with tabs for recent, shared, and folders.',
     },
     {
       src: drivePdPhoneFolder,
@@ -1229,7 +1229,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'Drive on a phone inside the Contracts folder: Contract review, Limitation of liability clause and five contracts.',
       title: 'Folders in your pocket',
-      text: 'Open a folder and its contracts, skills and snippets are all there.',
+      text: 'Open any folder and its contracts, skills, and snippets are right there.',
     },
     {
       src: drivePdPhonePdf,
@@ -1237,7 +1237,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'A brand guidelines PDF open in Drive on a phone, with page, annotation and comment tools above it.',
       title: 'Open files anywhere',
-      text: 'PDFs open right in Drive, with comments and signatures a tap away.',
+      text: 'PDFs open right inside Drive with comments and signatures one tap away.',
     },
   ],
   spreadsheets: [
@@ -1247,7 +1247,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The Launch budget sheet with Claude's named orange selection on the Team/Spend table it wrote.",
       title: 'Agents in your sheet',
-      text: 'Claude adds up the spend by team right in the budget.',
+      text: 'Claude adds up spend by team right inside your live budget.',
     },
     {
       src: spreadsheetsPhoneUpload,
@@ -1255,7 +1255,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The uploaded Vendor quotes.xlsx preview with the Uploaded workbook notice and the Edit in Macro button; only columns A and B fit, so no numbers show.',
       title: 'Open an Excel file',
-      text: 'Preview an uploaded workbook, then tap Edit in Macro.',
+      text: 'Preview uploaded workbooks then tap Edit in Macro.',
     },
   ],
   forms: [
@@ -1265,7 +1265,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The form's respond view on a phone: logo, title, description, section 1 of 2 with its progress bar and Next button in the form's accent color.",
       title: 'A branded form',
-      text: 'People open your form with your logo and accent color and answer one section at a time.',
+      text: 'Guests see your logo and accent color while answering one section at a time.',
     },
     {
       src: databasesFormsPBuild,
@@ -1273,7 +1273,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The form builder on a phone: Build / Responses / Settings tabs, the form's title and database link, and the first section's questions.",
       title: 'Build it anywhere',
-      text: 'Edit sections and questions from your phone.',
+      text: 'Edit sections, questions, and gates from your phone.',
     },
     {
       src: databasesFormsPResponses,
@@ -1281,7 +1281,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The Responses tab on a phone: four count tiles over the responses grid.',
       title: 'Responses as rows',
-      text: "Every response lands as a row in the form's table.",
+      text: 'Every submission lands as a row in the form’s table.',
     },
   ],
   snippets: [
@@ -1291,7 +1291,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The Northpeak pilot PRD on a phone with ';repl' typed and the Snippets menu open: Refund reply, Bug report reply, Pilot kickoff reply.",
       title: 'Type ; to insert',
-      text: 'Type a semicolon and a few letters to find a saved snippet.',
+      text: 'Type a semicolon and a few letters to insert any saved snippet.',
     },
     {
       src: docsSnippetPhoneDoc,
@@ -1299,7 +1299,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The snippet 'Pilot kickoff reply' on a phone: title pill, Add tags / Add property, the greeting, 'Before we start' with its 0/3 checklist, and 'Timeline' with the Week / What happens / Owner table.",
       title: 'Checklists and tables',
-      text: 'A snippet keeps its headings, checklists and tables.',
+      text: 'Every snippet preserves its headings, checklists, and tables intact.',
     },
   ],
   'booking-links': [
@@ -1309,7 +1309,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "The public booking page at phone width: Jacob's 30 minute meeting, the guest's time zone and the November 2026 calendar with the 5th chosen.",
       title: 'Book from any phone',
-      text: 'Guests open your link, see the meeting and pick a day in their own time zone.',
+      text: 'Guests open your link and pick a slot in their own time zone.',
     },
     {
       src: schedulingBlPDetails,
@@ -1317,7 +1317,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The same page after a time is chosen, scrolled to step 2, Your details: name and email filled in above Confirm booking.',
       title: 'No account needed',
-      text: 'A name and an email address are all a guest needs to confirm a time.',
+      text: 'Guests only need a name and email to lock in a meeting time.',
     },
   ],
   routines: [
@@ -1327,15 +1327,15 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The Routines list on a phone: templates such as Sort my inbox and Triage new tasks, then routines grouped by when they run, each with its on switch.',
       title: 'All your routines',
-      text: 'See every routine, what starts it and whether it is on.',
+      text: 'See every routine, its trigger, and toggle it anytime.',
     },
     {
       src: mailAgPRoutine,
       width: 390,
       height: 770,
       alt: 'The "Urgent support alerts" routine on a phone: enabled, triggered by a new email in the inbox when it is an urgent support request, followed by its AI step.',
-      title: 'Run when email arrives',
-      text: 'A routine starts when a new email matches its condition.',
+      title: 'Trigger on new mail',
+      text: 'Start a routine whenever incoming mail matches a rule.',
     },
     {
       src: mailRtPRuns,
@@ -1343,7 +1343,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: 'The Runs tab of "Invoices due soon" on a phone: Today / Yesterday / Fri, Oct 30 with succeeded runs and "N skipped by the condition" rows with Show.',
       title: 'Review every run',
-      text: 'Each run shows how it ended and when.',
+      text: 'Open any run to inspect its outcome and agent log.',
     },
   ],
   skills: [
@@ -1353,7 +1353,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       height: 770,
       alt: "Drive's My Files on a phone: the skills Release notes, Code review checklist and Contract review, with the skill icon, listed among the PDFs, docs and design files.",
       title: 'Skills live in Drive',
-      text: 'Your skills sit next to the rest of your files.',
+      text: 'Your markdown skills live right beside your team files.',
     },
   ],
 };

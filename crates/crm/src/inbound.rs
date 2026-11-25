@@ -16,3 +16,7 @@ pub mod pipelines;
 /// Pipeline entry, field and CSV routes addressed by name.
 #[cfg(feature = "axum")]
 pub mod pipeline_workflows;
+
+/// Merge review and commit routes.
+#[cfg(feature = "axum")]
+pub mod record_merge;

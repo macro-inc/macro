@@ -3,7 +3,7 @@
 use std::{collections::HashMap, future::Future};
 
 use macro_user_id::user_id::MacroUserIdStr;
-use teams::domain::model::SeatPlan;
+use teams::domain::model::{BillingCadence, SeatPlan};
 use thiserror::Error;
 
 #[cfg(test)]
@@ -43,6 +43,8 @@ pub struct CheckoutRequest<'a> {
     pub user_id: MacroUserIdStr<'a>,
     /// Requested seat plan.
     pub plan: SeatPlan,
+    /// How often the subscription bills.
+    pub interval: BillingCadence,
     /// Request the introductory Premium trial instead of immediate billing.
     pub onboarding_trial: bool,
     /// Return destination after successful checkout.
@@ -173,7 +175,11 @@ impl<G: CheckoutGateway> CheckoutService<G> {
         &self,
         request: CheckoutRequest<'_>,
     ) -> Result<CheckoutResult, CheckoutError<G::Error>> {
-        if !SeatPlan::PURCHASABLE.contains(&request.plan) {
+        // Premium is sold monthly only, so an annual checkout starts at
+        // Business.
+        if !SeatPlan::PURCHASABLE.contains(&request.plan)
+            || request.plan < SeatPlan::cheapest_at(request.interval)
+        {
             return Err(CheckoutError::PlanUnavailable);
         }
         let customer = self

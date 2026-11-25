@@ -32,6 +32,23 @@ struct Run {
 /// Exercises the actual pinned updater's HTTP and version handling, and the
 /// store's download, resume and signature check, against a local server.
 async fn check_fixture(directory: &Path, version: &str, serve: Serve) -> Run {
+    check_again(
+        &Coordinator::new(true, "1.0.0".into()),
+        directory,
+        version,
+        serve,
+    )
+    .await
+}
+
+/// `check_fixture` on a coordinator an earlier check left in its state, as
+/// the update loop's next check finds it.
+async fn check_again(
+    coordinator: &Coordinator,
+    directory: &Path,
+    version: &str,
+    serve: Serve,
+) -> Run {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let signature = include_str!("test/fixtures/update.txt.sig")
@@ -104,9 +121,8 @@ async fn check_fixture(directory: &Path, version: &str, serve: Serve) -> Run {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .build(context)
         .unwrap();
-    let coordinator = Coordinator::new(true, "1.0.0".into());
     let store = Store::new(directory.to_path_buf(), pubkey.into());
-    let result = check(app.handle(), &coordinator, &store, &Timing::start()).await;
+    let result = check(app.handle(), coordinator, &store, &Timing::start()).await;
     let status = coordinator.state.lock().unwrap().status.clone();
     let reports = coordinator.reports.lock().unwrap().take();
     assert!(
@@ -272,6 +288,131 @@ async fn a_newer_update_replaces_the_saved_download() {
 }
 
 #[tokio::test]
+async fn a_ready_update_is_replaced_when_a_newer_release_ships() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "98.0.0", Serve::Signed).await;
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    assert_eq!(run.artifact_requests, [0]);
+    assert_eq!(downloaded(&run), (ARTIFACT.len() as u64, 0));
+    assert!(run.store.read_verified(&run.signature).is_ok());
+    assert!(
+        std::fs::read_to_string(directory.path().join(RECORD))
+            .unwrap()
+            .contains("99.0.0")
+    );
+    let staging = directory.path().join("next");
+    for name in [COMPLETE, PARTIAL, RECORD] {
+        assert!(!staging.join(name).exists(), "staged {name} kept");
+    }
+    let mut state = coordinator.state.lock().unwrap();
+    assert_eq!(
+        state
+            .begin_install()
+            .map(|download| download.update.version),
+        Some("99.0.0".into())
+    );
+}
+
+#[tokio::test]
+async fn a_newer_release_replacing_a_retried_update_is_offered_as_new() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    coordinator.state.lock().unwrap().failed_install_version = Some("98.0.0".into());
+    check_again(&coordinator, directory.path(), "98.0.0", Serve::Signed).await;
+    assert_eq!(
+        coordinator
+            .state
+            .lock()
+            .unwrap()
+            .snapshot()
+            .failed_install_version
+            .as_deref(),
+        Some("98.0.0")
+    );
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    let snapshot = coordinator.state.lock().unwrap().snapshot();
+    assert_eq!(
+        snapshot.status,
+        Status::Ready {
+            version: "99.0.0".into()
+        }
+    );
+    assert_eq!(snapshot.failed_install_version, None);
+}
+
+#[tokio::test]
+async fn a_failed_newer_download_keeps_the_ready_update() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "98.0.0", Serve::Signed).await;
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Cut).await;
+    assert!(matches!(run.result, Err(CheckError::Download { .. })));
+    // The update loop's failure handling, which must leave it ready.
+    assert!(!coordinator.state.lock().unwrap().fail("offline".into()));
+    assert_eq!(
+        run.status,
+        Status::Ready {
+            version: "98.0.0".into()
+        }
+    );
+    assert!(run.store.read_verified(&run.signature).is_ok());
+    let mut state = coordinator.state.lock().unwrap();
+    assert_eq!(
+        state
+            .begin_install()
+            .map(|download| download.update.version),
+        Some("98.0.0".into())
+    );
+}
+
+#[tokio::test]
+async fn a_feed_rolled_back_below_the_ready_update_keeps_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+
+    for offered in ["98.0.0", "0.0.0"] {
+        let run = check_again(&coordinator, directory.path(), offered, Serve::Signed).await;
+        assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+        assert_eq!(
+            run.status,
+            Status::Ready {
+                version: "99.0.0".into()
+            }
+        );
+        assert!(run.outcomes.is_empty());
+        assert!(run.artifact_requests.is_empty());
+        assert!(run.store.read_verified(&run.signature).is_ok());
+    }
+}
+
+#[tokio::test]
+async fn a_ready_update_offered_again_stays_ready() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Tampered).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    assert_eq!(
+        run.status,
+        Status::Ready {
+            version: "99.0.0".into()
+        }
+    );
+    assert!(run.outcomes.is_empty());
+    assert!(run.artifact_requests.is_empty());
+    assert!(run.store.read_verified(&run.signature).is_ok());
+    assert!(coordinator.state.lock().unwrap().begin_install().is_some());
+}
+
+#[tokio::test]
 async fn tampered_download_never_becomes_ready_or_stays_saved() {
     let directory = tempfile::tempdir().unwrap();
     let run = check_fixture(directory.path(), "99.0.0", Serve::Tampered).await;
@@ -350,4 +491,59 @@ fn releases_for_a_newer_os_are_unsupported() {
             Some(minimum.into())
         );
     }
+}
+
+#[test]
+fn a_launch_after_a_failed_install_offers_to_try_again() {
+    let path = std::env::temp_dir()
+        .join(format!("macro-native-update-{}", uuid::Uuid::new_v4()))
+        .join("pending-install.json");
+    PendingInstall {
+        from_version: "2026.1106.1".into(),
+        target_version: "2026.1119.1".into(),
+        trigger: Trigger::Restart,
+        started_at_ms: 1_700_000_000_000,
+        failure: Some(Failure::new(FailureKind::Authentication)),
+    }
+    .write(&path)
+    .unwrap();
+    let coordinator = Coordinator::new(true, "2026.1106.1".into());
+    let report = coordinator.take_pending_install(&path).unwrap();
+    assert!(matches!(report.outcome, Outcome::InstallFailed { .. }));
+
+    // The failure outlasts the check that downloads the update again.
+    let mut state = coordinator.state.lock().unwrap();
+    assert!(state.begin_check());
+    assert_eq!(
+        state.snapshot().failed_install_version.as_deref(),
+        Some("2026.1119.1")
+    );
+}
+
+#[test]
+fn a_launch_on_the_installed_update_offers_nothing_to_retry() {
+    let path = std::env::temp_dir()
+        .join(format!("macro-native-update-{}", uuid::Uuid::new_v4()))
+        .join("pending-install.json");
+    PendingInstall {
+        from_version: "2026.1106.1".into(),
+        target_version: "2026.1119.1".into(),
+        trigger: Trigger::Quit,
+        started_at_ms: 1_700_000_000_000,
+        failure: None,
+    }
+    .write(&path)
+    .unwrap();
+    let coordinator = Coordinator::new(true, "2026.1119.1".into());
+    let report = coordinator.take_pending_install(&path).unwrap();
+    assert!(matches!(report.outcome, Outcome::Installed { .. }));
+    assert_eq!(
+        coordinator
+            .state
+            .lock()
+            .unwrap()
+            .snapshot()
+            .failed_install_version,
+        None
+    );
 }

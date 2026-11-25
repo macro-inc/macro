@@ -7,7 +7,9 @@ use super::models::{
     DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester, RunCaller,
     RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
 };
+use super::routine_limit::RoutineLimit;
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
+use ai_billing::PlanTier;
 use anyhow::Result;
 use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
@@ -91,9 +93,15 @@ pub trait LiveItems: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionRepo: Send + Sync + 'static {
+    /// Insert `action`. `activation` is set when the new routine is active
+    /// ([`ScheduledAction::is_active`]): the insert is then refused with
+    /// `RoutineLimitReached` when its owner already has the limit's number of
+    /// active routines, counted under a per-owner lock so concurrent
+    /// activations can't both take the last slot.
     fn create_action(
         &self,
         action: ScheduledAction,
+        activation: Option<RoutineLimit>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Account cleanup only: `WHERE owner = $1`. Never the HTTP list.
@@ -124,10 +132,12 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     /// predecessor, plus the claim fence. No owner predicate. While claimed,
     /// only disabling with otherwise identical configuration is allowed.
     /// `UpdateConflict` on a stale revision or a concurrent claim; never
-    /// overwrite execution state.
+    /// overwrite execution state. `activation` is set when the update makes
+    /// an inactive routine active, and is checked as in `create_action`.
     fn update_action(
         &self,
         action: ScheduledAction,
+        activation: Option<RoutineLimit>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Atomically replace presentation and record the actual change in entity
@@ -461,6 +471,15 @@ pub struct SuggestionOrigin {
     pub kind: &'static str,
     /// The surface it belongs to most.
     pub surface: Option<&'static str>,
+}
+
+/// The plan whose [`RoutineLimit`] applies to a routine owner.
+pub trait RoutinePlans: Send + Sync + 'static {
+    /// `owner`'s plan. Enterprise teams count as Max.
+    fn plan(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<PlanTier>> + Send;
 }
 
 /// The inboxes (email link ids) an owner receives mail in: their own and those
@@ -1315,6 +1334,9 @@ pub struct FinishedRoutineRun {
     pub target: RunTarget,
     pub end: RunEnd,
     pub duration: chrono::Duration,
+    /// The apps the routine needs connected, by name, when the run failed
+    /// because one of them is not; empty otherwise.
+    pub apps_to_connect: Vec<String>,
 }
 
 /// Told about every finished routine run, e.g. for product analytics.

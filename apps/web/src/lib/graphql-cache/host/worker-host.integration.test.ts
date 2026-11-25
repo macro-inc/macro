@@ -6,13 +6,20 @@ import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runti
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
 import { createCacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
 import { CoordinatorRouter } from '../worker/coordinator-router';
-import { EFFECT_WORKER_CLOSE_FRAME } from '../worker/effect-worker-transport';
-import { createWorkerCacheHost } from './worker-host';
+import {
+  EFFECT_WORKER_CLOSE_FRAME,
+  WorkerRestartedError,
+} from '../worker/effect-worker-transport';
+import {
+  CoordinatorRestartedError,
+  createWorkerCacheHost,
+} from './worker-host';
 import {
   exchangeHarness,
   LinkedMessageChannel,
   LinkedMessagePort,
   optimisticMutation,
+  originLocks,
 } from './worker-host.integration-helpers';
 
 const PAGEHIDE_MUTATION = gql`
@@ -171,7 +178,7 @@ class IntegrationDedicatedWorker {
           enqueueGates,
           options.onOwnerLockAcquired
         ),
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
     });
   }
 
@@ -223,6 +230,11 @@ class IntegrationSharedWorker {
     });
   }
 
+  /** Its process is gone: no port closes, and nothing is sent. */
+  crash(): void {
+    this.port.peer?.close();
+  }
+
   fail(message: string): void {
     this.onerror?.call(
       {} as AbstractWorker,
@@ -239,8 +251,10 @@ describe('worker CacheHost coordinator integration', () => {
   const hostInitGates = new Map<number, Promise<void>>();
   const enqueueGates = new Map<string, Promise<void>>();
   let router: CoordinatorRouter;
+  let locks: ReturnType<typeof originLocks>;
 
   beforeEach(() => {
+    locks = originLocks();
     localStorage.clear();
     logs.length = 0;
     dedicatedWorkers.length = 0;
@@ -317,13 +331,7 @@ describe('worker CacheHost coordinator integration', () => {
       }
     );
     vi.stubGlobal('navigator', {
-      locks: {
-        request: async (
-          name: string,
-          _options: LockOptions,
-          callback: (lock: Lock | null) => unknown
-        ) => await callback({ name, mode: 'exclusive' } as Lock),
-      },
+      locks,
       storage: { getDirectory: vi.fn() },
     });
   });
@@ -369,7 +377,7 @@ describe('worker CacheHost coordinator integration', () => {
       host.readQuery({ opKey: 7, query: 'query Seven { seven }' })
     ).resolves.toEqual({ kind: 'miss' });
     expect(host.clientId).toBe(clientId);
-    expect(generations).toEqual([{ storage: 'reset' }]);
+    expect(generations).toEqual([{ storage: 'reset', queue: 'reset' }]);
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'graphql_cache.owner',
@@ -388,6 +396,50 @@ describe('worker CacheHost coordinator integration', () => {
     expect(onInitializationError).not.toHaveBeenCalled();
     host.dispose();
   });
+
+  it.each(['owner', 'follower'])(
+    'connects the $0 again when the coordinator dies without a word',
+    async (role) => {
+      const record = vi.fn();
+      const owner = createWorkerCacheHost({
+        scope: 'integration-scope',
+        requestTimeoutMs: 1_000,
+        telemetry: { record, flush: vi.fn() },
+      });
+      await owner.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+      const host =
+        role === 'owner'
+          ? owner
+          : createWorkerCacheHost({
+              scope: 'integration-scope',
+              requestTimeoutMs: 1_000,
+            });
+      await host.currentRevision();
+      router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => undefined,
+      });
+      const connected = sharedWorkers.length;
+      for (const worker of sharedWorkers) worker.crash();
+      const unanswered = host.readQuery({ query: 'query Eight { eight }' });
+      const rejected = expect(unanswered).rejects.toMatchObject({
+        errorCode: 'owner-epoch-lost',
+      });
+      locks.abandon('graphql-cache-coordinator:');
+
+      await rejected;
+      await expect(
+        host.readQuery({ opKey: 7, query: 'query Seven { seven }' })
+      ).resolves.toEqual({ kind: 'miss' });
+      expect(sharedWorkers).toHaveLength(2 * connected);
+      expect(dedicatedWorkers[0]?.terminated).toBe(true);
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({ ownerEvent: 'coordinator-restarted' })
+      );
+      if (host !== owner) host.dispose();
+      owner.dispose();
+    }
+  );
 
   it('retries registration when the coordinator restarts before acknowledging it', async () => {
     const registering = Promise.withResolvers<void>();
@@ -435,9 +487,11 @@ describe('worker CacheHost coordinator integration', () => {
     const affected = Promise.withResolvers<number[]>();
     host.onOpsAffected((keys) => affected.resolve(keys));
     const read = host.readQuery({ opKey: 7, query: 'query First { first }' });
-    const rejected = expect(read).rejects.toMatchObject({
-      errorCode: 'owner-epoch-lost',
-    });
+    const rejected = expect(read).rejects.toSatisfy(
+      (error) =>
+        error instanceof CoordinatorRestartedError &&
+        error.errorCode === 'owner-epoch-lost'
+    );
     await initializing.promise;
     hostInitGates.clear();
     router = new CoordinatorRouter({
@@ -456,6 +510,38 @@ describe('worker CacheHost coordinator integration', () => {
     expect(dedicatedWorkers[0]?.terminated).toBe(true);
     expect(sharedWorkers).toHaveLength(2);
     expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it('ends with a typed restart when the coordinator restarts before every registration acknowledgement', async () => {
+    const restartingRouter = (): CoordinatorRouter =>
+      new CoordinatorRouter({
+        verifyTabLockHeld: () => {
+          queueMicrotask(() => {
+            router = restartingRouter();
+            sharedWorkers.at(-1)?.restart(router);
+          });
+          return new Promise<boolean>(() => undefined);
+        },
+        watchTabLock: () => () => undefined,
+      });
+    router = restartingRouter();
+    localStorage.setItem('graphql-cache:scope', 'integration-scope');
+    const fallback = Promise.withResolvers<Error>();
+    const host = createWorkerCacheHost({
+      scope: 'integration-scope',
+      onInitializationError: fallback.resolve,
+    });
+    const revision = host.currentRevision();
+    const failure = await fallback.promise;
+    expect(failure).toBeInstanceOf(CoordinatorRestartedError);
+    expect(failure.cause).toBeInstanceOf(WorkerRestartedError);
+    await expect(revision).rejects.toBe(failure);
+    expect(sharedWorkers).toHaveLength(3);
+    expect(dedicatedWorkers).toHaveLength(0);
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      'integration-scope'
+    );
     host.dispose();
   });
 
@@ -483,9 +569,9 @@ describe('worker CacheHost coordinator integration', () => {
     ).rejects.toMatchObject({
       errorCode: 'owner-epoch-lost',
     });
-    expect(await fallback.promise).toMatchObject({
-      errorCode: 'owner-epoch-lost',
-    });
+    const failure = await fallback.promise;
+    expect(failure).toBeInstanceOf(CoordinatorRestartedError);
+    expect(failure).toMatchObject({ errorCode: 'owner-epoch-lost' });
     expect(sharedWorkers).toHaveLength(3);
     expect(dedicatedWorkers.every((worker) => worker.terminated)).toBe(true);
     expect(localStorage.getItem('graphql-cache:scope')).toBe(
@@ -786,7 +872,10 @@ describe('worker CacheHost coordinator integration', () => {
         expect(await completed.promise).toMatchObject({
           error: { networkError: { errorCode: 'admitted-enqueue-uncertain' } },
         });
-        expect(await recovered.promise).toEqual({ storage: 'preserved' });
+        expect(await recovered.promise).toEqual({
+          storage: 'preserved',
+          queue: 'preserved',
+        });
         await expect(
           standby.readQuery({ query: 'query After { after }' })
         ).resolves.toEqual({ kind: 'miss' });
@@ -882,7 +971,10 @@ describe('worker CacheHost coordinator integration', () => {
       expect(forwarded).toHaveLength(0);
       gate.resolve();
       expect((await completed.promise).error).toBeUndefined();
-      expect(await recovered.promise).toEqual({ storage: 'preserved' });
+      expect(await recovered.promise).toEqual({
+        storage: 'preserved',
+        queue: 'preserved',
+      });
       expect(await affected.promise).toEqual([7, 9]);
       await write;
       expect(await lateAffected.promise).toEqual([11]);
@@ -983,7 +1075,7 @@ describe('worker CacheHost coordinator integration', () => {
     });
     await vi.waitFor(() => {
       expect(localStorage.getItem('graphql-cache:scope')).toBe(
-        'quarantine:integration-scope'
+        'integration-scope'
       );
       expect(initializationErrors).toEqual([
         'standby SharedWorker failed during retirement',

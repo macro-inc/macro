@@ -158,6 +158,8 @@ fn paths_filter() -> Step<Use> {
                   - '!apps/web/tauri/**/*.macos.*'
                   - '!apps/web/tauri/**/linux_*'
                   - '!apps/web/tauri/**/linux_*/**'
+                  - '!apps/web/tauri/**/windows/**'
+                  - '!apps/web/tauri/**/*.windows.*'
                   - '!apps/web/tauri/**/desktop/**'
                   - '!apps/web/tauri/**/desktop-*'
                   - '!apps/web/tauri/**/desktop-*/**'

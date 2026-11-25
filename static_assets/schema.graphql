@@ -1713,7 +1713,7 @@ The typed activity-action vocabulary. One member per durable action, plus
 with an undecodable payload) surface with their raw tag and payload
 instead of failing the page.
 """
-union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityTimeLogged | GraphqlActivityUnknownAction
+union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityTimeLogged | GraphqlActivityRecordMerged | GraphqlActivityUnknownAction
 
 """
 A call was started in the entity.
@@ -1757,6 +1757,24 @@ type GraphqlActivityDeleted {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+A value a merge dropped.
+"""
+type GraphqlActivityDroppedValue {
+	"""
+	The property definition id.
+	"""
+	property: String!
+	"""
+	The merged record that held it.
+	"""
+	record: ID!
+	"""
+	The value.
+	"""
+	value: JSON!
 }
 
 """
@@ -1846,6 +1864,20 @@ type GraphqlActivityInvalidation {
 	True when mounted activity queries need a fresh read.
 	"""
 	refresh: Boolean!
+}
+
+"""
+A record merged into the entity.
+"""
+type GraphqlActivityMergedRecord {
+	"""
+	Its id, which now opens the entity.
+	"""
+	id: ID!
+	"""
+	Its name at the merge.
+	"""
+	name: String
 }
 
 """
@@ -1957,6 +1989,21 @@ type GraphqlActivityPropertyChanged {
 	set to JSON null; the wire cannot distinguish the two.
 	"""
 	to: JSON
+}
+
+"""
+Records were merged into the entity, which they now name.
+"""
+type GraphqlActivityRecordMerged {
+	"""
+	The records merged in, as they were named at the merge.
+	"""
+	merged: [GraphqlActivityMergedRecord!]!
+	"""
+	Team-visible values of the merged records that the entity's own
+	values replaced. Private values are never recorded here.
+	"""
+	dropped: [GraphqlActivityDroppedValue!]!
 }
 
 """
@@ -2517,7 +2564,9 @@ type GraphqlCalendar {
 	"""
 	isWritable: Boolean!
 	"""
-	Whether this is a shared system calendar (holidays, birthdays).
+	Whether the account subscribes to this calendar as a feed: one of
+	Google's system calendars (holidays, birthdays), or one added by URL in
+	Google or subscribed from the web in Outlook.
 	"""
 	isSubscription: Boolean!
 	"""
@@ -4369,6 +4418,31 @@ enum GraphqlCrmDiscussionReason {
 }
 
 """
+Why someone's CRM email sharing rules changed.
+"""
+enum GraphqlCrmEmailSharingChangeReason {
+	"""
+	Companies their rules named were merged.
+	"""
+	COMPANIES_MERGED
+}
+
+"""
+A teammate's action changed the viewer's CRM email sharing rules. It names
+no company, count or person.
+"""
+type GraphqlCrmEmailSharingChangedMetadata {
+	"""
+	The team whose CRM the rules share mail with.
+	"""
+	teamId: ID!
+	"""
+	Why they changed.
+	"""
+	reason: GraphqlCrmEmailSharingChangeReason!
+}
+
+"""
 A CRM pipeline the viewer can see.
 """
 type GraphqlCrmPipeline {
@@ -5107,6 +5181,11 @@ input GraphqlEmailLiteral @oneOf {
 	Threads with at least one attachment of this kind.
 	"""
 	attachment: GraphqlAttachmentKind
+	"""
+	Threads with at least one message carrying this label of one of the
+	viewer's inboxes.
+	"""
+	label: ID
 	"""
 	The created at option.
 	"""
@@ -7005,7 +7084,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlPingMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlCrmEmailSharingChangedMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlPingMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -8144,6 +8223,10 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	property: GraphqlScheduledActionPropertySelector
 	"""
+	Email label ids, one of which an `EMAIL_LABELED` thread must gain. Null matches any label.
+	"""
+	labelIds: [ID!]
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -8185,6 +8268,10 @@ enum GraphqlScheduledActionEventName {
 	A new email was received.
 	"""
 	EMAIL_MESSAGE_RECEIVED
+	"""
+	An email thread gained a Gmail label or Outlook category.
+	"""
+	EMAIL_LABELED
 	"""
 	A channel was created.
 	"""

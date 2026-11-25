@@ -102,6 +102,8 @@ export async function verifyHomepage(
         } else {
           await expect(page.locator('#pricing')).toBeHidden();
         }
+        await expect(page.locator('#homepage-testimonial')).toBeVisible();
+        await expect(page.locator('.homepage-blog')).toBeVisible();
         await expect(page.locator('#app-scroll-root')).toHaveCSS(
           'background-color',
           'rgb(0, 0, 0)'

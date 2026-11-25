@@ -102,6 +102,8 @@ fn plan_item(decision: NotionDecision, reason: Option<&str>) -> NotionPlanItem {
         shared_reason: None,
         shareable: false,
         already_imported: None,
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
     }
 }
 

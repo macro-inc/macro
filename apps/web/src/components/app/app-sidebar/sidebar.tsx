@@ -121,6 +121,17 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.agents,
   },
   {
+    id: 'routines',
+    get label() {
+      return t('agentWork.routines');
+    },
+    href: '/routines',
+    // Opens the list, as the Agents sidebar does, even from an open routine.
+    search: {},
+    icon: getIconConfig('routine').icon,
+    hotkeyToken: TOKENS.sidebar.goTo.routines,
+  },
+  {
     id: 'mail',
     get label() {
       return t('nav.email');

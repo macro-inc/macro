@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH old_messages AS MATERIALIZED (\n               SELECT id, parent_entity_id FROM comms_messages\n               WHERE parent_entity_type = $1 AND parent_entity_id = ANY($2)\n               ORDER BY id\n               FOR UPDATE\n           ), old_threads AS MATERIALIZED (\n               SELECT root_id, parent_entity_id FROM comms_message_threads\n               WHERE parent_entity_type = $1 AND parent_entity_id = ANY($2)\n               ORDER BY root_id\n               FOR UPDATE\n           ), messages AS (\n               UPDATE comms_messages m SET parent_entity_id = $3\n               FROM old_messages o WHERE m.id = o.id\n               RETURNING m.id\n           ), threads AS (\n               UPDATE comms_message_threads t SET parent_entity_id = $3\n               FROM old_threads o WHERE t.root_id = o.root_id AND t.parent_entity_type = $1\n               RETURNING t.root_id\n           )\n           SELECT 'message' AS \"kind!\", o.id AS \"id!\", o.parent_entity_id AS \"previous!\"\n           FROM old_messages o JOIN messages USING (id)\n           UNION ALL\n           SELECT 'thread', o.root_id, o.parent_entity_id\n           FROM old_threads o JOIN threads ON threads.root_id = o.root_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "previous!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0fc81ca88694be8018197d721a847e5fa2d7eab452309725a7f24dc86f9d7fad"
+}
