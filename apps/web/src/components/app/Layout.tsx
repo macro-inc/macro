@@ -1,5 +1,4 @@
 import { ViewSwitcherContext } from '@app/components/view-shell';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
@@ -23,7 +22,6 @@ import {
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
-import { onboardingRedirectPath } from '@app/features/onboarding/core/next-target';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
@@ -52,7 +50,6 @@ import {
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useNativeNavigationEdge } from '@core/mobile/nativeNavigationEdge';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
@@ -61,9 +58,8 @@ import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isDesktopPlatform, isPlatform } from '@core/util/platform';
 import { useDesktopZoom } from '@macro/tauri/zoom';
-import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
-import { useLocation, useNavigate } from '@solidjs/router';
+import { useLocation } from '@solidjs/router';
 import { type as osType } from '@tauri-apps/plugin-os';
 import { cn } from '@ui';
 import {
@@ -77,7 +73,7 @@ import {
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
-import { FirstRunEmailSync } from './FirstRunEmailSync';
+import { useFirstRunSetup } from './FirstRunSetup';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
@@ -225,37 +221,6 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time web users (desktop and phone browsers) into the onboarding
- * flow at /onboarding, and new agents on any platform to their setup page.
- * App chrome runs it, so it fires on any app destination (marketing SSO lands
- * on /app, not /login) and never on the onboarding pages themselves.
- */
-function useNewOnboardingRedirect() {
-  const userInfoQuery = useUserInfoQuery();
-  const navigate = useNavigate();
-  const location = useLocation();
-  createEffect(() => {
-    // A pending read would suspend the chrome; wait for the user instead.
-    const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
-    if (data?.authenticated !== true || data.tutorialComplete !== false) {
-      return;
-    }
-    // Agents skip onboarding: their setup page shows their SDK token.
-    if (data.isAgent) {
-      navigate('/agent-setup', { replace: true });
-      return;
-    }
-    if (isNativeMobilePlatform()) return;
-    // Preserve the deep link the user arrived on (a shared doc, an invite)
-    // as ?next, and a lifecycle-email ?step, so finish() and the flow can
-    // resume. Base-relative so navigate() can resolve it against the router.
-    const target =
-      location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
-    navigate(onboardingRedirectPath(target), { replace: true });
-  });
-}
-
-/**
  * The app's chrome — rail, hotkeys, command menu, launcher, global modals,
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
@@ -287,7 +252,7 @@ export function AppChrome(props: ParentProps) {
 
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
-  useNewOnboardingRedirect();
+  useFirstRunSetup();
   const { status: systemStatus, dismiss: dismissSystemStatus } =
     useBannerStatus();
 
@@ -412,7 +377,6 @@ export function AppChrome(props: ParentProps) {
           <MobileDockRow vertical={dockEdge() !== 'bottom'} />
         </FloatRegion>
       </Show>
-      <FirstRunEmailSync />
       <Suspense>
         <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />

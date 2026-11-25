@@ -315,6 +315,9 @@ function WideSearchHeader() {
     userId: () => 'user',
     search: () => state.search,
     setSearch: (search) => setState('search', search),
+    hasResults: () => false,
+    openedThread: () => undefined,
+    isResult: () => true,
     scopeAvailable: () => true,
   });
   return <EmailHeader tabOnly searchSuggestions={suggestions} />;

@@ -441,7 +441,8 @@ saved-date semantics do not change.
 Behind `enable-time-tracking`. A task's property row has a Time pill
 (`InlineTaskTimeLogged` in `Notebook.tsx`, from `features/time-tracking`)
 showing Time logged, the sum of the task's entries, or "Time" when nothing is
-logged. On desktop it opens a popover: a length input that reads `1h 30m`,
+logged. It wears the row's other chips' look (`secondary`, `xs`, a
+`size-3 touch:size-4` icon). On desktop it opens a popover: a length input that reads `1h 30m`,
 `1.5h`, `90m`, `1:30` or a bare number of hours and shows what it understood
 (Enter logs it for today), one-tap 15m/30m/1h/2h, Custom entry (length, day,
 optional start and end, note) and the entries by day with day totals. An

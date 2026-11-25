@@ -378,7 +378,8 @@ Missing or failed reads preserve the single-command writer.
 - `run_health` runs in every `pubsub_workers` task: each flushes its in-memory
   Outlook import counts every minute, and the task that wins the Redis key
   `outlook:health_snapshot` logs one "outlook mailbox health" line per Outlook
-  mailbox. Its fields, the `outlook.sync.*`, `outlook.graph_request` and
+  mailbox, and one "outlook folder line" for the mail folder claim line they
+  share. Its fields, the `outlook.sync.*`, `outlook.graph_request` and
   `outlook.token.acquire` spans and the import lifecycle logs are read by the
   Outlook sync monitors in `infra/stacks/monitoring`; rename them only
   together. Loops whose domain service logs its own deferrals use `reported`,

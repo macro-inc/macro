@@ -21,6 +21,7 @@ Graph and token spans, so find them by their fields:
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
 | Accounts Graph serves no mailbox for | Logs: `"outlook mailbox health" @mailbox_unavailable:true`; their probes: spans `resource_name:outlook.sync.discover @outlook.defer_reason:no_mailbox`, field `@graph.error_code` ([No mailbox](#no-mailbox)) |
+| The folder claim line | Logs: `"outlook folder line"` once a minute (`@polls_due`, `@oldest_poll_due_seconds`, `@import_rounds_due`, `@oldest_import_round_due_seconds`); per claim, spans `resource_name:outlook.sync.enumerate`, field `@outlook.due_ms` (its wait after it came due), split by `@outlook.import_round` |
 | Its subscription upkeep | Spans: `resource_name:outlook.subscription.maintain @mailbox.link_id:<id>`, field `@outlook.upkeep_failures` (failed runs in a row); mailboxes whose upkeep Graph keeps refusing or failing: `"outlook mailbox health" @watch_failures:>0` (throttled and token-deferred runs are not counted; find those by `@outlook.defer_reason` on the spans) |
 
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
@@ -39,6 +40,15 @@ snapshot's `watch_failures` counts the failed runs; while it is above zero the
 mailbox may get no change notifications and syncs by polling alone (each
 folder about every 2 minutes). A run that works, a reconnect or a lifecycle
 event resets it.
+
+A finished folder is polled again 10 minutes after its last poll while its
+mailbox has a working subscription (one of the mailbox's current generation,
+registered with Graph, not expired, with no failed renewal since), and 2
+minutes after otherwise; a change notification or a `missed` lifecycle event
+makes it due at once either way. Each finished folder's enumerate span records
+the interval it scheduled in `@outlook.poll_interval_seconds` (600 or 120).
+Every folder of every mailbox waits in one claim line for the sync loops, so a
+due folder, notified or not, is read `@outlook.due_ms` after it came due.
 
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in

@@ -230,9 +230,15 @@ spinner. Once its own results arrive, a new search starts at the top of the list
 wherever the list was scrolled. With the field focused, up to five recent searches containing the
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
-result. A search is remembered when the field is left with words in it, with
-its `in:` filter, at most eight per person, in this browser only and not per
-inbox. Typing `in:` lists the views instead (only those the person has, so
+result. A search is remembered, with its `in:` filter, once the person settles
+on it: `Enter` (the phone's Search key too), a picked recent search, opening a
+thread from its results, or leaving the field with that search's own results on
+screen. Leaving before they arrive, another window or app taking the focus, or
+leaving on a last word the field offers to finish as an operator (`bef` for
+`before:`) remembers nothing; an
+operator still being typed is left out of what is remembered. A remembered
+search drops the earlier ones it starts with (`bud` once `budget` is), and at
+most eight are kept per person, in this browser only and not per inbox. Typing `in:` lists the views instead (only those the person has, so
 Focus only with its flag), narrowed as the name is typed, and `-in:` lists the
 views a search can leave out, then the labels and tags whose names hold what
 follows `in:` (not one that reads as a view, such as Archive, which
@@ -1355,9 +1361,12 @@ durable mutation metadata support. An older app receiving an OTA bundle opens
 the update-required dialog once and uses the existing uncached fallback. Its old queue
 must remain intact, with no new claims or queued writes, until the native update.
 When the cache becomes unavailable, draft saves and discards must not bypass its
-preserved queue through GraphQL or REST fallback. Local editing stays durable;
-reload or update the app to resume server sync. Verify this after a native
-upgrade-required error and a worker initialization failure; ordinary reads still work.
+preserved queue through GraphQL or REST fallback. Local editing stays durable.
+A cache whose worker never started or answered, or whose database another tab
+holds, starts again by itself, on reconnect, on foregrounding, and on draft Retry;
+after any other failure, reload or update the app to resume server sync. Verify this
+after a native upgrade-required error and a worker initialization failure; ordinary
+reads still work.
 
 For recovery verification, reject a draft save with a GraphQL error (including
 legacy `retryable: true` metadata), then perform an unrelated queued action: the

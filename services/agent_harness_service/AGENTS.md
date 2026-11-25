@@ -664,3 +664,11 @@ Authentication checks the owning hosted host heartbeat per request, so its
 attachment observation can briefly differ from this service's operator presence.
 
 Routine-suggestion recent-mail adapters preserve best-effort messages and record typed unreadable-mailbox reason counts on `routine_suggestions.mail_context` and provider-error warnings (expected Unsupported never warns). IMAP folder/date windows remain unsupported (`mac-imap-smtp.118`); IMAP-only suggestions currently use newest inbox mail, not full month/sent context.
+
+Import review actions reconcile external dependency defaults through the import
+service before saving. Record offered exclusions only after the review save
+succeeds. At approval, call `approve_workspace_dependencies` with the saved
+draft; it replaces review-scoped inclusion facts before starting the write.
+Do not compute or pass a second dependency whitelist: the domain reads the
+current review’s persisted consent on start and resume. The import domain owns consent, retry and source-stop policy;
+the host never queries import tables directly.

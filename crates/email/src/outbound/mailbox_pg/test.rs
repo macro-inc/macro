@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::projection::ProjectionClaim;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -17,6 +18,7 @@ mod no_mailbox;
 mod notified_reads;
 mod outlook_import;
 mod outlook_subscriptions;
+mod poll_schedule;
 mod projection_concurrency;
 mod projection_order;
 mod projection_retries;
@@ -80,6 +82,7 @@ async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
             position: StreamPosition::Continue(StreamToken::new("page-2".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -97,6 +100,7 @@ async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
             position: StreamPosition::Checkpoint(StreamToken::new("delta".into())),
             reader_revision: 2,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -124,7 +128,9 @@ async fn checkpoint_commits_with_deduplicated_changes_and_folder_removals(db: Pg
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&lease, &page()).await.unwrap();
+    repo.commit_page(&lease, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let row = sqlx::query!(
         "SELECT position,initial_complete,lease_id FROM email_sync_streams WHERE id = $1",
         lease.id
@@ -169,7 +175,7 @@ async fn stale_worker_cannot_advance_cursor_or_enqueue_work(db: PgPool) {
         .unwrap();
     assert!(current.fence > stale.fence);
     assert!(matches!(
-        repo.commit_page(&stale, &page()).await,
+        repo.commit_page(&stale, &page(), POLL_INTERVALS).await,
         Err(MailboxError::Stale)
     ));
     let count = sqlx::query_scalar!(
@@ -180,7 +186,9 @@ async fn stale_worker_cannot_advance_cursor_or_enqueue_work(db: PgPool) {
     .await
     .unwrap();
     assert_eq!(count, Some(0));
-    repo.commit_page(&current, &page()).await.unwrap();
+    repo.commit_page(&current, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -192,7 +200,9 @@ async fn wakeup_arriving_during_reconciliation_survives_old_acknowledgement(db: 
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -212,7 +222,9 @@ async fn wakeup_arriving_during_reconciliation_survives_old_acknowledgement(db: 
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     repo.complete_message(&work).await.unwrap();
     let row = sqlx::query!("SELECT revision,lease_id,is_import FROM email_message_reconciliation WHERE link_id = $1 AND provider_id = $2",work.mailbox.link_id,work.provider_id.as_str()).fetch_one(&db).await.unwrap();
     assert_eq!(row.revision, work.revision + 1);
@@ -229,7 +241,9 @@ async fn expired_stream_reset_preserves_other_streams_and_pending_work(db: PgPoo
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let known = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -383,7 +397,9 @@ async fn ingestion_commits_content_state_and_outbox_without_treating_categories_
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -436,7 +452,9 @@ async fn stale_ingestion_cannot_overwrite_a_reconnected_mailbox(db: PgPool) {
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -480,7 +498,9 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -590,7 +610,9 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         .unwrap()
         .into_lease()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -907,6 +929,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
             position: StreamPosition::Checkpoint(StreamToken::new("finished".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();

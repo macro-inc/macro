@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::{
     domain::{
         models::{ResolvedDraftInput, UpsertedContacts},
@@ -46,7 +47,9 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
         .unwrap()
         .into_lease()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync
         .claim_message(Uuid::now_v7())
         .await
@@ -529,7 +532,9 @@ async fn remote_ingestion_preserves_an_unsynced_local_edit_and_records_remote_co
         .unwrap()
         .into_lease()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync
         .claim_message(Uuid::now_v7())
         .await
@@ -778,7 +783,9 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
         .unwrap()
         .into_lease()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync
         .claim_message(Uuid::now_v7())
         .await

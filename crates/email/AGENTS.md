@@ -715,6 +715,16 @@ tools — hexagonal, heavily feature-gated.
   waited for a claim.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
+  A checkpoint schedules the stream's next poll by `schedule::POLL_INTERVALS`:
+  10 minutes while its mailbox has a working subscription, 2 otherwise
+  (`commit_page`). Working repeats the webhook's `notification_binding` test
+  (the mailbox's current generation, not expired) plus a Graph id and no
+  failed renewal (`email_mailbox_watch_work.failures = 0`); keep them alike.
+  The poll is then only a safety net: a change notification or a `missed`
+  lifecycle event makes the folders due at once. Enumerate spans record
+  `outlook.due_ms` (the claim's wait after the stream came due),
+  `outlook.import_round` and `outlook.poll_interval_seconds`, and the health
+  snapshot logs the line itself ("outlook folder line").
 - A folder's import round is a delta snapshot, so mail that arrives during it
   would wait for the whole round. While `LiveImportPass`
   (`domain/mailbox/live_pass.rs`, set by the host from PostHog) is on, an

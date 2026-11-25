@@ -23,7 +23,6 @@
   width: 1px;
   background: linear-gradient(transparent, color-mix(in srgb, currentColor 38%, transparent), transparent);
 }
-.macro-homepage .homepage-open-source-badges + .feature-page-section::before { display: none; }
 .homepage-github-badge { display: flex; flex-direction: column; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
 .homepage-github-badge strong { display: flex; align-items: center; gap: 5px; height: 36px; font-size: 20px; font-variant-numeric: tabular-nums; }
 .homepage-github-badge strong svg { width: 25px; height: 25px; margin-inline-end: 5px; }

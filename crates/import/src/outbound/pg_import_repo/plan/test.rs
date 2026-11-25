@@ -11,6 +11,7 @@ use super::*;
 use crate::domain::models::{ImportKind, ImportStatus, NotionJob, TEAMMATE_STOPPED};
 use crate::domain::ports::{ImportRepo, NotionRunRepo};
 
+mod inline_order;
 mod reimport_after_delete;
 
 const ROADMAP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

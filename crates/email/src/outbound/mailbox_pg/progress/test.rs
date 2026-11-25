@@ -363,6 +363,12 @@ async fn enumeration_reports_the_page_it_committed(db: PgPool) {
     assert_eq!(span["outlook.rows_queued"], "3");
     assert_eq!(span["outlook.delta_advanced"], "true");
     assert_eq!(span["outlook.folder_initial_complete"], "true");
+    assert_eq!(span["outlook.import_round"], "true");
+    assert!(span["outlook.due_ms"].parse::<i64>().unwrap() >= 0);
+    assert_eq!(
+        span["outlook.poll_interval_seconds"], "120",
+        "the mailbox has no subscription"
+    );
     assert!(matches!(
         super::super::test::page().position,
         StreamPosition::Checkpoint(_)
@@ -653,6 +659,45 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
     .await
     .unwrap();
     assert_eq!(retained, 2, "counts older than a day are dropped");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_folder_line_counts_what_a_claim_could_take_with_the_longest_wait(db: PgPool) {
+    let repo = PgMailboxSync::new(db.clone());
+    let active = outlook_link(&db, "active@example.com", true, false).await;
+    let paused = outlook_link(&db, "paused@example.com", true, true).await;
+    sqlx::query!(
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,lease_id,lease_until)
+        SELECT gen_random_uuid(), link_id, generation, kind, scope_id, initial_complete, now() - make_interval(secs => due_seconds_ago), lease_id, lease_until
+        FROM (VALUES
+            ($1::uuid, 1::bigint, 'mail_folder', 'polled long ago', true, 300.0::float8, NULL::uuid, NULL::timestamptz),
+            ($1, 1, 'mail_folder', 'polled lately', true, 60.0, NULL, NULL),
+            ($1, 1, 'mail_folder', 'not due', true, -60.0, NULL, NULL),
+            ($1, 1, 'mail_folder', 'claimed', true, 900.0, $3, now() + interval '1 minute'),
+            ($1, 1, 'mail_folder', 'importing', false, 30.0, NULL, NULL),
+            ($1, 0, 'mail_folder', 'older generation', true, 3600.0, NULL, NULL),
+            ($1, 1, 'contacts', 'contacts', true, 3600.0, NULL, NULL),
+            ($2, 1, 'mail_folder', 'needs reauthorization', false, 3600.0, NULL, NULL)
+        ) AS streams(link_id, generation, kind, scope_id, initial_complete, due_seconds_ago, lease_id, lease_until)"#,
+        active,
+        paused,
+        macro_uuid::generate_uuid_v7()
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let line = repo.folder_line().await.unwrap();
+
+    assert_eq!((line.polls_due, line.import_rounds_due), (2, 1), "{line:?}");
+    assert!(
+        (300..=302).contains(&line.oldest_poll_due_seconds),
+        "{line:?}"
+    );
+    assert!(
+        (30..=32).contains(&line.oldest_import_round_due_seconds),
+        "{line:?}"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

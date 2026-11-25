@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::mailbox::credentials::{CredentialHealth, MailboxCredentialHealthRepository};
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use email_api_client::domain::models::{MailboxAccess, TokenError};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -703,7 +704,8 @@ async fn outlook_resync_fences_page_workers_and_never_creates_a_gmail_backfill(d
     assert!(again.already_in_progress);
     assert_eq!(first.run_id, again.run_id);
     assert!(matches!(
-        repo.commit_page(&old, &super::super::test::page()).await,
+        repo.commit_page(&old, &super::super::test::page(), POLL_INTERVALS)
+            .await,
         Err(MailboxError::Stale)
     ));
     assert_eq!(

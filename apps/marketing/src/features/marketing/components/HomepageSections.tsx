@@ -52,9 +52,9 @@ type Section = {
 const SECTIONS: readonly Section[] = [
   {
     id: 'home',
-    title: 'One inbox for your work.',
+    title: 'One inbox for everything.',
     description:
-      'Home pulls everything that needs your attention into one prioritized feed with keyboard triage, AI summaries, and instant workspace search.',
+      'Home pulls what needs your attention into one prioritized feed with keyboard triage, AI summaries, and instant workspace search.',
     caption: [
       'Catch up on Macro Mail, Macro Chat, Macro Tasks, Macro Docs, and Macro Agents in one list or jump straight into a Macro GitHub pull request.',
     ],
@@ -133,7 +133,7 @@ const SECTIONS: readonly Section[] = [
   },
   {
     id: 'calls',
-    title: 'Calls that feed into team memory.',
+    title: 'Calls feed into team memory.',
     description:
       'Calls lets you start instant video meetings in any channel or invite external guests with a link—with recordings and transcripts included.',
     caption: [
@@ -208,27 +208,6 @@ function SectionCaption(props: { sentences: readonly string[] }) {
   );
 }
 
-function Shortcuts() {
-  return (
-    <ul class="homepage-shortcuts" aria-label="Keyboard shortcuts">
-      <li>
-        <kbd>J</kbd>
-        <kbd>K</kbd>
-        Move
-      </li>
-      <li>
-        <kbd>E</kbd>
-        Done
-      </li>
-      <li>
-        <kbd>⌘</kbd>
-        <kbd>K</kbd>
-        Search
-      </li>
-    </ul>
-  );
-}
-
 /** Everything below the homepage introduction: one section per product. */
 export function HomepageSections() {
   return (
@@ -249,7 +228,6 @@ export function HomepageSections() {
               page={section.page}
             />
             <SectionCaption sentences={section.caption} />
-            {section.id === 'home' && <Shortcuts />}
           </FeaturePageSection>
         )}
       </For>
