@@ -133,7 +133,7 @@ const SECTIONS: readonly Section[] = [
   },
   {
     id: 'calls',
-    title: 'Calls that feed into team memory.',
+    title: 'Calls feed into team memory.',
     description:
       'Calls lets you start instant video meetings in any channel or invite external guests with a link—with recordings and transcripts included.',
     caption: [
