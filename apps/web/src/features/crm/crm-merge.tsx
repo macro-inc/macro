@@ -8,6 +8,7 @@ import { useIsTeamAdmin } from '@queries/team/teams';
 import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   MAX_MERGE_SOURCES,
   type MergeCandidate,
@@ -63,9 +64,10 @@ export function mergeCandidates(
 /** A row menu's merge item: "Merge with…" for one record. */
 export function mergeActionLabel(selection: MergeSelection): string {
   if (selection.records.length < 2) return t('crm.mergeWith');
-  return selection.recordType === 'company'
-    ? t('crm.mergeCompanies')
-    : t('crm.mergePeople');
+  return match(selection.recordType)
+    .with('company', () => t('crm.mergeCompanies'))
+    .with('contact', () => t('crm.mergePeople'))
+    .exhaustive();
 }
 
 /** Whether this admin may merge records: the rollout flag and their role. */

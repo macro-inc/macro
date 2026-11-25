@@ -665,7 +665,7 @@ it('starting from one person, finds the others by name, address or company', asy
       id: 'sam',
       name: 'Sam Doe',
       email: 'sam@globex.example.com',
-      companyName: 'Globex',
+      companyName: 'Initech',
     },
     // Without a name, a person is listed by their address, once.
     {
@@ -689,7 +689,8 @@ it('starting from one person, finds the others by name, address or company', asy
     'the address isn’t repeated under it'
   ).toHaveLength(1);
   const search = screen.getByLabelText('Search people');
-  fireEvent.input(search, { target: { value: 'globex' } });
+  // By company: no address names it.
+  fireEvent.input(search, { target: { value: 'initech' } });
   expect(screen.queryByText('Pat Lee')).toBeNull();
   expect(screen.getByText('Sam Doe')).toBeTruthy();
   fireEvent.input(search, { target: { value: 'pat@acme' } });

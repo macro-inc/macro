@@ -483,6 +483,7 @@ export default {
   mergePeopleSearchPlaceholder: 'Search by name or email',
   mergePeopleNoMatches: 'No other people match.',
   mergePeopleTooMany: { other: 'A merge takes at most {{count}} people.' },
+  mergePeopleKeepTitle: 'Merge people',
   mergePeopleKeepDescription:
     'Choose the person to keep. They keep their name, company, primary address and values. Everything else moves to them.',
   mergePeopleKeepLabel: 'Person to keep',

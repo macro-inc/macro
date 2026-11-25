@@ -17,6 +17,7 @@ import {
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import {
   type Accessor,
+  type Component,
   createMemo,
   createSignal,
   For,
@@ -67,8 +68,10 @@ type ReviewState =
     }
   | { t: 'refused'; refusal: MergeRefusal };
 
-/** The words that differ between merging companies and merging people. */
+/** The words and marks that differ between merging companies and people. */
 type MergeCopy = {
+  entityType: 'crm_company' | 'crm_contact';
+  IdentifierIcon: Component<{ class?: string }>;
   pickTitle: () => string;
   pickDescription: (name: string) => string;
   searchLabel: () => string;
@@ -94,6 +97,8 @@ type MergeCopy = {
 
 const COPY: Record<MergeRecordType, MergeCopy> = {
   company: {
+    entityType: 'crm_company',
+    IdentifierIcon: GlobeIcon,
     pickTitle: () => t('crm.mergePickTitle'),
     pickDescription: (name) => t('crm.mergePickDescription', { name }),
     searchLabel: () => t('crm.mergeSearchLabel'),
@@ -118,13 +123,15 @@ const COPY: Record<MergeRecordType, MergeCopy> = {
     refuseGeneric: () => t('crm.mergeRefuseGeneric'),
   },
   contact: {
+    entityType: 'crm_contact',
+    IdentifierIcon: EnvelopeIcon,
     pickTitle: () => t('crm.mergePeoplePickTitle'),
     pickDescription: (name) => t('crm.mergePeoplePickDescription', { name }),
     searchLabel: () => t('crm.mergePeopleSearchLabel'),
     searchPlaceholder: () => t('crm.mergePeopleSearchPlaceholder'),
     noMatches: () => t('crm.mergePeopleNoMatches'),
     tooMany: (count) => t('crm.mergePeopleTooMany', { count }),
-    keepTitle: () => t('crm.mergePeople'),
+    keepTitle: () => t('crm.mergePeopleKeepTitle'),
     keepDescription: () => t('crm.mergePeopleKeepDescription'),
     keepLabel: () => t('crm.mergePeopleKeepLabel'),
     reviewDescription: (count, names, name) =>
@@ -482,7 +489,8 @@ function CandidateLine(props: {
   recordType: MergeRecordType;
   candidate: MergeCandidate;
 }) {
-  // A person without a name is listed by their address; don't say it twice.
+  // A record without a name is listed by its address or domain; don't say it
+  // twice.
   const detail = () =>
     [
       props.candidate.identifiers
@@ -496,9 +504,7 @@ function CandidateLine(props: {
     <span class="flex min-w-0 flex-1 flex-col gap-0.5">
       <span class="flex min-w-0 items-center gap-1.5 text-sm font-medium text-ink">
         <EntityIcon
-          targetType={
-            props.recordType === 'company' ? 'crm_company' : 'crm_contact'
-          }
+          targetType={COPY[props.recordType].entityType}
           size="xs"
           class="shrink-0"
         />
@@ -516,29 +522,33 @@ function usePickSource(recordType: MergeRecordType): {
   candidates: Accessor<MergeCandidate[]>;
   loading: () => boolean;
 } {
-  if (recordType === 'company') {
-    const suggestions = useQuickAccessCrmCompaniesQuery();
-    return {
-      candidates: () =>
-        suggestions.companies().map((company) => ({
-          id: company.id,
-          name: company.name,
-          identifiers: company.domains.map((domain) => domain.domain),
-        })),
-      loading: () => suggestions.query.isLoading,
-    };
-  }
-  const suggestions = useQuickAccessCrmContactsQuery();
-  return {
-    candidates: () =>
-      suggestions.contacts().map((contact) => ({
-        id: contact.id,
-        name: contact.name,
-        identifiers: contact.email ? [contact.email] : [],
-        company: contact.companyName ?? null,
-      })),
-    loading: () => suggestions.query.isLoading,
-  };
+  return match(recordType)
+    .with('company', () => {
+      const suggestions = useQuickAccessCrmCompaniesQuery();
+      return {
+        candidates: () =>
+          suggestions.companies().map((company) => ({
+            id: company.id,
+            name: company.name,
+            identifiers: company.domains.map((domain) => domain.domain),
+          })),
+        loading: () => suggestions.query.isLoading,
+      };
+    })
+    .with('contact', () => {
+      const suggestions = useQuickAccessCrmContactsQuery();
+      return {
+        candidates: () =>
+          suggestions.contacts().map((contact) => ({
+            id: contact.id,
+            name: contact.name,
+            identifiers: contact.email ? [contact.email] : [],
+            company: contact.companyName ?? null,
+          })),
+        loading: () => suggestions.query.isLoading,
+      };
+    })
+    .exhaustive();
 }
 
 function PickStep(props: {
@@ -662,12 +672,7 @@ function ReviewBody(props: {
           <For each={props.review.identifiers}>
             {(identifier, index) => (
               <Badge variant="secondary" size="sm">
-                <Show
-                  when={props.recordType === 'company'}
-                  fallback={<EnvelopeIcon class="size-3" />}
-                >
-                  <GlobeIcon class="size-3" />
-                </Show>
+                <props.copy.IdentifierIcon class="size-3" />
                 {identifier}
                 <Show when={index() === 0}>
                   <span class="font-normal text-ink-muted">

@@ -5,6 +5,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { createEffect, on, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { CrmProvider } from './context/crm-context';
 import type { MergeRecord, MergeRecordType } from './core/merge';
 import { createAppCrmContext } from './crm-adapter';
@@ -21,15 +22,16 @@ function mergedNotice(
     type: 'conjunction',
   }).format(merged.map((record) => record.name));
   const detail = { count: merged.length, names, name: survivor.name };
-  return recordType === 'company'
-    ? {
-        title: t('crm.mergeDone'),
-        subtext: t('crm.mergeDoneDetail', detail),
-      }
-    : {
-        title: t('crm.mergePeopleDone'),
-        subtext: t('crm.mergePeopleDoneDetail', detail),
-      };
+  return match(recordType)
+    .with('company', () => ({
+      title: t('crm.mergeDone'),
+      subtext: t('crm.mergeDoneDetail', detail),
+    }))
+    .with('contact', () => ({
+      title: t('crm.mergePeopleDone'),
+      subtext: t('crm.mergePeopleDoneDetail', detail),
+    }))
+    .exhaustive();
 }
 
 /** The app's one merge dialog, opened by `openMerge`. */

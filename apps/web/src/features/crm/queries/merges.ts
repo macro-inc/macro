@@ -141,12 +141,10 @@ export function createMergeCommands(
         }
         span.setAttr('crm.merge.id', result.value.mergeId);
         await span.span('crm.merge.commit.refresh', () =>
-          refreshAfterMerge(
-            deps.client,
-            recordType === 'company'
-              ? { companies: result.value.mergedIds, contacts: [] }
-              : { companies: [], contacts: result.value.mergedIds }
-          )
+          refreshAfterMerge(deps.client, {
+            companies: recordType === 'company' ? result.value.mergedIds : [],
+            contacts: recordType === 'contact' ? result.value.mergedIds : [],
+          })
         );
         return {
           ok: true,
