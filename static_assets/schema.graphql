@@ -2517,9 +2517,8 @@ type GraphqlCalendar {
 	"""
 	isWritable: Boolean!
 	"""
-	Whether the account subscribes to this calendar rather than a person
-	maintaining it: a system calendar (holidays, birthdays) or one added by
-	URL or from the web.
+	Whether the account subscribes to this calendar as a feed: a system
+	calendar (holidays, birthdays) or one added by URL or from the web.
 	"""
 	isSubscription: Boolean!
 	"""

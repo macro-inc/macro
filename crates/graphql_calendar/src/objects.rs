@@ -662,9 +662,8 @@ pub struct GraphqlCalendar {
     is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.
     is_writable: bool,
-    /// Whether the account subscribes to this calendar rather than a person
-    /// maintaining it: a system calendar (holidays, birthdays) or one added by
-    /// URL or from the web.
+    /// Whether the account subscribes to this calendar as a feed: a system
+    /// calendar (holidays, birthdays) or one added by URL or from the web.
     is_subscription: bool,
     /// A persistent sync failure isolated to this calendar.
     sync_error: Option<String>,

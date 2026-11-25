@@ -33,9 +33,9 @@ access role only says what they may do, on a colleague's calendar too. */
   id: string;
   /** Whether this is its account's primary calendar. */
   isPrimary: boolean;
-  /** Whether the account subscribes to this calendar rather than a person
-maintaining it: Google's system calendars (holidays, birthdays), and
-calendars added by URL in Google or subscribed from the web in Outlook. */
+  /** Whether the account subscribes to this calendar as a feed: Google's
+system calendars (holidays, birthdays), and calendars added by URL in
+Google or subscribed from the web in Outlook. */
   isSubscription: boolean;
   /** Whether the grant can create and modify events on this calendar. */
   isWritable: boolean;

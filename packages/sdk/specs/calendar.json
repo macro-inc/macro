@@ -3967,7 +3967,7 @@
           },
           "isSubscription": {
             "type": "boolean",
-            "description": "Whether the account subscribes to this calendar rather than a person\nmaintaining it: Google's system calendars (holidays, birthdays), and\ncalendars added by URL in Google or subscribed from the web in Outlook."
+            "description": "Whether the account subscribes to this calendar as a feed: Google's\nsystem calendars (holidays, birthdays), and calendars added by URL in\nGoogle or subscribed from the web in Outlook."
           },
           "isWritable": {
             "type": "boolean",
