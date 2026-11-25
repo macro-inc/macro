@@ -177,10 +177,10 @@ test.describe('desktop', () => {
       await page.mouse.click(x, y);
       await page.keyboard.up('ControlOrMeta');
       await page.mouse.click(x, y, { button: 'middle' });
-    }
 
-    expect(await windowOpens(page)).toEqual([]);
-    expect(tabs).toEqual([]);
+      expect(await windowOpens(page)).toEqual([]);
+      expect(tabs).toEqual([]);
+    }
   });
 
   test('a link still shows as link text with its highlight', async ({
