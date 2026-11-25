@@ -309,6 +309,9 @@ open the shared **Switch view** bottom drawer: every available section
 has an icon and label, with a check beside the current section. Choosing a section
 closes the drawer and updates the header label; Escape, backdrop tap, and drag
 also dismiss it. Focus returns to the section trigger. Contacts do not show Team.
+A Customers record link with a section (`/app/companies/company/<id>/team`)
+opens on a phone on that section of the record's own page; a section the
+record type lacks opens Overview.
 The workspace's scrollable mobile view strip is unchanged. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
