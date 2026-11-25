@@ -1,0 +1,22 @@
+apps/web/src/features/block-calendar/components/EventComposerSplit.test.tsx
+  s_d53ee78a67b860::t_95ab79a67191e3 5
+  s_d53ee78a67b860::t_6fdf746f03ebfe 6-11,51,90-94,201-239
+apps/web/src/features/block-calendar/components/EventComposerSplit.tsx
+  s_d53ee78a67b860::t_b610940e1bee74 167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7e2b07f3fc055e1ae2314a4d8fdcc6213fba5b89",
+  "prompts": {},
+  "sessions": {
+    "s_d53ee78a67b860": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "506d372f-de9d-4de5-9543-0570cfc655ac",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
