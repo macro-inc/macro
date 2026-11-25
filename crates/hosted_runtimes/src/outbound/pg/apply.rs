@@ -111,6 +111,13 @@ impl PgComputerRepo {
             // On to the lifecycle already; only its guest sleeps.
             Self::request_wake_in(tx, computer_id, now).await?;
         }
+        if matches!(
+            event,
+            Event::MacrodConnected | Event::MacrodConnectedWithoutAgentHandOff
+        ) {
+            // An image upgrade under way waits for exactly this.
+            Self::note_upgrade_reconnect(tx, computer_id, now).await?;
+        }
         let host_has_room =
             Self::host_has_room(tx, host, computer.id, computer.resources, now).await?;
         let transitioned = transition(

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of the viewer's teammates, the viewer excluded, in byte order after\n-- the cursor. $1 viewer, $2 exclusive cursor (NULL on the first page), $3 page\n-- size + 1.\n-- A user has at most one team. team_user ids may predate canonical lowercase\n-- ids; fold them like the other directory reads. The roster is read whole: no\n-- index orders it.\nSELECT DISTINCT lower(teammate.user_id COLLATE \"C\") AS \"contact!\"\nFROM team_user AS own\nJOIN team_user AS teammate ON teammate.team_id = own.team_id\nWHERE own.user_id IN (\n    -- team_user may hold a legacy mixed-case id for this user. Find it\n    -- through the lower(email) index and keep it only if it folds to the\n    -- canonical id.\n    SELECT $1::text\n    UNION\n    SELECT account.id\n    FROM \"User\" AS account\n    WHERE lower(account.email) = substr($1, length('macro|') + 1)\n      AND lower(account.id COLLATE \"C\") = $1\n)\n  AND teammate.user_id COLLATE \"C\" LIKE 'macro|%'\n  AND lower(teammate.user_id COLLATE \"C\") <> $1::text COLLATE \"C\"\n  AND lower(teammate.user_id COLLATE \"C\") > COALESCE($2::text, '')\nORDER BY 1\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cc6437bc3eccad9688b8afda2b6ec5cf4ea908b1e713c3b0b7a4672b8d52d016"
+}

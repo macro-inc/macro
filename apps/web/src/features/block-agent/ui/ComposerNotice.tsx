@@ -1,5 +1,5 @@
 /**
- * A one-line explanation above the composer for a wait the transcript cannot
+ * A short explanation above the composer for a wait the transcript cannot
  * show.
  *
  * The case it exists for: acting on a session whose sandbox was reaped for
@@ -9,6 +9,7 @@
  * "Disconnected", and the block otherwise looks like it ignored the click.
  */
 
+import { Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 
 export interface ComposerNoticeProps {
@@ -20,7 +21,13 @@ export interface ComposerNoticeProps {
 export function ComposerNotice(props: ComposerNoticeProps) {
   return (
     <div class="flex items-center gap-2 pb-2 text-xs text-ink-extra-muted">
-      <TextShimmer text={props.text} active={props.active ?? false} />
+      {/* A still notice wraps on a narrow screen; the shimmer stays one line. */}
+      <Show
+        when={props.active}
+        fallback={<span class="min-w-0">{props.text}</span>}
+      >
+        <TextShimmer text={props.text} active />
+      </Show>
     </div>
   );
 }

@@ -409,9 +409,14 @@ export function createTaskComposerProperties(args: {
         args.values?.() ?? propertyValues,
         options()
       ),
+      ...(timedDraft(definition.id) ? { hasTime: true } : {}),
       options: options().get(definition.id),
     } as Property;
   };
+  function timedDraft(definitionId: string) {
+    const value = (args.values?.() ?? propertyValues)[definitionId];
+    return value?.valueType === 'DATE' && value.hasTime === true;
+  }
   const properties = (): Property[] => filterMap(visibleIds(), draftProperty);
   /**
    * The pills plus the properties the host edits with its own control. An
@@ -424,12 +429,17 @@ export function createTaskComposerProperties(args: {
       draftProperty
     );
 
+  // A set by path would merge the new value into the old one and keep the
+  // fields it leaves out, such as a date's time once the time is removed.
+  const setPropertyValue = (id: string, value: PropertyApiValues) =>
+    setPropertyValues({ [id]: value });
+
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
-      setPropertyValues(property.propertyDefinitionId, value);
+      setPropertyValue(property.propertyDefinitionId, value);
     },
     saveDate: async (property: Property, date: Date) => {
-      setPropertyValues(property.propertyDefinitionId, {
+      setPropertyValue(property.propertyDefinitionId, {
         valueType: 'DATE',
         value: date,
       });
@@ -466,6 +476,7 @@ export function createTaskComposerProperties(args: {
   return {
     propertyValues,
     setPropertyValues,
+    setPropertyValue,
     properties,
     draftProperty,
     draftProperties,

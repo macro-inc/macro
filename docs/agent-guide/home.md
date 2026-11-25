@@ -301,53 +301,6 @@ not retracted automatically yet: answering the question or starting the next tur
 the earlier notification until you mark it done. The chip announcement post itself no
 longer notifies the thread. Settings → notifications lists them under `AI`.
 
-## New Home
-
-Desktop only, behind two PostHog flags read together (`features/new-home`).
-New Home's Recents tab is `/app/home` on the Recents tab; its Notifications tab
-is `/app/notifications`.
-
-| `enable-new-home` | `disable-old-home` | Rail | `/home` | `/notifications` | `g h` |
-| --- | --- | --- | --- | --- | --- |
-| off | any | Home, and Notifications with unified notifications | old Home | today's view | old Home |
-| on | off | Home, then **New Home** (house with a plus) right under it; no Notifications entry | old Home; on the Recents tab (`?s0.home.tab=recent` in the first split) New Home | New Home's Notifications tab | New Home |
-| on | on | **New Home** as Home | New Home | New Home's Notifications tab | New Home |
-
-`g i` goes away with New Home on: Notifications is a New Home tab. The rail
-item and `g h` go through `/new-home`, which opens the tab New Home was last
-left on (kept per user), without the preview it had open. Once old Home is
-off, a `/home` link opens Recents.
-New Home is called **New Home** (rail tooltip and split title) while old
-Home is beside it, and **Home** once it replaces it. Touch devices keep
-today's Home and Notifications in every state. `VITE_ENABLE_NEW_HOME` and
-`VITE_DISABLE_OLD_HOME` override the flags locally; New Home is on in dev,
-with old Home beside it.
-
-Under its header (New Chat, then the tab's tools) New Home has Recents and
-Notifications tabs, labels only, or icons only when the list is narrower
-than 280px; the Notifications tab carries the rail's unread dot. Switching
-tabs is a history entry and keeps the list's width: both tabs share one
-saved width, which starts from old Home's. While the keyboard is on the list (or
-nothing has focus), `1` and `2`, Tab and Shift+Tab move between Recents and
-Notifications; in the chat composer they type and move focus as usual. All
-and Unread are a filter row under them and take no key. Both tabs show Home's chat composer
-while nothing is open; a chat started from Notifications opens on Recents.
-
-- **Recents** is Home's list, rows and tools (Filter with Type only, Search,
-  collapse) fed only by the viewer's `touched_by_me` activity, bucketed by
-  the time of their own last touch. Its filters are old Home's (Status
-  aside). Saving a property, or starting to edit a document or task (the
-  first edit after 5 idle minutes, as the server records it), moves the
-  item to the top at once.
-- **Notifications** is the Notifications view with All/Unread beneath the
-  tabs and Display options (sliders) in place of the settings button:
-  **Condensed** (kept per user) and **Notification settings…**. Condensed
-  rows are Home's rows for the same entity: icon and name; the reply icon
-  and "who in #channel" for any row about a thread (replies, mentions,
-  reactions); "who commented on" for a comment. On hover the time shows
-  and Mark done takes the unread dot's place. Condensed rows sit under Home's
-  date dividers, and a condensed stack stays one row.
-
 ## Home — `/app/component/home`
 
 Greeting, example prompt buttons (`Draft a document`, `Draft an email`,
@@ -372,38 +325,42 @@ With `enable-suggestions` on (desktop only), the idle pane shows, below the comp
   server ranks them. A row opens For you with that suggestion first; **All in
   For you** opens the page.
 
-For you is up to four cards under **Today** and the date. **Suggestions** is work
-Macro can do: each row says what Macro will do on one line, cut where the
-row ends (hover shows the rest), with how long it has waited on the right.
-Every row's buttons, and the `x` in the age's place, show only while the row
-is pointed at or focused. **Run**
-starts a background run at once (a run that posts or sends something says
-so at the start of its line); the row moves to **Running**, where it reads
-"Running." with **View**, which opens its session, and a failed run turns
-red with **Retry**. **Open chat**
-opens the composer with a prompt typed, unsent, and **Turn on** saves a
-routine. **Open chat** beside **Run**, and **Review** beside **Turn on**,
-look without taking it up: a run's prompt opens in
-the composer, unsent, and a routine opens for review. Pressing the row's
-text does the same. **To do**
-is the person's own mail and documents: each row names the item it is about,
-who wrote, whether a reply is drafted, and how long it has waited. Its circle
-marks it done without opening anything; pressing its text, or **Open** /
-**Open draft**, opens the item. A reply is the exception: it stays in **To
-do** until the person replies on its thread, however often it is opened, and
-its circle is a mark, not a button. **Open draft** opens
-the thread with the draft in its reply composer and a footer under it that
-reads **Drafted by Macro**, links what else the suggestion cites, and offers
-**Rewrite**, which opens the agent composer with the thread mentioned and the
-request typed, unsent. A suggestion that is taken up or finished moves to
-**Done today**, which shows the latest one with its time; the earlier ones
-are behind the card's last row, **N earlier today**, and pressing a finished row's
-text opens what it left. With nothing waiting or running, a card reads
-**You’re clear for today** above everything finished. The `x`
-(shown on hover or focus) dismisses at once and leaves the row in its card
-with **Undo** for the visit; Undo restores the suggestion, which the server
-allows for a few minutes. Dismissing a running suggestion stops its run, and
-restoring it brings it back open, not running.
+For you has a sidebar of lists, each with its count: **Today** (everything
+that waits or runs), **To do** (the person's own mail and documents),
+**Suggestions** (work Macro can do: runs, chats and routines) and **Done**
+(finished in the last day). Under them, **Routines** links **Ideas** (a dot
+when a routine was proposed since the last visit) and **Your routines**, both
+opening Agents → Routines. The page shows the chosen list under its name and
+the date as one flat list of rows, each 56px: a tile tinted by kind, a title,
+and one line, cut where the row ends (hover shows the rest). A row's age sits
+on the right; pointing at the row or focusing in it swaps the age for its
+buttons: ✓ (mark done, where taking it up finishes it), ✕ (dismiss) and the
+row's action. **Run** starts a background run at once (a run that posts or
+sends something says so at the start of its line); the row reads
+"Running…" with **Stop**, which stops the run and keeps the suggestion
+("Stopping…" until the server opens it again). A finished run stays in place
+for the visit with a green check, the one line its run reported, and
+**Open**, which opens its session; a failed run turns red with **Retry**.
+**Open chat** opens the composer with a prompt typed, unsent, and pressing a
+run's text puts its prompt there without starting it. **Turn on** saves a
+routine switched on in one click: the row reads "<name> is on" with a green
+dot and when it runs, **Edit** and its switch, and a toast offers **View
+routine**. Switched off there, it reads "<name> is off" with a grey dot. A To do row names the item it is about, who wrote, whether a
+reply is drafted, and how long it has waited; pressing its text, or **Open**
+/ **Open draft**, opens the item. A reply stays open until the person
+replies on its thread, however often it is opened, and has no ✓. **Open
+draft** opens the thread with the draft in its reply composer and a footer
+under it that reads **Drafted by Macro**, links what else the suggestion
+cites, and offers **Rewrite**, which opens the agent composer with the thread
+mentioned and the request typed, unsent. ✓ strikes the row through, "Done
+just now · Stays here until you leave this page" (the Done list already
+holds it), with **Undo** on the row and in a **Marked done** toast. With nothing waiting in Today, the page reads
+**You’re all caught up** (the date line adds "Nothing needs you right now")
+with **See what’s done** and **Browse routines**. ✕ dismisses at once and
+leaves the row in place with **Undo** for the visit (a routine idea has no
+Undo: the server can't bring it back); Undo restores the suggestion, which
+the server allows for a few minutes. Dismissing a running
+suggestion stops its run, and restoring it brings it back open, not running.
 **Refresh** in the top bar asks for a fresh run, at most once an hour; while
 one runs it reads "Looking for suggestions", and during the cooldown
 "Available at" a time.

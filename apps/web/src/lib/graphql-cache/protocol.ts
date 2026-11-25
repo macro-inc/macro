@@ -1006,6 +1006,7 @@ export type CacheResponseErrorCode =
   | 'owner-lock-unavailable'
   | 'cache-superseded'
   | 'owner-handoff-blocked'
+  | 'write-not-admitted'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
@@ -1051,6 +1052,13 @@ export function isTypedSearchRowRead(request: CacheRequest): boolean {
  */
 export const OWNER_HANDOFF_BLOCKED_ERROR_CODE: CacheResponseErrorCode =
   'owner-handoff-blocked';
+
+/**
+ * A write waited too long for an owner and was dropped before any engine got
+ * it: nothing of it is stored, and nobody will send it.
+ */
+export const WRITE_NOT_ADMITTED_ERROR_CODE: CacheResponseErrorCode =
+  'write-not-admitted';
 
 /** An admitted enqueue lost its reply and may already be durably queued. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
@@ -1117,6 +1125,7 @@ export const isCacheResponseErrorCode = (
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
   value === CACHE_SUPERSEDED_ERROR_CODE ||
   value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
+  value === WRITE_NOT_ADMITTED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -1126,6 +1135,11 @@ export const isOwnerEpochLostError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
+
+/** Identifies a request no engine got or answered. A later engine serves the
+ * same host. */
+export const isEngineAbsentError = (value: unknown): boolean =>
+  isOwnerEpochLostError(value) || isCacheOutageError(value);
 
 /** Identifies a request refused because another context holds the database,
  * including a newer build that took it over. */
@@ -1138,6 +1152,15 @@ export const isOwnerLockUnavailableError = (
   'errorCode' in value &&
   (value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
     value.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+
+/** Identifies a request refused because nothing can open the database for now.
+ * The host that refused it serves again once something can. */
+export const isCacheOutageError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
 
 /** Identifies a request refused because a newer build took the database over;
  * this page session never gets the cache back. */
@@ -1155,6 +1178,14 @@ export const isOwnerHandoffBlockedError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_HANDOFF_BLOCKED_ERROR_CODE;
+
+/** Identifies a write dropped before any engine got it. */
+export const isWriteNotAdmittedError = (
+  value: unknown
+): value is Error & { errorCode: 'write-not-admitted' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === WRITE_NOT_ADMITTED_ERROR_CODE;
 
 /** Identifies an admitted enqueue whose durable outcome is unknown. */
 export const isAdmittedEnqueueUncertainError = (

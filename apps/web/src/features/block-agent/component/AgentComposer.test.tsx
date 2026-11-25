@@ -1,3 +1,4 @@
+import { Model } from '@core/component/AI/constant/model';
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
@@ -294,3 +295,17 @@ it('allows another prompt after a failed turn', () => {
     prompt: 'Try again',
   });
 });
+
+it.each([
+  ['in-memory', Model.gpt62Sol],
+  ['macrod', 'openai/gpt-5.6'],
+])(
+  "shows a %s session's last model %s until its next turn",
+  (harness, shown) => {
+    mocks.session = () => ({ canEdit: true, harness });
+    mocks.metadata = () => ({ model: 'openai/gpt-5.6', configOptions: [] });
+    render(() => <AgentComposer />);
+    expect(mocks.model?.model).toBe(shown);
+    expect(mocks.selectModel).not.toHaveBeenCalled();
+  }
+);

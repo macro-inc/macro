@@ -8,7 +8,9 @@ import {
 } from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
 import type { RoutineTemplate } from '../core/routine-templates';
+import type { RoutineRow } from '../core/types';
 import { createRoutineRows } from '../primitives/routines-list';
+import { toggleRoutine } from '../routine-toggle';
 
 export function RoutinesListView(props: {
   source: RoutineListSource;
@@ -32,6 +34,9 @@ export function RoutinesListView(props: {
     props.userId,
     () => !isTouchDevice()
   );
+  // Turning one off on desktop can be taken back; a phone keeps its list as it was.
+  const toggle = (row: RoutineRow) =>
+    toggleRoutine(props.source, row, { undo: !isTouchDevice() });
   return (
     <RoutinesList
       showTitle={props.showTitle}
@@ -44,7 +49,7 @@ export function RoutinesListView(props: {
       onCreate={props.onCreate}
       onOpen={props.onOpen}
       pendingId={props.source.pendingId()}
-      onToggle={(row) => props.source.setEnabled(row.id, !row.enabled)}
+      onToggle={toggle}
       templates={props.templates}
       onTemplate={props.onTemplate}
       discover={props.discover}

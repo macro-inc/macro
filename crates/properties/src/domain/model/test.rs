@@ -1,11 +1,12 @@
 use super::*;
 
-const STORAGE_TYPES: [EntityType; 12] = [
+const STORAGE_TYPES: [EntityType; 13] = [
     EntityType::CalendarEvent,
     EntityType::CallRecord,
     EntityType::Channel,
     EntityType::Chat,
     EntityType::Company,
+    EntityType::Contact,
     EntityType::DatabaseRow,
     EntityType::Document,
     EntityType::Initiative,
@@ -49,7 +50,6 @@ fn canonical_types_without_properties_storage_map_to_none() {
         AccessEntityType::Team,
         AccessEntityType::ForeignEntity,
         AccessEntityType::StaticFile,
-        AccessEntityType::CrmContact,
         AccessEntityType::Reminder,
         AccessEntityType::Skill,
         AccessEntityType::AgentSession,

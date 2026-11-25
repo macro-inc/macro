@@ -6,14 +6,15 @@
 //! both stores keep being written while the flag ramps.
 
 use crate::domain::models::{
+    list::ContactList,
     messages::ContactsNodes,
     page::{ContactCursor, ContactIdPage, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
     people::{NamedPeopleQuery, PeopleSearchLimit, PeopleSearchQuery, PersonMatch},
     query::ContactLookup,
 };
 use crate::domain::ports::{
-    ContactListReader, ContactsPageService, ContactsService, CorrespondentsService,
-    PeopleNamingService, PeopleSearchService,
+    ContactListMembersService, ContactListReader, ContactsPageService, ContactsService,
+    CorrespondentsService, PeopleNamingService, PeopleSearchService,
 };
 use crate::domain::service::{people_named_with, search_people_with};
 use feature_flags::FeatureFlags;
@@ -335,6 +336,26 @@ where
         invitee: MacroUserIdStr<'static>,
     ) -> Result<(), Report> {
         self.legacy.invite_contact(inviter, invitee).await
+    }
+}
+
+/// List members ignore the flag: the legacy graph records no lists, so a
+/// viewer on it still reads their lists from the list-aware tables, which may
+/// be incomplete until the list backfill has run.
+impl<Legacy, Lists, F> ContactListMembersService for FlaggedContactReads<Legacy, Lists, F>
+where
+    Legacy: Send + Sync + 'static,
+    Lists: ContactListReader,
+    F: Send + Sync + 'static,
+{
+    async fn list_members(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        self.lists.list_members(viewer, list, after, limit).await
     }
 }
 

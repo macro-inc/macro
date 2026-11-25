@@ -613,7 +613,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         isLabelOpen,
         order: state.sectionOrder,
         channelById,
-        unreadChannelIds: channelActivity.unreadChannelIds(),
+        unreadChannelIds: channelActivity.unreadOrMentionedChannelIds(),
         referenceStatuses: referenceStatuses(),
       }
     );

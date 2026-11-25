@@ -24,21 +24,24 @@ provider serialization tests when adding support.
 
 | Routed model | Explicit effort values |
 | --- | --- |
-| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
-| openai/gpt-6.1-sol, openai/gpt-6-astra | low, medium, high, xhigh, max |
-| openai/gpt-5.5 | none, low, medium, high, xhigh |
-| openai/gpt-5-mini | minimal, low, medium, high |
+| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5, anthropic/claude-haiku-5-5 | low, medium, high, xhigh, max |
+| openai/gpt-6.2-sol, openai/gpt-6-astra | low, medium, high, xhigh, max |
+| openai/gpt-6-luna | none, low, medium, high, xhigh, max |
+| openai/gpt-5.5 (retired, kept for old sessions) | none, low, medium, high, xhigh |
+| openai/gpt-5-mini (retired, kept for old sessions) | minimal, low, medium, high |
 | Haiku 4.5, retired Claude ids (Sonnet 5, Opus 5), and unknown models | No effort control |
 
 Every supported profile also offers **Default**, meaning no session override.
-It preserves Macro's existing adapter defaults (including low for GPT-5 mini).
+It preserves Macro's existing adapter defaults (including low for GPT-6 Luna
+and the GPT minis).
 It is distinct from OpenAI's explicit `none` and is never sent as a provider
 value. Anthropic receives `output_config.effort`; OpenAI Responses receives
 `reasoning.effort`. A compatible Chat Completions endpoint does not inherit
 native OpenAI capabilities merely because its model name resembles GPT.
 Thinking token budgets are not exposed as effort levels.
 
-Sources checked September 21, 2026 (GPT-6 rows November 12, 2026):
+Sources checked September 21, 2026 (GPT-6 rows November 12, 2026; Haiku 5.5,
+GPT-6.2 Sol and GPT-6 Luna November 24, 2026):
 [Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort),
 [GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5),
 [OpenAI models](https://developers.openai.com/api/docs/models), and

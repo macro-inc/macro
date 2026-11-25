@@ -755,6 +755,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 action: action.clone(),
                 prompt: brief.prompt,
                 context: None,
+                withhold_content: false,
             })
             .await?;
         progress.report(DraftMilestone::Writing);

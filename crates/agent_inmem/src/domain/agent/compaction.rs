@@ -289,8 +289,10 @@ fn start_summary(
             settle,
         );
         // A connection already gone drops the task, which frees the slot.
+        // A summary of a withheld turn's conversation is withheld too.
+        let withheld = genai_telemetry::content_withheld();
         let _ = connection.spawn(async move {
-            task.await;
+            genai_telemetry::withhold_content_if(withheld, task).await;
             Ok(())
         });
     }

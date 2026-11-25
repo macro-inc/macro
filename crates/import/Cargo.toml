@@ -27,6 +27,7 @@ connectors = { path = "../connectors" }
 model-entity = { path = "../model-entity" }
 import_notion = { path = "../import_notion" }
 import_tracker = { path = "../import_tracker" }
+import_hubspot = { path = "../import_hubspot" }
 models_databases = { path = "../models_databases" }
 models_properties = { path = "../models_properties" }
 properties = { path = "../properties", default-features = false, features = [

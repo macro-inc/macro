@@ -1,0 +1,30 @@
+[package]
+name = "computer_screen"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+base64 = { workspace = true }
+chrono = { workspace = true }
+computer_id = { workspace = true, features = ["sqlx"] }
+harness_id = { path = "../harness_id", features = ["sqlx"] }
+macro_user_id = { path = "../macro_user_id" }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tracing = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+rootcause = { workspace = true }
+uuid = { workspace = true, features = ["v7", "serde"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+harness_id = { path = "../harness_id", features = ["test-utils"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

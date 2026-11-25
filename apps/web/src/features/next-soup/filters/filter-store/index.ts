@@ -1,4 +1,5 @@
 export {
+  bothTargetAsts,
   compileToAst,
   defineQueryFilters,
   queryStateFrom,

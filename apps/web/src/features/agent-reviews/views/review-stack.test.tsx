@@ -5,6 +5,7 @@ import { INVALID_REVIEW_DECISION } from '@service-agent-harness/reviews';
 import type {
   ReviewItem,
   ReviewItems_Serialize,
+  ToolCalendarEvent,
 } from '@service-agent-reviews/generated/types';
 import {
   cleanup,
@@ -87,10 +88,43 @@ vi.mock('@core/component/AI/component/tool/calendar/DraftComposer', () => ({
     initialData: { title: string };
     registerDraftReader: (read: () => unknown) => void;
     registerSubmitReader: (read: () => Promise<unknown>) => void;
+    sink: {
+      canAct: () => boolean;
+      onExecute: (draft: unknown) => Promise<boolean>;
+      onReject: () => Promise<boolean>;
+    };
+    createdEventId?: string;
   }) => {
     props.registerDraftReader(() => props.initialData);
     props.registerSubmitReader(async () => props.initialData);
-    return <p>{props.initialData.title}</p>;
+    return (
+      <div>
+        <p>{props.initialData.title}</p>
+        <button
+          type="button"
+          disabled={!props.sink.canAct()}
+          onClick={() => {
+            editor.executed = props.sink.onExecute(props.initialData);
+          }}
+        >
+          Create event
+        </button>
+        <button
+          type="button"
+          disabled={!props.sink.canAct()}
+          onClick={() => {
+            editor.executed = props.sink.onReject();
+          }}
+        >
+          Cancel event
+        </button>
+        <p>
+          {props.createdEventId
+            ? `Preview shows ${props.createdEventId}`
+            : 'Preview shows the draft'}
+        </p>
+      </div>
+    );
   },
 }));
 
@@ -142,6 +176,63 @@ function decided<Draft, Outcome>(
   return {
     ...item,
     status: decision.action === 'submit' ? 'completed' : 'dismissed',
+  };
+}
+
+/** The created event a confirmed calendar item reports, as the tool returns it. */
+function createdEvent(id: string, title: string): ToolCalendarEvent {
+  return {
+    eventId: `event-${id}`,
+    title,
+    start: '2026-10-16T09:00:00Z',
+    end: '2026-10-16T10:00:00Z',
+    isAllDay: false,
+    timeZone: 'UTC',
+    location: null,
+    description: null,
+    status: 'confirmed',
+    isRecurring: false,
+    recurrenceLines: [],
+    attendees: [],
+    attendeeCount: 0,
+    organizerEmail: null,
+    conferenceUrl: null,
+    macroCallUrl: null,
+    isReadOnly: false,
+    calendarId: null,
+    calendarName: null,
+    inbox: null,
+    myRole: null,
+  };
+}
+
+/** One pending calendar draft. */
+function calendarItem(id: string, title: string) {
+  return {
+    id,
+    status: 'pending' as const,
+    error: null,
+    result: null,
+    draft: {
+      title,
+      time: {
+        kind: 'timed' as const,
+        startsAt: '2026-10-16T09:00:00Z',
+        endsAt: '2026-10-16T10:00:00Z',
+        timeZone: 'UTC',
+      },
+      description: null,
+      location: null,
+      attendees: [],
+      recurrenceLines: [],
+      calendarId: null,
+      reminders: null,
+      addMacroCall: false,
+      addConference: false,
+      eventType: 'default' as const,
+      outOfOffice: null,
+      guestPolicy: null,
+    },
   };
 }
 
@@ -226,9 +317,12 @@ function setup(
         (review): Review => ({
           ...review,
           revision,
-          items: review.items.map((item) =>
-            decided(item, decision, undefined, options.failedItem)
-          ),
+          items: review.items.map((item) => {
+            const next = decided(item, decision, undefined, options.failedItem);
+            return next.status === 'completed' && item.status !== 'completed'
+              ? { ...next, result: createdEvent(item.id, item.draft.title) }
+              : next;
+          }),
         })
       )
       .with(
@@ -865,5 +959,83 @@ describe('review deck', () => {
       items: ['first', 'second'],
     });
     expect(await screen.findByText('2 created')).toBeTruthy();
+  });
+});
+
+describe("a calendar card's preview", () => {
+  it('shows the created event once Create event on the card succeeds', async () => {
+    setup({
+      content: { kind: 'calendar', items: [calendarItem('one', 'Offsite')] },
+    });
+    expect(screen.getByText('Preview shows the draft')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(await screen.findByText('Preview shows event-one')).toBeTruthy();
+  });
+
+  it('shows the event the agent created after the review was approved', async () => {
+    const pending: Review = {
+      id: 'review',
+      sessionId: 'session',
+      actingUser: 'macro|owner@macro.local',
+      executionId: 'execution',
+      title: 'Drafts to review',
+      revision: 0,
+      updatedAt: 0,
+      presentedAt: 1,
+      decision: null,
+      kind: 'calendar',
+      items: [calendarItem('one', 'Offsite')],
+    };
+    const [review, setReview] = createSignal<Review>(pending);
+    render(() => (
+      <ReviewStack
+        review={review()}
+        canAct
+        actions={{ decide: vi.fn(), reload: async () => review() }}
+      />
+    ));
+    expect(screen.getByText('Preview shows the draft')).toBeTruthy();
+    setReview({
+      ...pending,
+      revision: 2,
+      decision: {
+        by: 'macro|owner@macro.local',
+        via: 'chat',
+        revision: 1,
+        items: ['one'],
+      },
+      items: [
+        {
+          ...calendarItem('one', 'Offsite'),
+          status: 'completed',
+          result: createdEvent('one', 'Offsite'),
+        },
+      ],
+    });
+    expect(await screen.findByText('Preview shows event-one')).toBeTruthy();
+    expect(
+      screen.getByText('Started by the agent at your request')
+    ).toBeTruthy();
+  });
+
+  it('keeps the draft on a card that was cancelled', async () => {
+    setup({
+      content: { kind: 'calendar', items: [calendarItem('one', 'Offsite')] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel event' }));
+    expect(await screen.findByText('Dismissed')).toBeTruthy();
+    expect(screen.getByText('Preview shows the draft')).toBeTruthy();
+  });
+
+  it('keeps the draft on a card whose create failed', async () => {
+    setup({
+      content: { kind: 'calendar', items: [calendarItem('one', 'Offsite')] },
+      failedItem: 'one',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(
+      await screen.findByText('The destination rejected this draft.')
+    ).toBeTruthy();
+    expect(screen.getByText('Preview shows the draft')).toBeTruthy();
   });
 });

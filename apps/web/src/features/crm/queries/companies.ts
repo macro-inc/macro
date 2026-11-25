@@ -1,12 +1,14 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { analytics } from '@app/lib/analytics';
 import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import { forgetMergedCrmRecords } from '@service-storage/crm-record-merge';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
@@ -20,6 +22,7 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
+import type { CompanyDomainChange } from '../core/company';
 import { contactCompanySummary } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
@@ -35,13 +38,30 @@ const COMPANY_STALE_TIME = 60 * 1000;
 function companyQueryOptions(deps: CrmRecordDependencies, companyId: string) {
   return queryOptions({
     queryKey: crmKeys.company(companyId).queryKey,
-    queryFn: () => {
+    queryFn: async () => {
       if (!companyId) {
         throw new Error('company id is required to fetch company');
       }
-      return throwOnErr(() =>
+      const canCache = captureQueryAuthorization();
+      const company = await throwOnErr(() =>
         deps.storage.getCompany({ companyId, includeContacts: false })
       );
+      // A merged company's id answers with the company it was merged into,
+      // which its view then opens under that company's own id.
+      if (company.id.toLowerCase() !== companyId.toLowerCase() && canCache()) {
+        const survivor = crmKeys.company(company.id).queryKey;
+        // An entry already there is as fresh as its own read made it.
+        if (deps.client.getQueryData(survivor) === undefined)
+          deps.client.setQueryData(survivor, company);
+        fireAndForget(
+          forgetMergedCrmRecords({
+            companies: [companyId.toLowerCase()],
+            contacts: [],
+          }),
+          'crm'
+        );
+      }
+      return company;
     },
     staleTime: COMPANY_STALE_TIME,
     enabled: !!companyId && companyId !== NIL_UUID,
@@ -335,6 +355,79 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
     }),
     () => deps.client
   );
+}
+
+/**
+ * Adds or removes a company domain via `PUT`/`DELETE
+ * /crm/companies/{id}/domains`. The server never changes the company's name
+ * or primary domain, so the answer replaces only the domain list of the
+ * cached company. Which of the company's contacts are on its domains changes
+ * with it, so their details and the company's Team list refresh, and soup
+ * refreshes the domains Customers listings show. Failures worth surfacing:
+ * 409 when another company has the domain (its name in the error message),
+ * 400 for a personal provider or the domain the company is named after, 403
+ * for a member removing a domain from a company whose email sync is off.
+ */
+export function useEditCompanyDomainMutation(deps: CrmRecordDependencies) {
+  return useMutation(
+    () => ({
+      // The header and Record details each edit through their own instance;
+      // one edit at a time keeps a slower response from replacing a newer list.
+      scope: { id: 'crm-company-domain-edits' },
+      mutationFn: ({
+        companyId,
+        domain,
+        change,
+      }: {
+        companyId: string;
+        domain: string;
+        change: CompanyDomainChange;
+      }) => editCompanyDomain(deps, companyId, domain, change),
+    }),
+    () => deps.client
+  );
+}
+
+async function editCompanyDomain(
+  deps: CrmRecordDependencies,
+  companyId: string,
+  domain: string,
+  change: CompanyDomainChange
+): Promise<CrmCompanyResponse> {
+  return Telemetry.span('crm.company_domain_edit', async (span) => {
+    span.setAttr('crm.record_id', companyId);
+    span.setAttr('crm.change', change);
+    const canCache = captureQueryAuthorization();
+    const write =
+      change === 'add'
+        ? deps.storage.addCompanyDomain
+        : deps.storage.removeCompanyDomain;
+    const company = await span.span('crm.company_domain_edit.save', () =>
+      throwOnErr(() => write({ companyId, domain }))
+    );
+    if (!canCache()) return company;
+
+    // A read already in flight would answer with the domains before the
+    // write and replace these.
+    await deps.client.cancelQueries({
+      queryKey: crmKeys.company(companyId).queryKey,
+    });
+    if (!canCache()) return company;
+    deps.client.setQueryData<CrmCompanyResponse>(
+      crmKeys.company(companyId).queryKey,
+      (current) => current && { ...current, domains: company.domains }
+    );
+    await span.span('crm.company_domain_edit.refresh', () =>
+      Promise.all([
+        refreshContactDetailsOfCompany(deps.client, companyId),
+        deps.client.invalidateQueries({
+          queryKey: crmKeys.companyContacts(companyId).queryKey,
+        }),
+        deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+      ])
+    );
+    return company;
+  });
 }
 
 /** Loaded contact details whose summary is of `companyId`. */

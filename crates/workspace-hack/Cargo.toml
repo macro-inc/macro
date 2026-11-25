@@ -180,6 +180,9 @@ xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
+zstd = { version = "0.14" }
+zstd-safe = { version = "8", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", default-features = false, features = ["legacy", "std", "zdict_builder"] }
 
 [build-dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
@@ -357,6 +360,9 @@ xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
+zstd = { version = "0.14" }
+zstd-safe = { version = "8", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", default-features = false, features = ["legacy", "std", "zdict_builder"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 crossbeam-epoch = { version = "0.9" }

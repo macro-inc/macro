@@ -27,7 +27,7 @@ impl BrainAuthenticator for OneAgent {
     fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a> {
         Box::pin(async move {
             if key == "mak_down" {
-                return Err(rootcause::report!("database down"));
+                return Err(rootcause::report!("database down").into());
             }
             Ok((key == AGENT_KEY).then(|| BrainCaller {
                 user_id: MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned(),
@@ -152,7 +152,10 @@ async fn only_agent_keys_are_admitted() {
             "http://127.0.0.1:1",
         );
 
-        assert_eq!(gateway.authorize(&headers).await.unwrap_err(), status);
+        assert_eq!(
+            gateway.authorize(&headers).await.unwrap_err().status(),
+            status
+        );
         assert_eq!(admission.0.load(Ordering::SeqCst), 0);
     }
 
@@ -185,7 +188,11 @@ async fn an_agent_with_agent_teammates_off_for_its_creator_is_refused_before_adm
     .unwrap();
 
     assert_eq!(
-        gateway.authorize(&bearer(AGENT_KEY)).await.unwrap_err(),
+        gateway
+            .authorize(&bearer(AGENT_KEY))
+            .await
+            .unwrap_err()
+            .status(),
         StatusCode::FORBIDDEN
     );
     assert_eq!(admission.0.load(Ordering::SeqCst), 0);

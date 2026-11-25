@@ -50,10 +50,7 @@ export function ProjectSummary(props: ParentProps<ProjectWorkspaceProps>) {
     enabled: startDateEnabled,
     other: startDate,
     saveOther: (property, value) =>
-      props.commands.saveProperty(props.project.id, property, {
-        valueType: 'DATE',
-        value,
-      }),
+      props.commands.saveProperty(props.project.id, property, value),
   });
   const rename = async (name: string) => {
     setError(undefined);

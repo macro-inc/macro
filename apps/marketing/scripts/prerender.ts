@@ -1,3 +1,4 @@
+import downloadRedirects from '../seo/download-redirects.json';
 import redirects from '../seo/page-redirects.json';
 /**
  * Build-time Solid SSR for the homepage and public feature pages.
@@ -51,10 +52,10 @@ const BASE_URL = (process.env.VITE_APP_BASE_URL || 'https://macro.com').replace(
 const BUILD_DATE = new Date().toISOString().slice(0, 10);
 
 // /test (internal playground) is intentionally not prerendered or listed.
-// The /mobile-signup* pages are prerendered because a direct hit has to resolve
+// The /mobile-signup* paths are prerendered because a direct hit has to resolve
 // to real HTML (CloudFront rewrites extensionless paths to <route>/index.html,
-// so an unbuilt route 404s), but they set `noindex` and are kept out of the
-// sitemap — they are steps inside the signup flow, not landing pages.
+// so an unbuilt route 404s). They only forward old links to app signup, set
+// `noindex`, and are kept out of the sitemap.
 const STATIC_ROUTES = [
   '/wall-of-love',
   '/replace-apps',
@@ -130,8 +131,7 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
   [/^\/tour$/, 'src/features/marketing/views/SalesPage.tsx'],
   [/^\/partners$/, 'src/app/routes/RoutePartners.tsx'],
   [/^\/partners\/terms$/, 'src/app/routes/RoutePartnerTerms.tsx'],
-  [/^\/mobile-signup$/, 'src/app/routes/RouteMobileSignup.tsx'],
-  [/^\/mobile-signup-sent$/, 'src/app/routes/RouteMobileSignupSent.tsx'],
+  [/^\/mobile-signup(-sent)?$/, 'src/app/routes/RouteMobileSignupRedirect.tsx'],
   [/^\/posts$/, 'src/routes/posts/index.tsx'],
   [/^\/posts\/.+$/, 'src/routes/posts/PostPage.tsx'],
 ];
@@ -204,7 +204,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/partners': 'Partner Program',
   '/partners/terms': 'Partner Program Terms',
   '/mobile-signup': 'Start for free',
-  '/mobile-signup-sent': 'Check your email',
+  '/mobile-signup-sent': 'Start for free',
 };
 
 // Product/feature pages, each describing one part of the Macro app. Used to
@@ -583,6 +583,15 @@ async function main(): Promise<void> {
     fs.writeFileSync(
       out,
       `<!doctype html><html><head><meta name="robots" content="noindex"><link rel="canonical" href="${BASE_URL}${destination}"><title>Page moved</title><script>location.replace(${JSON.stringify(destination)}+location.search+location.hash)</script></head><body><a href="${destination}">Continue to the page</a></body></html>`
+    );
+  }
+  // Static-host fallback for installer links; the CDN issues a 302.
+  for (const [source, destination] of Object.entries(downloadRedirects)) {
+    const out = outputPathFor(source);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(
+      out,
+      `<!doctype html><html><head><meta name="robots" content="noindex"><title>Downloading Macro</title><script>location.replace(${JSON.stringify(destination)})</script></head><body><a href="${destination}">Download Macro</a></body></html>`
     );
   }
   const homepage = await renderHomepage();

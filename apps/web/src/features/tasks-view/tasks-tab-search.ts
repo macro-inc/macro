@@ -28,6 +28,8 @@ export const tasksTabSearch = {
         'priority',
         'due_date_earliest',
         'due_date_latest',
+        'start_date_earliest',
+        'start_date_latest',
       ])
       .optional(),
     sortReversed: z.enum(['true', 'false']).optional(),
@@ -40,6 +42,7 @@ export const tasksTabSearch = {
         'project',
         'date',
         'due_date',
+        'start_date',
       ])
       .optional(),
     dueDate: z
@@ -57,6 +60,21 @@ export const tasksTabSearch = {
       .optional(),
     dueStart: z.iso.date().optional(),
     dueEnd: z.iso.date().optional(),
+    startDate: z
+      .enum([
+        'any',
+        'started',
+        'today',
+        'tomorrow',
+        'next_7_days',
+        'later',
+        'has_start_date',
+        'no_start_date',
+        'range',
+      ])
+      .optional(),
+    startFrom: z.iso.date().optional(),
+    startTo: z.iso.date().optional(),
   }),
   defaults: {
     tab: 'my-tasks' as TasksTab,
@@ -68,9 +86,31 @@ export const tasksTabSearch = {
     dueDate: undefined,
     dueStart: undefined,
     dueEnd: undefined,
+    startDate: undefined,
+    startFrom: undefined,
+    startTo: undefined,
   },
 };
 
 export const tasksTabSearchCodec = createSearchParamsCodec(tasksTabSearch);
 
 export type TasksTabSearchParams = z.infer<typeof tasksTabSearch.schema>;
+
+/** The URL keys for the due-date and start-date filters. */
+export function taskDateFilterSearch(filters: {
+  dueDate?: TasksViewState['dueDate'];
+  startDate?: TasksViewState['startDate'];
+}): Pick<
+  TasksTabSearchParams,
+  'dueDate' | 'dueStart' | 'dueEnd' | 'startDate' | 'startFrom' | 'startTo'
+> {
+  const { dueDate, startDate } = filters;
+  return {
+    dueDate: dueDate?.type ?? 'any',
+    dueStart: dueDate?.type === 'range' ? dueDate.start : undefined,
+    dueEnd: dueDate?.type === 'range' ? dueDate.end : undefined,
+    startDate: startDate?.type ?? 'any',
+    startFrom: startDate?.type === 'range' ? startDate.start : undefined,
+    startTo: startDate?.type === 'range' ? startDate.end : undefined,
+  };
+}

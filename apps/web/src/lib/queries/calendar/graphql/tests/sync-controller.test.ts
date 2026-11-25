@@ -497,6 +497,43 @@ describe('CalendarSyncController catching up a read', () => {
     controller.dispose();
   });
 
+  it('reads as behind after a change notice whose delta failed, until a delta reads the server', async () => {
+    const { fetchChanges, controller } = setup([changes(), changes()]);
+    await controller.runDelta();
+    controller.noticeChange();
+    fetchChanges.mockRejectedValueOnce(new Error('offline'));
+    await expect(controller.runDelta()).rejects.toThrow('offline');
+
+    expect(controller.caughtUp()).toBe(false);
+    await expect(controller.catchUp()).resolves.toBe('behind');
+
+    await vi.advanceTimersByTimeAsync(DELTA_RETRY_BASE_MS);
+    expect(fetchChanges).toHaveBeenCalledTimes(3);
+    await expect(controller.catchUp()).resolves.toBe('current');
+    controller.dispose();
+  });
+
+  it('runs a joined pass again when it read the server before a change notice', async () => {
+    const { fetchChanges, controller } = setup([changes(), changes()]);
+    const started = Promise.withResolvers<void>();
+    const first = Promise.withResolvers<CalendarChangesPage>();
+    fetchChanges.mockImplementationOnce(() => {
+      started.resolve();
+      return first.promise;
+    });
+    const running = controller.runDelta();
+    await started.promise;
+    controller.noticeChange();
+    const read = controller.catchUp();
+    first.resolve(changes());
+
+    await expect(read).resolves.toBe('held');
+    await running;
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    expect(controller.caughtUp()).toBe(true);
+    controller.dispose();
+  });
+
   it('runs one delta before answering after REST showed a viewport', async () => {
     const { fetchChanges, controller } = setup([changes(), changes()]);
     await controller.runDelta();

@@ -51,7 +51,11 @@ mesh: pre-copy while it runs, then a final round after `release`), then
 - `src/domain/metrics.rs`: metric names and attributes, a contract with the
   monitors in `infra/stacks/monitoring`.
 - `src/domain/service.rs`: operations, locking, idempotency; `service/host.rs`
-  goldens, host limits and info; `service/enrollment.rs` enrollment.
+  goldens, host limits, info and image staging; `service/enrollment.rs`
+  enrollment; `service/system_disk.rs` moving a computer to another image
+  (and back) with its `/home` kept.
+- `src/outbound/image_staging.rs`: `POST /v1/images` downloads (zstd,
+  SHA-256 checked) into `images_dir/+staging/`, then renames into place.
 - `src/outbound/jails.rs`: jailer, chroot, Firecracker calls; `jails/machines.rs`: the `Machines` port; `jails/golden_build.rs`: golden builds.
 - `src/outbound/network.rs`: netns slots and nftables.
 - `src/outbound/layout.rs`: what lives where on the durable disk.
@@ -73,6 +77,11 @@ mesh: pre-copy while it runs, then a final round after `release`), then
   and the record move: `release` shuts the guest down (or drops its
   hibernation), so the moved computer cold boots on its new host.
 
+- The record names the system disk the VM boots (`system_disk`: `rootfs.ext4`
+  for generation 0, `rootfs.<n>.ext4` after a replacement) and keeps the
+  previous one; that save is a replacement's commit point, and startup deletes
+  any system disk file the record does not name. A computer dataset's quota
+  holds two system disks.
 - Every step that changes a computer saves its record before the next one,
   and the record says what was in flight (`start_pending`, `hibernating`,
   `guest_restore_pending`); a new crash point needs its flag and a

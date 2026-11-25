@@ -5,7 +5,9 @@ import type { CallEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
 /** Display name for a call record. Renders the search highlight when present,
- *  otherwise the entity's resolved name. */
+ *  otherwise the entity's resolved name. The highlight is inert like a search
+ *  snippet: it splits a URL in the name, so a live link there would open only
+ *  its first part. */
 export function CallRecordName(props: { entity: CallEntity }) {
   const highlight = () =>
     isSearchEntity(props.entity)
@@ -16,6 +18,7 @@ export function CallRecordName(props: { entity: CallEntity }) {
     <Show when={highlight()} fallback={props.entity.name}>
       {(h) => (
         <StaticMarkdown
+          inert
           markdown={h()}
           theme={unifiedListMarkdownTheme}
           singleLine={true}

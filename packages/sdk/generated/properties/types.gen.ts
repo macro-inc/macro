@@ -487,7 +487,7 @@ export type PropertyScope = 'user' | 'team' | 'system' | 'all';
  * here; task classification is resolved by the properties domain from the
  * document subtype.
  */
-export type PropertyTargetEntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'THREAD' | 'USER';
+export type PropertyTargetEntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'CONTACT' | 'DATABASE_ROW' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'THREAD' | 'USER';
 
 /**
  * Canonical reference to an entity receiving properties.

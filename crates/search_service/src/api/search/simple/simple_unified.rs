@@ -8,11 +8,19 @@ use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 
 use crate::api::search::caller::{caller_label, draws_api_key_allowance, search_caller};
 use crate::api::search::crm_company;
+use crate::api::search::email_operators::{
+    EmailQuery, QueryClock, apply_email_operators, reported_filters, time_zone,
+};
+use crate::api::search::search_operators::{
+    SearchOperators, TagFilter, TypedConditions, apply_names, apply_search_operators,
+    reaches_beyond_email,
+};
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
     context::{SearchAuthorizationService, SearchHandlerState},
     search::{SearchPaginationParams, simple::SearchError},
 };
+use crate::domain::operator_names::NamedIds;
 use axum::{
     extract::{self, State},
     response::Json,
@@ -177,7 +185,9 @@ use crate::api::search::terms::{
 /// Per-request cap on whitespace-delimited search terms. Each term expands
 /// into its own `has_child` clause and is embedded in every clause's highlight
 /// query, so query-build cost is quadratic in the term count across the
-/// join-shape indices — an unbounded paste can OOM the service.
+/// join-shape indices — an unbounded paste can OOM the service. It also keeps
+/// an email search under the clauses OpenSearch accepts, so it counts the
+/// email text conditions the request sends with the ones typed.
 const MAX_SEARCH_TERMS: usize = 50;
 
 /// Per-term character cap. Body size also scales with summed term length; real
@@ -191,13 +201,110 @@ fn enforce_term_limits(terms: Vec<String>) -> Result<Vec<String>, SearchError> {
     if terms.len() > MAX_SEARCH_TERMS {
         return Err(SearchError::TooManyTerms);
     }
-    Ok(terms
-        .into_iter()
-        .map(|term| match term.char_indices().nth(MAX_TERM_CHARS) {
-            Some((byte_idx, _)) => term[..byte_idx].to_string(),
-            None => term,
-        })
-        .collect())
+    Ok(terms.into_iter().map(truncate_term).collect())
+}
+
+/// A search's terms with its email operators read out of them, then held to
+/// [`MAX_SEARCH_TERMS`] and [`MAX_TERM_CHARS`]. Operators are read before
+/// anything is cut to length, so a long label name is matched whole; the
+/// words left and every text condition the search applies are cut as terms
+/// are, and the typed conditions reported back are cut the same way.
+fn limited_terms(
+    filters: &mut SearchEntityFilters,
+    include_crm: bool,
+    terms: Vec<String>,
+    match_type: MatchType,
+    clock: QueryClock,
+) -> Result<(Vec<String>, Option<EmailQuery>), SearchError> {
+    if terms.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let (terms, mut email_query) =
+        apply_email_operators(filters, include_crm, terms, match_type, clock);
+    if terms.len() + filters.email_filters.text_matches.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let terms = enforce_term_limits(terms)?;
+    truncate_text_matches(&mut filters.email_filters);
+    if let Some(query) = &mut email_query {
+        truncate_text_matches(&mut query.filters);
+    }
+    Ok((terms, email_query))
+}
+
+/// A search's terms with every operator read out of them, and what the
+/// operators chose.
+#[derive(Debug)]
+struct ReadQuery {
+    terms: Vec<String>,
+    email_query: Option<EmailQuery>,
+    typed: SearchOperators,
+    conditions: TypedConditions,
+    /// CRM companies stay in only when no operator was read: none can meet
+    /// one.
+    include_crm: bool,
+}
+
+/// Reads the operators that choose kinds and name tasks, tags, inboxes and
+/// channels, then the email operators from the terms they leave
+/// ([`limited_terms`]). Only email is searched by its conditions alone,
+/// since every other kind's index matches words.
+fn read_query(
+    filters: &mut SearchEntityFilters,
+    include_crm: bool,
+    terms: Vec<String>,
+    match_type: MatchType,
+    clock: QueryClock,
+    user_id: &str,
+) -> Result<ReadQuery, SearchError> {
+    if terms.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let (mut typed, conditions) = apply_search_operators(filters, terms, match_type, user_id)?;
+    let include_crm = include_crm && typed.operators == 0;
+    let (terms, email_query) = limited_terms(
+        filters,
+        include_crm,
+        std::mem::take(&mut typed.terms),
+        match_type,
+        clock,
+    )?;
+    let include_crm = include_crm && email_query.is_none();
+    if typed.operators > 0 && terms.is_empty() && reaches_beyond_email(filters, include_crm) {
+        return Err(SearchError::OperatorsNeedAWord);
+    }
+    Ok(ReadQuery {
+        terms,
+        email_query,
+        typed,
+        conditions,
+        include_crm,
+    })
+}
+
+/// The text names are matched with: the query as typed, or the words the
+/// typed operators leave once they read any.
+fn name_search_term(query: &str, typed: &SearchOperators, terms: &[String]) -> String {
+    if typed.operators > 0 {
+        terms.join(" ")
+    } else {
+        query.to_string()
+    }
+}
+
+/// Each text condition in `filters` cut to [`MAX_TERM_CHARS`].
+fn truncate_text_matches(filters: &mut item_filters::EmailFilters) {
+    for text_match in &mut filters.text_matches {
+        text_match.text = truncate_term(std::mem::take(&mut text_match.text));
+    }
+}
+
+/// `term` cut to [`MAX_TERM_CHARS`].
+fn truncate_term(term: String) -> String {
+    match term.char_indices().nth(MAX_TERM_CHARS) {
+        Some((byte_idx, _)) => term[..byte_idx].to_string(),
+        None => term,
+    }
 }
 
 /// Convert request property filters into OpenSearch property-filter args.
@@ -376,6 +483,8 @@ fn unified_search_span(
         search.entity_types = tracing::field::Empty,
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
+        search.email_operators = tracing::field::Empty,
+        search.typed_operators = tracing::field::Empty,
         search.term_matching = tracing::field::Empty,
         search.term_matching_from_cursor = tracing::field::Empty,
         search.email_shared_capped = tracing::field::Empty,
@@ -421,6 +530,8 @@ pub(in crate::api::search) struct UnifiedSearchPage {
     pub(in crate::api::search) hits: Vec<SearchHit>,
     pub(in crate::api::search) next_cursor: Option<String>,
     pub(in crate::api::search) crm_access: Option<CrmTeamReceipt<MemberTeamRole>>,
+    /// The email filters the query's typed operators became, if it typed any.
+    pub(in crate::api::search) query_filters: Option<item_filters::EmailFilters>,
 }
 
 /// Creates a unified search request and performs the search
@@ -446,8 +557,16 @@ pub(in crate::api::search) async fn perform_unified_search(
         .await
         .inspect_err(|error| {
             // A limited search is the allowance working, marked on the span
-            // by `search.rate_limit`, not a failure to report.
-            if !matches!(error, SearchError::RateLimited { .. }) {
+            // by `search.rate_limit`, and the typed operators' refusals are
+            // what someone typed; neither is a failure to report.
+            if !matches!(
+                error,
+                SearchError::RateLimited { .. }
+                    | SearchError::OperatorsNeedAWord
+                    | SearchError::TagConditionsDontCombine
+                    | SearchError::SpeakersDontCombine
+                    | SearchError::TooManyChannelNames(_)
+            ) {
                 tracing::error!(error = %error);
             }
         })
@@ -556,13 +675,19 @@ async fn search_unified_sources(
     let match_type = req.match_type;
     let split_terms = split_search_terms(&terms);
     let split_count = split_terms.len();
-    let search_terms = enforce_term_limits(drop_wordless_terms(split_terms, match_type))?;
-    record_term_counts(
-        &tracing::Span::current(),
-        search_terms.len(),
-        split_count - search_terms.len(),
-    );
+    let search_terms = drop_wordless_terms(split_terms, match_type);
     let requested_term_matching = req.term_matching;
+
+    // Typed dates are read in the caller's zone, and a later page reads
+    // relative ones against the first page's moment.
+    let clock = QueryClock {
+        now: cursor
+            .as_ref()
+            .and_then(|cursor| cursor.query_time_millis)
+            .and_then(chrono::DateTime::from_timestamp_millis)
+            .unwrap_or_else(chrono::Utc::now),
+        zone: time_zone(req.time_zone.as_deref()).ok_or(SearchError::InvalidTimeZone)?,
+    };
 
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
@@ -570,12 +695,10 @@ async fn search_unified_sources(
     // Tags, by contrast, are indexed on every taggable source, each of which
     // applies the tag filter itself (see the per-source gating below).
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
-    let tag_option_ids = req.filters.tag_option_ids.clone();
-    let match_all_tags = req.filters.tag_filter_mode == item_filters::TagFilterMode::All;
-    // A tag filter keeps only the tag-indexed sources; channels and CRM drop
-    // out below (see should_include_channels), so response pages contain only
-    // rows the filter was actually applied to.
-    let tags_active = !tag_option_ids.is_empty();
+    let requested_tags = TagFilter {
+        option_ids: req.filters.tag_option_ids.clone(),
+        match_all: req.filters.tag_filter_mode == item_filters::TagFilterMode::All,
+    };
 
     // CRM is opt-in: it only runs when the caller resolved a team receipt
     // (set only when `include_crm` is true and the user has a qualifying
@@ -583,7 +706,38 @@ async fn search_unified_sources(
     let crm_company_filters = req.filters.crm_company_filters.clone();
 
     let calendar_event_scope = req.calendar_event_scope;
-    let search_filters = SearchEntityFilters::from(req.filters);
+    let mut search_filters = SearchEntityFilters::from(req.filters);
+    let ReadQuery {
+        terms: search_terms,
+        email_query,
+        typed,
+        conditions:
+            TypedConditions {
+                property_filters: typed_property_filters,
+                excluded_sub_types,
+                names_senders,
+            },
+        include_crm,
+    } = read_query(
+        &mut search_filters,
+        include_crm,
+        search_terms,
+        match_type,
+        clock,
+        user_id.as_ref(),
+    )?;
+    let mut property_filter_args = property_filter_args;
+    property_filter_args.extend(typed_property_filters);
+    record_term_counts(
+        &tracing::Span::current(),
+        search_terms.len(),
+        split_count - search_terms.len(),
+    );
+    tracing::Span::current().record(
+        "search.email_operators",
+        email_query.as_ref().map_or(0, |query| query.operators),
+    );
+    tracing::Span::current().record("search.typed_operators", typed.operators);
     let requested_sessions = search_filters
         .agent_session_filters
         .ids
@@ -604,6 +758,25 @@ async fn search_unified_sources(
         draw_search_allowance(ctx, &user_id).await?;
     }
     let _turn = take_search_turn(&ctx.search_lanes, caller).await?;
+
+    // Tag, inbox and channel names resolve for the caller in their turn.
+    let typed_names = typed.names();
+    let named = if typed_names.is_empty() {
+        NamedIds::default()
+    } else {
+        ctx.operator_names()
+            .resolve(&user_id, &typed_names)
+            .await
+            .map_err(|error| SearchError::InternalError(anyhow::anyhow!("{error}")))?
+    };
+    let TagFilter {
+        option_ids: tag_option_ids,
+        match_all: match_all_tags,
+    } = apply_names(&typed, &named, &mut search_filters, requested_tags)?;
+    // A tag filter keeps only the tag-indexed sources; channels and CRM drop
+    // out below (see should_include_channels), so response pages contain only
+    // rows the filter was actually applied to.
+    let tags_active = !tag_option_ids.is_empty();
 
     // CRM is opt-in: only when the caller asks for it does this resolve a
     // team membership and mint a capability receipt. No membership → empty
@@ -748,6 +921,7 @@ async fn search_unified_sources(
     // flat and match terms against their name/title only.
     filter_document_response.terms = search_terms.clone();
     filter_document_response.property_filters = property_filter_args;
+    filter_document_response.excluded_sub_types = excluded_sub_types;
     filter_document_response.tag_option_ids = tag_option_ids.clone();
     filter_document_response.match_all_tags = match_all_tags;
     filter_document_response.term_matching = document_term_matching;
@@ -782,8 +956,7 @@ async fn search_unified_sources(
     filter_calendar_event_response.tag_option_ids = tag_option_ids;
     filter_calendar_event_response.match_all_tags = match_all_tags;
 
-    // Clone terms for use in name searches
-    let name_search_term = terms[0].clone();
+    let name_search_term = name_search_term(&terms[0], &typed, &search_terms);
 
     // Extract individual cursors from the combined cursor (SearchCursorOption)
     // Clone for use in async blocks and for cursor regeneration
@@ -917,6 +1090,20 @@ async fn search_unified_sources(
                 .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
         }
     }
+    // A call's name says nothing of who spoke, so a `from:` search of calls
+    // matches their segments only.
+    if names_senders {
+        match search_on {
+            SearchOn::Name => {
+                unified_search_args
+                    .search_indices
+                    .remove(&models_opensearch::OpenSearchEntityType::CallRecords);
+            }
+            SearchOn::NameContent | SearchOn::Content => {
+                unified_search_args.call_record_search_args.mode = CallRecordSearchMode::Content;
+            }
+        }
+    }
     let searches_names = matches!(search_on, SearchOn::Name | SearchOn::NameContent);
     tracing::Span::current().record(
         "search.entity_types",
@@ -963,7 +1150,10 @@ async fn search_unified_sources(
             // other participant), so they are matched in Postgres rather than
             // the message-level channels index.
             match search_on {
-                SearchOn::Name | SearchOn::NameContent if should_include_channels => {
+                // A channel's name says nothing of who posted in it.
+                SearchOn::Name | SearchOn::NameContent
+                    if should_include_channels && !names_senders =>
+                {
                     simple_channel::search_names(
                         &ctx.db,
                         &user_id,
@@ -1140,6 +1330,10 @@ async fn search_unified_sources(
                     search_terms.len(),
                     document_term_matching,
                 ),
+                query_time_millis: email_query
+                    .as_ref()
+                    .filter(|query| query.reads_now)
+                    .map(|_| clock.now.timestamp_millis()),
             };
             cursor.encode()
         } else {
@@ -1154,6 +1348,7 @@ async fn search_unified_sources(
         hits: final_results,
         next_cursor,
         crm_access,
+        query_filters: email_query.as_ref().map(reported_filters),
     })
 }
 

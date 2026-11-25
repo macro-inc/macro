@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity\n            SET id = $2, status = 'staged', entity_id = NULL, entity_type = NULL,\n                team_id = NULL, waiting_on = NULL, review_id = NULL, last_error = $3,\n                metadata = CASE WHEN jsonb_typeof(metadata->'plan') = 'object'\n                    THEN metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}'\n                    ELSE metadata END - 'personalFolderId' - 'separateFolder' - 'warnings',\n                updated_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4041081f4765a424f56fcf91c6e519fa8c52558eef803c27e00cdd96319c10ad"
+}

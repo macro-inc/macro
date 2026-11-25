@@ -493,6 +493,54 @@ fn browser_suites_build_the_wasm_they_load_first() {
     );
 }
 
+#[test]
+fn captcha_lab_check_keeps_dev_shell_bun_and_clears_library_environment() {
+    let fixture = tempfile::tempdir().expect("lab runtime fixture");
+    let output = std::process::Command::new("bash")
+        .args([
+            "-ec",
+            r#"
+mkdir -p repo/bin node_modules/.bin
+export BASH_ENV="$PWD/dev-env"
+cat > "$BASH_ENV" <<'EOF'
+export PATH="$PWD/repo/bin:$PATH"
+export LD_LIBRARY_PATH=/fixture/nix-libraries
+EOF
+cat > repo/bin/bun <<'EOF'
+#!/usr/bin/env bash
+if [[ $* == 'install --frozen-lockfile' ]]; then
+  test "$LD_LIBRARY_PATH" = /fixture/nix-libraries
+  exit $?
+fi
+[[ -z ${BASH_ENV+x} && -z ${LD_LIBRARY_PATH+x} ]] || exit 1
+if [[ $* == 'run check' ]]; then
+  exec bash -ec 'bun probe'
+fi
+test "$*" = 'probe' && printf 'dev-shell Bun reached the nested script\n'
+EOF
+cat > node_modules/.bin/playwright <<'EOF'
+#!/usr/bin/env bash
+test "$*" = 'install --with-deps chromium'
+EOF
+chmod +x repo/bin/bun node_modules/.bin/playwright
+exec bash -ec "$LAB_CHECK"
+"#,
+        ])
+        .current_dir(fixture.path())
+        .env_remove("BASH_ENV")
+        .env_remove("LD_LIBRARY_PATH")
+        .env("LAB_CHECK", CAPTCHA_LAB_CHECK)
+        .output()
+        .expect("run the lab workflow command");
+
+    assert!(
+        output.status.success(),
+        "lab workflow command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"dev-shell Bun reached the nested script\n");
+}
+
 /// The event details fixture replaces the calendar query modules with preview
 /// adapters, so a change to those modules runs the suite that would show a
 /// blank page when an adapter export goes missing.
@@ -523,6 +571,41 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
         step.contains("needs.path-check.outputs.calendar_details_changed == 'true'")
             && step.contains("just test-calendar-details-browser"),
         "the step runs the suite when calendar details change: {step}"
+    );
+}
+
+/// The agent screen suite renders the viewer and the agent DM's top bar over
+/// stubs of the channel and team queries, so it runs when any of them change.
+#[test]
+fn agent_screen_browser_tests_run_when_the_viewer_or_dm_header_change() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let screen = filters
+        .split("agent_screen_changed:")
+        .nth(1)
+        .expect("agent_screen_changed filter");
+    for path in [
+        "apps/web/src/features/agent-screen/**",
+        "apps/web/src/features/channel/Channel/ChannelDetail.tsx",
+        "apps/web/src/features/settings/views/team-agent-dm-status.tsx",
+        "apps/web/src/components/app/split-layout/**",
+        "apps/web/src/components/ui/components/Dialog.tsx",
+    ] {
+        assert!(screen.contains(path), "{path} runs the suite: {screen}");
+    }
+    let step = browser_job(&yaml)
+        .split("- name: Agent Screen Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("agent screen browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.agent_screen_changed == 'true'")
+            && step.contains("just test-agent-screen-browser"),
+        "the step runs the suite when the agent screen changes: {step}"
     );
 }
 

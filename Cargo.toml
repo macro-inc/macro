@@ -112,10 +112,12 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_time_tracking",
   "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/computer_id",
+  "crates/computer_screen",
   "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
@@ -132,6 +134,7 @@ members = [
   "crates/import_notion",
   "crates/import_tracker",
   "crates/import_linear",
+  "crates/import_hubspot",
   "crates/import_jira",
   "crates/initiative",
   "crates/initiative_description",
@@ -157,6 +160,7 @@ members = [
   "crates/onboarding",
   "crates/outlook_emulator",
   "crates/model_emulator",
+  "crates/capsolver_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -606,6 +610,7 @@ zip-inflate = { package = "zip", version = "9.0.5", default-features = false, fe
 ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
+zstd = "0.14.3"
 
 [patch.crates-io]
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.

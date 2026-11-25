@@ -5,7 +5,10 @@ import type {
   RecipientSource,
   RecipientSourceInput,
 } from '@core/user/recipient-source';
-import { toChannelListItem } from '@queries/channel/directory-core';
+import {
+  isMessageDestinationChannel,
+  toChannelListItem,
+} from '@queries/channel/directory-core';
 import { createMemo } from 'solid-js';
 import { useTeammateIds } from '../team/roster';
 import { createContactRecipientSource } from './recipient-window';
@@ -29,14 +32,10 @@ export function useCombinedRecipientSource(
 ): RecipientSource<'user' | 'channel'> {
   const people = useContactRecipientSource(input);
   const { channels } = useChannelDirectory();
-  // Bots count as members, as they did in the REST channel list.
   const groups = createMemo(() =>
     input.enabled()
       ? channels()
-          .filter(
-            (channel) =>
-              channel.participants.length + channel.botParticipants.length > 2
-          )
+          .filter(isMessageDestinationChannel)
           .map((channel) =>
             recipientEntityMapper('channel')(toChannelListItem(channel))
           )

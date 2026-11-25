@@ -4,15 +4,32 @@ import type {
   FeatureScreenFrame,
   PhoneScreen,
 } from '../core/feature-screens';
+import type { TutorialVideoId } from '../core/tutorial-videos';
+import { TutorialWallpaper } from './TutorialWallpaper';
 import './feature-screenshot.css';
 
-/** A real Macro app screen on a dark stage, outlined where the section's point is. */
-export function FeatureScreenshot(props: { screen: FeatureScreen }) {
+/** A real Macro app screen on a dark or feature-themed stage, outlined where the section's point is. */
+export function FeatureScreenshot(props: {
+  screen: FeatureScreen;
+  wallpaper?: TutorialVideoId;
+  variant?: number;
+}) {
   return (
     <figure
       class="feature-screenshot"
+      classList={{ 'feature-screenshot--wallpaper': Boolean(props.wallpaper) }}
       data-narrow={props.screen.narrow ? '' : undefined}
+      data-wallpaper-variant={
+        props.wallpaper ? (props.variant ?? 0) % 4 : undefined
+      }
     >
+      <Show when={props.wallpaper}>
+        {(wallpaper) => (
+          <div class="feature-screenshot-backdrop" aria-hidden="true">
+            <TutorialWallpaper tutorial={wallpaper()} />
+          </div>
+        )}
+      </Show>
       <div class="feature-screenshot-frame">
         <ScreenCanvas
           frame={props.screen}
@@ -84,6 +101,24 @@ function ScreenCanvas(props: {
     return `clamp(100%, ${(fit * 100).toFixed(1)}%, 640px)`;
   };
 
+  // Keep the 2px outline + 2px offset inside the clipped frame on every edge.
+  const clampedFocus = () => {
+    const focus = props.frame.focus;
+    if (!focus) return undefined;
+    const padX = Math.max(8, Math.round(props.frame.width * 0.01));
+    const padY = Math.max(8, Math.round(props.frame.height * 0.01));
+    const left = Math.max(focus.x, padX);
+    const top = Math.max(focus.y, padY);
+    const right = Math.min(focus.x + focus.width, props.frame.width - padX);
+    const bottom = Math.min(focus.y + focus.height, props.frame.height - padY);
+    return {
+      x: left,
+      y: top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    };
+  };
+
   return (
     <div
       ref={viewport}
@@ -104,7 +139,7 @@ function ScreenCanvas(props: {
           loading="lazy"
           decoding="async"
         />
-        <Show when={props.frame.focus}>
+        <Show when={clampedFocus()}>
           {(focus) => (
             <span
               class="feature-screenshot-focus"
@@ -129,15 +164,10 @@ export function FeaturePhoneScreens(props: {
   product: string;
 }) {
   return (
-    <section class="feature-page-section" aria-labelledby="phone-screens-title">
-      <header class="product-feature-intro">
-        <h2 id="phone-screens-title">
-          <span>On your phone.</span>
-        </h2>
-        <p>
-          {props.product} works the same in the Macro apps for iOS and Android.
-        </p>
-      </header>
+    <section
+      class="feature-page-section"
+      aria-label={`${props.product} on your phone`}
+    >
       <ul class="feature-phone-screens">
         <For each={props.screens}>
           {(screen) => (

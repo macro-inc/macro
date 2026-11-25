@@ -1,4 +1,3 @@
-import { TOKENS } from '@core/hotkey/tokens';
 import { describe, expect, it } from 'vitest';
 import {
   customizableNavItems,
@@ -16,16 +15,9 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
   ...overrides,
 });
 
-// The catalog as the rail shows it with New Home off, which is how these
-// order tests read it.
-const WITHOUT_NEW_HOME = SIDEBAR_NEXT_NAV_ITEMS.filter(
-  (item) => item.id !== 'new-home'
-);
-
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCustomers: true,
   showNotifications: true,
-  homeMode: 'off',
   showForYou: false,
   showCalls: true,
   showReviews: true,
@@ -175,7 +167,7 @@ describe('External', () => {
 
 describe('orderNavItems', () => {
   it('keeps home first and applies a custom order', () => {
-    const ordered = orderNavItems(WITHOUT_NEW_HOME, [
+    const ordered = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, [
       'tasks',
       'mail',
       'home',
@@ -192,7 +184,7 @@ describe('orderNavItems', () => {
   });
 
   it('keeps For you where the person put it', () => {
-    const ordered = orderNavItems(WITHOUT_NEW_HOME, ['tasks', 'for-you']);
+    const ordered = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, ['tasks', 'for-you']);
 
     expect(ordered.map((item) => item.id).slice(0, 3)).toEqual([
       'home',
@@ -227,7 +219,9 @@ describe('Passwords on the rail', () => {
 
   it('joins a saved order right after Calendar and keeps every other position', () => {
     const order = ['home', 'agents', 'mail', 'calendar', 'tasks', 'documents'];
-    const ids = orderNavItems(WITHOUT_NEW_HOME, order).map((item) => item.id);
+    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
+      (item) => item.id
+    );
     // For you keeps its place under Home in an order saved before it existed.
     expect(ids.slice(0, 8)).toEqual([
       'home',
@@ -243,7 +237,9 @@ describe('Passwords on the rail', () => {
 
   it('keeps a saved position the user chose for it', () => {
     const order = ['home', 'passwords', 'mail', 'calendar', 'agents'];
-    const ids = orderNavItems(WITHOUT_NEW_HOME, order).map((item) => item.id);
+    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
+      (item) => item.id
+    );
     expect(ids.filter((id) => id !== 'for-you').slice(0, 5)).toEqual(order);
   });
 });
@@ -265,55 +261,4 @@ it('omits CRM from the rail, More, and customization for a denied member', () =>
   expect(
     customizableNavItems(defaultGates()).some((item) => item.id === 'companies')
   ).toBe(true);
-});
-
-describe('New Home on the rail', () => {
-  const ids = (gates: NavItemGates) =>
-    visibleNavItems(gates).map((item) => item.id);
-
-  it('takes Notifications’ place beside old Home, with g h', () => {
-    const gates = defaultGates({ homeMode: 'both' });
-    expect(ids(gates).slice(0, 2)).toEqual(['home', 'new-home']);
-    expect(ids(gates)).not.toContain('notifications');
-    const [home, newHome] = visibleNavItems(gates);
-    expect(home?.hotkeyToken).toBeUndefined();
-    expect(newHome?.hotkeyToken).toBe(TOKENS.sidebar.goTo.home);
-  });
-
-  it('sits right under Home, also ahead of an order saved before it', () => {
-    expect(
-      ids(defaultGates({ homeMode: 'both', showForYou: true })).slice(0, 3)
-    ).toEqual(['home', 'new-home', 'for-you']);
-    const saved = defaultGates({
-      homeMode: 'both',
-      prefs: defaultPrefs({ order: ['documents', 'notifications', 'mail'] }),
-    });
-    expect(ids(saved).slice(0, 4)).toEqual([
-      'home',
-      'new-home',
-      'documents',
-      'mail',
-    ]);
-  });
-
-  it('keeps the place the person moved New Home to', () => {
-    const gates = defaultGates({
-      homeMode: 'both',
-      prefs: defaultPrefs({ order: ['documents', 'new-home', 'mail'] }),
-    });
-    expect(ids(gates).slice(0, 4)).toEqual([
-      'home',
-      'documents',
-      'new-home',
-      'mail',
-    ]);
-  });
-
-  it('is the Home item once old Home is off', () => {
-    const gates = defaultGates({ homeMode: 'new-only' });
-    expect(ids(gates)[0]).toBe('home');
-    expect(visibleNavItems(gates)[0]?.viewId).toBe('new-home');
-    expect(ids(gates)).not.toContain('new-home');
-    expect(ids(gates)).not.toContain('notifications');
-  });
 });

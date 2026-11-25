@@ -42,6 +42,22 @@ pub enum SearchError {
     /// Query expands into too many search terms
     #[error("query has too many terms (max 50)")]
     TooManyTerms,
+    /// The query's operators leave no word, and a kind it searches needs one
+    #[error(
+        "type a word to search for beside the operators; only a search of email alone runs on operators alone"
+    )]
+    OperatorsNeedAWord,
+    /// Too many `in:#` channel names in one query
+    #[error("a search names at most {0} channels with in:#")]
+    TooManyChannelNames(usize),
+    /// Two `from:` in a search of calls, which can't require two speakers
+    #[error("a call search names one speaker with from:; join several with OR")]
+    SpeakersDontCombine,
+    /// Tags joined with OR beside another tag condition
+    #[error(
+        "tags joined with OR, or a tag name shared by several tag sets, cannot be combined with another tag in one search"
+    )]
+    TagConditionsDontCombine,
     /// No query or terms provided
     #[error("query or terms must be provided")]
     NoQueryOrTermsProvided,
@@ -69,6 +85,9 @@ pub enum SearchError {
     /// Too many Drive folders in one email search
     #[error("email_filters.project_ids takes at most {0} folders")]
     TooManyEmailProjects(usize),
+
+    #[error("time_zone must be an IANA time zone name, such as America/New_York")]
+    InvalidTimeZone,
     /// The caller's other searches held every slot of its lane until the wait
     /// ran out
     #[error("too many of your searches are running at once; retry with fewer at once")]
@@ -102,6 +121,10 @@ impl IntoResponse for SearchError {
             SearchError::InvalidPageSize
             | SearchError::EmptyQuery
             | SearchError::TooManyTerms
+            | SearchError::OperatorsNeedAWord
+            | SearchError::TooManyChannelNames(_)
+            | SearchError::TagConditionsDontCombine
+            | SearchError::SpeakersDontCombine
             | SearchError::InvalidCursor
             | SearchError::InvalidCrmCompanyId(_)
             | SearchError::InvalidAgentSessionId(_)
@@ -109,6 +132,7 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidChannelType(_)
             | SearchError::UnsupportedEmailFilter(_)
             | SearchError::TooManyEmailProjects(_)
+            | SearchError::InvalidTimeZone
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,

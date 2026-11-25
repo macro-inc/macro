@@ -10,6 +10,8 @@ import type { TaskEntityWithProperties } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyDefinitionDomain } from '@property/types';
 import { propertyDateSortKey, propertySortKey } from '@property/utils/sort';
+import { match } from 'ts-pattern';
+import type { TaskStartDateBucket } from './core/task-due-date';
 import type { ProjectTab, TaskGroupBy, TaskSortId, TasksTab } from './types';
 
 export type TaskTabItem = {
@@ -84,6 +86,7 @@ export const TASK_GROUP_OPTIONS: {
   { id: 'project', label: 'Project' },
   { id: 'date', label: 'Date' },
   { id: 'due_date', label: 'Due date' },
+  { id: 'start_date', label: 'Start date' },
 ];
 
 export const TASK_SORT_DEFINITIONS: SortDefinition<
@@ -170,7 +173,86 @@ export const TASK_SORT_OPTIONS: {
       direction: 'desc',
     },
   },
+  {
+    id: 'start_date_earliest',
+    get label() {
+      return t('viewMenus.sortStartsSoonest');
+    },
+    property: {
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
+      direction: 'asc',
+    },
+  },
+  {
+    id: 'start_date_latest',
+    get label() {
+      return t('viewMenus.sortStartsFurthestAway');
+    },
+    property: {
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
+      direction: 'desc',
+    },
+  },
 ];
+
+/** A Start date group or filter choice as the interface language reads it. */
+export function taskStartDateBucketLabel(bucket: TaskStartDateBucket): string {
+  return match(bucket)
+    .with('started', () => t('viewMenus.startDateStarted'))
+    .with('today', () => t('viewMenus.startDateToday'))
+    .with('tomorrow', () => t('viewMenus.startDateTomorrow'))
+    .with('next_7_days', () => t('viewMenus.startDateNext7Days'))
+    .with('later', () => t('viewMenus.startDateLater'))
+    .with('no_start_date', () => t('viewMenus.noStartDate'))
+    .exhaustive();
+}
+
+const START_DATE_SORTS: readonly TaskSortId[] = [
+  'start_date_earliest',
+  'start_date_latest',
+];
+
+/** The sort choices offered: Start date ones only with start dates on. */
+export function taskSortOptions(startDates: boolean) {
+  return startDates
+    ? TASK_SORT_OPTIONS
+    : TASK_SORT_OPTIONS.filter(
+        (option) => !START_DATE_SORTS.includes(option.id)
+      );
+}
+
+/** The grouping choices offered: Start date only with start dates on. */
+export function taskGroupOptions(startDates: boolean) {
+  return startDates
+    ? TASK_GROUP_OPTIONS
+    : TASK_GROUP_OPTIONS.filter((option) => option.id !== 'start_date');
+}
+
+/** The grouping a view runs with when start dates are off. */
+export function withoutStartDateGrouping(
+  groupBy: TaskGroupBy,
+  tab: TasksTab
+): TaskGroupBy {
+  return groupBy === 'start_date' ? TASK_DEFAULT_GROUP_BY[tab] : groupBy;
+}
+
+/** The sort a view runs with when start dates are off. */
+export function withoutStartDateSort(
+  sort: SortSelection<TaskSortId>[]
+): SortSelection<TaskSortId>[] {
+  const primary = sort[0];
+  return primary && START_DATE_SORTS.includes(primary.id)
+    ? [{ id: 'updated_at' }]
+    : sort;
+}
+
+/**
+ * Date sorts keep tasks without the date last whichever way they run, so
+ * they are never reversed.
+ */
+export function isTaskDateSort(id: TaskSortId): boolean {
+  return id.startsWith('due_date_') || id.startsWith('start_date_');
+}
 
 export function taskPropertySort(id: TaskSortId): TaskPropertySort | undefined {
   return TASK_SORT_OPTIONS.find((option) => option.id === id)?.property;
@@ -221,7 +303,7 @@ export function sortTasks(
     if (!definition?.options) return items;
   }
   let ascending = propertySort.direction === 'asc';
-  if (selection.reversed && !selection.id.startsWith('due_date_'))
+  if (selection.reversed && !isTaskDateSort(selection.id))
     ascending = !ascending;
   const key = (item: TaskEntityWithProperties) =>
     propertySortKey(

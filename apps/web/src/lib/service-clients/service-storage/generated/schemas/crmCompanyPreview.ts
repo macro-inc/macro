@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CrmCompanyPreviewMergedInto } from './crmCompanyPreviewMergedInto';
 import type { CrmCompanyPreviewName } from './crmCompanyPreviewName';
 import type { CrmCompanyPreviewPrimaryDomain } from './crmCompanyPreviewPrimaryDomain';
 
@@ -12,8 +13,11 @@ import type { CrmCompanyPreviewPrimaryDomain } from './crmCompanyPreviewPrimaryD
 title, without its contacts.
  */
 export interface CrmCompanyPreview {
-  /** The company. */
+  /** The requested company id. */
   id: string;
+  /** The company the requested one was merged into, which is the one the
+rest of the preview shows. Absent for a company that was not merged. */
+  mergedInto?: CrmCompanyPreviewMergedInto;
   /** The team's name override, else the primary domain's directory name. */
   name?: CrmCompanyPreviewName;
   /** The company's first domain, which titles a company with no name. */

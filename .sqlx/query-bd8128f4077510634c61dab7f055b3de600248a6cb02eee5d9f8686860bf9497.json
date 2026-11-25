@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT ON (m.thread_id, ml.label_id)\n            ml.label_id AS \"label_id!\", m.id AS \"message_id!\", m.thread_id AS \"thread_id!\"\n        FROM unnest($1::uuid[]) AS ids(id)\n        CROSS JOIN LATERAL (\n            SELECT o.id, o.thread_id FROM email_messages o WHERE o.id = ids.id AND NOT o.is_draft\n            OFFSET 0\n        ) m\n        CROSS JOIN LATERAL (\n            SELECT e.label_id FROM email_effective_message_labels e WHERE e.message_id = m.id\n            OFFSET 0\n        ) ml\n        WHERE ml.label_id = ANY($2)\n        ORDER BY m.thread_id, ml.label_id, m.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "label_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bd8128f4077510634c61dab7f055b3de600248a6cb02eee5d9f8686860bf9497"
+}
