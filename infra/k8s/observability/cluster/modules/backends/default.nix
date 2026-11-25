@@ -73,6 +73,13 @@ in
           action        = "keep"
         }
 
+        // It scrapes itself.
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_instance"]
+          regex         = "derived-metrics"
+          action        = "drop"
+        }
+
         rule {
           source_labels = ["__meta_kubernetes_pod_container_port_name"]
           regex         = "http-metrics"
