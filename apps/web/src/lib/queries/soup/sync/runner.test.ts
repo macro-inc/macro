@@ -448,7 +448,7 @@ describe('runStreamedSync', () => {
     runSyncPass
       .mockResolvedValueOnce({
         ok: false,
-        failure: { kind: 'http', status: 503 },
+        failure: { kind: 'http', status: 503, retryAfterMs: 5_000 },
       })
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
@@ -494,6 +494,13 @@ describe('runStreamedSync', () => {
     expect(second?.attributes['cache.sync_session']).toBe(
       first?.attributes['cache.sync_session']
     );
+    // The busy stream says how long the server asked the pass to wait.
+    expect(
+      spans
+        .filter((span) => span.name === 'graphql_cache.sync.stream')
+        .map((span) => span.attributes['cache.sync_retry_after_ms'])
+        .filter((wait) => wait !== undefined)
+    ).toEqual([5_000]);
   });
 });
 

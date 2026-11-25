@@ -188,6 +188,9 @@ function recordStream(
   span?.setAttr('cache.sync_outcome', failure.kind);
   if (failure.kind === 'http') {
     span?.setAttr('http.response.status_code', failure.status);
+    // A busy server's wait, which holds the pass back up to an hour.
+    if (failure.retryAfterMs !== undefined)
+      span?.setAttr('cache.sync_retry_after_ms', failure.retryAfterMs);
   }
   if (isServerBusy(failure)) {
     totals.busyStreams += 1;

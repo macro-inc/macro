@@ -241,7 +241,6 @@ async function network<T>(request: Promise<T>): Promise<T> {
   }
 }
 
-/** A run stopped by its host: `stop`, an engine drain or a cache reset. */
 /** A `Retry-After` header in seconds, as milliseconds. */
 function retryAfterMsOf(headers: Headers): number | undefined {
   const value = headers.get('retry-after')?.trim();
@@ -249,6 +248,7 @@ function retryAfterMsOf(headers: Headers): number | undefined {
   return Number(value) * 1_000;
 }
 
+/** A run stopped by its host: `stop`, an engine drain or a cache reset. */
 export function abortedError(message = 'the sync run was stopped'): Error {
   return Object.assign(new Error(message), { cacheSyncFailure: 'aborted' });
 }
