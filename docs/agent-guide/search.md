@@ -54,11 +54,6 @@ come from the routines list (Quick Access `routine` bucket), not the search
 service, and open the routine in the Agents workspace. They stay out of the
 empty recency list and out of Home, Drive and Tasks searches.
 
-The universal input's search filter chips use one compact control size for
-values, match mode, and clear actions. Labels and controls stay vertically
-centered inside a frame that grows to fit them, rather than clipping taller
-segments.
-
 On touch devices, the dock's **Search** button opens a persistent **Search…**
 input in `/app/search`. It starts with Command Menu-style Quick Access name
 search across every kind. The field is the whole search, as on desktop: it

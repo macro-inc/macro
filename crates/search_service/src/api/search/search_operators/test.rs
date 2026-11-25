@@ -243,6 +243,16 @@ fn from_names_senders_and_speakers_only_without_email() {
 }
 
 #[test]
+fn from_an_address_names_that_user_as_sender() {
+    let (filters, read, _) = apply("type:channel from:Ana@Example.com launch");
+    assert_eq!(
+        filters.channel_filters.sender_ids,
+        ["macro|ana@example.com"]
+    );
+    assert_eq!(read.terms, ["launch"]);
+}
+
+#[test]
 fn from_requires_each_sender_and_refuses_two_speakers() {
     let (filters, _, conditions) = apply("type:channel from:me from:bo@example.com launch");
     assert!(kinds(&filters).is_empty(), "a message has one sender");

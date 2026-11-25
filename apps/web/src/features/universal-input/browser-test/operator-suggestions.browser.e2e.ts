@@ -130,17 +130,20 @@ test('keeps the rows clickable inside the Cmd+K dialog', async ({ page }) => {
     name: 'Search for',
     exact: true,
   });
-  // The draft's filters take the words; the field empties once they do.
-  await expect(query).toHaveText('');
+  // The draft's filters are written into the field as operators.
+  await expect(query).toHaveText('type:channel from:julia@macro.com');
   await query.click();
-  await page.keyboard.type('type:');
+  await page.keyboard.press('End');
+  await page.keyboard.type(' type:');
   const row = page.getByRole('option', { name: 'type:task' });
   await expectOnScreen(page, row);
 
   await row.click();
   await expect(dialog).toBeVisible();
-  await expect(query).toHaveText('type:task');
+  await expect(query).toHaveText('type:channel from:julia@macro.com type:task');
   // Search for is the same field: the next word starts a new term.
   await page.keyboard.type('budget');
-  await expect(query).toHaveText('type:task budget');
+  await expect(query).toHaveText(
+    'type:channel from:julia@macro.com type:task budget'
+  );
 });
