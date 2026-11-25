@@ -398,6 +398,50 @@ describe('executeGraphqlUpdate', () => {
     expect(call?.optimistic.uncertainCalendarEventKeys).toBeUndefined();
   });
 
+  it.each([
+    ['a standalone event', { eventId: 'event-1' }, []],
+    [
+      'one occurrence of a series',
+      {
+        eventId: 'event-1',
+        scope: 'this_event' as const,
+        recurrenceId: 'r6',
+        occurrenceKey: '2026-10-06T09:00:00+00:00',
+      },
+      ['RRULE:FREQ=DAILY'],
+    ],
+  ])(
+    'gives a moved occurrence of %s no time zone, as the server’s carry none',
+    async (_, target, recurrenceLines) => {
+      const host = fakeHost(graphqlEvent({ recurrenceLines }), [instance(6)]);
+      const { calls, client } = fakeClient('committed');
+      const time = {
+        kind: 'timed' as const,
+        startsAt: '2026-10-07T10:00:00Z',
+        endsAt: '2026-10-07T10:30:00Z',
+        timeZone: 'America/New_York',
+      };
+
+      await executeGraphqlUpdate(host, { ...target, patch: { time } }, client);
+
+      const [call] = calls;
+      expect(response(call!).occurrences).toEqual([
+        expect.objectContaining({
+          id: 'event-1:2026-10-06T09:00:00+00:00',
+          time: {
+            __typename: 'GraphqlTimedEventTime',
+            startsAt: '2026-10-07T10:00:00+00:00',
+            endsAt: '2026-10-07T10:30:00+00:00',
+            timeZone: null,
+          },
+        }),
+      ]);
+      expect(call?.variables.input).toMatchObject({
+        time: { timed: { timeZone: 'America/New_York' } },
+      });
+    }
+  );
+
   it('leaves recurring instances in place and marks the series uncertain', async () => {
     const host = fakeHost(graphqlEvent(), [instance(6)]);
     const { calls, client } = fakeClient('committed');

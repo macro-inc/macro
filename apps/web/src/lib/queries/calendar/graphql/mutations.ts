@@ -54,6 +54,7 @@ import { mapCalendarEvent, mapCalendarOccurrence } from './map';
 import {
   deletionPlan,
   graphqlEnum,
+  graphqlOccurrenceTimeRecord,
   graphqlReminders,
   graphqlTimeInput,
   graphqlTimeRecord,
@@ -511,7 +512,7 @@ export async function executeGraphqlUpdate(
           .map((occurrence) => ({
             __typename: occurrence.__typename,
             id: occurrence.id,
-            time: graphqlTimeRecord(time),
+            time: graphqlOccurrenceTimeRecord(time),
           }))
       : [];
   // A recurring series' instances are expanded by the provider, so a time
@@ -825,12 +826,7 @@ async function createThroughQueue(
     occurrenceKey,
     recurrenceId: null,
     isCancelled: false,
-    // The server keeps an event's time zone on the event alone; its
-    // occurrences carry none, so the local one shows no "Original time".
-    time:
-      time.__typename === 'GraphqlTimedEventTime'
-        ? { ...time, timeZone: null }
-        : time,
+    time: graphqlOccurrenceTimeRecord(args.time),
     overrideTitle: null,
     overrideDescription: null,
     overrideLocation: null,
