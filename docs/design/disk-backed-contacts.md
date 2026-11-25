@@ -39,8 +39,8 @@ Remaining in scope:
     reductions (`910c4052`). Two current full-app runs per size show about 15–21%
     lower broad search/paging latency, unchanged retained JS, roughly 26 MiB more
     disk and 5–7 s more initial sync at 100k. Extend the existing unpublished
-    schema-12 cutover, not another migration; current-shape reopen preserves queues
-    and generation. No lookahead or statement cache was added.
+    schema-12 version, not another one; current-shape reopen preserves queues
+    and generation, and native schema-11 caches upgrade in place. No lookahead or statement cache was added.
   - [ ] Address/accept the remaining broad-read latency and validate remaining
     surfaces, concurrent initial-backfill interaction and in-place account/reset
     performance.
@@ -185,12 +185,15 @@ expanded workflows. Disk and write costs are measured, not assumed free.
 is now the active local-only suggestion path: among exact full or first names and all-word prefixes, people the viewer has a direct message with come first (policy 6), each group by name tier;
 then literal contains, then address terms, recent-first with identity ties. Policy 7 lets a
 caller pass a list order (`listPriority`, groups of contact list keys, and `onlyListed`):
-then the messaged split gives way to name stage, list group, recency. With
+then the messaged split gives way to name stage, list group, recency. Policy 8 lets the
+group decide first among exact and word-prefix matches, then exact before word-prefix,
+then recency, so a teammate whose name starts with the query precedes an exact name
+from an inbox; contains-only and address matches still follow, each by group. With
 `enable-contact-lists`, personal @mention windows pass teammates, then interacted and
 invited, then Gmail and Outlook contacts; other surfaces pass none yet. Hosts report their
 policy only in answers and those on 5 or 6 refuse list fields, so the web sends an order
-only to a host that has answered with 7 (the first search on a host goes without it and
-is resent). Consumers preserve that
+only to a host that has answered with 7 or later (the first search on a host goes without
+it and is resent); a policy 7 host ranks name stage before group. Consumers preserve that
 order; server suggestion fallback and old person scoring are removed. Partial
 hydration stays explicit, and refresh schedules background sync. Fresh regular-profile
 runs of `94dce7c0` put 100k broad command reads at 89–92 ms, recipient reads at
@@ -223,9 +226,9 @@ Migrating Quick Access alone leaves other callers retaining the entire corpus.
 - SQL results stream into a top-K ranker; there is no retained text-search catalog.
 - Row fields are borrowed and a canonical-key buffer is reused; only winners are
   copied into owned documents.
-- Storage schema 12 adds covering search and contact-payload indexes. The deliberately incompatible
-  cache cutover is already implemented; do not add another rollout mechanism for
-  contacts unnecessarily.
+- Storage schema 12 adds covering search and contact-payload indexes. Browsers
+  open a fresh file for it and native caches upgrade in place; do not add another
+  rollout mechanism for contacts unnecessarily.
 
 See [client cache architecture](../../crates/client/README.md#streaming-text-search)
 and [search measurements](../../crates/client/search-performance.md). These are

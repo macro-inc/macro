@@ -165,6 +165,9 @@ pub struct SuggestionRun {
     pub state: RunStateName,
     /// When it entered `state`.
     pub state_changed_at: DateTime<Utc>,
+    /// The one line the run wrote for the person before it ended, saying
+    /// what it did and what it sent; none until it writes one.
+    pub report: Option<String>,
 }
 
 /// Where a run's session is, as the scheduler reads it.
@@ -657,6 +660,17 @@ pub struct RetireSuggestionRequest {
     pub reason: String,
 }
 
+/// What a background run did, in one line for the person, written by the
+/// run before its last message.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunReport {
+    /// What it did and what it sent, as the card shows it, such as "12 seats
+    /// added · Nothing was sent". One plain line; it names no email address,
+    /// phone number or street address.
+    pub report: String,
+}
+
 /// A reply draft a session wrote for an open reply suggestion, as the user,
 /// through `macro.email.createDraft`. It replaces the suggestion's draft, if any;
 /// nothing is ever sent.
@@ -944,10 +958,16 @@ pub enum SuggestionError {
     /// produced.
     #[error("a routine suggestion is not accepted; the user saves its routine in the app")]
     RoutineNotAccepted,
-    /// Only a suggestion the person dismissed in the last few minutes comes
-    /// back, and not a routine suggestion.
-    #[error("only a suggestion dismissed in the last five minutes can be restored")]
+    /// Only a suggestion the person dismissed, or completed themself, in the
+    /// last few minutes comes back, and not a routine suggestion.
+    #[error(
+        "only a suggestion dismissed, or completed by opening it, in the last five minutes can be restored"
+    )]
     NotRestorable,
+    /// Only a background run of the person's, still under way, writes its
+    /// report, from its own session.
+    #[error("only a background run of a suggestion, still under way, may report what it did")]
+    NotARun,
     /// Anything else.
     #[error("internal suggestions error: {0:?}")]
     Internal(rootcause::Report),

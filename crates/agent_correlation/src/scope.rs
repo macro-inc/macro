@@ -30,8 +30,8 @@ pub enum SessionScope {
 /// agent session, a session's control, queued prompts and app connections
 /// (which resume it), its tool approvals and review decisions, running or
 /// rewriting a chat's tool call (a chat message's tools are refused by its
-/// route), agents, bots and the computers they run on, which act later, and
-/// their credentials. A run that sends nothing makes none of them.
+/// route), agents, bots and the computers they run on, which act later, their
+/// credentials and their screens. A run that sends nothing makes none of them.
 const SENDS: &[(&str, &str)] = &[
     ("POST", "/email/messages"),
     ("POST", "/email/send-confirmed"),
@@ -110,6 +110,8 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/harnesses/{id}/claude-sign-in"),
     ("POST", "/harnesses/{id}/claude-sign-in/complete"),
     ("POST", "/harnesses/{id}/claude-sign-out"),
+    // A screen ticket is a person's, to watch or drive in their browser.
+    ("POST", "/computers/{id}/screen/tickets"),
     ("PATCH", "/external-chats/{id}/permissions"),
     ("PATCH", "/crm/pipelines/{id}/permissions"),
     ("PATCH", "/databases/{id}/permissions"),

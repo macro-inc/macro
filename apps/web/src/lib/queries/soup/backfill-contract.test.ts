@@ -1,0 +1,320 @@
+import {
+  SoupBackfillDocument,
+  SoupChannelDirectoryBackfillDocument,
+  SoupMailBackfillDocument,
+  SoupSharedMailBackfillDocument,
+} from '@service-storage/graphql/generated/graphql';
+import fc from 'fast-check';
+import { Tab } from 'tab-election';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  AUXILIARY_SOUP_BACKFILL_LANE,
+  CORE_SOUP_BACKFILL_LANE,
+  DEFAULT_SOUP_BACKFILL_LANES,
+  SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+  type SoupBackfillOperation,
+  type SoupBackfillParams,
+} from './backfill';
+import {
+  soupBackfillCheckpointKey,
+  soupBackfillCoordinatorKey,
+  soupBackfillLaneContract,
+  soupBackfillLaneLocks,
+  soupBackfillLeadershipLock,
+} from './backfill-contract';
+import { installBrowserLocks } from './browser-locks.test-helpers';
+
+vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
+vi.mock('../contacts/use-context-publisher', () => ({
+  useContactContextPublisher: () => {},
+}));
+vi.mock('@core/constant/featureFlags', () => ({
+  ENABLE_GRAPHQL_BACKFILL: true,
+}));
+vi.mock('@core/cross-tab/tab-leader', () => ({
+  createTabLeaderSignal: vi.fn(),
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupCacheHost: vi.fn(),
+  hydrateGraphqlSoup: vi.fn(),
+}));
+
+/** What builds from before contracts elect their backfill leader on. */
+const V19_COORDINATOR = 'graphql-soup-backfill:v19:coordinator';
+
+/** Makes `tab` the leader; `leadership` settles once it stops leading. */
+async function lead(tab: Tab): Promise<{ leadership: Promise<unknown> }> {
+  let leads = () => {};
+  const led = new Promise<void>((resolve) => {
+    leads = resolve;
+  });
+  const leadership = tab.waitForLeadership(() => leads());
+  await led;
+  return { leadership };
+}
+
+/** Whether every lock in `names` is free, asked as a lane's first run asks. */
+function free(names: readonly string[]): Promise<boolean> {
+  const [first, ...rest] = names;
+  if (first === undefined) return Promise.resolve(true);
+  return navigator.locks.request(first, { ifAvailable: true }, (lock) =>
+    lock === null ? false : free(rest)
+  );
+}
+
+/** Adds a filter no lane uses, which changes what the lane returns. */
+const withExtraFilter = (lane: SoupBackfillParams): SoupBackfillParams => ({
+  ...lane,
+  input: {
+    ...lane.input,
+    filters: {
+      ...lane.input.filters,
+      teamFilter: { literal: { id: 'contract-test' } },
+    } as SoupBackfillParams['input']['filters'],
+  },
+});
+
+/** The same value with every object's keys in reverse order. */
+function reverseKeys<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(reverseKeys) as T;
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .reverse()
+        .map(([key, item]) => [key, reverseKeys(item)])
+    ) as T;
+  }
+  return value;
+}
+
+describe('soup backfill lane contracts', () => {
+  it('keeps every default lane on the v19 key builds before contracts use, under a coordinator of its own', () => {
+    for (const lane of DEFAULT_SOUP_BACKFILL_LANES) {
+      expect(soupBackfillCheckpointKey('user-1', lane)).toBe(
+        `graphql-soup-backfill:v19:user-1:${lane.checkpointId}`
+      );
+    }
+    expect(soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)).toMatch(
+      /^graphql-soup-backfill:c[0-9a-z]+:coordinator$/
+    );
+  });
+
+  it.each(DEFAULT_SOUP_BACKFILL_LANES.map((lane) => [lane.checkpointId, lane]))(
+    'restarts only %s when its input changes',
+    (_id, changed) => {
+      const lanes = DEFAULT_SOUP_BACKFILL_LANES.map((lane) =>
+        lane === changed ? withExtraFilter(lane) : lane
+      );
+      const keys = lanes.map((lane) =>
+        soupBackfillCheckpointKey('user-1', lane)
+      );
+      lanes.forEach((lane, index) => {
+        const before = soupBackfillCheckpointKey(
+          'user-1',
+          DEFAULT_SOUP_BACKFILL_LANES[index]
+        );
+        if (lane.checkpointId === changed.checkpointId) {
+          expect(keys[index]).not.toBe(before);
+          expect(keys[index]).toMatch(
+            new RegExp(`^graphql-soup-backfill:c[0-9a-z]+:user-1:${_id}$`)
+          );
+        } else {
+          expect(keys[index]).toBe(before);
+        }
+      });
+      expect(soupBackfillCoordinatorKey(lanes)).not.toBe(
+        soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
+      );
+    }
+  );
+
+  it('restarts the auxiliary lane alone for the CRM contacts change that took v17 to v18', () => {
+    const { crmContactFilter: _contacts, ...v17Filters } =
+      AUXILIARY_SOUP_BACKFILL_LANE.input.filters ?? {};
+    const v17Auxiliary = {
+      ...AUXILIARY_SOUP_BACKFILL_LANE,
+      input: { ...AUXILIARY_SOUP_BACKFILL_LANE.input, filters: v17Filters },
+    };
+    expect(soupBackfillLaneContract(v17Auxiliary)).not.toBe(
+      soupBackfillLaneContract(AUXILIARY_SOUP_BACKFILL_LANE)
+    );
+  });
+
+  it('restarts a content lane switched to the metadata operation', () => {
+    const metadataOnly = {
+      ...SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+      operation: SoupMailBackfillDocument,
+    };
+    expect(soupBackfillCheckpointKey('user-1', metadataOnly)).not.toBe(
+      soupBackfillCheckpointKey('user-1', SIGNAL_EMAIL_SOUP_BACKFILL_LANE)
+    );
+  });
+
+  it('treats no recency windows and an empty list alike, as the runner does', () => {
+    expect(
+      soupBackfillLaneContract({ ...CORE_SOUP_BACKFILL_LANE, emailRecency: [] })
+    ).toBe(soupBackfillLaneContract(CORE_SOUP_BACKFILL_LANE));
+  });
+
+  it('ignores what changes only how a lane pages', () => {
+    const contract = soupBackfillLaneContract(CORE_SOUP_BACKFILL_LANE);
+    const paging: SoupBackfillParams[] = [
+      {
+        ...CORE_SOUP_BACKFILL_LANE,
+        input: { ...CORE_SOUP_BACKFILL_LANE.input, limit: 250 },
+      },
+      { ...CORE_SOUP_BACKFILL_LANE, pageDelayMs: 0 },
+      {
+        ...CORE_SOUP_BACKFILL_LANE,
+        fetchPage: async () => ({ nextCursor: null }),
+      },
+      {
+        ...CORE_SOUP_BACKFILL_LANE,
+        createFetchPage: async () => async () => ({ nextCursor: null }),
+      },
+      reverseKeys(CORE_SOUP_BACKFILL_LANE),
+      { ...CORE_SOUP_BACKFILL_LANE, contractVersion: 0 },
+    ];
+    for (const lane of paging) {
+      expect(soupBackfillLaneContract(lane)).toBe(contract);
+    }
+  });
+
+  it('restarts a lane for each part of what a finished pass stores', () => {
+    const lane = SIGNAL_EMAIL_SOUP_BACKFILL_LANE;
+    const contract = soupBackfillLaneContract(lane);
+    const changes: SoupBackfillParams[] = [
+      { ...lane, contractVersion: 1 },
+      { ...lane, operation: SoupMailBackfillDocument },
+      { ...lane, emailRecency: [{ signal: true, days: 91 }] },
+      { ...lane, emailRecency: undefined },
+      { ...lane, refreshAll: true },
+      { ...lane, restartOnRun: true },
+      { ...lane, catchUpAfterInitialPass: false },
+      { ...lane, input: { ...lane.input, sortMethod: 'VIEWED_UPDATED' } },
+      { ...lane, input: { ...lane.input, expand: false } },
+      { ...lane, input: { ...lane.input, emailView: 'INBOX' } },
+      withExtraFilter(lane),
+    ];
+    const contracts = changes.map(soupBackfillLaneContract);
+    for (const changed of contracts) expect(changed).not.toBe(contract);
+    expect(new Set(contracts).size).toBe(contracts.length);
+  });
+
+  it('gives generated lanes the same contract for equal values and a new one for any change', () => {
+    const json = fc.jsonValue({ maxDepth: 3 });
+    const filters = fc.dictionary(fc.string({ maxLength: 8 }), json, {
+      maxKeys: 6,
+    });
+    const operations: readonly SoupBackfillOperation[] = [
+      SoupBackfillDocument,
+      SoupChannelDirectoryBackfillDocument,
+      SoupMailBackfillDocument,
+      SoupSharedMailBackfillDocument,
+    ];
+    const laneArb = fc.record({
+      checkpointId: fc.string({ minLength: 1, maxLength: 12 }),
+      operation: fc.constantFrom(...operations),
+      input: fc.record({
+        limit: fc.integer({ min: 1, max: 500 }),
+        expand: fc.boolean(),
+        sortMethod: fc.constantFrom('VIEWED_UPDATED', 'UPDATED_AT'),
+        filters,
+      }),
+      contractVersion: fc.option(fc.integer({ min: 0, max: 5 }), {
+        nil: undefined,
+      }),
+      refreshAll: fc.option(fc.boolean(), { nil: undefined }),
+      pageDelayMs: fc.option(fc.integer({ min: 0, max: 5000 }), {
+        nil: undefined,
+      }),
+    }) as fc.Arbitrary<SoupBackfillParams>;
+
+    fc.assert(
+      fc.property(laneArb, fc.integer({ min: 1, max: 500 }), (lane, limit) => {
+        const contract = soupBackfillLaneContract(lane);
+        expect(soupBackfillLaneContract(reverseKeys(lane))).toBe(contract);
+        const repaged: SoupBackfillParams = {
+          ...lane,
+          input: { ...lane.input, limit },
+          pageDelayMs: limit,
+        };
+        expect(soupBackfillLaneContract(repaged)).toBe(contract);
+        expect(
+          soupBackfillLaneContract({
+            ...lane,
+            contractVersion: (lane.contractVersion ?? 0) + 1,
+          })
+        ).not.toBe(contract);
+        expect(soupBackfillLaneContract(withExtraFilter(lane))).not.toBe(
+          contract
+        );
+        const otherOperation =
+          operations[
+            (operations.indexOf(lane.operation) + 1) % operations.length
+          ];
+        expect(
+          soupBackfillLaneContract({ ...lane, operation: otherOperation })
+        ).not.toBe(contract);
+      }),
+      { numRuns: 500 }
+    );
+  });
+
+  it('takes the v19 leadership lock before the checkpoint of a lane under its v19 key', () => {
+    const lanes = DEFAULT_SOUP_BACKFILL_LANES.map((lane) =>
+      lane === CORE_SOUP_BACKFILL_LANE ? withExtraFilter(lane) : lane
+    );
+    const v19Leadership = soupBackfillLeadershipLock(V19_COORDINATOR);
+    for (const lane of lanes) {
+      const checkpoint = soupBackfillCheckpointKey('user-1', lane);
+      expect(soupBackfillLaneLocks('user-1', lane)).toEqual(
+        lane.checkpointId === CORE_SOUP_BACKFILL_LANE.checkpointId
+          ? [checkpoint]
+          : [v19Leadership, checkpoint]
+      );
+    }
+  });
+
+  it("holds none of a newer build's lane locks while it leads the default lanes", async () => {
+    const locks = installBrowserLocks();
+    const tab = new Tab(
+      soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
+    );
+    try {
+      const { leadership } = await lead(tab);
+      const newer = DEFAULT_SOUP_BACKFILL_LANES.map((lane) =>
+        lane === CORE_SOUP_BACKFILL_LANE ? withExtraFilter(lane) : lane
+      );
+      for (const lane of newer) {
+        expect(await free(soupBackfillLaneLocks('user-1', lane))).toBe(true);
+      }
+      tab.relinquishLeadership();
+      await leadership;
+    } finally {
+      tab.close();
+      locks.restore();
+    }
+  });
+
+  it('keeps every v19 lane locked while a tab from before checkpoint locks leads', async () => {
+    const locks = installBrowserLocks();
+    const requested = vi.spyOn(navigator.locks, 'request');
+    const tab = new Tab(V19_COORDINATOR);
+    try {
+      const { leadership } = await lead(tab);
+      expect(requested.mock.calls.map(([name]) => name)).toContain(
+        soupBackfillLeadershipLock(V19_COORDINATOR)
+      );
+      for (const lane of DEFAULT_SOUP_BACKFILL_LANES) {
+        expect(await free(soupBackfillLaneLocks('user-1', lane))).toBe(false);
+      }
+      tab.relinquishLeadership();
+      await leadership;
+    } finally {
+      tab.close();
+      locks.restore();
+    }
+  });
+});

@@ -6,6 +6,7 @@ import {
   projectTimelineDates,
   projectTimelineTimed,
   projectTimelineWholeDay,
+  projectTimelineWholeDayEnd,
 } from './project-timeline';
 
 const CREATED = '2026-11-10T09:12:00Z';
@@ -62,6 +63,12 @@ describe('projectTimelineDates', () => {
     });
     expect(projectTimelineTimed(mixed)).toBe(true);
     expect(projectTimelineWholeDay(mixed)).toBe('start');
+    expect(projectTimelineWholeDayEnd(mixed)).toBe('start');
+    const wholeDayDue = row({
+      start: { value: START, hasTime: true },
+      due: { value: DUE },
+    });
+    expect(projectTimelineWholeDayEnd(wholeDayDue)).toBe('end');
     const wholeDays = row({ start: { value: START }, due: { value: DUE } });
     expect(projectTimelineTimed(wholeDays)).toBe(false);
     expect(projectTimelineWholeDay(wholeDays)).toBeUndefined();

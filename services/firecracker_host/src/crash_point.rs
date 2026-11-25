@@ -33,6 +33,13 @@ pub enum CrashPoint {
     DestroyDisksDeleted,
     /// Golden build: guest booted in the golden jail, no snapshot.
     GoldenBooted,
+    /// System disk replacement: guest stopped, older previous disk dropped
+    /// from the record, new disk not cloned.
+    SystemDiskPreviousDropped,
+    /// System disk replacement: new disk cloned, record not saved.
+    SystemDiskCloned,
+    /// System disk replacement: record names the new disk, guest not booted.
+    SystemDiskSaved,
 }
 
 #[cfg(feature = "crash-points")]

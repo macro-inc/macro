@@ -351,3 +351,58 @@ fn releases_for_a_newer_os_are_unsupported() {
         );
     }
 }
+
+#[test]
+fn a_launch_after_a_failed_install_offers_to_try_again() {
+    let path = std::env::temp_dir()
+        .join(format!("macro-native-update-{}", uuid::Uuid::new_v4()))
+        .join("pending-install.json");
+    PendingInstall {
+        from_version: "2026.1106.1".into(),
+        target_version: "2026.1119.1".into(),
+        trigger: Trigger::Restart,
+        started_at_ms: 1_700_000_000_000,
+        failure: Some(Failure::new(FailureKind::Authentication)),
+    }
+    .write(&path)
+    .unwrap();
+    let coordinator = Coordinator::new(true, "2026.1106.1".into());
+    let report = coordinator.take_pending_install(&path).unwrap();
+    assert!(matches!(report.outcome, Outcome::InstallFailed { .. }));
+
+    // The failure outlasts the check that downloads the update again.
+    let mut state = coordinator.state.lock().unwrap();
+    assert!(state.begin_check());
+    assert_eq!(
+        state.snapshot().failed_install_version.as_deref(),
+        Some("2026.1119.1")
+    );
+}
+
+#[test]
+fn a_launch_on_the_installed_update_offers_nothing_to_retry() {
+    let path = std::env::temp_dir()
+        .join(format!("macro-native-update-{}", uuid::Uuid::new_v4()))
+        .join("pending-install.json");
+    PendingInstall {
+        from_version: "2026.1106.1".into(),
+        target_version: "2026.1119.1".into(),
+        trigger: Trigger::Quit,
+        started_at_ms: 1_700_000_000_000,
+        failure: None,
+    }
+    .write(&path)
+    .unwrap();
+    let coordinator = Coordinator::new(true, "2026.1119.1".into());
+    let report = coordinator.take_pending_install(&path).unwrap();
+    assert!(matches!(report.outcome, Outcome::Installed { .. }));
+    assert_eq!(
+        coordinator
+            .state
+            .lock()
+            .unwrap()
+            .snapshot()
+            .failed_install_version,
+        None
+    );
+}

@@ -13,6 +13,7 @@ import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
+import { WorkerRestartedError } from './effect-worker-transport';
 
 class FakeCoordinatorPort extends EventTarget {
   readonly messages: Array<{ message: unknown; transfer: Transferable[] }> = [];
@@ -257,6 +258,79 @@ describe('CacheCoordinatorPageAdapter', () => {
     );
   });
 
+  describe('the coordinator lock', () => {
+    const COORDINATOR_LOCK = 'graphql-cache-coordinator:a';
+
+    async function watching() {
+      let free: (() => void) | undefined;
+      let mode: LockMode | undefined;
+      let signal: AbortSignal | undefined;
+      const port = new FakeCoordinatorPort();
+      const worker = new FakeWorker();
+      const error = vi.fn();
+      const adapter = createCacheCoordinatorPageAdapter({
+        scope: 'scope',
+        tabId: 'tab-a',
+        lockManager: {
+          request: async (
+            name: string,
+            options: LockOptions,
+            callback: (lock: Lock | null) => unknown
+          ) => {
+            if (name === COORDINATOR_LOCK) {
+              ({ mode, signal } = options);
+              await new Promise<void>((resolve, reject) => {
+                free = resolve;
+                signal?.addEventListener('abort', () => reject(signal?.reason));
+              });
+            }
+            return await callback({ name, mode: 'exclusive' });
+          },
+        } as unknown as Pick<LockManager, 'request'>,
+        createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+        createDedicatedWorker: () => worker,
+        onTerminalError: error,
+      });
+      const started = adapter.start();
+      await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+      port.receive({
+        ...version,
+        kind: 'registered',
+        tabId: 'tab-a',
+        coordinatorLockName: COORDINATOR_LOCK,
+      });
+      await started;
+      expect(mode).toBe('shared');
+      return {
+        adapter,
+        port,
+        worker,
+        error,
+        free: () => free?.(),
+        aborted: () => signal?.aborted,
+      };
+    }
+
+    it('ends the connection, and the engine, as a restart when the coordinator is gone', async () => {
+      const { port, worker, error, free } = await watching();
+      port.receive(election(1));
+      free();
+      await vi.waitFor(() => expect(error).toHaveBeenCalledOnce());
+      expect(error).toHaveBeenCalledWith(expect.any(WorkerRestartedError));
+      expect(worker.terminated).toBe(true);
+      expect(port.closed).toBe(true);
+    });
+
+    it('stops waiting for it when the page lets go', async () => {
+      const { adapter, error, aborted } = await watching();
+      expect(aborted()).toBe(false);
+      await adapter.dispose({ graceful: false });
+      expect(aborted()).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(error).not.toHaveBeenCalled();
+    });
+  });
+
   it('forwards startup phases once, ignores stale epochs, and rejects a backwards phase', async () => {
     const port = new FakeCoordinatorPort();
     const progress = vi.fn();
@@ -369,29 +443,81 @@ describe('CacheCoordinatorPageAdapter', () => {
       ...version,
       kind: 'cache-unavailable',
       reason: 'another app version holds the database',
+      unavailableReason: 'holder-kept',
     });
 
     expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
       'another app version holds the database',
-      false
+      'holder-kept'
     );
   });
 
-  it('relays that a newer build took the database over', async () => {
-    const onCacheUnavailable = vi.fn();
-    const port = await registeredAdapter({ onCacheUnavailable });
+  it('ends the connection as a restart when the coordinator dropped the page', async () => {
+    const onTerminalError = vi.fn();
+    const port = await registeredAdapter({ onTerminalError });
 
     port.receive({
       ...version,
-      kind: 'cache-unavailable',
-      reason: 'a newer version of the app took over the local cache',
-      superseded: true,
+      kind: 'connection-closed',
+      reason: 'tab MessagePort messageerror',
     });
 
-    expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
-      'a newer version of the app took over the local cache',
-      true
+    expect(onTerminalError).toHaveBeenCalledExactlyOnceWith(
+      expect.any(WorkerRestartedError)
     );
+    expect(port.closed).toBe(true);
+  });
+
+  it('asks the coordinator to answer, unless there is no connection', async () => {
+    const onPong = vi.fn();
+    const port = new FakeCoordinatorPort();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onPong,
+    });
+    expect(adapter.ping()).toBe(false);
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+
+    expect(adapter.ping()).toBe(true);
+    expect(port.messages.at(-1)).toMatchObject({
+      message: { kind: 'ping', tabId: 'tab-a' },
+    });
+    port.receive({ ...version, kind: 'pong' });
+    expect(onPong).toHaveBeenCalledOnce();
+
+    await adapter.dispose({ graceful: false });
+    expect(adapter.ping()).toBe(false);
+  });
+
+  it('listens for pagehide only while it is connected', async () => {
+    const listening = new Set<unknown>();
+    vi.stubGlobal('addEventListener', (type: string, listener: unknown) => {
+      if (type === 'pagehide') listening.add(listener);
+    });
+    vi.stubGlobal('removeEventListener', (type: string, listener: unknown) => {
+      if (type === 'pagehide') listening.delete(listener);
+    });
+    try {
+      const port = await registeredAdapter({});
+      expect(listening.size).toBe(1);
+
+      port.receive({
+        ...version,
+        kind: 'connection-closed',
+        reason: 'tab MessagePort messageerror',
+      });
+
+      expect(listening.size).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('registers with its build time and relays a newer build taking over', async () => {
@@ -788,34 +914,6 @@ describe('CacheCoordinatorPageAdapter', () => {
     await adapter.dispose();
   });
 
-  it('treats retry exhaustion from the coordinator as terminal', async () => {
-    const coordinatorPort = new FakeCoordinatorPort();
-    const terminalErrors: string[] = [];
-    const adapter = createCacheCoordinatorPageAdapter({
-      scope: 'scope',
-      tabId: 'tab-a',
-      lockManager: heldLockManager(),
-      createSharedWorker: () => ({
-        port: coordinatorPort as unknown as MessagePort,
-      }),
-      createDedicatedWorker: () => new FakeWorker(),
-      onTerminalError: (error) => terminalErrors.push(error.message),
-    });
-    const started = adapter.start();
-    await vi.waitFor(() => expect(coordinatorPort.messages).toHaveLength(1));
-    coordinatorPort.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
-    await started;
-
-    coordinatorPort.receive({
-      ...version,
-      kind: 'terminal-error',
-      error: 'cache recovery failed after 5 attempts',
-    });
-
-    expect(terminalErrors).toEqual(['cache recovery failed after 5 attempts']);
-    expect(coordinatorPort.closed).toBe(true);
-  });
-
   it('terminates an owned engine before closing a failed SharedWorker transport', async () => {
     const order: string[] = [];
     const coordinatorPort = new FakeCoordinatorPort();
@@ -1084,7 +1182,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     }
   );
 
-  it('settles graceful timeout when disconnect reporting throws', async () => {
+  it('settles graceful timeout when reporting the departure throws', async () => {
     vi.useFakeTimers();
     const coordinatorPort = new FakeCoordinatorPort();
     const worker = new FakeWorker();
@@ -1105,7 +1203,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     coordinatorPort.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
     await started;
     coordinatorPort.receive(election(1));
-    coordinatorPort.throwKinds.add('disconnect-tab');
+    coordinatorPort.throwKinds.add('navigation-departure');
 
     const disposed = adapter.dispose({ graceful: true });
     await vi.advanceTimersByTimeAsync(11);
@@ -1113,7 +1211,7 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
-    expect(terminalErrors).toEqual(['disconnect-tab send failed']);
+    expect(terminalErrors).toEqual(['navigation-departure send failed']);
   });
 
   it('rejects startup and queued RPC when disposed during lock acquisition', async () => {
@@ -1264,10 +1362,41 @@ describe('CacheCoordinatorPageAdapter', () => {
     ).toHaveLength(0);
   });
 
-  it('terminal-fails when the owned engine crashes during graceful drain', async () => {
+  it.each([
+    {
+      ends: 'the drain timed out',
+      departure: ['navigation-departure'],
+      end: () => vi.advanceTimersByTimeAsync(11),
+    },
+    {
+      ends: 'the engine crashed',
+      departure: ['engine-lost', 'disconnect-tab'],
+      end: (worker: FakeWorker) =>
+        worker.onerror?.call(
+          {} as AbstractWorker,
+          {
+            message: 'engine failed while draining',
+            preventDefault: vi.fn(),
+          } as unknown as ErrorEvent
+        ),
+    },
+    {
+      ends: 'the coordinator ended its epoch first',
+      departure: ['disconnect-tab'],
+      end: (_worker: FakeWorker, port: FakeCoordinatorPort) =>
+        port.receive({
+          ...version,
+          kind: 'terminate-engine',
+          tabId: 'tab-a',
+          ownerEpoch: 1,
+          reason: 'visibility handoff drained',
+        }),
+    },
+  ])('leaves without failing when $ends', async ({ departure, end }) => {
+    vi.useFakeTimers();
     const coordinatorPort = new FakeCoordinatorPort();
     const worker = new FakeWorker();
-    const terminalErrors: string[] = [];
+    const onTerminalError = vi.fn();
     const adapter = createCacheCoordinatorPageAdapter({
       scope: 'scope',
       tabId: 'tab-a',
@@ -1276,7 +1405,8 @@ describe('CacheCoordinatorPageAdapter', () => {
         port: coordinatorPort as unknown as MessagePort,
       }),
       createDedicatedWorker: () => worker,
-      onTerminalError: (error) => terminalErrors.push(error.message),
+      gracefulTimeoutMs: 10,
+      onTerminalError,
     });
     const started = adapter.start();
     await vi.waitFor(() => expect(coordinatorPort.messages).toHaveLength(1));
@@ -1285,18 +1415,20 @@ describe('CacheCoordinatorPageAdapter', () => {
     coordinatorPort.receive(election(1));
 
     const disposed = adapter.dispose({ graceful: true });
-    worker.onerror?.call(
-      {} as AbstractWorker,
-      {
-        message: 'engine failed while draining',
-        preventDefault: vi.fn(),
-      } as unknown as ErrorEvent
-    );
+    await end(worker, coordinatorPort);
     await disposed;
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
-    expect(terminalErrors).toEqual(['engine failed while draining']);
+    expect(
+      coordinatorPort.events.filter((event) =>
+        ['engine-lost', 'navigation-departure', 'disconnect-tab'].includes(
+          event.replace('post:', '')
+        )
+      )
+    ).toEqual(departure.map((kind) => `post:${kind}`));
+    expect(onTerminalError).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('keeps the worker alive through graceful drain and terminates after retire-complete', async () => {

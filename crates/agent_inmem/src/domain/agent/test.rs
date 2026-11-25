@@ -2613,6 +2613,59 @@ async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() 
     );
 }
 
+/// A model call that fails quoting what it was sent.
+struct QuotingFailureEngine;
+
+impl TurnEngine for QuotingFailureEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        parts
+            .try_send(Err(agent::AgentError::Other(anyhow::anyhow!(
+                "upstream refused: the private supplier list"
+            ))))
+            .unwrap();
+        receiver
+    }
+}
+
+/// A turn whose prompt withholds its content fails with only the kind of
+/// failure: the ACP SDK logs the error, and the turn's span records it.
+#[tokio::test]
+async fn a_withheld_turn_that_fails_returns_none_of_the_model_text() {
+    for withheld in [false, true] {
+        let (notifications, _config_options, response) = with_agent(
+            Arc::new(QuotingFailureEngine),
+            async |connection, session| {
+                let mut prompt = text_prompt(&session, "draft");
+                if withheld {
+                    let mut meta = serde_json::Map::new();
+                    meta.insert(
+                        agent_runtime_protocol::domain::action::WITHHOLD_CONTENT_META.to_owned(),
+                        serde_json::Value::Bool(true),
+                    );
+                    prompt = prompt.meta(meta);
+                }
+                connection.send_request(prompt).block_task().await
+            },
+        )
+        .await;
+
+        let error = format!("{:?}", response.expect_err("the turn fails"));
+        assert_eq!(error.contains("private supplier"), !withheld, "{error}");
+        if withheld {
+            assert!(error.contains(WITHHELD_TURN_FAILURE), "{error}");
+        }
+        assert_eq!(spoken(&notifications), TURN_FAILED_REPLY);
+    }
+}
+
 /// The timeout still guards a turn that is silent with nothing asked, and
 /// the turn it stops failed: nobody pressed Stop.
 #[tokio::test(start_paused = true)]

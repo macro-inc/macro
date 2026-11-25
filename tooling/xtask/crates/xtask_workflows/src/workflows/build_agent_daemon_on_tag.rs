@@ -138,6 +138,7 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
     let mut publish = build_appimage_on_tag::publish_job(
         resolved_ref(),
         xtask_paths::runtime_path!("release-artifacts/*"),
+        None,
     )
     .add_needs(RESOLVE_REF);
     for target in all_targets() {

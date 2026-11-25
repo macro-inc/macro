@@ -103,9 +103,11 @@ pub async fn structured_completion(
     Json(request): Json<StructuredCompletionRequest>,
 ) -> Result<Json<StructuredCompletionResponse>, StructuredCompletionError> {
     let ctx = Arc::new(state);
-    if !model_access.has_access(&request.model) {
+    // A caller that has not reloaded since a model retired still names it.
+    let model = chat::domain::models::current_model(&request.model).to_owned();
+    if !model_access.has_access(&model) {
         return Err(StructuredCompletionError {
-            error: format!("No access to model {}", request.model),
+            error: format!("No access to model {model}"),
             status: StatusCode::FORBIDDEN,
             code: None,
         });
@@ -117,7 +119,6 @@ pub async fn structured_completion(
             code: Some("invalid_output_schema".into()),
         }
     })?;
-    let model = request.model.clone();
 
     let user_id = user.authorization.user.macro_user_id.clone();
 

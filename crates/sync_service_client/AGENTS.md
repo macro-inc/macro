@@ -14,6 +14,9 @@ Object): document CRUD, state, surfaces, and wakeup calls.
 - One module per endpoint: `initialize.rs`, `get_raw.rs`, `document_state.rs`,
   `copy_document.rs`, `delete.rs`, `exists.rs`, `metadata.rs`, `surface.rs`,
   `wakeup.rs`. Each has a colocated `test.rs` where present.
+- `document_state::update_import_links` is the internal CAS for the active
+  Notion import. It takes a signed owner token and the inspected revision.
+  Ordinary callers use `update_document`.
 
 ## Scope
 

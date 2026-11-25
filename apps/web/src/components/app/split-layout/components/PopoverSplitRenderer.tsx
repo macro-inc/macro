@@ -183,6 +183,13 @@ function PopoverSplitModal(props: {
         <Dialog
           open={props.popover.isOpen}
           onOpenChange={onOpenChange}
+          // Named as the touch drawer is: popovers have no Dialog.Title.
+          aria-label={displayName()}
+          class={
+            props.popover.options.wide
+              ? 'w-[min(72rem,calc(100vw-16px))]'
+              : undefined
+          }
           contentRef={attachPanel}
           onOpenAutoFocus={(event) => focusPopoverInput(event, panelRef())}
         >

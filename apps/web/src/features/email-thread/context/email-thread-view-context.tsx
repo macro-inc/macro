@@ -24,6 +24,8 @@ export interface EmailThreadViewContext {
   composeHost?: EmailComposeHost;
   rendering: {
     renderTags?: () => JSX.Element;
+    /** The thread's labels from its inbox, beside its tags; read-only. */
+    renderLabels?: () => JSX.Element;
     renderOrganizationStatus?: (
       status: EmailThreadOrganizationStatus
     ) => JSX.Element;

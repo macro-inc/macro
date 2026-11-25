@@ -10,7 +10,7 @@ use http::{HeaderMap, Method, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::time::Instant;
 
-use crate::domain::model::TrackerError;
+use crate::domain::model::{ForbiddenReason, TrackerError};
 
 /// One account's request budget, retained across clients and retry delays.
 #[derive(Debug)]
@@ -204,7 +204,16 @@ impl<S: ApiConnectionsService> Session<S> {
                 response.status,
                 StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
             ) {
-                return Err(TrackerError::Forbidden(response.status.as_u16()));
+                return Err(TrackerError::Forbidden {
+                    status: response.status.as_u16(),
+                    // Classified here so no caller ever holds the provider's
+                    // text, which can name people or projects.
+                    reason: if response.body.contains("MISSING_SCOPES") {
+                        ForbiddenReason::MissingScopes
+                    } else {
+                        ForbiddenReason::Other
+                    },
+                });
             }
             return Err(TrackerError::Upstream {
                 status: response.status.as_u16(),

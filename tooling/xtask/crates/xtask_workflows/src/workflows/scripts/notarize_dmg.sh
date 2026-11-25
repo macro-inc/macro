@@ -84,7 +84,8 @@ run_stapler_pair updater-app/Macro.app
 codesign --verify --deep --strict --verbose=2 updater-app/Macro.app
 spctl --assess --type execute --verbose=2 updater-app/Macro.app
 version=$(jq -er '.version' apps/web/tauri/desktop-release.json)
-COPYFILE_DISABLE=1 tar -czf "artifacts/Macro-${version}-aarch64-darwin.app.tar.gz" -C updater-app Macro.app
+COPYFILE_DISABLE=1 tar -czf "artifacts/Macro-${version}-${DESKTOP_ARCH:?}-darwin.app.tar.gz" -C updater-app Macro.app
 
 # Stapling changes the DMG bytes, so checksum the final distributable.
-(cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
+# Each architecture's file keeps its own name in the release.
+(cd artifacts && shasum -a 256 -- *.dmg > "${DESKTOP_ARTIFACT:?}-SHA256SUMS")

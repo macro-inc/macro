@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE computer_screen_drives SET session_id = $2 WHERE computer_id = $1 AND ended_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c810671be7b5e8f3d2b5ba8e008fa43b956890866c00f08158a680a5474e37c7"
+}

@@ -194,5 +194,6 @@ fn request_defaults() -> UnifiedSearchRequest {
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
+        time_zone: None,
     }
 }

@@ -70,7 +70,7 @@ async fn a_personal_replacement_never_claims_or_shares_the_deleted_team_copy(poo
         let documents = writer.documents.lock().unwrap();
         assert_eq!(documents.len(), 1);
         assert_eq!(documents[0].0, expected);
-        assert_eq!(documents[0].2.pages[&page_id('e')].document_id, expected);
+        assert!(documents[0].2.pages.is_empty());
     }
     let imported = repo.get(&importer, imports[0]).await.unwrap().unwrap();
     assert_eq!(imported.status, ImportStatus::Imported);
@@ -97,7 +97,9 @@ async fn a_personal_replacement_never_claims_or_shares_the_deleted_team_copy(poo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn later_page_writes_use_the_replacement_and_preserve_live_team_destinations(pool: PgPool) {
+async fn a_personal_page_links_to_a_replacement_without_linking_to_an_adopted_team_copy(
+    pool: PgPool,
+) {
     let team = Uuid::now_v7();
     let owner = teammate(&pool, "references-owner", team).await;
     let importer = teammate(&pool, "references-importer", team).await;
@@ -178,6 +180,12 @@ async fn later_page_writes_use_the_replacement_and_preserve_live_team_destinatio
         delete_target: Some(old_wiki),
         delete_on_first_read: std::sync::atomic::AtomicBool::new(true),
         notify_on_document: Some((expected_wiki, Arc::clone(&ready))),
+        link_inputs: [(
+            expected_spec,
+            vec![super::links::reference('e'), super::links::reference('a')],
+        )]
+        .into(),
+        teammate_documents: [live_document].into(),
         ..Default::default()
     });
     let service = ImportServiceImpl::new(
@@ -205,10 +213,18 @@ async fn later_page_writes_use_the_replacement_and_preserve_live_team_destinatio
             .iter()
             .find(|(id, _, _)| *id == expected_spec)
             .unwrap();
-        assert_eq!(spec.2.pages[&page_id('e')].document_id, expected_wiki);
-        assert_ne!(spec.2.pages[&page_id('e')].document_id, old_wiki);
-        assert_eq!(spec.2.pages[&page_id('a')].document_id, live_document);
+        assert!(
+            spec.2.pages.is_empty(),
+            "body creation never installs provisional links"
+        );
     }
+    assert_eq!(
+        writer.replaced_links.lock().unwrap()[&expected_spec],
+        vec![(
+            super::links::reference('e'),
+            crate::domain::ports::NotionLinkDestination::Page(expected_wiki)
+        )],
+    );
     let live = repo.get(&owner, owners[1]).await.unwrap().unwrap();
     assert_eq!(live.status, ImportStatus::Imported);
     assert_eq!(live.entity_id, Some(live_document.to_string()));

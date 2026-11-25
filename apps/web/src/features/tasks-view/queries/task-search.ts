@@ -97,22 +97,25 @@ export function buildTaskSearchRequest(options: {
   facetContext?: TaskFacetContext;
   reference?: TaskReferenceScope;
   dueDate?: TaskDatePredicate;
+  startDate?: TaskDatePredicate;
 }): SearchSoupQueryArgs {
   const facetContext = {
     ...(options.facetContext ?? EMPTY_TASK_FACET_CONTEXT),
     viewerId: options.userId,
   };
   const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
-  if (options.dueDate) {
-    const value = options.dueDate;
+  const dateFilter = (definitionId: string, value?: TaskDatePredicate) => {
+    if (!value) return;
     propertyFilters.push({
-      property_definition_id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+      property_definition_id: definitionId,
       entity_type: 'TASK',
       ...('dateRange' in value
         ? { date_range: value.dateRange }
         : { has_date: value.hasDate }),
     });
-  }
+  };
+  dateFilter(SYSTEM_PROPERTY_IDS.DUE_DATE, options.dueDate);
+  dateFilter(SYSTEM_PROPERTY_IDS.START_DATE, options.startDate);
 
   if (options.tab === 'my-tasks') {
     propertyFilters.push({

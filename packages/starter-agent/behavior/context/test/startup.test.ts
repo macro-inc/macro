@@ -100,6 +100,25 @@ describe('startup', () => {
     });
   });
 
+  test("a script's process gets the web app its parent was enrolled with", () => {
+    expect(
+      startup(
+        {
+          AGENT_WORKSPACE: '/w',
+          MUPPET_RELAY_URL: 'http://127.0.0.1:4000',
+          MUPPET_RELAY_TOKEN: 'capability',
+          MUPPET_WEB_APP_URL: 'http://localhost:3005',
+        },
+        reserved
+      )
+    ).toMatchObject({
+      kind: 'configured',
+      value: {
+        credentials: { kind: 'relayed', webApp: 'http://localhost:3005' },
+      },
+    });
+  });
+
   test('names the variable that is missing', () => {
     expect(startup({ MUPPET_CREDENTIALS_FILE: '/f' }, reserved)).toEqual({
       kind: 'invalid',
@@ -254,6 +273,7 @@ describe('addresses', () => {
       value: {
         presence: 'wss://connection.internal/cg',
         speech: 'https://egress.internal/brain/inference',
+        brain: 'https://egress.internal/brain',
         hosts: {
           storage: 'https://storage.internal/dss',
           properties: 'https://storage.internal/dss',
@@ -307,6 +327,21 @@ describe('addresses', () => {
         MACRO_SPEECH_URL: 'not a url',
       })
     ).toMatchObject({ kind: 'invalid' });
+  });
+
+  test('the CAPTCHA brain and owner links go where enrollment says', () => {
+    const configured = addresses({
+      MACRO_GATEWAY: 'http://proxy:30734',
+      OVERRIDE_AGENT_HARNESS_EGRESS_URL: 'http://agent-harness-service:8102/',
+      OVERRIDE_APP_SERVICE_URL: 'http://localhost:3005/',
+    });
+    expect(configured).toMatchObject({
+      kind: 'configured',
+      value: {
+        brain: 'http://agent-harness-service:8102/brain',
+        webApp: 'http://localhost:3005',
+      },
+    });
   });
 
   test('needs the gateway, and URLs that parse, naming the key and never a value', () => {

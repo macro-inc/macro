@@ -134,6 +134,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
               property={property()}
               actions={props.hoverActions}
               trailingAction={props.hoverTrailingAction}
+              valueText={props.valueText}
             >
               <Switch fallback={pill()}>
                 <Match

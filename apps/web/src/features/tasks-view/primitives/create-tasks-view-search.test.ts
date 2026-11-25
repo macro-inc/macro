@@ -298,6 +298,44 @@ it('round-trips custom date ranges and due sorts without reversed null placement
   });
   expect(view.state.dueDate).toBeUndefined();
 });
+it('round-trips start-date filters, grouping and sorts through the URL', () => {
+  const view = setup({
+    search: {
+      startDate: 'range',
+      startFrom: '2026-10-21',
+      startTo: '2026-10-28',
+      groupBy: 'start_date',
+      sort: 'start_date_earliest',
+      sortReversed: 'true',
+    },
+  });
+  expect(view.state.startDate).toEqual({
+    type: 'range',
+    start: '2026-10-21',
+    end: '2026-10-28',
+  });
+  expect(view.state.groupBy).toBe('start_date');
+  expect(view.state.sort).toEqual([
+    { id: 'start_date_earliest', reversed: false },
+  ]);
+  view.setState('startDate', { type: 'started' });
+  expect(view.search.startDate).toBe('started');
+  expect(view.search.startFrom).toBeUndefined();
+  view.setState('startDate', undefined);
+  expect(view.search.startDate).toBe('any');
+  view.setPrimarySort('start_date_latest');
+  view.setPrimarySort('start_date_latest');
+  expect(view.state.sort).toEqual([
+    { id: 'start_date_latest', reversed: false },
+  ]);
+  view.setSearch({
+    startDate: 'range',
+    startFrom: '2026-10-28',
+    startTo: '2026-10-21',
+  });
+  expect(view.state.startDate).toBeUndefined();
+});
+
 it.each(['board', 'gantt'] as const)(
   'keeps saved %s layout in raw state and URL during mobile fallback',
   (layout) => {

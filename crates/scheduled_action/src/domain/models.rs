@@ -290,10 +290,14 @@ pub enum ActionPolicyError {
     NoFutureFirings,
     #[error("event-trigger management is not enabled")]
     EventManagementDisabled,
+    #[error("email label triggers are not enabled")]
+    EmailLabelsDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
     #[error("connect GitHub before enabling a GitHub trigger")]
     GithubNotLinked,
+    #[error("pick only inboxes you have connected or that are shared with you")]
+    UnknownInboxes,
     #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
@@ -623,6 +627,10 @@ pub struct ExecutionResult {
     /// What started the run and when, for runs of programs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run: Option<RunInfo>,
+    /// The owner stopped the run before it finished. Older records, and
+    /// replicas built before it, leave it out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stopped: bool,
 }
 
 impl ExecutionResult {
@@ -635,6 +643,7 @@ impl ExecutionResult {
             steps: Vec::new(),
             configuration_revision: None,
             run: None,
+            stopped: false,
         }
     }
 
@@ -647,6 +656,12 @@ impl ExecutionResult {
     /// What started the run and when.
     pub fn with_run(mut self, run: Option<RunInfo>) -> Self {
         self.run = run;
+        self
+    }
+
+    /// Whether the owner stopped the run.
+    pub fn with_stopped(mut self, stopped: bool) -> Self {
+        self.stopped = stopped;
         self
     }
 

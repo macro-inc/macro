@@ -6,6 +6,8 @@ import type { InputAttachmentData } from './types';
 export type InputAttachmentTracker = {
   attachments: Accessor<InputAttachmentData[]>;
   hasPending: Accessor<boolean>;
+  /** No room for another attachment; adding one is a no-op. */
+  isFull: Accessor<boolean>;
   addAttachment: (attachment: InputAttachmentData) => void;
   removeAttachment: (attachmentId: string) => void;
   setAttachmentPending: (attachmentId: string, pending: boolean) => void;
@@ -59,6 +61,8 @@ function buildAttachmentTracker(
     attachments().some((attachment) => attachment.pending === true)
   );
 
+  const isFull = () => attachments().length >= maxAttachments;
+
   const addAttachment = (attachment: InputAttachmentData) => {
     setAttachments((current) => {
       if (current.some((item) => item.id === attachment.id)) return current;
@@ -92,6 +96,7 @@ function buildAttachmentTracker(
   return {
     attachments,
     hasPending,
+    isFull,
     addAttachment,
     removeAttachment,
     setAttachmentPending,

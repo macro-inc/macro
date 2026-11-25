@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
+use strum::AsRefStr;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -374,6 +375,9 @@ pub struct ThreadHistoryInfo {
     pub pretty_sender: String,
     pub is_read: bool,
     pub inbox_visible: bool,
+    /// Whether the thread holds mail the user received, not only mail they
+    /// sent or drafted; a thread without any was never in the inbox.
+    pub has_received_mail: bool,
     pub is_draft: bool,
     pub is_important: bool,
 }
@@ -454,11 +458,22 @@ impl HasContactInfo for MessageToSend {
     }
 }
 
-/// One message from the top of a user's inbox, read straight from Gmail or
-/// Outlook rather than from Macro's synced copy.
+/// The folder to read live from each of a user's mailboxes.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RecentMailFolder {
+    /// Incoming mail in the inbox.
+    #[default]
+    Inbox,
+    /// Outgoing mail in Sent.
+    Sent,
+}
+
+/// One recent message read straight from Gmail or Outlook.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentInboxMessage {
-    /// The inbox address the message arrived in.
+    /// The address of the mailbox the message was read from.
     pub inbox: String,
     pub from: Option<ContactInfo>,
     /// Recipient addresses.

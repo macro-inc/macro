@@ -1,14 +1,17 @@
 # desktop-cef
 
-Status: shipped macOS desktop app. The desktop release workflow builds it,
-packages it as a signed DMG, and publishes the release.
+Status: shipped macOS desktop app. The desktop release workflow builds it for
+Apple silicon and Intel Macs, packages each as a signed DMG, launches the Apple
+silicon DMG's app on a macOS runner (the
+`QA macOS release app` job, `../../tests/macos/qa.mjs`), and only then promotes
+it to installed apps; see `../src-tauri/README.md#desktop-native-updates`.
 
 ## What it is
 
 The macOS desktop app rendered with Chromium (CEF) instead of WKWebView. It is a
 thin binary over `../src-tauri` (`app_lib::run_with`) that selects
-`tauri-runtime-cef`. It runs on Apple silicon Macs with macOS 14 (Sonoma) or
-later, the newest minimum of the binaries it bundles.
+`tauri-runtime-cef`. It runs on Apple silicon and Intel Macs with macOS 14
+(Sonoma) or later, the newest minimum of the binaries it bundles.
 
 ## Scope
 
@@ -22,7 +25,9 @@ later, the newest minimum of the binaries it bundles.
 - `RUSTUP_TOOLCHAIN=1.95.0 cargo check --target aarch64-apple-darwin`
 - From the repository root on macOS, `nix build --option sandbox false
   .#tauri-desktop-cef-app` builds the unsigned app. Release builds use
-  `.#tauri-desktop-dmg` and sign, notarize, and publish that app.
+  `.#tauri-desktop-dmg` and sign, notarize, and publish that app. The Intel
+  app is `.#tauri-desktop-cef-app-x86_64` and `.#tauri-desktop-dmg-x86_64`,
+  built on Apple silicon too.
 - Bundle: build the frontend inside `nix develop` (`just build-tauri` in
   `apps/web`), then from here run the Tauri CLI built from the `macro-cef`
   branch of `macro-inc/tauri`:
@@ -103,15 +108,27 @@ the same renderer code, but it skips AppKit's event timing.
   downloads about 1 GB of CEF into `~/Library/Caches/tauri-cef`. That CDN build
   has no H.264, HEVC, or AAC, so most videos won't play in a local build; set
   `CEF_PATH` to an extracted codec distribution (below) to test media.
-- Releases embed CEF built with proprietary codecs, pinned in `cef-codecs.json`
-  and laid out by `nix/tauri-desktop.nix`; Nix evaluation fails if that pin
-  doesn't match the `cef` crate in `Cargo.lock`. While `sha256` is empty, Nix
-  warns and builds with the codec-less CDN CEF. To bump the `cef` crate, put
-  the new CDN version (`cefVersion`, its `g<hash>` as `cefCommit`, the Chromium
-  branch) and a new `releaseTag`/`asset` in the manifest with an empty `sha256`
-  on a PR. The `Build CEF with codecs` workflow then builds and publishes it
-  (several hours on the large Mac runner); copy the sha256 from its run summary
-  into the manifest.
+- Releases embed CEF built with proprietary codecs, one distribution per Mac
+  architecture, pinned under `assets.aarch64` and `assets.x86_64` in
+  `cef-codecs.json` and laid out by `nix/tauri-desktop.nix`; Nix evaluation
+  fails if the manifest's CEF version doesn't match the `cef` crate in
+  `Cargo.lock`. While an architecture's `sha256` is empty or missing, Nix warns
+  and builds it with the codec-less CDN CEF. To bump the `cef` crate, put the
+  new CDN version (`cefVersion`, its `g<hash>` as `cefCommit`, the Chromium
+  branch), a new `releaseTag` and each architecture's `asset` in the manifest
+  with empty `sha256`s on a PR. The `Build CEF with codecs` workflow then
+  builds and publishes them, one job per architecture (several hours each on
+  the large Mac runner, which cross-compiles x64); copy each sha256 from its
+  run summary into the manifest. An architecture with no entry builds nothing.
+- The Intel app cross-compiles on Apple silicon (`--target
+  x86_64-apple-darwin`, Apple's linker, the `macrod` sidecar built the same
+  way): nixpkgs no longer builds x86_64-darwin, so there is no native Intel Nix
+  build. Anything it links must come from the Apple SDK or be built for the
+  target; a Nix dylib bundled from this platform would be arm64, and the
+  release's `Validate signed DMG` step fails on any binary without an x86_64
+  slice. Release tags build Intel only once `assets.x86_64.sha256` is pinned
+  (`decide_intel_desktop.sh`); a failed or skipped Intel build still publishes
+  Apple silicon and Linux, and the feed then has no `darwin-x86_64`.
 - Nix pins Rust 1.95 and the `macro-cef` Tauri CLI separately for macOS. Keep
   `nix/tauri-desktop.nix` on this workspace and CLI; the stock CLI omits the CEF
   framework and helper apps from macOS bundles.

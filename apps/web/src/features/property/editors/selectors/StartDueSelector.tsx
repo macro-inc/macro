@@ -131,6 +131,8 @@ export function StartDueSelector(props: StartDueSelectorProps) {
   const clear = (ends: DateField[]) => {
     const next = { ...props.dates };
     for (const end of ends) next[end] = null;
+    if (next.wholeDay && ends.includes(next.wholeDay))
+      next.wholeDay = undefined;
     props.onChange(next, ends);
   };
 

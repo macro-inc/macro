@@ -22,6 +22,14 @@ impl MailboxProgressRepository for FlakyStore {
     async fn backlogs(&self) -> Result<Vec<MailboxBacklog>, MailboxError> {
         Ok(Vec::new())
     }
+    async fn folder_line(&self) -> Result<FolderLine, MailboxError> {
+        Ok(FolderLine {
+            polls_due: 0,
+            oldest_poll_due_seconds: 0,
+            import_rounds_due: 0,
+            oldest_import_round_due_seconds: 0,
+        })
+    }
 }
 
 #[tokio::test]
@@ -49,4 +57,50 @@ async fn imports_counted_before_a_failed_flush_reach_the_next_one() {
             }
         )])]
     );
+}
+
+/// The folder line can't be read; each mailbox's backlog can.
+struct LineUnavailable {
+    link: Uuid,
+}
+
+impl MailboxProgressRepository for LineUnavailable {
+    async fn record_imports(&self, _: &HashMap<Uuid, MailboxImports>) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn backlogs(&self) -> Result<Vec<MailboxBacklog>, MailboxError> {
+        Ok(vec![MailboxBacklog {
+            link_id: self.link,
+            sync_generation: 1,
+            queued: 0,
+            parked: 0,
+            abandoned: 0,
+            leased: 0,
+            oldest_waiting_seconds: 0,
+            parked_until_max_seconds: 0,
+            streams_incomplete: 0,
+            import_round_wait_seconds: 0,
+            imported_5m: 0,
+            seconds_since_last_import: None,
+            sync_active: true,
+            needs_reauth: false,
+            mailbox_unavailable: false,
+            watch_failures: 0,
+        }])
+    }
+    async fn folder_line(&self) -> Result<FolderLine, MailboxError> {
+        Err(MailboxError::Persistence)
+    }
+}
+
+#[tokio::test]
+async fn mailbox_snapshots_go_out_when_the_folder_line_cannot_be_read() {
+    let service = MailboxProgressService::new(
+        LineUnavailable {
+            link: Uuid::now_v7(),
+        },
+        ImportTally::default(),
+    );
+
+    assert_eq!(service.report().await.unwrap(), 1);
 }

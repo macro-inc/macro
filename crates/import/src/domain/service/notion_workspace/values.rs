@@ -25,10 +25,11 @@ pub(super) fn document_properties(page: &NotionPage) -> ImportedDocumentProperti
         }
         if is_tag_property_name(name) {
             match value {
-                NotionValue::Options(labels) => imported.tags.extend(labels.iter().cloned()),
-                NotionValue::Option(label) | NotionValue::Text(label) => {
-                    imported.tags.push(label.clone())
-                }
+                NotionValue::Options(labels) => imported
+                    .tags
+                    .extend(labels.iter().map(|option| option.name.clone())),
+                NotionValue::Option(label) => imported.tags.push(label.name.clone()),
+                NotionValue::Text(label) => imported.tags.push(label.clone()),
                 _ => {}
             }
             continue;
@@ -44,12 +45,12 @@ pub(super) fn document_properties(page: &NotionPage) -> ImportedDocumentProperti
                 value: start.clone(),
             }),
             NotionValue::Option(label) => Some(ImportedDocumentPropertyValue::Select {
-                values: vec![label.clone()],
+                values: vec![label.name.clone()],
                 multi: false,
             }),
             NotionValue::Options(labels) if !labels.is_empty() => {
                 Some(ImportedDocumentPropertyValue::Select {
-                    values: labels.clone(),
+                    values: labels.iter().map(|option| option.name.clone()).collect(),
                     multi: true,
                 })
             }
