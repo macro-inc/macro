@@ -70,9 +70,12 @@ viewer's own or managed inboxes (the `Label` condition). A label in an inbox
 the viewer doesn't own or manage matches nothing, shared threads included. A
 big label whose mail is all old fills over several requests: a page can
 arrive empty with a cursor, and the list keeps loading (a spinner, never the
-empty state) until a row shows or the list ends. No menu offers labels yet:
-check through the Soup API with an `ef` of `{"l":{"Label":"<label id>"}}` on
-All, using a label whose mail is months old in a large inbox.
+empty state) until a row shows or the list ends. Filters (and the phone's
+filter drawer) has a Labels group after Tags on every tab but Reminders: the
+labels people made, by whole name, any of the ticked ones, each inbox's
+together and marked with the inbox's avatar when there are several. A saved
+view keeps them. To check a slow label, use one whose mail is months old in a
+large inbox.
 
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus

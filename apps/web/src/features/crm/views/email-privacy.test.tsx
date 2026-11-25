@@ -10,6 +10,10 @@ const state = vi.hoisted(() => ({
   enabled: false,
   mailboxEmail: null as string | null,
   mailboxLinkId: null as string | null,
+  openWithSplit: vi.fn(),
+  teamDomains: [] as string[],
+  archivedTeamDomains: {} as Record<string, string>,
+  canRemoveTeamDomains: false,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -19,7 +23,7 @@ vi.mock('@app/observability/flow', () => ({ usePending: () => {} }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     connectMailbox: state.connectMailbox,
-    createNavigation: () => ({ openWithSplit: vi.fn() }),
+    createNavigation: () => ({ openWithSplit: state.openWithSplit }),
     createEmailPolicy: () => ({
       scope: () => 'team-1',
       query: {
@@ -43,9 +47,10 @@ vi.mock('../context/crm-context', () => ({
               enabled: state.enabled,
               mailboxEmail: state.mailboxEmail,
               mailboxLinkId: state.mailboxLinkId,
-              teamDomains: [],
+              teamDomains: state.teamDomains,
               personalDomains: [],
-              canRemoveTeamDomains: false,
+              archivedTeamDomains: state.archivedTeamDomains,
+              canRemoveTeamDomains: state.canRemoveTeamDomains,
             },
         refetch: vi.fn(),
       },
@@ -66,6 +71,37 @@ afterEach(() => {
   state.policyFailed = false;
   state.mailboxEmail = null;
   state.mailboxLinkId = null;
+  state.openWithSplit.mockReset();
+  state.teamDomains = [];
+  state.archivedTeamDomains = {};
+  state.canRemoveTeamDomains = false;
+});
+
+it('opens an archived company in this split, or beside it on shift-click, without taking focus', async () => {
+  state.canRemoveTeamDomains = true;
+  state.teamDomains = ['archived.example.com'];
+  state.archivedTeamDomains = { 'archived.example.com': 'company-1' };
+  const user = userEvent.setup();
+  render(() => <CrmEmailPrivacySettings />);
+  const open = screen.getByRole('button', {
+    name: 'Open the archived company for archived.example.com',
+  });
+
+  await user.click(open);
+  expect(state.openWithSplit).toHaveBeenLastCalledWith(
+    { type: 'company', id: 'company-1' },
+    { activate: true, preferNewSplit: false }
+  );
+  // Focus moving to the button would let this split take activation back.
+  expect(document.activeElement).not.toBe(open);
+
+  await user.keyboard('{Shift>}');
+  await user.click(open);
+  await user.keyboard('{/Shift}');
+  expect(state.openWithSplit).toHaveBeenLastCalledWith(
+    { type: 'company', id: 'company-1' },
+    { activate: true, preferNewSplit: true }
+  );
 });
 
 it('offers a keyboard-operable Connect email that starts the mailbox connection without opting in', async () => {
