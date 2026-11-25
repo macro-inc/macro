@@ -127,13 +127,18 @@ for (const provider of PROVIDERS) {
       );
       saw('STC-434');
 
-      // Retry shows only between the cache's own attempts, which are seconds
-      // apart by now, and starts one at once: the worker loads within
-      // seconds of the press, before the cache's next attempt of its own.
-      // Lifted during one of those, the fault would let it bring storage
-      // back by itself, and Retry would not show again.
+      // Retry shows only between the cache's own attempts, and one can be
+      // due within seconds when it first shows. Once the next of them has
+      // failed, the one after is at least six seconds away. Retry starts an
+      // attempt at once, so the worker then loads within seconds of the
+      // press only because of it.
       const retry = notice.getByRole('button', { name: 'Retry', exact: true });
       await expect(retry).toBeVisible({ timeout: 90_000 });
+      const refusals = fault.refusals();
+      await expect
+        .poll(fault.refusals, { timeout: 45_000 })
+        .toBeGreaterThan(refusals);
+      await expect(retry).toBeVisible();
       fault.lift();
       const loads = fault.loads();
       await retry.click({ timeout: 5_000 });

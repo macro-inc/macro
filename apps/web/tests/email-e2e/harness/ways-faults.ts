@@ -101,23 +101,30 @@ export function waitingNotice(page: Page): Locator {
  * Keeps the app's local cache from starting on the page's next load: the
  * worker that opens it cannot load, as when its script fails to download.
  * (A page route, so it runs before `loadAppSteadily`'s.) Returns what lets
- * it load again, and how many times it has loaded since.
+ * it load again, and how many times it was refused and has loaded since.
  */
-export async function cacheWorkerUnloadable(
-  page: Page
-): Promise<{ lift: () => void; loads: () => number }> {
+export async function cacheWorkerUnloadable(page: Page): Promise<{
+  lift: () => void;
+  refusals: () => number;
+  loads: () => number;
+}> {
   const coordinator = /\/cache\.coordinator\.shared-worker-[^/]*\.js$/;
   let refused = true;
+  let refusals = 0;
   let loads = 0;
   await page.route(coordinator, (route: Route) => {
-    if (refused) return route.abort();
+    if (refused) {
+      refusals += 1;
+      return route.abort();
+    }
     loads += 1;
-    return route.continue();
+    return route.fallback();
   });
   return {
     lift: () => {
       refused = false;
     },
+    refusals: () => refusals,
     loads: () => loads,
   };
 }
