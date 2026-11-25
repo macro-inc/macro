@@ -4,16 +4,25 @@ import type {
 } from '@graphql-cache/host/types';
 import { afterEach, expect, it, vi } from 'vitest';
 import type * as ChannelNetwork from '../channel-network';
-import { channelSyncRuntime } from '../channel-sync';
+import { channelSyncRuntime, startChannelStream } from '../channel-sync';
 import { CHANNEL_ID, devicePage, fakeHost } from './fixtures';
 
 const network = vi.hoisted(() => ({ query: vi.fn() }));
+const session = vi.hoisted(() => ({
+  kept: undefined as unknown,
+  enabled: true,
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => {
     throw new Error('unexpected client');
   },
   getGraphqlSoupCacheHost: () => undefined,
-  graphqlCacheEnabled: () => true,
+  getKeptGraphqlCacheHost: () => session.kept,
+  graphqlCacheEnabled: () => false,
+}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: () => session.enabled,
 }));
 vi.mock('../channel-network', async (importOriginal) => ({
   ...(await importOriginal<typeof ChannelNetwork>()),
@@ -45,7 +54,10 @@ function replaceableHost() {
   };
 }
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  Object.assign(session, { kept: undefined, enabled: true });
+});
 
 const opened = () => {
   const fixture = replaceableHost();
@@ -73,4 +85,20 @@ it('waits for a paused host to serve again', () => {
   replace('preserved');
   replace('reset');
   expect(changes).not.toContain('resumed');
+});
+
+it('follows a host from its subscription on, proven readable or not', () => {
+  const subscribe = vi.fn(() => ({ unsubscribe: vi.fn() }));
+  const client = { subscription: vi.fn(() => ({ subscribe })) } as never;
+  const { host } = replaceableHost();
+
+  expect(startChannelStream(client, host)).toBeUndefined();
+  session.kept = host;
+  session.enabled = false;
+  expect(startChannelStream(client, host)).toBeUndefined();
+  session.enabled = true;
+  const stream = startChannelStream(client, host);
+  expect(stream).toBeDefined();
+  expect(subscribe).toHaveBeenCalledOnce();
+  stream?.dispose();
 });

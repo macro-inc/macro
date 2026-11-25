@@ -15,8 +15,8 @@ const unsupportedHosts = new WeakSet<CacheHost>();
 // A host answers nothing until its engine has started, and a failing start can
 // take minutes to give up, so only a host that has answered gets waited on.
 const answeredHosts = new WeakSet<CacheHost>();
-// Hosts whose database was away while they were the channels' host: they stay
-// it until the session has proven them readable again.
+// Hosts whose database has been away: they stay the channels' host while the
+// session proves them readable again.
 const pausedHosts = new WeakSet<CacheHost>();
 
 /**
@@ -31,6 +31,10 @@ export function markChannelCacheUnsupported(host: CacheHost): void {
 
 export function markChannelCacheAnswered(host: CacheHost): void {
   answeredHosts.add(host);
+}
+
+export function markChannelCachePaused(host: CacheHost): void {
+  pausedHosts.add(host);
 }
 
 /**
@@ -53,9 +57,20 @@ export function sessionChannelHost(): CacheHost | undefined {
   const serving = graphqlCacheEnabled() ? getGraphqlSoupCacheHost() : undefined;
   const host = serving ?? getKeptGraphqlCacheHost();
   if (!host || !channelCacheSupported(host)) return undefined;
-  if (host.paused) pausedHosts.add(host);
-  const kept = answeredHosts.has(host) || pausedHosts.has(host);
+  const kept = host.paused || answeredHosts.has(host) || pausedHosts.has(host);
   return serving || kept ? host : undefined;
+}
+
+/**
+ * Whether pushed channel changes go to this host. One still being proven
+ * readable takes them too: nothing subscribes again once it is.
+ */
+export function followsChannelChanges(host: CacheHost): boolean {
+  return (
+    getKeptGraphqlCacheHost() === host &&
+    channelCacheSupported(host) &&
+    isFeatureEnabled(enableChannelLocalSync)
+  );
 }
 
 export function channelCacheAnswered(host: CacheHost): boolean {

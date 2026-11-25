@@ -12,7 +12,7 @@ import {
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
-import { channelCacheHost } from './channel-flag';
+import { followsChannelChanges } from './channel-flag';
 import { queryChannelNetwork, storeResult } from './channel-network';
 import {
   type ChannelTouches,
@@ -124,14 +124,14 @@ export function channelTouches(host: CacheHost): ChannelTouches {
 }
 
 /**
- * Follows pushed channel changes on `client` when channels read from `host`;
- * undefined while they stay on REST.
+ * Follows pushed channel changes on `client` for the session's `host`;
+ * undefined while channels stay on REST.
  */
 export function startChannelStream(
   client: Pick<Client, 'subscription'>,
   host: CacheHost
 ): ChannelStream | undefined {
-  if (channelCacheHost() !== host) return undefined;
+  if (!followsChannelChanges(host)) return undefined;
   return createChannelStream(client, channelSyncRuntime(host));
 }
 

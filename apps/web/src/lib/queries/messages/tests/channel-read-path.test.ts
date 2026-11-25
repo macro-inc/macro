@@ -58,8 +58,12 @@ vi.mock('../timeline', async (importOriginal) => ({
 const { useChannelReadPath, useChannelMessageResolver } = await import(
   '../channel-timeline-source'
 );
-const { channelCacheHost, channelCacheHostFor, markChannelCacheAnswered } =
-  await import('../local/channel-flag');
+const {
+  channelCacheHost,
+  channelCacheHostFor,
+  markChannelCacheAnswered,
+  markChannelCachePaused,
+} = await import('../local/channel-flag');
 const soup = (await import('@service-storage/graphql-soup')) as unknown as {
   __setKept: (host: unknown) => void;
 };
@@ -248,7 +252,9 @@ describe('a host whose database is away', () => {
     const host = { ...outage };
     soup.__setKept(host);
     expect(channelCacheHost()).toBe(host);
-    // It took writes while it was away, though it has answered nothing yet.
+    markChannelCachePaused(host as never);
+    // It may have taken writes while it was away, though it has answered
+    // nothing yet.
     Object.assign(host, { paused: false, disabled: false });
     expect(channelCacheHost()).toBe(host);
   });

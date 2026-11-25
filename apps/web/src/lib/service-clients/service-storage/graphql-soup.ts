@@ -100,6 +100,7 @@ import { batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { filter, pipe } from 'wonka';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import { markChannelCachePaused } from '../../queries/messages/local/channel-flag';
 import {
   existingChannelSyncRuntime,
   existingChannelWrites,
@@ -1106,6 +1107,7 @@ export function getGraphqlSoupClient(): Client {
     /** The client, its socket and its queue stay: the host serves again. */
     const onUnavailable = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
+      markChannelCachePaused(host);
       installCrmCacheHost(host);
       cacheInitializationFailed = true;
       cacheRecovery.failed(error);

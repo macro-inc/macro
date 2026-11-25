@@ -2282,12 +2282,17 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.getGraphqlSoupCacheHost()).toBe(host);
   });
 
-  it('hands over what channels kept once a paused host serves again', async () => {
+  it("keeps a paused host the channels' host, and hands over what they kept once it serves again", async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {});
     const soup = await import('./graphql-soup');
     const { channelSyncRuntime, channelWrites } = await import(
       '@queries/messages/local/channel-sync'
     );
+    const { sessionChannelHost } = await import(
+      '@queries/messages/local/channel-flag'
+    );
+    const queue = Promise.withResolvers<[]>();
+    mocks.host.inspectMutations.mockImplementationOnce(() => queue.promise);
     const serving = mocks.createWorkerCacheHost.getMockImplementation();
     const availability = { disabled: false, paused: false };
     mocks.createWorkerCacheHost.mockImplementationOnce((options) => {
@@ -2318,6 +2323,15 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     Object.assign(availability, { disabled: false, paused: false });
     mocks.available();
+    await vi.waitFor(() =>
+      expect(mocks.host.inspectMutations).toHaveBeenCalled()
+    );
+    // Nothing asked for it while it was away, and its queue is unread yet.
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(sessionChannelHost()).toBe(host);
+    expect(writes).not.toHaveBeenCalled();
+
+    queue.resolve([]);
     await vi.waitFor(() => expect(writes).toHaveBeenCalledOnce());
     expect(runtime).toHaveBeenCalledOnce();
     expect(retire).not.toHaveBeenCalled();
