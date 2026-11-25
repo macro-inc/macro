@@ -88,7 +88,7 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
             <Button
               variant="primary"
               size="sm"
-              disabled={props.update().busy}
+              disabled={props.update().busy || props.update().waiting}
               onClick={() => props.update().apply()}
             >
               {props.update().actionLabel}

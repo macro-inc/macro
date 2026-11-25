@@ -102,6 +102,35 @@ export function FeaturePageCta(props: { name: string; label?: string }) {
   );
 }
 
+const FEATURE_SCREEN_WALLPAPERS: Record<string, TutorialVideoId> = {
+  email: 'mail',
+  tasks: 'tasks',
+  channels: 'chat',
+  documents: 'docs',
+  calls: 'calls',
+  crm: 'crm',
+  agents: 'agents',
+  github: 'github',
+  forms: 'forms',
+  spreadsheets: 'spreadsheets',
+  databases: 'databases',
+  canvas: 'canvas',
+  calendar: 'calendar',
+  'booking-links': 'scheduling',
+  drive: 'drive',
+  routines: 'routines',
+  skills: 'skills',
+};
+
+function wallpaperVariantForId(id: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 4;
+}
+
 export function FeaturePageSection(props: {
   id: string;
   aura?: TutorialVideoId;
@@ -114,6 +143,12 @@ export function FeaturePageSection(props: {
   more?: JSX.Element;
   children?: JSX.Element;
 }) {
+  const location = useLocation();
+  const screenWallpaper = (): TutorialVideoId | undefined => {
+    if (props.aura) return props.aura;
+    const slug = location.pathname.split('/').filter(Boolean)[0] ?? '';
+    return FEATURE_SCREEN_WALLPAPERS[slug];
+  };
   let heading: HTMLHeadingElement | undefined;
   let headingText: HTMLSpanElement | undefined;
   const title = () =>
@@ -174,7 +209,11 @@ export function FeaturePageSection(props: {
       >
         {(screen) => (
           <>
-            <FeatureScreenshot screen={screen()} />
+            <FeatureScreenshot
+              screen={screen()}
+              wallpaper={screenWallpaper()}
+              variant={wallpaperVariantForId(props.id)}
+            />
             {props.children}
           </>
         )}

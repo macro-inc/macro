@@ -289,7 +289,9 @@ where
                         Ok(set) => {
                             let span = tracing::Span::current();
                             span.record("pending", set.pending.len());
-                            span.record("done", set.all.len() - set.pending.len());
+                            let writes = set.all.iter().filter(|item| item.writes()).count();
+                            let pending = set.pending.iter().filter(|item| item.writes()).count();
+                            span.record("done", writes.saturating_sub(pending));
                             let service = self.clone();
                             self.jobs.tracker.spawn(
                                 async move { service.write_plan(&user, set).await }
@@ -337,8 +339,8 @@ where
         self.notify(user).await;
     }
 
-    /// The write for `review_id` as the ledger has it: the plan's copied
-    /// objects, and those still `importing`.
+    /// The current review’s persisted plan: copied/importing objects and
+    /// excluded data sources retained as link-only references.
     pub(in crate::domain::service) async fn resumable_write(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -358,14 +360,20 @@ where
             review_id,
             ..WriteSet::default()
         };
-        for row in rows.iter().filter(|row| {
-            row.review_id == Some(review_id)
-                && row.user_id == user.as_ref()
-                && row.status != ImportStatus::Discarded
-        }) {
-            let Some(item) = write::WriteItem::from_entity(row) else {
+        for row in rows
+            .iter()
+            .filter(|row| row.review_id == Some(review_id) && row.user_id == user.as_ref())
+        {
+            let Some(mut item) = write::WriteItem::from_entity(row) else {
                 continue;
             };
+            if row.status == ImportStatus::Discarded {
+                if item.kind == crate::domain::models::ImportKind::DataSource {
+                    item.decision = NotionDecision::Skip;
+                    set.all.push(item);
+                }
+                continue;
+            }
             if !matches!(item.decision, NotionDecision::Copy | NotionDecision::Tasks) {
                 continue;
             }

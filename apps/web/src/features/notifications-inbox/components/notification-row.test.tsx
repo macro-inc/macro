@@ -32,6 +32,10 @@ const setup = (overrides: Partial<NotificationRowProps> = {}) => {
   return { onClick, onToggleStack };
 };
 
+// Inert preview text is drawn once on screen and once more, visually hidden,
+// for assistive technology; read the copy on screen.
+const SHOWN = { ignore: '.sr-only' };
+
 const toggle = () => screen.getByRole('button', { name: /3 notifications/ });
 
 const separator = () => document.querySelector('[data-row-separator]');
@@ -46,7 +50,7 @@ describe('NotificationRow', () => {
   it('opens when chosen and leaves its stack folded', () => {
     const { onClick, onToggleStack } = setup();
 
-    fireEvent.click(screen.getByText('Launch plan'));
+    fireEvent.click(screen.getByText('Launch plan', SHOWN));
 
     expect(onClick).toHaveBeenCalledOnce();
     expect(onToggleStack).not.toHaveBeenCalled();
@@ -99,9 +103,9 @@ describe('NotificationRow', () => {
 
     fireEvent.click(toggle());
 
-    expect(screen.getByText('Sam and Ana commented')).toBeTruthy();
-    expect(screen.getByText('Launch plan')).toBeTruthy();
-    expect(screen.getByText('Can we move the date?')).toBeTruthy();
+    expect(screen.getByText('Sam and Ana commented', SHOWN)).toBeTruthy();
+    expect(screen.getByText('Launch plan', SHOWN)).toBeTruthy();
+    expect(screen.getByText('Can we move the date?', SHOWN)).toBeTruthy();
   });
 
   it('says only what it has to say', () => {
@@ -122,7 +126,7 @@ describe('NotificationRow', () => {
       />
     ));
 
-    expect(screen.getByText('Dana assigned you a task')).toBeTruthy();
+    expect(screen.getByText('Dana assigned you a task', SHOWN)).toBeTruthy();
     expect(document.querySelector('[data-card-what]')).toBeNull();
     expect(document.querySelector('[data-card-body]')).toBeNull();
   });

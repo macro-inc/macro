@@ -147,7 +147,9 @@ async fn test_labels_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> 
     let repo = EmailPgRepo::new(pool);
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
-    let labels = repo.labels_by_message_ids(&[msg1]).await?;
+    let labels = repo
+        .labels_by_message_ids(&[msg1], Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     let msg1_labels = labels.get(&msg1).expect("msg1 should have labels");
     assert_eq!(msg1_labels.len(), 2, "msg1 has INBOX and IMPORTANT");
@@ -168,7 +170,9 @@ async fn test_labels_by_message_ids_multiple_messages(pool: Pool<Postgres>) -> a
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
-    let labels = repo.labels_by_message_ids(&[msg1, msg2]).await?;
+    let labels = repo
+        .labels_by_message_ids(&[msg1, msg2], Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     assert_eq!(labels.len(), 2, "Both messages should have labels");
 
@@ -193,7 +197,9 @@ async fn test_labels_by_message_ids_no_labels(pool: Pool<Postgres>) -> anyhow::R
 
     // msg3 has no labels
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
-    let labels = repo.labels_by_message_ids(&[msg3]).await?;
+    let labels = repo
+        .labels_by_message_ids(&[msg3], Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     assert!(
         labels.is_empty(),
@@ -210,7 +216,9 @@ async fn test_labels_by_message_ids_no_labels(pool: Pool<Postgres>) -> anyhow::R
 async fn test_labels_by_message_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool);
 
-    let labels = repo.labels_by_message_ids(&[]).await?;
+    let labels = repo
+        .labels_by_message_ids(&[], Some(&inbox_owner(&repo.pool).await))
+        .await?;
     assert!(labels.is_empty());
 
     Ok(())

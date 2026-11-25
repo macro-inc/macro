@@ -10,7 +10,7 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import { PillButton } from '@ui';
 import { parseISO } from 'date-fns';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
-import { BreakdownList } from '../../components/time-breakdown';
+import { BreakdownList, OpenTaskRow } from '../../components/time-breakdown';
 import { TimeKeyLabel } from '../../components/time-key-label';
 import { WeekStepper } from '../../components/week-stepper';
 import { formatLength } from '../../core/format-length';
@@ -121,26 +121,26 @@ function MyWeekMobile(props: TasksTimeViewProps): JSX.Element {
                   <For each={day.rows}>
                     {(row) => (
                       <li>
-                        <button
-                          type="button"
-                          data-press-surface
-                          disabled={!row.key.taskId}
-                          class="flex min-h-[44px] w-full items-center gap-2 rounded-md px-2 text-left text-sm"
-                          onClick={(event) => {
+                        <OpenTaskRow
+                          timeKey={row.key}
+                          task={props.task}
+                          onOpen={(event) => {
                             if (row.key.taskId)
                               props.onOpenTask(row.key.taskId, { event });
                           }}
+                          class="min-h-[44px] rounded-md px-2 text-sm"
                         >
                           <span class="flex min-w-0 flex-1 items-center">
                             <TimeKeyLabel
                               timeKey={row.key}
                               person={props.person}
+                              task={props.task}
                             />
                           </span>
                           <span class="shrink-0 text-ink-muted tabular-nums">
                             {formatLength(row.minutes)}
                           </span>
-                        </button>
+                        </OpenTaskRow>
                       </li>
                     )}
                   </For>
@@ -189,7 +189,7 @@ function MyWeekMobile(props: TasksTimeViewProps): JSX.Element {
               taskId={task.id}
               minutes={0}
               canEdit={canEdit() === true}
-              person={props.person}
+              person={props.entryPerson}
               open
               onOpenChange={(open) => {
                 if (!open) setLogging(undefined);
@@ -223,6 +223,7 @@ function TeamWeekMobile(props: TasksTimeViewProps): JSX.Element {
           <BreakdownList
             groups={week.summary()?.groups ?? []}
             person={props.person}
+            task={props.task}
             onOpenTask={props.onOpenTask}
           />
         </div>

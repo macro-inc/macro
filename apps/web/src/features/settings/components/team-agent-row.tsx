@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
+import { agentInitial } from '@core/user/agent-initial';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { type JSX, Show } from 'solid-js';
 import { TeamAgentStatusLabel } from './team-agent-status';
@@ -29,7 +30,13 @@ export function TeamAgentRow(props: {
     >
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
-          <UserIcon id={props.agent.userId} isDeleted={false} size="lg" />
+          <UserIcon
+            id={props.agent.userId}
+            name={props.agent.name}
+            initials={agentInitial(props.agent.name)}
+            isDeleted={false}
+            size="lg"
+          />
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 min-w-0">

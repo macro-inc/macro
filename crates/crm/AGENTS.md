@@ -25,6 +25,15 @@ tools/HTTP/GraphQL surfaces over them.
   a saved file). Writes go through the
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
+- `src/domain/record_import.rs`: `CrmRecordImports`, the companies, contacts
+  and deal pipelines another CRM's import (HubSpot) writes, with the viewer's
+  receipts: companies by domain (personal providers never key one), contacts
+  with every free address, and company pipelines whose entries carry `Deal`,
+  `Close date` and `Source link` beside the standard Stage, Outcome, Owner
+  and Revenue. Every stage is checked against the select-option rules before
+  the pipeline is created, since its stages are set only after it exists. An
+  existing deal entry is found from its company's entries
+  (`record_entries`, indexed by record), never by scanning the pipeline.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
@@ -135,6 +144,14 @@ tools/HTTP/GraphQL surfaces over them.
   and conditional completion. Previewing never initializes consent. Matching
   edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
+
+- A company merged away keeps answering to its old id through
+  `crm_company_aliases`: the `/crm/companies/{company_id}` routes, the company and
+  pipeline tools, a contact's company, record associations and `/crm/previews`.
+  The company extractor and `company_receipt` mint the receipt for the company
+  the id names now, so act on the receipt's id, never on the path or argument.
+  Previews stay keyed by the requested id and name the other in `mergedInto`.
+  Soup and search filters match company ids as given.
 
 - Company lists with at most 500 explicit IDs and policy target reads probe the
   primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team
