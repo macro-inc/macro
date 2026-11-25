@@ -37,6 +37,7 @@ const settings: CrmEmailPrivacyResponse = {
   personal_domains: [],
   team_domain_warnings: {},
   personal_domain_warnings: {},
+  archived_team_domains: {},
   can_remove_team_domains: false,
 };
 const cleanups: (() => void)[] = [];
@@ -221,6 +222,34 @@ describe('CRM email privacy query adapter', () => {
     expect(h.feedback.failure).toHaveBeenCalledWith(
       'Could not reach the server'
     );
+  });
+
+  it('says to restore the company when a team domain is refused for an archived company', async () => {
+    const h = mount();
+    await signIn(h);
+    h.privacy.update.mockResolvedValue(
+      err([{ code: 'CONFLICT', message: 'Resource conflict' }])
+    );
+    await expect(
+      h.source.update.mutateAsync({
+        action: 'remove_domain',
+        scope: 'team',
+        domain: 'archived.example.com',
+      })
+    ).rejects.toThrow();
+    expect(h.feedback.failure).toHaveBeenLastCalledWith(
+      'This domain’s company is archived. Restore the company first to remove this domain.'
+    );
+
+    // Other failures keep their own message.
+    await expect(
+      h.source.update.mutateAsync({
+        action: 'remove_domain',
+        scope: 'personal',
+        domain: 'personal.example.com',
+      })
+    ).rejects.toThrow();
+    expect(h.feedback.failure).toHaveBeenLastCalledWith('Resource conflict');
   });
 
   it('does not replace another user’s settings when an earlier mutation finishes', async () => {

@@ -9556,6 +9556,11 @@ export const getCrmEmailPrivacyResponse = zod
   .union([
     zod
       .object({
+        archived_team_domains: zod
+          .record(zod.string(), zod.uuid())
+          .describe(
+            "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored. Empty for\nmembers, who can't see archived companies."
+          ),
         can_remove_team_domains: zod
           .boolean()
           .describe('Whether the caller can remove a team exclusion.'),
@@ -9699,6 +9704,11 @@ export const updateCrmEmailPrivacyBody = zod
 
 export const updateCrmEmailPrivacyResponse = zod
   .object({
+    archived_team_domains: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored. Empty for\nmembers, who can't see archived companies."
+      ),
     can_remove_team_domains: zod
       .boolean()
       .describe('Whether the caller can remove a team exclusion.'),

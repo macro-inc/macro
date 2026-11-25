@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import {
   assertQueryAccount,
@@ -40,8 +40,19 @@ function fromResponse(data: CrmEmailPrivacyResponse): EmailPrivacy {
     personalDomains: data.personal_domains,
     teamDomainWarnings: data.team_domain_warnings ?? {},
     personalDomainWarnings: data.personal_domain_warnings ?? {},
+    archivedTeamDomains: data.archived_team_domains ?? {},
     canRemoveTeamDomains: data.can_remove_team_domains,
   };
+}
+
+/** The server refuses a team domain while its company is archived (409). */
+function isArchivedCompanyRemoval(error: Error, change: EmailPrivacyChange) {
+  return (
+    change.action === 'remove_domain' &&
+    change.scope === 'team' &&
+    error instanceof ThrownResultError &&
+    error.errors.some((e) => e.code === 'CONFLICT')
+  );
 }
 
 type EmailPrivacyDependencies = Pick<
@@ -236,8 +247,12 @@ export function createEmailPrivacyMutation(
           });
           return data;
         }),
-      onError: (error: Error) =>
-        deps.feedback.failure(error.message || t('crm.privacyUpdateFailed')),
+      onError: (error: Error, change: EmailPrivacyChange) =>
+        deps.feedback.failure(
+          isArchivedCompanyRemoval(error, change)
+            ? t('crm.privacyArchivedCompanyConflict')
+            : error.message || t('crm.privacyUpdateFailed')
+        ),
     }),
     () => deps.client
   );

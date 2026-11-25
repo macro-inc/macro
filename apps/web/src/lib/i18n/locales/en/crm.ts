@@ -346,6 +346,12 @@ export default {
   privacyNoDomains: 'No domains blocked.',
   privacyRemove: 'Remove',
   privacyRemoveDomain: 'Remove {{domain}}',
+  privacyArchivedCompanyDomain:
+    'Its company is archived. Restore the company first to remove this domain.',
+  privacyOpenArchivedCompany: 'Open company',
+  privacyOpenArchivedCompanyLabel: 'Open the archived company for {{domain}}',
+  privacyArchivedCompanyConflict:
+    'This domain’s company is archived. Restore the company first to remove this domain.',
   privacyTeamDomainLabel: 'Domain to block for the team',
   privacyPersonalDomainLabel: 'Domain to block for my emails',
   privacyDomainPlaceholder: 'example.com',
