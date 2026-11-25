@@ -628,69 +628,48 @@ pub(in crate::api::search) fn apply_search_operators(
     Ok((read, conditions))
 }
 
-/// The tags a search requires: option ids and whether it needs every one
-/// of them rather than any.
+/// The tags a search requires: groups that must each hold, any one option
+/// id of a group being enough.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(in crate::api::search) struct TagFilter {
-    pub option_ids: Vec<String>,
-    pub match_all: bool,
+    pub groups: Vec<Vec<String>>,
 }
 
 impl TagFilter {
-    /// The request's tags as groups that must each hold, any one of a
-    /// group's ids being enough.
-    fn groups(self) -> Vec<Vec<String>> {
-        if self.option_ids.is_empty() {
+    /// The request's own tags: any of `option_ids` is one group, and all of
+    /// them (`match_all`) one group per id.
+    pub(in crate::api::search) fn requested(option_ids: Vec<String>, match_all: bool) -> Self {
+        let groups = if option_ids.is_empty() {
             Vec::new()
-        } else if self.match_all {
-            self.option_ids.into_iter().map(|id| vec![id]).collect()
+        } else if match_all {
+            option_ids.into_iter().map(|id| vec![id]).collect()
         } else {
-            vec![self.option_ids]
-        }
+            vec![option_ids]
+        };
+        Self { groups }
     }
 
-    /// The filter that requires each group. The search applies any of one
-    /// list of ids or all of them, so several groups of more than one id
-    /// are refused.
-    fn requiring(groups: Vec<Vec<String>>) -> Result<Self, SearchError> {
-        match groups.as_slice() {
-            [] => Ok(Self::default()),
-            [only] => Ok(Self {
-                option_ids: only.clone(),
-                match_all: false,
-            }),
-            _ if groups.iter().all(|group| group.len() == 1) => {
-                let mut option_ids: Vec<String> = Vec::new();
-                for id in groups.into_iter().flatten() {
-                    if !option_ids.contains(&id) {
-                        option_ids.push(id);
-                    }
-                }
-                Ok(Self {
-                    option_ids,
-                    match_all: true,
-                })
-            }
-            _ => Err(SearchError::TagConditionsDontCombine),
+    /// Requires `group` too; a group already required changes nothing.
+    fn require(&mut self, group: Vec<String>) {
+        if !self.groups.contains(&group) {
+            self.groups.push(group);
         }
     }
 }
 
 /// Applies the operators that name something by name, as `named` resolved
-/// them for the caller: `tag:` joins the request's own `tags`, `inbox:`
-/// narrows the inboxes searched and `in:#` the channels and calls. A name
-/// that reaches nothing leaves out the kinds its operator narrows, as a
-/// `label:` naming nothing does, so no kind the operators kept can match.
+/// them for the caller: each `tag:` (or `tag:` values joined by `OR`) is a
+/// group the request's own `tags` must also meet, by any of its option ids,
+/// `inbox:` narrows the inboxes searched and `in:#` the channels and calls.
+/// A name that reaches nothing leaves out the kinds its operator narrows, as
+/// a `label:` naming nothing does, so no kind the operators kept can match.
 pub(in crate::api::search) fn apply_names(
     read: &SearchOperators,
     named: &NamedIds,
     filters: &mut SearchEntityFilters,
-    tags: TagFilter,
-) -> Result<TagFilter, SearchError> {
-    let mut tag_groups = tags.clone().groups();
-    let mut typed_tags = false;
+    mut tags: TagFilter,
+) -> TagFilter {
     for group in read.groups_named(Name::Tag) {
-        typed_tags = true;
         let mut ids: Vec<String> = Vec::new();
         for id in group.names().flat_map(|name| named.tag(name)) {
             let id = id.to_string();
@@ -700,9 +679,9 @@ pub(in crate::api::search) fn apply_names(
         }
         if ids.is_empty() {
             leave_out_everything(filters);
-            return Ok(tags);
+            return tags;
         }
-        tag_groups.push(ids);
+        tags.require(ids);
     }
 
     for group in read.groups_named(Name::Inbox) {
@@ -734,11 +713,7 @@ pub(in crate::api::search) fn apply_names(
         }
     }
 
-    if typed_tags {
-        TagFilter::requiring(tag_groups)
-    } else {
-        Ok(tags)
-    }
+    tags
 }
 
 /// Whether `filters` still reach a kind whose search needs a word to

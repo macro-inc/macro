@@ -136,3 +136,29 @@ it("applies the opener's bound tag by id, beside a word and alone", () => {
     dispose();
   });
 });
+
+it('lists every tag group of operators alone through the feed', () => {
+  createRoot((dispose) => {
+    const tags: Record<string, string> = {
+      finance: 'opt-finance',
+      legal: 'opt-legal',
+      q3: 'opt-q3',
+    };
+    const lookup: SearchOperatorLookup = {
+      ...LOOKUP,
+      tags: (name) => {
+        const optionId = tags[name.toLowerCase()];
+        return optionId ? [{ propertyId: 'prop-1', optionId }] : [];
+      },
+    };
+    const [query] = createSignal('tag:finance OR tag:legal tag:q3');
+    createMobileFullTextSearch(query, () => lookup);
+
+    expect(capture.browse?.options().enabled).toBe(true);
+    const body = JSON.stringify(capture.browse?.request().body);
+    for (const optionId of Object.values(tags)) {
+      expect(body).toContain(optionId);
+    }
+    dispose();
+  });
+});

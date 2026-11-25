@@ -42,8 +42,7 @@ pub(crate) struct CalendarEventQueryBuilder {
     statuses: Vec<String>,
     organizer_emails: Vec<String>,
     attendee_emails: Vec<String>,
-    tag_option_ids: Vec<String>,
-    match_all_tags: bool,
+    tag_groups: Vec<Vec<String>>,
 }
 
 impl CalendarEventQueryBuilder {
@@ -54,8 +53,7 @@ impl CalendarEventQueryBuilder {
             statuses: Vec::new(),
             organizer_emails: Vec::new(),
             attendee_emails: Vec::new(),
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
         }
     }
 
@@ -82,13 +80,9 @@ impl CalendarEventQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
@@ -167,7 +161,7 @@ impl CalendarEventQueryBuilder {
 
         // Tag filter: nested clause(s) matching the option ids in
         // `properties.values`, with no definition_id constraint.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             bool_query.filter(nested);
         }
 
@@ -240,8 +234,7 @@ pub struct CalendarEventSearchArgs {
     pub match_type: String,
     pub collapse: bool,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 impl From<CalendarEventSearchArgs> for CalendarEventQueryBuilder {
@@ -258,8 +251,7 @@ impl From<CalendarEventSearchArgs> for CalendarEventQueryBuilder {
             .attendee_emails(args.attendee_emails)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
     }
 }
 
