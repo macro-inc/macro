@@ -65,10 +65,6 @@ rec {
     # changing a group's type in place replaces the group, and every node
     # with it, at once.
     nodeGroups = {
-      observability = {
-        instanceType = "m7g.large";
-        count = 3;
-      };
       observability-xlarge = {
         instanceType = "m7g.xlarge";
         count = 3;
