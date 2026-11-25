@@ -192,6 +192,8 @@ function mount(search = '', keepRowsWhileSearching = false) {
         setRetainedSearchEntities(rows);
       });
     const [searchHasMore, setSearchHasMore] = createSignal(true);
+    const [listHasMore, setListHasMore] = createSignal(true);
+    const listNext = vi.fn(async () => {});
     const [searchFetching, setSearchFetching] = createSignal(false);
     const [searchUnanswered, setSearchUnanswered] = createSignal(false);
     const [searchPaging, setSearchPaging] = createSignal(false);
@@ -258,12 +260,14 @@ function mount(search = '', keepRowsWhileSearching = false) {
         return fetching();
       },
       error: null,
-      hasNextPage: true,
+      get hasNextPage() {
+        return listHasMore();
+      },
       isFetchingNextPage: false,
       isFetchNextPageError: false,
       isEnabled: true,
       transport: 'graphql',
-      fetchNextPage: vi.fn(async () => {}),
+      fetchNextPage: listNext,
       refetch: vi.fn(async () => {}),
       refresh: vi.fn(async () => {}),
       resetToInitialPage: vi.fn(),
@@ -322,6 +326,8 @@ function mount(search = '', keepRowsWhileSearching = false) {
       query,
       extraLists,
       searchNext,
+      listNext,
+      setListHasMore,
       setSearchHasMore,
       setSearchFetching,
       setSearchUnanswered,
@@ -874,6 +880,70 @@ describe('Email list query transitions', () => {
     expect(root.source.hasMore()).toBe(false);
   });
 
+  it('reads on past list pages that hold no row instead of showing an empty list', async () => {
+    const root = mount('');
+    const labeled = email('labeled');
+    root.setRetainedEntities([]);
+    let seenEmptyAndIdle = false;
+    const stopWatching = createRoot((stop) => {
+      createEffect(() => {
+        if (ids(root.source).length === 0 && !root.source.isLoading())
+          seenEmptyAndIdle = true;
+      });
+      return stop;
+    });
+    // A label read that walked old mail answers with no row and a cursor,
+    // twice, before a page finds one.
+    let deliverRow = () => {};
+    root.listNext
+      .mockImplementationOnce(async () => {})
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            deliverRow = () => {
+              batch(() => {
+                root.setDiscoveryEntities([labeled]);
+                root.setListHasMore(false);
+              });
+              resolve();
+            };
+          })
+      );
+    try {
+      batch(() => {
+        root.setState('tab', 'all');
+        root.setDiscoveryEntities([]);
+      });
+      await vi.waitFor(() => expect(root.listNext).toHaveBeenCalledTimes(2));
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.isLoading()).toBe(true);
+
+      deliverRow();
+      await vi.waitFor(() => expect(ids(root.source)).toEqual(['labeled']));
+    } finally {
+      stopWatching();
+    }
+    expect(seenEmptyAndIdle).toBe(false);
+    expect(root.source.isLoading()).toBe(false);
+    expect(root.source.hasMore()).toBe(false);
+  });
+
+  it('shows a list that reaches its end without a row as empty', async () => {
+    const root = mount('');
+    root.setRetainedEntities([]);
+    root.listNext.mockImplementationOnce(async () => {
+      root.setListHasMore(false);
+    });
+    batch(() => {
+      root.setState('tab', 'all');
+      root.setDiscoveryEntities([]);
+    });
+    await vi.waitFor(() => expect(root.listNext).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(root.source.isLoading()).toBe(false));
+    expect(ids(root.source)).toEqual([]);
+    expect(root.source.hasMore()).toBe(false);
+  });
+
   it('trims in:archived search results to done threads', async () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };
@@ -977,7 +1047,8 @@ describe('Email list query transitions', () => {
   });
 
   it('does not keep rows from the previous inbox while the new inbox loads', () => {
-    const { source, setState, setLoading, setEntities } = mount();
+    const { source, setState, setLoading, setEntities, setListHasMore } =
+      mount();
     expect(ids(source)).toEqual(['noise']);
     batch(() => {
       setState('inboxIds', ['inbox-b']);
@@ -985,8 +1056,10 @@ describe('Email list query transitions', () => {
     });
     expect(ids(source)).toEqual([]);
     expect(source.isLoading()).toBe(true);
+    // The new inbox has no mail at all.
     batch(() => {
       setEntities([]);
+      setListHasMore(false);
       setLoading(false);
     });
     expect(ids(source)).toEqual([]);
@@ -1080,9 +1153,13 @@ describe('Email list query transitions', () => {
     vi.mocked(query.fetchNextPage).mockImplementation(async () => {
       setEntities(matching);
     });
+    // The empty list above already read on once; Load More reads one page.
+    const fetchedBefore = vi.mocked(query.fetchNextPage).mock.calls.length;
     await source.loadMore();
     expect(ids(source)).toHaveLength(205);
-    expect(query.fetchNextPage).toHaveBeenCalledOnce();
+    expect(vi.mocked(query.fetchNextPage).mock.calls.length).toBe(
+      fetchedBefore + 1
+    );
     const lookupArgs = vi
       .mocked(useSoupAstItemsQuery)
       .mock.calls.slice(1)
