@@ -15,6 +15,7 @@ import {
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { EmailEntity, EmailFocus, EntityData } from '@entity';
 import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
+import { LABEL_FACET_ID, labelFacetOption } from './email-label-facet';
 
 type EmailFilterOption = {
   id: EmailFilterOptionId;
@@ -143,6 +144,11 @@ export const EMAIL_FACETS: Facet<EmailEntity, EmailFacetContext>[] = [
     mode: 'or',
     options: (optionId, context) =>
       tagFacetOption<EmailEntity>(optionId, context),
+  },
+  {
+    id: LABEL_FACET_ID,
+    mode: 'or',
+    options: (optionId) => labelFacetOption<EmailFacetContext>(optionId),
   },
 ];
 
