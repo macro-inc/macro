@@ -156,7 +156,7 @@ async fn a_reply_names_the_thread_members_it_mentions_as_fallbacks() {
 
 #[tokio::test]
 async fn a_first_message_that_mentions_every_member_still_names_them_as_fallbacks() {
-    let channel_id = Uuid::new_v4();
+    let channel_id = Uuid::now_v7();
     let sender = user("sender@example.com");
     let mentioned = user("mentioned@example.com");
     let notifications = FakeNotifications::default();
