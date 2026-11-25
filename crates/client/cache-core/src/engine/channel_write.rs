@@ -73,6 +73,11 @@ impl ChannelAdmission {
         }
     }
 
+    /// The sequence the write stores `key` at, if it dates it.
+    pub(super) fn stamp(&self, key: &EntityKey<'static>) -> Option<i64> {
+        self.stamped.get(key).map(|admitted| admitted.seq)
+    }
+
     /// Whether `key` is written without merging into what is held.
     pub(super) fn replaces(&self, key: &EntityKey<'static>) -> bool {
         self.replaced.contains(key)

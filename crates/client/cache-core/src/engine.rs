@@ -760,7 +760,7 @@ impl<S: Storage> Engine<S> {
         queued: Vec<QueuedMutation>,
         strict_tail: Option<MutationId>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
-        self.rebuild_queued_layers_with_staged(queued, strict_tail, &StagedRecords::new())
+        self.rebuild_queued_layers_with_staged(queued, strict_tail, &StagedRecords::new(), None)
             .await
     }
 
@@ -771,6 +771,7 @@ impl<S: Storage> Engine<S> {
         queued: Vec<QueuedMutation>,
         strict_tail: Option<MutationId>,
         staged: &StagedRecords,
+        admission: Option<&ChannelAdmission>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
         let mut layers = Vec::with_capacity(queued.len());
         let mut pending_sends = PendingSends::default();
@@ -837,7 +838,14 @@ impl<S: Storage> Engine<S> {
             let (candidates, bases) = self
                 .load_link_patch_bases(candidates, &layers, &updates, &patches, staged)
                 .await?;
-            pending_sends.yield_to_server(queued.uuid, &mut updates, &bases);
+            self.yield_to_server(
+                &mut pending_sends,
+                queued.uuid,
+                &mut updates,
+                &bases,
+                admission,
+            )
+            .await?;
             let composed = effective_records(&bases, &layers, &candidates);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, &updates);
@@ -2021,7 +2029,7 @@ impl<S: Storage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
         let replacement = self
-            .rebuild_queued_layers_with_staged(queued, None, &staged)
+            .rebuild_queued_layers_with_staged(queued, None, &staged, Some(&admission))
             .await?;
         candidates.extend(layer_keys(&replacement));
         let mut staged_bases = self.load_bases(&candidates).await?;
@@ -3421,7 +3429,7 @@ impl<S: Storage> Engine<S> {
             .map_err(EngineError::Storage)?;
         queued.retain(|entry| entry.id != transaction);
         let replacement = self
-            .rebuild_queued_layers_with_staged(queued, None, &staged)
+            .rebuild_queued_layers_with_staged(queued, None, &staged, Some(&admission))
             .await?;
         candidates.extend(layer_keys(&replacement));
         let mut settled_bases = self.load_bases(&candidates).await?;
