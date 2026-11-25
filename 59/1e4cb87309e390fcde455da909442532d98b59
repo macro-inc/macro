@@ -1,0 +1,21 @@
+apps/web/src/components/app/split-layout/utils/canDuplicateSplit.ts
+  s_0e6178505bb035::t_d82a0bb77bc15f 5-9
+docs/agent-guide/navigation.md
+  s_0e6178505bb035::t_d893677164205b 2118-2120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "591e4cb87309e390fcde455da909442532d98b59",
+  "prompts": {},
+  "sessions": {
+    "s_0e6178505bb035": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c2a7817-ae48-4ee8-95fd-f30ccbfb9e3b",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
