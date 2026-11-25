@@ -15,12 +15,16 @@
 # while Datadog still has them.
 { lib }:
 let
-  service = name: ''resource.attributes["service.name"] == "${name}"'';
+  ottl = import ./ottl.nix;
+  inherit (ottl)
+    attr
+    present
+    is
+    isNot
+    service
+    same
+    ;
   named = name: ''name == "${name}"'';
-  attr = key: ''attributes["${key}"]'';
-  present = key: "${attr key} != nil";
-  is = key: value: ''${attr key} == "${value}"'';
-  isNot = key: value: ''${attr key} != "${value}"'';
   notFailed = "status.code != STATUS_CODE_ERROR";
   failed = "status.code == STATUS_CODE_ERROR";
 
@@ -63,7 +67,6 @@ let
     ];
   };
 
-  same = key: { ${key} = [ key ]; };
   statusCode."http.status_code" = [
     "http.response.status_code"
     "http.status_code"
@@ -248,8 +251,6 @@ let
       lib.nameValuePair "macro.agent.chat.prompt.${part}.bytes" (chat "macro.genai.prompt.${part}.bytes")
     ) promptParts
   );
-
-  names = import ./names.nix { inherit lib; };
 in
 {
   inherit selections;
@@ -259,37 +260,5 @@ in
   # keeps the text.
   openTags = [ "tool" ];
 
-  metrics = lib.mapAttrsToList (
-    name: definition:
-    let
-      metric = {
-        inherit name;
-        where = [ ];
-        value = null;
-        tags = { };
-      }
-      // definition;
-      tags = {
-        env = [
-          "deployment.environment"
-          "deployment.environment.name"
-        ];
-      }
-      // metric.tags;
-    in
-    metric
-    // {
-      inherit tags;
-      metric = names.metric name + lib.optionalString (metric.value == "duration") "_seconds";
-      kind = if metric.value == null then "count" else "distribution";
-      unit =
-        if metric.value == "duration" then
-          "seconds (Datadog: nanoseconds)"
-        else if metric.value == null then
-          "spans"
-        else
-          "as the attribute";
-      labels = lib.mapAttrs (tag: _: names.label tag) tags;
-    }
-  ) definitions;
+  metrics = import ./define.nix { inherit lib; } definitions;
 }

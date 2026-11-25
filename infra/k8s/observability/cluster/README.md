@@ -192,30 +192,40 @@ label writers `observability.macro.com/telemetry-write: "true"` and readers
 
 ## Derived metrics
 
-Datadog computes metrics from spans, which its monitors and dashboards read.
+Datadog computes metrics from spans and logs, which its monitors and dashboards read.
 `modules/derived-metrics/` computes the same ones here:
 
 ```
-alloy-ingest ── tap: spans some metric reads, before sampling ──▶ derived-metrics ── OTLP, delta ──▶ Mimir
+alloy-ingest ── tap: spans and logs some metric reads, before sampling ──▶ derived-metrics ── OTLP, delta ──▶ Mimir
 ```
 
-- `spans.nix` defines them, with Datadog's meaning; `alloy.nix` turns the
+- `spans.nix` and `logs.nix` define them, with Datadog's meaning; `alloy.nix` turns the
   definitions into the tap and the application's Alloy configuration.
 - [`modules/derived-metrics/MAPPING.md`](modules/derived-metrics/MAPPING.md)
   (generated) says what each Datadog metric and tag is called in Mimir and how
   to translate a query. Read it before porting a monitor.
+- Not Loki's ruler: a rule would read every service's logs each minute, and a
+  quantile of logs can't be summed over time.
 - Not Tempo's metrics generator: it sees only the traces the sampler keeps and
   can measure nothing but a span's duration.
-- The tap never holds ingest up: its queue holds 4 MiB at most and it drops what
-  `derived-metrics` can't take for a minute. It forwards only the attributes the
-  metrics read, without events, so no prompt or response text.
-- Every 30 s each replica writes one delta sample per series that had spans,
+- The tap drops rather than waits: its queue holds 4 MiB at most and it gives up
+  on what `derived-metrics` can't take for a minute. It isn't free: ingest copies
+  each batch before the tap filters it, about a fifth more memory churn and CPU
+  for a log batch (more for deeply nested ones). The cluster's ingest has twice the
+  host's memory limit to make up for it; look here first if it refuses data. The
+  tap forwards only the attributes the metrics read, and of those only strings
+  (cut at 256 bytes), numbers and booleans, without events or links, and only the
+  known phrases of a log's body, so no prompt or response text.
+- Every 30 s each replica writes one delta sample per series that had any,
   stored as it comes (`otel_native_delta_ingestion` in Mimir, experimental): no
   counter resets, no first increment lost, a series that fires once a day counts.
   A distribution is one native histogram series.
 - Cardinality: each replica writes its own series, so a metric has at most twice
-  its label combinations. `tool` is the widest label. Mimir caps any one metric at
-  20k series (`max_global_series_per_metric`).
+  its label combinations. The widest labels are `tool` and, on the eight Outlook
+  mailbox metrics, `link_id` (one per connected mailbox, by two flags). Mimir caps
+  any one metric at 20k series (`max_global_series_per_metric`), so a metric
+  stops growing at its cap but several together can still fill the total: watch
+  `cortex_ingester_memory_series` when a sender is added.
 
 ## Grafana, the edge and ingest
 
