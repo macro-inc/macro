@@ -11,10 +11,15 @@ import {
   type FakeOnboardingWorld,
 } from '../tests/fake-onboarding-context';
 import { renderInviteOfferStub } from '../tests/invite-offer-stub';
+import { AppHandoffView } from '../views/app-handoff-view';
 import { DesktopHandoffView } from '../views/desktop-handoff-view';
 import { OnboardingFlowView } from '../views/onboarding-flow-view';
 import { SignupJourneyView } from '../views/signup-journey-view';
-import { FIXTURE_KEYS, type FixtureLanding } from './fixture-keys';
+import {
+  FIXTURE_APP_HANDOFF,
+  FIXTURE_KEYS,
+  type FixtureLanding,
+} from './fixture-keys';
 
 /**
  * The real onboarding views over a fake backend persisted in sessionStorage,
@@ -131,8 +136,24 @@ if (params.handoff !== undefined) {
 const handoffPlatform = sessionStorage.getItem(FIXTURE_KEYS.handoff);
 const handoff = handoffPlatform !== null;
 
+// `?app`: the native app started this sign-up, so finishing ends on its
+// "Open Macro" screen. `?view=app` opens that screen directly.
+if (params.app !== undefined || params.view === 'app') {
+  sessionStorage.setItem(FIXTURE_KEYS.appHandoff, 'true');
+}
+const appHandoff =
+  sessionStorage.getItem(FIXTURE_KEYS.appHandoff) === null
+    ? undefined
+    : { ...FIXTURE_APP_HANDOFF, savedAt: Date.now() };
+
 function Fixture() {
   const [handoffTarget, setHandoffTarget] = createSignal<string>();
+  const [appFinished, setAppFinished] = createSignal(params.view === 'app');
+  const onFinished = (target: string) => {
+    if (appHandoff) setAppFinished(true);
+    else if (handoff) setHandoffTarget(target);
+    else land({ t: 'app', target });
+  };
   return (
     <OnboardingProvider value={fake.context}>
       <Switch>
@@ -150,6 +171,9 @@ function Fixture() {
             onAgentSignup={() => {}}
             showingEmail={false}
           />
+        </Match>
+        <Match when={appFinished() && appHandoff}>
+          {(handoff) => <AppHandoffView handoff={handoff()} />}
         </Match>
         <Match when={handoffTarget()}>
           {(target) => (
@@ -170,9 +194,7 @@ function Fixture() {
             step={params.step}
             checkoutReturn={parseCheckoutReturn(params)}
             onNavigate={(target) => land({ t: 'app', target })}
-            onFinished={
-              handoff ? (target) => setHandoffTarget(target) : undefined
-            }
+            onFinished={onFinished}
             onRedirect={(url) => location.assign(url)}
             onSignedOut={() => land({ t: 'signed-out' })}
             renderInviteOffer={renderInviteOfferStub}

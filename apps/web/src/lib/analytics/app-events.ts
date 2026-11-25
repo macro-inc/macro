@@ -146,6 +146,10 @@ export type AppEvents = {
   onboarding_v4_desktop_handoff: {
     action: 'viewed' | 'download_app' | 'continue_in_browser';
   };
+  /** The last screen of a sign-up the native app started in the browser. */
+  onboarding_v4_app_handoff: {
+    action: 'viewed' | 'open_app' | 'switch_account';
+  };
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;

@@ -1,6 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
@@ -50,6 +51,7 @@ import type {
   ViewerState,
 } from './context/onboarding-context';
 import { onboardingCheckoutRequest } from './core/checkout';
+import { mintAppSessionCode } from './queries/app-session-code';
 import {
   type HeldApp,
   onboardingConnectedTools,
@@ -168,6 +170,7 @@ function toViewerState(result: UserInfoResult): ViewerState {
 export function createAppOnboardingContext(): OnboardingContext {
   const analytics = useAnalytics();
   const userInfo = useUserInfoQuery();
+  const logout = useLogout();
   const startAddInbox = useAddInboxFlow();
   const createTeam = useCreateTeamWithInvitesMutation();
   const joinTeam = useJoinTeamMutation();
@@ -425,6 +428,8 @@ export function createAppOnboardingContext(): OnboardingContext {
         'onboarding.suggestions'
       ),
     createRoutinesStep: createAppRoutinesStep,
+    mintAppSessionCode,
+    signOut: () => logout(),
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();
     },

@@ -5,12 +5,15 @@ import { storeListingUrl } from '@core/mobile/native-update-link';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { createEffect, createSignal, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, Match, onMount, Switch } from 'solid-js';
 import { OnboardingProvider } from './context/onboarding-context';
+import { type AppHandoff, appHandoffFromParams } from './core/app-handoff';
 import { parseCheckoutReturn } from './core/checkout';
 import { phoneStorePlatform } from './core/desktop-handoff';
 import { parseOnboardingStepParam } from './core/steps';
 import { createAppOnboardingContext } from './create-app-onboarding-context';
+import { readAppHandoff, saveAppHandoff } from './primitives/flow-storage';
+import { AppHandoffView } from './views/app-handoff-view';
 import { DesktopHandoffView } from './views/desktop-handoff-view';
 import { OnboardingFlowView } from './views/onboarding-flow-view';
 import { SignupJourneyView } from './views/signup-journey-view';
@@ -36,14 +39,19 @@ export function Onboarding(props: { next?: string }) {
     if (params.step === undefined) return;
     setParams({ step: undefined }, { replace: true });
   });
-  // Phone browsers end on "Macro is better on desktop" before entering the
-  // app; computers and the native apps go straight in. Decided as onboarding
-  // finishes, so a rotation mid-flow counts. A phone held sideways is wider
-  // than `isMobile()`'s 640px and goes straight in, like a tablet.
+  // A sign-up the native app started ends by handing its session back to
+  // the app. Otherwise phone browsers end on "Macro is better on desktop"
+  // before entering the app; computers and the native apps go straight in.
+  // Decided as onboarding finishes, so a rotation mid-flow counts. A phone
+  // held sideways is wider than `isMobile()`'s 640px and goes straight in,
+  // like a tablet.
   const storePlatform = phoneStorePlatform(navigator.userAgent);
-  const [handoffTarget, setHandoffTarget] = createSignal<string>();
+  const [ending, setEnding] = createSignal<OnboardingEnding>();
   const finished = (target: string) => {
-    if (isMobile() && !isNativeMobilePlatform()) setHandoffTarget(target);
+    const appHandoff = readAppHandoff();
+    if (appHandoff) setEnding({ t: 'app', handoff: appHandoff });
+    else if (isMobile() && !isNativeMobilePlatform())
+      setEnding({ t: 'desktop', target });
     else navigate(target, { replace: true });
   };
   const flow = () => (
@@ -72,15 +80,58 @@ export function Onboarding(props: { next?: string }) {
   );
   return (
     <OnboardingProvider value={context}>
-      <Show when={handoffTarget()} keyed fallback={flow()}>
-        {(target) => (
-          <DesktopHandoffView
-            storeUrl={storeListingUrl(storePlatform)}
-            platform={storePlatform}
-            onContinue={() => navigate(target, { replace: true })}
-          />
-        )}
-      </Show>
+      <Switch fallback={flow()}>
+        <Match
+          when={(() => {
+            const end = ending();
+            return end?.t === 'app' ? end.handoff : undefined;
+          })()}
+          keyed
+        >
+          {(handoff) => <AppHandoffView handoff={handoff} />}
+        </Match>
+        <Match
+          when={(() => {
+            const end = ending();
+            return end?.t === 'desktop' ? end.target : undefined;
+          })()}
+          keyed
+        >
+          {(target) => (
+            <DesktopHandoffView
+              storeUrl={storeListingUrl(storePlatform)}
+              platform={storePlatform}
+              onContinue={() => navigate(target, { replace: true })}
+            />
+          )}
+        </Match>
+      </Switch>
+    </OnboardingProvider>
+  );
+}
+
+type OnboardingEnding =
+  | { t: 'app'; handoff: AppHandoff }
+  | { t: 'desktop'; target: string };
+
+/**
+ * Remembers the native app that sent this tab to sign up (`/signup` carries
+ * its challenge), so the sign-up can end by handing the session back to it.
+ * A link without one leaves an earlier handoff in place.
+ */
+export function rememberAppHandoff(params: Record<string, unknown>) {
+  const handoff = appHandoffFromParams(params, Date.now());
+  if (handoff) saveAppHandoff(handoff);
+}
+
+/** The native app this tab's sign-up hands its session back to, if any. */
+export const pendingAppHandoff = readAppHandoff;
+
+/** The last screen of an app-started sign-up, for hosts outside the flow. */
+export function OnboardingAppHandoff(props: { handoff: AppHandoff }) {
+  return (
+    <OnboardingProvider value={createAppOnboardingContext()}>
+      <AppHandoffView handoff={props.handoff} />
     </OnboardingProvider>
   );
 }

@@ -71,6 +71,8 @@ export type FakeOnboardingWorld = {
   routineCreateFailures: string[];
   /** Routines created from suggestions, by suggestion id. */
   routinesCreated: string[];
+  /** Session codes minted for the native app, in order. */
+  appSessionCodes: string[];
   /** Capabilities that fail, with the message they report. */
   failures: Partial<
     Record<
@@ -86,7 +88,8 @@ export type FakeOnboardingWorld = {
       | 'planCatalog'
       | 'trialEligibility'
       | 'checkout'
-      | 'completion',
+      | 'completion'
+      | 'appSessionCode',
       string
     >
   >;
@@ -158,6 +161,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     routineCatalog: TEST_CATALOG,
     routineCreateFailures: [],
     routinesCreated: [],
+    appSessionCodes: [],
     failures: {},
   };
 }
@@ -435,6 +439,21 @@ export function createFakeOnboarding(
         return `routine-${suggestion.id}`;
       },
     }),
+    mintAppSessionCode: async (handoff) => {
+      call(`mintAppSessionCode:${handoff.handoffId}`);
+      if (world.failures.appSessionCode) return undefined;
+      const code = `fake-app-code-${world.appSessionCodes.length + 1}`;
+      update((draft) => {
+        draft.appSessionCodes.push(code);
+      });
+      return code;
+    },
+    signOut: async () => {
+      call('signOut');
+      update((draft) => {
+        draft.viewer = null;
+      });
+    },
     repairTutorial: async () => {
       call('repairTutorial');
       update((draft) => {
