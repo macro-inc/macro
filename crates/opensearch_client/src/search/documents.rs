@@ -145,6 +145,7 @@ impl DocumentQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn sub_types(mut self, sub_types: Vec<String>) -> Self {
@@ -265,6 +266,23 @@ impl DocumentQueryBuilder {
         } else {
             for clause in self.build_content_clauses() {
                 bool_query.must(clause);
+            }
+        }
+
+        // A term a minus left out drops every document it would match: by
+        // its name, a chunk of its content, or either, as the mode reads.
+        if include_name {
+            for query in self
+                .inner
+                .excluded_field_queries(DocumentSearchConfig::TITLE_KEY)?
+            {
+                bool_query.must_not(query);
+            }
+        }
+        if include_content {
+            for term in &self.inner.excluded_terms {
+                let query = child_content_query(term, &self.inner.match_type);
+                bool_query.must_not(HasChildQuery::new(CHILD_RELATION, query).into());
             }
         }
 

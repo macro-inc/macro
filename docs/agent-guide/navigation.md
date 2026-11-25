@@ -284,7 +284,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/for-you` | For you: the person’s suggestions in lists, Today, To do, Suggestions (work Macro can do) and Done, chosen in its sidebar (`sN.forYou.view`) (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
+| `/app/for-you` | For you: the person’s suggestions in lists, Today, To do, Suggestions (work Macro can do) and Done, chosen in its sidebar (`sN.forYou.view`), or one topic’s rows (`sN.forYou.topic=<key>`, which replaces the list; one that groups nothing shows Today) (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -1671,6 +1671,17 @@ to save; it also works while paused. A failed save keeps the draft and offers
 loads those settings before further edits. While running, configuration is locked; the routine can be paused
 but cannot resume until the run ends. Completed one-offs remain visible with
 their history and do not repeat.
+
+Plans limit active routines: 10 on Free, 1,000 on Pro, 3,000 on Business, and
+10,000 on Max (enterprise teams count as Max). A routine is active while it is
+enabled and either watches events or has a next run; paused routines and
+completed one-offs don't count. At the limit, creating, duplicating, or
+activating a template with **Start enabled**, enabling a paused routine, or
+giving a completed one-off a new time fails with **You've reached your plan's
+limit of N active routines. Pause or delete a routine to activate another.** On
+Free, Pro, and Business the **Upgrade your plan** paywall opens as well, with
+that advice. Saving a routine paused always works. An owner over the limit after
+a downgrade keeps their active routines but can't activate more until under it.
 
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the

@@ -871,6 +871,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       ? searchQueryParts(searchText(), searchBindings())
       : undefined
   );
+  // Words a minus leaves out need a word beside them, so until one is typed
+  // nothing goes to the service.
+  const serviceText = () => {
+    const parts = searchParts();
+    if (!parts) return searchText();
+    return parts.waitsForWord ? '' : parts.serviceText;
+  };
   const [operatorLookup, setOperatorLookup] = createSignal<
     Accessor<SearchOperatorLookup> | undefined
   >();
@@ -936,8 +943,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     searchPaused: sourceSearchPaused,
     searchText,
     setSearchText,
-    serviceText: () => searchParts()?.serviceText ?? searchText(),
+    serviceText,
     nameText: () => searchParts()?.nameText ?? searchText(),
+    leftOutWords: () => searchParts()?.leftOutWords ?? [],
     operatorIndexes: () => operatorFilters()?.indexes,
   });
 
@@ -945,10 +953,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const searchAwaitingInput = () =>
     activeListView() === 'search' &&
     searchAwaitsInput({
-      // Half-typed operators alone search for nothing yet.
-      text: listsOperators()
-        ? searchText()
-        : (searchParts()?.serviceText ?? searchText()),
+      // Half-typed operators alone, or words a minus leaves out alone,
+      // search for nothing yet.
+      text: listsOperators() ? searchText() : serviceText(),
       state: queryFilters.state,
       activeFilterIds: soup.predicates.activeIds(),
       assigneeCount: assigneeFilter().length,

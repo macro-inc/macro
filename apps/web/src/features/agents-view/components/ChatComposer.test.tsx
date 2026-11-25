@@ -1228,7 +1228,9 @@ it('keeps the list composer expanded across model selection and dismisses an orp
     ).not.toBeNull()
   );
   expect(open()).toBe(true);
-  fireEvent.click(await screen.findByRole('button', { name: 'Auto' }));
+  const cardModel = await screen.findByRole('button', { name: 'Auto' });
+  await waitFor(() => expect(document.activeElement).toBe(cardModel));
+  fireEvent.click(cardModel);
   search = await screen.findByRole('textbox');
   fireEvent.focusOut(input, { relatedTarget: search });
   fireEvent.pointerDown(search);

@@ -72,8 +72,54 @@ impl Oracle {
                 Mode::Content => self.expect_content(raw, case, kind, &mut expected).await?,
                 Mode::Name => self.expect_names(raw, case, kind, &mut expected).await?,
             }
+            let left_out = self.left_out(raw, case, kind).await?;
+            expected
+                .entities
+                .retain(|(entity_kind, entity)| !left_out.contains(&(*entity_kind, *entity)));
+            expected
+                .parts
+                .retain(|(part_kind, entity, _)| !left_out.contains(&(*part_kind, *entity)));
         }
         Ok(expected)
+    }
+
+    /// The entities of `kind` that a word the case leaves out matches as one
+    /// of its terms would: by name in a name search, by any part in a content
+    /// search.
+    async fn left_out(
+        &self,
+        raw: &OpenSearch,
+        case: &Case,
+        kind: Kind,
+    ) -> anyhow::Result<HashSet<(Kind, Uuid)>> {
+        let mut left_out = HashSet::new();
+        for word in case.left_out {
+            match case.mode {
+                Mode::Name => {
+                    let Some(field) = kind.title_field() else {
+                        continue;
+                    };
+                    let term = Term {
+                        tokens: analyze(raw, kind, field, word).await?,
+                        prefix: case.match_type != "exact",
+                    };
+                    for ((name_kind, entity), tokens) in &self.names {
+                        if *name_kind == kind && term.matches(tokens) {
+                            left_out.insert((kind, *entity));
+                        }
+                    }
+                }
+                Mode::Content => {
+                    let term = content_term(raw, kind, word, case.match_type).await?;
+                    for ((part_kind, entity, _), tokens) in &self.parts {
+                        if *part_kind == kind && term.matches(tokens) {
+                            left_out.insert((kind, *entity));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(left_out)
     }
 
     /// A name search matches an entity whose name every term matches: a

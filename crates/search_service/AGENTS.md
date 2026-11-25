@@ -189,10 +189,10 @@ per-entity-type search plus a unified search across them — mounted into
   before paging; an unknown name or invalid value stays a word. A search that
   types a named operator becomes an email search (no other kind can meet
   them); one that leaves email out, or uses `regexp`/`query` matching, reads
-  none. A minus before a plain word or phrase says nothing about email, so it
-  leaves out mail containing it only beside a named operator or in a search
-  of email alone; otherwise, and always for a term starting `--`, it stays a
-  word and the search keeps every kind. Opposite
+  none. A minus before a plain word or phrase says nothing about email, so
+  beside a named operator or in a search of email alone it becomes mail's
+  excluded text (`EmailTextPart::Any`), and otherwise the generic reading
+  below takes it; a term starting `--` stays a word. Opposite
   operators search nothing. A cursor keeps the first page's moment
   (`query_time_millis`) so relative dates bound the same instants on every
   page, and the response's `query_filters` reports what the operators became.
@@ -226,11 +226,27 @@ per-entity-type search plus a unified search across them — mounted into
   name search already run, and a name reaching nothing matches nothing.
   Refused with a 400, and not logged as errors: an `OR` tag group beside
   another tag (`TagConditionsDontCombine`; the search applies one any-of or
-  all-of list), two `from:` on calls (`SpeakersDontCombine`), operators
-  leaving no word unless only email is searched (`OperatorsNeedAWord`), more
-  than `MAX_CHANNEL_NAMES` channel names. An unknown name or invalid value
-  stays a word. `search_operators/typed_operators.json` lists typed queries
+  all-of list), two `from:` on calls (`SpeakersDontCombine`), operators or
+  minus words leaving no word unless only email is searched
+  (`OperatorsNeedAWord`), more than `MAX_CHANNEL_NAMES` channel names. An
+  unknown name or invalid value stays a word. `search_operators/typed_operators.json` lists typed queries
   and how many operators each holds; change it with the parser.
+- A minus before a word or quoted phrase (`-draft`, `-"team lunch"`) leaves
+  out what holds it in every kind the unified search reaches, for every
+  caller (`terms::left_out` is the one rule; Mail's reader uses it too).
+  After both operator readers, `limited_terms` takes the minus words the Mail
+  reader left (`terms::take_left_out_terms`, exact and partial matching
+  only) as `ReadQuery::excluded_terms`, counted toward `MAX_SEARCH_TERMS` and
+  cut to `MAX_TERM_CHARS`. They reach every OpenSearch index as
+  `UnifiedSearchArgs::excluded_terms` (each leaves out what the word would
+  match as one of its terms in the search's mode; email as Mail's excluded
+  text), and the Postgres name searches as excluded patterns built like
+  their own: chat names (`name_search`), channel names as the viewer sees
+  them, and CRM company names and domains. The name search text drops them.
+  `/search/channel` and the per-type endpoints read no minus, as they read
+  no operators. The web Search field waits for a word while every word is a
+  minus word, and leaves local name matches that hold one out
+  (`apps/web/src/features/next-soup/core/search-operators.ts`).
 - The typed conditions that are not thread states run in OpenSearch: text
   matches, labels and tags (`labels` terms or the nested tag filter, each name
   resolved for the caller in Postgres; a required name naming nothing matches

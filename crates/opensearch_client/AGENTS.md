@@ -220,6 +220,14 @@ projects.
   hit matched only there takes its `links` highlight as its content snippet
   (`parse_highlight_hit`), as `source_names` stands in for a calendar name.
   `tests/content_search/channel_links.rs` checks it against a real index.
+- A word a minus leaves out (`UnifiedSearchArgs::excluded_terms`) is a
+  `must_not` of exactly the query it would run as one of the index's terms
+  in the search's mode: a `has_child` without inner hits for chunks,
+  messages and segments (with the role or speaker filter a term carries),
+  `create_query` on a name or title, the content fields and links for a
+  channel message. Email turns it into Mail's excluded text condition over
+  every part. Build a new index's terms so that the same query leaves a
+  word out; `tests/content_search` checks it through `Case::left_out`.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

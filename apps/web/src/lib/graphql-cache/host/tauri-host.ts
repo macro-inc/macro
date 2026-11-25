@@ -1176,12 +1176,15 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       keys: string[],
       authorityGeneration?: string
     ): Promise<AffectedOperationsResult> {
+      const context = Telemetry.captureContext();
       authorityGeneration ??=
         authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
-      const result = await request<AffectedOperationsResult>(
-        'graphql_cache_delete_records',
-        { keys, generation: authorityGeneration }
+      const result = await context.run(() =>
+        request<AffectedOperationsResult>('graphql_cache_delete_records', {
+          keys,
+          generation: authorityGeneration,
+        })
       );
       return { ...result, revision: parseCacheRevision(result.revision) };
     },
