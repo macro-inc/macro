@@ -74,7 +74,10 @@ import {
   type CacheCoordinatorPageAdapter,
   createCacheCoordinatorPageAdapter,
 } from '../worker/coordinator-page-adapter';
-import type { EngineOpenOutcome } from '../worker/coordinator-protocol';
+import type {
+  CacheQueueState,
+  EngineOpenOutcome,
+} from '../worker/coordinator-protocol';
 import { WorkerRestartedError } from '../worker/effect-worker-transport';
 import { isUnambiguousCacheScope } from '../worker/stale-databases';
 import {
@@ -213,6 +216,15 @@ export const UNANSWERED_AUTHORITY_READS = 3;
 const DEFAULT_STORAGE_HEALTH_INTERVAL_MS = 5 * 60_000;
 const MIN_STORAGE_HEALTH_INTERVAL_MS = 1_000;
 const MAX_STORAGE_HEALTH_INTERVAL_MS = 15 * 60_000;
+
+/** Two engine replacements a page hears of as one. */
+const bothChanges = (
+  first: CacheGenerationChange | undefined,
+  second: CacheGenerationChange
+): CacheGenerationChange => ({
+  storage: first?.storage === 'reset' ? 'reset' : second.storage,
+  queue: first?.queue === 'reset' ? 'reset' : second.queue,
+});
 
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
@@ -370,6 +382,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let telemetryRelayStarted = false;
   let telemetryFinished = false;
   let initializationStartedAt = 0;
+  let readyWaiters: (() => void)[] = [];
   let storageHealthTimer: ReturnType<typeof setInterval> | undefined;
   const setIntervalFn =
     options.setInterval ?? globalThis.setInterval.bind(globalThis);
@@ -424,7 +437,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       }
       if (msg.kind === 'cache-changed') {
         if (msg.reset) {
-          emitGenerationChange({ storage: 'reset' });
+          emitGenerationChange({ storage: 'reset', queue: 'reset' });
         }
         for (const cb of cacheChangeSubscribers) {
           if (
@@ -552,7 +565,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function onEngineReplaced(
     ownerEpoch: number,
-    openOutcome: EngineOpenOutcome
+    openOutcome: EngineOpenOutcome,
+    queue: CacheQueueState
   ): void {
     if (
       state === 'failed' ||
@@ -568,10 +582,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (state === 'initializing' && !recoveryInProgress) return;
     const change: CacheGenerationChange = {
       storage: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
+      queue,
     };
     // Nobody can read again before the handshake ends the outage.
     if (!outage) emitGenerationChange(change);
-    else if (outageChange?.storage !== 'reset') outageChange = change;
+    else outageChange = bothChanges(outageChange, change);
     if (state === 'ready') {
       beginRecoveryGeneration();
       // No old response put this host into recovery. Requests still pending at
@@ -724,8 +739,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const created = createCacheCoordinatorPageAdapter({
       scope: options.scope,
       hotCapacity: options.hotCapacity,
-      onEngineReplaced: (epoch, outcome) => {
-        if (adapter === created) onEngineReplaced(epoch, outcome);
+      onEngineReplaced: (epoch, outcome, queue) => {
+        if (adapter === created) onEngineReplaced(epoch, outcome, queue);
       },
       onCacheReadAvailabilityChanged: (availability) => {
         if (adapter !== created) return;
@@ -968,6 +983,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    */
   function stopForSession(error: Error, { uncertain = false } = {}): void {
     state = 'failed';
+    releaseReadyWaiters();
     outage = undefined;
     stopPing?.();
     releaseTransportWaiters();
@@ -1135,6 +1151,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    */
   function leave(mode: 'leaving' | 'navigation'): void {
     state = 'disposing';
+    releaseReadyWaiters();
     stopPing?.();
     releaseTransportWaiters();
     disposalMode = mode;
@@ -1168,6 +1185,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // every already-admitted RPC has a response or its existing read timer.
     // Mutations deliberately have no arbitrary disposal timeout.
     state = 'disposing';
+    releaseReadyWaiters();
     stopPing?.();
     disposalMode = 'draining';
     clearSubscribers();
@@ -1492,6 +1510,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
   }
 
+  /** Settles every whenReady() caller: the engine opened or never will. */
+  function releaseReadyWaiters(): void {
+    const waiters = readyWaiters;
+    readyWaiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
   function startStorageHealthSampling(): void {
     fireAndForget(observeStorageHealth(), 'graphql-cache-host');
     storageHealthTimer ??= setIntervalFn(() => {
@@ -1572,12 +1597,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         state = 'ready';
         initialization = undefined;
         reconnects = 0;
+        // Before the outage listeners, which may throw. The waiters run after
+        // endOutage has cleared the outage, so they find the engine open.
+        releaseReadyWaiters();
         endOutage();
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
           // invalidate local checkpoints as well as revision/dependency state.
-          emitGenerationChange({ storage: 'reset' });
+          emitGenerationChange({ storage: 'reset', queue: 'reset' });
         }
         telemetry?.record({
           name: 'graphql_cache.host_ready',
@@ -1753,6 +1781,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   return {
     clientId,
+    // A paused engine is not open: its writes reject rather than wait.
+    isReady: () => state === 'ready' && outage === undefined,
+    whenReady() {
+      if (
+        (state === 'ready' && outage === undefined) ||
+        state === 'failed' ||
+        state === 'disposing' ||
+        state === 'disposed'
+      )
+        return Promise.resolve();
+      return new Promise<void>((resolve) => readyWaiters.push(resolve));
+    },
     get disabled() {
       return outage !== undefined;
     },

@@ -155,7 +155,6 @@ fn harness_with_outbox(outbox: Arc<Outbox>) -> (TestBench, TurnSignals) {
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         None,
         None,

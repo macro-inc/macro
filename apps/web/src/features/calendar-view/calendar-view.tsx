@@ -24,7 +24,10 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
-import { CalendarFocusContextProvider } from './calendar-focus-target';
+import {
+  type CalendarDateTarget,
+  CalendarFocusContextProvider,
+} from './calendar-focus-target';
 import { createCalendarFocusTarget } from './calendar-target';
 import { createCalendarTargetAim } from './calendar-target-request';
 import { calendarSearch, calendarSearchTarget } from './calendar-url';
@@ -172,6 +175,17 @@ export function CalendarView(props: CalendarViewProps) {
     targetRequest,
     occurrencesQuery
   );
+  // The locator supplies a date before it supplies an occurrence. Page there
+  // now; only chip selection needs the resolved event identity and data.
+  const navigationTarget = createMemo<CalendarDateTarget | undefined>(() => {
+    const request = targetRequest();
+    if (!request) return undefined;
+    return {
+      date: new Date(request.range.start),
+      requestId: request.requestId,
+      requestedAt: request.requestedAt,
+    };
+  });
 
   const markEventRead = (eventId: string) => {
     fireAndForget(
@@ -233,7 +247,10 @@ export function CalendarView(props: CalendarViewProps) {
   });
 
   return (
-    <CalendarFocusContextProvider target={focusTarget}>
+    <CalendarFocusContextProvider
+      target={focusTarget}
+      navigationTarget={navigationTarget}
+    >
       <CalendarViewContextProvider
         periodView={routeParams.period}
         focusedEventId={routeTarget().eventId}

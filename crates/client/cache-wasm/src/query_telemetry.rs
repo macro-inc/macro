@@ -10,11 +10,16 @@ extern "C" {
     fn performance_now() -> Result<f64, JsValue>;
 }
 
+/// Milliseconds on this worker's monotonic clock.
+pub(crate) fn now_ms() -> f64 {
+    performance_now().unwrap_or(f64::NAN)
+}
+
 struct BrowserQueryTelemetry(Function);
 
 impl QueryTelemetry for BrowserQueryTelemetry {
     fn now_ms(&self) -> f64 {
-        performance_now().unwrap_or(f64::NAN)
+        now_ms()
     }
 
     fn slow_query(&self, fingerprint: &str, duration_ms: f64, success: bool) {

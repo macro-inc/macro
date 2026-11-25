@@ -1,5 +1,6 @@
 import {
   type SearchOperatorCompletion,
+  searchNameBeingTyped,
   searchOperatorBeingTyped,
   searchOperatorCompletions,
   searchTokenAtEnd,
@@ -179,16 +180,20 @@ export function SearchbarInput(
   const typing = createMemo(() =>
     props.operators ? searchOperatorBeingTyped(fieldText()) : undefined
   );
+  const [focused, setFocused] = createSignal(false);
   const personTyped = () => {
     const typed = typing();
-    if (!typed || !('name' in typed)) return undefined;
+    if (!typed) return undefined;
+    // A plain word may start someone's name, offered as from them or
+    // assigned to them; it is looked up only while the field is focused.
+    if ('prefix' in typed)
+      return focused() ? searchNameBeingTyped(fieldText()) : undefined;
     const names = ['assignee', 'author', 'from'];
     return names.includes(typed.name) ? typed.value : undefined;
   };
   const operatorValues = props.operators
     ? createSearchOperatorValues(personTyped)
     : undefined;
-  const [focused, setFocused] = createSignal(false);
   const [dismissedFor, setDismissedFor] = createSignal<string>();
   const operatorRows = createMemo(() =>
     operatorValues && focused() && dismissedFor() !== fieldText()
@@ -301,7 +306,9 @@ export function SearchbarInput(
           selection.deleteCharacter(true);
         }
       }
-      selection.insertText(row.insert);
+      // A whole operator is followed by a space, so the next word starts, as
+      // in Mail's field; an operator's name waits for its value.
+      selection.insertText(row.kind === 'name' ? row.insert : `${row.insert} `);
     });
   };
   const hasContent = () => !!markdown().trim();
@@ -370,7 +377,7 @@ export function SearchbarInput(
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-nowrap"
+          class="flex-1 min-w-0 whitespace-pre overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-pre **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-pre"
         >
           <MarkdownShell
             config={editor}

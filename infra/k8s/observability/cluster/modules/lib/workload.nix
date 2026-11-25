@@ -74,6 +74,12 @@ rec {
     ipBlock.cidr = cidr;
   });
 
+  # Lets the node Alloy (namespace `alloy`) scrape an Alloy pod's own metrics.
+  scrapedByNodeAlloy = {
+    from = [ { namespaceSelector.matchLabels."kubernetes.io/metadata.name" = "alloy"; } ];
+    ports = tcpPorts [ 12345 ];
+  };
+
   # Rolls a pod template when this text changes (mounted ConfigMaps don't).
   checksum = text: builtins.hashString "sha256" text;
 

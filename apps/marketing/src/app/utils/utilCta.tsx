@@ -9,7 +9,7 @@ import {
   journeyHref,
 } from '../../features/marketing/core/navigation';
 import { analytics } from './utilAnalytic';
-import { buildAppUrl } from './utilBaseUrl';
+import { buildAppPath, buildAppUrl } from './utilBaseUrl';
 
 // Mobile/touch browsers (phones, touch tablets). Signing up + onboarding on a
 // phone is a poor experience, so these visitors get the site's own email
@@ -132,7 +132,9 @@ export const handleCtaClick = (event: MouseEvent, buttonName: string): void => {
   });
   const href = ctaHref();
   if (leaveInAppBrowser(href)) return;
-  window.location.href = href;
+  // The ad parameters ride along here too: the app stores the ad click from
+  // them even when this page's pixel was blocked and set no cookie.
+  window.location.href = buildAppPath(href);
 };
 
 /** Retained as a slot for page components; the journey CTA has no provider icon. */

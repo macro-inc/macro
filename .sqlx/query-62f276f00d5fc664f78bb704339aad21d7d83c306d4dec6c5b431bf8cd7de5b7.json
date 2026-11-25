@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id as entity_id,\n                c.name,\n                regexp_replace(\n                    c.name,\n                    $7,\n                    '<macro_em>\\1</macro_em>',\n                    'gi'\n                ) as name_highlighted,\n                c.\"updatedAt\" as updated_at\n            FROM \"Chat\" c\n            WHERE (c.\"userId\" = $1 OR c.id = ANY($2))\n                AND c.\"deletedAt\" IS NULL\n                AND c.name ILIKE $3\n                AND NOT (c.name ILIKE ANY($10::text[]))\n                AND (\n                    $5::timestamptz IS NULL\n                    OR (c.\"updatedAt\", c.id) < ($5, $6)\n                )\n                AND NOT EXISTS (\n                    SELECT 1\n                    FROM (\n                        SELECT array_agg(want.opt) AS opts\n                        FROM unnest($8::text[], $9::int[]) AS want(opt, tag_group)\n                        GROUP BY want.tag_group\n                    ) AS required\n                    WHERE NOT EXISTS (\n                        SELECT 1 FROM entity_properties ep\n                        WHERE ep.entity_id = c.id\n                            AND ep.entity_type = 'CHAT'\n                            AND ep.values->'value' ?| required.opts\n                    )\n                )\n            ORDER BY c.\"updatedAt\" DESC, c.id DESC\n            LIMIT $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name_highlighted",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "TextArray",
+        "Int4Array",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "62f276f00d5fc664f78bb704339aad21d7d83c306d4dec6c5b431bf8cd7de5b7"
+}

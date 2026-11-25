@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  completeSearchOperator,
   type SearchOperatorValues,
   searchOperatorCompletions,
 } from './search-operator-completions';
@@ -52,24 +51,47 @@ describe('searchOperatorCompletions', () => {
     expect(inserts('in:inbox')).toEqual([]);
   });
 
+  it('writes a tag as it can be typed: quotes left out, an emoji alone', () => {
+    const values = { ...VALUES, tags: ['Q3 "Plan"', '🔥'] };
+    expect(
+      searchOperatorCompletions('tag:q3', values).map((row) => row.insert)
+    ).toEqual(['tag:"Q3 Plan"']);
+    expect(
+      searchOperatorCompletions('tag:', values).map((row) => row.insert)
+    ).toEqual(['tag:"Q3 Plan"', 'tag:🔥']);
+  });
+
+  it('offers the filter a plain word stands for, and the person a name starts', () => {
+    expect(inserts('budget tasks')).toEqual(['type:task']);
+    expect(inserts('Docs')).toEqual(['type:doc']);
+    expect(inserts('mail')).toEqual(['type:email']);
+    expect(inserts('unread')).toEqual(['is:unread']);
+    // Any word of the name, as Mail's search offers them.
+    expect(inserts('ana')).toEqual([
+      'from:ana@example.com',
+      'assignee:ana@example.com',
+    ]);
+    expect(inserts('lim')).toEqual([
+      'from:ana@example.com',
+      'assignee:ana@example.com',
+    ]);
+    // An accent typed as a combining mark is the same name.
+    const jose = {
+      ...VALUES,
+      people: [{ email: 'jose@example.com', name: 'José Ruiz' }],
+    };
+    for (const typed of ['José', 'Jose\u0301'])
+      expect(
+        searchOperatorCompletions(typed, jose).map((row) => row.insert)
+      ).toEqual(['from:jose@example.com', 'assignee:jose@example.com']);
+    // Too short to look up, finished, or inside a phrase: no rows.
+    expect(inserts('an')).toEqual([]);
+    expect(inserts('tasks ')).toEqual([]);
+    expect(inserts('"tasks')).toEqual([]);
+  });
+
   it('offers nothing once the operator is whole', () => {
     expect(inserts('type:task')).toEqual([]);
     expect(inserts('assignee:me')).toEqual([]);
-  });
-});
-
-describe('completeSearchOperator', () => {
-  it('writes the row in place of the token being typed', () => {
-    const [row] = searchOperatorCompletions('launch type:ta', VALUES);
-    expect(row && completeSearchOperator('launch type:ta', row)).toBe(
-      'launch type:task'
-    );
-  });
-
-  it('leaves the caret after a name, for its value', () => {
-    const [row] = searchOperatorCompletions('launch ty', VALUES);
-    expect(row && completeSearchOperator('launch ty', row)).toBe(
-      'launch type:'
-    );
   });
 });

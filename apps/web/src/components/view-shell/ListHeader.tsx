@@ -119,9 +119,16 @@ export function ListHeaderSearch(props: {
   });
   // The view keeps its own copy of these; a field that unmounts while open
   // (a tab that cannot search, a thread over the list) must not leave it set.
+  // Told after the teardown that unmounts the field: written during it, the
+  // view's state makes memos stale while their owner is still being cleaned,
+  // and a cleanup that reads one disposes that owner twice and fails the
+  // navigation that unmounted the field.
   onCleanup(() => {
-    props.onOpenChange?.(false);
-    props.onFocusChange?.(false);
+    const { onOpenChange, onFocusChange } = props;
+    queueMicrotask(() => {
+      onOpenChange?.(false);
+      onFocusChange?.(false);
+    });
   });
   // A field its view closes can go with focus still in it, without a blur.
   createEffect(
@@ -195,7 +202,7 @@ export function ListHeaderSearch(props: {
             // Focus moving to another control in the header (Email's search
             // tips) keeps the empty field open until it leaves the header.
             const header = input?.closest<HTMLElement>(
-              '[data-view-shell-header]'
+              '[data-view-shell-top-bar]'
             );
             const next = event.relatedTarget;
             if (!(header && next instanceof Node && header.contains(next))) {

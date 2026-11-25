@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   isUnfinishedSearchOperator,
+  leavesOutName,
   readSearchOperators,
   searchBindingsIn,
   searchOperatorIndexes,
@@ -126,6 +127,33 @@ describe('searchQueryParts', () => {
     expect(searchQueryParts('status:in_progress & launch').serviceText).toBe(
       'status:in_progress & launch'
     );
+  });
+
+  it('leaves out the words a minus names and waits for a word beside them', () => {
+    const beside = searchQueryParts('budget -draft -"team lunch"');
+    expect(beside.serviceText).toBe('budget -draft -"team lunch"');
+    expect(beside.nameText).toBe('budget');
+    expect(beside.leftOutWords).toEqual(['draft', 'team lunch']);
+    expect(beside.waitsForWord).toBe(false);
+
+    expect(searchQueryParts('-draft').waitsForWord).toBe(true);
+    expect(searchQueryParts('-draft').nameText).toBe('');
+    expect(searchQueryParts('type:doc -draft').waitsForWord).toBe(true);
+    // Mail's search runs on the words it leaves out alone.
+    expect(searchQueryParts('type:email -draft').waitsForWord).toBe(false);
+    expect(searchQueryParts('from:ana -draft').waitsForWord).toBe(false);
+
+    const words = searchQueryParts('e-mail --force');
+    expect(words.leftOutWords).toEqual([]);
+    expect(words.nameText).toBe('e-mail --force');
+    expect(words.waitsForWord).toBe(false);
+  });
+
+  it('leaves out a name holding a word a minus names, ignoring case', () => {
+    expect(leavesOutName('Budget Draft v2', ['draft'])).toBe(true);
+    expect(leavesOutName('Q3 redrafts', ['DRAFT'])).toBe(true);
+    expect(leavesOutName('Budget plan', ['draft'])).toBe(false);
+    expect(leavesOutName('Budget plan', [])).toBe(false);
   });
 
   it('sends bound tokens with the request by id, not in the service’s text', () => {
@@ -255,15 +283,21 @@ describe('searchOperatorSpans', () => {
   });
 
   it('draws a bound token as an operator', () => {
+    // A tag named with ASCII punctuation alone reads as a word when typed.
     const bindings = [
-      { token: 'tag:🔥', tags: [{ propertyId: 'tags-1', optionId: 'fire-1' }] },
+      { token: 'tag:--', tags: [{ propertyId: 'tags-1', optionId: 'dash-1' }] },
     ];
     expect(
-      searchOperatorSpans('launch tag:🔥', bindings).map(({ start, end }) =>
-        'launch tag:🔥'.slice(start, end)
+      searchOperatorSpans('launch tag:--', bindings).map(({ start, end }) =>
+        'launch tag:--'.slice(start, end)
       )
-    ).toEqual(['tag:🔥']);
-    expect(drawn('launch tag:🔥')).toEqual([]);
+    ).toEqual(['tag:--']);
+    expect(drawn('launch tag:--')).toEqual([]);
+  });
+
+  it('reads a tag or channel named by an emoji alone', () => {
+    expect(drawn('launch tag:🔥 in:#🚀')).toEqual(['tag:🔥', 'in:#🚀']);
+    expect(drawn('launch tag:- in:#-')).toEqual([]);
   });
 
   it('draws an operator the rest of the query lets it be', () => {

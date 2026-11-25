@@ -104,6 +104,7 @@ pkgs.stdenvNoCC.mkDerivation {
     cp -r ${muppetSource} $out/node_modules/@macro-inc/muppet
     cp -r ${observabilitySource} $out/node_modules/@macro-inc/observability
     cp ${lockSource}/bun.lock $out/bun.lock
+    cp ${starterAgent}/package.json $out/template.json
     runHook postInstall
   '';
 }

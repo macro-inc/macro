@@ -65,11 +65,39 @@ impl<T> State<T> {
         }
     }
 
+    /// Starts a check. A ready update stays ready and installable while the
+    /// feed is checked again, until a newer one has downloaded to replace it;
+    /// otherwise an app left open would install whichever update it
+    /// downloaded first, however many releases came after it.
     pub fn begin_check(&mut self) -> bool {
-        if self.exiting || !matches!(self.status, Status::Idle | Status::Error { .. }) {
+        if self.exiting {
             return false;
         }
-        self.status = Status::Checking;
+        match self.status {
+            Status::Idle | Status::Error { .. } => {
+                self.status = Status::Checking;
+                true
+            }
+            Status::Ready { .. } => true,
+            _ => false,
+        }
+    }
+
+    /// The version of the update ready to install, if any.
+    pub fn ready_version(&self) -> Option<&str> {
+        match &self.status {
+            Status::Ready { version } if self.ready.is_some() => Some(version),
+            _ => None,
+        }
+    }
+
+    /// Records a failed check, unless a ready update or an install owns the
+    /// status.
+    pub fn fail(&mut self, message: String) -> bool {
+        if !matches!(self.status, Status::Checking | Status::Downloading { .. }) {
+            return false;
+        }
+        self.status = Status::Error { message };
         true
     }
 

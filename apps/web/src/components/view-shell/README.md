@@ -136,6 +136,10 @@ The sheet occupies no resize track and does not resize or remount the list or
 preview. Detail headers add no sidebar trigger; floating channel headers keep
 their measured local chrome.
 
+Use `<ViewShell.TopBar touch>` to display an explicit touch composition without
+caller-owned responsive visibility classes. It retains the same measured islands
+and default navigation behavior.
+
 On touch, `ViewShell.TopBar` inside `ViewShell.Main`, `ViewShell.Detail`, or a
 `CollectionPanes` detail floats over the pane as mobile chrome, like the split
 header of a standalone view. Wrap its title in `ViewShell.TopBarTitle`, its
