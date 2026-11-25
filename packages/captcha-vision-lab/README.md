@@ -52,6 +52,14 @@ On Ubuntu, install Chromium from the locked Playwright package.
 ./node_modules/.bin/playwright install --with-deps chromium
 ```
 
+On macOS (Apple Silicon or Intel), install the same Chromium build; macOS
+needs no system dependencies, so leave out `--with-deps`, and leave
+`LAB_CHROMIUM_PATH` unset.
+
+```sh
+./node_modules/.bin/playwright install chromium
+```
+
 Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
