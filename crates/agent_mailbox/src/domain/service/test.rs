@@ -2377,7 +2377,7 @@ async fn a_team_gets_no_more_than_its_mailbox_limit() {
             .insert(agent.clone(), ADA_TEAM);
         world
             .service
-            .provision(request(&agent, 1000 + number, "agent"))
+            .provision(request(&agent, 1000 + number, &format!("agent{number}")))
             .await
             .unwrap();
     }
