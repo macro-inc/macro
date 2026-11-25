@@ -5,13 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionLifecycleEventOneOfOnefiveEventType } from './agentSessionLifecycleEventOneOfOnefiveEventType';
-import type { SessionMentionedMetadata } from './sessionMentionedMetadata';
+import type { SessionStoppedMetadata } from './sessionStoppedMetadata';
 
 /**
- * A prompt named other users who can open the session.
+ * The session's live actor is gone.
  */
 export type AgentSessionLifecycleEventOneOfOnefive = {
   event_type: AgentSessionLifecycleEventOneOfOnefiveEventType;
-  /** A prompt named other users who can open the session. */
-  metadata: SessionMentionedMetadata;
+  /** The session's live actor is gone. */
+  metadata: SessionStoppedMetadata;
 };

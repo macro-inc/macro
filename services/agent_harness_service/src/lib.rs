@@ -104,7 +104,6 @@ use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::primary_calendar_time_zones::PrimaryCalendarTimeZones;
-use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
 use agent_harness::outbound::tool_approvals::{
@@ -1392,8 +1391,6 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::clone(&entity_access),
         lexical.clone(),
     );
-    let prompt_mentions =
-        LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context =
         MessagePromptContextAdapter::new(message_service.clone(), Arc::clone(&entity_access));
     let prompt_composer = LexicalAgentPromptComposer::new(
@@ -1765,8 +1762,7 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::clone(&tool_approvals),
             ),
             pending_commands,
-            prompt_mentions,
-            // Finished / asking / mentioned reach people through the same
+            // Finished and asking reach people through the same
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
