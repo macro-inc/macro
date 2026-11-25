@@ -116,6 +116,8 @@ const pendingCreates = new Set<string>();
 const answeringCreates = new Set<string>();
 /** The server id each confirmed create replaced its local id with. */
 const landedCreates = new Map<string, string>();
+/** Confirmed creates whose server id the cache has not been able to tell. */
+const unreadCreates = new Set<string>();
 const landedListeners = new Set<(localId: string, serverId: string) => void>();
 
 /** Whether `eventId` is a local event the server has not confirmed yet. */
@@ -138,6 +140,7 @@ export function onCalendarEventCreated(
 
 function landCreate(localId: string, serverId: string | undefined) {
   pendingCreates.delete(localId);
+  unreadCreates.delete(localId);
   if (!serverId || serverId === localId) return;
   landedCreates.set(localId, serverId);
   for (const listener of [...landedListeners]) listener(localId, serverId);
@@ -172,8 +175,8 @@ async function settledEventId(
 ): Promise<string | undefined> {
   const selected = await readRecordsByKeys(host, eventIdentitySelection, [
     eventKey(localId),
-  ]).catch(() => undefined);
-  const identity = selected?.records[0];
+  ]);
+  const identity = selected.records[0];
   if (
     !identity?.record.id ||
     identity.identity?.pending !== false ||
@@ -183,27 +186,56 @@ async function settledEventId(
   return identity.record.id;
 }
 
-/** Records where queued creates land once the queue settles them. */
+/**
+ * Records where queued creates land once the queue settles them. A cache can
+ * tell of a settlement while it cannot be read, as when it is paused, so a
+ * create whose server id was not told stays pending until a host serves.
+ */
 export function trackCalendarCreateSettlements(
-  host: Pick<CacheHost, 'onMutationSettled' | 'readRecordsByKeys'>
+  host: Pick<
+    CacheHost,
+    'onMutationSettled' | 'onOwnerReady' | 'readRecordsByKeys'
+  >
 ): () => void {
-  return host.onMutationSettled((settlement) => {
+  let stopped = false;
+
+  async function landConfirmed(localId: string): Promise<void> {
+    let serverId: string | undefined;
+    try {
+      serverId = await settledEventId(host, localId);
+    } catch {
+      return;
+    }
+    if (stopped || !pendingCreates.has(localId)) return;
+    // A create still waiting on its own answer lands from that answer.
+    if (serverId || !answeringCreates.has(localId))
+      landCreate(localId, serverId);
+  }
+
+  function landUnread(): void {
+    for (const localId of unreadCreates) {
+      fireAndForget(landConfirmed(localId), 'calendar-create-settlement');
+    }
+  }
+
+  landUnread();
+  const stopReady = host.onOwnerReady?.(landUnread);
+  const stopSettled = host.onMutationSettled((settlement) => {
     const localId = settlement.mutationUuid;
     if (!localId || !pendingCreates.has(localId)) return;
     if (settlement.status !== 'committed') {
       pendingCreates.delete(localId);
+      unreadCreates.delete(localId);
       return;
     }
-    fireAndForget(
-      (async () => {
-        const serverId = await settledEventId(host, localId);
-        // A create still waiting on its own answer lands from that answer.
-        if (serverId || !answeringCreates.has(localId))
-          landCreate(localId, serverId);
-      })(),
-      'calendar-create-settlement'
-    );
+    unreadCreates.add(localId);
+    fireAndForget(landConfirmed(localId), 'calendar-create-settlement');
   });
+  return () => {
+    stopped = true;
+    stopReady?.();
+    stopSettled();
+  };
 }
 
 async function cachedEvent(
@@ -861,7 +893,9 @@ async function createThroughQueue(
     // Settlement preserves the local-to-server alias even when its response
     // content is retired. Navigation and later edits must use that server ID.
     const cache = host ?? getGraphqlSoupCacheHost();
-    const serverId = cache ? await settledEventId(cache, clientId) : undefined;
+    const serverId = cache
+      ? await settledEventId(cache, clientId).catch(() => undefined)
+      : undefined;
     landCreate(clientId, serverId);
     // Creation succeeded. The caller closes and refreshes without offering
     // a duplicate create or navigating to an unconfirmed local identifier.
