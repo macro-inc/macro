@@ -100,6 +100,9 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
   const [keepId, setKeepId] = createSignal<string>();
   const [review, setReview] = createSignal<ReviewState>({ t: 'loading' });
   const [sharing, setSharing] = createSignal<MergeSharingChoice>('keep');
+  // The choice an unconfirmed commit sent: a retry under its request key has
+  // to send the same command, so the choice stays until a new review.
+  const [attempted, setAttempted] = createSignal<MergeSharingChoice>();
   const [notice, setNotice] = createSignal<string>();
   const [pending, setPending] = createSignal(false);
   let reviewGeneration = 0;
@@ -121,6 +124,7 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
     });
     if (generation !== reviewGeneration) return;
     if (!answer.ok) return setReview({ t: 'refused', refusal: answer.refusal });
+    setAttempted(undefined);
     if (answer.value.sharingRules && !answer.value.sharingRules.keepFits)
       setSharing('stop');
     setReview({
@@ -143,12 +147,13 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
     if (current.t !== 'ready' || pending()) return;
     setPending(true);
     setNotice(undefined);
+    const sharingRules = attempted() ?? sharing();
     const answer = await commands.commit({
       survivorId: current.survivor.id,
       sourceIds: current.sources.map((source) => source.id),
       revision: current.review.revision,
       requestKey: current.requestKey,
-      sharingRules: sharing(),
+      sharingRules,
     });
     setPending(false);
     if (answer.ok) {
@@ -164,6 +169,7 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
     // The merge may have gone through: merging again sends the same key,
     // which answers with the first result instead of merging twice.
     if (answer.refusal.code === 'merge_unconfirmed') {
+      setAttempted(sharingRules);
       setNotice(t('crm.mergeUnconfirmed'));
       return;
     }
@@ -299,7 +305,8 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
                     <ReviewBody
                       review={current()}
                       survivor={survivor()?.name ?? ''}
-                      sharing={sharing()}
+                      sharing={attempted() ?? sharing()}
+                      sharingLocked={attempted() !== undefined}
                       onSharing={setSharing}
                       valueLabel={valueLabel}
                     />
@@ -489,6 +496,7 @@ function ReviewBody(props: {
   review: MergeReview;
   survivor: string;
   sharing: MergeSharingChoice;
+  sharingLocked: boolean;
   onSharing: (choice: MergeSharingChoice) => void;
   valueLabel: (propertyId: string, value: unknown) => string | undefined;
 }) {
@@ -620,6 +628,7 @@ function ReviewBody(props: {
               aria-label={t('crm.mergeSharingLabel')}
               class="grid gap-1.5"
               value={props.sharing}
+              disabled={props.sharingLocked}
               onChange={(value) => props.onSharing(value as MergeSharingChoice)}
             >
               <RadioGroup.Item value="keep" disabled={!rules().keepFits}>

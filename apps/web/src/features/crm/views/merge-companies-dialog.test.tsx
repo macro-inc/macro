@@ -42,18 +42,24 @@ vi.mock('@ui', async () => {
   const { createContext, useContext } = await import('solid-js');
   const Group = createContext<{
     value: () => string | undefined;
+    disabled: () => boolean;
     onChange: (value: string) => void;
   }>();
   const RadioGroup = Object.assign(
     (
       props: ParentProps<{
         value?: string;
+        disabled?: boolean;
         onChange: (value: string) => void;
         'aria-label'?: string;
       }>
     ) => (
       <Group.Provider
-        value={{ value: () => props.value, onChange: props.onChange }}
+        value={{
+          value: () => props.value,
+          disabled: () => props.disabled ?? false,
+          onChange: props.onChange,
+        }}
       >
         <div role="radiogroup" aria-label={props['aria-label']}>
           {props.children}
@@ -69,7 +75,7 @@ vi.mock('@ui', async () => {
               type="radio"
               value={props.value}
               checked={group.value() === props.value}
-              disabled={props.disabled}
+              disabled={props.disabled || group.disabled()}
               onChange={() => group.onChange(props.value)}
             />
             {props.children}
@@ -464,4 +470,38 @@ it('keeps the review after an unconfirmed commit and retries it under the same k
   await vi.waitFor(() => expect(onMerged).toHaveBeenCalled());
   const [first, second] = commit.mock.calls.map(([input]) => input);
   expect(second.requestKey).toBe(first.requestKey);
+});
+
+it('retries an unconfirmed commit with the sharing choice it sent, which stays locked', async () => {
+  const commit = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: false,
+      refusal: { code: 'merge_unconfirmed' },
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      value: { survivorId: 'kept', mergedIds: ['old'] },
+    });
+  fixture.commands = {
+    review: vi.fn(async () => ({ ok: true as const, value: review() })),
+    commit,
+  };
+  open();
+  await reviewKeeping('Kept Co');
+
+  fireEvent.click(screen.getByRole('radio', { name: 'Stop sharing it' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Merge 2 companies' }));
+  await screen.findByText(
+    'We couldn’t confirm the merge. Merge again to finish it; it won’t run twice.'
+  );
+  const stop = screen.getByRole('radio', { name: 'Stop sharing it' });
+  expect(stop).toHaveProperty('checked', true);
+  expect(stop).toHaveProperty('disabled', true);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Merge 2 companies' }));
+  await vi.waitFor(() => expect(onMerged).toHaveBeenCalled());
+  const [first, second] = commit.mock.calls.map(([input]) => input);
+  expect(first.sharingRules).toBe('stop');
+  expect(second).toEqual(first);
 });
