@@ -2,6 +2,9 @@
   "name": "@macro-inc/captcha-vision-lab",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "lab:smoke": "bun src/cli.ts",
     "lab:kimi-stand-in": "bun src/stand-in-cli.ts",

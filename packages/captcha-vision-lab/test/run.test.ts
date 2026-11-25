@@ -4,6 +4,7 @@
  * negative case still holds a genuine, consumed capability where it can.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { relation } from '../src/families.ts';
@@ -478,4 +479,37 @@ test('a browser that cannot start is a kept browser_error, no planner call', asy
   expect(record.actions).toHaveLength(0);
   expect(inputs).toHaveLength(0);
   expect(lab.stats().submissions).toBe(0);
+});
+
+test('Node older than 22.18 is rejected before starting the host', async () => {
+  const bin = await mkdtemp(join(tmpdir(), 'captcha-vision-node-test-'));
+  const node = join(bin, 'node');
+  const hostStarted = `${node}.started`;
+  const previousPath = process.env.PATH;
+  const lab = createLab();
+  handler = lab.fetch;
+  const { planner, inputs } = recordingPlanner('A');
+
+  try {
+    await writeFile(
+      node,
+      '#!/bin/sh\n' +
+        'if [ "$1" = "--version" ]; then printf "v22.17.1\\n"; exit 0; fi\n' +
+        ': > "$0.started"\n' +
+        'exit 1\n'
+    );
+    await chmod(node, 0o755);
+    process.env.PATH = `${bin}:${previousPath ?? ''}`;
+
+    const record = await run(lab, planner);
+
+    expect(record.outcome).toBe('browser_error');
+    expect(record.detail).toBe('browser_launch_failed');
+    expect(inputs).toHaveLength(0);
+    expect(await Bun.file(hostStarted).exists()).toBe(false);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    await rm(bin, { recursive: true, force: true });
+  }
 });

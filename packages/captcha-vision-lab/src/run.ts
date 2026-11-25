@@ -244,8 +244,11 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     if (!executableOk(input.executablePath)) {
       return finish('browser_error', 'browser_launch_failed');
     }
-    host = startBrowserHost();
-    if (host === undefined) return finish('browser_error', 'node_missing');
+    const startedHost = startBrowserHost();
+    if (typeof startedHost === 'string') {
+      return finish('browser_error', startedHost);
+    }
+    host = startedHost;
     profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-'));
 
     const opened = await host.request({

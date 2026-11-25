@@ -18,10 +18,11 @@ stealth or evasion. The lab answers only its own quiz, only at
 
 From this directory, use the repository dev shell in each lab terminal so
 installation and execution both use the same Bun as CI.
-The runner drives Chromium from a Node child process, so `node` 22.18 or
-newer (it runs the TypeScript host directly) must be on `PATH` too; the dev
-shell's does. A challenge's browser is stopped at its three-minute deadline
-plus up to 15 s of shutdown.
+The runner drives Chromium from a Node child process and requires `node`
+22.18.0 or newer on `PATH` to run the TypeScript host directly. The dev shell
+provides it. An older runtime is rejected before host startup and recorded
+as `browser_launch_failed`. A challenge's browser is stopped at its
+three-minute deadline plus up to 15 s of shutdown.
 
 ```sh
 nix develop ../..

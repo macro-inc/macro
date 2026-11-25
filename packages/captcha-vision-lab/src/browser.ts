@@ -15,6 +15,8 @@ import {
 } from './host-protocol.ts';
 
 const HOST_SCRIPT = join(import.meta.dir, 'browser-host.ts');
+const MINIMUM_NODE_VERSION = '22.18.0';
+const NODE_VERSION_TIMEOUT_MS = 5_000;
 
 export type BrowserHost = {
   request: (message: HostRequest) => Promise<HostReply>;
@@ -30,11 +32,32 @@ export type BrowserHost = {
 /** How long the host has to exit after SIGTERM before it is killed. */
 const STOP_TIMEOUT_MS = 5_000;
 
-/** Starts a host, or undefined when there is no `node` to run it. */
-export const startBrowserHost = (): BrowserHost | undefined => {
+/** Starts a host or returns the failure to record for an unusable runtime. */
+export const startBrowserHost = ():
+  | BrowserHost
+  | 'node_missing'
+  | 'browser_launch_failed' => {
   const env = hostEnvironment();
   const node = Bun.which('node', { PATH: env.PATH ?? '' });
-  if (node === null) return undefined;
+  if (node === null) return 'node_missing';
+
+  const version = Bun.spawnSync([node, '--version'], {
+    env,
+    timeout: NODE_VERSION_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
+  });
+  if (
+    !version.success ||
+    !Bun.semver.satisfies(
+      version.stdout.toString().trim(),
+      `>=${MINIMUM_NODE_VERSION}`
+    )
+  ) {
+    console.error(
+      `Browser host requires Node.js ${MINIMUM_NODE_VERSION} or newer.`
+    );
+    return 'browser_launch_failed';
+  }
 
   const child = Bun.spawn([node, HOST_SCRIPT], {
     env,

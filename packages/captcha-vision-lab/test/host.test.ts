@@ -117,7 +117,7 @@ describe('a host with an open page', () => {
     const issued = lab.issue('relation', sessionNonce);
     const profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-test-'));
     const host = startBrowserHost();
-    if (host === undefined) throw new Error('no node on PATH');
+    if (typeof host === 'string') throw new Error(host);
     const opened = await host.request({
       type: 'open',
       targetUrl: LAB_URL,
@@ -166,7 +166,7 @@ describe('a host with an open page', () => {
     const profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-test-'));
     const host = startBrowserHost();
     try {
-      if (host === undefined) throw new Error('no node on PATH');
+      if (typeof host === 'string') throw new Error(host);
       const opened = await host.request({
         type: 'open',
         targetUrl: LAB_URL,
@@ -177,7 +177,7 @@ describe('a host with an open page', () => {
       });
       expect(opened).toMatchObject({ type: 'opened', result: 'load_failed' });
     } finally {
-      await host?.stop();
+      if (typeof host !== 'string') await host.stop();
       await rm(profile, { recursive: true, force: true });
     }
   }, 30_000);
