@@ -42,9 +42,9 @@ impl AccountCapacity {
 }
 /// Largest supported full RFC822 source, matching the existing transport limit.
 pub(crate) const MAX_MESSAGE_SOURCE_BYTES: u32 = 25 * 1024 * 1024;
-/// Keep aligned with the fenced five-minute PostgreSQL command lease (pinned by DB tests).
+/// Duration of the fenced PostgreSQL command lease.
 pub(crate) const COMMAND_LEASE_BUDGET: std::time::Duration = std::time::Duration::from_secs(300);
-/// Keep aligned with the PostgreSQL owner lease (pinned by DB tests).
+/// Duration of the distinct PostgreSQL owner lease.
 pub(crate) const OWNER_LEASE_BUDGET: std::time::Duration = std::time::Duration::from_secs(360);
 /// Renew well before owner expiry, including while queued for admission.
 pub(crate) const OWNER_RENEW_INTERVAL: std::time::Duration =
@@ -431,6 +431,20 @@ pub enum Error {
     /// The full message source exceeds the supported content limit.
     #[error("message too large")]
     MessageTooLarge,
+}
+
+impl Error {
+    /// Bounded retry delay for responses carrying an IMAP admission limit.
+    pub fn retry_after_seconds(self) -> Option<u32> {
+        match self {
+            Self::Throttled => Some(60),
+            Self::RateLimited {
+                retry_after_seconds,
+            } => Some(retry_after_seconds.clamp(1, 86_400)),
+            Self::AccountBusy => Some(5),
+            _ => None,
+        }
+    }
 }
 
 /// A message's current location. Never look up a UID without the account and folder.

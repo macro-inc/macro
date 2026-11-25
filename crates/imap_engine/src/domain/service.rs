@@ -257,11 +257,6 @@ impl Engine {
             .await?;
         credentials.binding = Some(binding);
         let ciphertext = self.cipher.encrypt(link, &v.user_id, &credentials).await?;
-        let binding = Binding {
-            link_id: link,
-            sync_generation: input.sync_generation,
-            grant_generation: input.grant_generation,
-        };
         self.repository
             .connect(binding, &v.user_id, ciphertext, input.verification_id)
             .await?;
@@ -317,8 +312,7 @@ impl Engine {
         if let Operation::RecentInbox { limit } = operation {
             return self.recent_inbox(binding, limit, class).await;
         }
-        let retryable = (operation.access() == OperationAccess::Read
-            && !matches!(&operation, Operation::RecentInbox { .. }))
+        let retryable = operation.access() == OperationAccess::Read
             || matches!(&operation, Operation::Apply { .. });
         if !retryable {
             return self

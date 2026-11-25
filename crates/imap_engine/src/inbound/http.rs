@@ -111,14 +111,11 @@ impl IntoResponse for ApiError {
             }
             Error::MessageTooLarge | Error::SnapshotTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         };
-        let (code, retry_after_seconds) = match self.0 {
-            Error::RateLimited {
-                retry_after_seconds,
-            } => (Error::Throttled, Some(retry_after_seconds.clamp(1, 86_400))),
-            Error::Throttled => (self.0, Some(60)),
-            Error::AccountBusy => (self.0, Some(5)),
-            _ => (self.0, None),
+        let code = match self.0 {
+            Error::RateLimited { .. } => Error::Throttled,
+            error => error,
         };
+        let retry_after_seconds = self.0.retry_after_seconds();
         let mut response = (
             status,
             Json(serde_json::json!({

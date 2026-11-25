@@ -40,7 +40,7 @@ pub(super) fn decode_location(
 
 #[derive(Clone, serde::Serialize)]
 struct Entry {
-    kind: String,
+    kind: StateEntryKind,
     key: String,
     folder_id: Option<String>,
     message_id: Option<String>,
@@ -51,6 +51,12 @@ struct Entry {
     document: Value,
     body: Option<String>,
 }
+#[derive(serde::Serialize)]
+struct DeletedEntry<'a> {
+    kind: StateEntryKind,
+    key: &'a str,
+}
+
 fn serialize_fingerprint<S: serde::Serializer>(
     fingerprint: &Option<MessageFingerprint>,
     serializer: S,
@@ -61,9 +67,13 @@ fn serialize_fingerprint<S: serde::Serializer>(
     }
 }
 impl Entry {
-    fn new(kind: &str, key: String, value: &impl serde::Serialize) -> Result<Self, Error> {
+    fn new(
+        kind: StateEntryKind,
+        key: String,
+        value: &impl serde::Serialize,
+    ) -> Result<Self, Error> {
         Ok(Self {
-            kind: kind.into(),
+            kind,
             key,
             folder_id: None,
             message_id: None,
@@ -88,7 +98,7 @@ fn entries(state: &AccountState) -> Result<Vec<Entry>, Error> {
         let mut f = f.clone();
         for c in std::mem::take(&mut f.journal) {
             let mut e = Entry::new(
-                "change",
+                StateEntryKind::Change,
                 format!("{}:{}:{:020}", id, f.uid_validity, c.sequence),
                 &c,
             )?;
@@ -96,37 +106,45 @@ fn entries(state: &AccountState) -> Result<Vec<Entry>, Error> {
             e.sequence = Some(i64::try_from(c.sequence).map_err(|_| Error::Invalid)?);
             rows.push(e);
         }
-        rows.push(Entry::new("folder", id.clone(), &f)?);
+        rows.push(Entry::new(StateEntryKind::Folder, id.clone(), &f)?);
     }
     for (id, m) in &state.messages {
-        let mut e = Entry::new("message", id.clone(), m)?;
+        let mut e = Entry::new(StateEntryKind::Message, id.clone(), m)?;
         e.folder_id = Some(m.folder_id.clone());
         e.received_at = Some(m.received_at);
         rows.push(e);
     }
     for l in &state.locations {
-        let mut e = Entry::new("location", l.storage_key(), &LocationDocument::from(l))?;
+        let mut e = Entry::new(
+            StateEntryKind::Location,
+            l.storage_key(),
+            &LocationDocument::from(l),
+        )?;
         e.folder_id = Some(l.folder_id.clone());
         e.message_id = Some(l.message_id.clone());
         e.fingerprint = Some(l.fingerprint);
         rows.push(e);
     }
     for (id, t) in &state.thread_refs {
-        rows.push(Entry::new("thread", id.clone(), t)?);
+        rows.push(Entry::new(StateEntryKind::Thread, id.clone(), t)?);
     }
     for (id, d) in &state.drafts {
         let mut d = d.clone();
         for (cid, attachment) in std::mem::take(&mut d.attachments) {
-            let mut e = Entry::new("attachment", format!("{id}/{cid}"), &attachment)?;
+            let mut e = Entry::new(
+                StateEntryKind::Attachment,
+                format!("{id}/{cid}"),
+                &attachment,
+            )?;
             e.message_id = Some(id.clone());
             rows.push(e);
         }
-        rows.push(Entry::new("draft", id.clone(), &d)?);
+        rows.push(Entry::new(StateEntryKind::Draft, id.clone(), &d)?);
     }
     for (id, u) in &state.uploads {
         let mut u = u.clone();
         let bytes = std::mem::take(&mut u.bytes);
-        let mut e = Entry::new("upload", id.to_string(), &u)?;
+        let mut e = Entry::new(StateEntryKind::Upload, id.to_string(), &u)?;
         e.message_id = Some(u.draft_id.clone());
         e.body = Some(STANDARD.encode(bytes));
         rows.push(e);
@@ -136,22 +154,22 @@ fn entries(state: &AccountState) -> Result<Vec<Entry>, Error> {
 fn hydrate(state: &mut AccountState, rows: &[Entry]) -> Result<(), Error> {
     // Parents before children, independent of database order.
     for e in rows {
-        match e.kind.as_str() {
-            "folder" => {
+        match e.kind {
+            StateEntryKind::Folder => {
                 state.folders.insert(
                     e.key.clone(),
                     serde_json::from_value(e.document.clone())
                         .map_err(|_| Error::ConnectionUnavailable)?,
                 );
             }
-            "message" => {
+            StateEntryKind::Message => {
                 state.messages.insert(
                     e.key.clone(),
                     serde_json::from_value(e.document.clone())
                         .map_err(|_| Error::ConnectionUnavailable)?,
                 );
             }
-            "location" => {
+            StateEntryKind::Location => {
                 let location = decode_location(
                     e.document.clone(),
                     e.fingerprint.ok_or(Error::ConnectionUnavailable)?,
@@ -161,21 +179,21 @@ fn hydrate(state: &mut AccountState, rows: &[Entry]) -> Result<(), Error> {
                 }
                 state.locations.push(location);
             }
-            "thread" => {
+            StateEntryKind::Thread => {
                 state.thread_refs.insert(
                     e.key.clone(),
                     serde_json::from_value(e.document.clone())
                         .map_err(|_| Error::ConnectionUnavailable)?,
                 );
             }
-            "draft" => {
+            StateEntryKind::Draft => {
                 state.drafts.insert(
                     e.key.clone(),
                     serde_json::from_value(e.document.clone())
                         .map_err(|_| Error::ConnectionUnavailable)?,
                 );
             }
-            "upload" => {
+            StateEntryKind::Upload => {
                 let mut u: Upload = serde_json::from_value(e.document.clone())
                     .map_err(|_| Error::ConnectionUnavailable)?;
                 u.bytes = STANDARD
@@ -183,11 +201,11 @@ fn hydrate(state: &mut AccountState, rows: &[Entry]) -> Result<(), Error> {
                     .map_err(|_| Error::ConnectionUnavailable)?;
                 state.uploads.insert(u.session.id, u);
             }
-            _ => {}
+            StateEntryKind::Change | StateEntryKind::Attachment => {}
         }
     }
     for e in rows {
-        if e.kind == "change" {
+        if e.kind == StateEntryKind::Change {
             if let Some(f) = e
                 .folder_id
                 .as_ref()
@@ -198,7 +216,7 @@ fn hydrate(state: &mut AccountState, rows: &[Entry]) -> Result<(), Error> {
                         .map_err(|_| Error::ConnectionUnavailable)?,
                 );
             }
-        } else if e.kind == "attachment"
+        } else if e.kind == StateEntryKind::Attachment
             && let Some(d) = e
                 .message_id
                 .as_ref()
@@ -223,7 +241,7 @@ macro_rules! load {
             .map_err(super::acquisition::load_error)?
         {
             $rows.push(Entry {
-                kind: r.kind,
+                kind: r.kind.parse().map_err(|_| Error::ConnectionUnavailable)?,
                 key: r.key,
                 folder_id: r.folder_id,
                 message_id: r.message_id,
@@ -273,8 +291,15 @@ impl PgRepository {
                             AND kind = ANY ($2)
                         "#,
                         link,
-                        &["folder", "message", "location", "change", "thread", "draft"]
-                            .map(str::to_owned)[..],
+                        &[
+                            StateEntryKind::Folder,
+                            StateEntryKind::Message,
+                            StateEntryKind::Location,
+                            StateEntryKind::Change,
+                            StateEntryKind::Thread,
+                            StateEntryKind::Draft,
+                        ]
+                        .map(|kind| kind.as_ref().to_owned())[..],
                     )
                 );
             }
@@ -354,7 +379,7 @@ impl PgRepository {
                         // The preceding recent-message query caps these keys at 100.
                         let ids = rows
                             .iter()
-                            .filter(|e| e.kind == "message")
+                            .filter(|e| e.kind == StateEntryKind::Message)
                             .map(|e| e.key.clone())
                             .collect::<Vec<_>>();
                         load!(
@@ -436,7 +461,7 @@ impl PgRepository {
                         );
                         if let Some(id) = rows
                             .iter()
-                            .find(|e| e.kind == "upload")
+                            .find(|e| e.kind == StateEntryKind::Upload)
                             .and_then(|e| e.message_id.clone())
                         {
                             self.load_draft(connection, link, &id, &mut rows).await?;
@@ -539,7 +564,7 @@ impl PgRepository {
             .map(|entry| {
                 let (hash, bytes) = entry.hash_and_size()?;
                 encoded_bytes = encoded_bytes.saturating_add(bytes);
-                Ok(((entry.kind.clone(), entry.key.clone()), hash))
+                Ok(((entry.kind, entry.key.clone()), hash))
             })
             .collect::<Result<_, Error>>()?;
         let span = tracing::Span::current();
@@ -629,7 +654,7 @@ impl PgRepository {
         );
         let reply = rows
             .iter()
-            .find(|e| e.kind == "draft" && e.key == id)
+            .find(|e| e.kind == StateEntryKind::Draft && e.key == id)
             .and_then(|e| serde_json::from_value::<DraftState>(e.document.clone()).ok())
             .and_then(|d| d.input.reply_to);
         if let Some(reply) = reply {
@@ -643,7 +668,7 @@ impl PgRepository {
         let mut next = BTreeMap::new();
         let mut changed = Vec::new();
         for e in rows {
-            let key = (e.kind.clone(), e.key.clone());
+            let key = (e.kind, e.key.clone());
             let hash = e.hash()?;
             if a.checkpoint.get(&key) != Some(&hash) {
                 changed.push(e);
@@ -654,7 +679,7 @@ impl PgRepository {
             .checkpoint
             .keys()
             .filter(|k| !next.contains_key(*k))
-            .map(|(kind, key)| serde_json::json!({"kind":kind,"key":key}))
+            .map(|(kind, key)| DeletedEntry { kind: *kind, key })
             .collect::<Vec<_>>();
         let mut tx = self
             .pool
@@ -672,8 +697,8 @@ impl PgRepository {
         let revision = Self::write_health(&mut tx, a).await?;
         let removed_drafts = deleted
             .iter()
-            .filter(|v| v["kind"] == "draft")
-            .filter_map(|v| v["key"].as_str().map(str::to_owned))
+            .filter(|entry| entry.kind == StateEntryKind::Draft)
+            .map(|entry| entry.key.to_owned())
             .collect::<Vec<_>>();
         if !removed_drafts.is_empty() {
             sqlx::query!(
@@ -776,7 +801,7 @@ impl PgRepository {
             SET
                 state = $6,
                 revision = revision + 1,
-                lease_until = now() + interval '5 minutes',
+                lease_until = now() + make_interval(secs => $7::double precision),
                 updated_at = now()
             WHERE
                 link_id = $1
@@ -807,6 +832,7 @@ impl PgRepository {
             lease,
             a.revision,
             health,
+            COMMAND_LEASE_BUDGET.as_secs_f64(),
         )
         .fetch_optional(&mut **tx)
         .await
@@ -834,7 +860,7 @@ impl PgRepository {
 fn normalize_entries(rows: Vec<Entry>) -> Vec<Entry> {
     let mut unique = BTreeMap::new();
     for entry in rows {
-        unique.insert((entry.kind.clone(), entry.key.clone()), entry);
+        unique.insert((entry.kind, entry.key.clone()), entry);
     }
     unique.into_values().collect()
 }
@@ -846,7 +872,9 @@ mod fingerprint_order_test {
     fn fingerprint_hydration_normalizes_input_with_the_btree_map() {
         let rows = ["中", "a:b", "é", "Z", "a", "A"]
             .into_iter()
-            .map(|key| Entry::new("location", key.into(), &serde_json::json!({})).unwrap())
+            .map(|key| {
+                Entry::new(StateEntryKind::Location, key.into(), &serde_json::json!({})).unwrap()
+            })
             .collect::<Vec<_>>();
         let mut reversed = rows.clone();
         reversed.reverse();
@@ -861,7 +889,12 @@ mod fingerprint_order_test {
             keys(
                 ["A", "Z", "a", "a:b", "é", "中"]
                     .into_iter()
-                    .map(|key| Entry::new("location", key.into(), &serde_json::json!({})).unwrap())
+                    .map(|key| Entry::new(
+                        StateEntryKind::Location,
+                        key.into(),
+                        &serde_json::json!({})
+                    )
+                    .unwrap())
                     .collect()
             ),
             vec!["A", "Z", "a", "a:b", "é", "中"]

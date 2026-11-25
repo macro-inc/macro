@@ -35,11 +35,45 @@ pub struct Account {
     /// Serialized engine state.
     pub state: AccountState,
     /// Hashes of rows loaded by this operation, for bounded differential persistence.
-    pub checkpoint: std::collections::BTreeMap<(String, String), [u8; 32]>,
+    pub checkpoint: std::collections::BTreeMap<(StateEntryKind, String), [u8; 32]>,
     /// Current compare-and-swap revision.
     pub revision: i64,
     /// Distributed write lease; None is a read-only snapshot.
     pub lease_id: Option<Uuid>,
+}
+
+/// The persisted components of an account snapshot, in storage-key order.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    strum::EnumString,
+    strum::AsRefStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum StateEntryKind {
+    /// Draft attachment data.
+    Attachment,
+    /// Folder journal event.
+    Change,
+    /// Draft and submission state.
+    Draft,
+    /// Folder metadata.
+    Folder,
+    /// Remote message location.
+    Location,
+    /// Logical message metadata.
+    Message,
+    /// Message-to-thread mapping.
+    Thread,
+    /// Draft upload checkpoint.
+    Upload,
 }
 
 /// The bounded facts needed by one use case; only synchronization loads the full index.

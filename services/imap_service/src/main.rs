@@ -13,7 +13,7 @@ use imap_engine::{
 use macro_config::ConfigLoader;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 mod config;
 mod database;
@@ -34,25 +34,27 @@ async fn main() -> Result<(), rootcause::Report> {
     if config.internal_auth_key.trim().is_empty() {
         return Err(rootcause::report!("INTERNAL_AUTH_KEY must be nonempty"));
     }
-    let local =
-        !config.imap_test_endpoint_map.is_empty() || !config.imap_test_trust_root_pem.is_empty();
+    let endpoint_map = config
+        .imap_test_endpoint_map
+        .value()
+        .filter(|value| !value.is_empty());
+    let trust_root = config
+        .imap_test_trust_root_pem
+        .value()
+        .filter(|value| !value.is_empty());
+    let local = endpoint_map.is_some() || trust_root.is_some();
     if local && !matches!(config.environment, Environment::Local) {
         return Err(rootcause::report!(
             "IMAP test overrides require local environment"
         ));
     }
-    let addresses = if config.imap_test_endpoint_map.is_empty() {
-        BTreeMap::new()
-    } else {
-        serde_json::from_str(&config.imap_test_endpoint_map)?
-    };
+    let addresses = endpoint_map
+        .map(serde_json::from_str)
+        .transpose()?
+        .unwrap_or_default();
     let endpoints = LocalEndpoints {
         addresses,
-        trust_root_pem: if config.imap_test_trust_root_pem.is_empty() {
-            None
-        } else {
-            Some(config.imap_test_trust_root_pem)
-        },
+        trust_root_pem: trust_root.map(str::to_owned),
     };
     let connector = Connector::new(endpoints)?;
     let pool = database::pool(config.database_url.as_ref())?;

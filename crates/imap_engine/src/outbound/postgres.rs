@@ -111,7 +111,7 @@ impl Repository for PgRepository {
                 $4,
                 a.sync_generation,
                 a.grant_generation,
-                now() + interval '360 seconds'
+                now() + make_interval(secs => $5::double precision)
             FROM
                 imap_accounts a
                 JOIN email_links l ON l.id = a.link_id
@@ -140,6 +140,7 @@ impl Repository for PgRepository {
             b.sync_generation,
             b.grant_generation,
             owner,
+            OWNER_LEASE_BUDGET.as_secs_f64(),
         ).fetch_optional(&self.pool).await.map_err(|_|Error::ConnectionUnavailable)?;
         Ok(row.is_some())
     }
@@ -514,7 +515,7 @@ impl Repository for PgRepository {
             UPDATE
                 imap_accounts a
             SET
-                lease_until = now() + interval '5 minutes'
+                lease_until = now() + make_interval(secs => $6::double precision)
             FROM
                 email_links l
             WHERE
@@ -537,6 +538,7 @@ impl Repository for PgRepository {
             a.binding.grant_generation,
             lease,
             a.revision,
+            COMMAND_LEASE_BUDGET.as_secs_f64(),
         )
         .execute(&self.pool)
         .await

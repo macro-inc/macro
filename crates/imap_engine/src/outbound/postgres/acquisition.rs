@@ -61,7 +61,7 @@ impl PgRepository {
                 imap_accounts a
             SET
                 lease_id = $4,
-                lease_until = now() + interval '5 minutes'
+                lease_until = now() + make_interval(secs => $5::double precision)
             FROM
                 email_links l
             WHERE
@@ -87,6 +87,7 @@ impl PgRepository {
             b.sync_generation,
             b.grant_generation,
             lease,
+            COMMAND_LEASE_BUDGET.as_secs_f64(),
         )
         .fetch_optional(&mut *tx)
         .await
