@@ -14,6 +14,7 @@ import {
   SEARCH_DATE_SPANS,
   SEARCH_STARTERS,
   type SearchStarter,
+  searchStarterApplies,
   searchStarterLabel,
   searchStarterValue,
   startSearchOperator,
@@ -43,7 +44,11 @@ export function MobileSearchStarters(props: {
   setQuery: (text: string) => void;
 }) {
   const items = createMemo(() =>
-    SEARCH_STARTERS.map((starter) => {
+    // A starter whose operator no kind left can meet is left out (Date and
+    // Unread beside `type:task`), rather than written as a word.
+    SEARCH_STARTERS.filter((starter) =>
+      searchStarterApplies(props.query(), starter)
+    ).map((starter) => {
       const set = searchStarterValue(props.query(), starter);
       return {
         value: starter,
@@ -93,7 +98,14 @@ export function createMobileSearchSuggestions(
     return names.includes(typed.name) ? typed.value : undefined;
   };
   const values = createSearchOperatorValues(personTyped);
-  const rows = createMemo(() => searchOperatorCompletions(query(), values()));
+  // Rows open once an operator's colon is typed: offering names for any two
+  // letters would cover the results while typing words like "status".
+  const rows = createMemo(() => {
+    const typed = typing();
+    return typed && 'name' in typed
+      ? searchOperatorCompletions(query(), values())
+      : [];
+  });
   // A date operator still being typed, not a whole one such as Unread left
   // at the end when it goes.
   const typesDate = createMemo(() => {
@@ -138,7 +150,7 @@ export function MobileSearchSuggestionRows(props: {
   return (
     <div
       data-keep-keyboard
-      class="px-3 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+      class="h-full overflow-y-auto overscroll-none px-3 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
     >
       <Show when={props.suggestions.rows().length > 0}>
         <SearchOperatorSuggestions

@@ -69,26 +69,26 @@ import type { MobileSearchSession } from './mobileSearchState';
  * The name results a query's operators leave: `type:` alone narrows them to
  * its category, words or not; any other operator, Mail's among them, narrows
  * past what a name match can be checked against, so the search lists full
- * text instead, as the Search view hides its name matches.
+ * text instead, as the Search view hides its name matches. Operators still
+ * being typed stay out of the name search.
  */
 export function nameSearch(
-  parts: SearchQueryParts,
-  query: string
+  parts: SearchQueryParts
 ): { query: string; category: EntitySearchCategory } | undefined {
-  if (parts.read.operators === 0) {
-    // The words leave no name to match when Mail's operators took them.
-    return parts.nameText === '' && query.trim() !== ''
-      ? undefined
-      : { query, category: 'all' };
-  }
   if (parts.read.groups.some((group) => group.name !== 'type'))
     return undefined;
+  // The words leave no name to match when Mail's operators took them.
+  if (parts.read.terms.length > 0 && parts.nameText === '') return undefined;
   const indexes = searchOperatorIndexes(parts.read);
-  if (indexes.length === SEARCH_OPERATOR_TYPES.length)
-    return { query: parts.nameText, category: 'all' };
-  const category = indexes.length === 1 ? indexes[0] : undefined;
-  const mapped = category ? searchIndexCategory(category) : undefined;
-  return mapped ? { query: parts.nameText, category: mapped } : undefined;
+  const only = indexes.length === 1 ? indexes[0] : undefined;
+  const category =
+    indexes.length === SEARCH_OPERATOR_TYPES.length
+      ? 'all'
+      : only && searchIndexCategory(only);
+  if (!category) return undefined;
+  // Typed words keep their quotes, which rank exact names first.
+  const query = parts.read.operators === 0 ? parts.serviceText : parts.nameText;
+  return { query, category };
 }
 
 function MobileNameResults(props: {
@@ -455,7 +455,7 @@ function MobileFullTextResults(props: {
 export function MobileSearchResults() {
   const session = createMobileSearchEntry();
   const parts = createMemo(() => searchQueryParts(session.query()));
-  const names = createMemo(() => nameSearch(parts(), session.query()));
+  const names = createMemo(() => nameSearch(parts()));
   const operatorLookup = createSearchOperatorLookup(createTagOptions());
   const suggestions = createMobileSearchSuggestions(
     session.query,

@@ -304,11 +304,9 @@ it('offers full text above empty results, only mounts it explicitly, and keeps t
   expect(document.activeElement).toBe(input);
   fireEvent.input(input, { target: { value: 'teo update' } });
   expect(SearchState.mode()).toBe('full-text');
-  SearchState.setCategory('email');
   expect(mocks.fullText).toHaveBeenCalledOnce();
   fireEvent.input(input, { target: { value: '  ' } });
   expect(SearchState.mode()).toBe('name');
-  expect(SearchState.category()).toBe('email');
   expect(screen.queryByText(/Search full text for/)).toBeNull();
   expect(screen.getByPlaceholderText('Search…')).toBe(input);
 });
@@ -364,7 +362,6 @@ it('preserves the search after a failed person lookup and on return from a succe
     throw new Error('Unavailable');
   });
   SearchState.setQuery('teo');
-  SearchState.setCategory('people');
   render(() => <MobileSearchResults />);
   fireEvent.click(screen.getByRole('button', { name: 'Teo' }));
   await waitFor(() =>
@@ -374,7 +371,6 @@ it('preserves the search after a failed person lookup and on return from a succe
   );
   expect(SearchState.isOpen()).toBe(true);
   expect(SearchState.query()).toBe('teo');
-  expect(SearchState.category()).toBe('people');
   expect(SearchState.mode()).toBe('name');
   fireEvent.click(screen.getByRole('button', { name: 'Teo' }));
   expect(SearchState.isOpen()).toBe(true);
@@ -389,7 +385,6 @@ it('preserves the search after a failed person lookup and on return from a succe
   mocks.setActive(true);
   expect(SearchState.isOpen()).toBe(true);
   expect(SearchState.query()).toBe('teo');
-  expect(SearchState.category()).toBe('people');
   expect(screen.getByRole('button', { name: 'Teo' })).toBeTruthy();
 });
 
@@ -408,7 +403,6 @@ it('opens the selected full-text message and hides the search chrome', () => {
   };
   mocks.fullTextItems = [email];
   SearchState.setQuery('teo');
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   render(() => <MobileSearchResults />);
   fireEvent.click(
@@ -420,7 +414,6 @@ it('opens the selected full-text message and hides the search chrome', () => {
   });
   expect(SearchState.isOpen()).toBe(false);
   expect(SearchState.query()).toBe('teo');
-  expect(SearchState.category()).toBe('email');
 });
 
 it('bounds mounted recent rows while keeping the first result usable', () => {
@@ -467,7 +460,6 @@ it('restores full-text order, query, category, mode and scroll after measuring r
   mocks.fullTextSettling = settling;
   mocks.hasMore = false;
   SearchState.setQuery('teo');
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   const view = render(() => <MobileSearchResults />);
   const list = screen.getByRole('region', { name: 'Search results' });
@@ -487,7 +479,6 @@ it('restores full-text order, query, category, mode and scroll after measuring r
   // A separate dock session must not overwrite this history entry.
   SearchState.open();
   SearchState.setQuery('another query');
-  SearchState.setCategory('tasks');
   SearchState.close();
   expect(mocks.entryState).toBe(entry);
   mocks.setActive(true);
@@ -503,7 +494,6 @@ it('restores full-text order, query, category, mode and scroll after measuring r
   const input = screen.getByPlaceholderText('Search…');
   expect(input).toHaveProperty('value', 'teo');
   expect(document.activeElement).not.toBe(input);
-  expect(SearchState.category()).toBe('email');
   expect(SearchState.mode()).toBe('full-text');
   expect(screen.getByText('Searching…')).toBeTruthy();
   expect(
@@ -547,7 +537,6 @@ it('reveals the same scrolled results when native Back uncovers search', () => {
   ];
   mocks.hasMore = false;
   SearchState.setQuery('teo');
-  SearchState.setCategory('email');
   SearchState.searchFullText();
   render(() => (
     <>
@@ -598,7 +587,6 @@ it('restores the name list order and scroll after opening promotes a result by r
       ...originalItems.filter((item) => item.id !== 'project-2'),
     ]);
   SearchState.setQuery('Project');
-  SearchState.setCategory('projects');
   const view = render(() => <MobileSearchResults />);
   fireEvent.scroll(screen.getByRole('region', { name: 'Search results' }), {
     target: { scrollTop: 800 },
@@ -622,7 +610,6 @@ it('restores the name list order and scroll after opening promotes a result by r
   mocks.setActive(true);
   render(() => <MobileSearchResults />);
   expect(SearchState.query()).toBe('Project');
-  expect(SearchState.category()).toBe('projects');
   const restoredList = screen.getByRole('region', { name: 'Search results' });
   await waitFor(() => expect(restoredList.scrollTop).toBe(800));
   fireEvent.scroll(restoredList);
@@ -960,7 +947,6 @@ it('does not revive saved name rows after a failed refresh or successful empty r
   mocks.refreshError = failed;
   mocks.hasMore = false;
   SearchState.setQuery('Project');
-  SearchState.setCategory('projects');
   const view = render(() => <MobileSearchResults />);
   fireEvent.click(screen.getByRole('button', { name: 'Project' }));
   view.unmount();
@@ -1272,7 +1258,6 @@ it('resumes viewport paging when editing a restored search in the dock', async (
   mocks.entryState = {
     'mobileSearch.session': {
       query: 'First',
-      category: 'all',
       mode: 'name',
     },
     'mobileSearch.nameScroll': {

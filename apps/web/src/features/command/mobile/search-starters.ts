@@ -1,4 +1,10 @@
-import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
+import {
+  isPhraseQuote,
+  readSearchOperators,
+  searchOperatorIndexes,
+  searchOperatorSpans,
+  splitSearchTerms,
+} from '@app/features/next-soup/core/search-operators';
 import { type TranslationKey, t } from '@app/lib/i18n';
 
 /**
@@ -34,7 +40,9 @@ function starterOf(token: string): StarterToken | undefined {
   const parsed = /^([A-Za-z_]+):(.*)$/s.exec(token);
   if (!parsed) return undefined;
   const name = (parsed[1] ?? '').toLowerCase();
-  const value = (parsed[2] ?? '').replace(/["“”„]/g, '');
+  const value = [...(parsed[2] ?? '')]
+    .filter((char) => !isPhraseQuote(char))
+    .join('');
   if (name === 'from' || name === 'type' || name === 'tag')
     return { starter: name, name, value };
   if (DATE_NAMES.includes(name)) return { starter: 'date', name, value };
@@ -43,15 +51,35 @@ function starterOf(token: string): StarterToken | undefined {
   return undefined;
 }
 
-const tokensOf = (text: string) =>
-  searchTextRuns(text).filter((run) => !/^\s/.test(run));
+/** The text's tokens, split by whitespace outside quotes, as typed. */
+function tokensOf(text: string): string[] {
+  const tokens: string[] = [];
+  let token = '';
+  let inQuotes = false;
+  for (const char of text) {
+    if (isPhraseQuote(char)) inQuotes = !inQuotes;
+    if (/\s/.test(char) && !inQuotes) {
+      if (token) tokens.push(token);
+      token = '';
+    } else {
+      token += char;
+    }
+  }
+  if (token) tokens.push(token);
+  return tokens;
+}
 
 /** The last operator `starter` sets in `text`, with a value, if any. */
 export function searchStarterValue(
   text: string,
   starter: SearchStarter
 ): StarterToken | undefined {
+  // As the search reads it: beside `type:task`, `is:unread` is a word.
+  const read = new Set(
+    searchOperatorSpans(text).map(({ start, end }) => text.slice(start, end))
+  );
   return tokensOf(text)
+    .filter((token) => read.has(token))
     .map(starterOf)
     .filter(
       (token): token is StarterToken =>
@@ -70,19 +98,40 @@ export function startSearchOperator(
   starter: SearchStarter
 ): string {
   const tokens = tokensOf(text);
-  const kept = tokens.filter((token) => starterOf(token)?.starter !== starter);
-  const joined = kept.filter(
+  const removed = tokens.map((token) => starterOf(token)?.starter === starter);
+  // An `OR` that joined a removed operator goes with it.
+  const joined = tokens.filter(
     (token, index) =>
-      token !== 'OR' ||
-      (index > 0 && index < kept.length - 1 && kept[index + 1] !== 'OR')
+      !removed[index] &&
+      (token !== 'OR' || (!removed[index - 1] && !removed[index + 1]))
   );
-  // Unread is whole as written, so a space follows for the next word.
+  // What is left keeps a space after it for the next word, as typing does.
   if (starter === 'unread') {
-    const had = kept.length !== tokens.length;
-    return had ? joined.join(' ') : `${[...joined, 'is:unread'].join(' ')} `;
+    const rest = removed.some(Boolean) ? joined : [...joined, 'is:unread'];
+    return rest.length ? `${rest.join(' ')} ` : '';
   }
   const name = starter === 'date' ? 'newer_than' : starter;
   return [...joined, `${name}:`].join(' ');
+}
+
+/**
+ * Whether the kinds the text leaves to search can meet `starter`'s
+ * operator: Date and Unread are Mail's, and From names a sender of mail,
+ * messages or calls.
+ */
+export function searchStarterApplies(
+  text: string,
+  starter: SearchStarter
+): boolean {
+  if (starter === 'type' || starter === 'tag') return true;
+  const indexes = searchOperatorIndexes(
+    readSearchOperators(splitSearchTerms(text))
+  );
+  if (indexes.includes('email')) return true;
+  return (
+    starter === 'from' &&
+    (indexes.includes('channels') || indexes.includes('calls'))
+  );
 }
 
 /** What a starter's pill reads: its name, or the value the text sets. */

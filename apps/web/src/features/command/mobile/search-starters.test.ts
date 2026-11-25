@@ -6,6 +6,7 @@ vi.mock('@app/lib/i18n', () => ({
 }));
 
 import {
+  searchStarterApplies,
   searchStarterLabel,
   searchStarterValue,
   startSearchOperator,
@@ -32,7 +33,28 @@ describe('startSearchOperator', () => {
 
   it('toggles Unread', () => {
     expect(startSearchOperator('launch', 'unread')).toBe('launch is:unread ');
-    expect(startSearchOperator('is:unread launch', 'unread')).toBe('launch');
+    expect(startSearchOperator('is:unread launch', 'unread')).toBe('launch ');
+    expect(startSearchOperator('is:unread', 'unread')).toBe('');
+  });
+
+  it('reads curly quotes and takes an OR with the operator it joined', () => {
+    expect(startSearchOperator('tag:“Q3 launch” hello', 'tag')).toBe(
+      'hello tag:'
+    );
+    expect(
+      startSearchOperator('hello type:task OR type:doc world', 'type')
+    ).toBe('hello world type:');
+  });
+});
+
+describe('searchStarterApplies', () => {
+  it('offers Mail’s starters only where email is searched', () => {
+    expect(searchStarterApplies('launch', 'unread')).toBe(true);
+    expect(searchStarterApplies('type:task launch', 'unread')).toBe(false);
+    expect(searchStarterApplies('type:task launch', 'date')).toBe(false);
+    expect(searchStarterApplies('type:task launch', 'from')).toBe(false);
+    expect(searchStarterApplies('type:channel', 'from')).toBe(true);
+    expect(searchStarterApplies('type:task', 'tag')).toBe(true);
   });
 });
 
@@ -45,6 +67,10 @@ describe('searchStarterLabel', () => {
   it('names the starter until the text sets a value', () => {
     expect(label('launch', 'from')).toBe('searchOperators.starterFrom');
     expect(label('launch from:', 'from')).toBe('searchOperators.starterFrom');
+    // Beside type:task, Mail's from: is a word and sets nothing.
+    expect(label('type:task from:me', 'from')).toBe(
+      'searchOperators.starterFrom'
+    );
   });
 
   it('shows the value the text sets', () => {
@@ -52,6 +78,7 @@ describe('searchStarterLabel', () => {
     expect(label('from:ana@example.com', 'from')).toBe('ana@example.com');
     expect(label('type:task', 'type')).toBe('searchOperators.typeTask');
     expect(label('tag:"Q3 launch"', 'tag')).toBe('Q3 launch');
+    expect(label('tag:“Q3 launch” hello', 'tag')).toBe('Q3 launch');
     expect(label('newer_than:7d', 'date')).toBe('searchOperators.lastWeek');
     expect(label('after:2026/06/01', 'date')).toBe(
       'searchOperators.after {"date":"2026/06/01"}'

@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { shouldUseUniversalInput } from './universal-input-mode';
+import {
+  shouldUseUniversalInput,
+  shouldUseUniversalInputForSearch,
+} from './universal-input-mode';
 
 it.each([
   ['investor update', false],
@@ -15,11 +18,14 @@ it.each([
   expect(shouldUseUniversalInput(text)).toBe(expected);
 });
 
-it('leaves typed search operators out of the length', () => {
-  expect(
-    shouldUseUniversalInput('type:task assignee:me status:in_progress')
-  ).toBe(false);
-  expect(shouldUseUniversalInput(`type:task ${'a'.repeat(34)}`)).toBe(true);
+it('leaves typed search operators out of the phone Search length', () => {
+  const operators = 'type:task assignee:me status:in_progress';
+  expect(shouldUseUniversalInputForSearch(operators)).toBe(false);
+  expect(shouldUseUniversalInput(operators)).toBe(true);
+  expect(shouldUseUniversalInputForSearch(`type:task ${'a'.repeat(34)}`)).toBe(
+    true
+  );
+  expect(shouldUseUniversalInputForSearch(operators, true)).toBe(true);
 });
 
 it('keeps a shorter edited draft in composer mode until cleared', () => {

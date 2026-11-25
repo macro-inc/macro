@@ -14,7 +14,7 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { CommandMenuSearchInput } from '@ui';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, on, Show, Suspense } from 'solid-js';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { SearchState } from './mobileSearchState';
 
@@ -45,6 +45,10 @@ export function MobileSearchInput() {
   let inputRef: HTMLTextAreaElement | undefined;
   const universalInputEnabled = useUniversalInputEnabled();
   const [sending, setSending] = createSignal(false);
+  // The text as shown, a word being composed included, which the search
+  // only takes once it commits.
+  const [shown, setShown] = createSignal(SearchState.query());
+  createEffect(on(SearchState.query, setShown));
 
   const foregroundView = useForegroundMobileView();
   const navigate = useMobileNavNavigate();
@@ -119,7 +123,7 @@ export function MobileSearchInput() {
         <div class="relative flex min-w-0 flex-1">
           <SearchOperatorOverlay
             multiline
-            parts={operatorParts(SearchState.query())}
+            parts={operatorParts(shown())}
             input={() => inputRef}
             class="py-1.5 text-base text-ink"
           />
@@ -141,6 +145,7 @@ export function MobileSearchInput() {
             // Blurring never ends the session — the keyboard drops but search
             // mode stays until the X is pressed or navigation covers this entry.
             onInput={(e) => {
+              setShown(e.currentTarget.value);
               if (!e.isComposing) SearchState.setQuery(e.currentTarget.value);
             }}
             onCompositionEnd={(e) =>

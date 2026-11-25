@@ -33,10 +33,9 @@ it('writes a picked row in place of what is typed, then a space', () => {
     suggestions.pickRow(0);
     expect(query()).toBe('launch tag:"Q3 launch" ');
 
-    // An operator's name leaves its value to be picked next.
-    setQuery('launch ty');
-    suggestions.pickRow(0);
-    expect(query()).toBe('launch type:');
+    // A word that starts an operator's name offers nothing.
+    setQuery('launch status');
+    expect(suggestions.showing()).toBe(false);
     dispose();
   });
 });
