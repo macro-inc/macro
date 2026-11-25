@@ -717,6 +717,41 @@ async fn a_torn_database_is_not_opened_when_its_side_file_turns_busy() {
     close_and_destroy(&engine, SCOPE).await;
 }
 
+/// Opens for recovery while every use of the side file after the first
+/// `uses` finds another context at it.
+async fn recover_with_a_busy_side_file(scope: &str, uses: usize) -> bool {
+    run_js(
+        "const files = FileSystemFileHandle.prototype;
+         const create = files.createSyncAccessHandle;
+         self.restoreFiles = () => { files.createSyncAccessHandle = create; };
+         let left = Number(name);
+         files.createSyncAccessHandle = async function (...options) {
+           if (this.name.endsWith('-salvage') && --left < 0)
+             throw new DOMException('busy', 'NoModificationAllowedError');
+           return await create.apply(this, options);
+         };
+         return Promise.resolve();",
+        &uses.to_string(),
+    )
+    .await;
+    let opened = open_cache_inner(scope.into(), None, true, None, false).await;
+    run_js("self.restoreFiles(); return Promise.resolve();", "").await;
+    opened.is_ok()
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_database_is_not_wiped_while_its_queue_cannot_be_copied() {
+    for uses in [1, 2] {
+        let scope = format!("cache-wasm-salvage-copy-busy-{uses}");
+        closed_with_queue(&scope).await;
+        assert!(!recover_with_a_busy_side_file(&scope, uses).await);
+        let (engine, _, queue) = open(&scope, true).await;
+        assert_eq!(queue, serde_json::json!(["kept", 1, 0]), "{uses}");
+        assert_kept(&engine, &scope).await;
+        close_and_destroy(&engine, &scope).await;
+    }
+}
+
 #[wasm_bindgen_test(async)]
 async fn a_torn_database_says_so_after_a_wipe_that_found_it_busy() {
     const SCOPE: &str = "cache-wasm-salvage-torn-wal-busy";
