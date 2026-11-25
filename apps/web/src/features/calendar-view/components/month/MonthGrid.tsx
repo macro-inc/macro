@@ -1,6 +1,7 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { isSameLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { formatLocale, t } from '@app/lib/i18n';
+import { formatLocalDate } from '@core/util/local-date';
 import { Layer } from '@ui';
 import { createUniqueId, For, Show } from 'solid-js';
 import {
@@ -79,6 +80,7 @@ export function MonthGrid(props: {
                   {(day, index) => (
                     <button
                       type="button"
+                      data-date={formatLocalDate(day.date)}
                       class="phone-month-day outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-accent aria-pressed:not-focus-visible:inset-ring-1 aria-pressed:inset-ring-accent"
                       style={{ 'grid-column': index() + 1 }}
                       classList={{

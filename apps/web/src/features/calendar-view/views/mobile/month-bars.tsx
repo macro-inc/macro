@@ -16,6 +16,7 @@ import {
   type CalendarFocusTarget,
   calendarFocusTargetId,
 } from '../../calendar-focus-target';
+import { CalendarLoadingSkeleton } from '../../components/CalendarLoadingSkeleton';
 import { MonthDaySheet } from '../../components/month/MonthDaySheet';
 import { MonthGrid } from '../../components/month/MonthGrid';
 import { useOpenEventComposer } from '../../components/use-open-event-composer';
@@ -32,6 +33,7 @@ export function PhoneMonthBars(props: {
   events: CalendarEvent[];
   showWeekends: boolean;
   timeFormat: CalendarTimeFormat;
+  loading: boolean;
   focusTarget?: CalendarFocusTarget;
   onFocusHandled: (requestId: number) => void;
   onSelect: (event: CalendarEvent, element: HTMLElement) => void;
@@ -165,6 +167,12 @@ export function PhoneMonthBars(props: {
         cardRef={setCard}
         isSupported={(date) => date >= supported.start && date < supported.end}
         onPick={pick}
+      />
+      <CalendarLoadingSkeleton
+        element={card()}
+        dateInfo={props.range}
+        loading={props.loading}
+        disabled={false}
       />
       <MonthDaySheet
         open={sheetState.open}

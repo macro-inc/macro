@@ -175,7 +175,11 @@ function CalendarPageDataStatus(props: {
         element={props.grid.element()}
         dateInfo={props.grid.dateInfo()}
         loading={showLoading()}
-        disabled={isRangeUnavailable() || props.data.occurrencesQuery.isError}
+        disabled={
+          isRangeUnavailable() ||
+          props.data.occurrencesQuery.isError ||
+          (isMobile() && props.grid.dateInfo()?.view.type === 'dayGridMonth')
+        }
         onBlockingChange={props.onLoadingBlockingChange}
       />
       <Show when={!isRangeUnavailable() && props.data.occurrencesQuery.isError}>
@@ -497,6 +501,10 @@ export function Page(props: {
                 range={grid.dateInfo()}
                 initialDate={props.initialDate}
                 events={visibleEvents()}
+                loading={
+                  !data.occurrencesQuery.isError &&
+                  (data.isLoading() || (isActive() && pager.isChangingView()))
+                }
                 timeFormat={calendarView.displaySettings.timeFormat}
                 showWeekends={calendarView.displaySettings.showWeekends}
                 focusTarget={

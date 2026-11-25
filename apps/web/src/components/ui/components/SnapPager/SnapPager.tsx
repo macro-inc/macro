@@ -16,8 +16,9 @@ import { settleTarget } from './settle-target';
 
 // A missing scrollend must not strand the ring; require observed stillness.
 const SNAP_SETTLE_DELAY_MS = 350;
-// Repeated controls jump to their aggregate target instead of replaying slides.
-const SNAP_RAPID_PRESS_MS = 180;
+// A quiet gap rearms a single animated control step on every device.
+const SNAP_RAPID_PRESS_MS = 300;
+const SNAP_WHEEL_BURST_MS = 180;
 const SNAP_NO_SCROLL_RECOVERY_MS = 150;
 // Match the shared Pager's ease-out curve, with a short explicit duration.
 const SNAP_ANIMATION_MS = 140;
@@ -78,7 +79,7 @@ export type SnapPagerController = {
   /** Accumulated command destination, including a pending native gesture request. */
   targetPosition: () => number;
   phase: Accessor<SnapPagerPhase>;
-  /** Desktop period buttons ignore active animation, but accept idle burst steps. */
+  /** Period controls can finish an active slide and immediately step again. */
   canStep: () => boolean;
   attachViewport: (element: HTMLDivElement) => () => void;
   next: () => void;
@@ -99,7 +100,6 @@ export function createSnapPager(
   options: SnapPagerOptions = {}
 ): SnapPagerController {
   const count = options.pageCount ?? 5;
-  const rapidPressMs = () => (options.discrete?.() ? 300 : SNAP_RAPID_PRESS_MS);
   let wheelLastAt: number | undefined;
   let programmaticAnimating = false;
   if (!Number.isInteger(count) || count < 3 || count % 2 === 0) {
@@ -248,7 +248,7 @@ export function createSnapPager(
     }
     timer = setTimeout(
       settle,
-      rapidNavigation ? rapidPressMs() : SNAP_SETTLE_DELAY_MS
+      rapidNavigation ? SNAP_RAPID_PRESS_MS : SNAP_SETTLE_DELAY_MS
     );
   };
   const finishGesture = () => {
@@ -312,7 +312,7 @@ export function createSnapPager(
       if (event.ctrlKey || horizontal <= Math.abs(event.deltaY)) return;
       const now = Date.now();
       const inBurst =
-        wheelLastAt !== undefined && now - wheelLastAt < SNAP_RAPID_PRESS_MS;
+        wheelLastAt !== undefined && now - wheelLastAt < SNAP_WHEEL_BURST_MS;
       if (horizontal < 4 && !inBurst) return;
       event.preventDefault();
       if (locked()) return;
@@ -504,10 +504,10 @@ export function createSnapPager(
     const element = attached;
     if (!element || locked() || gestureHeld() || !element.clientWidth) return;
     if (programmaticAnimating) return;
-    // A burst changes the visible target immediately but prepares data only once
-    // controls go quiet. Ignore synthetic scrollend events from each re-centre.
+    // Wheel momentum reports its aggregate only after input stops. Ignore
+    // synthetic scrollend events from each wheel-driven re-centre.
     if (rapidNavigation && lastCommandAt !== undefined) {
-      const remaining = rapidPressMs() - (Date.now() - lastCommandAt);
+      const remaining = SNAP_RAPID_PRESS_MS - (Date.now() - lastCommandAt);
       if (remaining > 0) {
         timer = setTimeout(settle, remaining);
         return;
@@ -647,14 +647,13 @@ export function createSnapPager(
 
   const canStep = () =>
     !locked() &&
-    !programmaticAnimating &&
     (!options.discrete?.() ||
       (!nativeScroll && !gestureHeld() && alignmentTarget === undefined));
   const command = (offset: number) => {
     if (locked() || !Number.isInteger(offset) || offset === 0) return;
     const now = Date.now();
     const rapid =
-      lastCommandAt !== undefined && now - lastCommandAt < rapidPressMs();
+      lastCommandAt !== undefined && now - lastCommandAt < SNAP_RAPID_PRESS_MS;
     lastCommandAt = now;
     const target = (queuedJump ?? position() + pending) + offset;
     // Never re-centre a native gesture under the user's finger or momentum.
@@ -662,7 +661,6 @@ export function createSnapPager(
     if (gestureHeld() || nativeScroll) {
       queuedJump = target;
       queuedAtScrollLeft = attached?.scrollLeft;
-      rapidNavigation = rapid;
       return;
     }
     const animating =
@@ -670,12 +668,19 @@ export function createSnapPager(
     pending = target - position();
     unlockAlignmentPending = false;
     alignmentTarget = undefined;
-    if (rapid || animating || Math.abs(pending) > middle) {
-      clearTimer();
-      rapidNavigation = rapid || Boolean(animating);
-      performJump(target, rapidNavigation);
+    if (
+      rapid ||
+      programmaticAnimating ||
+      animating ||
+      Math.abs(pending) > middle
+    ) {
+      // Commit each control target now so recycled grids and their skeletons
+      // follow every press. Only native wheel bursts defer their settle report.
+      rapidNavigation = false;
+      performJump(target);
       return;
     }
+    rapidNavigation = false;
     navigate();
   };
   const detach = (element: HTMLDivElement) => {

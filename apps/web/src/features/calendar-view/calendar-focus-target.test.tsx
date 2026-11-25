@@ -6,11 +6,17 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CalendarPagerContextProvider,
+  useCalendarPager,
+} from '../calendar/components/CalendarPagerContext';
+import {
   CalendarFocusContextProvider,
   type CalendarFocusTarget,
   OCCURRENCE_FOCUS_TIMEOUT_MS,
   useCalendarFocus,
 } from './calendar-focus-target';
+import { CalendarViewportProvider } from './context/calendar-viewport-context';
+import { CalendarGridNavigation } from './views/CalendarGridNavigation';
 
 const OCCURRENCE = {
   eventId: 'ooo-1',
@@ -148,5 +154,52 @@ describe('CalendarFocusContext occurrence requests', () => {
     vi.advanceTimersByTime(OCCURRENCE_FOCUS_TIMEOUT_MS);
 
     expect(onTimeout).not.toHaveBeenCalled();
+  });
+
+  it('navigates to a known date while occurrence resolution stays pending', () => {
+    const [resolved, setResolved] = createSignal<CalendarFocusTarget>();
+    const [destination, setDestination] = createSignal(navigationTarget(1));
+    let pager!: ReturnType<typeof useCalendarPager>;
+    let focus!: ReturnType<typeof useCalendarFocus>;
+    function Probe() {
+      pager = useCalendarPager();
+      focus = useCalendarFocus();
+      return null;
+    }
+    render(() => (
+      <CalendarFocusContextProvider
+        target={resolved}
+        navigationTarget={destination}
+      >
+        <CalendarViewportProvider
+          value={{ initial: undefined, register: () => () => {} }}
+        >
+          <CalendarPagerContextProvider
+            initialView="dayGridMonth"
+            initialDate={new Date(2026, 0, 1)}
+            showWeekends={() => true}
+            weekStartsOn={() => 0}
+            onNavigate={() => {}}
+            onViewChange={() => {}}
+          >
+            <CalendarGridNavigation onAgendaSelect={() => {}}>
+              <Probe />
+            </CalendarGridNavigation>
+          </CalendarPagerContextProvider>
+        </CalendarViewportProvider>
+      </CalendarFocusContextProvider>
+    ));
+    expect(pager.activeDate().toDateString()).toBe(
+      destination().date.toDateString()
+    );
+    expect(focus.pendingTarget()).toBeUndefined();
+    const next = { ...navigationTarget(2), date: new Date(2027, 2, 1) };
+    setDestination(next);
+    expect(pager.activeDate().toDateString()).toBe(next.date.toDateString());
+    expect(focus.pendingTarget()).toBeUndefined();
+    setResolved(next);
+    expect(focus.pendingTarget()?.eventId).toBe('meeting');
+    focus.consume(next.requestId);
+    expect(focus.pendingNavigationTarget()).toBeUndefined();
   });
 });

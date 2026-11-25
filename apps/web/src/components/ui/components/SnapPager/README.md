@@ -35,8 +35,9 @@ stable `key`, `position`, and relative `offset`.
 - Controlled slides and final alignment take 140ms with the shared Pager ease-out
   curve. Their frame completion owns settlement; delayed scrollend cannot finish
   another controlled slide. Reduced motion is immediate.
-- Period buttons ignore an active controlled slide. Repeated idle commands jump
-  instantly and report the aggregate after the burst.
+- An isolated period command animates. Each command during that animation commits
+  its destination plus the new step immediately; further rapid commands stay instant.
+  Re-arm animation after 300ms without a command. Native wheel bursts still settle together.
 - Discrete desktop mode turns horizontal wheel gestures into one step.
 - `onSettle` reports total movement after recycling, including zero-move cancellation.
 - `onNearEdge` reports the logical position entering view within two slots of an edge,

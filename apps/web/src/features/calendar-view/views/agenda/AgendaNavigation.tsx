@@ -21,7 +21,7 @@ export function AgendaNavigation(
     onViewChange: view.setPeriodView,
   });
   createEffect(
-    on(focus.pendingTarget, (target) => {
+    on(focus.pendingNavigationTarget, (target) => {
       if (target) navigation.navigateToDate(target.date);
     })
   );

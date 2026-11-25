@@ -46,7 +46,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 /* Neighboring pages keep static loading feedback, without offscreen animation. */
-.snap-pager-page[aria-hidden="true"] .calendar-view [data-calendar-loading-placeholder] {
+	.snap-pager-page[aria-hidden="true"] :is(.calendar-view, .phone-month-card) [data-calendar-loading-placeholder] {
 	animation: none;
 }
 @keyframes calendar-skeleton-pulse {
@@ -59,7 +59,8 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	}
 }
 /* Commit real event layout under the skeletons, then reveal both layers together. */
-.calendar-view-host[data-calendar-loading-state="visible"] .fc-event:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event) {
+.calendar-view-host[data-calendar-loading-state="visible"] .fc-event:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event),
+.phone-month-card[data-calendar-loading-state="visible"] :is(.phone-month-bar, .phone-month-overflow) {
 	opacity: 0;
 	visibility: hidden;
 	pointer-events: none;
@@ -74,10 +75,11 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 @media (prefers-reduced-motion: no-preference) {
-	.calendar-view [data-calendar-loading-placeholder] {
+	:is(.calendar-view, .phone-month-card) [data-calendar-loading-placeholder] {
 		animation: calendar-skeleton-pulse 1.8s ease-in-out infinite;
 	}
-	.calendar-view-host[data-calendar-loading-state="revealing"] .fc-event:not(.fc-event-mirror) {
+	.calendar-view-host[data-calendar-loading-state="revealing"] .fc-event:not(.fc-event-mirror),
+	.phone-month-card[data-calendar-loading-state="revealing"] :is(.phone-month-bar, .phone-month-overflow) {
 		animation: calendar-event-enter 180ms ease-out;
 	}
 }

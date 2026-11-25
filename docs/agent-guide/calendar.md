@@ -34,8 +34,9 @@ calendar account metadata and other conferencing providers keep their original U
   change local colors. Settings and Busy calendars use separate pages.
 - Desktop horizontal trackpad gestures move one period per gesture; vertical
   scrolling does not change periods. Period slides use the shared ease-out curve
-  over 140ms on desktop and phone. Buttons ignore presses during a slide; rapid
-  presses after it finishes jump to their cumulative target without waiting for data.
+  over 140ms on desktop and phone. Another button or keyboard period press completes
+  the active slide and immediately moves one more period; further rapid presses are
+  instant. After 300ms without presses, a single press animates again.
 - Phone swipes settle before recycling pages. Slow drags must pass halfway;
   clear flicks can commit sooner. Plain taps must not leave paging stuck.
   Event drag/resize locks horizontal paging.
@@ -47,6 +48,11 @@ calendar account metadata and other conferencing providers keep their original U
   `+N` overflow. Phone 3-day uses 64px hours (32px half-hour slots); Day and Week
   retain their existing hour spacing, and desktop is unchanged.
 - Reduced motion removes nonessential transitions without changing destinations.
+- Date navigation never waits for occurrence data: header controls, Today, date
+  pickers, links, search results, and swipes show the destination grid with the existing
+  loading skeleton immediately. Phone Month skeletons appear in its visible card.
+  Query failures appear inside the destination with Retry. Event links with no date
+  still resolve their locator first; selecting the precise occurrence waits for its chip.
 
 ## Cached saves
 
@@ -91,9 +97,9 @@ readable. The final fitting row becomes `+N` when events overflow. Tap a day/cou
 for its complete event sheet; select an event for details or Add for a new event.
 The sheet date is a plain title, not a Day-view button. Choose Day in the navigation
 drawer to switch views. Event times remain visible in muted semantic text on the
-sheet's opaque menu surface, with primary-ink titles and calendar-colored dots
-outlined in muted ink. Desktop Month shares its event presentation between grid and
-overflow popover.
+sheet's opaque menu surface, with primary-ink titles and full-strength calendar dots.
+Dots use the same effective event/calendar colour as grid pills and desktop popups,
+without a muted outline or opacity reduction.
 
 Agenda lists events chronologically with sticky headings and all-day events first.
 Arrows move one week; scrolling loads older/newer windows within supported dates.
@@ -209,23 +215,16 @@ event reads leave the grid and its loading state navigable. On the iOS and Andro
 apps, recently seen periods and the calendar
 list remain on the device for a week; fresh reads replace those restored results.
 
-Period selection updates its label and route immediately. The active grid redraws
-on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
-grids stay mounted and undimmed while occurrences load. An uncached range never
-shows events from the previous range. After a short delay, representative event
-skeletons appear without adding synthetic FullCalendar events. Week/Day use sparse
-blocks with varied start times and durations, plus separate all-day bars. Month mixes
-filled bars for all-day/multi-day-style entries with single subtle text lines for
-single-day timed-style entries, without placeholder dots or time chips. Patterns stay
-stable for each date and clear the date headers. Skeletons preserve the grid, scroll
-position, and navigation.
-Quick loads skip the skeletons: the delay counts animation frames, so time the
-thread spends mounting a grid never uses it up, and events that are in memory or
-answered locally appear without skeletons on slow phones too.
-Real events lay out underneath during the brief
-minimum display, then fade in as the skeletons fade out. Phones have no minimum
-display: events fade in as soon as they arrive. Changing period during a
-load carries feedback into the new cells without restarting the appearance delay.
+Period selection updates its label and route immediately. Every committed step retargets
+its mounted grids immediately, independently of occurrence readiness. Calendar grids
+stay mounted and undimmed while occurrences load. An uncached range never shows events
+from the previous range. The existing representative event skeletons appear immediately,
+without synthetic FullCalendar events. Week/Day use sparse blocks with varied start times
+and durations, plus separate all-day bars. Month mixes bars and subtle text lines without
+placeholder dots or time chips. Phone Month places these skeletons on its visible card,
+not the covered FullCalendar grid. Patterns stay stable for each date and clear date headers.
+There is no minimum hold: incoming events replace the skeletons as soon as they are ready,
+with the existing short fade. Changing period carries feedback into the new cells.
 Background refreshes retain current events without skeletons or a transient loading
 pill. On a cold reload, the first event paint waits for calendar metadata so events
 appear in their configured colors. A REST/GraphQL handoff for the same user and

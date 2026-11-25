@@ -6,7 +6,8 @@ import {
 import { timeGridScroller } from '@app/features/calendar/utils/time-grid-scroller';
 import { SnapPager } from '@ui/components/SnapPager/SnapPager';
 import type { ParentProps } from 'solid-js';
-import { onCleanup } from 'solid-js';
+import { createEffect, on, onCleanup } from 'solid-js';
+import { useCalendarFocus } from '../calendar-focus-target';
 import { useCalendarViewport } from '../context/calendar-viewport-context';
 
 /** Adapts the grid pager to workspace navigation without exposing its renderer. */
@@ -17,6 +18,12 @@ export function CalendarGridNavigation(
 ) {
   const calendarPager = useCalendarPager();
   const viewport = useCalendarViewport();
+  const focus = useCalendarFocus();
+  createEffect(
+    on(focus.pendingNavigationTarget, (target) => {
+      if (target) calendarPager.navigateToDate(target.date);
+    })
+  );
   onCleanup(
     viewport.register(() => ({
       date: calendarPager.navigationDate().getTime(),

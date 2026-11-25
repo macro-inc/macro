@@ -6,6 +6,8 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CalendarLoadingSkeleton } from '../../calendar-view/components/CalendarLoadingSkeleton';
+import { MonthGrid } from '../../calendar-view/components/month/MonthGrid';
 import { createMonthWheelPicker } from '../primitives/create-month-wheel-picker';
 import type { CalendarGridPeriodView } from '../types';
 import {
@@ -27,7 +29,12 @@ afterEach(() => {
 
 function mountCalendar(
   view: CalendarGridPeriodView = 'timeGridDay',
-  restored?: { date: Date; scrollTop: number; laidOut?: boolean }
+  restored?: {
+    date: Date;
+    scrollTop: number;
+    laidOut?: boolean;
+    loading?: boolean;
+  }
 ) {
   const element = document.createElement('div');
   let laidOut = restored?.laidOut !== false;
@@ -98,7 +105,7 @@ function mountCalendar(
             events: () => [],
             visibleEvents: () => [],
             eventsById: () => new Map(),
-            isLoading: () => false,
+            isLoading: () => restored?.loading ?? false,
             isSyncing: () => false,
             get occurrencesQuery(): never {
               throw new Error('Date navigation must not read occurrences');
@@ -116,6 +123,12 @@ function mountCalendar(
     });
     return (
       <>
+        <CalendarLoadingSkeleton
+          element={pager.activePage()?.element()}
+          dateInfo={pager.activeDateInfo()}
+          loading={restored?.loading ?? false}
+          disabled={false}
+        />
         <button onClick={pager.navigateToToday}>Today</button>
         <button onClick={() => pager.navigateToDate(new Date(2026, 10, 5))}>
           Another date
@@ -548,20 +561,19 @@ describe('calendar native paging', () => {
     expect(calendar().getDate().getDate()).toBe(5);
     expect(pager().activeDate().getDate()).toBe(5);
   });
-  it('ignores Next during an adjacent date animation, then accepts an idle rapid step', async () => {
+  it('completes an adjacent date animation before each rapid Next', async () => {
     const { pager, viewport, calendar } = mountCalendar('timeGridThreeDay');
     pager().navigateToDate(new Date(2026, 10, 5));
     pager().nextPeriod();
-    viewport.dispatchEvent(new Event('scrollend'));
-    await vi.advanceTimersByTimeAsync(160);
-    expect(pager().navigationDate().getDate()).toBe(5);
-    pager().nextPeriod();
-    await vi.advanceTimersByTimeAsync(300);
+    expect(pager().navigationDate().getDate()).toBe(8);
     expect(calendar().getDate().getDate()).toBe(8);
+    pager().nextPeriod();
+    expect(calendar().getDate().getDate()).toBe(11);
+    await vi.advanceTimersByTimeAsync(300);
     viewport.scrollLeft = 100;
     viewport.dispatchEvent(new Event('scrollend'));
     await vi.advanceTimersByTimeAsync(200);
-    expect(calendar().getDate().getDate()).toBe(5);
+    expect(calendar().getDate().getDate()).toBe(8);
   });
 
   it('keeps a date queued during a small fling that settles at center', async () => {
@@ -628,7 +640,7 @@ describe('calendar native paging', () => {
     'timeGridWeek',
     'dayGridMonth',
   ] as const)(
-    'prepares only the final range after rapid period commands in %s',
+    'renders every rapid period command immediately in %s',
     async (view) => {
       const { pager, pages, viewport } = mountCalendar(view);
       await vi.advanceTimersByTimeAsync(300);
@@ -655,21 +667,19 @@ describe('calendar native paging', () => {
       expect(pager().navigationDate().toDateString()).toBe(
         target.toDateString()
       );
+      expect(pager().activeDate().toDateString()).toBe(target.toDateString());
+      expect(pager().activePage()?.api()?.getDate().toDateString()).toBe(
+        target.toDateString()
+      );
       expect(
-        dateChanges.every(
+        dateChanges.some(
           (change, index) =>
-            change.mock.calls.length === changesAfterAnimation[index]
+            change.mock.calls.length > changesAfterAnimation[index]
         )
       ).toBe(true);
       viewport.dispatchEvent(new Event('scrollend'));
       await vi.advanceTimersByTimeAsync(300);
       expect(pager().activeDate().toDateString()).toBe(target.toDateString());
-      expect(
-        dateChanges.every(
-          (change, index) =>
-            change.mock.calls.length <= changesAfterAnimation[index] + 1
-        )
-      ).toBe(true);
     }
   );
   it.each(['timeGridDay', 'timeGridThreeDay'] as const)(
@@ -738,23 +748,30 @@ describe('calendar native paging', () => {
         ?.scrollTop
     ).toBe(540);
   });
-  it('keeps the desktop date anchor unchanged for ignored animation presses', async () => {
-    device.touch = false;
-    const { pager, viewport, calendar } = mountCalendar('dayGridMonth');
-    Object.defineProperty(viewport, 'onscrollend', { value: null });
-    await vi.advanceTimersByTimeAsync(300);
-    pager().nextPeriod();
-    pager().nextPeriod();
-    pager().previousPeriod();
-    expect(pager().navigationDate().getMonth()).toBe(11);
-    viewport.dispatchEvent(new Event('scrollend'));
-    await vi.advanceTimersByTimeAsync(160);
-    pager().nextPeriod();
-    await vi.advanceTimersByTimeAsync(300);
-    expect(pager().activeDate().getFullYear()).toBe(2027);
-    expect(pager().activeDate().getMonth()).toBe(0);
-    expect(calendar().getDate().getMonth()).toBe(0);
-  });
+  it.each([false, true])(
+    'counts mid-animation reversals across a year boundary (touch=%s)',
+    async (touch) => {
+      device.touch = touch;
+      const { pager, viewport, calendar } = mountCalendar('dayGridMonth');
+      pager().nextPeriod();
+      await vi.advanceTimersByTimeAsync(64);
+      expect(viewport.scrollLeft).toBeGreaterThan(200);
+      expect(viewport.scrollLeft).toBeLessThan(300);
+      pager().nextPeriod();
+      expect(calendar().getDate().getFullYear()).toBe(2027);
+      expect(calendar().getDate().getMonth()).toBe(0);
+      pager().previousPeriod();
+      expect(calendar().getDate().getMonth()).toBe(11);
+      pager().nextPeriod();
+      pager().nextPeriod();
+      expect(pager().activeDate().getFullYear()).toBe(2027);
+      expect(pager().activeDate().getMonth()).toBe(1);
+      expect(calendar().getDate().getMonth()).toBe(1);
+      expect(viewport.scrollLeft).toBe(200);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(calendar().getDate().getMonth()).toBe(1);
+    }
+  );
   it('keeps the date anchor when desktop wheel interrupts an adjacent date animation', async () => {
     device.touch = false;
     const { pager, viewport } = mountCalendar();
@@ -770,7 +787,7 @@ describe('calendar native paging', () => {
 
 describe('period animation timing', () => {
   it.each([false, true])(
-    'finishes a short slide without scrollend and ignores active presses (touch=%s)',
+    'animates isolated presses and rearms after 300ms without a press (touch=%s)',
     async (touch) => {
       device.touch = touch;
       const { pager, viewport } = mountCalendar('dayGridMonth');
@@ -779,20 +796,134 @@ describe('period animation timing', () => {
       await vi.advanceTimersByTimeAsync(64);
       expect(viewport.scrollLeft).toBeGreaterThan(200);
       expect(viewport.scrollLeft).toBeLessThan(300);
-      pager().nextPeriod();
-      pager().previousPeriod();
-      expect(pager().navigationDate().getMonth()).toBe(11);
       await vi.advanceTimersByTimeAsync(96);
       expect(pager().activeDate().getMonth()).toBe(11);
       expect(pager().pager.phase()).toBe('idle');
-      // After completion, a rapid next press jumps instead of animating again.
       pager().nextPeriod();
       expect(pager().pager.position()).toBe(2);
       expect(viewport.scrollLeft).toBe(200);
+      await vi.advanceTimersByTimeAsync(299);
+      pager().nextPeriod();
+      expect(pager().pager.position()).toBe(3);
+      expect(viewport.scrollLeft).toBe(200);
+      await vi.advanceTimersByTimeAsync(300);
+      pager().nextPeriod();
+      await vi.advanceTimersByTimeAsync(64);
+      expect(viewport.scrollLeft).toBeGreaterThan(200);
+      expect(viewport.scrollLeft).toBeLessThan(300);
+      await vi.advanceTimersByTimeAsync(96);
+      expect(pager().pager.position()).toBe(4);
     }
   );
 });
 
+describe('navigation without occurrence data', () => {
+  it('paints the destination and existing grid skeleton before pending events arrive', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      function (this: HTMLElement) {
+        const height = this.classList.contains('fc-daygrid-day-top') ? 28 : 120;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 100,
+          bottom: height,
+          width: 100,
+          height,
+          toJSON: () => ({}),
+        };
+      }
+    );
+    const { pager, calendar } = mountCalendar('dayGridMonth', {
+      date: new Date(2026, 10, 1),
+      scrollTop: 0,
+      loading: true,
+    });
+    pager().navigateToDate(new Date(2027, 2, 1));
+    expect(calendar().getDate().toDateString()).toBe(
+      new Date(2027, 2, 1).toDateString()
+    );
+    expect(
+      calendar().el.querySelector(
+        '[data-date="2027-03-01"] [data-calendar-loading-skeleton]'
+      )
+    ).not.toBeNull();
+    expect(pager().activeData()?.isLoading()).toBe(true);
+    pager().navigateToToday();
+    expect(calendar().getDate().toDateString()).toBe(
+      new Date(2026, 10, 1).toDateString()
+    );
+    expect(
+      calendar().el.querySelector(
+        '[data-date="2026-11-01"] [data-calendar-loading-skeleton]'
+      )
+    ).not.toBeNull();
+    expect(pager().activeData()?.isLoading()).toBe(true);
+  });
+  it.each([50, 120])(
+    'mounts the same skeleton on a visible phone Month card with %spx cells',
+    (cellHeight) => {
+      vi.spyOn(
+        HTMLElement.prototype,
+        'getBoundingClientRect'
+      ).mockImplementation(function (this: HTMLElement) {
+        const height = this.classList.contains('phone-month-date')
+          ? 32
+          : cellHeight;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 100,
+          bottom: height,
+          width: 100,
+          height,
+          toJSON: () => ({}),
+        };
+      });
+      const { pager } = mountCalendar('dayGridMonth');
+      const [date, setDate] = createSignal(new Date(2027, 2, 1));
+      pager().gotoDate(date());
+      const [card, setCard] = createSignal<HTMLDivElement>();
+      render(() => (
+        <>
+          <MonthGrid
+            weeks={[
+              { days: [{ date: date(), events: [] }], bars: [], hidden: [0] },
+            ]}
+            month={date()}
+            today={date()}
+            selected={undefined}
+            capacity={3}
+            cardRef={setCard}
+            isSupported={() => true}
+            onPick={() => {}}
+          />
+          <CalendarLoadingSkeleton
+            element={card()}
+            dateInfo={pager().activeDateInfo()}
+            loading
+            disabled={false}
+          />
+        </>
+      ));
+      expect(
+        card()?.querySelector(
+          '[data-date="2027-03-01"] [data-calendar-loading-placeholder]'
+        )
+      ).not.toBeNull();
+      setDate(new Date(2027, 3, 1));
+      pager().gotoDate(date());
+      expect(
+        card()?.querySelector(
+          '[data-date="2027-04-01"] [data-calendar-loading-placeholder]'
+        )
+      ).not.toBeNull();
+    }
+  );
+});
 describe('phone Month recovery', () => {
   it('settles a released swipe when scrollend is exposed but never delivered', async () => {
     const { pager, viewport } = mountCalendar('dayGridMonth');
