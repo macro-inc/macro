@@ -22,7 +22,11 @@ in production imports it, and it solves nothing but its own fixture. Design:
 ## Checks
 
 - Follow the [runbook](README.md#runbook) to install and check with the dev
-  shell's Bun. CI runs the same check in Browser Tests.
+  shell's Bun. The `CAPTCHA vision lab` workflow runs the same check nightly,
+  on pushes to `main` that change the lab, and by hand on a branch (`gh
+  workflow run captcha_vision_lab.yml --ref <branch>`). `PR CI` runs only
+  `check:gate` (no browser), in Browser Tests: run the workflow on a branch
+  that changes the lab before merging it.
 
 ## Gotchas
 

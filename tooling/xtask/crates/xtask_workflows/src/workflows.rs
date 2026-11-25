@@ -30,6 +30,7 @@ mod build_dmg_on_tag;
 mod build_rust_ci_image;
 mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
+mod captcha_vision_lab;
 mod cargo_deny;
 mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
@@ -173,6 +174,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "connectors_e2e",
         file_name: "connectors_e2e.yml",
         render_yaml: || render_gh_workflow(connectors_e2e::connectors_e2e)(),
+    },
+    WorkflowFile {
+        slug: "captcha_vision_lab",
+        file_name: "captcha_vision_lab.yml",
+        render_yaml: || render_gh_workflow(captcha_vision_lab::captcha_vision_lab)(),
     },
     WorkflowFile {
         slug: "channels_e2e",

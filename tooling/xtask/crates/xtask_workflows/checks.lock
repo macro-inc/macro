@@ -35,6 +35,7 @@ check	build_desktop_on_tag.yml	publish-release	Sign and publish desktop updates
 check	build_dmg_on_tag.yml	build-dmg	Build macOS DMG
 check	build_web_app.yml	build	Build
 check	cancel_stuck_cloud_storage_deploys.yml	cancel-stuck	Cancel runs stuck queued or in_progress past threshold
+check	captcha_vision_lab.yml	lab	CAPTCHA vision lab
 check	cargo_deny.yml	cargo-deny	cargo-deny
 check	cargo_deny_advisories.yml	advisories	cargo deny check advisories
 check	cargo_workspace_dependency_check.yml	dependency-check	dependency-check

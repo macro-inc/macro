@@ -106,8 +106,9 @@ asserting zero planner calls, zero actions and zero submissions, a popup or
 foreign request set off by the click voiding the scored attempt, a failed
 click recording no markup, and the Kimi adapter against the stand-in
 (request shape, malformed output → closed failure). The CLI proxy test
-asserts refusal with zero requests to the lab or the counting proxy. CI
-runs them in the Browser Tests job.
+asserts refusal with zero requests to the lab or the counting proxy. The
+`CAPTCHA vision lab` workflow runs all of them and gates nothing; Browser Tests
+runs those that start no browser (`check:gate`).
 
 ## Live result
 
