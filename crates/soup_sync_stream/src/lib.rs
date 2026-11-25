@@ -31,7 +31,7 @@ pub use active::{ActiveStreamGuard, ActiveStreams};
 pub use calendar::{CalendarSpan, MaterializedRange, SpanKind};
 pub use catalog::{LANE_QUERIES, LaneQuery, Pass};
 pub use frame::{EndReason, Frame, LaneDoneReason};
-pub use lane::{InvalidLaneId, LaneError, LaneId, LaneKind, Paging};
+pub use lane::{InvalidLaneId, LaneError, LaneId, LaneKind, PageBudget, Paging};
 pub use request::{
     MAX_COVERAGE_SPANS, MAX_LANE_QUERIES, MAX_LANE_QUERY_BYTES, MAX_LANES, MAX_SAVED_LANES,
     PROTOCOL_VERSIONS, RequestError, SyncPlan,

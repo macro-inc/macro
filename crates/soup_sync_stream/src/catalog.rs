@@ -20,15 +20,17 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::calendar::iso_instant;
+use crate::lane::PageBudget;
 
 /// Items per hydrate page: Soup's maximum, as streaming has no round trip
 /// per page.
 const HYDRATE_PAGE: u32 = 500;
-/// Threads per email-content page, each with its first 20 messages. The
-/// stream's email-content budget is 500 threads and 10,000 messages per page;
-/// 200 threads keep a page near half a second of server time for large
-/// mailboxes.
+/// Threads per email-content page, each with its first
+/// [`EMAIL_CONTENT_MESSAGES`]. 200 threads keep a page near half a second of
+/// server time for large mailboxes.
 const EMAIL_CONTENT_PAGE: u32 = 200;
+/// Messages per thread the email-content lane's document asks for.
+const EMAIL_CONTENT_MESSAGES: u32 = 20;
 /// Items per ID-list page.
 const MEMBERSHIP_PAGE: u32 = 500;
 /// Occurrences per calendar page.
@@ -85,6 +87,8 @@ pub(crate) struct SoupLaneSpec {
     /// A full pass every run: never resumed, never narrowed to changes.
     pub(crate) restart_on_run: bool,
     pub(crate) max_items: Option<u32>,
+    /// What each page may load.
+    pub(crate) budget: PageBudget,
 }
 
 /// What the cache does with a Soup lane's pages.
@@ -208,6 +212,7 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: true,
             max_items: None,
+            budget: PageBudget::Operation,
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: TASKS,
@@ -216,6 +221,7 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: None,
+            budget: PageBudget::Operation,
         }),
         // Project chips answer from these records once the lane completed.
         LaneSpec::Soup(SoupLaneSpec {
@@ -225,6 +231,7 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: None,
+            budget: PageBudget::Operation,
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: "email-recent",
@@ -233,6 +240,7 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: None,
+            budget: PageBudget::Operation,
         }),
         // Shared threads, both windows, refreshed in full every run;
         // `email-shared-ids` reconciles the scope.
@@ -249,6 +257,7 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: true,
             max_items: None,
+            budget: PageBudget::Operation,
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: DOCUMENTS_RECENT,
@@ -257,6 +266,7 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: Some(DOCUMENTS_RECENT_MAX_ITEMS),
+            budget: PageBudget::Operation,
         }),
         LaneSpec::Calendar {
             id_prefix: "calendar-near",
@@ -333,9 +343,16 @@ fn second_pass() -> Vec<LaneSpec> {
                 rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE)
             })
         }),
-        // Threads with their first message page.
-        hydrate_lane("email-content", &SOUP_BACKFILL_QUERY, |now| {
-            mail_rows(EMAIL_CONTENT_DAYS, EMAIL_CONTENT_PAGE, now)
+        // Threads with their first message page, the one lane whose pages
+        // load more email content than one GraphQL operation may.
+        LaneSpec::Soup(SoupLaneSpec {
+            budget: PageBudget::EmailContent {
+                threads: EMAIL_CONTENT_PAGE,
+                messages: EMAIL_CONTENT_PAGE * EMAIL_CONTENT_MESSAGES,
+            },
+            ..soup_hydrate("email-content", &SOUP_BACKFILL_QUERY, |now| {
+                mail_rows(EMAIL_CONTENT_DAYS, EMAIL_CONTENT_PAGE, now)
+            })
         }),
     ]
 }
@@ -352,6 +369,7 @@ fn soup_hydrate(
         kind: SoupLaneKind::Hydrate,
         restart_on_run: false,
         max_items: None,
+        budget: PageBudget::Operation,
     }
 }
 

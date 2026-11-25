@@ -4,7 +4,7 @@
 mod test;
 
 use crate::frame::{EndReason, Frame, LaneDoneReason};
-use crate::lane::{INPUT_VARIABLE, LaneId, LanePaging, LanePlan};
+use crate::lane::{INPUT_VARIABLE, LaneId, LanePaging, LanePlan, PageBudget};
 use crate::plan::resume_checkpoint;
 use crate::request::SyncPlan;
 use async_graphql::{Request, Variables};
@@ -71,9 +71,13 @@ pub trait PageExecutor: Send + Sync + 'static {
     /// no place in line that a later call would lose.
     fn turn(&self) -> impl Future<Output = Self::Turn> + Send;
 
-    /// Executes `request` and returns its GraphQL response (`data`, optional
-    /// `errors`) as JSON.
-    fn execute(&self, request: Request) -> impl Future<Output = Result<Value, Self::Error>> + Send;
+    /// Executes `request` within `budget` and returns its GraphQL response
+    /// (`data`, optional `errors`) as JSON.
+    fn execute(
+        &self,
+        request: Request,
+        budget: PageBudget,
+    ) -> impl Future<Output = Result<Value, Self::Error>> + Send;
 }
 
 /// Why a lane failed, sent as the `laneError` message. Server-chosen text only.
@@ -231,7 +235,7 @@ impl<E: PageExecutor> Runner<E> {
         let executed = tokio::time::timeout(
             PAGE_TIMEOUT,
             self.executor
-                .execute(lane.request())
+                .execute(lane.request(), lane.plan.budget)
                 .instrument(span.clone()),
         )
         .await;

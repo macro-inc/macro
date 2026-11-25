@@ -15,6 +15,7 @@ fn draft(query: &'static str, operation_name: &'static str, input: Value) -> Lan
         items_before: 0,
         resumable: true,
         pass_started_at: "2026-11-02T12:00:00.000Z".to_owned(),
+        budget: PageBudget::Operation,
     }
 }
 

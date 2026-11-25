@@ -41,7 +41,7 @@ impl PageExecutor for ScriptedExecutor {
 
     async fn turn(&self) {}
 
-    async fn execute(&self, mut request: Request) -> Result<Value, FakeError> {
+    async fn execute(&self, mut request: Request, _budget: PageBudget) -> Result<Value, FakeError> {
         assert!(
             request.parsed_query().is_ok(),
             "pages run with the lane's parsed document"
@@ -113,6 +113,7 @@ fn test_plan(body: Value) -> SyncPlan {
                     .and_then(Value::as_bool)
                     .unwrap_or(paging == Paging::Soup),
                 pass_started_at: PASS_STARTED_AT.to_owned(),
+                budget: PageBudget::Operation,
             })
             .unwrap()
         })
@@ -679,7 +680,7 @@ impl PageExecutor for DelayedExecutor {
 
     async fn turn(&self) {}
 
-    async fn execute(&self, _request: Request) -> Result<Value, FakeError> {
+    async fn execute(&self, _request: Request, _budget: PageBudget) -> Result<Value, FakeError> {
         let delay = {
             let mut delays = self.delays.lock().unwrap();
             if delays.len() > 1 {
@@ -766,7 +767,7 @@ impl PageExecutor for QueuedExecutor {
         self.turns.next()
     }
 
-    async fn execute(&self, _request: Request) -> Result<Value, FakeError> {
+    async fn execute(&self, _request: Request, _budget: PageBudget) -> Result<Value, FakeError> {
         Ok(json!({ "data": { "user": { "soup": { "items": [], "nextCursor": null } } } }))
     }
 }

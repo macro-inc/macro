@@ -149,6 +149,23 @@ pub enum LaneError {
     InvalidInput,
 }
 
+/// What one page of a lane may load: the limits of one `/soup/graphql`
+/// operation, or a larger email-content batch sized to the lane's page. Only
+/// the lane that pages threads with their content gets the larger one, so a
+/// document sent for any other lane runs as it would on `/soup/graphql`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageBudget {
+    /// One GraphQL operation's limits.
+    Operation,
+    /// Up to `threads` threads' content and `messages` messages in one batch.
+    EmailContent {
+        /// Threads (or latest-message requests) per batch.
+        threads: u32,
+        /// Messages requested across the batch.
+        messages: u32,
+    },
+}
+
 /// What a lane is planned from.
 #[derive(Debug)]
 pub(crate) struct LaneDraft {
@@ -168,6 +185,8 @@ pub(crate) struct LaneDraft {
     pub(crate) resumable: bool,
     /// When the lane's pass started (ISO 8601).
     pub(crate) pass_started_at: String,
+    /// What each of its pages may load.
+    pub(crate) budget: PageBudget,
 }
 
 /// One planned lane.
@@ -186,6 +205,7 @@ pub(crate) struct LanePlan {
     pub(crate) items_before: u32,
     pub(crate) resumable: bool,
     pub(crate) pass_started_at: String,
+    pub(crate) budget: PageBudget,
 }
 
 impl LanePlan {
@@ -225,6 +245,7 @@ impl LanePlan {
             items_before: draft.items_before,
             resumable: draft.resumable,
             pass_started_at: draft.pass_started_at,
+            budget: draft.budget,
         })
     }
 }

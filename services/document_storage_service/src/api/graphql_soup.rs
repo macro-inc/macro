@@ -24,6 +24,7 @@ use macro_authorization::{
     UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use soup_sync_stream::PageBudget;
 use uuid::Uuid;
 
 mod stream;
@@ -158,11 +159,29 @@ enum ContextScope {
     /// One `POST /soup/graphql` request: queries or mutations.
     Request,
     /// One page of a streamed sync: a query only. Email loaders cache, so a
-    /// Soup page prefetches its threads' data in one batch, and the
-    /// email-content budget is a whole page's.
-    SyncStreamPage,
+    /// Soup page prefetches its threads' data in one batch. The page's lane
+    /// sets its email-content budget: one operation's, or the email-content
+    /// lane's whole page.
+    SyncStreamPage(PageBudget),
     /// A subscription connection, whose data outlives each payload.
     Subscription,
+}
+
+/// The email-content budget of one request: a stream page of the
+/// email-content lane loads that lane's page, everything else one
+/// operation's.
+fn email_content_limits(scope: ContextScope) -> complete_graph::EmailContentLimits {
+    match scope {
+        ContextScope::SyncStreamPage(PageBudget::EmailContent { threads, messages }) => {
+            complete_graph::EmailContentLimits {
+                max_keys: threads as usize,
+                max_messages: messages as usize,
+            }
+        }
+        ContextScope::SyncStreamPage(PageBudget::Operation)
+        | ContextScope::Request
+        | ContextScope::Subscription => complete_graph::EmailContentLimits::PER_OPERATION,
+    }
 }
 
 fn graphql_query_context_data(
@@ -284,17 +303,13 @@ fn insert_graphql_context_data(
             OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
         ),
     ));
-    let stream_page = scope == ContextScope::SyncStreamPage;
+    let stream_page = matches!(scope, ContextScope::SyncStreamPage(_));
     let properties =
         complete_graph::entity_properties_loader(macro_user_id.clone(), property_reader);
     data.insert(complete_graph::email_content_loader(
         macro_user_id.clone(),
         email_content_reader.clone(),
-        if stream_page {
-            complete_graph::EmailContentLimits::SYNC_STREAM
-        } else {
-            complete_graph::EmailContentLimits::PER_OPERATION
-        },
+        email_content_limits(scope),
     ));
     let metadata = complete_graph::email_thread_metadata_loader(
         macro_user_id.clone(),

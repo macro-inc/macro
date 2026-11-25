@@ -1,5 +1,5 @@
 use crate::calendar::MaterializedRange;
-use crate::lane::{LaneKind, LanePlan};
+use crate::lane::{LaneKind, LanePlan, PageBudget};
 use crate::request::{MAX_LANES, SyncPlan};
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
@@ -240,4 +240,35 @@ fn leaves_out_calendar_months_the_cache_already_holds() {
         starts,
         ["2026-12-01", "2026-10-01", "2027-01-01", "2026-09-01"]
     );
+}
+
+#[test]
+fn only_the_email_content_lane_loads_more_than_one_operation_may() {
+    let lanes = plan(json!({ "protocol": 1, "pass": "second", "lanes": [] }));
+    assert_eq!(
+        lane(&lanes, "email-content").budget,
+        PageBudget::EmailContent {
+            threads: 200,
+            messages: 4_000,
+        }
+    );
+    for planned in lanes
+        .iter()
+        .filter(|lane| lane.id.as_str() != "email-content")
+    {
+        assert_eq!(
+            planned.budget,
+            PageBudget::Operation,
+            "{}",
+            planned.id.as_str()
+        );
+    }
+    for planned in first_pass(json!([])) {
+        assert_eq!(
+            planned.budget,
+            PageBudget::Operation,
+            "{}",
+            planned.id.as_str()
+        );
+    }
 }

@@ -142,8 +142,11 @@ Pages run like this:
     statement ran; past that the lane is read again from the page's cursor,
     half as many items at once. A page that selects `frecencyScore` runs like
     any other.
-  - The email-content budget is a page's: up to 500 threads and 10,000
-    requested messages per batch (one operation: 20 and 100).
+  - Only the `email-content` lane's pages get a larger email-content budget,
+    sized to its page: 200 threads and 4,000 requested messages per batch
+    (`PageBudget` on the lane spec). Every other lane gets one operation's
+    (20 and 100), so a document sent for any other lane loads no more email
+    content than it could on `/soup/graphql`.
   - A Soup page loads its per-entity data in one batch per page instead of as
     each entity's fields ask: its entities' viewer permissions and properties,
     and its email threads' Mail projections and metadata.

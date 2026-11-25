@@ -11,7 +11,8 @@ use crate::catalog::{
     with_updated_since,
 };
 use crate::lane::{
-    INPUT_VARIABLE, LaneDraft, LaneError, LaneId, LaneKind, LanePlan, Paging, SOUP_CARRIED_FIELDS,
+    INPUT_VARIABLE, LaneDraft, LaneError, LaneId, LaneKind, LanePlan, PageBudget, Paging,
+    SOUP_CARRIED_FIELDS,
 };
 use crate::request::{MAX_LANES, RequestError, SavedLane, SyncRequest};
 use chrono::{DateTime, TimeDelta, Utc};
@@ -199,6 +200,7 @@ fn soup_lane(
             items_before,
             resumable,
             pass_started_at,
+            budget: spec.budget,
         })
     };
     let json = |input: &LaneInput| {
@@ -265,6 +267,7 @@ fn calendar_lane(
         items_before: 0,
         resumable: false,
         pass_started_at: iso_instant(now),
+        budget: PageBudget::Operation,
     })
 }
 

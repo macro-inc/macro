@@ -24,8 +24,8 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use soup_sync_stream::{
-    ActiveStreamGuard, ActiveStreams, MaterializedRange, PageExecutor, PageTurn, PageTurns,
-    RequestError, StreamTurns, SyncPlan,
+    ActiveStreamGuard, ActiveStreams, MaterializedRange, PageBudget, PageExecutor, PageTurn,
+    PageTurns, RequestError, StreamTurns, SyncPlan,
 };
 use std::{
     convert::Infallible,
@@ -179,6 +179,7 @@ impl PageExecutor for SchemaPageExecutor {
     async fn execute(
         &self,
         request: async_graphql::Request,
+        budget: PageBudget,
     ) -> Result<serde_json::Value, Self::Error> {
         let response = telemetry::observe(request, true, |request| {
             let request = graphql_query_context_data(
@@ -187,7 +188,7 @@ impl PageExecutor for SchemaPageExecutor {
                 Some(self.macro_user_id.clone()),
                 self.organization_id,
                 self.viewer_id,
-                ContextScope::SyncStreamPage,
+                ContextScope::SyncStreamPage(budget),
             );
             self.state.graphql_soup_schema.execute(
                 request

@@ -29,14 +29,6 @@ impl EmailContentLimits {
         max_keys: 20,
         max_messages: 100,
     };
-
-    /// One page of the streamed cache sync. Scales with the Soup page cap
-    /// (500 threads) at the 20 messages per thread the sync's content lane
-    /// asks for, so the lane's page size, not this cap, sets the batch.
-    pub const SYNC_STREAM: Self = Self {
-        max_keys: 500,
-        max_messages: 500 * 20,
-    };
 }
 const MAX_EMAIL_THREAD_METADATA_KEYS: usize = 500;
 const MAX_EMAIL_THREAD_MAIL_PROJECTION_KEYS: usize = 500;
