@@ -49,6 +49,27 @@ describe('scheduler', () => {
     ]);
   });
 
+  test('replays a persisted occurrence queued when a runtime stopped', async () => {
+    const store = memoryStore();
+    const clock = fakeClock('2026-11-09T09:00:00Z');
+    const first = scheduler({ store, clock, tz: 'UTC' });
+    await first.set('reminder', { at: '2026-11-09T09:00:00Z', data: 'call' });
+    const queued = await first.fired[Symbol.asyncIterator]().next();
+    expect(queued.value).toEqual({
+      name: 'reminder',
+      due: '2026-11-09T09:00:00Z',
+      data: 'call',
+    });
+    const stop = new AbortController();
+    const restarted = scheduler({
+      store,
+      clock: fakeClock('2026-11-10T09:00:00Z'),
+      tz: 'UTC',
+      signal: stop.signal,
+    });
+    expect(await take(restarted.fired, 1, stop)).toEqual([queued.value]);
+  });
+
   test('fires rules and ats in order, sleeping in between', async () => {
     const stop = new AbortController();
     const schedules = scheduler({

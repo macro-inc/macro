@@ -8,10 +8,12 @@ const isSource = Symbol('isSource');
  */
 export type Source<Payload> = AsyncIterable<Payload> & {
   readonly [isSource]: true;
+  readonly delivery?: 'replayable' | 'dependent';
 };
 
 export const source = <Payload>(
-  stream: AsyncIterable<Payload>
+  stream: AsyncIterable<Payload>,
+  delivery?: Source<Payload>['delivery']
 ): Source<Payload> => {
   let iterator: AsyncIterator<Payload> | undefined;
   let pulling = false;
@@ -48,6 +50,7 @@ export const source = <Payload>(
 
   return {
     [isSource]: true,
+    ...(delivery === undefined ? {} : { delivery }),
     [Symbol.asyncIterator]: () => {
       const reader = Symbol();
       readers.add(reader);
@@ -74,7 +77,9 @@ export const source = <Payload>(
  * nothing is listening. After `close`, the source ends once its queued events
  * are delivered.
  */
-export const channel = <Payload>(): {
+export const channel = <Payload>(
+  delivery?: Source<Payload>['delivery']
+): {
   readonly source: Source<Payload>;
   readonly push: (payload: Payload) => Promise<void>;
   readonly close: () => void;
@@ -101,20 +106,23 @@ export const channel = <Payload>(): {
   };
 
   return {
-    source: source({
-      [Symbol.asyncIterator]: () => {
-        reading = true;
-        return {
-          next: () =>
-            new Promise<IteratorResult<Payload>>((resolve) => {
-              finish?.();
-              finish = undefined;
-              wanting = resolve;
-              deliver();
-            }),
-        };
+    source: source(
+      {
+        [Symbol.asyncIterator]: () => {
+          reading = true;
+          return {
+            next: () =>
+              new Promise<IteratorResult<Payload>>((resolve) => {
+                finish?.();
+                finish = undefined;
+                wanting = resolve;
+                deliver();
+              }),
+          };
+        },
       },
-    }),
+      delivery
+    ),
     push: (payload) =>
       reading && !closed
         ? new Promise<void>((done) => {

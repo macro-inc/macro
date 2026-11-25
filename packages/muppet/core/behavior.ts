@@ -3,6 +3,7 @@ import type { Capability, Catalog } from './capability.ts';
 import { describeError } from './error.ts';
 import type { Source } from './event.ts';
 import type { Failure, Hooks, Lifecycle } from './hook.ts';
+import { type maintenance, trackMaintenanceTask } from './maintenance.ts';
 import type { Runtime } from './runtime.ts';
 
 /**
@@ -206,7 +207,8 @@ type Subscription<Context, Sources> = (
     handled: Handled,
     source: Source<unknown>,
     payload: unknown
-  ) => Promise<void>
+  ) => Promise<void>,
+  control?: ReturnType<typeof maintenance>
 ) => { readonly source: Source<unknown>; readonly done: Promise<void> };
 
 /**
@@ -285,24 +287,30 @@ const make = <Needs, Provided, Sources, Failures>(
       context,
       sources,
       wakeFor,
-      accept
+      accept,
+      control
     ) => {
       const source = select(sources);
       const done = (async () => {
         for await (const payload of source) {
-          // try, not .then: a handler that isn't async can throw before it returns a promise.
-          const handled = await (async (): Promise<Handled> => {
-            try {
-              await handle(payload, {
-                ...context,
-                wake: wakeFor(source, payload),
-              });
-              return { kind: 'handled' };
-            } catch (error) {
-              return { kind: 'failed', error: describeError(error) };
-            }
-          })();
-          await accept(handled, source, payload);
+          const dispatch = async () => {
+            // try, not .then: a handler that isn't async can throw before it returns a promise.
+            const handled = await (async (): Promise<Handled> => {
+              try {
+                await handle(payload, {
+                  ...context,
+                  wake: wakeFor(source, payload),
+                });
+                return { kind: 'handled' };
+              } catch (error) {
+                return { kind: 'failed', error: describeError(error) };
+              }
+            })();
+            await accept(handled, source, payload);
+          };
+          if (control === undefined) await dispatch();
+          else
+            await control.dispatch(source.delivery === 'dependent', dispatch);
         }
       })();
       return { source, done };
@@ -333,7 +341,15 @@ export const behavior = <Needs extends object = {}>(): Behavior<
 export const serve = async <Needs, Provided extends Needs, Sources>(
   behavior: Behavior<Needs, Provided, Sources, FailuresHandled>,
   lifecycle: Lifecycle,
-  { wakeFor, accept }: { readonly wakeFor: WakeFor; readonly accept: Accept }
+  {
+    wakeFor,
+    accept,
+    control,
+  }: {
+    readonly wakeFor: WakeFor;
+    readonly accept: Accept;
+    readonly control?: ReturnType<typeof maintenance>;
+  }
 ): Promise<void> => {
   const sources = { ...behavior.sources, hooks: lifecycle.hooks };
   const names = new Map<unknown, string>([
@@ -352,9 +368,13 @@ export const serve = async <Needs, Provided extends Needs, Sources>(
       behavior.decorations,
       sources,
       (source, payload) => (request) =>
-        wakeFor(request, event(source, payload)),
-      (handled, source, payload) => accept(handled, event(source, payload))
+        trackMaintenanceTask(() => wakeFor(request, event(source, payload))),
+      (handled, source, payload) => accept(handled, event(source, payload)),
+      control
     )
+  );
+  control?.eligible(
+    started.every(({ source }) => source.delivery !== undefined)
   );
   const hooks: readonly unknown[] = Object.values(lifecycle.hooks);
   await Promise.all(

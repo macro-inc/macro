@@ -103,17 +103,6 @@ const changeRun = (
     : { ...table, [name]: { ...entry, run: change(entry.run) } };
 };
 
-/** Nothing runs between passes, so a run still marked running was cut off, e.g. by a restart. */
-const recover = (table: Table): Table =>
-  Object.values(table).some((entry) => entry.run.running === true)
-    ? Object.fromEntries(
-        Object.entries(table).map(([name, entry]) => {
-          const { running: _, ...run } = entry.run;
-          return [name, { ...entry, run }];
-        })
-      )
-    : table;
-
 const start = (table: Table, fire: Fire, now: Temporal.Instant): Table =>
   changeRun(table, fire.name, (run) => ({
     ...run,
@@ -190,10 +179,29 @@ export const scheduler = ({
     };
   };
 
+  const firing = (name: string, due: string, schedule: Schedule): Fired => ({
+    name,
+    due,
+    ...(schedule.data === undefined ? {} : { data: schedule.data }),
+  });
+
   /** One pass: records what was missed, fires what is due, and says how long to sleep. */
   async function* pass(): AsyncGenerator<Fired, number> {
     try {
-      const table = await update(recover);
+      const table = await read();
+      const pending = Object.entries(table).filter(
+        ([, { run }]) => run.running === true && run.due !== undefined
+      );
+      // A dispatch fenced before its handler ran remains running on disk.
+      // Replay that exact occurrence before calculating any new due times.
+      for (const [name, entry] of pending) {
+        const { due: occurrence } = entry.run;
+        if (occurrence === undefined) continue;
+        yield firing(name, occurrence, entry.schedule);
+        await update((current) => end(current, name, clock.now()));
+      }
+      if (pending.length > 0) return 0;
+
       const verdict = due(table, clock.now(), zone);
       if (verdict.miss.length > 0)
         await update((current) => verdict.miss.reduce(miss, current));
@@ -202,13 +210,7 @@ export const scheduler = ({
           await update((current) => start(current, fire, clock.now()))
         )[fire.name];
         if (entry === undefined) continue;
-        yield {
-          name: fire.name,
-          due: isoText(fire.due),
-          ...(entry.schedule.data === undefined
-            ? {}
-            : { data: entry.schedule.data }),
-        };
+        yield firing(fire.name, isoText(fire.due), entry.schedule);
         await update((current) => end(current, fire.name, clock.now()));
       }
       // Firing took time, so look again before sleeping.
@@ -274,6 +276,6 @@ export const scheduler = ({
         .map(([name, entry]) => statusOf(name, entry, now, zone))
         .sort(soonest);
     },
-    fired: source(loop()),
+    fired: source(loop(), 'replayable'),
   };
 };
