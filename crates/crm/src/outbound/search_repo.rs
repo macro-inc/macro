@@ -98,48 +98,58 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         // override, the domain string, and the directory name. `$2`
         // (hidden) defaults to visible-only when NULL. The keyset guard
         // ($7/$8) seeks past the previous page under the
-        // `(updated_at DESC, id DESC)` sort; NULL = first page.
+        // `(updated_at DESC, id DESC)` sort; NULL = first page. `$10`
+        // holds the words a minus leaves out, checked only on the sorted
+        // matches behind the first `OFFSET 0`, so the `LIMIT` stops the
+        // check once a page is full; the second keeps it a probe of one
+        // company's domains, which the planner would otherwise hash over
+        // every team's domains.
         let rows = sqlx::query!(
             r#"
             WITH matched AS (
-                SELECT c.id, c.custom_name, c.last_interaction AS updated_at
-                FROM crm_companies c
-                WHERE c.team_id = $1
-                  AND (
-                      (c.hidden = FALSE AND ($2::bool IS NULL OR $2 = FALSE))
-                      OR (c.hidden = TRUE AND $2 = TRUE AND $9)
-                  )
-                  AND (cardinality($3::uuid[]) = 0 OR c.id = ANY($3))
-                  AND (
-                      c.custom_name ILIKE $4
-                      OR EXISTS (
-                          SELECT 1
-                          FROM crm_domains d
-                          LEFT JOIN crm_domain_directory dd
-                              ON LOWER(dd.domain) = LOWER(d.domain)
-                          WHERE d.company_id = c.id
-                            AND (d.domain ILIKE $4 OR dd.name ILIKE $4)
+                SELECT candidate.id, candidate.custom_name, candidate.updated_at
+                FROM (
+                    SELECT c.id, c.custom_name, c.last_interaction AS updated_at
+                    FROM crm_companies c
+                    WHERE c.team_id = $1
+                      AND (
+                          (c.hidden = FALSE AND ($2::bool IS NULL OR $2 = FALSE))
+                          OR (c.hidden = TRUE AND $2 = TRUE AND $9)
                       )
-                  )
-                  AND (
-                      cardinality($10::text[]) = 0
-                      OR NOT (
-                          COALESCE(c.custom_name ILIKE ANY($10::text[]), false)
+                      AND (cardinality($3::uuid[]) = 0 OR c.id = ANY($3))
+                      AND (
+                          c.custom_name ILIKE $4
                           OR EXISTS (
                               SELECT 1
                               FROM crm_domains d
                               LEFT JOIN crm_domain_directory dd
                                   ON LOWER(dd.domain) = LOWER(d.domain)
                               WHERE d.company_id = c.id
-                                AND (
-                                    d.domain ILIKE ANY($10::text[])
-                                    OR dd.name ILIKE ANY($10::text[])
-                                )
+                                AND (d.domain ILIKE $4 OR dd.name ILIKE $4)
                           )
                       )
-                  )
-                  AND ($7::timestamptz IS NULL OR (c.last_interaction, c.id) < ($7, $8))
-                ORDER BY c.last_interaction DESC, c.id DESC
+                      AND ($7::timestamptz IS NULL OR (c.last_interaction, c.id) < ($7, $8))
+                    ORDER BY c.last_interaction DESC, c.id DESC
+                    OFFSET 0
+                ) candidate
+                WHERE cardinality($10::text[]) = 0
+                   OR NOT (
+                       COALESCE(candidate.custom_name ILIKE ANY($10::text[]), false)
+                       OR EXISTS (
+                           SELECT 1
+                           FROM crm_domains d
+                           LEFT JOIN crm_domain_directory dd
+                               ON LOWER(dd.domain) = LOWER(d.domain)
+                           WHERE d.company_id = candidate.id
+                             AND d.team_id = $1
+                             AND (
+                                 d.domain ILIKE ANY($10::text[])
+                                 OR dd.name ILIKE ANY($10::text[])
+                             )
+                           OFFSET 0
+                       )
+                   )
+                ORDER BY candidate.updated_at DESC, candidate.id DESC
                 LIMIT $5
             ),
             primary_domain AS (

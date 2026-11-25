@@ -19,6 +19,10 @@ pub(in crate::api::search) struct FilterChannelResponse {
 /// the channels whose name holds one of `excluded_terms`. Organization
 /// channels no longer exist (`comms_channels.org_id` is always null), so an
 /// `org_id` filter matches no channel, as it does for the message index.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument narrows the one name search it runs"
+)]
 #[tracing::instrument(
     skip(db, filters, term, excluded_terms),
     fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
