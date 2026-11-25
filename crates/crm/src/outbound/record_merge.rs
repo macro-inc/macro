@@ -163,9 +163,9 @@ where
         let all_text: Vec<String> = all.iter().map(Uuid::to_string).collect();
 
         let cells = if lock {
-            lock_pipelines_holding(conn, team, &all).await?
+            lock_pipelines_holding(conn, &all).await?
         } else {
-            pipeline_cells(conn, team, &all).await?
+            pipeline_cells(conn, &all).await?
         };
         let values = if lock {
             property_merge::lock_entity_values_in(
@@ -426,18 +426,19 @@ fn retargeted(
     refs
 }
 
-/// The cells of the team's pipelines, trashed ones included, that reference
-/// one of `records`, in any column. Starts from the records' references
-/// through `idx_ep_database_row_references_gin`, as `referencing_rows` does.
+/// The cells of the pipelines, trashed ones included, that reference one of
+/// `records`, in any column. A company cell may name another team's company,
+/// so every team's pipelines are read; a review shows only those its reader
+/// can open. Starts from the records' references through
+/// `idx_ep_database_row_references_gin`, as `referencing_rows` does.
 async fn pipeline_cells(
     conn: &mut PgConnection,
-    team: Uuid,
     records: &[Uuid],
 ) -> Result<Vec<PipelineCell>, MergeError> {
     let rows = sqlx::query!(
         r#"WITH reference AS MATERIALIZED (
                SELECT DISTINCT r.id AS row_id, r.table_id, ep.property_definition_id, ep.values
-               FROM UNNEST($2::text[]) AS record(id)
+               FROM UNNEST($1::text[]) AS record(id)
                JOIN entity_properties ep
                  ON ep.entity_type = 'DATABASE_ROW'
                 AND ep.values ->> 'type' = 'EntityReference'
@@ -457,9 +458,7 @@ async fn pipeline_cells(
            JOIN database_columns c
              ON c.table_id = reference.table_id
             AND c.property_definition_id = reference.property_definition_id
-           WHERE p.team_id = $1
            ORDER BY p.id, reference.row_id, c.id"#,
-        team,
         &spellings(records),
     )
     .fetch_all(conn)
@@ -551,6 +550,15 @@ async fn lock_database_cells(
         if missing.is_empty() {
             return Ok(cells);
         }
+        // A database's row before its tables', as its writers take them: the
+        // write path holds it FOR SHARE, and a table delete FOR UPDATE.
+        sqlx::query_scalar!(
+            "SELECT id FROM databases WHERE id = ANY(SELECT database_id FROM database_tables WHERE id = ANY($1)) ORDER BY id FOR SHARE",
+            &missing,
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db)?;
         sqlx::query_scalar!(
             "SELECT id FROM database_tables WHERE id = ANY($1) ORDER BY id FOR UPDATE",
             &missing,
@@ -569,12 +577,11 @@ async fn lock_database_cells(
 /// cell between the reads is locked on the next round.
 async fn lock_pipelines_holding(
     conn: &mut PgConnection,
-    team: Uuid,
     records: &[Uuid],
 ) -> Result<Vec<PipelineCell>, MergeError> {
     let mut locked: Vec<Uuid> = Vec::new();
     for _ in 0..3 {
-        let cells = pipeline_cells(conn, team, records).await?;
+        let cells = pipeline_cells(conn, records).await?;
         let mut wanted: Vec<Uuid> = cells.iter().map(|cell| cell.pipeline_id).collect();
         wanted.sort_unstable();
         wanted.dedup();
@@ -930,7 +937,11 @@ where
         // Pipelines, trashed ones too so a restore names the survivor, and
         // company columns of ordinary databases, through one write path.
         let mut cells: Vec<StoredCell> = facts.cells.iter().map(StoredCell::from).collect();
-        cells.extend(lock_database_cells(&mut *tx, &targets.all_sorted()).await?);
+        // Only tables holding a merged company's cells: the merge rewrites
+        // nothing else there, so it doesn't wait on a writer that it
+        // wouldn't touch. One committed elsewhere meanwhile is caught by the
+        // final check.
+        cells.extend(lock_database_cells(&mut *tx, targets.sources()).await?);
         changes.extend(
             self.retarget_database_cells(tx, scope, targets, &cells)
                 .await?,
@@ -1211,7 +1222,7 @@ where
                 .await
                 .map_err(db)?
                 .is_empty();
-        let named = !pipeline_cells(&mut tx, scope.team_id, command.targets.sources())
+        let named = !pipeline_cells(&mut tx, command.targets.sources())
             .await?
             .is_empty()
             || !database_cells(&mut tx, command.targets.sources())

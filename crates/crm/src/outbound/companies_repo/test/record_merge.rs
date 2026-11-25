@@ -1375,3 +1375,52 @@ async fn a_database_cell_edited_while_the_merge_waits_keeps_the_edit(pool: PgPoo
         "the merge read the writer's value, not the one before it"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn another_teams_pipeline_naming_a_merged_company_names_the_one_that_stays(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let pipeline = company_pipeline(&world, "Partners", &[merged]).await;
+    // A company cell may name another team's company.
+    let other_owner = "macro|merge-other@example.com";
+    let macro_user = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
+    )
+    .bind(macro_user)
+    .bind("merge-other@example.com")
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, 'merge-other@example.com', $2)"#)
+        .bind(other_owner)
+        .bind(macro_user)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let other_team = Uuid::now_v7();
+    sqlx::query("INSERT INTO team (id, name, owner_id) VALUES ($1, 'other', $2)")
+        .bind(other_team)
+        .bind(other_owner)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE crm_pipeline_entities SET team_id = $2 WHERE id = $1")
+        .bind(pipeline.id)
+        .bind(other_team)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let outcome = world
+        .merge(&targets(stays, &[merged]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        named_in(&pool, &pipeline).await,
+        vec![vec![stays.to_string()]]
+    );
+    assert_eq!(logged_cells(&pool, outcome.merge_id).await, 1);
+}
