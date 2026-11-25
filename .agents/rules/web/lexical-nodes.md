@@ -49,6 +49,6 @@ still moves focus into the editor.
 Lexical is patched (`apps/web/patches/lexical-0.45.0.patch`) so an editor
 never writes its selection into the page while focus is in another text field
 (an input, a textarea, another contenteditable), unless `editor.focus()` asks.
-Code that moves the caret from one field into an editor (the document title's
-Enter and Tab) focuses the editor's root, or calls `editor.focus()`, before or
-with the update.
+Code that moves the caret from one field into an editor (between the document
+title and body, both ways) focuses the editor's root, or calls
+`editor.focus()`, before or with the update.

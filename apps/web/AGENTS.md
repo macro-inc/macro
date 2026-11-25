@@ -585,8 +585,8 @@ checks that focus never leaves another pane's field while collaborators edit a
 document holding every decorator type. Lexical is patched so an editor never
 writes its selection while focus is in another text field unless
 `editor.focus()` asks; the Markdown core suite's `focus-guard.browser.e2e.ts`
-covers that, and that toolbar buttons, menus, closing prompts and the title's
-Enter and Tab still move the caret into the document.
+covers that, and that toolbar buttons, menus, closing prompts and moving
+between the title and the body still move the caret.
 
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
