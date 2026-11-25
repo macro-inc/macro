@@ -35,4 +35,27 @@ describe('createSearchOperatorLookup', () => {
       dispose();
     });
   });
+
+  it('reaches a tag by its name as typed, quotes left out', () => {
+    createRoot((dispose) => {
+      const lookup = createSearchOperatorLookup({
+        options: () => [
+          { id: 'plan', label: 'Q3 "Plan"' },
+          { id: 'fire', label: '🔥' },
+        ],
+        defByOption: () =>
+          new Map([
+            ['plan', 'tags-1'],
+            ['fire', 'tags-1'],
+          ]),
+      });
+      expect(lookup().tags('q3 plan')).toEqual([
+        { propertyId: 'tags-1', optionId: 'plan' },
+      ]);
+      expect(lookup().tags('🔥')).toEqual([
+        { propertyId: 'tags-1', optionId: 'fire' },
+      ]);
+      dispose();
+    });
+  });
 });

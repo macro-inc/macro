@@ -153,6 +153,22 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
     async fn get_bot_sender_profile(&self, bot_id: BotId) -> Option<BotSenderProfile> {
         get_bot_sender_profile(&self.pool, bot_id).await
     }
+
+    async fn is_agent_dm(&self, channel_id: Uuid) -> Result<bool, Self::Err> {
+        let is_agent_dm = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM comms_channel_agents
+                WHERE channel_id = $1 AND kind = 'direct'
+            ) AS "is_agent_dm!"
+            "#,
+            channel_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(is_agent_dm)
+    }
 }
 
 async fn get_bot_sender_profile(db: &PgPool, bot_id: BotId) -> Option<BotSenderProfile> {

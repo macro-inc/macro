@@ -1,4 +1,6 @@
 #[cfg(test)]
+mod conflicts_test;
+#[cfg(test)]
 mod definitions_test;
 pub mod entity_info_queries;
 pub mod entity_properties_get_query;

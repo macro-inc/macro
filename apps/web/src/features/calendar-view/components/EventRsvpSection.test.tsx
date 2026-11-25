@@ -14,11 +14,17 @@ vi.mock('@queries/calendar/mutations', () => ({
   useRsvpCalendarEventMutation: () => ({ mutate }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@ui', () => ({
-  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button onClick={props.onClick}>{props.children}</button>
-  ),
-}));
+vi.mock('@ui', async () => {
+  const { Layer } = await import('@ui/components/Layer');
+  const { cn } = await import('@ui/utils/classname');
+  return {
+    Layer,
+    cn,
+    Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button onClick={props.onClick}>{props.children}</button>
+    ),
+  };
+});
 vi.mock('../../calendar/components/EventRsvpScopeDialog', () => ({
   EventRsvpScopeDialog: (props: {
     open: boolean;
@@ -67,6 +73,26 @@ const event: CalendarEvent = {
   ],
 };
 describe('event RSVP confirmation', () => {
+  it('keeps repeated response controls scoped to their own occurrence', () => {
+    render(() => (
+      <>
+        <EventRsvpSection event={{ ...event, eventId: 'first' }} />
+        <EventRsvpSection
+          event={{ ...event, eventId: 'second', occurrenceKey: '2026-09-18' }}
+        />
+      </>
+    ));
+    fireEvent.click(screen.getAllByText('Yes')[1]);
+    fireEvent.click(screen.getByText('Save response'));
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        eventId: 'second',
+        occurrenceKey: '2026-09-18',
+        scope: 'this_event',
+      }),
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
+  });
   it('cancels without submitting and resets the scope on the next response', () => {
     render(() => <EventRsvpSection event={event} />);
     fireEvent.click(screen.getByText('Yes'));

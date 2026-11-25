@@ -1,4 +1,4 @@
-import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
+import type { CalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -41,13 +41,23 @@ const SETUP_MESSAGES = {
 
 function isWorkingCalendar(link: EmailLink) {
   return (
-    link.is_sync_active && !link.needs_calendar_permission && !link.needs_reauth
+    link.is_sync_active &&
+    !link.calendar_disabled &&
+    !link.needs_calendar_permission &&
+    !link.needs_reauth
   );
 }
 
+type SetupCalendarData = Pick<CalendarOccurrenceData, 'range'>;
+type SetupProps = {
+  data: SetupCalendarData | undefined;
+  /** Agenda places the shared banner before its list content. */
+  includeBanner?: boolean;
+  fullWidth?: boolean;
+};
+
 /** The setup the viewer's own inboxes need before their calendar shows. */
-function useCalendarSetup() {
-  const calendarPager = useCalendarPager();
+function useCalendarSetup(props: SetupProps) {
   const linksQuery = useEmailLinksQuery();
   const calendarsQuery = useVisibleCalendarsQuery();
   const warnings = createMemo(() =>
@@ -58,9 +68,8 @@ function useCalendarSetup() {
   const startAddInbox = useAddInboxFlow();
   const userId = useUserId();
 
-  // The links list also carries inboxes another Macro user delegated to the
-  // viewer. Whether that user's calendar syncs is theirs to decide, as in the
-  // calendar settings, so setup counts and acts on the viewer's own alone.
+  // Delegated links belong to other users; the viewer cannot repair them,
+  // but a working delegated calendar still counts as connected.
   const ownLinks = () =>
     linksQuery.isSuccess
       ? (linksQuery.data?.links ?? []).filter(
@@ -68,39 +77,28 @@ function useCalendarSetup() {
         )
       : [];
 
-  const hasEvents = () =>
-    (calendarPager.activeData()?.events().length ?? 0) > 0 ||
-    calendarPager.activeTeamEvents().length > 0;
-
-  // A working calendar shared with the viewer still fills the grid, so a week
-  // without events is not a sign that nothing is set up: setting up their own
-  // stays on offer without covering the grid.
+  // A working delegated calendar is connected for the viewer too, even though
+  // only the owner can change its setup.
   const seesWorkingCalendar = () =>
     linksQuery.isSuccess &&
     (linksQuery.data?.links ?? []).some(isWorkingCalendar);
 
-  // Existing events are not evidence that setup is complete: a revoked grant
-  // or delegated inbox can leave events visible without a working calendar
-  // connection belonging to the current user.
+  // Old calendar data marks a revoked grant even after its events disappear.
   const stoppedLink = () => ownLinks().find(calendarStoppedSyncing);
 
   const setupState = createMemo<
     'connect' | 'permission' | 'reauth' | 'disabled' | 'stopped' | undefined
   >(() => {
-    const activeData = calendarPager.activeData();
+    const activeData = props.data;
     const range = activeData?.range();
     if (range && !isCalendarRangeSupported(range)) return undefined;
 
-    if (
-      !linksQuery.isSuccess ||
-      !activeData?.occurrencesQuery.isSuccess ||
-      userId() === undefined
-    ) {
-      return undefined;
-    }
+    if (!linksQuery.isSuccess || userId() === undefined) return undefined;
 
     const links = ownLinks();
-    if (links.length === 0) return 'connect';
+    if (links.length === 0) {
+      return seesWorkingCalendar() ? undefined : 'connect';
+    }
 
     if (links.some(calendarStoppedSyncing)) return 'stopped';
     if (links.some(isWorkingCalendar)) return undefined;
@@ -115,17 +113,15 @@ function useCalendarSetup() {
         : 'permission';
     }
 
-    return 'connect';
+    return seesWorkingCalendar() ? undefined : 'connect';
   });
 
   const setupMessage = createMemo(
     () => SETUP_MESSAGES[setupState() ?? 'connect']
   );
-  // A stopped calendar beside working ones keeps to the banner above the grid,
-  // so the working calendars' sync errors still show.
+  // A stopped calendar beside working ones keeps the sync errors visible.
   const showsWarnings = () =>
-    setupState() === undefined ||
-    (setupState() === 'stopped' && (hasEvents() || seesWorkingCalendar()));
+    setupState() === undefined || setupState() === 'stopped';
   const setupTitle = () => {
     const stopped = setupState() === 'stopped' ? stoppedLink() : undefined;
     return stopped
@@ -159,12 +155,8 @@ function useCalendarSetup() {
     );
   };
 
-  // Over an empty grid the setup explains itself in place of the events;
-  // beside events, or a calendar shared with the viewer, it sits above the
-  // grid, where it covers none of them.
-  const coversGrid = () =>
-    setupState() !== undefined && !hasEvents() && !seesWorkingCalendar();
-  const besideGrid = () => setupState() !== undefined && !coversGrid();
+  // Setup sits in the flow above the grid, including when there are no events.
+  const besideGrid = () => setupState() !== undefined;
 
   return {
     warnings,
@@ -172,16 +164,18 @@ function useCalendarSetup() {
     setupTitle,
     setupMessage,
     startSetup,
-    coversGrid,
     besideGrid,
   };
 }
 
-/** Explains missing setup over an empty grid, and lists calendars' sync errors. */
-export function SetupStatus() {
-  const setup = useCalendarSetup();
+/** Lists calendars' sync errors and hosts Agenda's inline setup banner. */
+export function SetupStatus(props: SetupProps) {
+  const setup = useCalendarSetup(props);
   return (
     <>
+      <Show when={props.includeBanner}>
+        <SetupBanner {...props} />
+      </Show>
       <Show when={setup.showsWarnings() && setup.warnings().length > 0}>
         <div
           role="status"
@@ -196,39 +190,23 @@ export function SetupStatus() {
           </For>
         </div>
       </Show>
-      <Show when={setup.coversGrid()}>
-        <div
-          class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
-          aria-live="polite"
-        >
-          <div class="flex max-w-sm flex-col items-center gap-3">
-            <div class="text-sm font-semibold text-ink">
-              {setup.setupTitle()}
-            </div>
-            <p class="text-xs text-ink-muted">
-              {setup.setupMessage().description}
-            </p>
-            <Button variant="primary" size="sm" onClick={setup.startSetup}>
-              {setup.setupMessage().action}
-            </Button>
-          </div>
-        </div>
-      </Show>
     </>
   );
 }
 
-/** Offers missing setup above a grid that shows events, in the page's flow. */
-export function SetupBanner(props: { class?: string; fullWidth?: boolean }) {
-  const setup = useCalendarSetup();
+/** Offers missing setup above the grid without covering events or navigation. */
+export function SetupBanner(props: SetupProps) {
+  const setup = useCalendarSetup(props);
   return (
     <Show when={setup.besideGrid()}>
-      <div class={cn('shrink-0', props.class)}>
+      <div class={props.includeBanner ? 'order-first shrink-0' : 'shrink-0'}>
         <div
           role="status"
           class={cn(
-            'mb-2 flex items-center gap-3 border border-accent/30 bg-accent-bg px-3 py-2 text-xs',
-            props.fullWidth ? 'rounded-none' : 'mx-2 rounded-lg'
+            'mb-2 flex gap-3 border border-accent bg-accent-bg px-3 py-2 text-xs',
+            props.fullWidth
+              ? 'mx-2 flex-col items-start rounded-(--calendar-phone-card-radius)'
+              : 'mx-2 items-center rounded-lg'
           )}
         >
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -240,7 +218,7 @@ export function SetupBanner(props: { class?: string; fullWidth?: boolean }) {
           <Button
             variant="primary"
             size="sm"
-            class="shrink-0"
+            class={props.fullWidth ? 'self-start' : 'shrink-0'}
             onClick={setup.startSetup}
           >
             {setup.setupMessage().action}

@@ -38,8 +38,8 @@
   border-radius: var(--feature-frame-radius, 26.25px);
   mask-image: none;
   -webkit-mask-image: none;
-  background: linear-gradient(135deg, #ffffff07, transparent 55%), rgb(16 16 18 / 64%);
-  box-shadow: inset 0 1px 0 #ffffff12, inset 0 0 0 1px #ffffff07, 0 14px 32px -24px #0009;
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 2.7%), transparent 55%), var(--demo-glass-fill);
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 7.1%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 2.7%), 0 14px 32px -24px #0009;
 }
 .feature-page .feature-demo-art .product-demo-stage::before,
 .feature-page .feature-demo-art .product-demo-stage::after { display: none; }
@@ -101,7 +101,7 @@
 }
 @media (prefers-reduced-transparency: reduce) {
   .feature-page .feature-demo-art .product-demo,
-  .feature-demo-art .mail-sharing-splits > .mail-sharing-email { background: #111113; }
+  .feature-demo-art .mail-sharing-splits > .mail-sharing-email { background: var(--demo-glass-solid); }
 }
 
 /* An 8px glass surround keeps the onboarding texture outside the UI. */
@@ -111,8 +111,8 @@
   margin: calc(-1 * var(--feature-frame-inset));
   padding: var(--feature-frame-inset);
   border-radius: calc(var(--feature-frame-radius) + var(--feature-frame-inset));
-  background: linear-gradient(135deg, #ffffff04, transparent 55%, #65d8ac02);
-  box-shadow: inset 0 0 0 1px #ffffff14, 0 16px 48px -24px #0008;
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 1.6%), transparent 55%, #65d8ac02);
+  box-shadow: inset 0 0 0 1px rgb(var(--demo-glass-rim) / 7.8%), 0 16px 48px -24px #0008;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -123,10 +123,10 @@
 }
 .feature-page .feature-demo-art[data-glass-frame] .product-demo,
 .feature-page .product-page .feature-page-section .product-demo {
-  background: linear-gradient(135deg, #ffffff0b, transparent 55%), rgb(16 16 18 / 64%);
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 4.3%), transparent 55%), var(--demo-glass-fill);
   backdrop-filter: blur(16px) saturate(115%);
   -webkit-backdrop-filter: blur(16px) saturate(115%);
-  box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0c, 0 14px 32px -24px #0009;
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 9.4%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 4.7%), 0 14px 32px -24px #0009;
 }
 .feature-demo-art[data-glass-frame] > .feature-demo-backdrop {
   inset: -108px -120px;
@@ -141,8 +141,8 @@
     radial-gradient(ellipse 38% 48% at 82% 70%, color-mix(in srgb, var(--feature-glow) 13%, transparent), transparent 82%);
 }
 @media (prefers-reduced-transparency: reduce) {
-  .feature-page .feature-demo-art[data-glass-frame] .product-demo { backdrop-filter: none; -webkit-backdrop-filter: none; background: #101012; }
-  .feature-demo-art[data-glass-frame] > .feature-demo-primary { backdrop-filter: none; -webkit-backdrop-filter: none; background: #141917; }
+  .feature-page .feature-demo-art[data-glass-frame] .product-demo { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--demo-glass-solid); }
+  .feature-demo-art[data-glass-frame] > .feature-demo-primary { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--demo-glass-solid); }
 }
 
 .feature-page .feature-page-section .product-demo-stage::before,
@@ -160,16 +160,16 @@
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
 }
 .feature-page-section :is(.sample-task-properties .review-pr-mention, .review-pr-pill, [data-slot='property-pill']:not(.sample-list-property), [aria-label^='Change tag'], [aria-label='Checklist progress'], .task-pr-pill) {
-  background: linear-gradient(135deg, #ffffff09, #ffffff02), rgb(30 32 32 / 54%);
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 3.5%), rgb(var(--demo-glass-rim) / 0.8%)), var(--demo-glass-chip);
   border: 0;
-  box-shadow: inset 0 1px 0 #ffffff0c, inset 0 0 0 1px #ffffff06;
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 4.7%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 2.4%);
   backdrop-filter: blur(10px) saturate(110%);
 }
 /* Status labels must not change where the remaining badges wrap. */
 .feature-page-section .sample-task-properties [aria-label='Change status'] { width: 120px; }
 @media (prefers-reduced-transparency: reduce) {
   .feature-page-section :is(.sample-task-properties .review-pr-mention, .review-pr-pill, [data-slot='property-pill']:not(.sample-list-property), [aria-label^='Change tag'], [aria-label='Checklist progress'], .task-pr-pill) {
-    background: #202222;
+    background: var(--demo-glass-chip-solid);
     backdrop-filter: none;
   }
 }
@@ -188,15 +188,15 @@
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .feature-page .product-page .feature-page-section .product-demo { background: #101012; backdrop-filter: none; }
+  .feature-page .product-page .feature-page-section .product-demo { background: var(--demo-glass-solid); backdrop-filter: none; }
 }
 
 /* Custom email demos and homepage document scenes use the same inner material. */
 .feature-page .feature-demo-art :is(.mail-app, .macro-preview-back, .mds-card) {
-  background: linear-gradient(135deg, #ffffff0b, transparent 55%), rgb(16 16 18 / 64%);
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 4.3%), transparent 55%), var(--demo-glass-fill);
   backdrop-filter: blur(16px) saturate(115%);
   -webkit-backdrop-filter: blur(16px) saturate(115%);
 }
 @media (prefers-reduced-transparency: reduce) {
-  .feature-page .feature-demo-art :is(.mail-app, .macro-preview-back, .mds-card) { background: #101012; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .feature-page .feature-demo-art :is(.mail-app, .macro-preview-back, .mds-card) { background: var(--demo-glass-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

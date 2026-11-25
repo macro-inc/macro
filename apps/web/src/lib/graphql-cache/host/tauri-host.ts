@@ -549,6 +549,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
+  let opened = false;
+  let disposed = false;
+  let stop = () => {};
+  const stopped = new Promise<void>((resolve) => {
+    stop = resolve;
+  });
+  // Settles either way (a failed native init never opens), or on dispose.
+  const settled = Promise.race([
+    ready.then(
+      () => {
+        opened = !disposed;
+      },
+      () => undefined
+    ),
+    stopped,
+  ]);
   fireAndForget(
     (async () => {
       try {
@@ -588,6 +604,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   return {
     clientId,
+    isReady: () => opened && !disposed,
+    whenReady: () => settled,
     authority: {
       current: async () => {
         const context = Telemetry.captureContext();
@@ -1225,6 +1243,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     dispose() {
+      disposed = true;
+      stop();
       clearTimeout(affectedTimer);
       pendingAffected.clear();
       pendingReads.clear();

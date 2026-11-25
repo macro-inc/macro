@@ -1,70 +1,113 @@
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import { createSignal, For, onCleanup, onMount } from 'solid-js';
 import calendarScreen from '../../../../assets/homepage/calendar.webp';
+import calendarScreenLight from '../../../../assets/homepage/calendar-light.webp';
 import callScreen from '../../../../assets/homepage/call.webp';
+import callScreenLight from '../../../../assets/homepage/call-light.webp';
 import chatScreen from '../../../../assets/homepage/chat.webp';
+import chatScreenLight from '../../../../assets/homepage/chat-light.webp';
 import crmScreen from '../../../../assets/homepage/crm-board.webp';
+import crmScreenLight from '../../../../assets/homepage/crm-board-light.webp';
 import docsScreen from '../../../../assets/homepage/docs.webp';
+import docsScreenLight from '../../../../assets/homepage/docs-light.webp';
 import homeScreen from '../../../../assets/homepage/home.webp';
+import homeScreenLight from '../../../../assets/homepage/home-light.webp';
 import mailScreen from '../../../../assets/homepage/mail.webp';
+import mailScreenLight from '../../../../assets/homepage/mail-light.webp';
 import tasksScreen from '../../../../assets/homepage/tasks.webp';
+import tasksScreenLight from '../../../../assets/homepage/tasks-light.webp';
 import type { TutorialVideoId } from '../../core/tutorial-videos';
 import { TutorialWallpaper } from '../TutorialWallpaper';
 import './homepage-tour.css';
 
+// `light` is the same module in the website's sample workspace, shown on the
+// light palette. Its alt text describes that capture, not the dark one.
 const STOPS: readonly {
   label: string;
   tutorial: TutorialVideoId;
   src: string;
   alt: string;
+  light: { src: string; alt: string };
 }[] = [
   {
     label: 'Home',
     tutorial: 'home',
     src: homeScreen,
     alt: 'Macro Home: one list of emails, channels, tasks and agent sessions beside an agent’s summary of today’s support tickets',
+    light: {
+      src: homeScreenLight,
+      alt: 'Macro Home: one list of chats, channels, emails and tasks beside an agent’s answer listing the launch tasks still open',
+    },
   },
   {
     label: 'Mail',
     tutorial: 'mail',
     src: mailScreen,
     alt: 'Macro Mail: an inbox split into Signal and Noise, each thread tagged',
+    light: {
+      src: mailScreenLight,
+      alt: 'Macro Mail: the Signal inbox for three accounts, each thread tagged',
+    },
   },
   {
     label: 'Chat',
     tutorial: 'chat',
     src: chatScreen,
     alt: 'Macro Chat: the launch-team channel with a thread showing its first replies inline',
+    light: {
+      src: chatScreenLight,
+      alt: 'Macro Chat: the launch channel with replies shown inline and tasks mentioned in messages',
+    },
   },
   {
     label: 'Tasks',
     tutorial: 'tasks',
     src: tasksScreen,
     alt: 'Macro Tasks: all tasks grouped by priority with due dates, projects and assignees',
+    light: {
+      src: tasksScreenLight,
+      alt: 'Macro Tasks: all tasks in a list with status, priority and assignee',
+    },
   },
   {
     label: 'Calendar',
     tutorial: 'calendar',
     src: calendarScreen,
     alt: 'Macro Calendar: a week view with upcoming events in the sidebar',
+    light: {
+      src: calendarScreenLight,
+      alt: 'Macro Calendar: a week view with upcoming events in the sidebar',
+    },
   },
   {
     label: 'Docs',
     tutorial: 'docs',
     src: docsScreen,
     alt: 'Macro Docs: a requirements doc that mentions tasks and a standup call',
+    light: {
+      src: docsScreenLight,
+      alt: 'Macro Docs: a launch plan with tags, a checklist and owners',
+    },
   },
   {
     label: 'CRM',
     tutorial: 'crm',
     src: crmScreen,
     alt: 'Macro CRM: a deals pipeline as a board with Discovery, Proposal and Negotiation columns',
+    light: {
+      src: crmScreenLight,
+      alt: 'Macro CRM: companies on a board with Lead, Qualified, Demo and Trial columns',
+    },
   },
   {
     label: 'Calls',
     tutorial: 'calls',
     src: callScreen,
     alt: 'Macro Calls: a recorded standup with participants, a summary and the recording',
+    light: {
+      src: callScreenLight,
+      alt: 'Macro Calls: a recorded planning call with participants, a summary and the recording',
+    },
   },
 ];
 
@@ -218,16 +261,30 @@ export function HomepageTour() {
       >
         <For each={STOPS}>
           {(item, index) => (
-            <img
-              src={item.src}
-              alt={item.alt}
-              width="1700"
-              height="916"
-              loading={index() === 0 ? 'eager' : 'lazy'}
-              decoding="async"
-              data-active={index() === current()}
-              aria-hidden={index() !== current()}
-            />
+            <>
+              <img
+                class="palette-dark-only"
+                src={item.src}
+                alt={item.alt}
+                width="1700"
+                height="916"
+                loading={index() === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+                data-active={index() === current()}
+                aria-hidden={index() !== current()}
+              />
+              <img
+                class="palette-light-only"
+                src={item.light.src}
+                alt={item.light.alt}
+                width="1700"
+                height="916"
+                loading="lazy"
+                decoding="async"
+                data-active={index() === current()}
+                aria-hidden={index() !== current()}
+              />
+            </>
           )}
         </For>
       </div>

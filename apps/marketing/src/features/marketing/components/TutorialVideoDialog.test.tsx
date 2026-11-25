@@ -89,7 +89,9 @@ it('starts playback immediately and keeps focus on the video when autoPlay is en
       autoPlay
     />
   ));
-  fireEvent.click(screen.getByRole('button', { name: 'Watch Email demo, 1:42' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Watch Email demo, 1:42' })
+  );
   const dialog = await screen.findByRole('dialog', {
     name: 'Learn how to use Macro Mail',
   });

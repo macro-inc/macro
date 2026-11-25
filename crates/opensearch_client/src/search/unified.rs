@@ -101,8 +101,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             excluded_sub_types: args.document_search_args.excluded_sub_types,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
-            tag_option_ids: args.document_search_args.tag_option_ids,
-            match_all_tags: args.document_search_args.match_all_tags,
+            tag_groups: args.document_search_args.tag_groups,
             term_matching: args.document_search_args.term_matching,
         }
     }
@@ -132,8 +131,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
             subject_only: args.email_search_args.subject_only,
-            tag_option_ids: args.email_search_args.tag_option_ids,
-            match_all_tags: args.email_search_args.match_all_tags,
+            tag_groups: args.email_search_args.tag_groups,
             text_conditions: args
                 .email_search_args
                 .text_conditions
@@ -186,8 +184,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
-            tag_option_ids: args.chat_search_args.tag_option_ids,
-            match_all_tags: args.chat_search_args.match_all_tags,
+            tag_groups: args.chat_search_args.tag_groups,
         }
     }
 }
@@ -205,8 +202,7 @@ impl From<UnifiedSearchArgs> for CallRecordSearchArgs {
             call_ids: args.call_record_search_args.call_ids,
             channel_ids: args.call_record_search_args.channel_ids,
             speaker_ids: args.call_record_search_args.speaker_ids,
-            tag_option_ids: args.call_record_search_args.tag_option_ids,
-            match_all_tags: args.call_record_search_args.match_all_tags,
+            tag_groups: args.call_record_search_args.tag_groups,
             mode: args.call_record_search_args.mode,
         }
     }
@@ -223,8 +219,7 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
             collapse: args.collapse,
             ids_only: args.project_search_args.ids_only,
             project_ids: args.project_search_args.project_ids,
-            tag_option_ids: args.project_search_args.tag_option_ids,
-            match_all_tags: args.project_search_args.match_all_tags,
+            tag_groups: args.project_search_args.tag_groups,
         }
     }
 }
@@ -244,8 +239,7 @@ impl From<UnifiedSearchArgs> for CalendarEventSearchArgs {
             statuses: args.calendar_event_search_args.statuses,
             organizer_emails: args.calendar_event_search_args.organizer_emails,
             attendee_emails: args.calendar_event_search_args.attendee_emails,
-            tag_option_ids: args.calendar_event_search_args.tag_option_ids,
-            match_all_tags: args.calendar_event_search_args.match_all_tags,
+            tag_groups: args.calendar_event_search_args.tag_groups,
         }
     }
 }
@@ -256,8 +250,7 @@ pub struct UnifiedChatSearchArgs {
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -270,8 +263,7 @@ pub struct UnifiedDocumentSearchArgs {
     pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub term_matching: DocumentTermMatching,
 }
 
@@ -304,8 +296,7 @@ pub struct UnifiedEmailSearchArgs {
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
     pub subject_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub text_conditions: Vec<EmailTextCondition>,
     pub label_conditions: Vec<EmailLabelCondition>,
     /// Threads no hit may belong to.
@@ -332,8 +323,7 @@ pub struct UnifiedCallRecordSearchArgs {
     pub channel_ids: Vec<String>,
     pub speaker_ids: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub mode: CallRecordSearchMode,
 }
 
@@ -347,8 +337,7 @@ pub struct UnifiedCalendarEventSearchArgs {
     pub organizer_emails: Vec<String>,
     pub attendee_emails: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -356,8 +345,7 @@ pub struct UnifiedProjectSearchArgs {
     pub terms: Vec<String>,
     pub project_ids: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 /// Possible search result indices for unified search.

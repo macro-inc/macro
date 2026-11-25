@@ -112,8 +112,7 @@ pub(crate) struct DocumentQueryBuilder {
     excluded_sub_types: Vec<String>,
     mode: DocumentSearchMode,
     property_filters: Vec<PropertyFilterArg>,
-    tag_option_ids: Vec<String>,
-    match_all_tags: bool,
+    tag_groups: Vec<Vec<String>>,
     term_matching: DocumentTermMatching,
 }
 
@@ -125,8 +124,7 @@ impl DocumentQueryBuilder {
             excluded_sub_types: Vec::new(),
             mode: DocumentSearchMode::default(),
             property_filters: Vec::new(),
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
             term_matching: DocumentTermMatching::default(),
         }
     }
@@ -165,13 +163,9 @@ impl DocumentQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
@@ -234,7 +228,7 @@ impl DocumentQueryBuilder {
         // Tag filter: nested clause(s) matching `properties.values` with no
         // definition_id constraint. Option ids are globally unique, so this
         // ORs (or ANDs, for match-all) tags across definitions.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             bool_query.filter(nested);
         }
 
@@ -549,8 +543,7 @@ pub struct DocumentSearchArgs {
     pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub term_matching: DocumentTermMatching,
 }
 
@@ -568,8 +561,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .excluded_sub_types(args.excluded_sub_types)
             .mode(args.mode)
             .property_filters(args.property_filters)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
             .term_matching(args.term_matching)
     }
 }

@@ -107,6 +107,40 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('readCalendarViewport', () => {
+  it.each([true, false])(
+    'shares startup across five covered ranges (healthy=%s)',
+    async (healthy) => {
+      // Copying the fixture gives this cache a new, unanswered host identity.
+      const host = { ...answeredHost() };
+      let answer!: (value: CalendarRangeCacheResult) => void;
+      host.calendarRange.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          })
+      );
+      const fetchRest = vi.fn(async () => restData);
+      const ranges = Array.from({ length: 5 }, (_, index) =>
+        createCalendarOccurrenceQueryRange(
+          new Date(2026, 9, 5 + index * 7),
+          new Date(2026, 9, 12 + index * 7)
+        )
+      );
+      const results = ranges.map((range) =>
+        readCalendarViewport(host, range, { fetchRest, span: fakeSpan() })
+      );
+      await vi.advanceTimersByTimeAsync(400);
+      expect(fetchRest).not.toHaveBeenCalled();
+      expect(host.calendarRange).toHaveBeenCalledTimes(1);
+      if (healthy) answer(covered());
+      await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_HEAD_START_MS - 400);
+      expect(
+        (await Promise.all(results)).map((result) => result.source)
+      ).toEqual(Array(5).fill(healthy ? 'cache' : 'rest'));
+      expect(fetchRest).toHaveBeenCalledTimes(healthy ? 0 : 5);
+      expect(host.calendarRange).toHaveBeenCalledTimes(healthy ? 5 : 1);
+    }
+  );
   it('answers a healthy cache without REST', async () => {
     const host = answeredHost();
     const { result, span, fetchRest } = read(host);

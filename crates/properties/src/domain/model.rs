@@ -383,6 +383,38 @@ pub enum PropertyOptionReplaceOutcome {
     DuplicateValue,
 }
 
+/// Outcome of creating a property definition with its seed options.
+#[derive(Debug, Clone)]
+pub enum CreatePropertyDefinitionOutcome {
+    /// The definition and its seed options were created.
+    Created(PropertyDefinition),
+    /// The owner already has a property with that name; nothing was written.
+    DuplicateName,
+    /// Two seed options share a value; nothing was written.
+    DuplicateOptionValue,
+}
+
+impl CreatePropertyDefinitionOutcome {
+    /// The created definition, if the create wrote one.
+    pub fn into_created(self) -> Option<PropertyDefinition> {
+        match self {
+            Self::Created(definition) => Some(definition),
+            Self::DuplicateName | Self::DuplicateOptionValue => None,
+        }
+    }
+}
+
+/// Outcome of creating a property option under an id the caller minted.
+#[derive(Debug, Clone)]
+pub enum CreatePropertyOptionWithIdOutcome {
+    /// The option was created under the id.
+    Created(PropertyOption),
+    /// A row already has that id; nothing was written.
+    IdTaken,
+    /// Another option on the definition already has the value; nothing was written.
+    DuplicateValue,
+}
+
 /// Outcome of an in-place property option update.
 #[derive(Debug, Clone)]
 pub enum UpdatePropertyOptionOutcome {

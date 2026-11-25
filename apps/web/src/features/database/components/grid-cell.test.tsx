@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { createSignal, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CellMentionEditor } from '../../../components/cell-text-editor/CellMentionEditor';
+import { installTimeInputResizeObserver } from '../../../components/date-time-range/test-support';
 import type { DatabaseMention } from '../core/column-inference';
 import type {
   DatabaseCellValue,
@@ -39,6 +40,7 @@ const column: DatabaseViewColumn = {
   writable: true,
 };
 beforeEach(() => {
+  installTimeInputResizeObserver();
   const style = document.createElement('style');
   style.textContent =
     '[role="menu"], [role="dialog"] { animation-name: none; }';
@@ -50,6 +52,7 @@ afterEach(() => {
   cleanup();
   document.head.querySelectorAll('style').forEach((style) => style.remove());
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const mention: DatabaseMention = {

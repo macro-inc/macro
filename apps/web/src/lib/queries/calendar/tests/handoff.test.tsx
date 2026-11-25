@@ -5,7 +5,7 @@ import type { CalendarOccurrenceResponse } from '@service-storage/generated/sche
 import type { CalendarFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { type Ok, ok } from 'neverthrow';
-import { type Accessor, batch, createSignal } from 'solid-js';
+import { type Accessor, batch, createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVisibleCalendarsQuery } from '../calendars';
@@ -166,6 +166,50 @@ afterEach(() => {
   dispose?.();
   dispose = undefined;
   client.clear();
+});
+
+describe('calendar preload observer retirement', () => {
+  it.each([false, true])(
+    'cancels only requests without a remaining reader (shared=%s)',
+    async (shared) => {
+      cacheHost = () => undefined;
+      const pending = deferred<Ok<CalendarOccurrenceResponse, never>>();
+      const signals: AbortSignal[] = [];
+      mocks.listOccurrences.mockImplementation(
+        (args: { signal: AbortSignal }) => {
+          signals.push(args.signal);
+          return pending.promise;
+        }
+      );
+      const [readers, setReaders] = createSignal([0, 1]);
+      function Reader(props: { id: number }) {
+        useCalendarOccurrencesQuery(
+          () => ({
+            userId: 'user-1',
+            range: shared || props.id === 0 ? range : nextRange,
+          }),
+          () => ({ pollWhileSyncing: false, refetchOnWindowFocus: false })
+        );
+        return null;
+      }
+      dispose = render(
+        () => (
+          <QueryClientProvider client={client}>
+            <For each={readers()}>{(id) => <Reader id={id} />}</For>
+          </QueryClientProvider>
+        ),
+        document.body
+      );
+      await vi.waitFor(() => expect(signals).toHaveLength(shared ? 1 : 2));
+      setReaders([1]);
+      await vi.waitFor(() => expect(signals[0].aborted).toBe(!shared));
+      expect(signals.at(-1)?.aborted).toBe(false);
+      setReaders([]);
+      await vi.waitFor(() =>
+        expect(signals.every((signal) => signal.aborted)).toBe(true)
+      );
+    }
+  );
 });
 
 describe('calendar query transport handoff', () => {

@@ -8,8 +8,8 @@
 //!    full commit SHA on `main` at or after the agent trace wiring (#12046).
 //! 2. `build`: `nix build .#macro-box-firecracker` at that commit, each file's
 //!    SHA-256 and size, and the files zstd-compressed in the Nix cache bucket
-//!    under `firecracker-images/<version>/`. A version already there must
-//!    hold exactly these files.
+//!    under `firecracker-images/<version>/`. Reuse the manifest for an
+//!    already published version from the same source commit.
 //! 3. `roll out`: on the in-VPC migrator runner, with the environment's
 //!    database URL, presign the files and record the upgrade through
 //!    `hosted_runtimes`' `image-upgrade` binary, then wait for it. The control
@@ -26,10 +26,13 @@ use gh_workflow::{
 use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps, vars};
 
+#[cfg(test)]
+mod test;
+
 const VALIDATE: JobHandle<()> = JobHandle::new("validate", ());
 const BUILD: JobHandle<()> = JobHandle::new("build", ());
 
-/// The artifact `build` hands `roll out`: each file's name, SHA-256 and size.
+/// The artifact `build` hands `roll out`: the source commit and file digests.
 const FILES_ARTIFACT: &str = "firecracker-image-files";
 const FILES_PATH: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("target/firecracker-image");

@@ -47,9 +47,6 @@ where
                 PlannedNotification::WaitingForInput(notify) => {
                     self.ingress.send_notification(notify.into_request()).await
                 }
-                PlannedNotification::Mentioned(notify) => {
-                    self.ingress.send_notification(notify.into_request()).await
-                }
             };
             if let Err(error) = result {
                 tracing::warn!(

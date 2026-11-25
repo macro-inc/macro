@@ -2,18 +2,19 @@ import InfoIcon from '@icon/system/regular/info.svg';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Transition } from 'solid-transition-group';
+import { useCalendarNavigation } from '../context/calendar-navigation-context';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
-import { useCalendarPager } from './CalendarPagerContext';
 
 /** Announces when the visible viewport is outside backend occurrence coverage. */
 export function RangeUnavailableBanner(props: {
   class?: string;
   fullWidth?: boolean;
 }) {
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const isUnavailable = createMemo(() => {
-    const range = calendarPager.visibleRange();
-    return range !== undefined && !isCalendarRangeSupported(range);
+    const range = navigation.visibleRange();
+    if (!range) return false;
+    return !isCalendarRangeSupported(range);
   });
 
   return (

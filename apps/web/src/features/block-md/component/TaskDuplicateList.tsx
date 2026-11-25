@@ -1,10 +1,17 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import {
+  type SoupAstItemsQueryArgs,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { useTaskSimilaritySearchQuery } from '@queries/storage/task-duplicates';
 import type { TaskSimilarityResult } from '@service-storage/client';
 import { debounce } from '@solid-primitives/scheduled';
@@ -12,6 +19,7 @@ import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   For,
   Show,
@@ -22,6 +30,20 @@ const DEBOUNCE_MS = 300;
 const MAX_SIMILAR_TASKS = 2;
 
 type DebouncedInput = { title: string; markdown: string };
+
+/** The given tasks, read in full so they render like the task list. */
+export function taskDuplicatesArgs(taskIds: string[]): SoupAstItemsQueryArgs {
+  return {
+    params: { limit: 25 },
+    body: compileToAst(
+      queryStateFrom(
+        defineQueryFilters({
+          include: { documentId: taskIds, subType: ['task'] },
+        })
+      )
+    ),
+  };
+}
 
 /**
  * Inner component: lives inside the local `<Suspense>` so every read of query
@@ -52,21 +74,38 @@ function SimilarTasksInner(props: {
 
   // Hydrate full soup entities (status, owner, assignees, …) for the matches so
   // they render identically to the soup task list.
-  const soup = useSoupItemsQuery(
+  const soup = useSoupAstItemsQuery(
+    () => taskDuplicatesArgs(ids()),
+    // Keep the shown matches while the next ids load, so the section never
+    // collapses between keystrokes.
     () => ({
-      params: { limit: 25 },
-      body: {
-        ...QUERY_FILTERS_BASE,
-        document_filters: { document_ids: ids(), sub_types: ['task'] },
-      },
-    }),
-    () => ({ enabled: ids().length > 0, staleTime: 30 * 1000 })
+      enabled: ids().length > 0,
+      keepPreviousData: true,
+      staleTime: 30 * 1000,
+    })
+  );
+
+  // A page and the ranking it was read for. A page takes the current ranking
+  // only once it is a new page that answers the current ids (`hasPageData`);
+  // until then the previous page keeps its own, so the section never collapses
+  // between keystrokes. The query can report the new ids a tick after they
+  // change, and over GraphQL the data is never placeholder data and can be
+  // rebuilt from the previous ids' entities while the next page loads.
+  const shown = createMemo<{ page?: typeof soup.data; ids: string[] }>(
+    (previous) => {
+      if (ids().length === 0) return { ids: [] };
+      const page = soup.data;
+      if (!page || !soup.hasPageData || page === previous.page) return previous;
+      return { page, ids: ids() };
+    },
+    { ids: [] }
   );
 
   // Keep the similarity ranking order.
   const entities = () => {
-    const order = new Map(ids().map((id, index) => [id, index] as const));
-    return [...(soup.data ?? [])]
+    const { page, ids: ranking } = shown();
+    const order = new Map(ranking.map((id, index) => [id, index] as const));
+    return [...(page?.entities ?? [])]
       .filter((entity) => order.has(entity.id))
       .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   };

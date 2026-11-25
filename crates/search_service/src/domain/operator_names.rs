@@ -112,6 +112,16 @@ impl NamedIds {
     }
 }
 
+/// `label` as a typed value can hold it: a query's terms drop the phrase
+/// quotes they're typed with, so a tag named `Q3 "Plan"` is typed as
+/// `tag:"Q3 Plan"`.
+fn as_typed(label: &str) -> String {
+    label
+        .chars()
+        .filter(|c| !matches!(c, '"' | '“' | '”' | '„'))
+        .collect()
+}
+
 /// Distinct lowercased names, in the order typed.
 fn distinct(names: &[String]) -> Vec<String> {
     let mut seen: Vec<String> = Vec::new();
@@ -160,7 +170,7 @@ impl<S: OperatorNameSource> OperatorNamesService<S> {
                     .map(|name| {
                         let ids = options
                             .iter()
-                            .filter(|option| option.label.to_lowercase() == *name)
+                            .filter(|option| as_typed(&option.label).to_lowercase() == *name)
                             .map(|option| option.option_id)
                             .collect();
                         (name.clone(), ids)

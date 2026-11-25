@@ -80,16 +80,15 @@ let
       # Prometheus' --storage.tsdb.retention.time on the host.
       compactor_blocks_retention_period = "30d";
       # Prometheus' --enable-feature=exemplar-storage, at its default size.
-      # Tempo's span metrics carry trace IDs as exemplars.
+      # The sampler's span metrics carry trace IDs as exemplars.
       max_global_exemplars_per_user = 100000;
-      # Prometheus has no series limit; Mimir defaults to 150k. The host holds
-      # about 53k; each of the two metrics generators may add up to 50k (its
-      # own cap), and the node Alloy adds the cluster's own node, kubelet and
-      # cAdvisor series.
-      max_global_series_per_user = 300000;
+      # Prometheus has no series limit; Mimir defaults to 150k. Dev and the
+      # cluster's own series are about 185k; prod adds up to 20k custom
+      # metrics and the samplers' span metrics and service graphs.
+      max_global_series_per_user = 450000;
       # So that one metric whose label turns out to be free text can't take
-      # them all. The largest has about 3k; the cap is a generator's own.
-      max_global_series_per_metric = 50000;
+      # them all. The largest has about 3k.
+      max_global_series_per_metric = 20000;
       # OTLP delta counts and histograms are stored as they come instead of
       # refused; queries sum them with sum_over_time. Experimental in Mimir.
       otel_native_delta_ingestion = true;
@@ -100,7 +99,7 @@ let
     };
   };
 
-  memoryLimitMiB = 2048;
+  memoryLimitMiB = 3072;
 in
 {
   applications.mimir = {
@@ -176,7 +175,7 @@ in
                 resources = {
                   requests = {
                     cpu = "100m";
-                    memory = "1Gi";
+                    memory = "1536Mi";
                   };
                   limits.memory = "${toString memoryLimitMiB}Mi";
                 };
@@ -270,11 +269,6 @@ in
               shared.writers
               shared.readers
               shared.nodeAlloy
-              # Tempo's metrics generator: span metrics and service graphs.
-              (shared.pods {
-                "app.kubernetes.io/name" = "tempo";
-                "app.kubernetes.io/component" = "metrics-generator";
-              })
             ];
             ports = shared.tcp [ ports.http ];
           }

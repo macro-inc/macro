@@ -1,5 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onCleanup } from 'solid-js';
 import type { CalendarPeriodView } from '../types';
 
@@ -9,6 +11,7 @@ interface CalendarHotkeyHandlers {
   previousPeriod: () => unknown;
   nextPeriod: () => unknown;
   navigateToToday: () => void;
+  goToDate: () => void;
 }
 
 const VIEW_HOTKEYS = [
@@ -97,5 +100,18 @@ export function useCalendarHotkeys(handlers: CalendarHotkeyHandlers) {
     })
   );
 
+  group.add(
+    registerHotkey({
+      scopeId: handlers.scopeId,
+      hotkey: 'y',
+      hotkeyToken: TOKENS.calendar.goToDate,
+      description: () => t('calendar.goToDate'),
+      keyDownHandler: () => {
+        if (isTouchDevice()) return false;
+        handlers.goToDate();
+        return true;
+      },
+    })
+  );
   onCleanup(() => group.dispose());
 }

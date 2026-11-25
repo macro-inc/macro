@@ -1,5 +1,19 @@
 # AI Chat (Agents)
 
+## Add existing items by dragging
+
+Drag an email thread, document, task, channel, Drive item, or project onto the
+Home, Agents, or AI chat composer to add it as mention context, just like the
+library/mention picker. Context is appended to the draft, regardless of the old
+caret position. The source item stays in place and the draft is retained.
+Dragging a selected row adds its selected items. Only the composer under the
+pointer receives them; loading, read-only, disabled and dictation surfaces reject drops.
+Native files still use the upload/attachment path.
+
+Release outside a target or cancel with Escape to add nothing. Pointer cancel
+and window blur also cancel; the preview and drop indication clear on every
+termination path.
+
 ## Recently shared in an agent session
 
 With agent session activity enabled, the first side panel section lists items
@@ -1858,9 +1872,11 @@ transcript (and in the originating channel thread). An agent-session chip with
 latest turn. A date chip written for a moment (a timestamp whose label names a
 time, as agents write a busy block) shows that moment's day and time in the
 viewer's zone, such as "Today, 3:15 PM"; a day chip shows the day alone.
-`@mention` a person in a prompt and, if you can edit the session, they are granted edit
-access and get an `agent_session_mentioned` notification that opens the session; a viewer's
-mention only notifies people who could already open it.
+`@mention` a person in a prompt to tell the agent who you mean: the mention reaches the
+agent as a chip, but it notifies nobody and shares the session with nobody. The same holds
+in a private conversation with an agent (an agent DM): naming someone there, in your message
+or the agent's reply, does not notify them; only the DM's owner still hears a mention of
+themselves.
 
 In Home, a new Agents conversation, and an existing agent session, files can be
 attached to a prompt three ways: drop them anywhere on the composer (a

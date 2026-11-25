@@ -1,5 +1,6 @@
 import { serve } from '../core/behavior.ts';
 import { lifecycle } from '../core/hook.ts';
+import { hostedMaintenance } from '../core/maintenance.ts';
 import type { Runtime } from '../core/runtime.ts';
 import {
   agentState,
@@ -26,9 +27,11 @@ export const parallel = ({ systemPrompt, ...scripts }: Options): Runtime => ({
       state,
     });
     const wake = wakeAgent({ agent: behavior.decorations.agent, run });
+    const control = hostedMaintenance();
     await serve(behavior, run, {
       wakeFor: wakeFromHandlers({ run, build, wake }),
       accept: reportFailures(run),
+      ...(control === undefined ? {} : { control }),
     });
   },
 });

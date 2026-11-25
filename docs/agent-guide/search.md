@@ -12,7 +12,9 @@ The field holds the whole search: there is no filter row. Filters are typed as
 operators, the search service's (`type:task`, `status:in_progress`,
 `priority:high`, `assignee:me`, `author:`, `tag:`, `inbox:`, `in:#channel`,
 `from:` beside `type:channel` or `type:call`) and Mail's (`subject:`,
-`is:unread`, `in:inbox`); `OR` between two of the same operator joins them. The
+`is:unread`, `in:inbox`); `OR` between two of the same operator joins them. A
+`tag:` or `in:#` value named by an emoji alone (`tag:🔥`) is an operator, and a
+tag name is typed with its own double quotes left out. The
 field draws every whole operator in the accent colour and offers operator
 names, then their values (types, statuses, priorities, `me` and people, the
 person's tags, inboxes, and channels and DMs, a DM by the other person's name as `in:#"Ana Lima"`), under it as they are typed: arrow keys
@@ -25,7 +27,8 @@ what each finds, and pressing it (or `All search operators`) opens the docs'
 `#search-operators` section; on touch, the empty bottom field has an info
 button beside the X that opens the same list as a `Search tips` sheet. With words beside them the
 service reads the operators; operators alone (`assignee:me`) list through the
-view's feed with the filters they set. A minus before a word or quoted phrase
+view's feed with the filters they set, each tag group (`tag:a OR tag:b tag:c`)
+joined to the feed's query as its own any-of tag filter. A minus before a word or quoted phrase
 (`budget -draft`) leaves out every result holding it, the name matches below
 included; minus words alone wait for a word, as an operator still being typed
 does, unless the search is of email alone. Opening Search on a tag writes

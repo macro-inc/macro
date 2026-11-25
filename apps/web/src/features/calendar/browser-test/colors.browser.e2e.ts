@@ -61,7 +61,6 @@ async function openColors(page: Page) {
     calendars: calendars(),
   });
   await openFixture(page, '/colors.html');
-  await page.getByRole('button', { name: 'Expand viewer@example.com' }).click();
   return server;
 }
 
@@ -92,9 +91,6 @@ test.describe("a calendar's color in the sidebar", () => {
 
     // A fresh load reads the color from the account, not this page.
     await openFixture(page, '/colors.html');
-    await page
-      .getByRole('button', { name: 'Expand viewer@example.com' })
-      .click();
     await expect(event).toHaveCSS('--event-calendar-color', '#9382e8');
   });
 
