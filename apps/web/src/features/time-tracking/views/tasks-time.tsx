@@ -33,9 +33,22 @@ function taskKey(task: PickedTask): TimeSummaryKey {
   return { by: 'TASK', userId: null, taskId: task.id, date: null, task: null };
 }
 
+/** A task with no values yet, to hold the lead's place while it is read. */
+function unreadTask(id: string): SummaryTask {
+  return {
+    __typename: 'GraphqlSoupDocument',
+    id,
+    name: '',
+    subType: null,
+    properties: [],
+  };
+}
+
 /**
  * A row's priority and status, before the task has time as well as after,
  * so a task just added lines up with the rest and stays put once logged.
+ * Until the task is read its lead keeps its place unseen, so the name does
+ * not move over when the icons arrive.
  */
 function SheetTaskLead(props: {
   taskId: string;
@@ -46,7 +59,18 @@ function SheetTaskLead(props: {
     () => props.taskId,
     () => props.inSummary
   );
-  return <Show when={task()}>{(task) => <props.lead task={task()} />}</Show>;
+  return (
+    <Show
+      when={task()}
+      fallback={
+        <span class="invisible flex shrink-0" aria-hidden="true">
+          <props.lead task={unreadTask(props.taskId)} />
+        </span>
+      }
+    >
+      {(task) => <props.lead task={task()} />}
+    </Show>
+  );
 }
 
 /** A button that opens the host's task search beside it. */

@@ -17,6 +17,7 @@ import { ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../context/time-tracking-context';
 import type { RunningTimerState } from '../primitives/running-timer';
+import * as reportTaskModule from '../queries/report-task';
 import * as summaryModule from '../queries/time-summary';
 import { reportTask, TEST_TASK_PARTS } from '../tests/report-task';
 import { TasksTimeDesktop } from './tasks-time';
@@ -98,10 +99,13 @@ const summaryState = vi.hoisted(() => ({
 /** Tasks read on their own, in the order the sheet asked for them. */
 const taskReads = vi.hoisted(() => [] as string[]);
 vi.mock('../queries/report-task', async () => {
-  const { createMemo } = await import('solid-js');
+  const { createMemo, createSignal } = await import('solid-js');
   const { PROPERTY_OPTION_IDS } = await import('@property/identifiers');
   const { reportTask } = await import('../tests/report-task');
+  const [answered, setAnswered] = createSignal(true);
   return {
+    /** Whether reads have answered yet; true unless a test holds them back. */
+    setReadsAnswered: setAnswered,
     createReportTaskQuery: (taskId: () => string | undefined) => {
       const id = createMemo(() => {
         const value = taskId();
@@ -109,7 +113,7 @@ vi.mock('../queries/report-task', async () => {
         return value;
       });
       return () =>
-        id() === 'task-b'
+        answered() && id() === 'task-b'
           ? reportTask('task-b', 'Review the plan', {
               status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
             })
@@ -117,6 +121,10 @@ vi.mock('../queries/report-task', async () => {
     },
   };
 });
+const setReadsAnswered = (value: boolean) =>
+  (
+    reportTaskModule as unknown as { setReadsAnswered(value: boolean): void }
+  ).setReadsAnswered(value);
 
 const taskBGroup = () => ({
   key: {
@@ -258,6 +266,7 @@ afterEach(() => {
   summaryState.withTaskB = false;
   inputs.length = 0;
   taskReads.length = 0;
+  setReadsAnswered(true);
 });
 
 function renderWeek(
@@ -464,6 +473,32 @@ it('puts a picked task on the sheet with its status and priority, and starts a t
     await screen.findByRole('button', { name: 'Pick Review the plan' })
   );
   expect(startTimer).toHaveBeenCalledWith('task-b');
+});
+
+it('holds a picked task’s status and priority place, unseen, while the task is read', async () => {
+  setReadsAnswered(false);
+  renderWeek('week');
+  fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Pick Review the plan' })
+  );
+  const row = within(screen.getByRole('table', { name: 'My week' })).getByRole(
+    'row',
+    { name: /Review the plan/ }
+  );
+
+  expect(
+    within(row).queryByRole('button', { name: 'Status of task-b' })
+  ).toBeNull();
+  expect(
+    within(row).getByRole('button', { name: 'Status of task-b', hidden: true })
+  ).toBeTruthy();
+
+  setReadsAnswered(true);
+
+  expect(
+    within(row).getByRole('button', { name: 'Status of task-b' })
+  ).toBeTruthy();
 });
 
 it('keeps a picked task’s status and priority in place when its first time is logged', async () => {
