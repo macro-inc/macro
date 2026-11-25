@@ -21,7 +21,7 @@ behavior/
   index.ts                     the whole behavior, composed from the areas
   context/                     the one place IO happens: disk, clock, shell, credentials, Macro, the relay
   agent/                       the agent as Claude Code (Agent SDK), its limits per event, its guards
-  brain/                       Brain job contracts and offline lifecycle fixtures
+  brain/                       Brain job contracts, pinned prompt assembly and offline fixtures
   events/sources/<area>.ts     where events come from
   events/handlers/<area>.ts    what happens when one fires
   capabilities/<area>/     what the agent can do, and all of the area's logic
@@ -35,6 +35,12 @@ state/
 `chat` is the worked example of an area. Read these before writing another:
 `behavior/capabilities/chat/*`, `behavior/events/sources/chat.ts`,
 `behavior/events/handlers/chat.ts`, `behavior/index.ts`, `behavior/context/*`.
+
+Brain prompt assembly takes the job pins and trusted snapshots of the charter,
+task pack, and Muppet script and catalog metadata. Reuse the metadata snapshot
+when resuming. The assembler verifies the charter's commit and byte digest and
+the task pack's identity and revision before returning a system prompt. The
+request and event travel separately as input.
 
 ## An area
 
