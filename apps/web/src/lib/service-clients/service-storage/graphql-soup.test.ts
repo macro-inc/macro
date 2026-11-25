@@ -354,6 +354,7 @@ it('maps agent sessions without discarding persona, favorites or notifications',
 const mocks = vi.hoisted(() => {
   let enabled = true;
   let tauri = false;
+  let mobile = false;
   let signedIn = true;
   let releaseApi: (() => void) | undefined;
   let markApiStarted: (() => void) | undefined;
@@ -414,6 +415,12 @@ const mocks = vi.hoisted(() => {
     },
     set tauri(value: boolean) {
       tauri = value;
+    },
+    get mobile() {
+      return mobile;
+    },
+    set mobile(value: boolean) {
+      mobile = value;
     },
     get signedIn() {
       return signedIn;
@@ -517,7 +524,12 @@ vi.mock('@core/util/reloadForNewerBuild', () => ({
 }));
 vi.mock('@core/util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/platform')>()),
-  isPlatform: () => false,
+  isPlatform: (target: string | string[]) => {
+    if (!mocks.mobile) return false;
+    return Array.isArray(target)
+      ? target.includes('ios') || target.includes('android')
+      : target === 'ios' || target === 'android';
+  },
   isTauri: () => mocks.tauri,
 }));
 // Recovery lifecycle is covered with its real store in local-drafts.test.ts.
@@ -987,6 +999,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     vi.clearAllMocks();
     mocks.enabled = true;
     mocks.tauri = false;
+    mocks.mobile = false;
     mocks.signedIn = true;
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
@@ -2508,6 +2521,27 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.createTauriCacheHost).toHaveBeenCalledOnce();
     expect(mocks.createWorkerCacheHost).not.toHaveBeenCalled();
     expect(WorkerConstructor).not.toHaveBeenCalled();
+  });
+
+  it('caps the native GraphQL cache hot tier on mobile platforms only', async () => {
+    mocks.tauri = true;
+    mocks.mobile = true;
+    const mobileSoup = await import('./graphql-soup');
+    mobileSoup.getGraphqlSoupClient();
+    expect(mocks.createTauriCacheHost).toHaveBeenCalledWith(
+      expect.objectContaining({ hotCapacity: 2_500 })
+    );
+    mobileSoup.setGraphqlSoupSessionActive(false);
+
+    vi.resetModules();
+    mocks.createTauriCacheHost.mockClear();
+    mocks.tauri = true;
+    mocks.mobile = false;
+    const desktopSoup = await import('./graphql-soup');
+    desktopSoup.getGraphqlSoupClient();
+    expect(mocks.createTauriCacheHost.mock.calls[0]?.[0]).not.toHaveProperty(
+      'hotCapacity'
+    );
   });
 });
 
