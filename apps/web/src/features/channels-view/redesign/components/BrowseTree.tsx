@@ -253,6 +253,9 @@ function PlacedSectionBlock(props: {
   const isChannelDropActive = () => {
     const drag = dndState?.active.draggable?.data;
     const drop = dndState?.active.droppable?.data;
+    if (drag?.fromSectionScope === 'personal' && section().scope === 'team') {
+      return false;
+    }
     return (
       drag?.dragType === 'redesign-channel' &&
       drag?.dndScope === channelScope &&
@@ -365,6 +368,7 @@ function PlacedSectionBlock(props: {
                           kind: 'channel',
                           channelId: entry.channel.id,
                           fromSectionId: section().id,
+                          fromSectionScope: section().scope,
                         }
                       : undefined
                   }

@@ -24,6 +24,7 @@ export type SidebarRowDragConfig =
       kind: 'channel';
       channelId: string;
       fromSectionId?: string;
+      fromSectionScope?: 'personal' | 'team';
     }
   | {
       kind: 'favorite';
@@ -141,6 +142,7 @@ export function SidebarRow(props: SidebarRowProps) {
               dndScope,
               channelId: dragConfig.channelId,
               fromSectionId: dragConfig.fromSectionId,
+              fromSectionScope: dragConfig.fromSectionScope,
               name: props.channel.name,
             }
       )

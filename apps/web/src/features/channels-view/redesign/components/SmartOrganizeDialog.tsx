@@ -5,7 +5,7 @@ import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button, Checkbox, Dialog, Spinner, Surface } from '@ui';
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, Show, untrack } from 'solid-js';
 import { useSidebarWorkspace } from '../context/sidebar-workspace-context';
 import type { OrganizeSuggestion } from '../core/jev-triage';
 
@@ -22,44 +22,57 @@ export function SmartOrganizeDialog(props: SmartOrganizeDialogProps) {
   const [selectedIds, setSelectedIds] = createSignal<Set<string>>(new Set());
   const [costNote, setCostNote] = createSignal('');
   const [error, setError] = createSignal('');
+  let runGeneration = 0;
 
-  createEffect(() => {
-    if (!props.open) return;
-    setAnalyzing(true);
-    setError('');
-    setCostNote('');
-    setSuggestions([]);
-    setSelectedIds(new Set<string>());
-
-    const ungrouped = ws.placement().ungroupedChannels;
-    const sections = ws.sections();
-
-    fireAndForget(
-      ws.triage
-        .suggestOrganization(ungrouped, sections)
-        .then((result) => {
-          setSuggestions(result.suggestions);
-          setSelectedIds(
-            new Set(result.suggestions.map((item) => item.channelId))
-          );
-          if (result.usedJevCount > 0) {
-            setCostNote(
-              t('channelSidebar.organizeJevCostNote', {
-                count: result.usedJevCount,
-                cost: result.estimatedCostFormatted,
-              })
-            );
-          }
-        })
-        .catch(() => {
-          setError(t('channelSidebar.organizeFailed'));
-        })
-        .finally(() => {
+  createEffect(
+    on(
+      () => props.open,
+      (open) => {
+        const gen = ++runGeneration;
+        if (!open) {
           setAnalyzing(false);
-        }),
-      'channels-jev'
-    );
-  });
+          return;
+        }
+        setAnalyzing(true);
+        setError('');
+        setCostNote('');
+        setSuggestions([]);
+        setSelectedIds(new Set<string>());
+
+        const ungrouped = untrack(() => ws.placement().ungroupedChannels);
+        const sections = untrack(() => ws.sections());
+
+        fireAndForget(
+          ws.triage
+            .suggestOrganization(ungrouped, sections)
+            .then((result) => {
+              if (gen !== runGeneration || !props.open) return;
+              setSuggestions(result.suggestions);
+              setSelectedIds(
+                new Set(result.suggestions.map((item) => item.channelId))
+              );
+              if (result.usedJevCount > 0) {
+                setCostNote(
+                  t('channelSidebar.organizeJevCostNote', {
+                    count: result.usedJevCount,
+                    cost: result.estimatedCostFormatted,
+                  })
+                );
+              }
+            })
+            .catch(() => {
+              if (gen !== runGeneration || !props.open) return;
+              setError(t('channelSidebar.organizeFailed'));
+            })
+            .finally(() => {
+              if (gen !== runGeneration) return;
+              setAnalyzing(false);
+            }),
+          'channels-jev'
+        );
+      }
+    )
+  );
 
   const toggleItem = (channelId: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -85,41 +98,91 @@ export function SmartOrganizeDialog(props: SmartOrganizeDialogProps) {
     try {
       // Group proposed new sections so we create each proposed section once.
       const createdByProposedName = new Map<string, string>();
-      let moved = 0;
+      const succeededIds = new Set<string>();
+      let failedCount = 0;
 
       for (const item of chosen) {
-        if (item.target.kind === 'existing') {
-          await ws.assignChannelToSection(
-            item.channelId,
-            item.target.sectionId
-          );
-          moved += 1;
-        } else {
-          const proposedName = item.target.sectionName;
-          let sectionId = createdByProposedName.get(proposedName);
-          if (!sectionId) {
-            sectionId = await ws.createSection({
-              scope: 'personal',
-              name: proposedName,
-              channelIds: [item.channelId],
-            });
-            if (sectionId) {
-              createdByProposedName.set(proposedName, sectionId);
-              moved += 1;
+        try {
+          if (item.target.kind === 'existing') {
+            const ok = await ws.assignChannelToSection(
+              item.channelId,
+              item.target.sectionId
+            );
+            if (ok === false) {
+              failedCount += 1;
+            } else {
+              succeededIds.add(item.channelId);
             }
           } else {
-            await ws.assignChannelToSection(item.channelId, sectionId);
-            moved += 1;
+            const proposedName = item.target.sectionName;
+            let sectionId = createdByProposedName.get(proposedName);
+            if (!sectionId) {
+              sectionId = await ws.createSection({
+                scope: 'personal',
+                name: proposedName,
+                channelIds: [item.channelId],
+              });
+              if (sectionId) {
+                createdByProposedName.set(proposedName, sectionId);
+                succeededIds.add(item.channelId);
+              } else {
+                failedCount += 1;
+              }
+            } else {
+              const ok = await ws.assignChannelToSection(
+                item.channelId,
+                sectionId
+              );
+              if (ok === false) {
+                failedCount += 1;
+              } else {
+                succeededIds.add(item.channelId);
+              }
+            }
           }
+        } catch {
+          failedCount += 1;
         }
       }
 
-      if (moved > 0) {
-        toast.success(t('channelSidebar.organizeApplied', { count: moved }));
+      if (succeededIds.size > 0) {
+        toast.success(
+          t('channelSidebar.organizeApplied', { count: succeededIds.size })
+        );
       }
-      props.onOpenChange(false);
-    } catch {
-      setError(t('channelSidebar.organizeFailed'));
+
+      if (failedCount > 0) {
+        setSuggestions((prev) =>
+          prev
+            .filter((item) => !succeededIds.has(item.channelId))
+            .map((item) => {
+              if (item.target.kind === 'proposed') {
+                const createdId = createdByProposedName.get(
+                  item.target.sectionName
+                );
+                if (createdId) {
+                  return {
+                    ...item,
+                    target: {
+                      kind: 'existing' as const,
+                      sectionId: createdId,
+                      sectionName: item.target.sectionName,
+                    },
+                  };
+                }
+              }
+              return item;
+            })
+        );
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of succeededIds) next.delete(id);
+          return next;
+        });
+        setError(t('channelSidebar.organizeFailed'));
+      } else {
+        props.onOpenChange(false);
+      }
     } finally {
       setApplying(false);
     }

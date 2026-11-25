@@ -225,6 +225,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         {
           scope,
           canShare: sharedLabels(),
+          sectionMode: true,
           onConfirm: async (value) => {
             createdId = await persistCreate(channelIds, value, actorId, true);
           },
@@ -392,6 +393,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
           scope,
           canShare: sharedLabels(),
           initial: label,
+          sectionMode: true,
           onConfirm: ({ name, rule, scope: nextScope }) =>
             persistUpdate(label, name, rule, nextScope, actorId, sectionMode),
         },

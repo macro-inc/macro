@@ -1,6 +1,13 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { createMemo, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SmartOrganizeDialog } from '../components/SmartOrganizeDialog';
 import {
   type SidebarWorkspaceContextValue,
   SidebarWorkspaceProvider,
@@ -444,5 +451,96 @@ describe('ChannelSidebarWorkspace', () => {
     expect(
       container.querySelector('[data-placed-section="sec-ops"]')
     ).not.toBeNull();
+  });
+
+  it('keeps route tab as sole owner of Threads and preserves native Enter on buttons', () => {
+    const openThreads = vi.fn();
+    const exitThreads = vi.fn();
+    const [activeTab, setActiveTab] = createSignal<'browse' | 'threads'>(
+      'threads'
+    );
+    const { container } = render(() => {
+      const { value, openChannel } = createFixtureWorkspace();
+      const ws = {
+        ...value,
+        activeTab,
+        openThreads: () => {
+          openThreads();
+          setActiveTab('threads');
+        },
+        exitThreads: () => {
+          exitThreads();
+          setActiveTab('browse');
+        },
+        openChannel,
+      };
+      return (
+        <SidebarWorkspaceProvider value={ws}>
+          <ChannelSidebarWorkspace />
+        </SidebarWorkspaceProvider>
+      );
+    });
+
+    // When route tab leaves threads externally, sidebar must return to Browse (not stick in Threads)
+    setActiveTab('browse');
+    expect(container.querySelector('[data-dm-section]')).not.toBeNull();
+
+    // Pressing Enter on a focused button inside the sidebar must not be prevented by tree shortcuts
+    const focusTabBtn = container.querySelector(
+      '[data-lens-tab="focus"]'
+    ) as HTMLButtonElement;
+    focusTabBtn.focus();
+    const enterEvent = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    });
+    focusTabBtn.dispatchEvent(enterEvent);
+    expect(enterEvent.defaultPrevented).toBe(false);
+  });
+
+  it('keeps failed Smart Organize assignments open for retry instead of closing silently', async () => {
+    const onOpenChange = vi.fn();
+    const assign = vi.fn(async () => false);
+    render(() => {
+      const { value } = createFixtureWorkspace();
+      const ws = {
+        ...value,
+        assignChannelToSection: assign,
+        createSection: vi.fn(async () => undefined),
+        triage: {
+          ...value.triage,
+          suggestOrganization: async () => ({
+            suggestions: [
+              {
+                channelId: 'general',
+                channelName: 'general',
+                target: {
+                  kind: 'existing' as const,
+                  sectionId: 'sec-eng',
+                  sectionName: 'Engineering',
+                },
+                confidence: 0.9,
+                reason: 'Match',
+                source: 'heuristic' as const,
+              },
+            ],
+            usedJevCount: 0,
+            estimatedCostFormatted: '$0.0000',
+          }),
+        },
+      };
+      return (
+        <SidebarWorkspaceProvider value={ws}>
+          <SmartOrganizeDialog open={true} onOpenChange={onOpenChange} />
+        </SidebarWorkspaceProvider>
+      );
+    });
+
+    await waitFor(() => expect(screen.getByText('general')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Move 1 channel/ }));
+    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });

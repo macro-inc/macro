@@ -45,6 +45,16 @@ function isEditableElement(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
+function isInteractiveControl(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.matches('[data-channel-sidebar-redesign]')) return false;
+  return Boolean(
+    target.closest(
+      'button, a, [role="button"], [role="menuitem"], [role="tab"], [role="option"], summary'
+    )
+  );
+}
+
 export function ChannelSidebarWorkspace() {
   const ws = useSidebarWorkspace();
   const [, dndActions] = useDragDropContext() ?? [];
@@ -57,17 +67,16 @@ export function ChannelSidebarWorkspace() {
   const activeLens = (): SidebarLens => {
     if (ws.activeTab() === 'threads') return 'threads';
     const pref = ws.prefs.prefs.activeLens;
+    if (pref === 'threads') return 'browse';
     if (pref === 'support' && ws.supportDesk().items.length === 0) {
       return 'browse';
     }
-    if (pref === 'threads' && !ws.threadsEnabled()) return 'browse';
     return pref;
   };
 
   const selectLens = (lens: SidebarLens) => {
     if (lens === 'threads') {
       ws.openThreads();
-      ws.prefs.setActiveLens('threads');
       return;
     }
     if (ws.activeTab() === 'threads') ws.exitThreads();
@@ -108,6 +117,11 @@ export function ChannelSidebarWorkspace() {
         typeof drag.channelId === 'string'
       ) {
         if (drop.isSmart) return;
+        // Personal placement wins over team placement; block personal-to-team drops
+        // so users are never surprised by a row staying in its personal section.
+        if (drag.fromSectionScope === 'personal' && drop.scope === 'team') {
+          return;
+        }
         const targetSectionId =
           typeof drop.sectionId === 'string' ? drop.sectionId : undefined;
         const fromSectionId =
@@ -381,6 +395,7 @@ export function ChannelSidebarWorkspace() {
   const handleTreeKeyDown = (event: KeyboardEvent) => {
     if (isEditableElement(event.target)) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (isInteractiveControl(event.target)) return;
 
     switch (event.key) {
       case 'ArrowDown':

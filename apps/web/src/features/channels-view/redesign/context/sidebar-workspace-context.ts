@@ -63,6 +63,9 @@ export type SidebarWorkspaceContextValue = {
   dmWindow: Accessor<DmWindowResult>;
   dmQuery: Accessor<string>;
   setDmQuery: (query: string) => void;
+  /** Optional live search hook for Quick Switch to discover unjoined team channels. */
+  setQuickSwitchState?: (open: boolean, query: string) => void;
+  discoverableChannels?: Accessor<readonly SidebarChannel[]>;
   supportDesk: Accessor<SupportDeskModel>;
   focusModel: Accessor<FocusModel>;
   totalUnreadCount: Accessor<number>;
@@ -95,7 +98,7 @@ export type SidebarWorkspaceContextValue = {
     channelId: string,
     sectionId: string | undefined,
     fromSectionId?: string
-  ) => Promise<void>;
+  ) => Promise<boolean | undefined | void>;
   createSection: (
     input?: SidebarCreateSectionInput
   ) => Promise<string | undefined>;

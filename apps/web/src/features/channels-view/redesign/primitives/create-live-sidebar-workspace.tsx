@@ -15,6 +15,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
@@ -51,6 +52,7 @@ import { useJoinChannelMutation } from '@queries/channel/join-links';
 import {
   useChannelSectionsQuery,
   useCreateChannelLabelMutation,
+  useSetChannelLabelMutation,
 } from '@queries/channel-labels/channel-labels';
 import {
   useAddFavoriteMutation,
@@ -76,10 +78,14 @@ import {
 import { useChannelsView } from '../../channels-view-context';
 import { ConversationsCreateMenu } from '../../components/ConversationsCreateMenu';
 import { ChannelAvatar } from '../../components/rail/ChannelRailItems';
+import { rowKeyForFavorite } from '../../components/rail/ChannelsRailContext';
 import { useChannelCalls } from '../../components/rail/hooks/useChannelCalls';
 import { useChannelLabelActions } from '../../components/rail/hooks/useChannelLabelActions';
 import { useChannelRailActivity } from '../../components/rail/hooks/useChannelRailActivity';
 import { useChannelSectionNotifications } from '../../components/rail/hooks/useChannelSectionNotifications';
+import { createSectionSearchSource } from '../../components/rail/next/channel-discovery-source';
+import { useCollapsedUnreadChannels } from '../../components/rail/next/collapsed-unread-channels';
+import { reorderVisibleFavorites } from '../../components/rail/next/useFavoriteReorder';
 import { canAssignChannel } from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
 import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
@@ -146,9 +152,11 @@ export function createLiveSidebarWorkspace(options: {
   const directory = useChannelDirectory();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
+  const panel = useSplitPanelOrThrow();
   const teamQuery = useCurrentTeamQuery();
   const {
     state,
+    mobileLayout,
     selectedChannel,
     setSelectedChannel,
     setGroupOpen: setViewGroupOpen,
@@ -164,6 +172,8 @@ export function createLiveSidebarWorkspace(options: {
 
   const prefs = createSidebarPreferences({ userId });
   const [dmQuery, setDmQuery] = createSignal('');
+  const [quickSwitchOpen, setQuickSwitchOpen] = createSignal(false);
+  const [quickSwitchQuery, setQuickSwitchQuery] = createSignal('');
   const [nowTick, setNowTick] = createSignal(Date.now());
   // Refresh relative wait ages every 60s without re-fetching anything.
   const ageTimer = setInterval(() => setNowTick(Date.now()), 60_000);
@@ -175,13 +185,28 @@ export function createLiveSidebarWorkspace(options: {
   const personalSectionsQuery = useChannelSectionsQuery('personal');
   const createPersonalMutation = useCreateChannelLabelMutation('personal');
   const createTeamMutation = useCreateChannelLabelMutation();
+  const assignPersonalMutation = useSetChannelLabelMutation('personal');
+  const assignTeamMutation = useSetChannelLabelMutation();
 
-  const favoritesData = useFavoritesData({ entityType: ['channel'] });
+  // Complete favorites list so reordering channels preserves document/task slots.
+  const favoritesData = useFavoritesData();
   const addFavorite = useAddFavoriteMutation();
   const removeFavorite = useRemoveFavoriteMutation();
   const reorderFavoritesMutation = useReorderFavoritesMutation();
   const joinMutation = useJoinChannelMutation();
   const bulkNotificationPrefs = useBulkNotificationPreferencesMutation();
+
+  // Unread-channel projection ensures unread DMs/mentions outside loaded Soup pages
+  // still enrich Focus, Support Desk, Unread-only, and the DM priority window.
+  const collapsedUnread = useCollapsedUnreadChannels(() => true);
+
+  // Discoverable unjoined team channels while Quick Switch is open.
+  const quickSwitchDiscovery = createSectionSearchSource({
+    enabled: quickSwitchOpen,
+    text: quickSwitchQuery,
+    recent: () => options.sources.recents,
+    localChannels: options.localChannels,
+  });
 
   const favorites = createMemo(() => favoritesData()?.favorites ?? []);
   const favoriteChannelIds = createMemo(() =>
@@ -197,6 +222,7 @@ export function createLiveSidebarWorkspace(options: {
       options.sources.channels.items(),
       options.sources.direct_messages.items(),
       options.sources.recents.items(),
+      collapsedUnread(),
       options.localChannels(),
     ])
   );
@@ -521,17 +547,32 @@ export function createLiveSidebarWorkspace(options: {
     channelId: string,
     opts?: { newSplit?: boolean; focusComposer?: boolean }
   ) => {
-    const entity = entityById().get(channelId);
-    if (options.openPreview && entity && !opts?.newSplit) {
-      options.openPreview(entity);
-      return;
-    }
-    if (opts?.newSplit && entity) {
+    const entity =
+      entityById().get(channelId) ??
+      quickSwitchDiscovery.items().find((ch) => ch.id === channelId);
+    const sidebarCh = channelsById().get(channelId);
+    const fallbackEntity: ChannelEntity | undefined =
+      entity ??
+      (sidebarCh
+        ? {
+            id: sidebarCh.id,
+            type: 'channel',
+            name: sidebarCh.name,
+            ownerId: '',
+            channelType: sidebarCh.channelType,
+            teamId: sidebarCh.teamId,
+            isParticipant: sidebarCh.isParticipant,
+          }
+        : undefined);
+
+    const openViaSplitList = (openInNewSplit: boolean) => {
+      if (!fallbackEntity) return;
       fireAndForget(
         openEntityInSplitFromUnifiedList(
-          withEntityNotifications(entity, notificationSource),
+          withEntityNotifications(fallbackEntity, notificationSource),
           {
-            openInNewSplit: true,
+            ...(openInNewSplit ? { openInNewSplit: true } : {}),
+            splitHandle: panel.handle,
             referredFrom: 'channels',
             notificationSource,
             channelNavigation: 'latest',
@@ -540,12 +581,34 @@ export function createLiveSidebarWorkspace(options: {
         ),
         'channels-view'
       );
+    };
+
+    if (options.openPreview && fallbackEntity && !opts?.newSplit) {
+      if (
+        !options.openPreview(fallbackEntity) &&
+        fallbackEntity.isParticipant === false
+      ) {
+        openViaSplitList(false);
+      }
       return;
     }
+
+    if (opts?.newSplit) {
+      openViaSplitList(true);
+      return;
+    }
+
+    // On narrow touch/mobile layouts where inline preview isn't active,
+    // route directly through the unified split opener (same as ChannelsMobileView).
+    if (!options.openPreview && mobileLayout()) {
+      openViaSplitList(false);
+      return;
+    }
+
     const previous = selectedChannel();
-    const target = entity
+    const target = fallbackEntity
       ? getChannelEntityTarget(
-          withEntityNotifications(entity, notificationSource),
+          withEntityNotifications(fallbackEntity, notificationSource),
           { channelNavigation: 'latest' }
         )
       : undefined;
@@ -559,11 +622,11 @@ export function createLiveSidebarWorkspace(options: {
     }
     if (
       previous?.id === channelId &&
-      entity &&
-      entity.isParticipant !== false
+      fallbackEntity &&
+      fallbackEntity.isParticipant !== false
     ) {
       markChannelNotificationsSeenOnOpen(
-        withEntityNotifications(entity, notificationSource),
+        withEntityNotifications(fallbackEntity, notificationSource),
         notificationSource,
         { channelReadScope: 'top-level' }
       );
@@ -819,6 +882,16 @@ export function createLiveSidebarWorkspace(options: {
     dmWindow,
     dmQuery,
     setDmQuery,
+    setQuickSwitchState: (open, query) => {
+      setQuickSwitchOpen(open);
+      setQuickSwitchQuery(query);
+    },
+    discoverableChannels: createMemo(() => {
+      if (!quickSwitchOpen()) return [];
+      return quickSwitchDiscovery
+        .items()
+        .map((ch) => toSidebarChannel(ch, directoryById().get(ch.id)));
+    }),
     supportDesk,
     focusModel,
     totalUnreadCount,
@@ -872,26 +945,79 @@ export function createLiveSidebarWorkspace(options: {
       }
     },
     reorderFavorites: async (sourceChannelId, targetChannelId) => {
-      const current = favorites();
-      const channelFavs = current.filter((f) => f.entityType === 'channel');
-      const srcIdx = channelFavs.findIndex(
-        (f) => f.entityId === sourceChannelId
+      const allFavs = favorites();
+      const visibleChannelFavs = allFavs.filter(
+        (fav) =>
+          fav.entityType === 'channel' &&
+          Boolean(channelsById().get(fav.entityId))
       );
-      const dstIdx = channelFavs.findIndex(
-        (f) => f.entityId === targetChannelId
+      const sourceFav = visibleChannelFavs.find(
+        (fav) => fav.entityId === sourceChannelId
       );
-      if (srcIdx < 0 || dstIdx < 0 || srcIdx === dstIdx) return;
-      const next = [...channelFavs];
-      next.splice(dstIdx, 0, ...next.splice(srcIdx, 1));
+      const targetFav = visibleChannelFavs.find(
+        (fav) => fav.entityId === targetChannelId
+      );
+      if (!sourceFav || !targetFav) return;
+      const reordered = reorderVisibleFavorites(
+        allFavs,
+        visibleChannelFavs,
+        rowKeyForFavorite(sourceFav),
+        rowKeyForFavorite(targetFav)
+      );
+      if (!reordered) return;
       await reorderFavoritesMutation.mutateAsync({
-        favorites: next.map(({ entityType, entityId }) => ({
+        favorites: reordered.map(({ entityType, entityId }) => ({
           entityType,
           entityId,
         })),
       });
     },
     assignChannelToSection: async (channelId, sectionId, fromSectionId) => {
-      labelActions.setChannelLabel(channelId, sectionId, fromSectionId);
+      const actorId = userId();
+      if (!actorId || !labelsAvailable()) return false;
+      const to = sectionId ? rawLabelMap().get(sectionId) : undefined;
+      const previous = fromSectionId
+        ? rawLabelMap().get(fromSectionId)
+        : undefined;
+      if (sectionId && (!to || to.rule)) return false;
+
+      const entity = entityById().get(channelId);
+      const fallbackChannel = channelsById().get(channelId);
+      const checkChannel =
+        entity ??
+        (fallbackChannel
+          ? {
+              channelType: fallbackChannel.channelType,
+              teamId: fallbackChannel.teamId,
+              isParticipant: fallbackChannel.isParticipant,
+            }
+          : undefined);
+      if (to && (!checkChannel || !canAssignChannel(checkChannel, to))) {
+        return false;
+      }
+
+      const scope = to
+        ? to.teamId
+          ? 'team'
+          : 'personal'
+        : previous
+          ? previous.teamId
+            ? 'team'
+            : 'personal'
+          : 'personal';
+
+      const mutation =
+        scope === 'team' ? assignTeamMutation : assignPersonalMutation;
+      await mutation.mutateAsync({
+        channelId,
+        labelId: sectionId,
+        actorId,
+        sectionMode: true,
+      });
+      if (sectionId) {
+        setLabelOpen(sectionId, true);
+      }
+      return true;
     },
     createSection,
     editSection: async (sectionId) => {

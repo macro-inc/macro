@@ -33,10 +33,29 @@ export function QuickSwitchModal(props: QuickSwitchModalProps) {
   const [joiningId, setJoiningId] = createSignal<string>();
   let inputRef: HTMLInputElement | undefined;
 
+  createEffect(() => {
+    ws.setQuickSwitchState?.(props.open, query());
+  });
+
+  const combinedChannels = createMemo<readonly SidebarChannel[]>(() => {
+    const base = ws.channels();
+    const extra = ws.discoverableChannels?.() ?? [];
+    if (extra.length === 0) return base;
+    const seen = new Set(base.map((ch) => ch.id));
+    const merged = [...base];
+    for (const ch of extra) {
+      if (!seen.has(ch.id)) {
+        seen.add(ch.id);
+        merged.push(ch);
+      }
+    }
+    return merged;
+  });
+
   const results = createMemo(() =>
     buildQuickSwitchResults({
       query: query(),
-      channels: ws.channels(),
+      channels: combinedChannels(),
       sections: ws.sections(),
       unreadIds: ws.unreadIds(),
       unreadOrMentionedIds: ws.unreadOrMentionedIds(),
@@ -104,6 +123,9 @@ export function QuickSwitchModal(props: QuickSwitchModalProps) {
     options?: { newSplit?: boolean }
   ) => {
     if (item.kind === 'section') {
+      if (ws.activeTab() === 'threads') {
+        ws.exitThreads();
+      }
       ws.prefs.setActiveLens('browse');
       if (ws.prefs.prefs.hiddenTeamSectionIds.includes(item.section.id)) {
         ws.prefs.showTeamSection(item.section.id);
@@ -114,6 +136,9 @@ export function QuickSwitchModal(props: QuickSwitchModalProps) {
       return;
     }
 
+    if (!options?.newSplit && ws.activeTab() === 'threads') {
+      ws.exitThreads();
+    }
     ws.openChannel(item.channel.id, {
       newSplit: options?.newSplit,
       focusComposer: true,
