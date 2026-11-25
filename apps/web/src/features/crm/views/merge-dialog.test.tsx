@@ -930,3 +930,25 @@ it('without the current team, lists no one and offers Retry for the team', async
   expect(fixture.teamRefetch).toHaveBeenCalled();
   expect(fixture.retry).not.toHaveBeenCalled();
 });
+
+it('offers more pages, not "no matches", when a page held only other teams’ people', async () => {
+  fixture.searched = [
+    {
+      id: 'their-pat',
+      name: 'Pat Lane',
+      email: 'plane@acme.example.com',
+      teamId: 'team-2',
+    },
+  ];
+  fixture.hasMore = true;
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([PAT_L], 'contact');
+
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'pat lane' },
+  });
+  expect(screen.queryByText('Pat Lane')).toBeNull();
+  expect(screen.queryByText('No other people match.')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+  expect(fixture.loadMore).toHaveBeenCalled();
+});

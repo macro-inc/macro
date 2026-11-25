@@ -702,7 +702,14 @@ function PickStep(props: {
         </p>
       </Show>
       <Show
-        when={matches().length > 0 || source.loading() || source.failed()}
+        // More pages may hold this team's matches even when this one held
+        // only other teams' records: offer them, never "no matches".
+        when={
+          matches().length > 0 ||
+          source.loading() ||
+          source.failed() ||
+          source.hasMore()
+        }
         fallback={
           <p class="text-sm text-ink-muted">{props.copy.noMatches()}</p>
         }
