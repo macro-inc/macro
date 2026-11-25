@@ -26,6 +26,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { createSearchOperatorLookup } from '../search-operator-lookup';
 
 type SearchbarVariant = 'filled' | 'secondary';
 interface SoupSearchbarProps {
@@ -44,8 +45,16 @@ const variantStyles: Record<SearchbarVariant, string> = {
 
 /** Split-owned history, focus shortcuts and navigation around the shared search input. */
 export function SoupSearchbar(props: SoupSearchbarProps) {
-  const { searchText, setSearchText, setSearchPaused, queryFilters } =
-    useSoupView();
+  const {
+    searchText,
+    setSearchText,
+    setSearchPaused,
+    queryFilters,
+    provideOperatorLookup,
+    tagFilter,
+  } = useSoupView();
+  provideOperatorLookup(createSearchOperatorLookup(tagFilter));
+  onCleanup(() => provideOperatorLookup(undefined));
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const persisted = panel.handle.currentEntryState()?.['search.text'];

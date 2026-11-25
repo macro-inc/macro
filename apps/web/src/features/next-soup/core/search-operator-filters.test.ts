@@ -4,6 +4,7 @@ import {
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
+  withSearchOperatorQuery,
 } from './search-operator-filters';
 import { readSearchOperators, splitSearchTerms } from './search-operators';
 
@@ -89,5 +90,21 @@ describe('searchOperatorFilters', () => {
     expect(searchOperatorQuery(inbox).include?.emailLinkId).toEqual([
       'link-ana',
     ]);
+  });
+});
+
+describe('withSearchOperatorQuery', () => {
+  it('lays the operators over the view, keeping the view exclusions', () => {
+    const merged = withSearchOperatorQuery(
+      {
+        include: { tagFilters: [], fileType: ['pdf'] },
+        exclude: { subType: ['template'] },
+      } as unknown as Parameters<typeof withSearchOperatorQuery>[0],
+      { include: { subType: ['task'] }, exclude: { subType: ['draft'] } }
+    );
+
+    expect(merged.include.fileType).toEqual(['pdf']);
+    expect(merged.include.subType).toEqual(['task']);
+    expect(merged.exclude.subType).toEqual(['template', 'draft']);
   });
 });

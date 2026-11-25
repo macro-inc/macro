@@ -1,6 +1,6 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
-import type { Query } from '../filters/filter-store';
+import type { Query, QueryState } from '../filters/filter-store';
 import {
   DEFAULT_SECTIONS,
   type SearchFiltersState,
@@ -230,4 +230,29 @@ export function searchOperatorQuery({ state }: SearchOperatorFilters): Query {
   ];
   if (properties.length) include.properties = properties;
   return { include, exclude: query.exclude };
+}
+
+/**
+ * The view's own filters with the conditions a query's operators set: an
+ * operator's field replaces the view's, its exclusions add to them.
+ */
+export function withSearchOperatorQuery(
+  state: QueryState,
+  operators: Query
+): QueryState {
+  const exclude: QueryState['exclude'] = { ...state.exclude };
+  for (const [key, values] of Object.entries(operators.exclude ?? {})) {
+    const field = key as keyof QueryState['exclude'];
+    const current = exclude[field];
+    exclude[field] = (
+      Array.isArray(current) && Array.isArray(values)
+        ? [...new Set([...current, ...values])]
+        : values
+    ) as never;
+  }
+  return {
+    ...state,
+    include: { ...state.include, ...operators.include },
+    exclude,
+  };
 }
