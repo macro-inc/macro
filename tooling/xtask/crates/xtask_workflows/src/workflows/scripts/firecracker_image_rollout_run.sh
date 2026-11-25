@@ -29,7 +29,11 @@ trap 'rm -rf "$secrets"' EXIT
 # dropped from the database once the image is staged.
 sources='[]'
 for name in vmlinux rootfs.ext4 boot_args; do
-  url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 21600 "s3://$bucket/$prefix/$name.zst")
+  # Named by its contents, as the build job uploaded it.
+  # shellcheck disable=SC2016 # $name is jq's, not the shell's
+  sha256=$(jq -r --arg name "$name" '.[] | select(.name == $name) | .sha256' "$files")
+  [[ $sha256 =~ ^[0-9a-f]{64}$ ]] || fail "files.json has no SHA-256 for $name"
+  url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 21600 "s3://$bucket/$prefix/$sha256-$name.zst")
   echo "::add-mask::$url"
   sources=$(jq --arg name "$name" --arg url "$url" --slurpfile files "$files" \
     '. + [{file: ($files[0][] | select(.name == $name)), url: $url}]' <<<"$sources")
