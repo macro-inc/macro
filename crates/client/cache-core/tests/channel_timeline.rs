@@ -208,7 +208,8 @@ fn removals_dropped_threads_and_resets_delete_records() {
                 .iter()
                 .filter_map(EntityKey::id)
                 .collect::<Vec<_>>(),
-            ["m2", "r1", "r2"]
+            // A removed id may name an activity or a message.
+            ["gone", "m2", "r1", "r2", "gone", "m2"]
         );
         assert!(removed.revision_advanced);
         let read = engine.channel_timeline(&latest("c1", 10)).await.unwrap();

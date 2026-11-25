@@ -138,11 +138,12 @@ impl InMemoryChannels {
         for row in &write.rows {
             self.removed.remove(&row.row.record_key);
             self.rows.insert(row.row.record_key.clone(), row.clone());
-            let channel_id = &row.row.channel_id;
+        }
+        for channel_id in write.entry_channels() {
             self.sync
-                .entry(channel_id.clone())
+                .entry(channel_id.to_owned())
                 .or_insert_with(|| ChannelSync {
-                    channel_id: channel_id.clone(),
+                    channel_id: channel_id.to_owned(),
                     ..ChannelSync::default()
                 });
         }

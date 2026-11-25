@@ -43,39 +43,34 @@ pub(super) struct ChannelAdmission {
     pub(super) changes: ChannelChanges,
     /// Sort keys of the entries the response carries, by list.
     listed: BTreeMap<TimelineScope, BTreeSet<String>>,
+    /// Lists that may lack an entry the committed page has: the response also
+    /// carries an older copy, and nothing says which of the two is refused.
+    unproven: BTreeSet<TimelineScope>,
     stamped: HashMap<EntityKey<'static>, Admitted>,
     /// Records written whole: nothing they held before is merged into.
     replaced: BTreeSet<EntityKey<'static>>,
-    /// Records of removed entries, written only over one that is held.
-    tombstones: BTreeSet<EntityKey<'static>>,
 }
 
 impl ChannelAdmission {
     /// Merges `update` into what is held of `key`, with whether that changes
-    /// the record. `None` writes nothing.
+    /// the record.
     pub(super) fn merge(
         &self,
         key: &EntityKey<'static>,
         existing: Option<Record>,
         update: Record,
-    ) -> Option<(Record, bool)> {
+    ) -> (Record, bool) {
         match existing {
             Some(existing) if self.replaced.contains(key) => {
                 let changed = existing != update;
-                Some((update, changed))
+                (update, changed)
             }
             Some(mut existing) => {
                 let changed = existing.merge(update);
-                Some((existing, changed))
+                (existing, changed)
             }
-            None if self.tombstones.contains(key) => None,
-            None => Some((update, true)),
+            None => (update, true),
         }
-    }
-
-    /// Whether `key` is written only when a record of it is held.
-    pub(super) fn only_over_held(&self, key: &EntityKey<'static>) -> bool {
-        self.tombstones.contains(key)
     }
 
     /// Whether `key` is written without merging into what is held.
@@ -147,8 +142,9 @@ fn is_deleted(record: &Record) -> bool {
     record.fields.get(DELETED_FIELD) == Some(&CacheValue::Bool(true))
 }
 
-/// The record of a removed entry. List fields leave it out, so a thread that
-/// still names it stays readable.
+/// The record of a removed entry, kept as long as its tombstone, so a queued
+/// write has a removed entry under it. List fields leave it out, and a thread
+/// that still names it stays readable.
 fn tombstone_record(key: &EntityKey<'static>) -> Record {
     let mut record = super::identity_record(key);
     record
@@ -202,7 +198,8 @@ impl<S: Storage> Engine<S> {
             .map(|commit| {
                 let held = guard.watermark(&commit.channel_id);
                 let (after, status) = commit.parsed_watermark()?.apply(held);
-                Ok::<_, EngineError<S::Error>>((commit, held, after, status))
+                let seq = commit.parsed_seq()?;
+                Ok::<_, EngineError<S::Error>>((commit, seq, held, after, status))
             })
             .transpose()?;
         for key in entries {
@@ -211,9 +208,10 @@ impl<S: Storage> Engine<S> {
             let Some(record) = updates.get_mut(&key) else {
                 continue;
             };
-            if let Some(row) = stamp.and_then(|_| project_channel_timeline(&key, record)) {
-                let listed = admission.listed.entry(row.scope).or_default();
-                listed.insert(row.sort_key);
+            let row = stamp.and_then(|_| project_channel_timeline(&key, record));
+            if let Some(row) = &row {
+                let listed = admission.listed.entry(row.scope.clone()).or_default();
+                listed.insert(row.sort_key.clone());
             }
             let channel_id = entry_channel_id(record)
                 .or(state.map(|state| state.channel_id.as_str()))
@@ -221,10 +219,16 @@ impl<S: Storage> Engine<S> {
             let committed =
                 moved.filter(|(commit, ..)| Some(commit.channel_id.as_str()) == channel_id);
             let reset = committed.is_some_and(|(commit, ..)| commit.reset);
-            // A reset keeps no entry its response does not date.
-            let state = state.filter(|_| !reset || stamp.is_none());
+            let state = state.filter(|state| match committed {
+                _ if stamp.is_none() => true,
+                // A reset keeps no entry its response does not date.
+                Some((commit, ..)) if commit.reset => false,
+                // Nobody followed the changes between a preview and a first page.
+                Some((_, _, None, Some(after), _)) => state.removed || state.seq >= after,
+                _ => true,
+            });
             let watermark = match committed {
-                Some((_, _, after, _)) => after,
+                Some((_, _, _, after, _)) => after,
                 None => channel_id.and_then(|channel_id| guard.watermark(channel_id)),
             };
             let unheld = stamp.is_some()
@@ -245,6 +249,10 @@ impl<S: Storage> Engine<S> {
                 }
                 continue;
             }
+            let older = committed.is_some_and(|(_, seq, ..)| stamp < seq);
+            if let Some(row) = row.filter(|_| older && state.is_none_or(|state| state.removed)) {
+                admission.unproven.insert(row.scope);
+            }
             match (refused, state) {
                 (Refused::KeepIdentity, Some(state)) => retain_identity(record, state.removed),
                 (Refused::KeepIdentity, None) | (Refused::Drop, _) => {
@@ -252,7 +260,7 @@ impl<S: Storage> Engine<S> {
                 }
             }
         }
-        if let Some((commit, held, after, status)) = moved {
+        if let Some((commit, _, held, after, status)) = moved {
             self.admit_channel_commit(&mut admission, updates, &guard, commit, (held, after))
                 .await?;
             admission.outcome = Some(ChannelCommitOutcome {
@@ -292,9 +300,6 @@ impl<S: Storage> Engine<S> {
                 admission.stamped.remove(&key);
                 updates.insert(key.clone(), tombstone_record(&key));
                 admission.replaced.insert(key.clone());
-                if !pending.contains(&key) {
-                    admission.tombstones.insert(key.clone());
-                }
                 admission.changes_reads |= state.is_some_and(|state| !state.removed);
                 admission.write.tombstones.push(ChannelTombstone {
                     record_key: key,
@@ -351,7 +356,8 @@ impl<S: Storage> Engine<S> {
         }
         admission.write.deleted = doomed.into_iter().collect();
 
-        admission.write.coverage = coverage_writes(commit, guard, &admission.listed);
+        admission.write.coverage =
+            coverage_writes(commit, guard, &admission.listed, &admission.unproven);
         let stored = guard.sync.get(channel_id);
         let touched = stored.map_or(0, |sync| sync.touched_at_ms);
         let sync = ChannelSync {
@@ -378,8 +384,8 @@ impl<S: Storage> Engine<S> {
         Ok(())
     }
 
-    /// The entries queued writes change. Such a write shows its entry without a
-    /// record under it, so the removal of one stays until the write settles.
+    /// The entries queued writes change. Such a write shows its entry when no
+    /// record is under it, so the removal of one stays until the write settles.
     fn pending_channel_entries(&self) -> BTreeSet<EntityKey<'static>> {
         let mut pending = layer_keys(&self.optimistic);
         pending.retain(is_channel_entry);

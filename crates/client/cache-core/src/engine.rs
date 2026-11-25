@@ -78,7 +78,6 @@ use predicate_index::{
     OptimisticProjectionMutation, RecordKey as PredicateRecordKey, ValidatedIndexQuery,
 };
 use serde_json::Value as Json;
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use thiserror::Error;
@@ -475,20 +474,11 @@ const METADATA_KEY_PREFIX: &str = "__meta:";
 /// while its records stay would let the next account bind over them, and the
 /// engine keeps the witness and authority in memory besides; only a reset or
 /// clear removes them.
-fn without_metadata<'k>(keys: &'k [EntityKey<'static>]) -> Cow<'k, [EntityKey<'static>]> {
-    if keys
-        .iter()
-        .any(|key| key.0.starts_with(METADATA_KEY_PREFIX))
-    {
-        Cow::Owned(
-            keys.iter()
-                .filter(|key| !key.0.starts_with(METADATA_KEY_PREFIX))
-                .cloned()
-                .collect(),
-        )
-    } else {
-        Cow::Borrowed(keys)
-    }
+fn without_metadata(keys: &[EntityKey<'static>]) -> Vec<EntityKey<'static>> {
+    keys.iter()
+        .filter(|key| !key.0.starts_with(METADATA_KEY_PREFIX))
+        .cloned()
+        .collect()
 }
 
 /// Hydration/binding state of the session identity tag for this cache.
@@ -2017,10 +2007,8 @@ impl<S: Storage> Engine<S> {
         let before = effective_records(&bases, &self.optimistic, &candidates);
         let mut staged = StagedRecords::new();
         for (key, update) in &updates {
-            if let Some((record, _)) = admission.merge(key, bases.get(key).cloned(), update.clone())
-            {
-                staged.insert(key.clone(), Some(record));
-            }
+            let (record, _) = admission.merge(key, bases.get(key).cloned(), update.clone());
+            staged.insert(key.clone(), Some(record));
         }
         staged.extend(admission.deleted.iter().map(|key| (key.clone(), None)));
         let queued = self
@@ -2179,7 +2167,6 @@ impl<S: Storage> Engine<S> {
         let mut persisted = Vec::with_capacity(updates.len());
         for (key, update) in updates {
             let (merged, did_change, was_hot) = match staging.remove(&key) {
-                None if admission.only_over_held(&key) => continue,
                 Some((existing, was_hot)) if admission.replaces(&key) => {
                     let did_change = existing != update;
                     if did_change {
@@ -3826,11 +3813,10 @@ impl<S: Storage> Engine<S> {
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
-        let keys = &*without_metadata(keys);
+        let (keys, channels) = self.deletable(keys).await?;
         let affected = self.deps.ops_for_keys(keys.iter());
-        let channels = self.channels_holding(keys).await?;
         self.storage
-            .delete_batch(keys)
+            .delete_batch(&keys)
             .await
             .map_err(EngineError::Storage)?;
         if keys
@@ -3839,7 +3825,7 @@ impl<S: Storage> Engine<S> {
         {
             self.contact_fence = Uuid::now_v7();
         }
-        for key in keys {
+        for key in &keys {
             self.hot.pop(key);
         }
         self.advance_revision()?;
@@ -4001,11 +3987,10 @@ impl<S: PredicateIndexStorage> Engine<S> {
         projections: Vec<ProjectionMutation>,
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
-        let keys = &*without_metadata(keys);
+        let (keys, channels) = self.deletable(keys).await?;
         let affected = self.deps.ops_for_keys(keys.iter());
-        let channels = self.channels_holding(keys).await?;
         self.storage
-            .delete_batch_with_projection_changes(keys, projections)
+            .delete_batch_with_projection_changes(&keys, projections)
             .await
             .map_err(EngineError::Storage)?;
         if keys
@@ -4014,7 +3999,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         {
             self.contact_fence = Uuid::now_v7();
         }
-        for key in keys {
+        for key in &keys {
             self.hot.pop(key);
         }
         self.advance_revision()?;

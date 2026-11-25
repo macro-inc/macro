@@ -684,12 +684,7 @@ pub(super) fn apply(connection: &Db, write: &ChannelWrite) -> Result<(), TursoSt
             })
             .collect(),
     )?;
-    let channels = write
-        .rows
-        .iter()
-        .map(|row| row.row.channel_id.as_str())
-        .collect::<BTreeSet<_>>();
-    for channel_id in channels {
+    for channel_id in write.entry_channels() {
         driver::execute(connection, SYNC_ENSURE, vec![text(channel_id)])?;
     }
     for coverage in &write.coverage {

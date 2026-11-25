@@ -120,10 +120,10 @@ pub struct ChannelWrite {
     pub deleted: Vec<EntityKey<'static>>,
     /// Channels whose coverage is dropped whole.
     pub uncovered: Vec<String>,
-    /// Entries whose row becomes a tombstone.
+    /// Entries whose row becomes a tombstone. As with rows, their channel gets
+    /// sync state if it has none, so eviction finds it.
     pub tombstones: Vec<ChannelTombstone>,
-    /// Entries whose row is stored, replacing a tombstone. A channel of one
-    /// without sync state gets an empty one, so eviction finds it.
+    /// Entries whose row is stored, replacing a tombstone.
     pub rows: Vec<ChannelRowWrite>,
     /// Lists whose fetched stretches change.
     pub coverage: Vec<ChannelCoverageWrite>,
@@ -135,6 +135,14 @@ impl ChannelWrite {
     /// Whether there is nothing to apply.
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// The channels of the entries the write stores, as a row or a tombstone.
+    pub fn entry_channels(&self) -> BTreeSet<&str> {
+        let rows = self.rows.iter().map(|row| row.row.channel_id.as_str());
+        let tombstones = self.tombstones.iter();
+        rows.chain(tombstones.map(|tombstone| tombstone.channel_id.as_str()))
+            .collect()
     }
 }
 
@@ -207,11 +215,13 @@ fn proven(
 }
 
 /// The coverage `commit` leaves its lists with, over what the guard read.
-/// `listed` has the sort keys of the entries its response carries.
+/// `listed` has the sort keys of the entries its response carries; a list in
+/// `unproven` gains no stretch.
 pub(crate) fn coverage_writes(
     commit: &ChannelTimelineCommit,
     guard: &ChannelGuard,
     listed: &BTreeMap<TimelineScope, BTreeSet<String>>,
+    unproven: &BTreeSet<TimelineScope>,
 ) -> Vec<ChannelCoverageWrite> {
     let mut scopes = commit
         .dropped_thread_root_ids
@@ -226,6 +236,7 @@ pub(crate) fn coverage_writes(
             .filter(|_| !fresh);
         let spans = spans
             .into_iter()
+            .filter(|_| !unproven.contains(&scope))
             .filter_map(|span| proven(span, listed.get(&scope), held));
         let spans = merge_spans(held.into_iter().flatten().cloned().chain(spans));
         if held.map_or(&[][..], Vec::as_slice) != spans {

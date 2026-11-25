@@ -102,8 +102,8 @@ bundle.
 The server numbers each channel's changes, and every `seq` it sends is a floor:
 the answer is at least that new. The engine keeps three things by it. Each
 message and activity row has the `seq` of the response that stored it; a removed
-one leaves a tombstone at the `seq` of its removal, pruned once it is 1,000
-changes behind; and the channel's watermark says up to where its changes were
+one leaves a tombstone at the `seq` of its removal and a deleted record, pruned
+once they are 1,000 changes behind; and the channel's watermark says up to where its changes were
 applied to everything held. Content older than its row, its tombstone or (for an
 entry not held) the watermark is dropped, so answers may arrive in any order.
 
@@ -114,7 +114,8 @@ lowers the watermark and a reset sets it, so what is held is never older than it
 says; changes advance it only when they continue it, and the outcome (`applied`,
 `stale`, `gap`, `unheld`) tells the host what to ask next. A bound of a covered
 stretch counts only when the page lists it or the device's coverage already
-reaches it. A response without a `seq` never adds a row. A row has one `seq`
+reaches it, and none counts of a list whose entry the response also carries at an
+older `seq` and the device refuses. A response without a `seq` never adds a row. A row has one `seq`
 for the whole record, so every selection of a message under a `seq` uses the same
 fragment, and one response selects a message under a `seq` or not. The removal of
 an entry a queued write changes is kept until the write settles, and eviction

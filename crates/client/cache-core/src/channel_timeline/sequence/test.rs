@@ -92,7 +92,7 @@ fn coverage_joins_what_is_held_unless_the_commit_drops_it() {
         .map(|(scope, keys)| (scope, keys.map(str::to_owned).into()))
         .into();
     let written = |commit: &ChannelTimelineCommit| {
-        coverage_writes(commit, &guard, &listed)
+        coverage_writes(commit, &guard, &listed, &BTreeSet::new())
             .into_iter()
             .map(|write| (write.scope, write.spans))
             .collect::<Vec<_>>()

@@ -1,6 +1,6 @@
 //! Which channels a transaction changed, for hosts to tell their views.
 
-use super::{Engine, EngineError, Storage};
+use super::{Engine, EngineError, Storage, without_metadata};
 use crate::channel_timeline::{ChannelGuardQuery, entry_channel_id, is_channel_entry};
 use crate::value::{EntityKey, Record};
 use maybe_send::{MaybeSend, MaybeSync};
@@ -93,11 +93,14 @@ impl<S: Storage> Engine<S> {
         listener.channels_changed(&changes);
     }
 
-    /// The channels whose timelines hold any of `keys`, read before they go.
-    pub(super) async fn channels_holding(
+    /// The records among `keys` a deletion may take, and the channels whose
+    /// timelines hold any of them. The record of a removed entry stays as long
+    /// as its tombstone.
+    pub(super) async fn deletable(
         &self,
         keys: &[EntityKey<'static>],
-    ) -> Result<ChannelChanges, EngineError<S::Error>> {
+    ) -> Result<(Vec<EntityKey<'static>>, ChannelChanges), EngineError<S::Error>> {
+        let mut keys = without_metadata(keys);
         let query = ChannelGuardQuery {
             keys: keys
                 .iter()
@@ -107,18 +110,20 @@ impl<S: Storage> Engine<S> {
             ..ChannelGuardQuery::default()
         };
         if query.keys.is_empty() {
-            return Ok(ChannelChanges::new());
+            return Ok((keys, ChannelChanges::new()));
         }
         let guard = self
             .storage
             .load_channel_guard(&query)
             .await
             .map_err(EngineError::Storage)?;
-        Ok(guard
+        keys.retain(|key| !guard.entries.get(key).is_some_and(|state| state.removed));
+        let channels = guard
             .entries
             .into_values()
             .filter(|state| !state.removed)
             .map(|state| (state.channel_id, ChannelChangeKind::Changed))
-            .collect())
+            .collect();
+        Ok((keys, channels))
     }
 }
