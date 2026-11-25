@@ -208,7 +208,7 @@ const MAX_SUPERSET_CAP: i64 = 800_000;
 const LABEL_MAX_SUPERSET_CAP: i64 = 20_000;
 
 /// The most threads a label read walks for one request.
-const LABEL_WALK_BUDGET: i64 = 32_000;
+const LABEL_WALK_BUDGET: i64 = 10_000;
 
 /// How much each round's window grows over the last, and the least each
 /// probe's cap grows over the last cap the superset outgrew.
@@ -703,14 +703,6 @@ impl<'a> OwnedRead<'a> {
             WHERE lmp.own_contacts OR "#,
             );
             member.push_into(&mut builder, &self.params.user_id);
-        } else if let (Some(walked_match), Stream::Inboxes { .. }) = (&self.walked_match, stream) {
-            builder.push(
-                r#"
-            WHERE "#,
-            );
-            walked_match
-                .clone()
-                .push_into(&mut builder, &self.params.user_id);
         }
         builder.push(
             r#"
@@ -784,9 +776,21 @@ impl<'a> OwnedRead<'a> {
                     builder.push_bind(window);
                     builder.push(")");
                 }
+                // A label read tests its labels on each walked thread here,
+                // before the preview pick, which then runs only on matches.
+                match &self.walked_match {
+                    Some(walked_match) => {
+                        builder.push("\n                    ) AS t WHERE ");
+                        walked_match
+                            .clone()
+                            .push_into(builder, &self.params.user_id);
+                    }
+                    None => {
+                        builder.push("\n                    ) AS inbox_threads");
+                    }
+                }
                 builder.push(
                     r#"
-                    ) AS inbox_threads
                     ORDER BY effective_ts DESC, id DESC
                     LIMIT "#,
                 );
