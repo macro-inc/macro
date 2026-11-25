@@ -153,3 +153,52 @@ async fn a_reply_names_the_thread_members_it_mentions_as_fallbacks() {
     assert_eq!(reply.0, &HashSet::from([follower]));
     assert_eq!(reply.1, &HashSet::from([mentioned]));
 }
+
+#[tokio::test]
+async fn a_first_message_that_mentions_every_member_still_names_them_as_fallbacks() {
+    let channel_id = Uuid::now_v7();
+    let sender = user("sender@example.com");
+    let mentioned = user("mentioned@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            message_count: 1,
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+
+    service
+        .handle(posted(
+            channel_id,
+            None,
+            &sender,
+            vec![member(channel_id, &sender), member(channel_id, &mentioned)],
+            vec![SimpleMention::user(&mentioned)],
+        ))
+        .await;
+
+    let effects = notifications.effects.lock().unwrap();
+    let message = effects
+        .iter()
+        .find_map(|effect| match effect {
+            ChannelNotificationEffect::ChannelMessage {
+                recipient_ids,
+                mention_fallback_ids,
+                ..
+            } => Some((recipient_ids, mention_fallback_ids)),
+            _ => None,
+        })
+        .expect("expected a channel message notification");
+
+    // Nobody is left to notify of the message itself, only through the mention.
+    assert!(message.0.is_empty());
+    assert_eq!(message.1, &HashSet::from([mentioned]));
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, ChannelNotificationEffect::Invite { .. }))
+    );
+}
