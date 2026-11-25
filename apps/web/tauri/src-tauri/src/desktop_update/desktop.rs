@@ -478,6 +478,11 @@ async fn check<R: Runtime>(
                     download_ms: duration_ms(download_started.elapsed()),
                     error: error.into(),
                 })?;
+            // The newer release is a new update, not another try at the one
+            // the previous launch failed to install.
+            if state.failed_install_version.as_deref() != Some(version.as_str()) {
+                state.failed_install_version = None;
+            }
         }
         state.downloaded(
             version.clone(),

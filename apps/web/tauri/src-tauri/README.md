@@ -713,7 +713,8 @@ the app stays open, the six-hourly check keeps running with an update ready, so
 an app left open for days doesn't install the first update it downloaded and
 find the next one on relaunch. A newer release downloads into `native-update/next/`
 while the ready update stays installable, and replaces it, in one rename, only
-once verified; it is then offered as a new update. A failed download, a feed
+once verified; it is then offered as a new update, not as another try at an
+install that failed (`failedInstallVersion` is cleared). A failed download, a feed
 that offers nothing newer, or a release this Mac can't run leaves the ready
 update as it is. The next launch deletes a staged download a quit left
 behind. A ready update installs on normal app quit;

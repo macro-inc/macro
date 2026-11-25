@@ -317,6 +317,35 @@ async fn a_ready_update_is_replaced_when_a_newer_release_ships() {
 }
 
 #[tokio::test]
+async fn a_newer_release_replacing_a_retried_update_is_offered_as_new() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    coordinator.state.lock().unwrap().failed_install_version = Some("98.0.0".into());
+    check_again(&coordinator, directory.path(), "98.0.0", Serve::Signed).await;
+    assert_eq!(
+        coordinator
+            .state
+            .lock()
+            .unwrap()
+            .snapshot()
+            .failed_install_version
+            .as_deref(),
+        Some("98.0.0")
+    );
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    let snapshot = coordinator.state.lock().unwrap().snapshot();
+    assert_eq!(
+        snapshot.status,
+        Status::Ready {
+            version: "99.0.0".into()
+        }
+    );
+    assert_eq!(snapshot.failed_install_version, None);
+}
+
+#[tokio::test]
 async fn a_failed_newer_download_keeps_the_ready_update() {
     let directory = tempfile::tempdir().unwrap();
     let coordinator = Coordinator::new(true, "1.0.0".into());
