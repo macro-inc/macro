@@ -34891,6 +34891,39 @@
                 }
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "`Delta` for callers that replay an edit until they hear an answer: an\nadded entity the message already holds is not attached a second time.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["delta_once"]
+              },
+              "value": {
+                "type": "object",
+                "description": "`Delta` for callers that replay an edit until they hear an answer: an\nadded entity the message already holds is not attached a second time.",
+                "required": ["remove", "add"],
+                "properties": {
+                  "add": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NewAttachment"
+                    },
+                    "description": "New attachments to append unless already held."
+                  },
+                  "remove": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Existing attachment UUIDs to remove."
+                  }
+                }
+              }
+            }
           }
         ],
         "description": "Attachment changes interpreted by the common command boundary."

@@ -78030,6 +78030,44 @@ export const entityMessageEditBody = zod
           .describe(
             'Remove stored attachment identities and append new references.'
           ),
+        zod
+          .object({
+            type: zod.enum(['delta_once']),
+            value: zod
+              .object({
+                add: zod
+                  .array(
+                    zod
+                      .object({
+                        entity_id: zod
+                          .string()
+                          .describe('Attached entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Attached entity type.'),
+                        height: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media height.'),
+                        width: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media width.'),
+                      })
+                      .describe('An attachment to add to a message.')
+                  )
+                  .describe('New attachments to append unless already held.'),
+                remove: zod
+                  .array(zod.uuid())
+                  .describe('Existing attachment UUIDs to remove.'),
+              })
+              .describe(
+                '`Delta` for callers that replay an edit until they hear an answer: an\nadded entity the message already holds is not attached a second time.'
+              ),
+          })
+          .describe(
+            '`Delta` for callers that replay an edit until they hear an answer: an\nadded entity the message already holds is not attached a second time.'
+          ),
       ])
       .optional()
       .describe(
