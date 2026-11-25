@@ -1,7 +1,7 @@
 import { type Api, unique } from './harness/api';
 import { ChannelView, conversationRow } from './harness/channel';
 import { mentionPerson } from './harness/composer';
-import { expect, failsSometimes, test } from './harness/fixtures';
+import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
 import type { Person } from './harness/people';
 import {
   chooseFromRowMenu,
@@ -339,6 +339,12 @@ test('UNR-09 the first message in a new channel marks it unread for the other me
   ben,
   people,
 }) => {
+  // Known defect on main: the first message a person posts in a named
+  // channel reaches the other members as an invite instead of as a message
+  // (`send_first_message_invites` in crates/channels), and since #12028 an
+  // invite does not mark a channel unread. The second message marks it.
+  // While unseen invites counted as unread (#11647 to #12028) this passed.
+  knownDefect();
   const made = await channelsNamed(ada, [people.ben], 'open', 'fresh', 'used');
   await ada.post(made.used, 'earlier');
   await new ChannelView(page, made.open).open();

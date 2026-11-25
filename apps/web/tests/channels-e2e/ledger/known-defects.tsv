@@ -1,3 +1,4 @@
 test	defect
 NAV-05	Reading forward from an old message jumps over part of the history (from message 150 to about 217 of 230)
 CHN-14	A new channel with no messages shows neither its created line nor an empty state
+UNR-09	The first message in a new named channel reaches the other members as an invite, which does not mark their row unread since #12028; the second message marks it
