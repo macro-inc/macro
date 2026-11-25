@@ -69,6 +69,36 @@ async fn a_channel_name_is_the_whole_name_the_viewer_sees(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("operator_names"))
 )]
+async fn a_channel_name_is_typed_with_its_quotes_left_out(pool: PgPool) {
+    let found = source(pool)
+        .channels_named(&viewer(), "launch beta", 20)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        found,
+        ids(&["d4000000-0000-0000-0000-000000000009"]),
+        "a term drops the quotes Launch \"beta\" is named with"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("operator_names"))
+)]
+async fn a_name_longer_than_any_channel_names_none(pool: PgPool) {
+    let found = source(pool)
+        .channels_named(&viewer(), &"launch".repeat(400), 20)
+        .await
+        .unwrap();
+
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("operator_names"))
+)]
 async fn a_channel_name_is_matched_literally(pool: PgPool) {
     let found = source(pool)
         .channels_named(&viewer(), "launch.*", 20)

@@ -248,12 +248,12 @@ export function searchOperatorCompletions(
         if (value !== '' && !value.startsWith('#')) return [];
         const typedName = value.slice(1);
         return values.channels
-          .filter((channel) => startsWith(channel, typedName))
+          .filter((channel) => startsWith(nameAsTyped(channel), typedName))
           .map(
             (channel): SearchOperatorCompletion => ({
               kind: 'channel',
               text: channel,
-              insert: `in:#${asValue(channel)}`,
+              insert: `in:#${asValue(nameAsTyped(channel))}`,
             })
           );
       })
