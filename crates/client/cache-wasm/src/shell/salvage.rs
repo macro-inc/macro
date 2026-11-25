@@ -133,13 +133,14 @@ async fn wipe_keeping(
     let held = owner.sidecar().hold().await;
     let (owner, sidecar) = or_release(owner, held).await?;
     let (owner, file) = or_release(owner, read_file(&sidecar).await).await?;
-    // Either way the file cannot say what else is lost once a queue follows in it.
+    // Either way the file cannot say what else is lost once a queue follows in
+    // it, so the copy says so itself.
     let doubted = untold
         || file
             .as_ref()
             .is_none_or(|file| file.lost() && file.queue().is_none());
     let (owner, mut read) =
-        read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default(), untold).await?;
+        read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default(), doubted).await?;
     if doubted {
         read.report.lose();
     }
@@ -303,7 +304,7 @@ async fn read_before_wipe(
     owner: OpfsOwner,
     sidecar: &Sidecar,
     file: SalvageFile,
-    untold: bool,
+    doubted: bool,
 ) -> Result<(OpfsOwner, ReadBeforeWipe), JsValue> {
     let mut read = ReadBeforeWipe {
         queue: None,
@@ -386,7 +387,7 @@ async fn read_before_wipe(
         Ok(())
     };
     if forgotten.is_ok() {
-        let queue = found.queue.map(|queue| match untold {
+        let queue = found.queue.map(|queue| match doubted {
             true => queue.after_loss(),
             false => queue,
         });
