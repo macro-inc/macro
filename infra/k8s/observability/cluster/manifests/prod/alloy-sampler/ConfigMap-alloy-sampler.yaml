@@ -36,7 +36,7 @@ data:
         statements = [
           `delete_key(attributes, "macro.sampling.root")`,
           `set(attributes["macro.sampling.root"], "other") where IsRootSpan()`,
-          `set(attributes["macro.sampling.root"], resource.attributes["service.name"]) where IsRootSpan() and IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|github-actions|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$")`,
+          `set(attributes["macro.sampling.root"], resource.attributes["service.name"]) where IsRootSpan() and IsMatch(resource.attributes["service.name"], "^(agent-harness-service|ai-editing-worker|authentication-service|calendar-service|github-actions|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|gitai-service|notification-service|search-freshness-probe|search-processing-service|static-file-service|sync-service|web-app|whatsapp-session-service|agent_harness_service|authentication_service|calendar_service|connection_gateway_service|contacts_service|document_storage_service|email_service|notification_service|pubsub_workers|search_processing_service|static_file_service|whatsapp_session_service)$")`,
         ]
       }
       output {
@@ -165,7 +165,47 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-ai-editing-worker"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "ai-editing-worker"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -205,7 +245,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -245,7 +285,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -285,7 +325,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -325,7 +365,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -365,7 +405,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -405,7 +445,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -445,7 +485,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -485,7 +525,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -525,7 +565,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -549,6 +589,46 @@ data:
       }
     }
     policy {
+      name = "important-gitai-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "gitai-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
       name = "important-notification-service"
       type = "and"
       and {
@@ -565,7 +645,47 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-search-freshness-probe"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-freshness-probe"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -605,7 +725,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -645,7 +765,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -685,7 +805,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -725,7 +845,47 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$")) and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-whatsapp-session-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "whatsapp-session-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -757,7 +917,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["other"]
+      values = ["agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = false
     }
     }
@@ -789,7 +949,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -798,7 +958,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "service.name"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service"]
       invert_match = true
     }
     }
@@ -884,7 +1044,52 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-ai-editing-worker"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "ai-editing-worker"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -929,7 +1134,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -974,7 +1179,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1019,7 +1224,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1064,7 +1269,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1109,7 +1314,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1154,7 +1359,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1199,7 +1404,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1244,7 +1449,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1289,7 +1494,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1318,6 +1523,51 @@ data:
       }
     }
     policy {
+      name = "tenth-gitai-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "gitai-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
       name = "tenth-notification-service"
       type = "and"
       and {
@@ -1334,7 +1584,52 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-search-freshness-probe"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-freshness-probe"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1379,7 +1674,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1424,7 +1719,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1469,7 +1764,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1514,7 +1809,52 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not (IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-whatsapp-session-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "whatsapp-session-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1551,7 +1891,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["other"]
+      values = ["agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = false
     }
     }
@@ -1588,7 +1928,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1597,7 +1937,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "service.name"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service"]
       invert_match = true
     }
     }
@@ -1642,7 +1982,47 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-ai-editing-worker"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "ai-editing-worker"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1682,7 +2062,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1722,7 +2102,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1762,7 +2142,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1802,7 +2182,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1842,7 +2222,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1882,7 +2262,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1922,7 +2302,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -1962,7 +2342,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2002,7 +2382,47 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-gitai-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "gitai-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2042,7 +2462,47 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-search-freshness-probe"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-freshness-probe"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2082,7 +2542,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2122,7 +2582,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2162,7 +2622,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2202,7 +2662,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2219,6 +2679,526 @@ data:
       type = "rate_limiting"
     rate_limiting {
       spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-whatsapp-session-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "whatsapp-session-service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-agent_harness_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "agent_harness_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-authentication_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "authentication_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-calendar_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "calendar_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-connection_gateway_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "connection_gateway_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-contacts_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "contacts_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-document_storage_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "document_storage_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-email_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-notification_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "notification_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-pubsub_workers"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "pubsub_workers"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","search_processing_service","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-search_processing_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search_processing_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","static_file_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-static_file_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "static_file_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","whatsapp_session_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-whatsapp_session_service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "has"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "whatsapp_session_service"`]
+    }
+    }
+    and_sub_policy {
+      name = "none"
+      type = "string_attribute"
+    string_attribute {
+      key = "macro.sampling.root"
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","other"]
+      invert_match = true
+    }
+    }
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 66
       burst_capacity = 20000
     }
     }
@@ -2266,7 +3246,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "macro.sampling.root"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app","other"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service","other"]
       invert_match = true
     }
     }
@@ -2275,7 +3255,7 @@ data:
       type = "string_attribute"
     string_attribute {
       key = "service.name"
-      values = ["agent-harness-service","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","notification-service","search-processing-service","static-file-service","sync-service","web-app"]
+      values = ["agent-harness-service","ai-editing-worker","authentication-service","calendar-service","github-actions","cloud-storage-service","connection-gateway","contacts-service","convert-service","email-focus-worker","email-service","gitai-service","notification-service","search-freshness-probe","search-processing-service","static-file-service","sync-service","web-app","whatsapp-session-service","agent_harness_service","authentication_service","calendar_service","connection_gateway_service","contacts_service","document_storage_service","email_service","notification_service","pubsub_workers","search_processing_service","static_file_service","whatsapp_session_service"]
       invert_match = true
     }
     }

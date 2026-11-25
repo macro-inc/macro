@@ -248,7 +248,8 @@ its trace ID, over the headless Service's DNS. Each replica:
   `modules/sampler/policies.nix` matches: from prod, every trace with an error,
   every served request of 1 s or more, and a tenth of the rest; from any
   environment, every `perf` and Outlook trace; from dev, CI and local stacks,
-  everything. An unnamed environment is sampled like prod. A span that arrives
+  everything, up to the caps below (low for each local service, since one
+  failing in a loop sends as much as the rest of dev). An unnamed environment is sampled like prod. A span that arrives
   later follows a kept trace; one of a dropped trace is judged again, so a late
   error is still kept (that part of the trace only);
 - caps each service within each group of policies, in spans a second. A trace

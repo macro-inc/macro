@@ -47,7 +47,8 @@ let
       )) (lib.attrValues values) (builtins.readFile ./sampler.alloy);
     in
     assert lib.assertMsg (
-      !lib.hasInfix "@" result
+      # Not hasInfix: its regex overflows the stack on a text this long.
+      builtins.replaceStrings [ "@" ] [ "" ] result == result
     ) "sampler.alloy has a placeholder modules/sampler/default.nix doesn't fill";
     result;
 in

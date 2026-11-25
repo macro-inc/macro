@@ -29,6 +29,9 @@ let
       cloud-storage-service = 2000;
       connection-gateway = 2000;
       other = 500;
+      # Each of a developer machine's services (below): one failing in a loop
+      # sends as much as the rest of dev.
+      local = 200;
     };
     # Every perf trace (the browser samples the users) and Outlook trace.
     perf = 1000;
@@ -38,6 +41,7 @@ let
   # Every service that has a budget of its own in each group.
   services = [
     "agent-harness-service"
+    "ai-editing-worker"
     "authentication-service"
     "calendar-service"
     "github-actions"
@@ -47,16 +51,35 @@ let
     "convert-service"
     "email-focus-worker"
     "email-service"
+    "gitai-service"
     "notification-service"
+    "search-freshness-probe"
     "search-processing-service"
     "static-file-service"
     "sync-service"
     "web-app"
+    "whatsapp-session-service"
   ];
+  # What local stacks call theirs. They have a budget in `nonProd` only.
+  localServices = [
+    "agent_harness_service"
+    "authentication_service"
+    "calendar_service"
+    "connection_gateway_service"
+    "contacts_service"
+    "document_storage_service"
+    "email_service"
+    "notification_service"
+    "pubsub_workers"
+    "search_processing_service"
+    "static_file_service"
+    "whatsapp_session_service"
+  ];
+  named = services ++ localServices;
 
   rootKey = "macro.sampling.root";
   service = ''resource.attributes["service.name"]'';
-  isListed = ''IsMatch(${service}, "^(${lib.concatStringsSep "|" services})$")'';
+  isListed = ''IsMatch(${service}, "^(${lib.concatStringsSep "|" named})$")'';
   # Dev, CI and local stacks name their environment, on the resource or
   # (Cloudflare workers) on the span; anything that doesn't is sampled like prod.
   isNonProd = ''(IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") or IsMatch(attributes["deployment.environment"], "^(dev|development|ci|local)$"))'';
@@ -118,27 +141,38 @@ let
   # sampler.alloy names the root span's service in `rootKey`, `other` for one
   # not listed.
   perService =
-    group: parts:
+    {
+      group,
+      own ? services,
+    }:
+    parts:
+    let
+      unowned = lib.subtractLists own named ++ [ "other" ];
+      budget =
+        s:
+        budgets.${group}.${s}
+          or (if lib.elem s localServices then budgets.${group}.local else budgets.${group}.other);
+    in
     map (
       s:
       policy "${group}-${s}" (
         [
           (any "has" ''${service} == "${s}"'')
-          (values rootKey (lib.filter (o: o != s) services ++ [ "other" ]) true)
+          (values rootKey (lib.filter (o: o != s) named ++ [ "other" ]) true)
         ]
         ++ parts
-        ++ [ (limit (budgets.${group}.${s} or budgets.${group}.other)) ]
+        ++ [ (limit (budget s)) ]
       )
-    ) services
+    ) own
     ++ [
       (policy "${group}-other" (
-        [ (values rootKey [ "other" ] false) ] ++ parts ++ [ (limit budgets.${group}.other) ]
+        [ (values rootKey unowned false) ] ++ parts ++ [ (limit budgets.${group}.other) ]
       ))
-      # No root and no listed service.
+      # No root and no named service.
       (policy "${group}-rootless" (
         [
-          (values rootKey (services ++ [ "other" ]) true)
-          (values "service.name" services true)
+          (values rootKey (named ++ [ "other" ]) true)
+          (values "service.name" own true)
         ]
         ++ parts
         ++ [ (limit budgets.${group}.other) ]
@@ -151,7 +185,9 @@ in
     ''set(attributes["${rootKey}"], ${service}) where IsRootSpan() and ${isListed}''
   ];
   policies = lib.concatStrings (
-    perService "important" [ (any "match" "${isProd} and (${isError} or ${isSlowRequest})") ]
+    perService { group = "important"; } [
+      (any "match" "${isProd} and (${isError} or ${isSlowRequest})")
+    ]
     ++ [
       (policy "perf" [
         (any "match" isPerf)
@@ -162,10 +198,13 @@ in
         (limit budgets.outlook)
       ])
     ]
-    ++ perService "tenth" [
+    ++ perService { group = "tenth"; } [
       (any "match" isProd)
       probabilistic
     ]
-    ++ perService "nonProd" [ (any "match" isNonProd) ]
+    ++ perService {
+      group = "nonProd";
+      own = named;
+    } [ (any "match" isNonProd) ]
   );
 }
