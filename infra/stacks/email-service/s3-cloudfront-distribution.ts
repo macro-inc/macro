@@ -105,6 +105,12 @@ export const getCloudfrontDistribution = ({
           cookies: {
             forward: 'none',
           },
+          // The bucket's CORS rules answer each page origin with its own
+          // Access-Control-Allow-Origin. Forwarding Origin also puts it in
+          // the cache key; without it every origin got the answer cached
+          // for whichever origin fetched the file first, and the native
+          // apps' fetches failed CORS.
+          headers: ['Origin'],
         },
       },
       enabled: true,
