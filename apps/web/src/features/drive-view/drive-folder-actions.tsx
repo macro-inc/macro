@@ -23,6 +23,7 @@ import type { ProjectEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
+import FolderPlusIcon from '@icon/system/regular/folder-plus.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import StarIcon from '@icon/system/regular/star.svg';
@@ -30,11 +31,13 @@ import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { refreshActiveGraphqlFoldersQueries } from '@queries/storage/graphql-folders';
 import { Show } from 'solid-js';
+import { useOptionalDriveRedesign } from './context/drive-redesign-context';
 import type { DriveFolderMetadata } from './context/drive-source';
 
 /** App wiring for sidebar folder actions using the shared list dialogs and mutations. */
 export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
   const userId = useUserId();
+  const redesign = useOptionalDriveRedesign();
 
   const entity = (): ProjectEntity => ({
     type: 'project',
@@ -81,11 +84,34 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
   return (
     <>
       <MenuSeparator />
+      <Show when={redesign && entity().ownerId === userId()}>
+        <MenuItem
+          text={t('drive.newSubfolder')}
+          icon={FolderPlusIcon}
+          onClick={() =>
+            redesign?.inlineEdit.startCreateFolder({
+              parentId: props.folder.id,
+              surface: 'sidebar',
+            })
+          }
+        />
+      </Show>
       <Show when={entity().ownerId === userId()}>
         <MenuItem
           text={t('entityActions.rename')}
           icon={PencilIcon}
-          onClick={() => editFolder('rename')}
+          onClick={() => {
+            if (redesign) {
+              redesign.inlineEdit.startRename({
+                id: props.folder.id,
+                name: props.folder.name,
+                isFolder: true,
+                surface: 'sidebar',
+              });
+            } else {
+              editFolder('rename');
+            }
+          }}
         />
       </Show>
       <MenuItem
@@ -106,7 +132,10 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
         <MenuItem
           text={t('entityActions.moveToFolder')}
           icon={FolderIcon}
-          onClick={() => editFolder('moveToProject')}
+          onClick={() => {
+            if (redesign) redesign.host.openMoveDialog([entity()]);
+            else editFolder('moveToProject');
+          }}
         />
       </Show>
       <Show when={duplicate.canExecute(entity())}>
@@ -136,11 +165,16 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
       <Show when={deleteFolder.canExecute(entity())}>
         <MenuSeparator />
         <MenuItem
-          text={t('entityActions.delete')}
+          text={redesign ? t('drive.moveToTrash') : t('entityActions.delete')}
           icon={TrashIcon}
           class="text-failure-ink"
           onClick={() =>
-            fireAndForget(deleteFolder.execute([entity()]), 'drive-view')
+            fireAndForget(
+              redesign
+                ? redesign.host.trashEntitiesWithUndo([entity()])
+                : deleteFolder.execute([entity()]),
+              'drive-view'
+            )
           }
         />
       </Show>

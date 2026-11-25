@@ -404,7 +404,7 @@ export const driveTabRoute = defineRoute({
   id: 'drive-tab',
   path: ':tab',
   aliases: ['tab/:tab'],
-  params: z.object({ tab: z.enum(['recent', 'shared']) }),
+  params: z.object({ tab: z.enum(['recent', 'shared', 'starred', 'trash']) }),
   state: driveDetailTrailSchema,
 });
 

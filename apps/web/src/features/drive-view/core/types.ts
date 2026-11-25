@@ -1,7 +1,7 @@
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { t } from '@app/lib/i18n';
 
-export type DriveTab = 'owned' | 'recent' | 'shared';
+export type DriveTab = 'owned' | 'recent' | 'shared' | 'starred' | 'trash';
 export type DriveScope = 'default' | 'all' | 'attachments';
 export type DriveSort = 'updated_at' | 'created_at' | 'viewed_at' | 'name';
 

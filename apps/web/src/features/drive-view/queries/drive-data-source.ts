@@ -82,7 +82,9 @@ export function createDriveDataSource(options: {
     const { location, scope } = selection();
     if (scope === 'attachments') return false;
     return location.kind === 'tab'
-      ? location.tab !== 'recent'
+      ? location.tab !== 'recent' &&
+          location.tab !== 'starred' &&
+          location.tab !== 'trash'
       : Boolean(location.id);
   };
   const includesDatabases = () =>
@@ -129,8 +131,17 @@ export function createDriveDataSource(options: {
 
       const context = facetContext();
 
+      const isDedicatedTab =
+        current.location.kind === 'tab' &&
+        (current.location.tab === 'starred' ||
+          current.location.tab === 'trash');
+
       return {
-        enabled: Boolean(viewer) && facetsReady() && !current.search.trim(),
+        enabled:
+          Boolean(viewer) &&
+          facetsReady() &&
+          !current.search.trim() &&
+          !isDedicatedTab,
         // Folder contents mix email with indexed project members. Seed the
         // latter locally without narrowing the authoritative server request.
         graphqlLocalReconciliation:

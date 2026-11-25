@@ -13,6 +13,7 @@ export default {
   driveRoot: 'Drive',
   browseMode: 'Browse',
   allFilesMode: 'All files',
+  filesSection: 'Files',
   rootModeLabel: 'My Drive view mode',
 
   // View modes & display options
