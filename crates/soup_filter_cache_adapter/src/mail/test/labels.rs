@@ -2,6 +2,8 @@ use super::*;
 
 const LABELED: &str = r#"query MailLabels { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal latestInboundMessageTs reminderReturnedAt mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt labels { __typename id } } } } } }"#;
 
+const LABELS_ONLY: &str = r#"query ThreadLabels { user { id soup(input:{initial:{limit:1}}) { items { __typename id ... on GraphqlSoupEmailThread { labels { __typename id } } } } } }"#;
+
 /// A label made in the viewer's own inbox, on every sixth thread.
 const MADE: u128 = 5000;
 /// One of Gmail's system labels, which a shared thread's reader also sees.
@@ -90,4 +92,13 @@ async fn lists_labeled_threads() {
     assert_eq!(keys.len(), 11);
     assert!(keys.contains(&format!("{TYPE}:{}", id(1))));
     assert!(!keys.contains(&format!("{TYPE}:{}", id(6))));
+
+    // A response that reads only a thread's labels moves it too.
+    let labels_only = json!({"user":{"id":VIEWER,"soup":{"items":[
+        {"__typename":"GraphqlSoupEmailThread","id":id(12),"labels":[]}
+    ]}}});
+    write(&mut engine, LABELS_ONLY, &labels_only).await;
+    let keys = all_keys(&mut engine, with_tree(label(MADE)), "ALL").await;
+    assert_eq!(keys.len(), 10);
+    assert!(!keys.contains(&format!("{TYPE}:{}", id(12))));
 }

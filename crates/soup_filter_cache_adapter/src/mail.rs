@@ -449,9 +449,10 @@ pub async fn projection_updates_for_response<S: DurableRead>(
         .iter()
         .filter(|(key, record)| {
             key.as_ref().starts_with(&prefix)
-                && FIELDS
-                    .iter()
-                    .any(|field| record.fields.contains_key(*field))
+                && (record.fields.contains_key("labels")
+                    || FIELDS
+                        .iter()
+                        .any(|field| record.fields.contains_key(*field)))
         })
         .map(|(key, record)| (key.clone(), record.clone()))
         .collect::<Vec<_>>();
