@@ -88,14 +88,16 @@ async function finalFindings(
   system: FuzzSystem,
   model: FuzzModel
 ): Promise<Finding[]> {
+  const watcher = system.peer(WATCHER);
+  // Writes a decorator makes after it mounts (a measured size, debounced
+  // 60 ms) land late; give them time to be sent, so the delivery below
+  // carries them to every page before focus is read.
+  await watcher.page.waitForTimeout(300);
   const findings = await check(system.peers, system.relay, 'typed', (name) =>
     name === WATCHER
       ? [{ type: 'p', text: markerOf(WATCHER) }]
       : model.peer(name).blocks
   );
-  const watcher = system.peer(WATCHER);
-  // Writes a decorator makes after it mounts (a measured size) land late.
-  await watcher.page.waitForTimeout(300);
   try {
     await expectComposerFocused(watcher, 'everything was delivered');
   } catch (error) {
@@ -120,7 +122,6 @@ test('focus stays in another field while collaborators edit every decorator type
 }) => {
   test.setTimeout((MINUTES + 5) * 60_000);
   let attempt = 0;
-  let failing: { findings: Finding[]; commands: string } | undefined;
   const reported: Finding[] = [];
 
   const property = fc.asyncProperty(
@@ -170,7 +171,6 @@ test('focus stays in another field while collaborators edit every decorator type
           ...findings.filter((finding) => !FOCUS_KINDS.includes(finding.kind))
         );
         if (failures.length === 0) return;
-        failing = { findings: failures, commands: String(commands) };
         throw new FindingsError(failures);
       } finally {
         await close();
@@ -186,6 +186,15 @@ test('focus stays in another field while collaborators edit every decorator type
     interruptAfterTimeLimit: MINUTES * 60_000,
   });
 
+  // The counterexample fast-check settled on, with that run's own findings
+  // (none when it failed before the oracles ran, as a page that never loaded).
+  const error = details.errorInstance;
+  const failing = details.counterexample
+    ? {
+        commands: String(details.counterexample[1]),
+        findings: error instanceof FindingsError ? error.findings : [],
+      }
+    : undefined;
   mkdirSync(REPORTS, { recursive: true });
   const file = `${REPORTS}focus-${details.seed}.json`;
   writeFileSync(
@@ -198,10 +207,7 @@ test('focus stays in another field while collaborators edit every decorator type
         typists: TYPISTS.length,
         steps: STEPS,
         failing,
-        error:
-          details.errorInstance === null
-            ? undefined
-            : String(details.errorInstance),
+        error: error === null ? undefined : String(error),
         reported: [...new Set(reported.map((finding) => finding.kind))],
       },
       null,

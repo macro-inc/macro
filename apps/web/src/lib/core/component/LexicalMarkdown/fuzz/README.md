@@ -95,9 +95,13 @@ Composer, someone adds one of every decorator type the app renders
 (`decorators.ts`, which fails when a new type has no factory), and the others
 run the fuzz commands. After every command and once everything is delivered,
 the watcher's focus must be in the Composer, holding what they typed, with
-their region untouched. It fails only on focus, caret, model and convergence
-findings; the rest go in its report (`reports/focus-<seed>.json`). Run it with
-`focus.browser` as the test filter and the same knobs (not `FUZZ_UNDO`).
+their region untouched. It fails only on `focus`, `composer` (the Composer
+lost or gained text), `decorators` (a type could not be added), `caret`,
+`model` and `no-convergence` findings; the rest go in its report
+(`reports/focus-<seed>.json`). Run it with `focus.browser` as the test filter
+and the same knobs, except `FUZZ_UNDO` and `FUZZ_IGNORE`, which it does not
+read, and `FUZZ_PEERS`, which is at most 7 here because the watcher takes the
+eighth page.
 
 ## Known findings
 
