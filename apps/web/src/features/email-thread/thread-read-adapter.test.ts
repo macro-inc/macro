@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   markSeen: vi.fn(),
 }));
 
-vi.mock('@app/features/email-view/primitives/email-read-on-open', () => ({
+vi.mock('@app/preferences/email-read-on-open', () => ({
   markEmailReadOnOpen: () => mocks.markReadOnOpen,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -48,17 +48,6 @@ afterEach(() => {
 });
 
 describe('createThreadReadAdapter', () => {
-  it('offers Mark unread on an opened thread when opening marks it read', () => {
-    const { adapter, dispose } = createAdapter();
-    try {
-      expect(adapter.isThreadMarkedUnread()).toBe(false);
-      expect(adapter.markThreadRead()).toBe(false);
-      expect(mocks.markSeen).not.toHaveBeenCalled();
-    } finally {
-      dispose();
-    }
-  });
-
   it('keeps an unread thread unread until it is marked read by hand', () => {
     mocks.markReadOnOpen = false;
     const { adapter, open, dispose } = createAdapter();

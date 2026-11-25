@@ -1,5 +1,5 @@
 import { useReadsHeldByAgentArrival } from '@app/features/agent-navigation/context/agent-arrivals';
-import { markEmailReadOnOpen } from '@app/features/email-view/primitives/email-read-on-open';
+import { markEmailReadOnOpen } from '@app/preferences/email-read-on-open';
 import type { Entity } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';

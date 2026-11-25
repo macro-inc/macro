@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   markReadOnOpen: true,
 }));
 
-vi.mock('@app/features/email-view/primitives/email-read-on-open', () => ({
+vi.mock('@app/preferences/email-read-on-open', () => ({
   markEmailReadOnOpen: () => mocks.markReadOnOpen,
 }));
 vi.mock('@core/constant/featureFlags', () => ({

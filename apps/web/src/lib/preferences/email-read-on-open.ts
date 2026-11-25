@@ -1,4 +1,4 @@
-import { usePreference } from '@app/lib/preferences/use-preference';
+import { usePreference } from './use-preference';
 
 /**
  * Whether opening an email thread marks it read, chosen in Settings → Email.

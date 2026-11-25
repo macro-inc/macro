@@ -1,8 +1,8 @@
-import { markEmailReadOnOpen } from '@app/features/email-view/primitives/email-read-on-open';
 import {
   type EntityWithRawNotifications,
   getEntityNotifications,
 } from '@app/features/soup/entity-notifications';
+import { markEmailReadOnOpen } from '@app/preferences/email-read-on-open';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityData, isGithubPrEntity } from '@entity/types/entity';
 import {

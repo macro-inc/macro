@@ -1,4 +1,4 @@
-import { markEmailReadOnOpen } from '@app/features/email-view/primitives/email-read-on-open';
+import { markEmailReadOnOpen } from '@app/preferences/email-read-on-open';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -24,9 +24,10 @@ export function createThreadReadAdapter(
   const markSeenMutation = useMarkThreadAsSeenMutation();
 
   // Viewing a thread marks it read (EmailReadMarker), so each thread starts
-  // with the toggle offering Mark Unread. With that setting off, an unread
-  // thread stays unread and starts offering Mark Read; a toggle overrides it.
-  const [unreadToggle, setThreadMarkedUnread] = createSignal<boolean>();
+  // with the toggle offering Mark Unread. With "Mark as read when opened" off,
+  // an unread thread stays unread and starts offering Mark Read; a toggle
+  // overrides it.
+  const [unreadToggle, setUnreadToggle] = createSignal<boolean>();
   const threadMarkedUnread = () =>
     unreadToggle() ??
     (!markEmailReadOnOpen() && threadSource()?.is_read === false);
@@ -40,7 +41,7 @@ export function createThreadReadAdapter(
   createEffect(
     on(currentThreadId, () => {
       readToggleVersion += 1;
-      setThreadMarkedUnread(undefined);
+      setUnreadToggle(undefined);
       setThreadMarkedRead(false);
     })
   );
@@ -54,7 +55,7 @@ export function createThreadReadAdapter(
   };
   const showUnreadFailure = (unreadThreadId: string, version: number) => {
     if (threadId() === unreadThreadId && readToggleVersion === version) {
-      setThreadMarkedUnread(false);
+      setUnreadToggle(false);
     }
     toast.failure('Failed to mark as unread');
     fireAndForget(
@@ -102,7 +103,7 @@ export function createThreadReadAdapter(
 
     readToggleVersion += 1;
     unreadWriteVersion = readToggleVersion;
-    setThreadMarkedUnread(true);
+    setUnreadToggle(true);
     setThreadMarkedRead(false);
     markUnreadMutation.mutate({ threadId: thread.db_id });
     return true;
@@ -117,12 +118,13 @@ export function createThreadReadAdapter(
       return false;
     }
 
-    const threadId = thread.db_id;
+    const readThreadId = thread.db_id;
     readToggleVersion += 1;
-    setThreadMarkedUnread(false);
+    const version = readToggleVersion;
+    setUnreadToggle(false);
     setThreadMarkedRead(true);
     markSeenMutation.mutate(
-      { threadId },
+      { threadId: readThreadId },
       {
         onSuccess: () => {
           toast.success('Marked as read', {
@@ -132,11 +134,13 @@ export function createThreadReadAdapter(
           });
         },
         onError: () => {
-          setThreadMarkedUnread(true);
-          setThreadMarkedRead(false);
+          if (threadId() === readThreadId && readToggleVersion === version) {
+            setUnreadToggle(true);
+            setThreadMarkedRead(false);
+          }
           toast.failure('Failed to mark as read');
           fireAndForget(
-            refetchSoupEntity(threadId, 'emailThread'),
+            refetchSoupEntity(readThreadId, 'emailThread'),
             'email-thread'
           );
         },

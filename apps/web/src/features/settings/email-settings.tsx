@@ -1,13 +1,13 @@
 import { EmailRowStylePreview } from '@app/features/email-view/components/EmailRowStylePreview';
 import {
-  markEmailReadOnOpen,
-  setMarkEmailReadOnOpen,
-} from '@app/features/email-view/primitives/email-read-on-open';
-import {
   chosenEmailRowStyle,
   setEmailRowStyle,
 } from '@app/features/email-view/primitives/email-row-style';
 import { t } from '@app/lib/i18n';
+import {
+  markEmailReadOnOpen,
+  setMarkEmailReadOnOpen,
+} from '@app/preferences/email-read-on-open';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
