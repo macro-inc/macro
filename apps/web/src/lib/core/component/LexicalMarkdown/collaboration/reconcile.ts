@@ -10,7 +10,6 @@ import {
   type NodeIdMappings,
   stripDraftCommentMarks,
 } from '@macro-inc/lexical-core';
-import deepEqual from 'fast-deep-equal';
 import {
   $getEditor,
   $isElementNode,
@@ -60,6 +59,62 @@ function getComparableNodeValue(
   // carries; applying it would re-nest the item (ListItemNode.setIndent).
   if (node.type === 'listitem') value.indent = undefined;
   return value;
+}
+
+/**
+ * Whether two comparable node values hold the same state. Unlike
+ * `fast-deep-equal`, a field that is `undefined` on one side matches `null` or
+ * a missing field on the other: Loro stores an unset field as `null` while a
+ * node's own JSON leaves it `undefined`, and treating that as a change would
+ * call `updateFromJSON` on every remote update, remounting decorators such as
+ * images (they flash their loading state). A missing field still differs from
+ * `null`, so a field another client adds as `null` is applied.
+ */
+function isSameNodeValue(a: unknown, b: unknown): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  if (typeof a !== 'object' || typeof b !== 'object') {
+    return a === b || (Number.isNaN(a) && Number.isNaN(b));
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && isSameArray(a, b);
+  }
+  return (
+    hasSameFields(a as Record<string, unknown>, b as Record<string, unknown>) &&
+    hasNoExtraFields(a as Record<string, unknown>, b as Record<string, unknown>)
+  );
+}
+
+function isSameArray(a: unknown[], b: unknown[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index++) {
+    if (!isSameNodeValue(a[index], b[index])) return false;
+  }
+  return true;
+}
+
+/** Every field of `left` matches `right`, where `undefined` may be missing. */
+function hasSameFields(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>
+): boolean {
+  for (const key of Object.keys(left)) {
+    const same = Object.hasOwn(right, key)
+      ? isSameNodeValue(left[key], right[key])
+      : left[key] === undefined;
+    if (!same) return false;
+  }
+  return true;
+}
+
+/** `right` has no field missing from `left` other than `undefined` ones. */
+function hasNoExtraFields(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>
+): boolean {
+  for (const key of Object.keys(right)) {
+    if (!Object.hasOwn(left, key) && right[key] !== undefined) return false;
+  }
+  return true;
 }
 
 /** What one reconcile pass reads while it walks the new tree. */
@@ -178,7 +233,7 @@ function $updateExistingNode(
   const oldNode = reconcile.oldNodes.get(id);
   if (!oldNode) return;
   const newValue = getComparableNodeValue(newNode);
-  if (!deepEqual(getComparableNodeValue(oldNode), newValue)) {
+  if (!isSameNodeValue(getComparableNodeValue(oldNode), newValue)) {
     $applyNodeState(reconcile, id, newValue);
   }
   if (hasChildren(oldNode) && hasChildren(newNode)) {
