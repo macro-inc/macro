@@ -171,7 +171,8 @@ export type EmailViewContext = {
   /**
    * The view the navigation and the header show as selected: the open tab,
    * or the view the search on screen runs in (`inbox` for the whole Inbox);
-   * `search` for a search of all mail, which selects none.
+   * `search`, which selects none, for a search of all mail or an open field
+   * with no words yet.
    */
   shownTab: Accessor<EmailShownView>;
   /** The search field holds a query, whatever it says. */
@@ -497,11 +498,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     { query: '' }
   );
   const shownTab = (): EmailShownView => {
+    if (!canSearchEmailTab(state.tab) || !searchOpen()) return state.tab;
     const { query, scope } = parsedSearch();
-    // With no search to stay on, the list is still the open tab's.
-    if (!searchHasText() || query === '') return state.tab;
-
-    if (!scope) return 'search';
+    // An open field reads as a search before it has words, even while the
+    // open tab's rows are still the ones listed.
+    if (query === '' || !scope) return 'search';
     return emailSearchScopeTab(scope) ?? 'inbox';
   };
   const showsInboxTabs = () =>

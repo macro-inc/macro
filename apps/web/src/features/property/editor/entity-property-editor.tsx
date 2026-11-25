@@ -38,12 +38,9 @@ import type {
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '../types';
+import { createGuardedHighlight } from './guarded-highlight';
 import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
-import {
-  createUnhighlightedArrival,
-  type SavedValueState,
-  SavedValueStatus,
-} from './saved-value-status';
+import { type SavedValueState, SavedValueStatus } from './saved-value-status';
 
 type EntityPropertyRow =
   | { type: 'clear'; separatorBefore: boolean }
@@ -306,24 +303,21 @@ export function EntityPropertyEditor(props: {
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
   });
-  createUnhighlightedArrival(
-    waitsForSavedValue,
-    () => rows().length > 0,
-    () => Boolean(searchQuery()) && rows()[0]?.type === 'entity',
-    props.setSelectedIndex
-  );
+  const highlight = createGuardedHighlight({
+    rows,
+    guarded: () => rows()[0]?.type === 'clear',
+    searchValue: props.searchValue,
+    selectedIndex: props.selectedIndex,
+    listController,
+  });
 
   props.setKeybindings({
     select: (event) => {
-      const row = rows()[props.selectedIndex()];
+      const row = rows()[highlight.highlightedIndex()];
       if (row) selectRow(row, event);
     },
-    next: () => {
-      listController.selectNext();
-    },
-    previous: () => {
-      listController.selectPrevious();
-    },
+    next: highlight.selectNext,
+    previous: highlight.selectPrevious,
   });
 
   const listId = createUniqueId();
@@ -371,7 +365,7 @@ export function EntityPropertyEditor(props: {
         </Show>
         <CommandMenuList
           items={rows()}
-          selectedIndex={props.selectedIndex()}
+          selectedIndex={highlight.highlightedIndex()}
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           itemId={(_, index) => `${listId}-entity-option-${index}`}
           beforeItem={(row) =>
@@ -380,9 +374,7 @@ export function EntityPropertyEditor(props: {
             ) : null
           }
           onSelect={(row, _, event) => selectRow(row, event)}
-          onItemMouseMove={(index) =>
-            listController.setSelectedIndexFromPointer(index)
-          }
+          onItemMouseMove={highlight.selectFromPointer}
         >
           {(row) => (
             <Switch>

@@ -209,11 +209,12 @@ filter names (the header says Focus, and the sidebar selects Inbox, for
 `in:focus`); a search with no `in:` selects nothing, and the header says
 Search. The Focus, Signal and Noise tabs never show while the field is open,
 empty or not, on desktop or phone; closing it brings them back on the tab that
-was open. Open and empty, the field leaves that tab's rows on screen, and the
-desktop header names it (Signal). Text with no words yet (`in:`, `in:se`, or a
-view alone such as `in:focus`) runs no search of its own: the list, header and
-sidebar stay on the last search that had words, or on the open view when there
-was none (the text was pasted). Check from Inbox with a
+was open. Open and empty, the field leaves that tab's rows on screen, while
+the desktop header says Search and the sidebar selects nothing. Text with no
+words yet (`in:`, `in:se`, or a view alone such as `in:focus`) runs no search
+of its own: the list, header and sidebar stay on the last search that had
+words, or, when there was none (the text was pasted), the open view's rows
+stay under Search. Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
 `in:`, then pick Sent and All mail in the sidebar while it runs; then type
 `in`, `in:`, pick Focus and type a word, clear the field, and close it.

@@ -580,6 +580,20 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
     .execute(&db)
     .await
     .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,next_run_at,initial_complete,lease_id,lease_until) VALUES
+            ($2,$1,1,'mail_folder','waiting round',now() - interval '400 seconds',false,NULL,NULL),
+            ($3,$1,1,'mail_folder','leased round',now() - interval '900 seconds',false,$5,now() + interval '60 seconds'),
+            ($4,$1,1,'mail_folder','finished folder',now() - interval '1200 seconds',true,NULL,NULL)"#,
+        active,
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7()
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let paused = outlook_link(&db, "paused@example.com", false, true).await;
     queue(&db, paused, "waiting", true, 0).await;
     outlook_link(&db, "idle@example.com", false, false).await;
@@ -605,7 +619,11 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
             active_backlog.sync_active,
             active_backlog.needs_reauth,
         ),
-        (3, 1, 1, 1, 5, true, false)
+        (3, 1, 1, 3, 5, true, false)
+    );
+    assert!(
+        (400..=402).contains(&active_backlog.import_round_wait_seconds),
+        "the longest-due unclaimed round: {active_backlog:?}"
     );
     assert!((90..=92).contains(&active_backlog.oldest_waiting_seconds));
     assert!((598..=600).contains(&active_backlog.parked_until_max_seconds));
@@ -677,6 +695,7 @@ async fn import_counts_from_several_workers_add_up_in_the_snapshot(db: PgPool) {
     assert_eq!(fields["imported_5m"], "4");
     assert_eq!(fields["queued"], "0");
     assert_eq!(fields["oldest_waiting_seconds"], "0");
+    assert!(fields.contains_key("import_round_wait_seconds"));
     assert_eq!(fields["sync_active"], "true");
     assert!(fields.contains_key("seconds_since_last_import"));
 }

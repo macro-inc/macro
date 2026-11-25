@@ -291,17 +291,42 @@ it('keeps the search on screen while an in: filter has no words after it', () =>
 });
 
 it.each(['in:', 'in:se', 'in:sent '])(
-  'stays on the open tab’s list when %s follows no search',
+  'stays on the open tab’s list, under Search, when %s follows no search',
   (search) => {
     const { view } = mount();
     view.setTab('noise');
     view.setState('search', search);
     expect(view.showsInboxTabs()).toBe(false);
-    expect(view.shownTab()).toBe('noise');
+    expect(view.shownTab()).toBe('search');
     expect(mocks.list?.input.search).toBe('');
     expect(mocks.list?.input.tab).toBe('noise');
   }
 );
+
+it('shows an open, empty field as a search over the open tab’s list', () => {
+  const { view } = mount();
+  view.setTab('noise');
+  const [open, setOpen] = createSignal(false);
+  const dispose = createRoot((dispose) => {
+    view.registerSearchField({ open, close: () => setOpen(false) });
+    return dispose;
+  });
+  expect(view.shownTab()).toBe('noise');
+
+  setOpen(true);
+  expect(view.shownTab()).toBe('search');
+  expect(mocks.list?.input.search).toBe('');
+  expect(mocks.list?.input.tab).toBe('noise');
+
+  setOpen(false);
+  expect(view.shownTab()).toBe('noise');
+
+  // A tab with no search keeps its own name, whatever the field says.
+  view.setTab('trash');
+  setOpen(true);
+  expect(view.shownTab()).toBe('trash');
+  dispose();
+});
 
 it('opens a tab picked while the field holds no words, ending the search', () => {
   const { view } = mount();

@@ -339,18 +339,24 @@ describe('desktop header and sidebar', () => {
       openSearch();
     };
 
-    it('hides the Inbox tabs as it opens, and names the view still on screen', () => {
+    it('hides the Inbox tabs as it opens, and says Search while it is empty', () => {
       openEmptyFromNoise();
       expect(searchField()?.value).toBe('');
       expect(inboxTabs()).toBeNull();
-      expect(headerTitle()).toBe('Noise');
-      expect(selectedFolders()).toEqual(['Inbox']);
+      expect(headerTitle()).toBe('Search');
+      expect(selectedFolders()).toEqual([]);
 
       type('invoice');
       expect(headerTitle()).toBe('Search');
       type('');
       expect(inboxTabs()).toBeNull();
-      expect(headerTitle()).toBe('Noise');
+      expect(headerTitle()).toBe('Search');
+      expect(selectedFolders()).toEqual([]);
+
+      // A view with no words yet lists the same rows, still under Search.
+      type('in:sent ');
+      expect(headerTitle()).toBe('Search');
+      expect(selectedFolders()).toEqual([]);
     });
 
     it.each([
@@ -453,7 +459,7 @@ describe('phone tab strip', () => {
   it.each([
     ...INBOX_SEARCHES,
     { search: 'invoice', title: 'Search' },
-    { search: 'in:', title: 'Noise' },
+    { search: 'in:', title: 'Search' },
   ])(
     'shows the search’s view in place of the pills for $search',
     ({ search, title }) => {

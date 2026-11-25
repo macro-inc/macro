@@ -26,6 +26,28 @@ type Mode =
   | { kind: 'edit'; entry: TimeEntryFieldsFragment };
 
 /**
+ * One's own entry, which a tap anywhere on opens for editing. The button lies
+ * over the row rather than around it, so the note's Show more stays a button
+ * of its own.
+ */
+function EditableEntry(props: {
+  onEdit: () => void;
+  children: JSX.Element;
+}): JSX.Element {
+  return (
+    <div class="relative w-full">
+      {props.children}
+      <button
+        type="button"
+        class="absolute inset-0"
+        aria-label={t('timeTracking.editEntry')}
+        onClick={() => props.onEdit()}
+      />
+    </div>
+  );
+}
+
+/**
  * The Time pill and its bottom sheet, on touch devices. Given `open`, the
  * sheet opens for whoever holds it (My week's Log time) and the pill stays
  * out.
@@ -209,14 +231,11 @@ export function TaskTimeSheet(
                                 />
                               }
                             >
-                              <button
-                                type="button"
-                                class="w-full text-left"
-                                aria-description={t('timeTracking.editEntry')}
-                                onClick={() => setMode({ kind: 'edit', entry })}
+                              <EditableEntry
+                                onEdit={() => setMode({ kind: 'edit', entry })}
                               >
                                 {content}
-                              </button>
+                              </EditableEntry>
                             </SwipableRow>
                           </Show>
                         )}

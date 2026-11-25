@@ -2165,7 +2165,9 @@ which open the property editor like their shortcuts. For a property that holds
 several values (assignees, tags), the editor shows "Loading …" and takes no pick
 until that item's own values are read. If the read fails, an assignee list says
 it couldn't be loaded; tags can still be edited, since the server merges tag
-changes. Agent sessions add
+changes. While **Clear all** is the editor's first row, nothing is highlighted
+until the arrow keys or the pointer pick a row, so Enter right after opening
+clears nothing. Agent sessions add
 **Archive** / **Unarchive** for their owner. Calls offer **Share**. Pull
 requests offer **Open in new split**, **Copy GitHub Link**, **Open on GitHub**,
 and **Copy Branch Name** when the head branch is stored. Rows inside a Drive
