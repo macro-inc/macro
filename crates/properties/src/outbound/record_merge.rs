@@ -89,12 +89,15 @@ pub struct RetargetedReference {
 }
 
 /// Lock and read the own values of `entity_ids`, taking each row's writer
-/// lock in key order before the rows, as single-value writers do.
+/// lock in key order before the rows, as single-value writers do, and the
+/// lock of each property `survivor` may take from another of them, so a
+/// first assignment can't race the move.
 #[tracing::instrument(name = "properties.merge.lock_values", skip_all, fields(%entity_type, entities = entity_ids.len(), values = tracing::field::Empty), err)]
 pub async fn lock_entity_values_in(
     conn: &mut PgConnection,
     entity_type: EntityType,
     entity_ids: &[String],
+    survivor: &str,
 ) -> Result<Vec<MergeEntityValue>, sqlx::Error> {
     let keys = sqlx::query!(
         r#"SELECT entity_id, property_definition_id FROM entity_properties
@@ -107,11 +110,17 @@ pub async fn lock_entity_values_in(
     .await?;
     let keys: Vec<String> = keys
         .into_iter()
-        .map(|key| {
-            format!(
-                "entity_property:{entity_type}:{}:{}",
-                key.entity_id, key.property_definition_id
-            )
+        .flat_map(|key| {
+            [
+                format!(
+                    "entity_property:{entity_type}:{}:{}",
+                    key.entity_id, key.property_definition_id
+                ),
+                format!(
+                    "entity_property:{entity_type}:{survivor}:{}",
+                    key.property_definition_id
+                ),
+            ]
         })
         .collect();
     lock_keys(conn, &keys).await?;
@@ -286,8 +295,7 @@ pub async fn referencing_rows_in(
 }
 
 /// Point every reference to one of `sources` outside databases at
-/// `survivor`, listing it once in each value, in its first place. Each row's
-/// writer lock is taken in key order before the rows.
+/// `survivor`, listing it once in each value, in its first place.
 #[tracing::instrument(name = "properties.merge.retarget", skip_all, fields(%referenced, sources = sources.len(), rows = tracing::field::Empty), err)]
 pub async fn retarget_references_in(
     conn: &mut PgConnection,
@@ -299,23 +307,9 @@ pub async fn retarget_references_in(
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let keys = sqlx::query!(
-        r#"SELECT entity_id, entity_type AS "entity_type: EntityType", property_definition_id
-           FROM entity_properties WHERE id = ANY($1)"#,
-        &ids,
-    )
-    .fetch_all(&mut *conn)
-    .await?;
-    let keys: Vec<String> = keys
-        .into_iter()
-        .map(|key| {
-            format!(
-                "entity_property:{}:{}:{}",
-                key.entity_type, key.entity_id, key.property_definition_id
-            )
-        })
-        .collect();
-    lock_keys(conn, &keys).await?;
+    // Only existing rows change, so their row locks serialize with every
+    // writer, which waits for them and then reads what the merge wrote. A
+    // writer lock per row would hold one lock-table slot per reference.
 
     let (_, type_tag) = reference_property(referenced);
     let rows = sqlx::query!(

@@ -157,6 +157,7 @@ async fn own_values_move_when_the_survivor_has_none_and_the_rest_are_deleted(poo
         &mut tx,
         EntityType::Company,
         &[survivor.clone(), first.clone(), second.clone()],
+        &survivor,
     )
     .await
     .unwrap();

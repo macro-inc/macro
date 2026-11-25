@@ -977,12 +977,18 @@ async fn opposing_merges_at_once_commit_one_and_refuse_the_other(pool: PgPool) {
         result,
         Err(MergeError::AlreadyMerged { .. } | MergeError::RecordUnavailable)
     )));
-    let companies: i64 = sqlx::query_scalar("SELECT count(*) FROM crm_companies WHERE id = ANY($1)")
-        .bind(vec![first, second])
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let companies: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM crm_companies WHERE id = ANY($1)")
+            .bind(vec![first, second])
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(companies, 1, "exactly one company stays");
-    let aliases: i64 = world.scalar("SELECT count(*) FROM crm_company_aliases WHERE company_id = $1 OR retired_id = $1", first).await;
+    let aliases: i64 = world
+        .scalar(
+            "SELECT count(*) FROM crm_company_aliases WHERE company_id = $1 OR retired_id = $1",
+            first,
+        )
+        .await;
     assert_eq!(aliases, 1, "no alias points both ways");
 }

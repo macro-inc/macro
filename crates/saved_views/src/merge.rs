@@ -31,13 +31,13 @@ pub async fn retarget_crm_list_companies_in(
     survivor: Uuid,
 ) -> Result<Vec<MergedListView>, sqlx::Error> {
     let sources: Vec<String> = sources.iter().map(Uuid::to_string).collect();
-    // Start from each member's views (`idx_views_user_id`); the config has no
-    // index, so it is only filtered on those rows.
+    // Start from each member's CRM lists (`saved_view_crm_list_owner_idx`,
+    // whose predicate the probe repeats), so other views are never read.
     let ids = sqlx::query_scalar!(
         r#"SELECT v.id
-           FROM (SELECT id, config FROM saved_view WHERE user_id = ANY($1) OFFSET 0) v
-           WHERE v.config->>'kind' = 'crm-list'
-             AND v.config->>'teamId' = $2::uuid::text
+           FROM (SELECT id, config FROM saved_view
+                 WHERE user_id = ANY($1) AND config->>'kind' = 'crm-list' OFFSET 0) v
+           WHERE v.config->>'teamId' = $2::uuid::text
              AND jsonb_typeof(v.config->'companyIds') = 'array'
              AND v.config->'companyIds' ?| $3
            ORDER BY v.id"#,

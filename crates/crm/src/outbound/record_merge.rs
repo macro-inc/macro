@@ -144,9 +144,14 @@ where
             pipeline_cells(conn, team, &all).await?
         };
         let values = if lock {
-            property_merge::lock_entity_values_in(conn, PropertyEntityType::Company, &all_text)
-                .await
-                .map_err(db)?
+            property_merge::lock_entity_values_in(
+                conn,
+                PropertyEntityType::Company,
+                &all_text,
+                &targets.survivor().to_string(),
+            )
+            .await
+            .map_err(db)?
         } else {
             property_merge::read_entity_values_in(conn, PropertyEntityType::Company, &all_text)
                 .await
@@ -919,7 +924,12 @@ where
         let fingerprint =
             plan::request_fingerprint(&command.targets, &command.revision, command.sharing_rules);
         let mut tx = self.pool.begin().await.map_err(db)?;
+        // A slow merge fails instead of holding the team's CRM writers.
         sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(db)?;
+        sqlx::query!("SET LOCAL statement_timeout = '60s'")
             .execute(&mut *tx)
             .await
             .map_err(db)?;
