@@ -1,4 +1,5 @@
 import { devices } from '@playwright/test';
+import { loadAppSteadily } from './harness/drafts';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/fixtures';
 import { saw } from './ledger/record';
@@ -58,6 +59,7 @@ for (const [device, use] of [
     // onboarding, which renders outside the app shell: the app must have set
     // up the inbox by the time it sends them there.
     test.use(use);
+    test.beforeEach(({ page }) => loadAppSteadily(page));
 
     // Class link-first-inbox-not-initialised: someone who signed up through
     // single sign-on lands in the app without passing a login screen, and the

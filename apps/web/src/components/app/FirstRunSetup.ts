@@ -4,7 +4,6 @@ import { initAndStartEmailSync } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUserInfoQuery } from '@queries/auth/user-info';
-import { queryReadyGate } from '@queries/gate';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createEffect } from 'solid-js';
 
@@ -48,7 +47,7 @@ export function useFirstRunSetup() {
   let emailInitForUserId: string | undefined;
   createEffect(() => {
     // A pending read would suspend the chrome; wait for the user instead.
-    const data = queryReadyGate(userInfoQuery) ? userInfoQuery.data : undefined;
+    const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }

@@ -20,10 +20,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@queries/auth/user-info', () => ({
   useUserInfoQuery: () => ({
-    get isPending() {
-      return mocks.user() === undefined;
+    get isSuccess() {
+      return mocks.user() !== undefined;
     },
     get data() {
+      // A real query suspends the app chrome on this read while pending.
+      if (mocks.user() === undefined) mocks.calls.push('pending data read');
       return mocks.user();
     },
   }),
@@ -117,4 +119,14 @@ it('starts email sync once per user, and again for a different user', () => {
   signIn({ ...NEW_USER, id: 'next-user' });
 
   expect(mocks.calls).toEqual(['email sync', 'email sync']);
+});
+
+it('starts a web user’s email sync once when the effect runs again', () => {
+  const signIn = arrive(NEW_USER);
+
+  signIn({ ...NEW_USER });
+
+  expect(mocks.calls.filter((call) => call === 'email sync')).toEqual([
+    'email sync',
+  ]);
 });
