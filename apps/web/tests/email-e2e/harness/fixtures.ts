@@ -15,6 +15,7 @@ import {
   FROM_TEST,
   type Front,
   type SignedInUser,
+  servesPage,
   startFront,
 } from './front';
 import { LocalStack, localStackAddresses } from './local-stack';
@@ -184,6 +185,7 @@ export const test = base.extend<
         proxyUrl: local?.proxyUrl,
       });
       evidence.requests(front.requests);
+      servesPage(front, page);
 
       try {
         await page.addInitScript(() => {

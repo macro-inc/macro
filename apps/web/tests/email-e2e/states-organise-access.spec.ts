@@ -5,18 +5,20 @@
 // row's Share opens the dialog with the owner the list knows; the dialog in
 // the open thread is never reached, since the thread no longer opens.
 //
-// The app scans the threads shared with the user once it has loaded, and that
-// scan drops a thread whose access is gone; the access is taken back after it,
-// as when the owner takes it back while the user's list is open.
+// The app scans the threads shared with the user once it has loaded (the
+// paged backfill's shared-mail lane, or the streamed cache sync's
+// `email-shared-ids` when it runs instead), and that scan drops a thread whose
+// access is gone; the access is taken back after it, as when the owner takes
+// it back while the user's list is open.
 //
 // Sharing with a person is sent through the channels service, which the
 // stack does not run, so the grant, and taking it back, are written to the
 // database here, as in sharing.spec.ts.
 
-import type { Locator, Page, Response } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
-import type { SignedInUser } from './harness/front';
+import { type SignedInUser, streamedSyncListed } from './harness/front';
 import { rowIds } from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
 import {
@@ -58,19 +60,26 @@ async function sharedWithUser(
   return { owner, id };
 }
 
-/** The app's scan of the threads shared with the user, once it lists this one. */
-function sharedScan(page: Page, threadId: string): Promise<Response> {
-  return page.waitForResponse(async (response) => {
+/**
+ * Whether the app's scan of the threads shared with the user has listed this
+ * one, watching from now on.
+ */
+function sharedScan(page: Page, threadId: string): () => boolean {
+  let paged = false;
+  page.on('response', async (response) => {
     const request = response.request();
     if (
       request.method() !== 'POST' ||
       !request.url().endsWith('/items/soup/graphql')
     )
-      return false;
+      return;
     const body = request.postDataJSON() as { operationName?: string } | null;
-    if (body?.operationName !== 'SoupSharedMailBackfill') return false;
-    return (await response.text()).includes(threadId);
+    if (body?.operationName !== 'SoupSharedMailBackfill') return;
+    // A body the page closed on is no scan the test waits for.
+    const text = await response.text().catch(() => '');
+    if (text.includes(threadId)) paged = true;
   });
+  return () => paged || streamedSyncListed(page, 'email-shared-ids', threadId);
 }
 
 /** Takes back the view access a share with the signed-in user gave them. */
@@ -153,7 +162,7 @@ for (const provider of PROVIDERS) {
         .getByRole('button', { name: 'Shared' })
         .click();
       await expect.poll(() => rowIds(page)).toEqual([budget.id]);
-      await scanned;
+      await expect.poll(scanned).toBe(true);
       await takeBackAccess(mailbox, budget.id);
 
       await rowMenu(page, budget.id, /^Share/);
@@ -190,7 +199,7 @@ test.describe('asking for access to a thread on a phone', () => {
     );
     await openTouchTab(page, 'Shared');
     await expect.poll(() => rowIds(page)).toEqual([budget.id]);
-    await scanned;
+    await expect.poll(scanned).toBe(true);
     await takeBackAccess(mailbox, budget.id);
 
     await longPress(page, budget.id, actions);

@@ -5,6 +5,7 @@
 import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
+import { isSyncStreamPath } from './harness/front';
 import { rowIds, seenRequestsInFlight } from './harness/list';
 import { notice } from './harness/send';
 import {
@@ -46,6 +47,8 @@ test.describe("the notices of an open thread's header", () => {
     const catchUps = [
       await holdOperation(page, 'SoupMailBackfill'),
       await holdOperation(page, 'SoupBackfill'),
+      // The streamed cache sync, when it runs instead of those.
+      mailbox.front.hold(({ path }) => isSyncStreamPath(path)),
     ];
     const seenInFlight = seenRequestsInFlight(page);
     await mailbox.open(`/app/mail/${id}`);

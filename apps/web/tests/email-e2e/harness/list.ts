@@ -4,6 +4,7 @@
 import { expect, type Page } from '@playwright/test';
 import { did, saw } from '../ledger/record';
 import type { Mailbox } from './fixtures';
+import { streamedSyncFinished } from './front';
 import type { Mail } from './stack';
 
 /** A GraphQL operation the browser sent. */
@@ -146,10 +147,13 @@ export async function deliverLabelled(
 }
 
 /**
- * Whether the app's startup catch-up of the list has finished. Until then a
- * row can arrive with a catch-up page instead of the live update under test.
+ * Whether the app's startup catch-up of the list has finished: the paged
+ * backfill's lanes, or the streamed cache sync's passes when it runs instead.
+ * Until then a row can arrive with a catch-up page instead of the live update
+ * under test.
  */
-export function catchUpFinished(page: Page): Promise<boolean> {
+export async function catchUpFinished(page: Page): Promise<boolean> {
+  if (streamedSyncFinished(page)) return true;
   return page
     .evaluate(() => {
       const lanes = Object.keys(localStorage).filter((key) =>

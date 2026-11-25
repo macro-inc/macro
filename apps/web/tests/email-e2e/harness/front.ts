@@ -81,16 +81,108 @@ export type Stub = (request: {
   body: string;
 }) => { status?: number; json: unknown } | undefined;
 
+/**
+ * A stream of the app's streamed cache sync (`POST /dss/items/soup/graphql/stream`),
+ * which fills the cache in the background instead of the paged backfill's
+ * `…Backfill` requests when the `enable-streamed-cache-sync` flag is on (it is
+ * on in the development build the suite serves). The front reads a stream
+ * whole before it passes it on.
+ */
+export type SyncStream = {
+  /** The pass the app asked for: `first` or `second`. */
+  pass: string;
+  /** The stream's lines (`docs/architecture/streamed-cache-sync.md`). */
+  lines: { type: string; lane?: string; reason?: string; response?: unknown }[];
+};
+
 export type Front = {
   origin: string;
   /** Requests no service or stub answered. A test can assert it is empty. */
   unanswered: FrontRequest[];
   /** Every request that was not for one of the bundle's files. */
   requests: RecordedRequest[];
+  /** The streamed cache sync's streams, in the order they ended. */
+  syncStreams: SyncStream[];
   /** Adds a stub ahead of the built-in ones. */
   stub(stub: Stub): void;
+  /**
+   * Keeps the requests `matches` picks from the services until `release`,
+   * as a slow connection would.
+   */
+  hold(matches: (request: { method: string; path: string }) => boolean): {
+    held: () => number;
+    release: () => void;
+  };
   close(): Promise<void>;
 };
+
+/** The front each test's page talks to, for helpers that are given the page. */
+const PAGE_FRONTS = new WeakMap<object, Front>();
+
+/** Records that `page` is served by `front`. */
+export function servesPage(front: Front, page: object): void {
+  PAGE_FRONTS.set(page, front);
+}
+
+/** The streams of the streamed cache sync that `page`'s front passed on. */
+export function syncStreamsOf(page: object): readonly SyncStream[] {
+  return PAGE_FRONTS.get(page)?.syncStreams ?? [];
+}
+
+/**
+ * Whether the streamed cache sync filled the cache: a stream of its second
+ * (last) pass ended complete with no failed lane, so every lane has run.
+ */
+export function streamedSyncFinished(page: object): boolean {
+  return syncStreamsOf(page).some(
+    ({ pass, lines }) =>
+      pass === 'second' &&
+      lines.at(-1)?.type === 'end' &&
+      lines.at(-1)?.reason === 'complete' &&
+      !lines.some(({ type }) => type === 'laneError')
+  );
+}
+
+/** Whether a page of the streamed sync's `lane` listed `entityId`. */
+export function streamedSyncListed(
+  page: object,
+  lane: string,
+  entityId: string
+): boolean {
+  return syncStreamsOf(page).some(({ lines }) =>
+    lines.some(
+      (line) =>
+        line.type === 'page' &&
+        line.lane === lane &&
+        JSON.stringify(line.response).includes(entityId)
+    )
+  );
+}
+
+/** Whether `path` is the streamed cache sync's (on a service or the front). */
+export function isSyncStreamPath(path: string): boolean {
+  return path.endsWith('/soup/graphql/stream');
+}
+
+function syncStream(request: string, answer: string): SyncStream {
+  let pass = '';
+  try {
+    pass = String((JSON.parse(request) as { pass?: unknown }).pass ?? '');
+  } catch {
+    // Not a sync request the app would send; recorded without a pass.
+  }
+  const lines = answer
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as SyncStream['lines'][number]];
+      } catch {
+        return [];
+      }
+    });
+  return { pass, lines };
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html',
@@ -401,11 +493,22 @@ export async function startFront(options: FrontOptions): Promise<Front> {
   const requests: RecordedRequest[] = [];
   // The stack's own services answer what the built-in stubs stand in for.
   const stubs: Stub[] = options.proxyUrl ? [] : [builtInStubs(options)];
+  const syncStreams: SyncStream[] = [];
+  const holds: {
+    matches: (request: { method: string; path: string }) => boolean;
+    waiting: (() => void)[];
+    released: boolean;
+  }[] = [];
 
   const handle = async (request: IncomingMessage, response: ServerResponse) => {
     const url = new URL(request.url ?? '/', 'http://front');
     const path = url.pathname;
     const method = request.method ?? 'GET';
+
+    for (const gate of holds) {
+      if (gate.released || !gate.matches({ method, path })) continue;
+      await new Promise<void>((resolve) => gate.waiting.push(resolve));
+    }
 
     if (method === 'GET') {
       const found = bundleFile(options.dist, path);
@@ -446,6 +549,10 @@ export async function startFront(options: FrontOptions): Promise<Front> {
 
     if (options.proxyUrl) {
       const answered = await throughProxy(options, request, url, body);
+      if (isSyncStreamPath(path))
+        syncStreams.push(
+          syncStream(body.toString('utf8'), answered.body.toString('utf8'))
+        );
       const operations = graphqlOperations(body.toString('utf8'));
       const failed =
         operations.length > 0 && graphqlFailed(answered.body.toString('utf8'));
@@ -483,6 +590,10 @@ export async function startFront(options: FrontOptions): Promise<Front> {
         if (!HOP_BY_HOP.has(name)) answerHeaders[name] = value;
       });
       const answered = Buffer.from(await answer.arrayBuffer());
+      if (isSyncStreamPath(path))
+        syncStreams.push(
+          syncStream(body.toString('utf8'), answered.toString('utf8'))
+        );
       const operations = graphqlOperations(body.toString('utf8'));
       const failed =
         operations.length > 0 && graphqlFailed(answered.toString('utf8'));
@@ -630,8 +741,20 @@ export async function startFront(options: FrontOptions): Promise<Front> {
     origin: `http://localhost:${port}`,
     unanswered,
     requests,
+    syncStreams,
     stub: (stub) => {
       stubs.unshift(stub);
+    },
+    hold: (matches) => {
+      const gate = { matches, waiting: [] as (() => void)[], released: false };
+      holds.push(gate);
+      return {
+        held: () => gate.waiting.length,
+        release: () => {
+          gate.released = true;
+          for (const resume of gate.waiting.splice(0)) resume();
+        },
+      };
     },
     close: () =>
       new Promise((resolve) => {
