@@ -403,15 +403,8 @@ export class Sdk extends HeyApiClient {
         });
     }
 
-    public imapDiscover<ThrowOnError extends boolean = false>(options: Options<ImapDiscoverData, ThrowOnError>): RequestResult<ImapDiscoverResponses, ImapDiscoverErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<ImapDiscoverResponses, ImapDiscoverErrors, ThrowOnError>({
-            url: '/email/links/imap/discover',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
+    public imapDiscover<ThrowOnError extends boolean = false>(options?: Options<ImapDiscoverData, ThrowOnError>): RequestResult<ImapDiscoverResponses, ImapDiscoverErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<ImapDiscoverResponses, ImapDiscoverErrors, ThrowOnError>({ url: '/email/links/imap/discover', ...options });
     }
 
     public imapSuggestion<ThrowOnError extends boolean = false>(options?: Options<ImapSuggestionData, ThrowOnError>): RequestResult<ImapSuggestionResponses, ImapSuggestionErrors, ThrowOnError> {

@@ -40,7 +40,6 @@ fn input(id: u128) -> ImapConnectRequest {
     ImapConnectRequest {
         request_id: Uuid::from_u128(id),
         link_id: None,
-        email: macro_user_id::email::EmailStr::parse_from_str("owner@example.com").unwrap(),
         imap: login.clone(),
         smtp: login,
         confirmed_hosts: vec!["mail.example.com".into()],
@@ -131,6 +130,10 @@ async fn promotion_is_inactive_until_activated_replayable_and_cannot_resurrect_d
         repo.attempt(&actor, request.request_id).await,
         Err(ImapConnectionError::Changed)
     ));
+    assert!(matches!(
+        repo.preflight(&actor, Some(attempt.binding.link_id)).await,
+        Err(ImapConnectionError::Changed)
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -143,6 +146,11 @@ async fn reservation_serializes_provider_collisions_and_abandons_only_inactive_p
         id: Uuid::from_u128(3),
         expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
     };
+    repo.preflight(&actor, None).await.unwrap();
+    assert!(matches!(
+        repo.preflight(&actor, Some(Uuid::now_v7())).await,
+        Err(ImapConnectionError::Changed)
+    ));
     let attempt = repo
         .reserve(&actor, "owner", &input(2), &verification)
         .await
@@ -185,6 +193,10 @@ async fn reservation_serializes_provider_collisions_and_abandons_only_inactive_p
     .execute(&db)
     .await
     .unwrap();
+    assert!(matches!(
+        repo.preflight(&actor, None).await,
+        Err(ImapConnectionError::ProviderConflict)
+    ));
     assert!(matches!(
         repo.reserve(&actor, "owner", &input(5), &verification)
             .await,

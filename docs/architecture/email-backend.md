@@ -62,12 +62,19 @@ Periodic polling recovers lost hints.
 
 The projection claim locks at most 64 due rows, then checks unfinished heads in
 a fresh READ COMMITTED statement. This preserves FIFO per serialized producer
-without losing a concurrent finish's successor wake. Local blocking and real
-retry times remain separate; finishes serialize per link and wake one successor
+without losing a concurrent finish's successor wake. Order by
+`(seq NULLS FIRST, id)` and keep locked and delayed predecessors eligible to
+block. Sequence allocation does not define the order of independent producer
+commits. The draining NULL-sequence cohort has only v7 IDs, which do not order
+different producers within a millisecond. Keep local blocking in
+`blocked_until` and real retry times in `available_at`. Finishes serialize
+per link and wake one successor
 in their transaction and again after commit to catch a concurrent insert. The
 post-commit wake is best effort: its failure is logged while the committed
 finish stays successful. Wakes write only when clearing a deferral. The
-backstop covers an interruption between those transactions and old binaries.
+one-to-two-hour jittered backstop covers an interruption between those
+transactions and old binaries. A maintenance-only claim continues immediately
+and yields after at most 32 progress turns.
 Inactive work parks outside the due index. Catalog, folder/live streams and
 reconciliation use bounded 64-row due windows followed by a fresh-snapshot claim;
 independent folders and messages have no per-mailbox FIFO floor. Exact indexed
@@ -159,19 +166,29 @@ A command with more than 64 targets can leave later targets to that backstop.
 The temporary NULL lanes/indexes retire only after an authorized zero check and
 old-writer review (`mac-imap-smtp.114`).
 
+An IMAP reconnect rebinds unresolved message commands to the new generation.
+The worker reads fresh provider flags, keywords and folder state before
+applying any difference. A target already in the intended state only needs
+confirmation. An unsettled move waits for the provider location to resolve.
+Compose and organization projection preserve agent correlation in the
+scheduled row and projection payload so delayed activity retains attribution.
+
 The parked-work recovery sweep visits parked links rather than their backlogs,
 using one next-link index probe per family and one shared cursor. Its 64-row
 page shares quota among projection, streams, reconciliation, drafts and commands,
 then borrows unused room once; this guarantees room for each family with at most
 ten bounded updates.
-New activation and recovery paths clear bounded pages immediately; old-binary
-link changes converge through the five-minute sweep.
+New activation and recovery paths clear bounded pages immediately. If a
+probe runs past the two-second page budget, its savepoint rolls back and the
+next attempt halves the link's row limit. A link that exceeds the budget with
+one row waits for the next sweep. The cursor commits after each link probe.
+Old-binary link changes converge through the five-minute sweep.
 
-The email domain's `ImapConnectionService` accepts only the actor's independently
-verified sign-in address. Logging in to an arbitrary mail server does not prove
-control of an email address. Verification and host confirmation run in the
-internal engine; the public API derives the owner from authentication. A durable
-request-id reservation owns an inactive provisional link before engine promotion.
+The public IMAP API derives the mail address and owner from the authenticated
+session. The service checks provider conflicts, entitlement, and the expected
+reconnect link before the engine verifies the confirmed hosts. The reservation
+repeats those checks under its locks and owns an inactive provisional link
+before engine promotion.
 Interactive requests and recovery share a five-minute per-attempt nonce lease.
 Recovery locks one due attempt at a time through the indexed effective deadline,
 commits before the bounded engine RPC, and handles at most 32 attempts per cycle.

@@ -13,6 +13,7 @@ import {
 } from '@queries/auth/account-scope';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
+  getImapMailboxSettings,
   imapConnect,
   imapDiscover,
   imapRefusalCode,
@@ -42,6 +43,7 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { imapHelpUrl } from './help-url';
 
 type ConnectOutcome =
   | { type: 'connected'; linkId: string }
@@ -272,6 +274,8 @@ function ConnectForm(props: ImapConnectProps) {
   const [email, setEmail] = createSignal(
     props.emailAddress ?? viewerEmail() ?? ''
   );
+  const usesVerifiedAddress = () =>
+    email().trim().toLowerCase() === viewerEmail()?.toLowerCase();
   const [phase, setPhase] = createSignal<'address' | 'servers'>('address');
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<TranslationKey>();
@@ -316,7 +320,11 @@ function ConnectForm(props: ImapConnectProps) {
     requestId = crypto.randomUUID();
   }
 
-  function startRequest(budgetMs: number, parent: Span) {
+  function startRequest(
+    budgetMs: number,
+    parent: Span,
+    onTimeout?: () => void
+  ) {
     controller?.abort();
     const request = new AbortController();
     controller = request;
@@ -327,6 +335,7 @@ function ConnectForm(props: ImapConnectProps) {
       setBusy(false);
       setError('imap.timedOut');
       parent.error('request_timeout');
+      onTimeout?.();
     }, budgetMs);
     const finish = () => clearTimeout(timer);
     request.signal.addEventListener('abort', finish, { once: true });
@@ -340,6 +349,20 @@ function ConnectForm(props: ImapConnectProps) {
     props.onOpenChange(false);
   }
 
+  function showServerSettings(found?: Discovery, consentAvailable = false) {
+    if (!usesVerifiedAddress() && !consentAvailable) {
+      setError('imap.addressUnverified');
+      return;
+    }
+    setOauthAvailable(consentAvailable);
+    setPasswordSelected(false);
+    setDiscovery(found);
+    setImap(found?.imap ?? blankEndpoint(email(), 993));
+    setSmtp(found?.smtp ?? blankEndpoint(email(), 465));
+    setManual(!found?.imap || !found?.smtp);
+    setPhase('servers');
+  }
+
   async function discover(parent: Span) {
     if (busy() || !isCurrentQueryAccount(viewer)) return;
     const address = email().trim();
@@ -347,13 +370,37 @@ function ConnectForm(props: ImapConnectProps) {
     setBusy(true);
     setError(undefined);
     // Discovery has a five-second provider budget; allow capability lookup too.
-    const { request: read, finish } = startRequest(20_000, parent);
+    const { request: read, finish } = startRequest(
+      20_000,
+      parent,
+      props.linkId ? showServerSettings : undefined
+    );
     try {
-      const result = await imapDiscover(address, read.signal, parent);
+      const result = props.linkId
+        ? (await getImapMailboxSettings(props.linkId, read.signal, parent)).map(
+            ({ imap, smtp, provider, helpUrl }): Discovery => ({
+              imap,
+              smtp,
+              provider,
+              helpUrl,
+              hostConfirmationRequired: true,
+            })
+          )
+        : await imapDiscover(read.signal, parent);
       if (read.signal.aborted || !isCurrentQueryAccount(viewer)) return;
       if (result.isErr()) {
         parent.error('discovery_failed');
-        setError(connectionRefusal(imapRefusalCode(result.error)).message);
+        const code = imapRefusalCode(result.error);
+        setError(connectionRefusal(code).message);
+        const inaccessible = result.error.some(({ code }) =>
+          [
+            ImapConnectionErrorCode.forbidden,
+            ImapConnectionErrorCode.not_found,
+            ImapConnectionErrorCode.connection_changed,
+            'UNAUTHORIZED',
+          ].includes(code)
+        );
+        if (props.linkId && !inaccessible) showServerSettings();
         return;
       }
       const found = result.value;
@@ -370,13 +417,7 @@ function ConnectForm(props: ImapConnectProps) {
         }
       }
       if (read.signal.aborted || !isCurrentQueryAccount(viewer)) return;
-      setOauthAvailable(consentAvailable);
-      setPasswordSelected(false);
-      setDiscovery(found);
-      setImap(found?.imap ?? blankEndpoint(address, 993));
-      setSmtp(found?.smtp ?? blankEndpoint(address, 465));
-      setManual(!found?.imap || !found?.smtp);
-      setPhase('servers');
+      showServerSettings(found, consentAvailable);
     } catch (cause) {
       if (!read.signal.aborted) throw cause;
     } finally {
@@ -386,7 +427,7 @@ function ConnectForm(props: ImapConnectProps) {
   }
 
   onMount(() => {
-    if (props.emailAddress)
+    if (props.emailAddress || props.linkId)
       fireAndForget(
         flow.task('email.imap.discover', discover),
         'imap-discovery'
@@ -398,6 +439,7 @@ function ConnectForm(props: ImapConnectProps) {
       busy() ||
       !confirmed() ||
       !isCurrentQueryAccount(viewer) ||
+      !usesVerifiedAddress() ||
       password() === '' ||
       (separatePassword() && smtpPassword() === '')
     )
@@ -412,7 +454,6 @@ function ConnectForm(props: ImapConnectProps) {
         {
           requestId,
           linkId: props.linkId,
-          email: email().trim(),
           imap: { endpoint: imap(), password: password() },
           smtp: {
             endpoint: smtp(),
@@ -477,17 +518,11 @@ function ConnectForm(props: ImapConnectProps) {
     return consentProvider(steer());
   };
   const canUsePassword = () => {
-    return steer() !== 'none' && (!oauthProvider() || passwordSelected());
-  };
-  const helpUrl = () => {
-    const value = discovery()?.helpUrl;
-    if (!value) return;
-    try {
-      const url = new URL(value);
-      if (url.protocol === 'https:') return url.href;
-    } catch {
-      return;
-    }
+    return (
+      usesVerifiedAddress() &&
+      steer() !== 'none' &&
+      (!oauthProvider() || passwordSelected())
+    );
   };
 
   const actions = () => (
@@ -581,7 +616,13 @@ function ConnectForm(props: ImapConnectProps) {
                     </Button>
                   )}
                 </Show>
-                <Show when={oauthProvider() && !passwordSelected()}>
+                <Show
+                  when={
+                    oauthProvider() &&
+                    usesVerifiedAddress() &&
+                    !passwordSelected()
+                  }
+                >
                   <Button
                     type="button"
                     variant="secondary"
@@ -672,7 +713,7 @@ function ConnectForm(props: ImapConnectProps) {
                           })}
                     </Checkbox.Label>
                   </Checkbox>
-                  <Show when={helpUrl()}>
+                  <Show when={imapHelpUrl(discovery()?.helpUrl)}>
                     {(url) => (
                       <a
                         class="text-sm text-accent hover:underline"

@@ -77,6 +77,7 @@ import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCal
 import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
 import { ImapConnectionErrorCode } from './generated/schemas/imapConnectionErrorCode';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
+import { isImapRefusalCode } from './imap-refusal-code';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 const calendarHost: string = SERVER_HOSTS['calendar-service'];
@@ -143,8 +144,6 @@ async function forwardCalendarEventErrorHandler(response: Response) {
   };
 }
 
-const imapRefusalCodes = Object.values(ImapConnectionErrorCode);
-
 async function imapConnectionError(response: Response) {
   const body: unknown = await response.json().catch(() => null);
   const code =
@@ -153,9 +152,9 @@ async function imapConnectionError(response: Response) {
       : undefined;
 
   return {
-    code:
-      imapRefusalCodes.find((known) => known === code) ??
-      ImapConnectionErrorCode.connection_unavailable,
+    code: isImapRefusalCode(code)
+      ? code
+      : ImapConnectionErrorCode.connection_unavailable,
     message: 'IMAP connection refused',
   };
 }
@@ -598,13 +597,12 @@ export const emailClient = {
     return emailFetch<ImapSuggestion>('/email/links/suggestion', { signal });
   },
 
-  imapDiscover(email: string, signal: AbortSignal, parentSpan?: Span) {
+  imapDiscover(signal: AbortSignal, parentSpan?: Span) {
     return fetchWithToken<Discovery, ImapConnectionErrorCode>(
       `${emailHost}/email/links/imap/discover`,
       {
         errorResponseHandler: imapConnectionError,
         method: 'POST',
-        body: JSON.stringify({ email }),
         signal,
         trace: { parentSpan },
       }
@@ -653,6 +651,7 @@ export const emailClient = {
       `${emailHost}/email/links/imap`,
       {
         method: 'POST',
+        personalSession: true,
         body: JSON.stringify(request),
         signal,
         trace: { parentSpan },

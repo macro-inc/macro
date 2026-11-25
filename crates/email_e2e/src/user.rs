@@ -161,13 +161,20 @@ impl User {
             .as_ref()
             .ok_or_else(|| report!("link_imap needs StackOptions.imap"))?;
         let response = self
-            .post("/email/links/imap", Some(&lab.connect_request(&self.email)))
+            .submit_imap_connection(&lab.connect_request(&self.email))
             .await?
             .ok()?;
         response["linkId"]
             .as_str()
             .and_then(|id| id.parse().ok())
             .ok_or_else(|| report!("IMAP connect returned no linkId"))
+    }
+
+    /// Submits server settings as this user's personal session, including requests expected to fail.
+    pub async fn submit_imap_connection(&self, request: &Value) -> Result<ApiResponse, Report> {
+        self.api
+            .post_as_session(&self.email, "/email/links/imap", request)
+            .await
     }
 
     /// Links the Gmail mailbox with the user's own address, consenting to

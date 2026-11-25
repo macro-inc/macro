@@ -1,6 +1,32 @@
 use super::*;
 use imap_service_client::Error;
+use macro_authorization::CODE_EXECUTION_HEADER;
 use utoipa::OpenApi;
+
+#[test]
+fn linking_requires_a_person_in_a_session() {
+    use CredentialAttribution::{Agent, Person, Routine};
+    let session = CredentialOrigin::Session;
+    let mut headers = HeaderMap::new();
+    assert!(authorize_connection_principal(&session, Person, &headers).is_ok());
+
+    headers.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+    let refusal = authorize_connection_principal(&session, Person, &headers).unwrap_err();
+    assert!(matches!(refusal.0, ImapConnectionError::PersonRequired));
+    assert_eq!(refusal.into_response().status(), StatusCode::FORBIDDEN);
+    headers.clear();
+    for attribution in [Agent, Routine] {
+        assert!(authorize_connection_principal(&session, attribution, &headers).is_err());
+    }
+
+    for origin in [
+        CredentialOrigin::UserApiKey,
+        CredentialOrigin::MacroApiJwt,
+        CredentialOrigin::Internal,
+    ] {
+        assert!(authorize_connection_principal(&origin, Person, &headers).is_err());
+    }
+}
 
 #[test]
 fn public_spec_omits_internal_imap_notifications() {
@@ -97,27 +123,46 @@ async fn verification_errors_preserve_closed_categories_and_accurate_statuses() 
 }
 
 #[test]
-fn public_mailbox_inputs_reject_malformed_identities_before_domain_admission() {
-    for email in [
-        "not-an-address",
-        "bad..local@example.net",
-        "owner@@example.net",
-        " owner@example.net",
+fn verification_rate_limits_include_the_provider_retry_delay() {
+    use axum::http::header::RETRY_AFTER;
+
+    for (error, delay) in [
+        (Error::AccountBusy, "5"),
+        (
+            Error::RateLimited {
+                retry_after_seconds: 17,
+            },
+            "17",
+        ),
     ] {
-        assert!(
-            serde_json::from_value::<ImapDiscoverRequest>(serde_json::json!({"email": email}))
-                .is_err()
+        let response = ConnectionError(ImapConnectionError::Provider(error)).into_response();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers()[RETRY_AFTER], delay);
+    }
+}
+
+#[test]
+fn public_connection_contract_uses_the_actor_and_declares_typed_refusals() {
+    let spec = serde_json::to_value(crate::ApiDoc::openapi()).unwrap();
+    let connect = &spec["components"]["schemas"]["ImapConnectRequest"]["properties"];
+    assert!(connect.get("email").is_none());
+    let discovery = &spec["paths"]["/email/links/imap/discover"]["post"];
+    assert!(discovery.get("requestBody").is_none());
+    let suggestion = &spec["paths"]["/email/links/suggestion"]["get"];
+    for operation in [discovery, &spec["paths"]["/email/links/imap"]["post"]] {
+        assert_eq!(
+            operation["responses"]["429"]["headers"]["Retry-After"]["schema"]["type"],
+            "integer"
         );
-        let login = serde_json::json!({
-            "endpoint": {"host": "mail.example.net", "port": 993, "tls": "implicit", "username": "account-id"},
-            "password": "synthetic-test-secret"
-        });
-        assert!(
-            serde_json::from_value::<ImapConnectRequest>(serde_json::json!({
-                "requestId": "00000000-0000-7000-8000-000000000001", "linkId": null,
-                "email": email, "imap": login, "smtp": login, "confirmedHosts": ["mail.example.net"]
-            }))
-            .is_err()
+    }
+    for response in ["403", "429", "502", "503", "504"]
+        .into_iter()
+        .map(|status| &discovery["responses"][status])
+        .chain([&suggestion["responses"]["503"]])
+    {
+        assert_eq!(
+            response["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ImapConnectionErrorResponse",
         );
     }
 }

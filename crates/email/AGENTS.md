@@ -422,11 +422,8 @@ tools — hexagonal, heavily feature-gated.
   inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
-- Draft claims inspect one indexed eligible head per provider mailbox, then lock only
-  the winner with every eligibility fence repeated; retry a locked head’s successor,
-  yielding without a claim after 32 contended candidates until the next worker round.
-  Keep separate normal/recovery index predicates and correlated command-lease probes
-  so paused writes and mixed-provider backlogs do not scan unrelated drafts.
+- Follow the [bounded draft claim protocol](../../docs/architecture/email-backend.md#imap-integration)
+  when changing eligibility, leases, or command exclusions.
 - Include a reader’s cross-inbox reply draft on a shared thread at Edit only
   when it belongs to an inbox in the reader’s Drafts scope. Apply the same
   rule to full and parsed thread reads.
@@ -811,58 +808,10 @@ tools — hexagonal, heavily feature-gated.
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
-- Claim projections once across providers, routing attachment downloads by the
-  current link provider. Bound the due walk to 64 rows; require the earliest
-  unfinished event per link in `(seq NULLS FIRST, id)` order for each serialized
-  producer (sequence allocation does not order independent producer commits), including backed-off
-  or row-locked predecessors. Legacy v7 ids do not define inter-process order
-  within a millisecond; only the draining NULL-sequence cohort has that caveat.
-  Park inactive links separately from due times and preserve retry backoff.
-  Use the exact indexed expression `GREATEST(available_at, COALESCE(blocked_until,
-  '-infinity'))` for both the due predicate and order. Keep the old due index until
-  older binaries retire. Lock the window first, then check eligibility in a fresh
-  READ COMMITTED statement over those locked ids, so a finish cannot lose its wake.
-  The outbox has seven indexes; queue transitions are
-  non-HOT, so measure row writes as well as buffers. Each window locks at most
-  64 work rows plus 64 inactive parent rows; both bounds are fleet-independent.
-  Validate both claim statements together: at most 3,500 buffers on vacuumed
-  tables, 4,000 in the unvacuumed stale-statistics case, 2x growth across
-  1k–100k links, 128 row locks and no timeouts, including parked-heavy cases.
-  Attribute the window, 64-row primary-key reread, head probes, parent checks,
-  deferral updates and final claim separately. The 64 non-HOT deferral updates
-  dominate at about 1,500–1,900 buffers; each waiting row pays this on encounter,
-  rather than on every head completion (the jittered backstop can revisit it).
-  A bounded deferral returns `Progress`; poll again without the idle sleep,
-  yielding every 32 pages and checking cancellation. Store FIFO deferral in
-  `blocked_until`, preserving real retry times in `available_at`. Finish and
-  release take the namespaced link advisory lock before child locks and wake the
-  next event in their transaction, then wake it once more after commit in a new
-  transaction using plain `FOR UPDATE`. This catches inserts after the first
-  wake's snapshot and waits out a claimer's deferral. Clear only a non-null
-  deferral from the locked successor's newest version, avoiding no-op writes.
-  A post-commit wake failure is logged without failing the committed finish.
-  A crash or failed wake between the transactions, or an old binary without
-  either wake, needs the jittered one-to-two-hour backstop. Activation clears
-  one FIFO page atomically,
-  then bounded pages after commit. The separately fenced parked-work recovery
-  sweep shares one cursor across projection, streams, reconciliation, drafts
-  and commands every five minutes, including old-binary activations. Find the next link using one
-  LIMIT 1 probe per family's parked partial index; dead-link cost is five
-  probes per cycle, independent of backlog size. A page clears at most 64 rows
-  total, sharing initial quota across all five families when at least five
-  slots remain, then borrowing
-  unused room once (at most ten UPDATEs). A family with zero initial quota
-  still participates in borrowing so a one- or two-slot page cannot falsely
-  report an empty link. Projection heads receive room even
-  beside a hot reconciliation backlog; streams and reconciliation receive room
-  beside a hot projection backlog.
-  Commit its cursor per probe; isolate known-link work with a short timeout and
-  halve timed-out unpark pages down to one row before skipping a failed link
-  until wrap, recording failed probes, consecutive skips and no progress.
-  On discovery timeout advance by one parent-key probe; capture attempt fields
-  on drop so cancellation retains the last attempted budget.
-  An active link whose parked rows are all locked is skipped until the next
-  wrap, up to five minutes; page limits grow back after a successful retry.
+- Keep projection claims provider-neutral and enforce FIFO over unfinished
+  predecessors. Preserve real retry deadlines and the second successor wake
+  after commit. See the [projection claim protocol](../../docs/architecture/email-backend.md#imap-integration)
+  and the [query rehearsal](../../docs/runbooks/email-provider-routing.md#projection-and-sync-claim-rehearsal).
 - A projection event that keeps failing is given up as a message read is:
   `MailboxProjectionService::project_leased` decides with `message_retry`
   (backoff included), and `finish_projection` gives an uncounted claim back to
@@ -977,210 +926,22 @@ tools — hexagonal, heavily feature-gated.
   `email_message_reconciliation` rows: claims never take them, and left in place
   they stay due and every lease claim reads past them.
 
+- Keep paused folders in the full role catalog with `sync_enabled = false` so
+  existing Trash descendants keep their treatment.
+- Persist `ImportCompleted` with the generation's completion marker, including
+  empty imports. Attempt list refresh before slower projection effects, and
+  retry a failed refresh independently.
+- Follow the [mailbox worker architecture](../../docs/architecture/email-backend.md#imap-integration)
+  when changing bounded claims, rollback compatibility, or parking. For plan
+  fixtures and cutover checks, see the
+  [provider routing runbook](../../docs/runbooks/email-provider-routing.md).
+- Preserve typed content limits, local contention, provider pacing and
+  credential health through the draft, attachment and notification ports.
+- Decode settings-work kinds before dispatch, and report partial recent-mail
+  results with typed omissions so healthy mailboxes stay visible.
+
 ## Related
 
-- Rules: `.agents/rules/rust/architecture.md`
-
-- Persist agent correlation with scheduled delivery and organization projection payloads, then restore it when publishing delayed activity.
-
-Keep paused folders in the complete role catalog with `sync_enabled = false`.
-Pause or remove only their folder streams: treating an exclusion as deletion
-reclassifies retained Trash descendants and schedules unwanted body downloads.
-
-- Persist `ImportCompleted` in the projection outbox in the same transaction as
-  `import_completed_at`, once per link/generation, including empty imports.
-  Refresh mounted readers before slower message projection effects and retry
-  failed gateway handoffs independently of new-message notification policy.
-
-
-Non-FIFO catalog, folder/live streams and reconciliation claims use a bounded
-64-row due window, then re-read only those locked keys in a fresh READ COMMITTED
-statement. Reconciliation keeps live work first per claimer with separate
-constant-kind index walks under one outer limit, and its second statement uses
-fenced unique-key probes rather than a hash join over due work. Keep the due predicate and order identical to the partial-index
-GREATEST expression, including the lease deadline and provider floor. Ineligible
-or stale-generation rows are parked lazily; bounded activation, credential and
-catalog recovery clears parking without lowering real retry times or leases.
-A maintenance-only claim returns `SyncClaim::Progress`; only `Idle` sleeps, and
-the host yields and checks cancellation after at most 32 progress turns.
-Sync claims take no advisory lock: live work is first per claimer, with a
-momentary inversion across claimers. Unlike main's one-row lock, a locked live
-window can divert overlapping claims to imports for that short transaction.
-Mutation claims use `email.mailbox.mutation-claims:<provider>`. Outlook takes
-its legacy key first, then the provider key, until the rollback baseline is
-retired; remove that compatibility acquisition under `mac-imap-smtp.89`.
-IMAP never takes the Outlook legacy key.
-Draft claims reserve 32 native plus 32 NULL-provider keys; command claims reserve
-32 native plus 16 NULL-provider keys to bound routing writes. Limit keys before
-row locking; never enumerate links or let SKIP LOCKED walk an unbounded prefix.
-Keep each finite CASE due expression identical to its partial index. Acquire
-only by the locked primary keys, rechecking parent routing/generation, real retry
-and lease floors, schedule/mode and target exclusion. Maintain old NULL rows in
-that bounded lane; do not deploy an unbounded backfill or hide them from claims.
-Recheck a draft's schedule through a key-only limited LATERAL on both
-(link_id, message_id), applying due/sent/processing eligibility outside its
-LIMIT; never let eligibility select a global send-time range.
-Draft and command acquisition share one lazy ordered per-ID loop under a
-128-probe reservation budget and one 15-second evaluation deadline. Await commit
-outside that deadline so its timer cannot orphan a successfully committed
-lease; database and transport failures during commit can still be ambiguous. Draft
-exclusion lists only the candidate's live leases in its link/generation scope,
-then probes (command_id, message_id); never enumerate a leased command's target
-prefix or repeat checks for every locked draft at once. Reserve at most the
-remaining budget plus one lease-list sentinel. A scope that does not fit the
-remaining budget waits for a fresh turn. More than 128 live leases on a scope
-causes only a conservative 60-second local deferral; record overflow and the
-lease-count lower bound, preserving real retry/lease floors. Orphaned leases
-expire in three minutes, so this cannot permanently strand a draft.
-Drafts and sends stay independent across messages. Commands block only behind
-unfinished earlier accepted orders on an overlapping target, including delayed,
-leased and confirming predecessors. Keep Progress distinct from Idle in both
-worker ports. Clear only local blockers after fenced settlement commits, with an ordered
-SKIP LOCKED post-commit wake and <=60-second backstop; never report a committed finish failed
-just because its best-effort wake failed. Re-arm old-writer edits, schedules and
-cancels through the metadata hooks, and keep the shared parked sweep fair across
-all five work families. Keep each one-link draft/command unpark range inside its
-ordered, limited LATERAL probe, matching (link_id, generation, message_id/id), so
-the limit stops the index scan before a whole backlog is read or sorted. Retire
-NULL lanes/indexes under `mac-imap-smtp.114`.
-
-Command windows lock at most 48 ordered keys; draft windows lock at most 64.
-Both inspect one key at a time until the first lease or the 128-probe budget is
-spent (command targets or draft exclusion lease probes).
-Count only a 65-target prefix before dependency checks. Keep the locks and all
-per-key acquisitions in the same transaction under a 15-second evaluation
-deadline; await commit separately, and report DeadlineExceeded distinctly.
-Statement timeouts alone do not bound the sequential calls. Reject fresh-budget
-exhaustion instead of silently spinning Progress. Unknown command kinds get a
-finite 60-second local floor so a newer reader can reconsider them. A legacy wide head is an explicit probe-budget exception: it runs alone and
-is leased or deferred for 60 seconds, never split or reordered.
-
-New thread actions use at most 64 targets per command only when the backend
-`enable-mailbox-action-chunks` flag is on in the shared `email-mailbox-actions`
-context. Email-service API and message-label writers share one snapshot; DSS
-polls the same context. Agent-harness and ai_tools writers remain default-off
-legacy writers and block retirement of the wide allowance under .116.
-Default off preserves one legacy command. Group chunks atomically
-under the link lock with the first command ID as action ID; identity orders need
-not be consecutive. Receipts stay Pending while any chunk is unfinished, then
-Cancelled (including unknown), Failed, or Applied, matching the single-command
-reader. Reject an unrecognized terminal status rather than reporting success.
-Retained terminal chunks still count after reconnect. Enable writers
-only after every reader replica is upgraded, in the same rollout. Retire the
-flag, off writer and temporary wide-command allowance under `mac-imap-smtp.116`;
-retain NULL-action receipt decoding for terminal history.
-
-Command targets carry parent link/generation/order and unfinished facts for the
-partial predecessor index; every probe still checks the authoritative parent by
-primary key. Keep a wake's parent LATERAL key-only before LIMIT; check scope and
-status outside it so a generic plan cannot walk an active-link prefix instead.
-Derive them in the database on target insert and on parent
-terminal/generation transitions so old binaries remain correct. Nonterminal
-status changes must not rewrite targets. Fill only the pre-existing unfinished
-backlog atomically with those triggers installed; retained terminal history
-needs no facts. Keep the runtime free of a target repair lane, NULL-fact index
-or watermark fallback. Measure both the one-time migration and completion/rebind
-trigger writes, including 5,000 one-target commands, separately from claim cost.
-
-Nonempty windows open `email.mailbox.claim` with provider, work kind, window size,
-maintained row count and outcome; empty polling creates no claim span.
-
-Validate both claim statements together at 1k/10k/100k links with fresh/stale
-statistics and custom/generic plans. The standard matrix gate is at most 3,500
-buffers on vacuumed tables, 4,000 on unvacuumed stale-statistics tables, 2x growth,
-128 row locks and no timeouts. Measure bulk transition prefixes separately,
-including their dead-index reads and vacuum cadence; the
-[routing runbook](../../docs/runbooks/email-provider-routing.md) records those
-single-claimer fixture costs.
-
-Reconciliation claims relabel at most 64 legacy routing mismatches to the link's
-provider within the due window. No completion marker gates live mail. A
-provider-bound Gmail repository test proves routing only: legacy Gmail
-reconciliation rows have no running consumer on main or here. Keep RELABEL rather
-than deleting that legacy data. The measured one-time Outlook reconciliation
-prefix delay is about 17–18 seconds per 100k legacy mislabelled due rows after the
-deploy in the synthetic fixture; hosted dev has zero, and production is
-unmeasured (requires explicit authorization). The same one-time drain applies to initially
-unparked ineligible due rows; the authorized hosted dev aggregate is zero for
-catalog, folder, live-pass and live/import reconciliation. The claim-time
-relabel also handles rows that become due later; no repair job or completion
-marker is needed. Claim, release and an actual lease extension update indexed eligibility and can be non-HOT; renewals within the first 30
-seconds perform only a fenced read, with no tuple rewrite or row lock.
-
-Keep main's claim indexes for rolling binaries. The undeployed provider-prefixed
-claim indexes in migrations 254–256 are superseded by the exact eligibility
-indexes; do not recreate both generations and pay for unused indexes on writes.
-Drop main's three legacy claim indexes only after the rollback baseline is
-retired (`mac-imap-smtp.89`), together with the Outlook compatibility key.
-A local database that applied the removed migrations retains its historical
-ledger; use the documented scoped preview procedure, never edit that ledger.
-
-Mailbox claim queues carry parent-derived provider routing metadata. Keep both
-the queue index predicate and the authoritative link/provider/generation/health
-checks, and keep claim transactions bounded by their statement timeout.
-
-Keep interactive and recovery promotion on the same nonce lease; fence every
-settlement and re-read a lease miss before returning a completed receipt or
-retryable contention. Keep recovery retry/expiry policy in the domain and SQL
-lease mechanics in the adapter; see the connection flow in
-[the backend architecture](../../docs/architecture/email-backend.md).
-
-IMAP enrollment inputs and durable promotion attempts carry EmailStr identities.
-After ownership comparison, discovery retains the submitted spelling and
-verification uses the actor's canonical email part; catalog domains are case-folded. Do not normalize mailbox identity
-or replace raw IMAP/SMTP protocol usernames with sign-in address types.
-
-IMAP uses only the existing user-scoped connection enrollment flag. Once linked,
-sync, authorized sends and organization writes run independently of PostHog.
-Keep ownership, active/reauth state, generation/lease fences and explicit
-pause, disconnect and deletion admission. Outlook's rollout remains separate.
-
-Attempt message-list refresh before slower projection effects, but retain a failed
-refresh for retry after independent contacts, notifications, search and attachment
-effects run. A websocket outage must not suppress those projections.
-
-Preserve ContentTooLarge through message-source and attachment ports; unsupported
-content is a client limit, never an infrastructure outage or automatic retry.
-
-IMAP notifications project optional mailbox health and retry time under the existing active-link and two-generation fence. Lock the link with FOR NO KEY UPDATE so foreign-key readers can proceed. Emit LinkChanged only on a health edge; sync limits never imply rejected credentials.
-
-An IMAP credentials_unreadable issue requires reconnect but is not a provider password rejection. Project needs_reauth under the same active-binding fence without stamping last_sync_error_at; emit the existing reauthorization event and preserve the separate reason.
-
-New work derives provider metadata through the trigger; initialize test links
-with their final provider rather than depending on a cascade. Streams were
-Outlook-only before rollout. A corrupt wrong-provider stream is parked without
-changing its provider; recovery can unpark and re-park it once per five-minute
-wrap. This unsupported corruption cannot arise through normal writers or a
-provider change, and does not justify another index. A provider mismatch alone never parks a reconciliation row, so claim-time
-relabeling can repair its routing.
-See the [routing runbook](../../docs/runbooks/email-provider-routing.md) for
-removed, undeployed migrations and the preserved preview's local limitation.
-
-Draft retry timing keeps local AccountBusy separate from provider pacing: cap
-local-contention release delays from five seconds, doubling to sixty using a
-defaulted checkpoint count that resets on progress, preserving real Retry-After
-values for provider throttling. Optional send_refusal checkpoint/status details
-are projected only with a current send_rejected issue; recipient positions use
-the frozen To, Cc, Bcc order and contain no additional personal data.
-
-IMAP host catch-up lives in `domain/mailbox/imap_catchup.rs` behind its repository
-port; only the pubsub worker composes the adapter on its existing worker pool. Keep
-startup scans globally leased and cursored, steady-state scans restricted to
-unconsumed hint revisions, and deferred stream ids within the same page budget.
-Compare notification revisions on release; local contention may yield to a newer
-hint, but the nullable provider retry floor and import pacing remain authoritative.
-Bound every catch-up transaction locally: acquisition within five seconds,
-statement timeout fifteen seconds (one second per wake), lock timeout one second.
-Commit list reads before individual probes, and never leave timeout settings on a
-shared connection for another provider.
-
-Startup catch-up must advance the hint revision even for an already-due stream
-with a live lease; steady-state pending catch-up preserves its queue order.
-Resync exposes the future Inbox/catalog provider floor in its typed result;
-a longer Archive-only pause must not describe the Inbox as paused. Keep
-missing-mailbox probe backoff Local, separate from provider pacing.
-
-Decode settings-work kinds to SettingsWorkKind at the database boundary; keep
-execution and label-successor wake decisions exhaustive over that enum.
-
-Recent-mail aggregation returns healthy messages plus typed mailbox omissions (`Unsupported` or `ProviderError`); mailbox-read failures never erase another mailbox’s messages. Unsupported capability is a reason field, not an error span or warning; provider failures retain ERROR and WARN.
+- Rules are in [Rust architecture](../../.agents/rules/rust/architecture.md).
+- [IMAP engine architecture](../../docs/architecture/imap-engine.md) covers
+  promotion, provider operations, and host catch-up.

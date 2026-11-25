@@ -1445,10 +1445,6 @@ export type ImapConnectRequest = {
      */
     confirmedHosts: Array<string>;
     /**
-     * Must be an address Macro has independently verified for the actor.
-     */
-    email: string;
-    /**
      * IMAP login.
      */
     imap: Login;
@@ -1484,10 +1480,6 @@ export type ImapConnectionErrorResponse = {
  * Provider offered using a catalog entry or a domain-only DNS hint.
  */
 export type ImapConnectionOffer = 'none' | 'gmail' | 'outlook' | 'imap';
-
-export type ImapDiscoverRequest = {
-    email: string;
-};
 
 export type ImapSuggestion = {
     email: string;
@@ -3356,14 +3348,19 @@ export type ImapConnectResponses = {
 export type ImapConnectResponse2 = ImapConnectResponses[keyof ImapConnectResponses];
 
 export type ImapDiscoverData = {
-    body: ImapDiscoverRequest;
+    body?: never;
     path?: never;
     query?: never;
     url: '/email/links/imap/discover';
 };
 
 export type ImapDiscoverErrors = {
+    401: ErrorResponse;
     403: ImapConnectionErrorResponse;
+    429: ImapConnectionErrorResponse;
+    502: ImapConnectionErrorResponse;
+    503: ImapConnectionErrorResponse;
+    504: ImapConnectionErrorResponse;
 };
 
 export type ImapDiscoverError = ImapDiscoverErrors[keyof ImapDiscoverErrors];
@@ -3383,6 +3380,7 @@ export type ImapSuggestionData = {
 
 export type ImapSuggestionErrors = {
     401: ErrorResponse;
+    503: ImapConnectionErrorResponse;
 };
 
 export type ImapSuggestionError = ImapSuggestionErrors[keyof ImapSuggestionErrors];

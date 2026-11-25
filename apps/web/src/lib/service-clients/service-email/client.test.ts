@@ -30,10 +30,7 @@ it.each([
       return err([failure]);
     });
 
-    const result = await emailClient.imapDiscover(
-      'account@example.net',
-      new AbortController().signal
-    );
+    const result = await emailClient.imapDiscover(new AbortController().signal);
 
     expect(result._unsafeUnwrapErr()).toMatchObject([{ code: expected }]);
     expect(result._unsafeUnwrapErr()[0].message).not.toContain(

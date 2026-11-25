@@ -153,7 +153,8 @@ export function getExpiresAt(token: string) {
 
 // Promise to track ongoing refresh operations to prevent multiple concurrent refreshes
 let ongoingRefresh: Promise<string | null> | null = null;
-async function getAccessToken(): Promise<string | null> {
+/** Read or refresh the signed-in person's FusionAuth session token. */
+export async function getPersonalAccessToken(): Promise<string | null> {
   const data = accessTokenData();
   if (!data) {
     return null;
@@ -566,7 +567,7 @@ export const authServiceClient = {
     ).map((result) => result);
   },
   async macroApiToken() {
-    const accessToken = await getAccessToken();
+    const accessToken = await getPersonalAccessToken();
     if (!accessToken) {
       Telemetry.warn('No access token found, fetching with cookies');
       return authApiFetch<MacroApiTokenResponse>('/jwt/macro_api_token');

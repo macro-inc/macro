@@ -40,13 +40,7 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
     let lab = stack.imap_lab()?;
     let suggestion = alice.get("/email/links/suggestion").await?.ok()?;
     assert_eq!(suggestion["email"], alice.email());
-    alice
-        .post(
-            "/email/links/imap/discover",
-            Some(&json!({"email":alice.email()})),
-        )
-        .await?
-        .ok()?;
+    alice.post("/email/links/imap/discover", None).await?.ok()?;
     let received_subject = format!("Real IMAP {}", Uuid::now_v7());
     let delivered = lab
         .deliver(
@@ -65,22 +59,24 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
         .await?;
     let mut rejected = lab.connect_request(alice.email());
     rejected["imap"]["password"] = json!("wrong-lab-password");
-    let rejected = alice.post("/email/links/imap", Some(&rejected)).await?;
+    let rejected = alice.submit_imap_connection(&rejected).await?;
     assert_eq!(rejected.status, 422, "{}", rejected.text);
     let mut rejected_submission = lab.connect_request(alice.email());
     rejected_submission["smtp"]["password"] = json!("wrong-submission-password");
-    let rejected_submission = alice
-        .post("/email/links/imap", Some(&rejected_submission))
-        .await?;
+    let rejected_submission = alice.submit_imap_connection(&rejected_submission).await?;
     assert_eq!(
         rejected_submission.status, 422,
         "{}",
         rejected_submission.text
     );
-    let unverified = alice
-        .post("/email/links/imap", Some(&lab.connect_request(bob.email())))
+    let internal_caller = alice
+        .post(
+            "/email/links/imap",
+            Some(&lab.connect_request(alice.email())),
+        )
         .await?;
-    assert_eq!(unverified.status, 403, "{}", unverified.text);
+    assert_eq!(internal_caller.status, 403, "{}", internal_caller.text);
+    assert_eq!(internal_caller.json["code"], "forbidden");
     let alice_link = alice.link_imap().await?;
     let bob_link = bob.link_imap().await?;
     let incoming = preview(&alice, alice_link, "inbox", &received_subject).await?;
@@ -361,10 +357,7 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
     );
     let mut reconnect = lab.connect_request(alice.email());
     reconnect["linkId"] = json!(alice_link);
-    let reconnected = alice
-        .post("/email/links/imap", Some(&reconnect))
-        .await?
-        .ok()?;
+    let reconnected = alice.submit_imap_connection(&reconnect).await?.ok()?;
     assert_eq!(reconnected["linkId"], alice_link.to_string());
     preview(&alice, alice_link, "sent", &sent_subject).await?;
     alice

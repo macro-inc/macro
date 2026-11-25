@@ -14,8 +14,6 @@ import type { Login } from './login';
 export interface ImapConnectRequest {
   /** Endpoints the user explicitly approved before credentials leave Macro. */
   confirmedHosts: string[];
-  /** Must be an address Macro has independently verified for the actor. */
-  email: string;
   /** IMAP login. */
   imap: Login;
   /** Required by a reconnect surface to reject stale settings dialogs. */

@@ -1,7 +1,7 @@
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { Telemetry } from '@macro-inc/observability';
 
-import { fetchWithAuth } from '@service-auth/fetch';
+import { fetchWithAuth, getPersonalAccessToken } from '@service-auth/fetch';
 import { err, type Result } from 'neverthrow';
 import { fetchToken } from '../auth/session-refresh';
 
@@ -26,6 +26,8 @@ export type FetchWithTokenErrorCode = BaseFetchErrorCode;
 export type FetchWithTokenInit<CustomErrorCode extends string = never> =
   SafeFetchInit & {
     errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>;
+    /** Use a personal session for endpoints that exclude API credentials. */
+    personalSession?: boolean;
   };
 
 function fetchWithCredentials<
@@ -33,7 +35,8 @@ function fetchWithCredentials<
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,
-  init?: FetchWithTokenInit<CustomErrorCode>
+  init?: FetchWithTokenInit<CustomErrorCode>,
+  credentials: RequestCredentials = 'include'
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
   const { errorResponseHandler, ...fetchInit } = init ?? {};
   let safeFetchErrorHandler: ErrorResponseHandler<CustomErrorCode> | undefined;
@@ -53,7 +56,7 @@ function fetchWithCredentials<
     input,
     {
       ...fetchInit,
-      credentials: 'include',
+      credentials,
     },
     safeFetchErrorHandler
   );
@@ -90,24 +93,43 @@ export async function fetchWithToken<
   input: RequestInfo,
   init?: FetchWithTokenInit<CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
+  const { personalSession, ...fetchInit } = init ?? {};
   const requestInit = {
-    ...init,
+    ...fetchInit,
     trace: {
       ...init?.trace,
       parentSpan: init?.trace?.parentSpan ?? Telemetry.captureContext(),
     },
   };
   if (ENABLE_BEARER_TOKEN_AUTH) {
-    const result = await fetchWithAuth<T, CustomErrorCode>(input, requestInit);
-    if (result.isErr()) {
-      Telemetry.error('fetchWithToken: fetchWithAuth failed', {
-        input: telemetryUrl(input),
-        method: init?.method,
-        errors: redactLinkTokens(JSON.stringify(result.error)),
-      });
-    }
+    if (!personalSession) {
+      const result = await fetchWithAuth<T, CustomErrorCode>(
+        input,
+        requestInit
+      );
+      if (result.isErr()) {
+        Telemetry.error('fetchWithToken: fetchWithAuth failed', {
+          input: telemetryUrl(input),
+          method: init?.method,
+          errors: redactLinkTokens(JSON.stringify(result.error)),
+        });
+      }
 
-    return result;
+      return result;
+    }
+    const token = await requestInit.trace.parentSpan.run(
+      getPersonalAccessToken
+    );
+    if (init?.signal?.aborted) return abortedRequest();
+    if (token) {
+      const headers = new Headers(requestInit.headers);
+      headers.set('Authorization', `Bearer ${token}`);
+      return fetchWithCredentials<T, CustomErrorCode>(
+        input,
+        { ...requestInit, headers: Object.fromEntries(headers) },
+        'omit'
+      );
+    }
   }
 
   let result = await fetchWithCredentials<T, CustomErrorCode>(
@@ -131,18 +153,20 @@ export async function fetchWithToken<
 
     // The caller may have given up while the session refreshed, for example
     // because the signed-in account changed; never replay under the new one.
-    if (init?.signal?.aborted)
-      return err([
-        {
-          name: 'AbortError',
-          code: 'NETWORK_ERROR',
-          message: 'Request aborted before retry',
-        },
-      ]);
+    if (init?.signal?.aborted) return abortedRequest();
 
     // Retry the original request
     result = await fetchWithCredentials<T, CustomErrorCode>(input, requestInit);
   }
 
   return result;
+}
+
+function abortedRequest() {
+  const aborted = {
+    name: 'AbortError',
+    code: 'NETWORK_ERROR',
+    message: 'Request aborted before sending',
+  } as const;
+  return err<never, ResultError<BaseFetchErrorCode>[]>([aborted]);
 }

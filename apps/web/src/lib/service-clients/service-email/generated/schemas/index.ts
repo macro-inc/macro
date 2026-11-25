@@ -285,7 +285,6 @@ export * from './imapConnectionOffer';
 export * from './imapConnectRequest';
 export * from './imapConnectRequestLinkId';
 export * from './imapConnectResponse';
-export * from './imapDiscoverRequest';
 export * from './imapSuggestion';
 export * from './initConflictResponse';
 export * from './initConflictResponseOneOf';

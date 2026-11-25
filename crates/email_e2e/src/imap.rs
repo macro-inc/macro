@@ -40,7 +40,6 @@ impl ImapLab {
         json!(
         {
             "requestId": uuid::Uuid::now_v7(),
-            "email": email,
             "imap": {
                 "endpoint": {
                     "host": "maillab.example.net",

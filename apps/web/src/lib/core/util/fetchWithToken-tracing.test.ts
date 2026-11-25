@@ -146,11 +146,10 @@ it('propagates the IMAP interaction through the four email endpoints after an as
   };
 
   await Promise.resolve();
-  await emailClient.imapDiscover(email, signal, action);
+  await emailClient.imapDiscover(signal, action);
   await emailClient.imapConnect(
     {
       requestId: link,
-      email,
       imap: login,
       smtp: { ...login, endpoint: { ...login.endpoint, port: 465 } },
       confirmedHosts: [login.endpoint.host],

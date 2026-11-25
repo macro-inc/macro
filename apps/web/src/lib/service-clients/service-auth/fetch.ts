@@ -12,6 +12,8 @@ import { Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { authServiceClient, getExpiresAt } from './client';
 
+export { getPersonalAccessToken } from './client';
+
 function isExpired(token: string) {
   const expiresAt = getExpiresAt(token);
   return expiresAt <= 0 || Date.now() >= expiresAt;

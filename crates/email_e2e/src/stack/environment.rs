@@ -7,8 +7,8 @@ use gmail_emulator::GmailEmulator;
 use outlook_emulator::OutlookEmulator;
 use rootcause::prelude::*;
 
-use crate::infra::sqs::Queues;
 use crate::macro_services::{CONNECTION_GATEWAY, DOCUMENT_STORAGE, MacroServices, STATIC_FILES};
+use crate::{api::SESSION_FIXTURE, infra::sqs::Queues};
 
 /// The key the scenario's requests and the services' calls to each other
 /// carry.
@@ -144,9 +144,9 @@ pub(crate) fn service_env(addresses: &Addresses<'_>) -> BTreeMap<String, String>
             INTERNAL_API_KEY.to_owned(),
         ),
         ("INTERNAL_API_KEY", INTERNAL_API_KEY.to_owned()),
-        ("AUDIENCE", "email-e2e".to_owned()),
-        ("ISSUER", "email-e2e".to_owned()),
-        ("JWT_SECRET_KEY", "email-e2e".to_owned()),
+        ("AUDIENCE", SESSION_FIXTURE.to_owned()),
+        ("ISSUER", SESSION_FIXTURE.to_owned()),
+        ("JWT_SECRET_KEY", SESSION_FIXTURE.to_owned()),
         ("MACRO_API_TOKEN_ISSUER", "email-e2e".to_owned()),
         (
             "MACRO_API_TOKEN_PUBLIC_KEY",

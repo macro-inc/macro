@@ -14,12 +14,18 @@ notifications. Axum handlers authenticate an internal key and decode a link with
 both sync and grant generations. PostgreSQL, KMS, DNS and mail sockets live in
 outbound adapters. `imap_service` composes the adapters and scheduler.
 
-The email domain authorizes connect and reconnect against the signed-in owner's
-verified address before credentials reach the engine. Verification produces an
+The public connect route requires a personal session cookie or the signed-in
+app's personal access token. The email domain
+authorizes connect and reconnect against the signed-in owner's verified
+address before credentials reach the engine. Verification produces an
 expiring owner-bound token; promotion binds it to exactly one link. Concurrent
 or retried public connections use durable reservations and provider conflicts
 cannot silently replace an existing Gmail or Outlook inbox. Generation changes
-fence old commands, settings edits and connection owners.
+fence old commands, settings edits and connection owners. A delivery
+commits its Submitting checkpoint before the provider call. Reconnect rebinds
+the draft without removing that checkpoint or clearing schedule processing.
+The replacement worker reconciles the outcome by reading provider state.
+Engine promotion retains the separate durable SMTP submission outcome.
 
 Passwords are encrypted with a dedicated KMS key and encryption context bound to
 the owner, link and credential purpose. They are absent from ordinary email link

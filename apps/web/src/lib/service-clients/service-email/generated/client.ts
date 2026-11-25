@@ -49,7 +49,6 @@ import type {
   ImapConnectionErrorResponse,
   ImapConnectRequest,
   ImapConnectResponse,
-  ImapDiscoverRequest,
   ImapSuggestion,
   InitConflictResponse,
   InitErrorCodeResponse,
@@ -2641,15 +2640,47 @@ export type imapDiscoverResponse200 = {
   status: 200;
 };
 
+export type imapDiscoverResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
 export type imapDiscoverResponse403 = {
   data: ImapConnectionErrorResponse;
   status: 403;
 };
 
+export type imapDiscoverResponse429 = {
+  data: ImapConnectionErrorResponse;
+  status: 429;
+};
+
+export type imapDiscoverResponse502 = {
+  data: ImapConnectionErrorResponse;
+  status: 502;
+};
+
+export type imapDiscoverResponse503 = {
+  data: ImapConnectionErrorResponse;
+  status: 503;
+};
+
+export type imapDiscoverResponse504 = {
+  data: ImapConnectionErrorResponse;
+  status: 504;
+};
+
 export type imapDiscoverResponseSuccess = imapDiscoverResponse200 & {
   headers: Headers;
 };
-export type imapDiscoverResponseError = imapDiscoverResponse403 & {
+export type imapDiscoverResponseError = (
+  | imapDiscoverResponse401
+  | imapDiscoverResponse403
+  | imapDiscoverResponse429
+  | imapDiscoverResponse502
+  | imapDiscoverResponse503
+  | imapDiscoverResponse504
+) & {
   headers: Headers;
 };
 
@@ -2662,14 +2693,11 @@ export const getImapDiscoverUrl = () => {
 };
 
 export const imapDiscover = async (
-  imapDiscoverRequest: ImapDiscoverRequest,
   options?: RequestInit
 ): Promise<imapDiscoverResponse> => {
   const res = await fetch(getImapDiscoverUrl(), {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(imapDiscoverRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -2692,10 +2720,18 @@ export type imapSuggestionResponse401 = {
   status: 401;
 };
 
+export type imapSuggestionResponse503 = {
+  data: ImapConnectionErrorResponse;
+  status: 503;
+};
+
 export type imapSuggestionResponseSuccess = imapSuggestionResponse200 & {
   headers: Headers;
 };
-export type imapSuggestionResponseError = imapSuggestionResponse401 & {
+export type imapSuggestionResponseError = (
+  | imapSuggestionResponse401
+  | imapSuggestionResponse503
+) & {
   headers: Headers;
 };
 

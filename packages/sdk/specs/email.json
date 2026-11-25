@@ -2320,6 +2320,16 @@
           },
           "429": {
             "description": "",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                },
+                "description": "Minimum retry delay in seconds"
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2365,16 +2375,6 @@
       "post": {
         "tags": ["crate::api::imap"],
         "operationId": "imap_discover",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImapDiscoverRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "",
@@ -2386,7 +2386,67 @@
               }
             }
           },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                },
+                "description": "Minimum retry delay in seconds"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
             "description": "",
             "content": {
               "application/json": {
@@ -2420,6 +2480,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
                 }
               }
             }
@@ -6767,7 +6837,7 @@
       "ImapConnectRequest": {
         "type": "object",
         "description": "Public input never carries an owner identity or a credential binding.",
-        "required": ["requestId", "email", "imap", "smtp", "confirmedHosts"],
+        "required": ["requestId", "imap", "smtp", "confirmedHosts"],
         "properties": {
           "confirmedHosts": {
             "type": "array",
@@ -6775,11 +6845,6 @@
               "type": "string"
             },
             "description": "Endpoints the user explicitly approved before credentials leave Macro."
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "description": "Must be an address Macro has independently verified for the actor."
           },
           "imap": {
             "$ref": "#/components/schemas/Login",
@@ -6851,16 +6916,6 @@
         "type": "string",
         "description": "Provider offered using a catalog entry or a domain-only DNS hint.",
         "enum": ["none", "gmail", "outlook", "imap"]
-      },
-      "ImapDiscoverRequest": {
-        "type": "object",
-        "required": ["email"],
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email"
-          }
-        }
       },
       "ImapSuggestion": {
         "type": "object",

@@ -20,9 +20,6 @@ pub struct ImapConnectRequest {
     pub request_id: Uuid,
     /// Required by a reconnect surface to reject stale settings dialogs.
     pub link_id: Option<Uuid>,
-    /// Must be an address Macro has independently verified for the actor.
-    #[cfg_attr(feature = "axum", schema(value_type = String, format = Email))]
-    pub email: EmailStr<'static>,
     /// IMAP login.
     pub imap: Login,
     /// SMTP login.
@@ -62,6 +59,8 @@ pub enum ConnectionRecoveryTick {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ImapConnectionError {
+    #[error("Use a personal Macro session to connect this mailbox")]
+    PersonRequired,
     #[error("IMAP connections are not enabled")]
     Disabled,
     #[error("Verify this email address in Macro before connecting its mailbox")]
@@ -85,6 +84,13 @@ pub trait ImapConnectionRepository: Send + Sync + 'static {
         actor: &MacroUserIdStr<'_>,
         request: Uuid,
     ) -> impl Future<Output = Result<Option<ImapConnectionAttempt>, ImapConnectionError>> + Send;
+    /// Reject an inadmissible new attempt before contacting the mail provider.
+    /// The reservation repeats these checks under its locks.
+    fn preflight(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        link_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<(), ImapConnectionError>> + Send;
     fn reserve(
         &self,
         actor: &MacroUserIdStr<'_>,
@@ -163,6 +169,14 @@ pub struct ImapConnectionService<R, G, F> {
     pub gateway: G,
     pub enrollment: F,
 }
+
+fn is_private_relay(actor: &MacroUserIdStr<'_>) -> bool {
+    actor
+        .email_part()
+        .domain_part()
+        .eq_ignore_ascii_case("privaterelay.appleid.com")
+}
+
 impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnrollment>
     ImapConnectionService<R, G, F>
 {
@@ -172,10 +186,7 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
         actor: &MacroUserIdStr<'_>,
     ) -> Result<ImapConnectionOffer, ImapConnectionError> {
         if !self.enrollment.enabled(actor).await
-            || actor
-                .email_part()
-                .domain_part()
-                .eq_ignore_ascii_case("privaterelay.appleid.com")
+            || is_private_relay(actor)
             || self.repository.owned_address_is_connected(actor).await?
         {
             return Ok(ImapConnectionOffer::None);
@@ -198,20 +209,14 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
     pub async fn discover(
         &self,
         actor: &MacroUserIdStr<'_>,
-        email: &Email<ArcCowStr<'_>>,
     ) -> Result<Discovery, ImapConnectionError> {
         if !self.enrollment.enabled(actor).await {
             return Err(ImapConnectionError::Disabled);
         }
-        if !actor.email_str().eq_ignore_ascii_case(email.email_str())
-            || actor
-                .email_part()
-                .domain_part()
-                .eq_ignore_ascii_case("privaterelay.appleid.com")
-        {
+        if is_private_relay(actor) {
             return Err(ImapConnectionError::AddressUnverified);
         }
-        self.gateway.discover(email).await
+        self.gateway.discover(&actor.email_part()).await
     }
     #[tracing::instrument(skip_all, fields(connection.request_id = %input.request_id), err)]
     pub async fn connect(
@@ -223,14 +228,7 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
         if !self.enrollment.enabled(&actor).await {
             return Err(ImapConnectionError::Disabled);
         }
-        if !actor
-            .email_str()
-            .eq_ignore_ascii_case(input.email.0.as_ref())
-            || actor
-                .email_part()
-                .domain_part()
-                .eq_ignore_ascii_case("privaterelay.appleid.com")
-        {
+        if is_private_relay(&actor) {
             return Err(ImapConnectionError::AddressUnverified);
         }
         let attempt = match self.repository.attempt(&actor, input.request_id).await? {
@@ -244,6 +242,7 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
                 attempt
             }
             None => {
+                self.repository.preflight(&actor, input.link_id).await?;
                 let verification = self
                     .gateway
                     .verify(&VerifyRequest {

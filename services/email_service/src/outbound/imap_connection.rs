@@ -2,6 +2,7 @@
 
 use email::domain::inbox_entitlement::InboxConnectionFacts;
 use email::domain::mailbox::imap_connection::*;
+use email::domain::models::UserProvider;
 use imap_service_client::{
     Binding, ConnectRequest, Discovery, ImapServiceClient, Verification, VerifyRequest,
 };
@@ -19,6 +20,119 @@ pub struct PgImapConnections(pub PgPool);
 pub(super) fn failure(error: sqlx::Error) -> ImapConnectionError {
     tracing::error!(error=?email::domain::mailbox::DatabaseFailure::from(&error),"IMAP connection persistence failed");
     ImapConnectionError::Unavailable
+}
+
+struct ExistingConnection<P = UserProvider> {
+    id: Uuid,
+    macro_id: String,
+    provider: Option<P>,
+    sync_generation: i64,
+    grant_generation: i64,
+    disconnect_requested_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleting_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+type ExistingConnectionRow = ExistingConnection<String>;
+
+impl ExistingConnectionRow {
+    fn decode(self) -> ExistingConnection {
+        ExistingConnection {
+            id: self.id,
+            macro_id: self.macro_id,
+            provider: self.provider.and_then(|provider| provider.parse().ok()),
+            sync_generation: self.sync_generation,
+            grant_generation: self.grant_generation,
+            disconnect_requested_at: self.disconnect_requested_at,
+            deleting_at: self.deleting_at,
+        }
+    }
+}
+
+fn validate_existing_connection(
+    existing: Option<&ExistingConnection>,
+    actor: &MacroUserIdStr<'_>,
+    expected_link: Option<Uuid>,
+) -> Result<(), ImapConnectionError> {
+    let Some(existing) = existing else {
+        return match expected_link {
+            Some(_) => Err(ImapConnectionError::Changed),
+            None => Ok(()),
+        };
+    };
+    if existing.provider != Some(UserProvider::Imap) || existing.macro_id != actor.as_ref() {
+        return Err(ImapConnectionError::ProviderConflict);
+    }
+    if existing.disconnect_requested_at.is_some()
+        || existing.deleting_at.is_some()
+        || expected_link.is_some_and(|id| id != existing.id)
+    {
+        return Err(ImapConnectionError::Changed);
+    }
+    Ok(())
+}
+
+async fn check_new_connection_entitlement(
+    connection: &mut sqlx::PgConnection,
+    actor: &MacroUserIdStr<'_>,
+) -> Result<(), ImapConnectionError> {
+    // The policy needs at most the free limit from each lane. Probe distinct
+    // delegated IDs in index order so a large share list needs no aggregate scan.
+    let facts = sqlx::query!(
+        r#"
+        WITH RECURSIVE owned AS MATERIALIZED (
+            SELECT id
+            FROM email_links
+            WHERE macro_id = $1
+            LIMIT $2
+        ), delegated (id, seen) AS (
+            SELECT NULL::uuid, ARRAY[]::uuid[]
+            UNION ALL
+            SELECT candidate.id, array_append(delegated.seen, candidate.id)
+            FROM delegated
+            CROSS JOIN LATERAL (
+                SELECT link_id AS id
+                FROM macro_user_links
+                WHERE primary_macro_id = $1
+                    AND link_id <> ALL (delegated.seen)
+                ORDER BY child_macro_id, link_id
+                LIMIT 1
+            ) candidate
+            WHERE cardinality(delegated.seen) < $2
+        )
+        SELECT
+            EXISTS (
+                SELECT 1
+                FROM "RolesOnUsers" ru
+                JOIN "RolesOnPermissions" rp ON rp."roleId" = ru."roleId"
+                WHERE ru."userId" = $1
+                    AND rp."permissionId" = 'read:professional_features'
+            ) AS "professional!",
+            (
+                SELECT count(*)
+                FROM (
+                    SELECT id FROM owned
+                    UNION
+                    SELECT id FROM delegated WHERE id IS NOT NULL
+                ) AS inboxes
+            ) AS "inboxes!"
+        "#,
+        actor.as_ref(),
+        email::domain::inbox_entitlement::FREE_INBOX_LIMIT,
+    )
+    .fetch_one(connection)
+    .await
+    .map_err(failure)?;
+    if (InboxConnectionFacts {
+        professional: facts.professional,
+        accessible_inboxes: facts.inboxes,
+        reconnecting: false,
+    })
+    .permits_connection()
+    {
+        Ok(())
+    } else {
+        Err(ImapConnectionError::PaymentRequired)
+    }
 }
 
 impl ImapConnectionRepository for PgImapConnections {
@@ -100,6 +214,54 @@ impl ImapConnectionRepository for PgImapConnections {
         .transpose()
     }
 
+    async fn preflight(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        link_id: Option<Uuid>,
+    ) -> Result<(), ImapConnectionError> {
+        let mut tx = self.0.begin().await.map_err(failure)?;
+        sqlx::query!(
+            r#"
+            SET LOCAL statement_timeout = '15s'
+            "#,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(failure)?;
+        let existing = sqlx::query_as!(
+            ExistingConnectionRow,
+            r#"
+            SELECT
+                id,
+                macro_id,
+                provider::text AS provider,
+                sync_generation,
+                grant_generation,
+                disconnect_requested_at,
+                deleting_at
+            FROM
+                email_links
+            WHERE
+                lower(email_address) = lower($1)
+            ORDER BY
+                created_at,
+                id
+            LIMIT 1
+            "#,
+            actor.email_str(),
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(failure)?
+        .map(ExistingConnectionRow::decode);
+
+        validate_existing_connection(existing.as_ref(), actor, link_id)?;
+        if existing.is_none() {
+            check_new_connection_entitlement(&mut tx, actor).await?;
+        }
+        tx.commit().await.map_err(failure)
+    }
+
     async fn reserve(
         &self,
         actor: &MacroUserIdStr<'_>,
@@ -141,7 +303,8 @@ impl ImapConnectionRepository for PgImapConnections {
         .fetch_one(&mut *tx)
         .await
         .map_err(failure)?;
-        let existing = sqlx::query!(
+        let existing = sqlx::query_as!(
+            ExistingConnectionRow,
             r#"
             SELECT
                 id,
@@ -165,71 +328,22 @@ impl ImapConnectionRepository for PgImapConnections {
         )
         .fetch_optional(&mut *tx)
         .await
-        .map_err(failure)?;
-        let (link, expected, sync, grant) = if let Some(existing) = existing {
-            if existing.provider.as_deref() != Some("IMAP") || existing.macro_id != actor.as_ref() {
-                return Err(ImapConnectionError::ProviderConflict);
-            }
-            if existing.disconnect_requested_at.is_some()
-                || existing.deleting_at.is_some()
-                || input.link_id.is_some_and(|id| id != existing.id)
-            {
-                return Err(ImapConnectionError::Changed);
-            }
-            (
+        .map_err(failure)?
+        .map(ExistingConnectionRow::decode);
+
+        validate_existing_connection(existing.as_ref(), actor, input.link_id)?;
+        if existing.is_none() {
+            check_new_connection_entitlement(&mut tx, actor).await?;
+        }
+        let (link, expected, sync, grant) = match existing {
+            Some(existing) => (
                 existing.id,
                 Some(existing.sync_generation),
                 existing.sync_generation + 1,
                 existing.grant_generation + 1,
-            )
-        } else {
-            if input.link_id.is_some() {
-                return Err(ImapConnectionError::Changed);
-            }
-            (macro_uuid::generate_uuid_v7(), None, 1, 1)
+            ),
+            None => (macro_uuid::generate_uuid_v7(), None, 1, 1),
         };
-        let facts = sqlx::query!(
-            r#"
-            SELECT
-                EXISTS (
-                    SELECT
-                        1
-                    FROM
-                        "RolesOnUsers" ru
-                        JOIN "RolesOnPermissions" rp ON rp."roleId" = ru."roleId"
-                    WHERE
-                        ru."userId" = $1
-                        AND rp."permissionId" = 'read:professional_features') AS "professional!",
-                (
-                    SELECT
-                        count(*)
-                    FROM
-                        email_links l
-                    WHERE
-                        l.macro_id = $1
-                        OR EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                macro_user_links u
-                            WHERE
-                                u.link_id = l.id
-                                AND u.primary_macro_id = $1)) AS "inboxes!"
-            "#,
-            actor.as_ref(),
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(failure)?;
-        if !(InboxConnectionFacts {
-            professional: facts.professional,
-            accessible_inboxes: facts.inboxes,
-            reconnecting: expected.is_some(),
-        })
-        .permits_connection()
-        {
-            return Err(ImapConnectionError::PaymentRequired);
-        }
         if expected.is_none() {
             // A provisional link is inactive and always has a durable attempt.
             // It is promoted by recovery if the caller loses the HTTP response.
@@ -408,9 +522,10 @@ impl ImapConnectionRepository for PgImapConnections {
         let expected = attempt
             .expected_generation
             .unwrap_or(attempt.binding.sync_generation);
+        let provider = current.provider.and_then(|provider| provider.parse().ok());
         if current.id != attempt.binding.link_id
             || current.macro_id != attempt.owner.as_ref()
-            || current.provider.as_deref() != Some("IMAP")
+            || provider != Some(UserProvider::Imap)
             || current.sync_generation != expected
         {
             return Err(ImapConnectionError::Changed);
@@ -467,7 +582,8 @@ impl ImapConnectionRepository for PgImapConnections {
         )
         .await
         .map_err(failure)?;
-        // Rebind unfinished organization/draft intents to the fresh credentials.
+        // Rebind unresolved intents. A command first reads live organization
+        // under the new binding and confirms any target already at its desired state.
         sqlx::query!(
             r#"
             UPDATE

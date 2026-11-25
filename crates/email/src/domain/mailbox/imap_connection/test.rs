@@ -12,6 +12,7 @@ struct State {
     hint_error: bool,
     hints: u32,
     attempt: Option<ImapConnectionAttempt>,
+    payment_required: bool,
     verifies: u32,
     promotions: u32,
     activations: u32,
@@ -102,6 +103,16 @@ impl ImapConnectionRepository for Fake {
             .clone()
             .filter(|attempt| attempt.owner.as_ref() == actor.as_ref()))
     }
+    async fn preflight(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Option<Uuid>,
+    ) -> Result<(), ImapConnectionError> {
+        if self.0.lock().unwrap().payment_required {
+            return Err(ImapConnectionError::PaymentRequired);
+        }
+        Ok(())
+    }
     async fn reserve(
         &self,
         actor: &MacroUserIdStr<'_>,
@@ -109,11 +120,14 @@ impl ImapConnectionRepository for Fake {
         input: &ImapConnectRequest,
         verification: &Verification,
     ) -> Result<ImapConnectionAttempt, ImapConnectionError> {
+        if self.0.lock().unwrap().payment_required {
+            return Err(ImapConnectionError::PaymentRequired);
+        }
         let attempt = ImapConnectionAttempt {
             id: input.request_id,
             owner: MacroUserIdStr::try_from(actor.to_string()).unwrap(),
             credential_owner: owner.into(),
-            email: input.email.clone(),
+            email: EmailStr(actor.email_part().into_owned()),
             verification_id: verification.id,
             binding: Binding {
                 link_id: Uuid::from_u128(3),
@@ -184,7 +198,7 @@ impl ImapConnectionRepository for Fake {
         Ok(false)
     }
 }
-fn request(email: &str) -> ImapConnectRequest {
+fn request() -> ImapConnectRequest {
     let login = Login {
         endpoint: Endpoint {
             host: "mail.example.com".into(),
@@ -197,16 +211,19 @@ fn request(email: &str) -> ImapConnectRequest {
     ImapConnectRequest {
         request_id: Uuid::from_u128(1),
         link_id: None,
-        email: EmailStr::try_from(email.to_owned()).unwrap(),
         imap: login.clone(),
         smtp: login,
         confirmed_hosts: vec!["mail.example.com".into()],
     }
 }
 #[tokio::test]
-async fn arbitrary_host_login_cannot_claim_someone_elses_address() {
+async fn unpaid_additional_connection_does_not_probe_credentials() {
     let fake = Fake::default();
-    fake.0.lock().unwrap().enabled = true;
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.enabled = true;
+        state.payment_required = true;
+    }
     let service = ImapConnectionService {
         repository: fake.clone(),
         gateway: fake.clone(),
@@ -216,15 +233,13 @@ async fn arbitrary_host_login_cannot_claim_someone_elses_address() {
         .connect(
             MacroUserIdStr::try_from("macro|owner@example.com").unwrap(),
             "owner",
-            request("victim@example.com"),
+            request(),
         )
         .await;
-    assert!(matches!(
-        result,
-        Err(ImapConnectionError::AddressUnverified)
-    ));
+    assert!(matches!(result, Err(ImapConnectionError::PaymentRequired)));
     assert_eq!(fake.0.lock().unwrap().verifies, 0);
 }
+
 #[tokio::test]
 async fn disabled_rollout_does_not_attempt_credentials() {
     let fake = Fake::default();
@@ -238,7 +253,7 @@ async fn disabled_rollout_does_not_attempt_credentials() {
             .connect(
                 MacroUserIdStr::try_from("macro|owner@example.com").unwrap(),
                 "owner",
-                request("owner@example.com")
+                request()
             )
             .await,
         Err(ImapConnectionError::Disabled)
@@ -261,18 +276,13 @@ async fn interrupted_promotion_recovers_the_same_verified_binding_and_completed_
     };
     let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
     assert!(matches!(
-        service
-            .connect(actor.clone(), "owner", request("owner@example.com"))
-            .await,
+        service.connect(actor.clone(), "owner", request()).await,
         Err(ImapConnectionError::Provider(Error::ConnectionUnavailable))
     ));
     fake.0.lock().unwrap().deferred.clear();
     service.recover_once().await.unwrap();
     assert_eq!(
-        service
-            .connect(actor, "owner", request("owner@example.com"))
-            .await
-            .unwrap(),
+        service.connect(actor, "owner", request()).await.unwrap(),
         Uuid::from_u128(3)
     );
     let state = fake.0.lock().unwrap();
@@ -282,25 +292,7 @@ async fn interrupted_promotion_recovers_the_same_verified_binding_and_completed_
 }
 
 #[tokio::test]
-async fn live_discovery_does_not_disclose_unverified_addresses() {
-    let fake = Fake::default();
-    fake.0.lock().unwrap().enabled = true;
-    let service = ImapConnectionService {
-        repository: fake.clone(),
-        gateway: fake.clone(),
-        enrollment: fake.clone(),
-    };
-    let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
-    let submitted = EmailStr::parse_from_str("someone-else@example.com").unwrap();
-    assert!(matches!(
-        service.discover(&actor, &submitted.0).await,
-        Err(ImapConnectionError::AddressUnverified)
-    ));
-    assert!(fake.0.lock().unwrap().discoveries.is_empty());
-}
-
-#[tokio::test]
-async fn authorized_discovery_preserves_the_submitted_validated_spelling() {
+async fn live_discovery_uses_the_verified_actor_address() {
     let fake = Fake::default();
     fake.0.lock().unwrap().enabled = true;
     let service = ImapConnectionService {
@@ -309,12 +301,11 @@ async fn authorized_discovery_preserves_the_submitted_validated_spelling() {
         enrollment: fake.clone(),
     };
     let actor = MacroUserIdStr::try_from("macro|owner+tag@example.com").unwrap();
-    let submitted = EmailStr::parse_from_str("Owner+Tag@Example.com").unwrap();
     assert_eq!(actor.email_str(), "owner+tag@example.com");
-    service.discover(&actor, &submitted.0).await.unwrap();
+    service.discover(&actor).await.unwrap();
     assert_eq!(
         fake.0.lock().unwrap().discoveries,
-        ["Owner+Tag@Example.com"]
+        ["owner+tag@example.com"]
     );
 }
 
@@ -334,14 +325,13 @@ async fn private_relay_policy_remains_enforced_with_validated_domain_parts() {
         service.suggestion(&actor).await.unwrap(),
         ImapConnectionOffer::None
     ));
-    let submitted = EmailStr(actor.email_part());
     assert!(matches!(
-        service.discover(&actor, &submitted.0).await,
+        service.discover(&actor).await,
         Err(ImapConnectionError::AddressUnverified)
     ));
     assert!(matches!(
         service
-            .connect(actor.into_owned(), "owner", request(&address))
+            .connect(actor.into_owned(), "owner", request())
             .await,
         Err(ImapConnectionError::AddressUnverified)
     ));
@@ -384,7 +374,7 @@ async fn passive_suggestions_use_mx_hints_without_address_bearing_discovery() {
 #[tokio::test]
 async fn recovery_yields_after_bounded_work_even_when_old_attempts_keep_failing() {
     let fake = Fake::default();
-    let input = request("owner@example.com");
+    let input = request();
     let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
     let verification = Verification {
         id: Uuid::from_u128(2),
@@ -416,7 +406,7 @@ async fn recovery_yields_after_bounded_work_even_when_old_attempts_keep_failing(
 #[tokio::test]
 async fn proven_invalid_promotion_is_abandoned_instead_of_poisoning_recovery() {
     let fake = Fake::default();
-    let input = request("owner@example.com");
+    let input = request();
     let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
     let verification = Verification {
         id: Uuid::from_u128(2),
@@ -444,14 +434,9 @@ async fn unproven_auth_failure_defers_with_age_then_expires_at_the_cap() {
             id: Uuid::from_u128(2),
             expires_at: chrono::Utc::now() - chrono::Duration::minutes(1),
         };
-        fake.reserve(
-            &actor,
-            "owner",
-            &request("owner@example.com"),
-            &verification,
-        )
-        .await
-        .unwrap();
+        fake.reserve(&actor, "owner", &request(), &verification)
+            .await
+            .unwrap();
         {
             let mut state = fake.0.lock().unwrap();
             state.recovery_age = Some(chrono::Duration::minutes(age));
@@ -486,12 +471,7 @@ async fn one_hundred_deferred_attempts_do_not_hide_a_healthy_promotion() {
         expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
     };
     let attempt = fake
-        .reserve(
-            &actor,
-            "owner",
-            &request("owner@example.com"),
-            &verification,
-        )
+        .reserve(&actor, "owner", &request(), &verification)
         .await
         .unwrap();
     {
@@ -541,12 +521,7 @@ async fn lease_contention_is_retryable_and_a_concurrent_completion_returns_its_r
             expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
         };
         let attempt = fake
-            .reserve(
-                &actor,
-                "owner",
-                &request("owner@example.com"),
-                &verification,
-            )
+            .reserve(&actor, "owner", &request(), &verification)
             .await
             .unwrap();
         {
@@ -562,9 +537,7 @@ async fn lease_contention_is_retryable_and_a_concurrent_completion_returns_its_r
             gateway: fake.clone(),
             enrollment: fake.clone(),
         };
-        let result = service
-            .connect(actor, "owner", request("owner@example.com"))
-            .await;
+        let result = service.connect(actor, "owner", request()).await;
         outcomes.push((
             matches!(&result, Ok(id) if *id == attempt.binding.link_id),
             matches!(

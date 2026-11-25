@@ -4,16 +4,18 @@ use super::context::{ApiContext, AuthorizationService};
 use axum::{
     Json, Router,
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode, header::RETRY_AFTER},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use email::domain::mailbox::imap_connection::{
     ImapConnectRequest, ImapConnectionError, ImapConnectionOffer,
 };
-use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
-use macro_user_id::email::EmailStr;
-use serde::{Deserialize, Serialize};
+use macro_authorization::{
+    AccountHolderOrInternal, CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
+    is_program_run,
+};
+use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -29,11 +31,6 @@ pub(crate) fn router() -> Router<ApiContext> {
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))
 }
 
-#[derive(Deserialize, ToSchema)]
-pub(crate) struct ImapDiscoverRequest {
-    #[schema(value_type = String, format = Email)]
-    email: EmailStr<'static>,
-}
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ImapConnectResponse {
@@ -89,6 +86,7 @@ impl IntoResponse for ConnectionError {
         use ImapConnectionErrorCode as Code;
         use imap_service_client::Error;
         let (status, code) = match &self.0 {
+            ImapConnectionError::PersonRequired => (StatusCode::FORBIDDEN, Code::Forbidden),
             ImapConnectionError::Disabled => (StatusCode::FORBIDDEN, Code::Disabled),
             ImapConnectionError::AddressUnverified => {
                 (StatusCode::FORBIDDEN, Code::AddressUnverified)
@@ -147,14 +145,22 @@ impl IntoResponse for ConnectionError {
                 (StatusCode::GATEWAY_TIMEOUT, Code::ConnectionTimedOut)
             }
         };
-        (
+        let mut response = (
             status,
             Json(ImapConnectionErrorResponse {
                 code,
                 message: self.0.to_string(),
             }),
         )
-            .into_response()
+            .into_response();
+        if let ImapConnectionError::Provider(error) = self.0
+            && let Some(seconds) = error.retry_after_seconds()
+        {
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        response
     }
 }
 
@@ -164,7 +170,8 @@ impl IntoResponse for ConnectionError {
     operation_id = "imap_suggestion",
     responses(
         (status = 200, body = ImapSuggestion),
-        (status = 401, body = model::response::ErrorResponse)
+        (status = 401, body = model::response::ErrorResponse),
+        (status = 503, body = ImapConnectionErrorResponse)
     )
 )]
 pub(crate) async fn suggestion(
@@ -183,23 +190,24 @@ pub(crate) async fn suggestion(
     post,
     path = "/email/links/imap/discover",
     operation_id = "imap_discover",
-    request_body = ImapDiscoverRequest,
     responses(
         (status = 200, body = imap_service_client::Discovery),
-        (status = 403, body = ImapConnectionErrorResponse)
+        (status = 401, body = model::response::ErrorResponse),
+        (status = 403, body = ImapConnectionErrorResponse),
+        (status = 429, body = ImapConnectionErrorResponse,
+            headers(("Retry-After" = u32, description = "Minimum retry delay in seconds"))),
+        (status = 502, body = ImapConnectionErrorResponse),
+        (status = 503, body = ImapConnectionErrorResponse),
+        (status = 504, body = ImapConnectionErrorResponse)
     )
 )]
 pub(crate) async fn discover(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
-    Json(input): Json<ImapDiscoverRequest>,
 ) -> Result<Json<imap_service_client::Discovery>, ConnectionError> {
     Ok(Json(
         ctx.imap_connections
-            .discover(
-                &authorization.authorization.user.macro_user_id,
-                &input.email.0,
-            )
+            .discover(&authorization.authorization.user.macro_user_id)
             .await?,
     ))
 }
@@ -217,7 +225,8 @@ pub(crate) async fn discover(
         (status = 404, body = ImapConnectionErrorResponse),
         (status = 409, body = ImapConnectionErrorResponse),
         (status = 422, body = ImapConnectionErrorResponse),
-        (status = 429, body = ImapConnectionErrorResponse),
+        (status = 429, body = ImapConnectionErrorResponse,
+            headers(("Retry-After" = u32, description = "Minimum retry delay in seconds"))),
         (status = 502, body = ImapConnectionErrorResponse),
         (status = 503, body = ImapConnectionErrorResponse),
         (status = 504, body = ImapConnectionErrorResponse),
@@ -227,9 +236,11 @@ pub(crate) async fn discover(
 pub(crate) async fn connect(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Json(input): Json<ImapConnectRequest>,
 ) -> Result<Json<ImapConnectResponse>, ConnectionError> {
     let user = authorization.authorization.user;
+    authorize_connection_principal(&user.origin, user.attribution(), &headers)?;
     let link_id = ctx
         .imap_connections
         .connect(
@@ -239,6 +250,17 @@ pub(crate) async fn connect(
         )
         .await?;
     Ok(Json(ImapConnectResponse { link_id }))
+}
+
+fn authorize_connection_principal(
+    origin: &CredentialOrigin,
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+) -> Result<(), ConnectionError> {
+    if !matches!(origin, CredentialOrigin::Session) || is_program_run(attribution, headers) {
+        return Err(ImapConnectionError::PersonRequired.into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]

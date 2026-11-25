@@ -1,18 +1,15 @@
 import type { FetchWithTokenErrorCode } from '@core/util/fetchWithToken';
 import type { ResultError } from '@core/util/result';
 import { emailClient } from '@service-email/client';
-import { ImapConnectionErrorCode } from '@service-email/generated/schemas/imapConnectionErrorCode';
-
-const refusalCodes = Object.values(ImapConnectionErrorCode);
+import type { ImapConnectionErrorCode } from '@service-email/generated/schemas/imapConnectionErrorCode';
+import { isImapRefusalCode } from '@service-email/imap-refusal-code';
 
 export function imapRefusalCode(
   errors: readonly ResultError<
     FetchWithTokenErrorCode | ImapConnectionErrorCode
   >[]
 ) {
-  return refusalCodes.find((code) =>
-    errors.some((error) => error.code === code)
-  );
+  return errors.map(({ code }) => code).find(isImapRefusalCode);
 }
 
 /**

@@ -437,92 +437,21 @@ Missing or failed reads preserve the single-command writer.
   wrapper in the `pubsub_workers` binary. Pixels use `EmailServiceUrl`, so the
   local Docker stack embeds an in-network host recipients cannot load.
 
+- Derive discovery and connection addresses from authentication. Keep
+  connection refusals typed and regenerate the public contracts when they
+  change. Keep the engine notification route internal.
+- Keep interactive and background IMAP client classes separate. Preserve
+  typed provider pacing, credential health, content limits and SMTP refusals.
+- Use fresh organization state for command reconciliation. Keyword discovery
+  and deletion need metadata only.
+- Keep parking and host catch-up in the pubsub worker on its existing pools.
+  Follow the [recovery bounds](../../docs/architecture/imap-engine.md#host-catch-up-after-restart)
+  for timeouts, fences and provider deadlines.
+- Return the typed unsupported reason for IMAP recent-mail requests outside
+  the supported Inbox scope and retain healthy results from other mailboxes.
+
 ## Related
 
-- Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service`
-
-- Validate optional agent correlation at the HTTP boundary; delayed Gmail completion restores it from the scheduled-message row.
-
-- Durable mailbox refresh effects propagate gateway handoff failures for outbox
-  retry; import completion uses the existing backfill-complete refresh event.
-
-- Preserve typed IMAP verification failures through the public boundary: rejected
-  credentials use 422, DNS/TCP/TLS use 502, and a bounded timeout uses 504.
-  Map errors exhaustively to `ImapConnectionErrorCode` and regenerate the web
-  and SDK schemas when it changes. Return only closed domain messages.
-  Keep the authenticated IMAP notification callback out of the public spec.
-
-IMAP discovery/connect request identities deserialize as EmailStr before domain
-admission. Discovery forwards the validated ownership-checked address, while persisted
-promotion identities are validated once when read. Parse failures map to closed
-errors without logging the address.
-
-First-visit inbox suggestions use the bounded catalog/MX-only adapter. Unknown
-providers retain the generic chooser; full address-bearing discovery runs only
-after the user explicitly opens IMAP setup.
-
-IMAP worker composition gives live and historical-import providers separate
-client classes. Background settings scans and link-maintenance jobs also use a
-background client. Preserve the original interactive gateway for API settings,
-user commands, draft materialization, attachments and sends; never classify all
-`MailboxGateway` methods as background, because API and worker contexts share it.
-
-The IMAP gateway preserves AccountBusy as a local rate-limit refusal with the
-engine's five-second retry hint. MessageTooLarge is permanent. Neither changes
-credential health or proves a send outcome; generic connectivity remains
-uncertain. Recent inbox sources contain complete MIME only; the engine defers
-individual busy or oversized items instead of returning partial bodies.
-
-Map engine MessageTooLarge through ContentTooLarge to coded HTTP413
-(message_too_large) on original-source and attachment downloads. Provider-backed
-message/settings errors use the same content-limit response; keep sign-in and
-mailbox health classifications separate.
-
-The inbox catalog exposes mailbox_issue independently of needs_reauth. Oversized sync is visible as sync health; do not map it to a rejected password.
-
-Successful verified IMAP reconnect clears the old projected mailbox issue and retry deadline while advancing the same link generations. Preserve CredentialsUnreadable as saved-credential unavailability, never AuthRequired or definite SendUnavailable.
-
-Legacy reconciliation routing is repaired by bounded claim-time relabeling,
-including work that becomes due later. There is no background provider repair
-job, dedicated repair connection or completion-marker gate. The derivation
-trigger covers new writes from old binaries. See the
-[routing runbook](../../docs/runbooks/email-provider-routing.md) for local
-migration compatibility.
-
-Mailbox command reconciliation uses LiveOrganization for fresh IMAP versions;
-category enumeration keeps the cache-only Organization read. The live read adds
-one bounded provider snapshot per target, recorded on `imap.organization.read`.
-
-IMAP category deletion lists Organization metadata (flags and keywords), never
-full MIME bodies. An oversized message must not prevent removing its keyword.
-
-
-IMAP submission refuses an entire envelope before DATA when any RCPT is refused.
-Forward its optional typed phase/class/recipient position unchanged into the
-durable send_rejected detail; never infer the phase from sanitized prose or put
-an address in logs. Keep AccountBusy local and preserve provider retry hints.
-
-The pubsub worker also runs projection parking recovery on the shared projection
-pool, with its own singleton cursor lock and an absolute two-second page budget.
-Each link probe commits its cursor independently. Timed-out unpark attempts halve
-their row budget in fresh savepoints down to one row; a link still failing is
-skipped until wrap, with consecutive skips visible on the recovery span.
-Both recovery loops borrow the existing worker pool; neither owns a maintenance pool.
-Connect/reconnect adapters clear one FIFO parking page after their parent update
-and finish bounded pages after commit; the periodic sweep recovers interrupted
-tails and old-binary activations without changing retry or provider due times.
-
-The pubsub worker alone runs IMAP host catch-up (`imap_runtime::catch_up`), through
-the domain service on the existing worker pool. Every adapter call applies
-transaction-local statement and lock timeouts, restoring the connection defaults
-on commit or rollback. API replicas do not start fleet scans. One global
-lease serializes bounded pages and preserves their cursor across restarts. See
-[host restart recovery](../../docs/architecture/imap-engine.md#host-catch-up-after-restart).
-
-IMAP activation carries the last generation's persisted future provider floor
-into its new catalog stream. Resync returns that deadline to Mail settings;
-credential changes do not bypass provider pacing.
-
-IMAP reconnect preserves the maximum provider wait across all its stream kinds. The IMAP-only non-null retry index supports that lookup without changing its SQL predicates.
-
-Recent-mail IMAP reads support newest Inbox mail up to 100 only. Reject Sent/date-window/oversized reads before RPC as typed Unsupported, expose them in `unreadable_mailboxes`, and retain healthy provider results. Engine folder/window support is tracked in `mac-imap-smtp.118`.
+- [Service URL rules](../../.agents/rules/config-and-service-urls.md)
+- [Service registration guide](../../.agents/skills/new-service/SKILL.md)
+- [Email backend architecture](../../docs/architecture/email-backend.md)

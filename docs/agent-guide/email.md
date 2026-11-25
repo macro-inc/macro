@@ -171,11 +171,13 @@ hints. Unknown hosts keep the provider chooser; provider hints never bypass
 the user's enrollment availability policy.
 
 Google- and Microsoft-hosted discovery offers consent first when available,
-with **Use an app password instead** as a secondary path. Without provider
-consent availability, the app-password form opens directly. Reconnecting an
-existing IMAP link keeps its bound password workflow and never starts a new
-OAuth link. OAuth-first ordering is a user-interface choice; the server
-also accepts authorized IMAP/app-password connections.
+using the typed address as the sign-in hint. For the signed-in account's
+verified address, **Use an app password instead** is a secondary path.
+Without provider consent availability, the app-password form opens directly
+for that verified address. Reconnecting an existing IMAP link opens its
+saved server settings and password workflow. If a recoverable error prevents
+loading the saved endpoints, enter them manually and confirm the servers
+before entering a password.
 Fastmail opens the direct password flow. Onboarding retains its Google and
 Microsoft actions; a suggested IMAP inbox is an additional secondary choice.
 Connection and server-settings dialogs use Macro selects and checkboxes.
@@ -2169,8 +2171,9 @@ Close it or swipe it away on a phone to dismiss it for that send attempt.
 The conversation and Drafts keep the failure details and recovery actions when
 the toast is out of view, including on a phone with one visible toast slot.
 A local queued-send timer must never say
-Delivery unconfirmed before a provider outcome. Reconnect uses the Reconnect
-action; server fields stack at full dialog width and port choices name SSL/TLS
+Delivery unconfirmed before a provider outcome. Reconnect opens the existing
+mailbox's saved endpoints and asks for passwords again. Server fields stack
+at full dialog width and port choices name SSL/TLS
 or STARTTLS in both the selected value and menu.
 
 Routine suggestions currently use newest inbox context for IMAP. Month and Sent context are omitted until IMAP folder/date-window support lands; internal recent-mail responses identify unsupported mailboxes, and the harness records typed partial-context counts.

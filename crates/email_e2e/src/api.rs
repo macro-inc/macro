@@ -1,5 +1,6 @@
 //! Calls to the email API, as a signed-in user's client makes them.
 
+use macro_auth::middleware::decode_jwt::{MacroAccessToken, encode_test_session};
 use reqwest::Method;
 use rootcause::prelude::*;
 use serde_json::Value;
@@ -7,6 +8,7 @@ use uuid::Uuid;
 
 /// The header that picks the inbox a request acts on.
 const LINK_HEADER: &str = "x-email-link-id";
+pub(crate) const SESSION_FIXTURE: &str = "email-e2e";
 
 /// An answer of the email API.
 #[derive(Clone, Debug)]
@@ -44,6 +46,37 @@ pub(crate) struct ApiClient {
 }
 
 impl ApiClient {
+    /// Start an account link with the local stack's personal-session credential.
+    pub(crate) async fn post_as_session(
+        &self,
+        email: &str,
+        path: &str,
+        body: &Value,
+    ) -> Result<ApiResponse, Report> {
+        let token = encode_test_session(
+            &MacroAccessToken {
+                aud: SESSION_FIXTURE.into(),
+                exp: usize::try_from(chrono::Utc::now().timestamp() + 300)
+                    .context("invalid email test session expiry")?,
+                tid: SESSION_FIXTURE.into(),
+                iss: SESSION_FIXTURE.into(),
+                email: email.into(),
+                fusion_user_id: self.fusion_user_id.to_string(),
+                macro_user_id: self.macro_user_id.clone(),
+                macro_organization_id: None,
+                root_macro_id: None,
+            },
+            SESSION_FIXTURE,
+        )
+        .context("could not sign email test session")?;
+        let request = self
+            .http
+            .post(format!("{}{path}", self.api_url))
+            .bearer_auth(token)
+            .json(body);
+        Self::response(request, Method::POST, path).await
+    }
+
     /// Runs one GraphQL operation as the user and answers its `data`. A
     /// GraphQL error fails the call, with what the server said.
     pub(crate) async fn graphql(&self, query: &str, variables: &Value) -> Result<Value, Report> {
@@ -143,6 +176,14 @@ impl ApiClient {
             request = request.json(body);
         }
 
+        Self::response(request, method, path).await
+    }
+
+    async fn response(
+        request: reqwest::RequestBuilder,
+        method: Method,
+        path: &str,
+    ) -> Result<ApiResponse, Report> {
         let response = request
             .send()
             .await

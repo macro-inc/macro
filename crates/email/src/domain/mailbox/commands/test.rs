@@ -91,7 +91,9 @@ struct Harness(Arc<Mutex<State>>);
 struct State {
     claimed: bool,
     claim_progress: bool,
+    generation: Option<i64>,
     applies: u32,
+    confirmations: u32,
     /// Write-version records that time out on a busy mailbox.
     locked_records: u32,
     record_attempts: u32,
@@ -115,13 +117,19 @@ impl MailboxCommandRepository for Harness {
         if std::mem::take(&mut self.0.lock().unwrap().claim_progress) {
             return Ok(super::SyncClaim::Progress);
         }
-        if std::mem::replace(&mut self.0.lock().unwrap().claimed, true) {
+        let mut state = self.0.lock().unwrap();
+        if std::mem::replace(&mut state.claimed, true) {
             return Ok(super::SyncClaim::Idle);
+        }
+        let mut mailbox = mailbox();
+        if let Some(generation) = state.generation {
+            mailbox.sync_generation = generation;
+            mailbox.grant_generation = generation;
         }
         Ok(super::SyncClaim::Acquired(CommandLease {
             id: Uuid::now_v7(),
             lease_id,
-            mailbox: mailbox(),
+            mailbox,
             action: MailboxAction::Flagged(true),
             attempts: 1,
         }))
@@ -170,6 +178,7 @@ impl MailboxCommandRepository for Harness {
         _: &CommandTarget,
         _: Option<&MailboxOrganization>,
     ) -> Result<(), MailboxError> {
+        self.0.lock().unwrap().confirmations += 1;
         Ok(())
     }
     async fn fail_target(
@@ -191,6 +200,24 @@ impl MailboxCommandRepository for Harness {
     ) -> Result<(), MailboxError> {
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn a_reclaimed_command_confirms_an_applied_write_after_reconnect() {
+    let harness = Harness::default();
+    let service = MailboxCommandService::new(harness.clone(), harness.clone());
+    service.execute_once().await.unwrap();
+    {
+        let mut state = harness.0.lock().unwrap();
+        assert_eq!(state.applies, 1);
+        assert_eq!(state.confirmations, 0);
+        state.claimed = false;
+        state.generation = Some(2);
+    }
+    service.execute_once().await.unwrap();
+    let state = harness.0.lock().unwrap();
+    assert_eq!(state.applies, 1);
+    assert_eq!(state.confirmations, 1);
 }
 
 impl MailboxGateway for Harness {

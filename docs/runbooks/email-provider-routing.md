@@ -54,6 +54,17 @@ to reclaim it and replay the same verification, rather than create a new attempt
 Earlier preview incompatibilities listed above remain separate from this additive
 upgrade; do not reset the kept preview or change its migration ledger.
 
+## Projection and sync claim rehearsal
+
+Run both claim statements against 1,000, 10,000 and 100,000 synthetic links,
+including parked-heavy cases, fresh and stale statistics, and both PostgreSQL
+plan modes. Use a maximum of 3,500 buffers after vacuum and 4,000 on the
+unvacuumed stale-statistics fixture. Require at most 2x growth, 128 row locks,
+and zero timeouts. Record the bounded window, keyed reread, predecessor and
+parent probes, and deferral or final-claim writes. Projection deferrals update
+indexed eligibility and can write non-HOT tuples. The measured 64-row
+deferral used about 1,500–1,900 buffers.
+
 ## Draft and command claim rollout
 
 Migrations 20261123181255–181263 add nullable routing/local blocker fields and

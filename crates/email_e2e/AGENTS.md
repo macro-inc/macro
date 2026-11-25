@@ -62,8 +62,10 @@ scenarios.
 
 Real IMAP scenarios set `StackOptions { imap: true, .. }`. Prepare and start
 `docker/imap-lab` first, and build `imap_service` alongside the email binaries.
-`user.link_imap()` uses the authenticated connection API and returns the link
-UUID. `stack.imap_lab()` controls Dovecot through an independent Python IMAP
+`user.link_imap()` signs a synthetic personal session for the connection API
+and returns the link UUID. Use `user.submit_imap_connection()` to exercise a
+specific settings payload or a typed refusal with the same session.
+`stack.imap_lab()` controls Dovecot through an independent Python IMAP
 client and reads Mailpit; it never uses the engine's index as its provider
 oracle. Each unique user has a separate real mailbox. The existing `Provider`
 helpers remain specific to the Gmail/Outlook emulators.

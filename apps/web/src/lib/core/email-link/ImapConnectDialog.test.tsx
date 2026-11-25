@@ -18,6 +18,7 @@ import { ImapConnectDialog, openImapConnection } from './ImapConnectDialog';
 
 const mail = vi.hoisted(() => ({
   discover: vi.fn(),
+  settings: vi.fn(),
   connect: vi.fn(),
   accountCurrent: vi.fn(),
   providers: vi.fn(),
@@ -34,7 +35,11 @@ vi.mock('@queries/auth/outlook-link', () => ({
   fetchEmailConnectionProviders: mail.providers,
 }));
 vi.mock('@service-email/client', () => ({
-  emailClient: { imapDiscover: mail.discover, imapConnect: mail.connect },
+  emailClient: {
+    imapDiscover: mail.discover,
+    imapConnect: mail.connect,
+    getImapMailboxSettings: mail.settings,
+  },
 }));
 
 beforeEach(() => {
@@ -49,22 +54,25 @@ beforeEach(() => {
   );
   mail.accountCurrent.mockReturnValue(true);
   mail.providers.mockResolvedValue({ gmail: true, outlook: true, imap: true });
+  const endpoints = {
+    imap: {
+      host: 'in.example.com',
+      username: 'in-user',
+      port: 993,
+      tls: 'implicit',
+    },
+    smtp: {
+      host: 'out.example.com',
+      username: 'out-user',
+      port: 587,
+      tls: 'start_tls',
+    },
+  } satisfies Pick<Discovery, 'imap' | 'smtp'>;
   mail.discover.mockResolvedValue(
-    ok({
-      imap: {
-        host: 'in.example.com',
-        username: 'in-user',
-        port: 993,
-        tls: 'implicit',
-      },
-      smtp: {
-        host: 'out.example.com',
-        username: 'out-user',
-        port: 587,
-        tls: 'start_tls',
-      },
-      hostConfirmationRequired: true,
-    })
+    ok({ ...endpoints, hostConfirmationRequired: true })
+  );
+  mail.settings.mockResolvedValue(
+    ok({ ...endpoints, provider: 'Stored provider' })
   );
 });
 afterEach(() => {
@@ -121,6 +129,12 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   const incomingPassword = await screen.findByLabelText(
     'Password or app password'
   );
+  expect(mail.settings).toHaveBeenCalledWith(
+    'existing-inbox',
+    expect.any(AbortSignal),
+    expect.anything()
+  );
+  expect(mail.discover).not.toHaveBeenCalled();
   expect(incomingPassword.getAttribute('autocomplete')).toBe('off');
   expect(
     incomingPassword.closest('form')?.classList.contains('ph-no-capture')
@@ -157,7 +171,6 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   expect(mail.connect.mock.calls[0][0]).toEqual({
     requestId: expect.any(String),
     linkId: 'existing-inbox',
-    email: 'owner@example.com',
     imap: {
       endpoint: {
         host: 'in.example.com',
@@ -390,6 +403,51 @@ it('keeps reconnect secrets empty and forgets an unselected outgoing password', 
   expect(mail.connect).not.toHaveBeenCalled();
 });
 
+it('allows confirmed manual reconnect when saved endpoints cannot be loaded', async () => {
+  mail.settings.mockResolvedValue(
+    err([
+      {
+        code: ImapConnectionErrorCode.credentials_unreadable,
+        message: 'Unavailable',
+      },
+    ])
+  );
+  mail.connect.mockResolvedValue(ok({ linkId: 'existing-inbox' }));
+  const onResult = vi.fn();
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={onResult}
+      emailAddress="owner@example.com"
+      linkId="existing-inbox"
+    />
+  ));
+
+  const password = await screen.findByLabelText('Password or app password');
+  const [incoming, outgoing] = screen.getAllByLabelText('Server name');
+  expect(incoming).toHaveProperty('value', '');
+  expect(outgoing).toHaveProperty('value', '');
+  expect(password).toHaveProperty('disabled', true);
+  expect(mail.discover).not.toHaveBeenCalled();
+  expect(mail.connect).not.toHaveBeenCalled();
+  fireEvent.input(incoming, { target: { value: 'imap.example.com' } });
+  fireEvent.input(outgoing, { target: { value: 'smtp.example.com' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+  fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+  await vi.waitFor(() =>
+    expect(onResult).toHaveBeenCalledWith({
+      type: 'connected',
+      linkId: 'existing-inbox',
+    })
+  );
+  expect(mail.connect.mock.calls[0][0]).toMatchObject({
+    linkId: 'existing-inbox',
+    confirmedHosts: ['imap.example.com', 'smtp.example.com'],
+  });
+});
+
 it.each([
   { steer: 'gmail', provider: 'GMAIL', name: 'Google' },
   { steer: 'outlook', provider: 'OUTLOOK', name: 'Microsoft' },
@@ -421,10 +479,22 @@ it.each([
   }
 );
 
+it('keeps password setup on the verified address', async () => {
+  render(() => (
+    <ImapConnectDialog open onOpenChange={() => {}} onResult={() => {}} />
+  ));
+  fireEvent.input(screen.getByLabelText('Email address'), {
+    target: { value: 'entered@example.com' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Find settings' }));
+  expect((await screen.findByRole('alert')).textContent).toMatch(/verified/i);
+  expect(screen.queryByLabelText('Password or app password')).toBeNull();
+  expect(mail.connect).not.toHaveBeenCalled();
+});
+
 it('keeps an existing Google IMAP reconnect on its bound password flow', async () => {
-  mail.discover.mockResolvedValue(
+  mail.settings.mockResolvedValue(
     ok({
-      steer: 'gmail',
       provider: 'Google',
       imap: {
         host: 'imap.example.com',
@@ -438,7 +508,6 @@ it('keeps an existing Google IMAP reconnect on its bound password flow', async (
         port: 465,
         tls: 'implicit',
       },
-      hostConfirmationRequired: true,
     })
   );
   mail.connect.mockResolvedValue(ok({ linkId: 'existing-inbox' }));
@@ -608,7 +677,9 @@ it.each(['discovery', 'connect'])(
     }
     const request = phase === 'discovery' ? mail.discover : mail.connect;
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
-    const signal = request.mock.calls[0][1] as AbortSignal;
+    const signal = request.mock.calls[0][
+      phase === 'discovery' ? 0 : 1
+    ] as AbortSignal;
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(signal.aborted).toBe(true);
     expect(close).toHaveBeenCalledWith(false);
@@ -647,7 +718,10 @@ it.each([
     }
     await vi.advanceTimersByTimeAsync(deadline);
     const request = phase === 'discovery' ? mail.discover : mail.connect;
-    expect((request.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
+    const signal = request.mock.calls[0][
+      phase === 'discovery' ? 0 : 1
+    ] as AbortSignal;
+    expect(signal.aborted).toBe(true);
     expect(
       screen
         .getByRole('button', {
