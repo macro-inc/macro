@@ -1267,3 +1267,33 @@ async fn a_company_column_of_an_ordinary_database_names_the_company_that_stays(p
         "the write went through the database write path"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_commit_names_each_teammate_whose_rules_it_rewrote_to_tell_them(pool: PgPool) {
+    let world = World::new(pool).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    world
+        .sharer(&EmailRuleSet {
+            schema_version: 1,
+            include: vec![EmailInclusionRule::Company { company_id: merged }],
+        })
+        .await;
+    let merge = targets(stays, &[merged]);
+    let preview = world.merges.preview(&world.scope(), &merge).await.unwrap();
+    let command = MergeCommand {
+        targets: merge,
+        revision: preview.revision,
+        request_key: Uuid::now_v7(),
+        sharing_rules: SharingRulesChoice::Keep,
+    };
+
+    let committed = world.merges.commit(&world.scope(), &command).await.unwrap();
+    assert_eq!(committed.sharing_owners, vec![SHARER.to_string()]);
+    let again = world.merges.commit(&world.scope(), &command).await.unwrap();
+    assert!(again.replayed);
+    assert!(
+        again.sharing_owners.is_empty(),
+        "a retry tells no one again"
+    );
+}

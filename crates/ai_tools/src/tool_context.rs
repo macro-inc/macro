@@ -706,13 +706,23 @@ pub type ToolMergeService = crm::domain::record_merge::service::RecordMergeServi
 pub type ToolMergeToolContext =
     crm::inbound::toolset::merge::MergeToolContext<ToolMergeService, ToolEntityAccessService>;
 
+/// The notices a merge sends members whose sharing rules it changed, through
+/// `ingress`.
+pub fn merge_sharing_notices<I: notification::domain::service::NotificationIngress>(
+    ingress: Arc<I>,
+) -> Arc<dyn crm::domain::record_merge::service::MergeNotices> {
+    Arc::new(crm::outbound::record_merge::SharingNotices(ingress))
+}
+
 /// Build the merge tools over the database tools' service and access. Without
-/// a feature flag client, merging stays off.
+/// a feature flag client, merging stays off; without `notices`, members whose
+/// sharing rules a merge rewrites see it only in their sharing history.
 pub fn build_merge_tool_context(
     pool: sqlx::PgPool,
     databases: &ToolDatabasesToolContext,
     feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
     event_broker: MaybeToolEventBroker,
+    notices: Option<Arc<dyn crm::domain::record_merge::service::MergeNotices>>,
 ) -> ToolMergeToolContext {
     let mut merges = crm::domain::record_merge::service::RecordMergeService::new(
         crm::outbound::record_merge::PgRecordMergeRepository::new(
@@ -732,6 +742,9 @@ pub fn build_merge_tool_context(
     )));
     if let Some(flags) = feature_flags {
         merges = merges.with_gate(Arc::new(crm::outbound::record_merge::FlaggedMerge(flags)));
+    }
+    if let Some(notices) = notices {
+        merges = merges.with_notices(notices);
     }
     crm::inbound::toolset::merge::MergeToolContext {
         merges: Arc::new(merges),

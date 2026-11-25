@@ -264,8 +264,9 @@ mod service {
     use uuid::Uuid;
 
     use super::super::service::{
-        ChangedEntityProperty, MergeCommitted, MergeEffects, MergeGate, MergePipelineAccess,
-        MergeReferenceAccess, RecordMergeRepository, RecordMergeService, RecordMerges,
+        ChangedEntityProperty, MergeCommitted, MergeEffects, MergeGate, MergeNotices,
+        MergePipelineAccess, MergeReferenceAccess, RecordMergeRepository, RecordMergeService,
+        RecordMerges,
     };
     use super::super::*;
     use crate::domain::auth::{CrmMemberAccess, CrmTeamReceipt};
@@ -279,6 +280,7 @@ mod service {
         calls: Mutex<Vec<&'static str>>,
         replayed: bool,
         preview: Option<MergePreview>,
+        sharing_owners: Vec<String>,
     }
 
     impl CrmMemberAccess for Arc<Repo> {
@@ -326,6 +328,7 @@ mod service {
                     previous_value: None,
                     updated_at: chrono::DateTime::UNIX_EPOCH,
                 }],
+                sharing_owners: self.sharing_owners.clone(),
             })
         }
     }
@@ -355,6 +358,19 @@ mod service {
                 .copied()
                 .filter(|pipeline| self.0.contains(pipeline))
                 .collect())
+        }
+    }
+
+    #[derive(Default)]
+    struct Notices(Mutex<Vec<(Uuid, Uuid, Vec<String>)>>);
+
+    #[async_trait::async_trait]
+    impl MergeNotices for Notices {
+        async fn sharing_rules_changed(&self, team_id: Uuid, merge_id: Uuid, owners: &[String]) {
+            self.0
+                .lock()
+                .unwrap()
+                .push((team_id, merge_id, owners.to_vec()));
         }
     }
 
@@ -618,5 +634,34 @@ mod service {
             .await
             .unwrap();
         assert_eq!(unchecked.moves.references, 0);
+    }
+
+    #[tokio::test]
+    async fn teammates_whose_rules_changed_are_told_once_and_never_on_a_retry() {
+        let owners = vec!["macro|sharer@example.com".to_string()];
+        let effects = Arc::new(Effects::default());
+        for replayed in [false, true] {
+            let repo = Arc::new(Repo {
+                replayed,
+                sharing_owners: owners.clone(),
+                ..Repo::default()
+            });
+            let notices = Arc::new(Notices::default());
+            let access = receipt(TeamRole::Admin);
+            service(&repo, true, &effects)
+                .with_notices(notices.clone())
+                .commit(&access, &command())
+                .await
+                .unwrap();
+            let sent = notices.0.lock().unwrap().clone();
+            if replayed {
+                assert!(sent.is_empty(), "a retry tells no one again");
+            } else {
+                assert_eq!(
+                    sent,
+                    vec![(access.team_id(), outcome().merge_id, owners.clone())]
+                );
+            }
+        }
     }
 }

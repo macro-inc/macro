@@ -846,6 +846,23 @@ function getSupportedHandler(
           );
       })
       .with('inbox_reauth_required', () => null)
+      // Opens where the recipient reviews their CRM email sharing rules.
+      .with(
+        'crm_email_sharing_changed',
+        () =>
+          async (lm: SplitManager, newSplit: boolean = false) =>
+            openContent(
+              lm,
+              {
+                type: 'component',
+                id: 'settings',
+                entryMetadata: {
+                  route: paneRoute({ id: 'settings', params: { tab: 'crm' } }),
+                },
+              },
+              { newSplit, sourceHandle, onApplied }
+            )
+      )
       .with('routine_run_finished', () => {
         return async (lm: SplitManager, newSplit: boolean = false) =>
           openContent(lm, routineContent(notification.entity_id), {

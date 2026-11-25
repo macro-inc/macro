@@ -111,7 +111,7 @@ pub use tool_context::{
     build_properties_service_with_broker, build_properties_tool_context,
     build_read_agent_session_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
-    build_team_tool_context, build_time_tracking_tool_context,
+    build_team_tool_context, build_time_tracking_tool_context, merge_sharing_notices,
 };
 pub use tool_context::{ToolConnectorToolContext, build_connector_tool_context};
 #[cfg(any(test, feature = "test-support"))]

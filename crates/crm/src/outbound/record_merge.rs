@@ -714,7 +714,7 @@ where
         scope: &MergeScope,
         command: &MergeCommand,
         merge_id: Uuid,
-    ) -> Result<(MergeOutcome, Vec<ChangedEntityProperty>), MergeError> {
+    ) -> Result<(MergeOutcome, Vec<ChangedEntityProperty>, Vec<String>), MergeError> {
         let team = scope.team_id;
         let targets = &command.targets;
         let state = CompaniesRepositoryImpl::lock_company_merge(&mut *tx, team, targets).await?;
@@ -1002,7 +1002,11 @@ where
             merged_ids: targets.sources().to_vec(),
             committed_at,
         };
-        Ok((outcome, written))
+        let sharing_owners = rewrites
+            .iter()
+            .map(|(member, _)| member.user_id.clone())
+            .collect();
+        Ok((outcome, written, sharing_owners))
     }
 }
 
@@ -1062,6 +1066,7 @@ where
                 outcome,
                 replayed: true,
                 changed_properties: Vec::new(),
+                sharing_owners: Vec::new(),
             });
         }
 
@@ -1098,7 +1103,7 @@ where
         .await
         .map_err(db)?;
 
-        let (outcome, changed_properties) = self
+        let (outcome, changed_properties, sharing_owners) = self
             .commit_company(&mut tx, scope, command, merge_id)
             .await?;
         sqlx::query!(
@@ -1129,7 +1134,49 @@ where
             outcome,
             replayed: false,
             changed_properties,
+            sharing_owners,
         })
+    }
+}
+
+/// Notices through the notification service, one per member, from no one:
+/// what changed is the member's own rules, not something the admin shares.
+pub struct SharingNotices<I>(pub Arc<I>);
+
+#[async_trait::async_trait]
+impl<I: notification::domain::service::NotificationIngress>
+    crate::domain::record_merge::service::MergeNotices for SharingNotices<I>
+{
+    #[tracing::instrument(name = "crm.merge.sharing_notices", skip_all, fields(team_id = %team_id, merge_id = %merge_id, owners = owners.len(), failed = tracing::field::Empty))]
+    async fn sharing_rules_changed(&self, team_id: Uuid, merge_id: Uuid, owners: &[String]) {
+        let mut failed = 0usize;
+        for owner in owners {
+            let Ok(recipient) = macro_user_id::user_id::MacroUserIdStr::parse_from_str(owner)
+            else {
+                failed += 1;
+                tracing::warn!("a merge's sharing notice has no valid recipient");
+                continue;
+            };
+            let request = notification::domain::models::SendNotificationRequestBuilder {
+                notification_entity: model_entity::EntityType::User
+                    .with_entity_string(owner.clone()),
+                secondary_notification_entity: None,
+                sender_id: None,
+                recipient_ids: std::collections::HashSet::from([recipient]),
+                notification: model_notifications::CrmEmailSharingChangedMetadata {
+                    team_id,
+                    reason: model_notifications::CrmEmailSharingChangeReason::CompaniesMerged,
+                },
+            }
+            // One per member per merge, however often it is sent.
+            .into_request_with_id(Uuid::new_v5(&merge_id, owner.as_bytes()))
+            .with_conn_gateway();
+            if let Err(error) = self.0.send_notification(request).await {
+                failed += 1;
+                tracing::warn!(error = ?error, "failed to send a merge's sharing notice");
+            }
+        }
+        tracing::Span::current().record("failed", failed);
     }
 }
 

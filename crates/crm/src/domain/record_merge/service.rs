@@ -40,6 +40,8 @@ pub struct MergeCommitted {
     pub replayed: bool,
     /// Entity properties written, for publication.
     pub changed_properties: Vec<ChangedEntityProperty>,
+    /// The teammates whose email sharing rules the merge rewrote, to tell.
+    pub sharing_owners: Vec<String>,
 }
 
 /// Storage for merges: locks the records, recomputes the review under the
@@ -98,6 +100,15 @@ pub trait MergeReferenceAccess: Send + Sync {
     ) -> Result<HashSet<(PropertyEntityType, String)>, MergeError>;
 }
 
+/// Tells members their own settings changed with a merge. Best effort: a
+/// notice that fails never undoes the merge.
+#[async_trait::async_trait]
+pub trait MergeNotices: Send + Sync {
+    /// Tell each of `owners` once that their email sharing rules in `team_id`
+    /// changed because companies were merged.
+    async fn sharing_rules_changed(&self, team_id: Uuid, merge_id: Uuid, owners: &[String]);
+}
+
 /// The merge operations inbound adapters call.
 pub trait RecordMerges: Send + Sync + 'static {
     /// Review a merge.
@@ -122,6 +133,7 @@ pub struct RecordMergeService<R> {
     effects: Option<Arc<dyn MergeEffects>>,
     pipelines: Option<Arc<dyn MergePipelineAccess>>,
     references: Option<Arc<dyn MergeReferenceAccess>>,
+    notices: Option<Arc<dyn MergeNotices>>,
 }
 
 impl<R: RecordMergeRepository> RecordMergeService<R> {
@@ -133,6 +145,7 @@ impl<R: RecordMergeRepository> RecordMergeService<R> {
             effects: None,
             pipelines: None,
             references: None,
+            notices: None,
         }
     }
 
@@ -151,6 +164,12 @@ impl<R: RecordMergeRepository> RecordMergeService<R> {
     /// Attach pipeline access; without it a review names no pipeline.
     pub fn with_pipeline_access(mut self, pipelines: Arc<dyn MergePipelineAccess>) -> Self {
         self.pipelines = Some(pipelines);
+        self
+    }
+
+    /// Attach the notices to members whose settings a merge changes.
+    pub fn with_notices(mut self, notices: Arc<dyn MergeNotices>) -> Self {
+        self.notices = Some(notices);
         self
     }
 
@@ -306,6 +325,20 @@ impl<R: RecordMergeRepository> RecordMerges for RecordMergeService<R> {
             && let Some(effects) = &self.effects
         {
             effects.properties_changed(&committed.changed_properties);
+        }
+        // Their sharing history records it too, but only a notice reaches
+        // someone who doesn't open it.
+        if !committed.replayed
+            && !committed.sharing_owners.is_empty()
+            && let Some(notices) = &self.notices
+        {
+            notices
+                .sharing_rules_changed(
+                    scope.team_id,
+                    committed.outcome.merge_id,
+                    &committed.sharing_owners,
+                )
+                .await;
         }
         Ok(committed.outcome)
     }

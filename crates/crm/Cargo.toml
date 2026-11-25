@@ -35,6 +35,8 @@ merge = [
   "dep:macro_event_broker",
   "dep:favorites",
   "dep:model-entity",
+  "dep:model_notifications",
+  "dep:notification",
   "dep:saved_views",
   "favorites/postgres",
   "messages/outbound",
@@ -107,6 +109,8 @@ activity = { path = "../activity", default-features = false, features = ["outbou
 favorites = { path = "../favorites", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 saved_views = { path = "../saved_views", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
+notification = { path = "../notification", optional = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }

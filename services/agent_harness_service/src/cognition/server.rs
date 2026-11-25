@@ -677,6 +677,9 @@ pub async fn build(
         &databases_tool_context,
         side_effect_clients.feature_flags.clone(),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        Some(ai_tools::merge_sharing_notices(
+            notification_ingress_service.clone(),
+        )),
     );
     let entity_creator = Arc::new(ai_tools::ToolEntityCreator {
         notion_link_editor: Some(ai_tools::NotionLinkEditor::new(

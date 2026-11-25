@@ -490,6 +490,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         &databases_tool_context,
         None,
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        None,
     );
     let crm_transfer_tool_context = ai_tools::build_crm_transfer_tool_context(
         &pipeline_tool_context,
