@@ -29,7 +29,7 @@ Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
 bun run check
-# … 97 pass, 0 fail
+# … 99 pass, 0 fail
 ```
 
 Mock smoke run. The mock always answers `--mock-choice`, so about one in four
@@ -71,9 +71,8 @@ doppler run -p shared_ai -c lcl --only-secrets FIREWORK_API_KEY -- \
 # solved  planner_calls=1  actions=1  planner_ms=1019  tokens=734  lab-records/<run>.json
 ```
 
-`--challenges` is capped at 10 per family per run. Results so far (20 live attempts:
-5 `model_error` with Kimi's default reasoning, then 15 of 15 solved with it
-off) are in the design doc.
+`--challenges` is capped at 10 per family per run. Results so far are in the
+design doc.
 
 With the local stack up (`just run_local`), the same commands apply
 unchanged: the lab uses none of the stack's services, and ordinary agent
@@ -87,4 +86,5 @@ ignored by git): run id, capability id, origin, gate decisions, provider,
 requested and returned model, planner calls, the action taken, the server's
 outcome, token usage and timings. No answer, option id or seed.
 Outcomes: `solved`, `incorrect`, `expired` (server-scored), and
-`provenance_rejected`, `model_error`, `aborted`, `action_error` (no score).
+`provenance_rejected`, `model_error`, `aborted`, `action_error`, `timeout`
+(no score; `timeout` after three minutes of wall clock per challenge).

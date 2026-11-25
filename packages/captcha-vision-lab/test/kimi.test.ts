@@ -50,7 +50,7 @@ describe('the Kimi adapter', () => {
       apiKey: 'stand-in-key',
     });
 
-    const result = await planner.plan(INPUT);
+    const result = await planner.plan(INPUT, new AbortController().signal);
 
     expect(result.decision).toEqual({ kind: 'choice', label: 'C' });
     expect(result.usage).toEqual({
@@ -125,7 +125,9 @@ describe('the Kimi adapter', () => {
         apiKey: 'stand-in-key',
       });
 
-      await expect(planner.plan(INPUT)).rejects.toThrow();
+      await expect(
+        planner.plan(INPUT, new AbortController().signal)
+      ).rejects.toThrow();
     });
   }
 
@@ -136,7 +138,9 @@ describe('the Kimi adapter', () => {
       apiKey: 'stand-in-key',
     });
 
-    expect((await planner.plan(INPUT)).decision).toEqual({
+    expect(
+      (await planner.plan(INPUT, new AbortController().signal)).decision
+    ).toEqual({
       kind: 'abort',
       reason: 'cannot tell',
     });
@@ -151,10 +155,13 @@ describe('the Kimi adapter for ordered and typed responses', () => {
       apiKey: 'stand-in-key',
     });
 
-    const result = await planner.plan({
-      ...INPUT,
-      response: { kind: 'order', labels: LABELS },
-    });
+    const result = await planner.plan(
+      {
+        ...INPUT,
+        response: { kind: 'order', labels: LABELS },
+      },
+      new AbortController().signal
+    );
 
     expect(result.decision).toEqual({
       kind: 'order',
@@ -185,7 +192,10 @@ describe('the Kimi adapter for ordered and typed responses', () => {
       apiKey: 'stand-in-key',
     });
 
-    const result = await planner.plan({ ...INPUT, response: { kind: 'text' } });
+    const result = await planner.plan(
+      { ...INPUT, response: { kind: 'text' } },
+      new AbortController().signal
+    );
 
     expect(result.decision).toEqual({ kind: 'text', text: '40719' });
     const request = standIn.requests[0] as {
@@ -226,9 +236,9 @@ describe('the Kimi adapter for ordered and typed responses', () => {
           ? { kind: 'order' as const, labels: LABELS }
           : { kind: 'text' as const };
 
-      await expect(planner.plan({ ...INPUT, response })).rejects.toThrow(
-        'answer_outside_spec'
-      );
+      await expect(
+        planner.plan({ ...INPUT, response }, new AbortController().signal)
+      ).rejects.toThrow('answer_outside_spec');
     });
   }
 
@@ -245,7 +255,9 @@ describe('the Kimi adapter for ordered and typed responses', () => {
       apiKey: 'stand-in-key',
     });
 
-    const failure = await planner.plan(INPUT).catch((error: unknown) => error);
+    const failure = await planner
+      .plan(INPUT, new AbortController().signal)
+      .catch((error: unknown) => error);
 
     expect(failure).toMatchObject({
       code: 'no_content',

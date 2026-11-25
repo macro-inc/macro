@@ -58,7 +58,8 @@ export class PlannerError extends Error {
 export type Planner = {
   provider: 'mock' | 'kimi';
   model: string;
-  plan: (input: PlannerInput) => Promise<PlannerResult>;
+  /** `signal` aborts the call when the challenge's deadline passes. */
+  plan: (input: PlannerInput, signal: AbortSignal) => Promise<PlannerResult>;
 };
 
 /** Whether a decision is one the spec allows. */
@@ -203,12 +204,12 @@ export const kimiPlanner = ({
 }: KimiPlannerOptions): Planner => ({
   provider: 'kimi',
   model,
-  plan: async ({ screenshot, prompt, response: spec }) => {
+  plan: async ({ screenshot, prompt, response: spec }, signal) => {
     const image = Buffer.from(screenshot).toString('base64');
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       redirect: 'error',
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${apiKey}`,
