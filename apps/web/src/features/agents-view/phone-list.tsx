@@ -206,7 +206,7 @@ export function PhoneAgentsList(props: {
                   <AgentBubble onSelect={props.onCreateAgent} />
                 </div>
               </Show>
-              <div class="flex min-h-0 flex-1 flex-col gap-3">
+              <div class="flex min-h-0 flex-1 flex-col gap-3 px-3">
                 <Show
                   when={
                     !props.archived &&
@@ -214,22 +214,20 @@ export function PhoneAgentsList(props: {
                     sections().waiting.length > 0
                   }
                 >
-                  <div class="px-3">
-                    <PhoneListSection.Root
+                  <PhoneListSection.Root
+                    title={t('agentWork.waitingOnYou')}
+                    card
+                  >
+                    <PhoneListSection.Heading
                       title={t('agentWork.waitingOnYou')}
+                      count={sections().waiting.length}
+                      icon={<SessionStatusGlyph state="waiting" />}
                       card
-                    >
-                      <PhoneListSection.Heading
-                        title={t('agentWork.waitingOnYou')}
-                        count={sections().waiting.length}
-                        icon={<SessionStatusGlyph state="waiting" />}
-                        card
-                      />
-                      <PhoneListSection.Body>
-                        {renderRows(sections().waiting, true)}
-                      </PhoneListSection.Body>
-                    </PhoneListSection.Root>
-                  </div>
+                    />
+                    <PhoneListSection.Body>
+                      {renderRows(sections().waiting, true)}
+                    </PhoneListSection.Body>
+                  </PhoneListSection.Root>
                 </Show>
                 <Show
                   when={
@@ -238,22 +236,17 @@ export function PhoneAgentsList(props: {
                     sections().favorites.length > 0
                   }
                 >
-                  <div class="px-3">
-                    <PhoneListSection.Root
+                  <PhoneListSection.Root title={t('agentWork.favorites')} card>
+                    <PhoneListSection.Heading
                       title={t('agentWork.favorites')}
+                      count={sections().favorites.length}
+                      icon={<StarIcon class="size-3.5" />}
                       card
-                    >
-                      <PhoneListSection.Heading
-                        title={t('agentWork.favorites')}
-                        count={sections().favorites.length}
-                        icon={<StarIcon class="size-3.5" />}
-                        card
-                      />
-                      <PhoneListSection.Body>
-                        {renderRows(sections().favorites)}
-                      </PhoneListSection.Body>
-                    </PhoneListSection.Root>
-                  </div>
+                    />
+                    <PhoneListSection.Body>
+                      {renderRows(sections().favorites)}
+                    </PhoneListSection.Body>
+                  </PhoneListSection.Root>
                 </Show>
                 <PhoneListSection.Root title={collectionTitle()}>
                   <PhoneListSection.Heading
