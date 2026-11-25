@@ -23,6 +23,7 @@ import {
   isEmailEntity,
   type WithNotification,
 } from '@entity';
+import { useEmailInboxLabels } from '@queries/email/label-names';
 import {
   createLocalDraftSource,
   localDraftEntities,
@@ -278,10 +279,15 @@ export function useEmailDataSource(
         ? 'all'
         : (emailSearchScopeTab(state.searchScope) ?? 'all'),
   });
+  const inboxLabels = useEmailInboxLabels();
+  const labelNames = createMemo(
+    () => new Map(inboxLabels().map((label) => [label.id, label.storedName]))
+  );
   const searchContext = (): EmailSearchContext => ({
     ...searchQueryContext(),
     scope: state.searchScope,
     scopeThreadIds: scopeThreadIds(),
+    labelNames: labelNames(),
   });
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: listEnabled(),

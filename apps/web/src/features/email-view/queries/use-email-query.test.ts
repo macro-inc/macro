@@ -22,6 +22,9 @@ import {
 } from './use-email-query';
 
 const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
+vi.mock('@queries/email/label-names', () => ({
+  useEmailInboxLabels: () => () => [],
+}));
 vi.mock('@queries/email/local-draft-source', async () => ({
   ...(await import('@queries/email/local-draft-entities')),
   createLocalDraftSource: (enabled: () => boolean) => ({

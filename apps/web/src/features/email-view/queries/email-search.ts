@@ -65,6 +65,8 @@ export type EmailSearchContext = Omit<EmailQueryContext, 'tab'> & {
   scope: EmailSearchScope;
   /** The threads a Favorites or Focus search is held to. */
   scopeThreadIds?: readonly string[];
+  /** Each label's stored name ("Customers/Larkspur"), which search matches. */
+  labelNames?: ReadonlyMap<string, string>;
 };
 
 const soleSelection = (selection: string[] | undefined) =>
@@ -117,6 +119,7 @@ const SERVICE_FACET_GROUPS = [
   'calendar',
   'attachments',
   'tags',
+  'labels',
 ] as const;
 
 /** The part of `facets` that service search leaves to the client. */
@@ -172,6 +175,18 @@ export function buildEmailSearchRequest(
   const tagOptionIds = [...new Set(context.facets.tags ?? [])].filter((id) =>
     context.facetContext.tagPropertyDefinitionByOptionId.has(id)
   );
+  // Search hits carry no labels, so a label narrows by its stored name, as
+  // `label:` does, among the viewer's own inboxes; a label not yet known stops
+  // filtering, as a tag does.
+  const labelNames = [
+    ...new Set(
+      (context.facets.labels ?? []).flatMap((id) => {
+        const name = context.labelNames?.get(id);
+        return name ? [name] : [];
+      })
+    ),
+  ];
+  if (labelNames.length > 0) emailFilters.include_labels = labelNames;
 
   return {
     params: { cursor: null, page_size: 100 },
