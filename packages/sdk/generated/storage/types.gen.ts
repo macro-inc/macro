@@ -10057,6 +10057,13 @@ export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConse
  */
 export type EmailPrivacySettings = {
     /**
+     * Team domains listed because their company is archived, mapped to that
+     * company. They can't be removed until the company is restored.
+     */
+    archived_team_domains: {
+        [key: string]: string;
+    };
+    /**
      * Whether the caller can remove a team exclusion.
      */
     can_remove_team_domains: boolean;

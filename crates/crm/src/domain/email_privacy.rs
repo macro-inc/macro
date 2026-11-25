@@ -48,6 +48,9 @@ pub struct EmailPrivacySettings {
     pub team_domain_warnings: std::collections::BTreeMap<String, MailboxDomainConflict>,
     /// Existing personal exclusions that cover the caller's whole mailbox.
     pub personal_domain_warnings: std::collections::BTreeMap<String, MailboxDomainConflict>,
+    /// Team domains listed because their company is archived, mapped to that
+    /// company. They can't be removed until the company is restored.
+    pub archived_team_domains: std::collections::BTreeMap<String, Uuid>,
     /// Whether the caller can remove a team exclusion.
     pub can_remove_team_domains: bool,
 }

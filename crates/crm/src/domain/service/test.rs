@@ -78,6 +78,7 @@ impl EmailPrivacyRepository for StubRepo {
             personal_domains: vec![],
             team_domain_warnings: Default::default(),
             personal_domain_warnings: Default::default(),
+            archived_team_domains: Default::default(),
             can_remove_team_domains: false,
         })
     }

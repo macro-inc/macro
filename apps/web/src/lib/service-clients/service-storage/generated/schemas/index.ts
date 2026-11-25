@@ -1437,6 +1437,7 @@ export * from './emailPrivacyChangeOneOfThreeAction';
 export * from './emailPrivacyChangeOneOfThreeLinkId';
 export * from './emailPrivacyResponse';
 export * from './emailPrivacySettings';
+export * from './emailPrivacySettingsArchivedTeamDomains';
 export * from './emailPrivacySettingsMailboxEmail';
 export * from './emailPrivacySettingsMailboxLinkId';
 export * from './emailPrivacySettingsPersonalDomainWarnings';

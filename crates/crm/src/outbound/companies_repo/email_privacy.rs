@@ -566,6 +566,23 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
                UNION SELECT lower(d.domain) FROM crm_domains d JOIN crm_companies c ON c.id = d.company_id
                WHERE d.team_id = $1 AND c.team_id = $1 AND NOT c.email_sync ORDER BY 1"#, team
         ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // Removing a team domain is refused while its company is archived,
+        // whatever its sync state, and archiving turns sync off, so these
+        // domains are all on the list above. Keep `NOT email_sync` and
+        // `d.team_id` out: either lets the planner read past the team's
+        // archived companies.
+        let archived_team_domains = sqlx::query!(
+            r#"SELECT lower(d.domain) AS "domain!", c.id AS company_id FROM crm_companies c
+               JOIN crm_domains d ON d.company_id = c.id
+               WHERE c.team_id = $1 AND c.hidden"#,
+            team
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        .into_iter()
+        .map(|row| (row.domain, row.company_id))
+        .collect();
         let personal_domains = sqlx::query_scalar!(
             "SELECT domain FROM crm_personal_email_blocklist WHERE team_id = $1 AND user_id = $2 ORDER BY domain", team, user
         ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
@@ -585,6 +602,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             personal_domains,
             team_domain_warnings,
             personal_domain_warnings,
+            archived_team_domains,
             can_remove_team_domains: false,
         })
     }

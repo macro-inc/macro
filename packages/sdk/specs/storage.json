@@ -47850,9 +47850,21 @@
           "personal_domains",
           "team_domain_warnings",
           "personal_domain_warnings",
+          "archived_team_domains",
           "can_remove_team_domains"
         ],
         "properties": {
+          "archived_team_domains": {
+            "type": "object",
+            "description": "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "can_remove_team_domains": {
             "type": "boolean",
             "description": "Whether the caller can remove a team exclusion."
