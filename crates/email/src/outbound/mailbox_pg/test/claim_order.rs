@@ -1,11 +1,14 @@
-//! Which due folder stream a claim takes: import rounds go ahead of finished
-//! folders that came due a little earlier, never of ones due much earlier, and
-//! a new import's Inbox and Sent rounds go ahead of its other folders.
+//! Which due folder stream a claim takes: every other turn of a sync loop
+//! takes the longest-due import round first, the others the longest-due
+//! folder of either kind, and a new import's Inbox and Sent rounds go ahead of
+//! its other folders.
 
-use crate::domain::mailbox::live_pass::StreamKind;
+use super::retries::{Provider, sync};
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::{MailboxSyncRepository, StreamLease};
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use email_api_client::domain::models::{FolderRole, MailFolder, ProviderId};
+use email_api_client::domain::models::{MailboxChangePage, StreamPosition, StreamToken};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -34,58 +37,94 @@ async fn mailbox(db: &PgPool, address: &str, finished: bool, due_seconds_ago: f6
     link
 }
 
-async fn claim(repo: &PgMailboxSync) -> StreamLease {
-    repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+async fn claim(repo: &PgMailboxSync, claim: StreamClaim) -> StreamLease {
+    repo.claim_stream(macro_uuid::generate_uuid_v7(), claim)
         .await
         .unwrap()
         .unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn import_rounds_go_ahead_of_finished_folders_due_shortly_before_them(db: PgPool) {
-    let polled = mailbox(&db, "polled@example.com", true, 120.0).await;
+async fn an_import_first_claim_takes_rounds_ahead_of_polls_due_long_before_them(db: PgPool) {
+    let polled = mailbox(&db, "polled@example.com", true, 1800.0).await;
     let first = mailbox(&db, "first@example.com", false, 10.0).await;
     let second = mailbox(&db, "second@example.com", false, 5.0).await;
     let repo = PgMailboxSync::new(db.clone());
 
     let order = [
-        claim(&repo).await.mailbox.link_id,
-        claim(&repo).await.mailbox.link_id,
-        claim(&repo).await.mailbox.link_id,
+        claim(&repo, StreamClaim::ImportFirst).await.mailbox.link_id,
+        claim(&repo, StreamClaim::ImportFirst).await.mailbox.link_id,
+        claim(&repo, StreamClaim::ImportFirst).await.mailbox.link_id,
     ];
-    assert_eq!(order, [first, second, polled]);
+    assert_eq!(
+        order,
+        [first, second, polled],
+        "the poll once no round is due"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_finished_folder_due_past_the_head_start_waits_for_no_round_that_came_due_later(
-    db: PgPool,
-) {
-    // Due six minutes ago, past the five-minute head start.
-    let polled = mailbox(&db, "polled@example.com", true, 360.0).await;
-    // Came due within five minutes after the poll: these still go first.
-    let earlier = mailbox(&db, "earlier@example.com", false, 240.0).await;
-    let early = mailbox(&db, "early@example.com", false, 120.0).await;
-    // Came due more than five minutes after the poll.
-    let later = mailbox(&db, "later@example.com", false, 30.0).await;
+async fn a_longest_due_claim_takes_whichever_folder_came_due_first(db: PgPool) {
+    let early_round = mailbox(&db, "early@example.com", false, 300.0).await;
+    let polled = mailbox(&db, "polled@example.com", true, 120.0).await;
+    let late_round = mailbox(&db, "late@example.com", false, 10.0).await;
     let repo = PgMailboxSync::new(db.clone());
 
-    // Each round read is due again at once, as a committed page leaves it,
-    // so the importing mailboxes always have a round due.
-    let mut before_poll = Vec::new();
-    for _ in 0..10 {
-        let lease = claim(&repo).await;
-        if lease.mailbox.link_id == polled {
-            break;
-        }
-        before_poll.push(lease.mailbox.link_id);
-        repo.release_stream(&lease, 0).await.unwrap();
+    let order = [
+        claim(&repo, StreamClaim::LongestDue).await.mailbox.link_id,
+        claim(&repo, StreamClaim::LongestDue).await.mailbox.link_id,
+        claim(&repo, StreamClaim::LongestDue).await.mailbox.link_id,
+    ];
+    assert_eq!(order, [early_round, polled, late_round]);
+}
+
+/// A page that leaves its round due again at once, as an import's pages do
+/// until its last.
+fn next_page() -> MailboxChangePage {
+    MailboxChangePage {
+        changed: Vec::new(),
+        removed: Vec::new(),
+        position: StreamPosition::Continue(StreamToken::new("next".into())),
+        reader_revision: 1,
     }
-    assert_eq!(
-        before_poll,
-        [earlier, early],
-        "only rounds due less than five minutes after the poll go before it, once each"
+}
+
+/// A finished folder's page: its next poll is minutes away.
+fn checkpoint() -> MailboxChangePage {
+    MailboxChangePage {
+        changed: Vec::new(),
+        removed: Vec::new(),
+        position: StreamPosition::Checkpoint(StreamToken::new("checkpoint".into())),
+        reader_revision: 1,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_sync_loop_reads_an_import_round_first_every_other_turn(db: PgPool) {
+    // The round has always just come due; both polls are long overdue.
+    let importing = mailbox(&db, "importing@example.com", false, 0.0).await;
+    let oldest = mailbox(&db, "oldest@example.com", true, 1800.0).await;
+    let older = mailbox(&db, "older@example.com", true, 1200.0).await;
+    let repo = PgMailboxSync::new(db.clone());
+    let service = sync(
+        &repo,
+        Provider::paging(vec![next_page(), checkpoint(), next_page(), checkpoint()]),
     );
-    assert_eq!(claim(&repo).await.mailbox.link_id, later);
+
+    let mut read = Vec::new();
+    for _ in 0..4 {
+        assert!(service.enumerate_once().await.unwrap());
+        read.push(
+            sqlx::query_scalar!(
+                "SELECT link_id FROM email_sync_streams ORDER BY lease_started_at DESC NULLS LAST LIMIT 1"
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        );
+    }
+
+    assert_eq!(read, [importing, oldest, importing, older]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -135,7 +174,13 @@ async fn a_new_import_reads_its_inbox_then_sent_before_folders_listed_ahead_of_t
 
     let mut order = Vec::new();
     for _ in 0..7 {
-        order.push(claim(&repo).await.folder.as_str().to_owned());
+        order.push(
+            claim(&repo, StreamClaim::ImportFirst)
+                .await
+                .folder
+                .as_str()
+                .to_owned(),
+        );
     }
     assert_eq!(order[..2], ["inbox", "sent"], "{order:?}");
     // The rest are due together; ids made in the same millisecond order them.

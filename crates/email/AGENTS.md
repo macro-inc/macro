@@ -674,19 +674,25 @@ tools — hexagonal, heavily feature-gated.
   import, and any message that waited for room, behind its whole backlog.
   Gmail's backfill lists its next page behind the threads it queued for the
   same reason. Live folder streams are never paced.
-  A mail folder claim takes an import round ahead of finished folders that
-  came due less than five minutes before it (`IMPORT_ROUND_HEAD_START_SECONDS`
-  in `claim_stream`, which picks the earlier of two one-row candidates). The
-  import round comes off the partial index
-  `email_sync_streams_import_round_claim`; keep its predicate and the query's
-  identical, or each claim reads every due finished folder. Polls of every
+  Every other `enumerate_once` turn of a sync loop claims the longest-due
+  import round first, or the longest-due folder when no round is due
+  (`StreamClaim::ImportFirst`); the other turns claim the longest-due folder
+  of either kind (`LongestDue`). `domain/mailbox/claim.rs`'s `ClaimTurns`
+  counts the turns, and `IMPORT_FIRST_EVERY` is the cap. Polls of every
   finished folder share the sync loops and run minutes late, and a round that
   waited behind them read a page only every few minutes while its import sat
-  empty. A round waiting for room reads nothing: paced, or its page refused
-  by the request gate while its mailbox's message reads hold the import
-  slots, which waits the 10 s pace too. `enumerate_once` then goes on to the
-  next due stream (up to `PACED_CLAIMS_PER_TURN`); otherwise a large import's
-  waiting rounds, due again within seconds, would take the polls' turns.
+  empty; half the turns keep an import reading once its mailbox has room,
+  whatever the line's length, and leave polls at least the other half. The
+  import round comes off the partial index
+  `email_sync_streams_import_round_claim`; keep its predicate and the query's
+  identical, or each claim reads every due finished folder. Enumerate spans
+  record the claim in `outlook.claim` (`import_first`, `longest_due`,
+  `live_pass`). A round waiting for room reads nothing: paced, or its page
+  refused by the request gate while its mailbox's message reads hold the
+  import slots, which waits the 10 s pace too. `enumerate_once` then goes on
+  to the next due stream of the same claim (up to `PACED_CLAIMS_PER_TURN`);
+  otherwise a large import's waiting rounds, due again within seconds, would
+  take the polls' turns.
   The discovery that creates a folder's stream makes its first round due a
   little early by role (`import_round_lead_seconds`: Inbox, then Sent, then
   the rest): the rounds that read an import's first pages stay ahead of those
