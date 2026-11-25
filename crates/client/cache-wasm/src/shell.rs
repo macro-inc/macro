@@ -51,7 +51,7 @@ mod test;
 #[cfg(test)]
 mod test_storage;
 
-use salvage::{Crossing, QueueReport, wipe_keeping_queue};
+use salvage::{Crossing, QueueReport, wipe_keeping_queue, wipe_keeping_queue_after};
 #[cfg(test)]
 use test_storage::{BrowserStorage, TestStorageFault};
 
@@ -1114,8 +1114,8 @@ async fn adopted_engine(
                     TursoStorageCloseOutcome::ResetRequired(closed) => closed.preserve_for_wipe(),
                 }
                 .map_err(err_js)?;
-                let (owner, crossing) = wipe_keeping_queue(scope, owner).await?;
-                let reopened = open_storage(scope, owner, crossing.after(&queue)).await?;
+                let (owner, crossing) = wipe_keeping_queue_after(scope, owner, &queue).await?;
+                let reopened = open_storage(scope, owner, crossing).await?;
                 let storage = reopened.storage;
                 match storage.adopt_schema(&incoming, &inputs, Unrecorded::Guess) {
                     Ok(adoption) => (

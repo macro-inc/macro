@@ -1,6 +1,8 @@
 use super::schema_change::{labelled, set_worker_schema};
 use super::*;
-use crate::shell::salvage::{QueueOutcome, QueueReport, wipe_keeping_queue};
+use crate::shell::salvage::{
+    QueueOutcome, QueueReport, wipe_keeping_queue, wipe_keeping_queue_after,
+};
 use cache_turso::{QueueLoss, SalvageFile};
 use std::cell::Cell;
 
@@ -393,6 +395,40 @@ async fn a_loss_the_side_file_refused_before_a_schema_wipe_outlives_a_worker_tha
         assert_kept(&engine, SCOPE).await;
         close_and_destroy(&engine, SCOPE).await;
         set_worker_schema(None);
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_taken_after_a_loss_nobody_noted_tells_it_to_whoever_imports_it() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-copy";
+    let untold = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 1,
+        ..QueueReport::default()
+    };
+    let noted = QueueReport {
+        noted: true,
+        ..untold
+    };
+    for (earlier, expected) in [
+        (untold, "partial"),
+        (noted, "kept"),
+        (QueueReport::default(), "kept"),
+    ] {
+        closed_with_queue(SCOPE).await;
+        // No loss note reaches the side file, and the engine dies before it
+        // opens the next database.
+        break_side_files("write", REFUSE_LOSSES).await;
+        let owner = owner(SCOPE).await;
+        let Ok((owner, _)) = wipe_keeping_queue_after(SCOPE, owner, &earlier).await else {
+            panic!("wipe keeps the queue")
+        };
+        owner.release().await.expect("release");
+        restore_side_files().await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!([expected, 1, 0]), "{earlier:?}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
     }
 }
 

@@ -108,17 +108,38 @@ pub(super) async fn wipe_keeping_queue(
     scope: &str,
     owner: OpfsOwner,
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
+    wipe_keeping(scope, owner, false).await
+}
+
+/// [`wipe_keeping_queue`], after an open that told `earlier`. A loss in it
+/// that the side file does not note goes with the copy, which then says writes
+/// were lost before it, as one behind a noted loss does: whoever imports it,
+/// this engine or one after it dies, tells the loss.
+pub(super) async fn wipe_keeping_queue_after(
+    scope: &str,
+    owner: OpfsOwner,
+    earlier: &QueueReport,
+) -> Result<(OpfsOwner, Crossing), JsValue> {
+    wipe_keeping(scope, owner, earlier.lost() && !earlier.noted).await
+}
+
+async fn wipe_keeping(
+    scope: &str,
+    owner: OpfsOwner,
+    untold: bool,
+) -> Result<(OpfsOwner, Crossing), JsValue> {
     let started = query_telemetry::now_ms();
     // Once the queue is read from here on, nothing may keep it from the file.
     let held = owner.sidecar().hold().await;
     let (owner, sidecar) = or_release(owner, held).await?;
     let (owner, file) = or_release(owner, read_file(&sidecar).await).await?;
     // Either way the file cannot say what else is lost once a queue follows in it.
-    let doubted = file
-        .as_ref()
-        .is_none_or(|file| file.lost() && file.queue().is_none());
+    let doubted = untold
+        || file
+            .as_ref()
+            .is_none_or(|file| file.lost() && file.queue().is_none());
     let (owner, mut read) =
-        read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default()).await?;
+        read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default(), untold).await?;
     if doubted {
         read.report.lose();
     }
@@ -282,6 +303,7 @@ async fn read_before_wipe(
     owner: OpfsOwner,
     sidecar: &Sidecar,
     file: SalvageFile,
+    untold: bool,
 ) -> Result<(OpfsOwner, ReadBeforeWipe), JsValue> {
     let mut read = ReadBeforeWipe {
         queue: None,
@@ -364,7 +386,11 @@ async fn read_before_wipe(
         Ok(())
     };
     if forgotten.is_ok() {
-        read.carry(found.queue, pending);
+        let queue = found.queue.map(|queue| match untold {
+            true => queue.after_loss(),
+            false => queue,
+        });
+        read.carry(queue, pending);
         read.write_queue(sidecar).await;
     }
     let owner = connected
@@ -471,17 +497,6 @@ impl Crossing {
     /// This crossing, to a database whose other half was gone.
     pub(super) fn torn(self) -> Self {
         Self { torn: true, ..self }
-    }
-
-    /// This crossing, after an open whose loss the side file did not note:
-    /// the import notes that writes were lost, once the wipe may have made
-    /// room, so a worker that dies before it tells leaves the loss to the
-    /// next. The count stays with the earlier report.
-    pub(super) fn after(mut self, earlier: &QueueReport) -> Self {
-        if earlier.lost() && !earlier.noted {
-            self.report.lose();
-        }
-        self
     }
 
     /// What this wipe and a later one found.
