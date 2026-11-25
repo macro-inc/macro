@@ -12,6 +12,7 @@ import {
   participantAddedEvent,
   participantRemovedEvent,
   propertyChangedEvent,
+  recordMergedEvent,
   sentEvent,
   timeLoggedEvent,
   unknownActionEvent,
@@ -113,4 +114,23 @@ describe('decodeActivityEvent', () => {
 
 it('decodes a form as its own entity type', () => {
   expect(decodeActivityEvent(formRespondedEvent).entityType).toBe('form');
+});
+
+describe('decodeActivityEvent merges', () => {
+  it('keeps what a merge merged and the values it dropped', () => {
+    expect(decodeActivityEvent(recordMergedEvent)?.action).toEqual({
+      kind: 'record-merged',
+      merged: [
+        { id: 'company-old', name: 'Old Co' },
+        { id: 'company-other', name: null },
+      ],
+      dropped: [
+        {
+          property: 'tier',
+          record: 'company-old',
+          value: { type: 'String', value: 'Silver' },
+        },
+      ],
+    });
+  });
 });

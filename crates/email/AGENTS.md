@@ -159,7 +159,9 @@ tools — hexagonal, heavily feature-gated.
   `has_thread_literals` mirror, so a page's LIMIT never counts threads the
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
-  `email_db_client` maintains.
+  `email_db_client` maintains, from partial indexes in page order: All Mail the
+  `idx_email_threads_*_attachment_view` ones and Inbox, which sorts by its own
+  timestamp, the `idx_email_threads_*_attachment_inbox_view` ones.
 - `Label(id)` matches a thread with a message carrying the label, by
   `email_effective_message_labels`' rules, in an inbox the viewer owns or
   manages; another inbox's label never matches, so a shared thread can't be
@@ -167,9 +169,15 @@ tools — hexagonal, heavily feature-gated.
   computes a label per row, so it scans every pending change. Read provider
   rows by label and pending changes by attribute (`MESSAGE_CARRIES_LABEL`,
   `build_label_superset`), and the viewer's inboxes as `= ANY(ARRAY(...))`,
-  never an `IN` subquery, which the planner hashes the inbox's messages for. An owned All Mail page whose filter has one top-level OR-tree of labels
-  and no message term is read by `OwnedRead` too: the label rows are the
-  superset (`build_label_superset`). The label tree stays out of the inbox
+  never an `IN` subquery, which the planner hashes the inbox's messages for.
+  An owned page of All Mail, Inbox, Sent, Drafts, Starred, Important or Other
+  (`walks_threads`) whose filter has one top-level OR-tree of labels and no
+  message term is read by `OwnedRead` too: the label rows are the superset
+  (`build_label_superset`). On the views other than All Mail the view's thread
+  restriction (`build_view_thread_filter`) leads the terms every stream
+  applies, so the inbox windows, the label rows and the window end keep it.
+  Spam, Trash and user-label views sort by their folder's date and stay on
+  the general builder. The label tree stays out of the inbox
   windows' terms and is tested on each walked thread before the preview pick
   (`walked_match`): inside the window it would stretch the window to that
   many labeled threads, and after the pick it would pay a pick for every

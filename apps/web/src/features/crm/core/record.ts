@@ -78,5 +78,6 @@ export const RECORD_PANEL_ORDER = {
   properties: 20,
   lists: 30,
   sharing: 40,
+  activity: 45,
   references: 50,
 } as const;

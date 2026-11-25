@@ -1317,7 +1317,9 @@ or spotlight.
 
 ## Routines
 
-Open **Agents → Routines** for your routines. Opening a routine updates the URL
+Open **Agents → Routines**, or **Go to Routines** in the command menu (no `g`
+letter; always the list, even from an open routine),
+for your routines. Opening a routine updates the URL
 to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
 URL restores that routine; browser Back and Forward restore the list or detail.
 Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.

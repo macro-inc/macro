@@ -1,6 +1,10 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
-import type { Query, QueryState } from '../filters/filter-store';
+import {
+  defineQueryFilters,
+  type Query,
+  type QueryState,
+} from '../filters/filter-store';
 import {
   DEFAULT_SECTIONS,
   type SearchFiltersState,
@@ -230,7 +234,13 @@ export function searchOperatorFilters(
  * set, whichever types are left, since a type's facets are otherwise only
  * compiled for that type.
  */
-export function searchOperatorQuery({ state }: SearchOperatorFilters): Query {
+export function searchOperatorQuery({
+  state,
+  matchesNothing,
+}: SearchOperatorFilters): Query {
+  // Nothing can match, so the feed is asked for nothing rather than paged
+  // through for rows that would all be dropped.
+  if (matchesNothing) return defineQueryFilters({});
   const query = compileSearchQuery(state);
   const include = { ...query.include };
   // A tag narrows every kind that carries tags, as on the service, while a

@@ -638,6 +638,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     source,
     rows,
     searchText,
+    searchAwaitingInput,
     featuredIds,
     moreChatCount,
     showMoreChats,
@@ -1218,7 +1219,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         <EmptyState
                           content={props.emptyContent}
                           listView={currentView()}
-                          search={!!searchText()}
+                          search={!!searchText() && !searchAwaitingInput()}
                           hasRefinementsFromBase={hasActiveRefinements()}
                           hasHiddenItems={hasHiddenItems()}
                           onClearFilters={resetToTabDefaults}

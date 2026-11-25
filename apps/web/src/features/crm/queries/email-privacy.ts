@@ -247,12 +247,17 @@ export function createEmailPrivacyMutation(
           });
           return data;
         }),
-      onError: (error: Error, change: EmailPrivacyChange) =>
+      onError: (error: Error, change: EmailPrivacyChange) => {
+        const archived = isArchivedCompanyRemoval(error, change);
         deps.feedback.failure(
-          isArchivedCompanyRemoval(error, change)
+          archived
             ? t('crm.privacyArchivedCompanyConflict')
             : error.message || t('crm.privacyUpdateFailed')
-        ),
+        );
+        // The list was read before the company was archived: reread it so the
+        // row points at the company instead of offering Remove again.
+        if (archived) deps.client.invalidateQueries({ queryKey: key() });
+      },
     }),
     () => deps.client
   );

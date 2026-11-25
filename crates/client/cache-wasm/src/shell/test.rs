@@ -2725,7 +2725,7 @@ async fn queue_mutation(engine: &CacheEngine, uuid: &str) {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_generation(&engine).await,
+        test_generation(engine).await,
     ))
     .await;
 }

@@ -39,6 +39,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { createSearchOperatorLookup } from '../search-operator-lookup';
 import { searchOperatorHighlights } from './search-operator-highlight';
 import { SearchOperatorSuggestions } from './search-operator-suggestions';
@@ -53,6 +54,12 @@ interface SoupSearchbarProps {
   initialValue?: string;
   /** Offer the search operators as they are typed. */
   operators?: boolean;
+  /**
+   * The suggestion rows go to the page's top layer, pinned under the field,
+   * for a field inside a split header, which clips what overflows it. In a
+   * dialog they stay inline, inside its scope.
+   */
+  floatingSuggestions?: boolean;
 }
 
 // Both variants draw the shared SearchBar pill; they differ only in emphasis.
@@ -134,6 +141,7 @@ export function SoupSearchbar(props: SoupSearchbarProps) {
     <SearchbarInput
       {...props}
       operators
+      floatingSuggestions
       bindings={searchBindings()}
       value={searchText()}
       initialValue={initialValue}
@@ -297,6 +305,38 @@ export function SearchbarInput(
     });
   };
   const hasContent = () => !!markdown().trim();
+  const suggestions = () => (
+    <SearchOperatorSuggestions
+      rows={operatorRows()}
+      active={activeIndex()}
+      listId={listId}
+      onPick={(index) => {
+        const row = operatorRows()[index];
+        if (row) pickOperator(row);
+      }}
+    />
+  );
+  // Floating rows sit in a portal under the field: a split header clips
+  // what overflows it, so a menu inside would be hidden and let clicks reach
+  // the results beneath. They are measured again as the rows change.
+  let wrapper: HTMLDivElement | undefined;
+  const [anchor, setAnchor] = createSignal<DOMRect>();
+  createEffect(() => {
+    if (!props.floatingSuggestions) return;
+    if (operatorRows().length === 0 || !wrapper) return;
+    const field = wrapper;
+    const measure = () => setAnchor(field.getBoundingClientRect());
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(field);
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    onCleanup(() => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    });
+  });
   createEffect(
     on(
       () => editor.controls.isInlineMenuOpen(),
@@ -308,6 +348,7 @@ export function SearchbarInput(
   );
   return (
     <div
+      ref={wrapper}
       class="relative w-full items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
       data-no-focus-restore
@@ -367,15 +408,29 @@ export function SearchbarInput(
         </Show>
       </div>
       <Show when={operatorRows().length > 0}>
-        <SearchOperatorSuggestions
-          rows={operatorRows()}
-          active={activeIndex()}
-          listId={listId}
-          onPick={(index) => {
-            const row = operatorRows()[index];
-            if (row) pickOperator(row);
-          }}
-        />
+        <Show
+          when={props.floatingSuggestions && anchor()}
+          fallback={
+            <div class="absolute top-full left-0 z-item-options-menu mt-1 w-full">
+              {suggestions()}
+            </div>
+          }
+        >
+          {(rect) => (
+            <Portal>
+              <div
+                class="fixed z-action-menu"
+                style={{
+                  top: `${rect().bottom + 4}px`,
+                  left: `${rect().left}px`,
+                  width: `${rect().width}px`,
+                }}
+              >
+                {suggestions()}
+              </div>
+            </Portal>
+          )}
+        </Show>
       </Show>
     </div>
   );

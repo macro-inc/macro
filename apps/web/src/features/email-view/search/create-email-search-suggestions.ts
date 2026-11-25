@@ -18,6 +18,7 @@ import {
   matchEmailSearchLabels,
   type TypedEmailSearchValue,
   typedEmailSearchValue,
+  wordFilterAtEnd,
 } from './email-search-operators';
 import {
   completeEmailSearch,
@@ -67,6 +68,34 @@ export function emailSearchValueBeingTyped(
   return token ? typedEmailSearchValue(token) : undefined;
 }
 
+/**
+ * Fewest letters of a plain word before the people it names are offered:
+ * each word typed looks people up, so a short one would on almost every
+ * search.
+ */
+const MIN_NAME_LETTERS = 3;
+
+/**
+ * Lowercase without accents, and with one apostrophe, so `jose` finds José
+ * and a phone's `o’neil` finds O'Neil.
+ */
+const foldName = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replaceAll('’', "'")
+    .toLowerCase();
+
+/**
+ * A plain word typed at the end of the field that could start someone's
+ * name (`ana`), so the rows can offer mail from or to them.
+ */
+export function emailSearchNameBeingTyped(text: string): string | undefined {
+  const token = typedToken(text)?.token;
+  if (!token || token.length < MIN_NAME_LETTERS) return undefined;
+  return /^\p{L}[\p{L}'’.-]*$/u.test(token) ? token : undefined;
+}
+
 /** What a row names, which stays the same as rows load around it. */
 function suggestionKey(row: EmailSearchSuggestion | undefined) {
   if (!row) return undefined;
@@ -81,6 +110,7 @@ function suggestionKey(row: EmailSearchSuggestion | undefined) {
       { kind: 'value' },
       { kind: 'person' },
       { kind: 'label' },
+      { kind: 'word' },
       (completion) =>
         `${completion.kind}:${emailSearchCompletionText(completion)}`
     )
@@ -247,6 +277,27 @@ export function createEmailSearchSuggestions(options: {
     )
   );
 
+  // A plain word that starts a word of someone's name offers the mail from
+  // them and to them, the best match among the people found for it.
+  const namedPersonRows = (): EmailSearchSuggestion[] => {
+    const name = emailSearchNameBeingTyped(options.search());
+    if (!name) return [];
+    const typed = foldName(name);
+    const person = (options.people?.() ?? []).find((candidate) =>
+      foldName(candidate.name ?? '')
+        .split(/\s+/)
+        .some((part) => part.startsWith(typed))
+    );
+    if (!person) return [];
+    return (['from', 'to'] as const).map((key) => ({
+      kind: 'person',
+      key,
+      exclude: false,
+      person,
+      byName: true,
+    }));
+  };
+
   const listed = createMemo((): EmailSearchSuggestion[] => {
     if (!focused()) return [];
 
@@ -270,9 +321,22 @@ export function createEmailSearchSuggestions(options: {
       return [...views, ...labels];
     }
 
-    // Operators whose names or values finish what is typed come first.
+    // The filter a plain word stands for comes first, then the operators
+    // whose names or values finish what is typed, then people it names.
     const token = typedToken(options.search())?.token;
-    const completions = token ? completeTypedToken(token) : [];
+    const word = wordFilterAtEnd(options.search());
+    // A view alone (`sent` gives `in:sent`) runs no search of its own, so it
+    // is offered only beside other words.
+    const searchesWithWord =
+      word !== undefined &&
+      parseEmailSearch(
+        `${options.search().slice(0, -word.typed.length)}${word.filter}`
+      ).query !== '';
+    const wordRows: EmailSearchSuggestion[] =
+      word && searchesWithWord ? [{ kind: 'word', ...word }] : [];
+    const completions = token
+      ? [...wordRows, ...completeTypedToken(token), ...namedPersonRows()]
+      : [];
     const recentRows = matchRecentSearches(
       recent.recent(),
       options.search()
@@ -324,6 +388,14 @@ export function createEmailSearchSuggestions(options: {
           const before = typedFilter()?.before ?? '';
           const minus = exclude ? '-' : '';
           options.setSearch(`${before}${minus}in:${scope} `);
+          setActive(-1);
+        })
+        // A filter replaces the plain words it stands for.
+        .with({ kind: 'word' }, (row) => {
+          const text = options.search();
+          options.setSearch(
+            `${text.slice(0, text.length - row.typed.length)}${emailSearchCompletionText(row)}`
+          );
           setActive(-1);
         })
         // An operator, a person or a label replaces the token it finishes.

@@ -21,7 +21,7 @@ impl AuthServiceClient {
     /// The user's GitHub token from their account link. `None` when they
     /// never linked or the token no longer works; either way they have to
     /// link GitHub before it can be used.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     pub async fn get_github_access_token(
         &self,
         macro_user_id: &str,
@@ -34,7 +34,7 @@ impl AuthServiceClient {
 
     /// Where the user's GitHub account link stands, with its token when
     /// GitHub still accepts it.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     pub async fn get_github_link(
         &self,
         macro_user_id: &str,
@@ -45,8 +45,9 @@ impl AuthServiceClient {
             .query(&[("macro_user_id", macro_user_id)])
             .send()
             .await
+            // The URL names the user.
             .map_err(|e| AuthServiceClientError::RequestBuildError {
-                details: e.to_string(),
+                details: e.without_url().to_string(),
             })?;
 
         match res.status() {
@@ -56,7 +57,7 @@ impl AuthServiceClient {
                 .map(GithubLink::Linked)
                 .map_err(|e| {
                     AuthServiceClientError::Generic(GenericErrorResponse {
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     })
                 }),
             reqwest::StatusCode::NOT_FOUND => Ok(GithubLink::NotLinked),

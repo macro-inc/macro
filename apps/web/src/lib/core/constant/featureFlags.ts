@@ -490,6 +490,11 @@ export const enableCrmSelectiveEmailContribution = defineFlag({
   env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
 });
 
+// No dev override: the server requires this same remote flag before merging.
+export const enableCrmMerge = defineFlag({
+  key: 'enable-crm-merge',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
