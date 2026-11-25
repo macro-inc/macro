@@ -911,7 +911,7 @@ STL-088	The read receipt label in the message header is emptied once the receipt
 STL-089	not shown as the row says (caret tooltip "Collapse Message Header" / "Expand Message Header"): its rendering is switched off or changed in src/features/email-message/components/email-message-top-bar.tsx
 STL-090	The "Show quoted text" toggle under a reply with a hidden quote and signature is not rendered, in email-message-body.tsx.
 STL-091	The "+N more" label on the collapsed participants list is emptied in email-participants.tsx.
-STL-092	not shown as the row says (toast "Download failed"): its rendering is switched off or changed in src/features/email-message/attachment-action-adapter.ts
+STL-092	A failed attachment download no longer raises its "Unable to download file" notice: the failure branch of createFileDownload.ts returns without it.
 STL-093	not shown as the row says (toast "Attachment unavailable"): its rendering is switched off or changed in src/features/email-message/attachment-action-adapter.ts
 STL-094	A failed .eml download in eml-download-adapter.ts no longer raises its "Failed to download email. Please try again." toast.
 STL-095	The invitation card's RSVP control never marks the saved response as selected, in calendar-invite-card.tsx.
