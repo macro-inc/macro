@@ -38,6 +38,10 @@ pub struct Account {
     pub checkpoint: std::collections::BTreeMap<(StateEntryKind, String), [u8; 32]>,
     /// Current compare-and-swap revision.
     pub revision: i64,
+    /// Folder preference revision observed when this snapshot was loaded.
+    pub folder_preferences_revision: i64,
+    /// The snapshot publishes folder state and must use the observed preferences.
+    pub fences_folder_preferences: bool,
     /// Distributed write lease; None is a read-only snapshot.
     pub lease_id: Option<Uuid>,
 }
@@ -79,6 +83,8 @@ pub enum StateEntryKind {
 /// The bounded facts needed by one use case; only synchronization loads the full index.
 #[derive(Debug, Clone)]
 pub enum StateSelection {
+    /// Account scalars without any indexed folder or message rows.
+    Health,
     /// Full metadata snapshot for a synchronization pass.
     Sync,
     /// Small folder catalog and health only.
@@ -137,6 +143,8 @@ pub trait Repository: Send + Sync {
     ) -> Result<(), Error>;
     /// Claim or renew a long-lived connection owner, separately from command leases.
     async fn claim_owner(&self, binding: Binding, owner: Uuid) -> Result<bool, Error>;
+    /// Check the exact live owner without extending or transferring its lease.
+    async fn holds_owner(&self, binding: Binding, owner: Uuid) -> Result<bool, Error>;
     /// Relinquish this exact owner only after closing its sockets.
     async fn release_owner(&self, binding: Binding, owner: Uuid) -> Result<(), Error>;
     /// Save a new expiring verification.

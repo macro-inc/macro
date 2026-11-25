@@ -41,22 +41,9 @@ pub fn imap_gateway(
 pub fn imap_enrollment(
     config: &crate::config::Config,
 ) -> anyhow::Result<crate::outbound::imap_connection::ImapEnrollment> {
-    let flags = config
-        .posthog_api_key()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
-                key.to_owned(),
-                std::time::Duration::from_secs(3),
-                config.environment,
-            )
-        })
-        .transpose()
-        .map_err(|error| anyhow::anyhow!("invalid IMAP rollout configuration: {error}"))?;
-    Ok(crate::outbound::imap_connection::ImapEnrollment(flags))
+    Ok(crate::outbound::imap_connection::ImapEnrollment(
+        crate::outlook_flags::posthog(config)?,
+    ))
 }
 
 /// The contacts queue every email path publishes through: legacy messages

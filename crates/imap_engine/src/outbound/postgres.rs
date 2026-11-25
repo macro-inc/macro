@@ -144,6 +144,24 @@ impl Repository for PgRepository {
         ).fetch_optional(&self.pool).await.map_err(|_|Error::ConnectionUnavailable)?;
         Ok(row.is_some())
     }
+    async fn holds_owner(&self, b: Binding, owner: Uuid) -> Result<bool, Error> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM imap_account_owners
+                WHERE link_id = $1 AND sync_generation = $2
+                    AND grant_generation = $3 AND owner_id = $4 AND lease_until > now()
+            ) AS "owned!"
+            "#,
+            b.link_id,
+            b.sync_generation,
+            b.grant_generation,
+            owner,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| Error::ConnectionUnavailable)
+    }
     async fn release_owner(&self, b: Binding, owner: Uuid) -> Result<(), Error> {
         sqlx::query!(
             r#"
@@ -457,6 +475,7 @@ impl Repository for PgRepository {
         // Claim and hydrate in one transaction. A loading timeout rolls back
         // the uncommitted lease instead of stranding it for five minutes.
         let (mut tx, mut account) = self.begin_acquisition(b).await?;
+        account.fences_folder_preferences = matches!(selection, StateSelection::Sync);
         self.hydrate(&mut tx, &mut account, selection).await?;
         tx.commit().await.map_err(acquisition::load_error)?;
         acquisition::record_outcome(acquisition::AcquireOutcome::Acquired);

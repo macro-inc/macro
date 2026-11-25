@@ -268,6 +268,7 @@ impl PgRepository {
         let link = account.binding.link_id;
         let mut rows = Vec::new();
         match selection {
+            StateSelection::Health => return Ok(()),
             StateSelection::Sync => {
                 load!(
                     connection,
@@ -553,7 +554,7 @@ impl PgRepository {
                             );
                         }
                     }
-                    StateSelection::Sync => unreachable!(),
+                    StateSelection::Health | StateSelection::Sync => unreachable!(),
                 }
             }
         }
@@ -794,12 +795,15 @@ impl PgRepository {
     ) -> Result<i64, Error> {
         let lease = a.lease_id.ok_or(Error::Conflict)?;
         let health = serde_json::to_value(a.state.small_state()).map_err(|_| Error::Invalid)?;
+        // A settings edit clears the sync retry delay. A concurrent command
+        // must not restore that old delay when it saves its own state.
         let r = sqlx::query!(
             r#"
             UPDATE
                 imap_accounts
             SET
-                state = $6,
+                state = CASE WHEN folder_preferences_revision = $8
+                    THEN $6::jsonb ELSE $6::jsonb - 'sync_retry_at' END,
                 revision = revision + 1,
                 lease_until = now() + make_interval(secs => $7::double precision),
                 updated_at = now()
@@ -809,6 +813,7 @@ impl PgRepository {
                 AND grant_generation = $3
                 AND lease_id = $4
                 AND revision = $5
+                AND (NOT $9 OR folder_preferences_revision = $8)
                 AND lease_until > now()
                 AND EXISTS (
                     SELECT
@@ -833,6 +838,8 @@ impl PgRepository {
             a.revision,
             health,
             COMMAND_LEASE_BUDGET.as_secs_f64(),
+            a.folder_preferences_revision,
+            a.fences_folder_preferences,
         )
         .fetch_optional(&mut **tx)
         .await

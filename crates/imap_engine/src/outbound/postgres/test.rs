@@ -807,7 +807,6 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
     limited.state.sync_size_failures = 6;
     limited.state.sync_retry_at = Some(Utc::now() + Duration::hours(24));
     repo.save_health(&mut limited).await.unwrap();
-    repo.release(&limited).await.unwrap();
     sqlx::query!(
         r#"
         INSERT INTO imap_state_entries (link_id, kind, key, document)
@@ -842,6 +841,8 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
         watched_folder_ids: Default::default(),
     };
     assert_eq!(repo.update(binding, &prefs).await.unwrap(), 1);
+    assert_eq!(repo.save_health(&mut limited).await, Err(Error::Conflict));
+    repo.release(&limited).await.unwrap();
     let state = sqlx::query_scalar!(
         r#"
         SELECT

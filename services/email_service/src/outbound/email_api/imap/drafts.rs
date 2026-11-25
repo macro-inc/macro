@@ -163,8 +163,10 @@ impl DraftGateway for ImapMailboxGateway {
         id: &ProviderId,
         content: AttachmentContent<'_>,
     ) -> Result<AttachmentUploadSession, EmailApiError> {
-        let mut content = attachment_input(content);
-        content.data_base64.clear();
+        let content = attachment_input(AttachmentContent {
+            data: &[],
+            ..content
+        });
         let result = self
             .client
             .create_upload(binding(mailbox), id.as_str(), content)
@@ -213,6 +215,14 @@ impl DraftGateway for ImapMailboxGateway {
         id: &ProviderId,
     ) -> Result<SubmissionOutcome, EmailApiError> {
         let result = self.client.submit(binding(mailbox), id.as_str()).await;
+        // Older engines could lose a finalization fence or fail to parse
+        // Sent-copy state after SMTP accepted the message.
+        if matches!(
+            result,
+            Err(models::Error::Conflict | models::Error::NotFound | models::Error::Invalid)
+        ) {
+            return Ok(SubmissionOutcome::Unknown);
+        }
         Ok(match self.record(mailbox, result).await? {
             models::SubmissionOutcome::Accepted => SubmissionOutcome::Accepted,
             models::SubmissionOutcome::Unknown => SubmissionOutcome::Unknown,

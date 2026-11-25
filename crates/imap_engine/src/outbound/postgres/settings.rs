@@ -119,7 +119,8 @@ impl SettingsRepository for PgRepository {
             serde_json::to_value(&change.excluded_folder_ids).map_err(|_| Error::Invalid)?;
         let watches =
             serde_json::to_value(&change.watched_folder_ids).map_err(|_| Error::Invalid)?;
-        // Fence a snapshot started under the previous preferences as well as stale settings dialogs.
+        // Sync fences its snapshot on the preference revision. A settings
+        // edit is independent of in-flight commands and their write lease.
         sqlx::query_scalar!(
             r#"
             WITH changed AS (
@@ -127,7 +128,6 @@ impl SettingsRepository for PgRepository {
                     imap_accounts
                 SET
                     folder_preferences_revision = folder_preferences_revision + 1,
-                    revision = revision + 1,
                     folder_role_overrides = $5,
                     excluded_folder_ids = $6,
                     watched_folder_ids = $7,

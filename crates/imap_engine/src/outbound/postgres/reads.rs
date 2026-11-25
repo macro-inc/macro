@@ -35,7 +35,8 @@ impl PgRepository {
                 a.user_id,
                 a.credential_ciphertext,
                 a.state,
-                a.revision
+                a.revision,
+                a.folder_preferences_revision
             FROM
                 imap_accounts a
                 JOIN email_links l ON l.id = a.link_id
@@ -65,6 +66,8 @@ impl PgRepository {
             state: serde_json::from_value(row.state).map_err(|_| Error::ConnectionUnavailable)?,
             checkpoint: Default::default(),
             revision: row.revision,
+            folder_preferences_revision: row.folder_preferences_revision,
+            fences_folder_preferences: false,
             lease_id: None,
         })
     }

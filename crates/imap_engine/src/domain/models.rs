@@ -588,6 +588,9 @@ pub struct AccountState {
     /// A submission deadline pauses later sends for this account without replaying the unknown attempt.
     #[serde(default)]
     pub send_penalty_until: Option<DateTime<Utc>>,
+    /// Last draft selected for Sent-copy or Answered reconciliation.
+    #[serde(default)]
+    pub sent_effects_cursor: Option<String>,
     /// Folder index.
     pub folders: BTreeMap<String, FolderState>,
     /// Message identity index.
@@ -930,6 +933,7 @@ impl AccountState {
             send_day: self.send_day,
             sends_today: self.sends_today,
             send_penalty_until: self.send_penalty_until,
+            sent_effects_cursor: self.sent_effects_cursor.clone(),
             ..Self::default()
         }
     }

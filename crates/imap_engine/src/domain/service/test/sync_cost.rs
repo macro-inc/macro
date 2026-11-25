@@ -164,6 +164,71 @@ async fn unchanged_sync_does_not_save_or_notify() {
 }
 
 #[tokio::test]
+async fn an_unreadable_sent_copy_does_not_fail_sync_or_hide_its_changes() {
+    let f = fixture(vec![inbox(1, 2)]);
+    let id = accepted_pending_copy(&f, Uuid::from_u128(1), true).await;
+
+    f.engine.execute(f.binding, Operation::Sync).await.unwrap();
+
+    let state = f.repository.state.lock().unwrap();
+    assert_eq!(state.messages.len(), 1);
+    let pending = &state.drafts[&id];
+    assert_eq!(pending.submission, Some(SubmissionOutcome::Accepted));
+    assert!(pending.sent_copy_pending);
+    assert_eq!(f.notifier.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_broken_sent_copy_cannot_keep_later_drafts_from_reconciling() {
+    let f = fixture(vec![inbox(1, 2), inbox(1, 2)]);
+    let broken = accepted_pending_copy(&f, Uuid::from_u128(1), true).await;
+    let later = accepted_pending_copy(&f, Uuid::from_u128(2), false).await;
+
+    f.engine.execute(f.binding, Operation::Sync).await.unwrap();
+    f.engine.execute(f.binding, Operation::Sync).await.unwrap();
+
+    let state = f.repository.state.lock().unwrap();
+    assert!(state.drafts[&broken].sent_copy_pending);
+    assert!(state.drafts[&later].sent_copy_attempted);
+}
+
+async fn accepted_pending_copy(f: &Fixture, correlation: Uuid, corrupt: bool) -> String {
+    let draft: Draft = serde_json::from_value(
+        f.engine
+            .execute(
+                f.binding,
+                Operation::CreateDraft {
+                    input: DraftInput {
+                        correlation,
+                        revision: 1,
+                        reply_to: None,
+                        content: serde_json::json!({
+                            "message_id": "synthetic-copy@example.net",
+                            "message": {
+                                "link_id": f.binding.link_id,
+                                "subject": "Synthetic message",
+                                "to": [{"email": "recipient@example.net"}],
+                                "body_text": "Synthetic body",
+                            },
+                            "from": {"email": "owner@example.net"},
+                        }),
+                    },
+                },
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let mut state = f.repository.state.lock().unwrap();
+    let pending = state.drafts.get_mut(&draft.id).unwrap();
+    pending.draft.is_draft = false;
+    pending.submission = Some(SubmissionOutcome::Accepted);
+    pending.sent_copy_pending = true;
+    pending.frozen_content = corrupt.then(|| serde_json::json!(null));
+    draft.id
+}
+
+#[tokio::test]
 async fn baseline_only_change_is_saved_without_notification() {
     let f = fixture(vec![inbox(2, 3), inbox(2, 4)]);
     f.engine.execute(f.binding, Operation::Sync).await.unwrap();
@@ -235,6 +300,19 @@ async fn quiet_sync_does_not_bypass_a_pending_hints_retry_backoff() {
     assert!(!f.repository.state.lock().unwrap().notification_pending);
     stopped.cancel();
     retries.await.unwrap();
+}
+
+#[tokio::test]
+async fn an_idle_hint_check_does_not_renew_the_account_owner() {
+    let f = fixture(Vec::new());
+    let mut age = 0;
+    let mut acked = None;
+    f.engine
+        .flush_host_hint_once(f.binding, Uuid::now_v7(), 1, &mut age, &mut acked)
+        .await
+        .unwrap();
+    assert_eq!(f.repository.owner_claims.load(Ordering::Acquire), 0);
+    assert!(f.notifier.0.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

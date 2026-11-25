@@ -316,8 +316,32 @@ async fn stalled_envelopes_share_one_budget_and_do_not_start_a_short_retry() {
 async fn reconnect_during_smtp_data_preserves_unknown_without_a_second_delivery(
     pool: sqlx::PgPool,
 ) {
+    submission_after_smtp_data(pool, DuringSmtpData::ReconnectAndLoseReply).await;
+}
+
+#[sqlx::test(migrations = false)]
+async fn accepted_smtp_data_stays_uncertain_when_reconnect_fences_its_save(pool: sqlx::PgPool) {
+    submission_after_smtp_data(pool, DuringSmtpData::ReconnectAndAccept).await;
+}
+
+#[sqlx::test(migrations = false)]
+async fn folder_settings_during_smtp_data_do_not_fence_acceptance(pool: sqlx::PgPool) {
+    submission_after_smtp_data(pool, DuringSmtpData::ChangeFolderSettings).await;
+}
+
+#[derive(Clone, Copy)]
+enum DuringSmtpData {
+    ReconnectAndLoseReply,
+    ReconnectAndAccept,
+    ChangeFolderSettings,
+}
+
+async fn submission_after_smtp_data(pool: sqlx::PgPool, during_data: DuringSmtpData) {
     use crate::{
-        domain::service::{Engine, VerificationScopeKey, test::TestCipher},
+        domain::{
+            account_settings::UpdateFolderSettings,
+            service::{Engine, VerificationScopeKey, test::TestCipher},
+        },
         outbound::postgres::{PgRepository, test::schema},
     };
     use std::sync::Arc;
@@ -366,15 +390,24 @@ async fn reconnect_during_smtp_data_preserves_unknown_without_a_second_delivery(
             .unwrap();
     }
     promote(&repository, old).await;
+    if matches!(during_data, DuringSmtpData::ChangeFolderSettings) {
+        let mut account = repository.acquire(old).await.unwrap();
+        account.state.sync_retry_at = Some(Utc::now() + chrono::Duration::hours(1));
+        repository.save_health(&mut account).await.unwrap();
+        repository.release(&account).await.unwrap();
+    }
 
-    let engine = Arc::new(Engine::new(
-        VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
-        repository.clone(),
-        Arc::new(TestCipher),
-        Arc::new(transport),
-        tokio_util::task::TaskTracker::new(),
-        tokio_util::sync::CancellationToken::new(),
-    ));
+    let engine = Arc::new(
+        Engine::new(
+            VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
+            repository.clone(),
+            Arc::new(TestCipher),
+            Arc::new(transport),
+            tokio_util::task::TaskTracker::new(),
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .with_settings(repository.clone()),
+    );
     let draft: Draft = serde_json::from_value(
         engine
             .execute(
@@ -402,7 +435,7 @@ async fn reconnect_during_smtp_data_preserves_unknown_without_a_second_delivery(
     .unwrap();
 
     let (data_received, data) = tokio::sync::oneshot::channel();
-    let (disconnect, disconnected) = tokio::sync::oneshot::channel();
+    let (finish, finish_data) = tokio::sync::oneshot::channel();
     let peer = tokio::spawn(async move {
         let mut peer = BufReader::new(socket);
         for expected in [
@@ -432,8 +465,10 @@ async fn reconnect_during_smtp_data_preserves_unknown_without_a_second_delivery(
         }
         assert!(mime.contains("Synthetic body"));
         data_received.send(()).unwrap();
-        // Losing the final SMTP response leaves delivery ambiguous.
-        disconnected.await.unwrap();
+        let accept: bool = finish_data.await.unwrap();
+        if accept {
+            peer.get_mut().write_all(b"250 accepted\r\n").await.unwrap();
+        }
     });
     let initial = tokio::spawn({
         let engine = engine.clone();
@@ -445,24 +480,64 @@ async fn reconnect_during_smtp_data_preserves_unknown_without_a_second_delivery(
         .unwrap()
         .unwrap();
 
-    promote(&repository, next).await;
-    sqlx::query!(
-        r#"
-        UPDATE
-            email_links
-        SET
-            sync_generation = 2,
-            grant_generation = 2
-        WHERE
-            id = $1
-        "#,
-        old.link_id,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let (current, expected) = if matches!(during_data, DuringSmtpData::ChangeFolderSettings) {
+        let before = engine.account_mail_settings(old).await.unwrap();
+        let changed = engine
+            .update_mail_settings(
+                old,
+                UpdateFolderSettings {
+                    expected_revision: before.revision,
+                    role_overrides: BTreeMap::new(),
+                    excluded_folder_ids: Default::default(),
+                    watched_folder_ids: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(changed.revision, before.revision + 1);
+        (old, SubmissionOutcome::Accepted)
+    } else {
+        promote(&repository, next).await;
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_links
+            SET
+                sync_generation = 2,
+                grant_generation = 2
+            WHERE
+                id = $1
+            "#,
+            old.link_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        (next, SubmissionOutcome::Unknown)
+    };
+    finish
+        .send(!matches!(
+            during_data,
+            DuringSmtpData::ReconnectAndLoseReply
+        ))
+        .unwrap();
+    peer.await.unwrap();
+    let response = timeout(Duration::from_secs(10), initial)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_value::<SubmissionOutcome>(response).unwrap(),
+        expected
+    );
 
-    let retry = engine.execute(next, Operation::Submit { id: draft.id });
+    let retry = engine.execute(
+        current,
+        Operation::Submit {
+            id: draft.id.clone(),
+        },
+    );
     let reply = timeout(Duration::from_secs(10), async {
         tokio::select! {
             biased;
@@ -475,10 +550,22 @@ async fn reconnect_during_smtp_data_preserves_unknown_without_a_second_delivery(
     .unwrap();
     assert_eq!(
         serde_json::from_value::<SubmissionOutcome>(reply).unwrap(),
-        SubmissionOutcome::Unknown,
+        expected,
     );
-    disconnect.send(()).unwrap();
-    peer.await.unwrap();
-    // An old worker cannot persist a result after its generation is replaced.
-    assert_eq!(initial.await.unwrap(), Err(Error::Conflict));
+    let stored = repository
+        .read_scoped(
+            current,
+            StateSelection::Draft {
+                id: draft.id.clone(),
+                reply_to: None,
+            },
+        )
+        .await
+        .unwrap();
+    if matches!(during_data, DuringSmtpData::ChangeFolderSettings) {
+        assert!(stored.state.sync_retry_at.is_none());
+    }
+    let stored = &stored.state.drafts[&draft.id];
+    assert_eq!(stored.submission.as_ref(), Some(&expected));
+    assert!(!stored.sent_copy_attempted);
 }

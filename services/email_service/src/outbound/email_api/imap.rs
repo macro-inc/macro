@@ -36,7 +36,8 @@ impl ImapMailboxGateway {
         result: Result<T, models::Error>,
     ) -> Result<T, EmailApiError> {
         if result.is_ok() || matches!(result, Err(models::Error::CredentialsRejected)) {
-            self.health
+            let recorded = self
+                .health
                 .record(
                     MailboxAccess {
                         link_id: mailbox.link_id,
@@ -49,10 +50,10 @@ impl ImapMailboxGateway {
                         CredentialHealth::ReauthorizationRequired
                     },
                 )
-                .await
-                .map_err(|_| EmailApiError::CredentialsUnavailable {
-                    message: "could not persist IMAP credential health".into(),
-                })?;
+                .await;
+            if let Err(error) = recorded {
+                tracing::warn!(?error, mailbox.link_id = %mailbox.link_id, "IMAP credential health update failed");
+            }
         }
         result.map_err(error)
     }
@@ -76,18 +77,20 @@ impl ImapMailboxGateway {
             .recent_inbox(binding(mailbox), u32::from(limit))
             .await;
         let sources = self.record(mailbox, result).await?;
+        let received = sources.len();
         let messages = sources
             .into_iter()
-            .map(|source| {
-                let bytes =
-                    STANDARD
-                        .decode(&source.mime_base64)
-                        .map_err(|_| EmailApiError::Transient {
-                            message: "IMAP service returned invalid message bytes".into(),
-                        })?;
-                Ok(mime::parse(mailbox.link_id, &source, &bytes)?.message)
+            .filter_map(|source| {
+                let bytes = STANDARD.decode(&source.mime_base64).ok()?;
+                mime::parse(mailbox.link_id, &source, &bytes)
+                    .ok()
+                    .map(|content| content.message)
             })
-            .collect::<Result<Vec<_>, EmailApiError>>()?;
+            .collect::<Vec<_>>();
+        let omitted = received - messages.len();
+        if omitted > 0 {
+            tracing::warn!(mailbox.link_id = %mailbox.link_id, omitted, "IMAP recent inbox omitted unreadable messages");
+        }
         Ok(messages)
     }
 }
@@ -180,25 +183,11 @@ impl MailboxGateway for ImapMailboxGateway {
         let content = mime::parse(mailbox.link_id, &source, &bytes)?;
         let folder = ProviderId::new(source.folder_id.clone())?;
         let role = MailFolder::effective_role(folders, Some(&folder));
-        let has_flag = |value: &str| {
-            source
-                .flags
-                .iter()
-                .any(|flag| flag.eq_ignore_ascii_case(value))
-        };
         Ok(Some(MailboxMessage {
             draft_correlation: source.draft_correlation,
             content,
             calendar_parts_unavailable: false,
-            state: MailboxState {
-                is_read: has_flag("\\Seen"),
-                is_flagged: has_flag("\\Flagged"),
-                is_draft: has_flag("\\Draft"),
-                in_inbox: role == FolderRole::Inbox,
-                in_trash: role == FolderRole::Trash,
-                in_junk: role == FolderRole::Junk,
-                attention: Attention::Unknown,
-            },
+            state: mailbox_state(&source.flags, role),
             folder_id: Some(folder),
             tags: source.tags,
             version: Some(source.version),
@@ -261,20 +250,12 @@ impl email::domain::mailbox::commands::MailboxCommandGateway for ImapMailboxGate
         action: &MessageAction,
         expected_version: Option<&str>,
     ) -> Result<MessageWriteReceipt, EmailApiError> {
-        let request = models::ActionRequest {
-            action: serde_json::to_value(action).map_err(|_| EmailApiError::Permanent {
-                message: "invalid IMAP action".into(),
-            })?,
-            expected_version: expected_version.map(str::to_owned),
-        };
+        let action = serde_json::to_value(action).map_err(|_| EmailApiError::Permanent {
+            message: "invalid IMAP action".into(),
+        })?;
         let result = self
             .client
-            .apply(
-                binding(mailbox),
-                message.as_str(),
-                request.action,
-                request.expected_version.as_deref(),
-            )
+            .apply(binding(mailbox), message.as_str(), action, expected_version)
             .await;
         let receipt = self.record(mailbox, result).await?;
         Ok(MessageWriteReceipt {
@@ -366,25 +347,24 @@ fn imap_organization_snapshot(
 ) -> Result<MailboxOrganization, EmailApiError> {
     let folder = ProviderId::new(source.folder_id)?;
     let role = MailFolder::effective_role(folders, Some(&folder));
-    let has_flag = |value: &str| {
-        source
-            .flags
-            .iter()
-            .any(|flag| flag.eq_ignore_ascii_case(value))
-    };
     Ok(MailboxOrganization {
-        state: MailboxState {
-            is_read: has_flag("\\Seen"),
-            is_flagged: has_flag("\\Flagged"),
-            is_draft: has_flag("\\Draft"),
-            in_inbox: role == FolderRole::Inbox,
-            in_trash: role == FolderRole::Trash,
-            in_junk: role == FolderRole::Junk,
-            attention: Attention::Unknown,
-        },
+        state: mailbox_state(&source.flags, role),
         folder_id: Some(folder),
         tags: source.tags,
         version: Some(source.version),
         is_sent: source.is_sent,
     })
+}
+
+fn mailbox_state(flags: &[String], role: FolderRole) -> MailboxState {
+    let has_flag = |value: &str| flags.iter().any(|flag| flag.eq_ignore_ascii_case(value));
+    MailboxState {
+        is_read: has_flag("\\Seen"),
+        is_flagged: has_flag("\\Flagged"),
+        is_draft: has_flag("\\Draft"),
+        in_inbox: role == FolderRole::Inbox,
+        in_trash: role == FolderRole::Trash,
+        in_junk: role == FolderRole::Junk,
+        attention: Attention::Unknown,
+    }
 }

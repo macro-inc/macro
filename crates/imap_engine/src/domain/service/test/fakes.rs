@@ -33,6 +33,8 @@ impl MemoryRepository {
             state: self.state.lock().unwrap().clone(),
             checkpoint: Default::default(),
             revision: self.revision.load(Ordering::Acquire),
+            folder_preferences_revision: 0,
+            fences_folder_preferences: false,
             lease_id,
         }
     }
@@ -68,6 +70,9 @@ impl Repository for MemoryRepository {
         {
             return Err(Error::ConnectionUnavailable);
         }
+        Ok(self.owner_available.load(Ordering::Acquire))
+    }
+    async fn holds_owner(&self, _: Binding, _: Uuid) -> Result<bool, Error> {
         Ok(self.owner_available.load(Ordering::Acquire))
     }
     async fn release_owner(&self, _: Binding, _: Uuid) -> Result<(), Error> {

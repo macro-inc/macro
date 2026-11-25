@@ -364,6 +364,7 @@ impl Engine {
         owner: Option<(Uuid, tokio_util::sync::CancellationToken)>,
     ) -> Result<Value, Error> {
         let synchronizing = matches!(operation, Operation::Sync);
+        let submitting = matches!(operation, Operation::Submit { .. });
         let reading = operation.access() == OperationAccess::Read;
         let submission_deadline = tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET;
         let stopped = owner
@@ -429,6 +430,12 @@ impl Engine {
         } else {
             work.await
         };
+        if synchronizing
+            && result.is_ok()
+            && let Some(account) = account.as_mut()
+        {
+            self.reconcile_sent_after_sync(account, &stopped).await;
+        }
         // Release the expensive sync slot before bounded lease cleanup; queued
         // accounts must not wait for another account's cleanup query.
         if synchronizing {
@@ -444,6 +451,12 @@ impl Engine {
             return result;
         }
         let release = self.repository.release(&account).await;
+        if submitting {
+            if let Err(error) = release {
+                tracing::warn!(?error, "IMAP submission lease cleanup failed");
+            }
+            return result;
+        }
         match result {
             Ok(value) => {
                 release?;
@@ -587,7 +600,6 @@ impl Engine {
         } else if health_changed {
             self.repository.save_health(a).await?;
         }
-        self.reconcile_sent(a, &c).await?;
         if changes.mailbox_changed || health_changed {
             self.notify(a).await?;
         }

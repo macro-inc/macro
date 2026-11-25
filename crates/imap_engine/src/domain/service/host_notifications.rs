@@ -115,12 +115,14 @@ impl Engine {
     ) -> Result<HintOutcome, Error> {
         let mut durable_pending_age = *pending_age;
         let result = async {
-            if !self.repository.claim_owner(binding, owner).await? {
-                return Err(Error::Conflict);
+            // Hints can start before the main actor's first claim. Only that
+            // actor renews ownership, and its exit cancels this side task.
+            if !self.repository.holds_owner(binding, owner).await? {
+                return Ok(HintOutcome::NotPending);
             }
             let observed = self
                 .repository
-                .read_scoped(binding, StateSelection::Catalog)
+                .read_scoped(binding, StateSelection::Health)
                 .await?;
             if !observed.state.notification_pending {
                 return Ok(HintOutcome::NotPending);
@@ -140,7 +142,7 @@ impl Engine {
             }
             let mut current = self
                 .repository
-                .acquire_scoped(binding, StateSelection::Catalog)
+                .acquire_scoped(binding, StateSelection::Health)
                 .await?;
             let mut outcome = HintOutcome::Pending;
             let saved = if !current.state.notification_pending {

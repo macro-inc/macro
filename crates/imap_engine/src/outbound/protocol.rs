@@ -731,13 +731,16 @@ impl ProtocolTransport {
             .capabilities()
             .await
             .map_err(|e| imap_error(e, false))?;
-        session
-            .limit_response(ResponseLimit::Metadata)
-            .logout()
-            .await
-            .map_err(|e| imap_error(e, false))?;
         let (mut smtp, extensions) = self.smtp_with_features(&c.smtp).await?;
-        command(&mut smtp, b"QUIT\r\n", 221).await?;
+        // Both authenticated probes have succeeded. Some providers close
+        // the connection without a final reply to these courtesy commands.
+        let _ = timeout(Duration::from_secs(2), async {
+            tokio::join!(
+                session.limit_response(ResponseLimit::Metadata).logout(),
+                command(&mut smtp, b"QUIT\r\n", 221),
+            )
+        })
+        .await;
         Ok(ServerFeatures {
             verified_at: Some(Utc::now()),
             idle: caps.has_str("IDLE"),

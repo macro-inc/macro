@@ -1,6 +1,8 @@
 //! Durable SMTP admission and replayable post-send effects.
 use super::*;
 
+const SENT_EFFECTS_BUDGET: std::time::Duration = std::time::Duration::from_secs(45);
+
 impl Engine {
     pub(super) async fn reconcile_submission(
         &self,
@@ -35,106 +37,139 @@ impl Engine {
         Ok(())
     }
 
-    pub(super) async fn reconcile_sent(
+    pub(super) async fn reconcile_sent_after_sync(
         &self,
         a: &mut Account,
-        credentials: &Credentials,
-    ) -> Result<(), Error> {
-        let ids = a
+        stopped: &CancellationToken,
+    ) {
+        // The snapshot and its notification already settled. Sent-copy work
+        // has its own bounded budget and may be recovered on a later round.
+        let result = tokio::select! {
+            biased;
+            _ = stopped.cancelled() => return,
+            result = tokio::time::timeout(SENT_EFFECTS_BUDGET, self.reconcile_sent(a)) => result,
+        };
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::warn!(?error, "IMAP post-send effects remain pending"),
+            Err(_) => tracing::warn!("IMAP post-send effects exceeded their budget"),
+        }
+    }
+
+    pub(super) async fn reconcile_sent(&self, a: &mut Account) -> Result<(), Error> {
+        use std::ops::Bound::{Excluded, Included, Unbounded};
+
+        let cursor = a.state.sent_effects_cursor.as_deref();
+        let start = cursor.map_or(Unbounded, Excluded);
+        let id = a
             .state
             .drafts
-            .iter()
-            .filter(|(_, d)| {
-                (d.sent_copy_pending || d.answered_pending)
-                    && d.submission == Some(SubmissionOutcome::Accepted)
+            .range::<str, _>((start, Unbounded))
+            .chain(cursor.into_iter().flat_map(|cursor| {
+                a.state
+                    .drafts
+                    .range::<str, _>((Unbounded, Included(cursor)))
+            }))
+            .find(|(_, draft)| {
+                (draft.sent_copy_pending || draft.answered_pending)
+                    && draft.submission == Some(SubmissionOutcome::Accepted)
             })
-            .map(|(id, _)| id.clone())
-            .take(1)
-            .collect::<Vec<_>>();
-        for id in ids {
-            let draft = a.state.drafts.get(&id).ok_or(Error::NotFound)?;
-            let send: SendRequest = serde_json::from_value(
-                draft
-                    .frozen_content
-                    .as_ref()
-                    .unwrap_or(&draft.input.content)
-                    .clone(),
-            )
-            .map_err(|_| Error::Invalid)?;
-            let message_id = send.message_id.as_ref().ok_or(Error::Invalid)?;
-            let mime = send.build_mime().map_err(|_| Error::Invalid)?;
-            if draft.sent_copy_pending {
-                let allow_append = !draft.sent_copy_attempted;
-                if allow_append {
-                    a.state
-                        .drafts
-                        .get_mut(&id)
-                        .ok_or(Error::NotFound)?
-                        .sent_copy_attempted = true;
+            .map(|(id, _)| id.clone());
+        let Some(id) = id else {
+            return Ok(());
+        };
+        // Commit the cursor before parsing or provider IO, so a corrupt
+        // record or timeout cannot keep the next accepted draft waiting.
+        if a.state.sent_effects_cursor.as_ref() != Some(&id) {
+            a.state.sent_effects_cursor = Some(id.clone());
+            self.repository.save_health(a).await?;
+        }
+        let credentials = self
+            .cipher
+            .decrypt(a.binding.link_id, &a.user_id, &a.ciphertext)
+            .await?;
+        let draft = a.state.drafts.get(&id).ok_or(Error::NotFound)?;
+        let send: SendRequest = serde_json::from_value(
+            draft
+                .frozen_content
+                .as_ref()
+                .unwrap_or(&draft.input.content)
+                .clone(),
+        )
+        .map_err(|_| Error::Invalid)?;
+        let message_id = send.message_id.as_ref().ok_or(Error::Invalid)?;
+        let mime = send.build_mime().map_err(|_| Error::Invalid)?;
+        if draft.sent_copy_pending {
+            let allow_append = !draft.sent_copy_attempted;
+            if allow_append {
+                a.state
+                    .drafts
+                    .get_mut(&id)
+                    .ok_or(Error::NotFound)?
+                    .sent_copy_attempted = true;
+                self.repository.save(a).await?;
+            }
+            match self
+                .transport
+                .save_sent(&credentials, message_id, &mime, allow_append)
+                .await
+            {
+                Ok(true) => {
+                    if let Some(draft) = a.state.drafts.get_mut(&id) {
+                        draft.sent_copy_pending = false;
+                    }
                     self.repository.save(a).await?;
                 }
-                match self
-                    .transport
-                    .save_sent(credentials, message_id, &mime, allow_append)
-                    .await
-                {
-                    Ok(true) => {
-                        if let Some(draft) = a.state.drafts.get_mut(&id) {
-                            draft.sent_copy_pending = false;
-                        }
-                        self.repository.save(a).await?;
-                    }
-                    Ok(false) => {}
-                    Err(error) => tracing::warn!(?error, "IMAP sent copy remains pending"),
-                }
+                Ok(false) => {}
+                Err(error) => tracing::warn!(?error, "IMAP sent copy remains pending"),
             }
-            let reply = a
+        }
+        let reply = a
+            .state
+            .drafts
+            .get(&id)
+            .filter(|d| d.answered_pending)
+            .and_then(|d| d.input.reply_to.clone());
+        if let Some(reply) = reply {
+            let location = a
                 .state
-                .drafts
-                .get(&id)
-                .filter(|d| d.answered_pending)
-                .and_then(|d| d.input.reply_to.clone());
-            if let Some(reply) = reply {
-                let location = a
+                .locations
+                .iter()
+                .find(|l| l.message_id == reply && l.uid > 0)
+                .cloned();
+            let result = if let Some(location) = location {
+                let folder = a
                     .state
-                    .locations
-                    .iter()
-                    .find(|l| l.message_id == reply && l.uid > 0)
-                    .cloned();
-                let result = if let Some(location) = location {
-                    let folder = a
-                        .state
-                        .folders
-                        .get(&location.folder_id)
-                        .ok_or(Error::NotFound)?;
-                    self.transport
-                        .apply(
-                            credentials,
-                            &folder.path,
-                            location.uid_validity,
-                            location.uid,
-                            RemoteAction::Flag {
-                                flag: "\\Answered".into(),
-                                enabled: true,
-                            },
-                        )
-                        .await
-                        .map_err(ApplyError::into_error)
-                        .map(|_| ())
-                } else if a.state.messages.contains_key(&reply) {
-                    Err(Error::ConnectionUnavailable)
-                } else {
-                    Ok(())
-                };
-                match result {
-                    Ok(()) => {
-                        if let Some(draft) = a.state.drafts.get_mut(&id) {
-                            draft.answered_pending = false;
-                        }
-                        self.repository.save(a).await?;
+                    .folders
+                    .get(&location.folder_id)
+                    .ok_or(Error::NotFound)?;
+                self.transport
+                    .apply(
+                        &credentials,
+                        &folder.path,
+                        location.uid_validity,
+                        location.uid,
+                        RemoteAction::Flag {
+                            flag: "\\Answered".into(),
+                            enabled: true,
+                        },
+                    )
+                    .await
+                    .map_err(ApplyError::into_error)
+                    .map(|_| ())
+            } else if a.state.messages.contains_key(&reply) {
+                Err(Error::ConnectionUnavailable)
+            } else {
+                Ok(())
+            };
+            match result {
+                Ok(()) => {
+                    if let Some(draft) = a.state.drafts.get_mut(&id) {
+                        draft.answered_pending = false;
                     }
-                    Err(error) => tracing::warn!(?error, "IMAP answered flag remains pending"),
+                    self.repository.save(a).await?;
                 }
+                Err(error) => tracing::warn!(?error, "IMAP answered flag remains pending"),
             }
         }
         Ok(())
@@ -278,23 +313,24 @@ impl Engine {
             self.repository.save(a).await?;
             return value(outcome);
         }
-        if let Some(d) = a.state.drafts.get_mut(id) {
-            d.submission = Some(outcome.clone());
+        let settled = async {
             if outcome == SubmissionOutcome::Accepted {
-                d.draft.is_draft = false;
-                d.sent_copy_pending = true;
-                d.answered_pending = d.input.reply_to.is_some();
+                accept_submission(a, id, &mime, true)?;
             }
+            self.repository.save(a).await
         }
-        if outcome == SubmissionOutcome::Accepted {
-            accept_submission(a, id, &mime, true)?;
+        .await;
+        if let Err(error) = settled {
+            // SMTP has accepted the message or may have done so. A failed
+            // final save cannot undo delivery or clear the committed fence.
+            tracing::warn!(?error, "IMAP submission outcome requires confirmation");
+            return value(SubmissionOutcome::Unknown);
         }
-        self.repository.save(a).await?;
         if deadline_exceeded {
             tracing::Span::current().record("smtp.penalty_applied", true);
         }
         if outcome == SubmissionOutcome::Accepted {
-            self.reconcile_sent(a, &c).await?;
+            self.wake_account(a.binding.link_id);
         }
         value(outcome)
     }

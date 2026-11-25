@@ -72,7 +72,7 @@ impl Engine {
             let mut failures = 0u32;
             loop {
                 if done.is_cancelled() { return; }
-                match repository.claim_owner(binding, owner).await { Ok(true) => {}, _ => return }
+                match repository.holds_owner(binding, owner).await { Ok(true) => {}, _ => return }
                 let result = async {
                     let (user, ciphertext) = repository.credentials(binding).await?;
                     let credentials = cipher.decrypt(binding.link_id, &user, &ciphertext).await?;

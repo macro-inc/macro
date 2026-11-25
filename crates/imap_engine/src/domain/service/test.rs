@@ -766,15 +766,8 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         tokio_util::task::TaskTracker::new(),
         tokio_util::sync::CancellationToken::new(),
     );
-    let credentials = TestCipher
-        .decrypt(binding.link_id, "owner", &[])
-        .await
-        .unwrap();
     let mut account = repository.acquire(binding).await.unwrap();
-    engine
-        .reconcile_sent(&mut account, &credentials)
-        .await
-        .unwrap();
+    engine.reconcile_sent(&mut account).await.unwrap();
     assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
     assert!(account.state.drafts[&id].sent_copy_pending);
     // Simulate a server whose Message-ID SEARCH is blind and whose recent UID window is displaced.
@@ -795,10 +788,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         tokio_util::sync::CancellationToken::new(),
     );
     let mut account = repository.acquire(binding).await.unwrap();
-    restarted
-        .reconcile_sent(&mut account, &credentials)
-        .await
-        .unwrap();
+    restarted.reconcile_sent(&mut account).await.unwrap();
     assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
     assert!(account.state.drafts[&id].sent_copy_attempted);
     assert!(account.state.drafts[&id].sent_copy_pending);

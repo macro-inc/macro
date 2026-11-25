@@ -81,7 +81,8 @@ impl PgRepository {
                 a.user_id,
                 a.credential_ciphertext,
                 a.state,
-                a.revision
+                a.revision,
+                a.folder_preferences_revision
             "#,
             b.link_id,
             b.sync_generation,
@@ -141,6 +142,8 @@ impl PgRepository {
                 Error::ConnectionUnavailable
             })?,
             revision: r.revision,
+            folder_preferences_revision: r.folder_preferences_revision,
+            fences_folder_preferences: false,
             lease_id: Some(lease),
         };
         Ok((tx, account))

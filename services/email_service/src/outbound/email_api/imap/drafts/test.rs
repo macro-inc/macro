@@ -2,13 +2,6 @@ use super::*;
 
 #[tokio::test]
 async fn only_typed_pre_data_failure_is_definite_not_a_generic_service_outage() {
-    use email::domain::models::UserProvider;
-    use sqlx::postgres::PgPoolOptions;
-    use wiremock::{
-        Mock, MockServer, ResponseTemplate,
-        matchers::{header, method, path},
-    };
-
     for (code, status, expected_reason) in [
         (
             "send_unavailable",
@@ -22,36 +15,7 @@ async fn only_typed_pre_data_failure_is_definite_not_a_generic_service_outage() 
         ),
         ("connection_unavailable", 503, None),
     ] {
-        let server = MockServer::start().await;
-        let mailbox = MailboxKey {
-            link_id: Uuid::now_v7(),
-            sync_generation: 1,
-            grant_generation: 1,
-        };
-        Mock::given(method("POST"))
-            .and(path(format!(
-                "/internal/v1/accounts/{}/operations",
-                mailbox.link_id
-            )))
-            .and(header("x-mailbox-binding", "1.1"))
-            .respond_with(
-                ResponseTemplate::new(status).set_body_json(serde_json::json!({"code":code})),
-            )
-            .expect(1)
-            .mount(&server)
-            .await;
-        let db = PgPoolOptions::new()
-            .connect_lazy("postgres://unused:unused@localhost/unused")
-            .unwrap();
-        db.close().await;
-        let gateway = ImapMailboxGateway {
-            client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
-            health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-                .with_provider(UserProvider::Imap),
-        };
-        let result = gateway
-            .submit_draft(mailbox, &ProviderId::new("draft").unwrap())
-            .await;
+        let result = submit_engine_response(status, serde_json::json!({"code": code})).await;
         if let Some(expected_reason) = expected_reason {
             assert!(
                 matches!(result, Err(EmailApiError::SendRejected {reason, ..}) if reason == expected_reason)
@@ -59,8 +23,75 @@ async fn only_typed_pre_data_failure_is_definite_not_a_generic_service_outage() 
         } else {
             assert!(matches!(result, Err(EmailApiError::Transient { .. })));
         }
-        server.verify().await;
     }
+}
+
+#[tokio::test]
+async fn a_conflict_or_missing_draft_response_can_follow_smtp_acceptance() {
+    let conflict = submit_engine_response(409, serde_json::json!({"code": "conflict"})).await;
+    let missing = submit_engine_response(404, serde_json::json!({"code": "not_found"})).await;
+    assert_eq!(
+        [conflict, missing],
+        [
+            Ok(SubmissionOutcome::Unknown),
+            Ok(SubmissionOutcome::Unknown)
+        ],
+    );
+}
+
+#[tokio::test]
+async fn a_legacy_invalid_response_can_follow_smtp_acceptance() {
+    let result = submit_engine_response(422, serde_json::json!({"code": "invalid"})).await;
+    assert_eq!(result, Ok(SubmissionOutcome::Unknown));
+}
+
+#[tokio::test]
+async fn health_bookkeeping_cannot_replace_an_accepted_submission() {
+    let result = submit_engine_response(200, serde_json::json!("accepted")).await;
+    assert_eq!(result, Ok(SubmissionOutcome::Accepted));
+}
+
+async fn submit_engine_response(
+    status: u16,
+    response: serde_json::Value,
+) -> Result<SubmissionOutcome, EmailApiError> {
+    use email::domain::models::UserProvider;
+    use sqlx::postgres::PgPoolOptions;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{header, method, path},
+    };
+
+    let server = MockServer::start().await;
+    let mailbox = MailboxKey {
+        link_id: Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    Mock::given(method("POST"))
+        .and(path(format!(
+            "/internal/v1/accounts/{}/operations",
+            mailbox.link_id
+        )))
+        .and(header("x-mailbox-binding", "1.1"))
+        .respond_with(ResponseTemplate::new(status).set_body_json(response))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let db = PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@localhost/unused")
+        .unwrap();
+    db.close().await;
+    let gateway = ImapMailboxGateway {
+        client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
+            .with_provider(UserProvider::Imap),
+    };
+    let result = gateway
+        .submit_draft(mailbox, &ProviderId::new("draft").unwrap())
+        .await;
+    server.verify().await;
+    result
 }
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]

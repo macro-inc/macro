@@ -310,8 +310,8 @@ async fn main() -> anyhow::Result<()> {
     );
     let imap_gateway =
         email_service::composition::imap_gateway(db.clone(), config.internal_api_key.as_ref())?;
-    // Only stream ingestion uses this class. Settings, commands and drafts keep
-    // their explicit background clients; user-triggered work stays interactive.
+    // Live and import ingestion have separate admission. The shared gateway
+    // keeps interactive admission for commands and draft materialization.
     let mut imap_ingestion = imap_gateway.clone();
     imap_ingestion.client = imap_ingestion
         .client

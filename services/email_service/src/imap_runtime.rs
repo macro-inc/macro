@@ -43,7 +43,8 @@ pub async fn catch_up<R>(
 ) where
     R: email::domain::mailbox::imap_catchup::ImapCatchupRepository,
 {
-    use email::domain::mailbox::imap_catchup::CatchupTick;
+    use email::domain::mailbox::imap_catchup::{CatchupTick, IMAP_CATCHUP_IDLE_SECONDS};
+    let idle = std::time::Duration::from_secs(u64::from(IMAP_CATCHUP_IDLE_SECONDS));
     let mut requested = false;
     loop {
         if cancellation.is_cancelled() {
@@ -62,14 +63,9 @@ pub async fn catch_up<R>(
             }
         } else {
             match service.tick().await {
-                Ok(CatchupTick::Busy) => std::time::Duration::from_secs(5),
-                Ok(CatchupTick::Page(page)) => {
-                    if page.complete {
-                        std::time::Duration::from_secs(5)
-                    } else {
-                        std::time::Duration::from_millis(50)
-                    }
-                }
+                Ok(CatchupTick::Busy) => idle,
+                Ok(CatchupTick::Page(page)) if page.complete => idle,
+                Ok(CatchupTick::Page(_)) => std::time::Duration::from_millis(50),
                 Err(error) => {
                     tracing::warn!(%error, "IMAP catch-up page deferred");
                     std::time::Duration::from_secs(5)

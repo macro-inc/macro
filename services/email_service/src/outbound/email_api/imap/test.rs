@@ -160,3 +160,58 @@ async fn conditional_command_reads_live_organization_instead_of_the_catalog_cach
         Err(EmailApiError::NotFound)
     ));
 }
+
+#[tokio::test]
+async fn a_corrupt_imap_source_does_not_hide_the_other_recent_messages() {
+    let mailbox = MailboxKey {
+        link_id: Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    let mime = b"From: sender@example.net\r\nTo: reader@example.net\r\n\
+        Message-ID: <synthetic-recent@example.net>\r\nSubject: Still readable\r\n\r\nFixture";
+    let good = models::Message {
+        id: "good".into(),
+        thread_id: "thread".into(),
+        folder_id: "inbox".into(),
+        flags: Vec::new(),
+        tags: Vec::new(),
+        version: "1".into(),
+        mime_base64: STANDARD.encode(mime),
+        source_complete: true,
+        classification: None,
+        received_at: chrono::Utc::now(),
+        size: 100,
+        is_sent: false,
+        draft_correlation: None,
+    };
+    let corrupt = models::Message {
+        id: "corrupt".into(),
+        mime_base64: "!invalid".into(),
+        ..good.clone()
+    };
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!(
+            "/internal/v1/accounts/{}/operations",
+            mailbox.link_id
+        )))
+        .respond_with(ResponseTemplate::new(200).set_body_json([corrupt, good]))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let db = PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@localhost/unused")
+        .unwrap();
+    db.close().await;
+    let gateway = ImapMailboxGateway {
+        client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
+            .with_provider(UserProvider::Imap),
+    };
+
+    let recent = gateway.recent(mailbox, 2).await.unwrap();
+    assert_eq!(recent.len(), 1);
+    assert_eq!(recent[0].subject.as_deref(), Some("Still readable"));
+    server.verify().await;
+}
