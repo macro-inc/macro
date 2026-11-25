@@ -71,12 +71,17 @@ Migrations 20261123181255–181263 add nullable routing/local blocker fields and
 new concurrent indexes; no applied migration changes. Draft claims reserve 32
 legacy NULL-provider slots beside 32 native slots; command claims reserve 16
 legacy slots beside 32 native slots to bound routing writes. A populated native
-queue cannot starve the transition. New/old writers derive routing through insert hooks;
-existing NULL rows are labelled in bounded claim maintenance. Keep the NULL
-indexes until an authorized production check and writer review under
-`mac-imap-smtp.114`; retained terminal NULL metadata may need a separately reviewed
-bounded completion before the all-row zero check. No production check is implied
-by the local synthetic evidence.
+queue cannot starve the transition. New rows derive routing on insert.
+Migration 20261125103100 updates two trigger functions so a real draft edit or
+schedule change routes an existing draft in the same transaction. An existing
+schedule that becomes due before any edit also routes through the scheduled
+queue. That wake only updates its legacy draft routing. The mailbox claim path
+still acquires the delivery lease and submits the message.
+
+Claims route other eligible NULL rows and block quiet synced drafts after their
+first evaluation. Keep the NULL indexes until an authorized production check
+and writer review under `mac-imap-smtp.114`. A separately reviewed operations
+backfill and lane retirement are tracked in `mac-imap-smtp.122`.
 
 Migration 20261123181266 adds the command live-lease range index concurrently.
 Draft exclusion uses its link/generation/expiry range before target primary-key
@@ -169,7 +174,8 @@ the 60-second local floor prevents reevaluation in intervening claim windows.
 Draft exclusion uses bounded target-key point probes independently of command
 width and does not need this wide-command allowance.
 
-The shared claim loop bounds evaluation to 15 seconds and reports a typed
+The shared mutation claim loop bounds evaluation to two seconds, with a
+one-second statement limit, and reports a typed
 `DeadlineExceeded`; it awaits commit outside that timer to avoid cancelling a
 commit after the lease was acquired. Database lock and statement timeouts still
 apply. A transport failure at commit can remain ambiguous. Fresh-budget

@@ -253,9 +253,10 @@ pub async fn resume_link(pool: &PgPool, link: Uuid) {
     match tokio::time::timeout(Duration::from_secs(2), work).await {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
-            tracing::warn!(?error, "parked mailbox work tail retained for maintenance")
+            tracing::warn!(?error, mailbox.link_id = %link, "parked mailbox work tail retained for maintenance")
         }
         Err(_) => tracing::warn!(
+            mailbox.link_id = %link,
             "parked mailbox work tail exceeded connect budget; retained for maintenance"
         ),
     }

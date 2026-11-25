@@ -667,18 +667,20 @@ async fn the_folder_line_counts_what_a_claim_could_take_with_the_longest_wait(db
     let active = outlook_link(&db, "active@example.com", true, false).await;
     let paused = outlook_link(&db, "paused@example.com", true, true).await;
     sqlx::query!(
-        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,lease_id,lease_until)
-        SELECT gen_random_uuid(), link_id, generation, kind, scope_id, initial_complete, now() - make_interval(secs => due_seconds_ago), lease_id, lease_until
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,lease_id,lease_until,provider_retry_at,parked_at)
+        SELECT gen_random_uuid(), link_id, generation, kind, scope_id, initial_complete, now() - make_interval(secs => due_seconds_ago), lease_id, lease_until, provider_retry_at, parked_at
         FROM (VALUES
-            ($1::uuid, 1::bigint, 'mail_folder', 'polled long ago', true, 300.0::float8, NULL::uuid, NULL::timestamptz),
-            ($1, 1, 'mail_folder', 'polled lately', true, 60.0, NULL, NULL),
-            ($1, 1, 'mail_folder', 'not due', true, -60.0, NULL, NULL),
-            ($1, 1, 'mail_folder', 'claimed', true, 900.0, $3, now() + interval '1 minute'),
-            ($1, 1, 'mail_folder', 'importing', false, 30.0, NULL, NULL),
-            ($1, 0, 'mail_folder', 'older generation', true, 3600.0, NULL, NULL),
-            ($1, 1, 'contacts', 'contacts', true, 3600.0, NULL, NULL),
-            ($2, 1, 'mail_folder', 'needs reauthorization', false, 3600.0, NULL, NULL)
-        ) AS streams(link_id, generation, kind, scope_id, initial_complete, due_seconds_ago, lease_id, lease_until)"#,
+            ($1::uuid, 1::bigint, 'mail_folder', 'polled long ago', true, 300.0::float8, NULL::uuid, NULL::timestamptz, now() - interval '75 seconds', NULL::timestamptz),
+            ($1, 1, 'mail_folder', 'polled lately', true, 60.0, NULL, NULL, NULL, NULL),
+            ($1, 1, 'mail_folder', 'not due', true, -60.0, NULL, NULL, NULL, NULL),
+            ($1, 1, 'mail_folder', 'claimed', true, 900.0, $3, now() + interval '1 minute', NULL, NULL),
+            ($1, 1, 'mail_folder', 'retry deferred', true, 900.0, NULL, NULL, now() + interval '1 minute', NULL),
+            ($1, 1, 'mail_folder', 'parked', false, 900.0, NULL, NULL, NULL, now()),
+            ($1, 1, 'mail_folder', 'importing', false, 30.0, NULL, NULL, NULL, NULL),
+            ($1, 0, 'mail_folder', 'older generation', true, 3600.0, NULL, NULL, NULL, NULL),
+            ($1, 1, 'contacts', 'contacts', true, 3600.0, NULL, NULL, NULL, NULL),
+            ($2, 1, 'mail_folder', 'needs reauthorization', false, 3600.0, NULL, NULL, NULL, NULL)
+        ) AS streams(link_id, generation, kind, scope_id, initial_complete, due_seconds_ago, lease_id, lease_until, provider_retry_at, parked_at)"#,
         active,
         paused,
         macro_uuid::generate_uuid_v7()
@@ -691,7 +693,7 @@ async fn the_folder_line_counts_what_a_claim_could_take_with_the_longest_wait(db
 
     assert_eq!((line.polls_due, line.import_rounds_due), (2, 1), "{line:?}");
     assert!(
-        (300..=302).contains(&line.oldest_poll_due_seconds),
+        (75..=77).contains(&line.oldest_poll_due_seconds),
         "{line:?}"
     );
     assert!(

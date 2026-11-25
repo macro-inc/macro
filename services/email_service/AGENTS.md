@@ -174,6 +174,7 @@ Missing or failed reads preserve the single-command writer.
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 
 - Provider-sync deletions deferred by active sends publish no deletion event; scheduled recovery reconciles the retained marker before trying to claim delivery.
+- Scheduled wakes can route a single due legacy draft to its owning provider. The mailbox draft worker retains the delivery lease and submission; the scheduled-queue sender claims Gmail only.
 - Scheduled delivery calls the email domain for durable claims, completion fences, provider identity adoption and retained deletions; its PostgreSQL capabilities are wired by `email::outbound::scheduled_delivery_pg`. The worker adapter retains provider I/O, event publication and attachment cleanup.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.

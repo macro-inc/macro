@@ -70,6 +70,9 @@ predicate aligned with the draft exclusion query and retain the old indexes for
 rolling binaries. Migrations 181267–181268 add nullable command action IDs and
 a concurrent partial group lookup index. Legacy writers leave the action ID
 NULL; grouped receipt readers must precede the default-off chunking flag flip.
+Legacy draft routing is derived from the parent link on a real draft or
+schedule write and in the bounded claim window. Keep the legacy lane until a
+one-off backfill has drained the remaining rows.
 
 `imap_state_entries` location rows require a 32-byte `fingerprint` bytea value,
 indexed by `(link_id, fingerprint)` for the literal location kind. The engine

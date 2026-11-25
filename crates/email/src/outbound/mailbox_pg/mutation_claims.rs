@@ -4,7 +4,20 @@ use std::{future::Future, time::Duration};
 use tracing::Instrument;
 
 pub(super) const MUTATION_PROBE_BUDGET: i64 = 128;
-const MUTATION_CLAIM_TIMEOUT: Duration = Duration::from_secs(15);
+// Leave margin under the five-second parent-writer lock timeout used by
+// link_lock, begin_health_write and mailbox lifecycle transactions. A dropped
+// query can keep running until PostgreSQL applies the per-statement limit.
+const MUTATION_CLAIM_TIMEOUT: Duration = Duration::from_secs(2);
+pub(super) const MUTATION_STATEMENT_TIMEOUT: &str = "1s";
+
+fn claim_sql_timeout(error: MailboxError) -> MailboxError {
+    match error {
+        MailboxError::Database(DatabaseFailure::Sqlstate(code)) if code == "57014" => {
+            MailboxError::database(DatabaseFailure::DeadlineExceeded)
+        }
+        error => error,
+    }
+}
 
 pub(super) struct MutationWindow {
     pub ids: Vec<Uuid>,
@@ -69,10 +82,12 @@ impl PgMailboxSync {
         let deadline = tokio::time::Instant::now() + MUTATION_CLAIM_TIMEOUT;
         let mut tx = tokio::time::timeout_at(deadline, self.mutation_claim_transaction())
             .await
-            .map_err(|_| MailboxError::database(DatabaseFailure::DeadlineExceeded))??;
+            .map_err(|_| MailboxError::database(DatabaseFailure::DeadlineExceeded))?
+            .map_err(claim_sql_timeout)?;
         let window = tokio::time::timeout_at(deadline, acquirer.window(&mut tx))
             .await
-            .map_err(|_| MailboxError::database(DatabaseFailure::DeadlineExceeded))??;
+            .map_err(|_| MailboxError::database(DatabaseFailure::DeadlineExceeded))?
+            .map_err(claim_sql_timeout)?;
         if window.ids.is_empty() {
             tx.commit().await.map_err(db_error)?;
             return Ok(SyncClaim::Idle);
@@ -168,7 +183,7 @@ impl PgMailboxSync {
         )
         .await
         {
-            Ok(result) => result,
+            Ok(result) => result.map_err(claim_sql_timeout),
             Err(_) => Err(MailboxError::database(DatabaseFailure::DeadlineExceeded)),
         };
         // Cancelling a COMMIT can report failure after Postgres acquired the

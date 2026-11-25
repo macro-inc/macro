@@ -95,12 +95,27 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
         else {
             return Ok(None);
         };
-        // Outlook delivery is claimed by its durable draft coordinator. This
-        // legacy adapter must never claim it or release an uncertain send.
-        if !matches!(
-            link.provider,
-            models_email::service::link::UserProvider::Gmail
-        ) {
+        if link.provider.uses_mailbox_framework() {
+            // An unchanged schedule can come due during rollout without a
+            // draft write. Route that one legacy row ahead of quiet drafts.
+            // The mailbox coordinator still owns the lease and submission.
+            sqlx::query!(
+                r#"
+                UPDATE email_mailbox_drafts d
+                SET provider=d.provider
+                WHERE d.message_id=$1 AND d.link_id=$2 AND d.provider IS NULL
+                    AND d.state IN ('pending', 'running', 'synced')
+                    AND EXISTS (
+                        SELECT 1 FROM email_scheduled_messages s
+                        WHERE s.message_id=d.message_id AND s.link_id=d.link_id
+                            AND NOT s.sent AND s.send_time<=now()
+                    )
+                "#,
+                message_id,
+                link_id,
+            )
+            .execute(&self.db)
+            .await?;
             return Ok(None);
         }
         Ok(

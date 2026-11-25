@@ -25,13 +25,22 @@ locked AS MATERIALIZED (
     ) d
 ),
 enriched AS MATERIALIZED (
-    SELECT d.*, l.provider AS actual_provider,
-        (l.is_sync_active AND l.mailbox_unavailable_at IS NULL
-            AND l.sync_generation=d.generation) AS parent_ready
+    SELECT d.*, COALESCE(parking_parent.provider, l.provider) AS actual_provider,
+        l.parent_ready
     FROM locked d CROSS JOIN LATERAL (
-        SELECT provider,is_sync_active,mailbox_unavailable_at,sync_generation
+        SELECT provider, (is_sync_active AND mailbox_unavailable_at IS NULL
+            AND sync_generation=d.generation) AS parent_ready
         FROM email_links WHERE id=d.link_id LIMIT 1
     ) l
+    -- Only parking needs to serialize with activation. A healthy candidate is
+    -- rechecked by acquire, without making unrelated link writers wait here.
+    LEFT JOIN LATERAL (
+        SELECT provider FROM email_links WHERE NOT l.parent_ready AND id=d.link_id
+            AND NOT (is_sync_active AND mailbox_unavailable_at IS NULL
+                AND sync_generation=d.generation)
+        LIMIT 1 FOR SHARE SKIP LOCKED
+    ) parking_parent ON true
+    WHERE l.parent_ready OR parking_parent.provider IS NOT NULL
 ),
 changes AS MATERIALIZED (
     SELECT d.*, CASE WHEN d.intent->>'kind' IS NULL OR d.intent->>'kind' NOT IN ('read','flagged','archived','trashed','junk','category')

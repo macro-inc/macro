@@ -38,19 +38,28 @@ locked AS MATERIALIZED (
     ) d
 ),
 enriched AS MATERIALIZED (
-    SELECT d.*, l.provider AS actual_provider,
-        (l.is_sync_active AND l.mailbox_unavailable_at IS NULL
-            AND l.sync_generation=d.generation) AS parent_ready,
+    SELECT d.*, COALESCE(parking_parent.provider, l.provider) AS actual_provider,
+        l.parent_ready,
         CASE WHEN NOT schedule.sent AND NOT schedule.processing
             THEN schedule.send_time ELSE NULL END AS send_time
     FROM locked d CROSS JOIN LATERAL (
-        SELECT provider,is_sync_active,mailbox_unavailable_at,sync_generation
+        SELECT provider, (is_sync_active AND mailbox_unavailable_at IS NULL
+            AND sync_generation=d.generation) AS parent_ready
         FROM email_links WHERE id=d.link_id LIMIT 1
-    ) l LEFT JOIN LATERAL (
+    ) l
+    -- Only parking needs to serialize with activation. A healthy candidate is
+    -- rechecked by acquire, without making unrelated link writers wait here.
+    LEFT JOIN LATERAL (
+        SELECT provider FROM email_links WHERE NOT l.parent_ready AND id=d.link_id
+            AND NOT (is_sync_active AND mailbox_unavailable_at IS NULL
+                AND sync_generation=d.generation)
+        LIMIT 1 FOR SHARE SKIP LOCKED
+    ) parking_parent ON true LEFT JOIN LATERAL (
         SELECT send_time,sent,processing FROM email_scheduled_messages
         WHERE message_id=d.id AND link_id=d.link_id
         LIMIT 1
     ) schedule ON true
+    WHERE l.parent_ready OR parking_parent.provider IS NOT NULL
 ),
 changes AS MATERIALIZED (
     SELECT d.*, CASE WHEN d.state='synced' AND d.send_time IS NULL THEN 'infinity'::timestamptz

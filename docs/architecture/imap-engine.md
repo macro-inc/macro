@@ -111,8 +111,16 @@ shutdown refuses unadmitted sends while preserving any prior sticky outcome.
 Its first command-lease renewal is after sixty seconds; a concurrent heartbeat
 bounds each database renewal at ten seconds, so it cannot stop polling SMTP or
 its single transport deadline. Renewal failures are counted and logged while
-SMTP continues, since Unknown already prevents resending. A
-stale final save cannot overwrite newer state. HTTP and tracked-work shutdown
+SMTP continues, since Unknown already prevents resending. A failed final
+save leaves that durable Unknown in place and the email coordinator confirms
+without submitting again. Folder preferences have their own revision so an
+edit can fence an outdated folder snapshot while a different command continues.
+Accepted drafts keep Sent-copy and Answered effects pending. The sync owner
+reconciles them within a separate budget after committing and notifying the
+snapshot. A durable cursor selects the next pending draft on each round,
+including after a timeout or an unreadable record. A failure there leaves
+the settled submission and sync result intact.
+HTTP and tracked-work shutdown
 share thirty seconds, below the ECS stop timeout; a process cut-off retains
 Unknown. Exhausted pre-body connection failures return the closed
 `SendUnavailable` category: the email coordinator fails that attempt visibly,
@@ -539,6 +547,16 @@ without changing routing; the trigger and provider immutability exclude this
 state from normal writes. Recovery can re-park unsupported corruption once per
 five-minute wrap without adding another index.
 
+Older draft rows may have no provider. Real draft and schedule writes route
+each affected draft in the same transaction. When an existing schedule comes
+due, its scheduled-queue wake can also route the draft. The mailbox worker
+retains the delivery lease and submits the message. The bounded legacy claim
+window routes untouched rows and blocks quiet synced drafts without a live
+schedule after their first evaluation.
+Draft and command windows take a shared parent lock only when parking.
+They skip a parent already locked by activation. The mutation claim deadline
+leaves margin under the five-second timeout used by parent writers.
+
 The [routing runbook](../runbooks/email-provider-routing.md) records one-time
 transition costs and the preserved preview's migration-history limitation.
 
@@ -554,7 +572,9 @@ prevents its fenced clear, avoiding repeated HTTP callbacks for that revision.
 The earliest pending time persists in the small account JSON state, so a new actor
 does not reset the alert age. Legacy rows without it use the current actor's age
 until the next durable change. Routine ownership loss stops delivery cleanly.
-Shutdown drains the bounded callback and fenced save.
+Shutdown drains the bounded callback and fenced save. Hint retries read
+only the account scalars. They and optional folder watchers check the
+owner lease without extending it.
 
 Notifications carry an optional engine revision. The host records the last health
 revision under its sync and grant generations and ignores reordered older health
@@ -567,7 +587,8 @@ minutes. Each page examines at most sixteen streams, including up to eight due
 deferred ids. Locked or failed rows enter a bounded-backoff queue; deleted and
 ineligible ids are retired. The steady-state thirty-second cycle uses a partial
 index of unconsumed notification revisions, so an idle cycle does not scan every
-account. Catch-up shares the existing worker pool with normal sync. Each call
+account. Completed or contended cycles sleep for the same thirty-second interval.
+Catch-up shares the existing worker pool with normal sync. Each call
 acquires within five seconds and uses transaction-local statement and lock
 limits: fifteen seconds per statement, one second per wake statement and one
 second for lock waits. List reads commit before individual wake transactions;

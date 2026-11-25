@@ -105,6 +105,194 @@ async fn activation_unparks_a_window_committed_by_a_concurrent_parker(db: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn activation_and_mutation_parking_cannot_miss_each_other(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let thread = Uuid::now_v7();
+    let draft = Uuid::now_v7();
+    let command = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_threads (id,link_id) VALUES ($1,$2)",
+        thread,
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO email_messages (id,thread_id,link_id,is_draft) VALUES ($1,$2,$3,true)",
+        draft,
+        thread,
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_drafts (message_id, link_id, generation, actor_id, desired_content)
+        VALUES ($1, $2, 1, 'macro|outlook-test@example.com', '{}')
+        "#,
+        draft, link
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_commands (id, link_id, generation, actor_id, intent, status)
+        VALUES ($1, $2, 1, 'macro|outlook-test@example.com', '{"kind":"read","value":true}', 'pending')
+        "#,
+        command, link
+    ).execute(&db).await.unwrap();
+
+    async fn windows(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> (i64, i64) {
+        let draft = sqlx::query_file!(
+            "src/outbound/mailbox_pg/drafts/claim/window.sql",
+            "OUTLOOK",
+            true
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .unwrap();
+        let command = sqlx::query_file!(
+            "src/outbound/mailbox_pg/commands/claim/window.sql",
+            "OUTLOOK"
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .unwrap();
+        (draft.maintained, command.maintained)
+    }
+
+    // Activation holds the parent row. Neither window may park using the
+    // older inactive version while activation skips locked child rows.
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active=false WHERE id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let mut activation = db.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active=true WHERE id=$1",
+        link
+    )
+    .execute(&mut *activation)
+    .await
+    .unwrap();
+    let mut parker = repo.mutation_claim_transaction().await.unwrap();
+    assert_eq!(windows(&mut parker).await, (0, 0));
+    parker.commit().await.unwrap();
+    let unparked = super::super::parked_work_recovery::unpark_link_page(&mut activation, link, 64)
+        .await
+        .unwrap();
+    assert_eq!(unparked, 0);
+    activation.commit().await.unwrap();
+
+    // When the parker wins, the parent lock keeps activation from
+    // completing before both child rows have committed their park.
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active=false WHERE id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let mut parker = repo.mutation_claim_transaction().await.unwrap();
+    assert_eq!(windows(&mut parker).await, (1, 1));
+    let conflict = sqlx::query!(
+        "SELECT id FROM email_links WHERE id=$1 FOR UPDATE NOWAIT",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        conflict.as_database_error().unwrap().code().as_deref(),
+        Some("55P03")
+    );
+    let mut activation = repo.begin().await.unwrap();
+    {
+        let mut activate = std::pin::pin!(async {
+            sqlx::query!(
+                "UPDATE email_links SET is_sync_active=true WHERE id=$1",
+                link
+            )
+            .execute(&mut *activation)
+            .await
+            .unwrap();
+        });
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(25), &mut activate)
+                .await
+                .is_err(),
+            "activation must still wait for the park to commit"
+        );
+        parker.commit().await.unwrap();
+        activate.await;
+    }
+    let unparked = super::super::parked_work_recovery::unpark_link_page(&mut activation, link, 64)
+        .await
+        .unwrap();
+    assert_eq!(unparked, 2);
+    activation.commit().await.unwrap();
+
+    // Both ordinary windows hold child locks on these due, healthy rows.
+    // Concurrent health and lifecycle writers must still get the parent.
+    let mut claim = repo.mutation_claim_transaction().await.unwrap();
+    assert_eq!(windows(&mut claim).await, (0, 0));
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        assert!(
+            email_db_client::links::update::set_link_needs_reauth(&db, link)
+                .await
+                .unwrap()
+        );
+        let snapshot =
+            crate::domain::mailbox::lifecycle::InboxLifecycleRepository::snapshot(&repo, link)
+                .await
+                .unwrap();
+        assert!(!snapshot.disconnecting);
+    })
+    .await
+    .expect("healthy claim windows must allow parent writers to complete");
+    use crate::domain::mailbox::lifecycle::{
+        InboxLifecycleEffect, InboxLifecycleEffects, InboxLifecycleService,
+    };
+    use models_email::service::pubsub::DeletionReason;
+    struct Effects;
+    impl InboxLifecycleEffects for Effects {
+        async fn apply(&self, _: Uuid, _: &InboxLifecycleEffect) -> Result<(), MailboxError> {
+            panic!("preparing deletion must only write durable effects");
+        }
+    }
+    let lifecycle = InboxLifecycleService::new(repo.clone(), Effects);
+    let mut prepare = std::pin::pin!(lifecycle.prepare_delete(link, DeletionReason::UserDeleted));
+    let started = tokio::time::timeout(std::time::Duration::from_millis(25), &mut prepare).await;
+    claim.commit().await.unwrap();
+    let deleted = match started {
+        Ok(result) => result,
+        Err(_) => prepare.await,
+    }
+    .unwrap();
+    assert!(!deleted, "the first delivery only prepares deletion");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_mutation_claim_statement_timeout_preserves_the_typed_deadline(db: PgPool) {
+    let (repo, _) = fixture(&db).await;
+    let held = repo.mutation_claim_transaction().await.unwrap();
+    // Bypass the application deadline to exercise the server-side cap.
+    assert!(matches!(
+        repo.mutation_claim_transaction().await,
+        Err(MailboxError::Database(DatabaseFailure::Sqlstate(code))) if code == "57014"
+    ));
+    let result = repo.claim_draft(Uuid::now_v7(), DraftClaimMode::All).await;
+    assert!(matches!(
+        result,
+        Err(MailboxError::Database(DatabaseFailure::DeadlineExceeded))
+    ));
+    held.commit().await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn corrupt_stream_routing_is_parked_without_relabeling(db: PgPool) {
     let (_, link) = fixture(&db).await;
     // Unsupported corruption, not a legacy writer: all real inserts derive

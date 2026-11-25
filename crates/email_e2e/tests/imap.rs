@@ -380,3 +380,153 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
     assert!(bob_settings["folders"].is_array());
     stack.finish().await
 }
+
+/// Delivers an already-scheduled legacy draft through the real scheduled
+/// queue and SMTP path. The claim lock isolates the queue's routing step.
+#[tokio::test(flavor = "multi_thread")]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the scenario restores its own draft to the pre-migration representation"
+)]
+async fn a_pre_rollout_schedule_routes_and_submits_once() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        imap: true,
+        ..Default::default()
+    })
+    .await?;
+    let user = stack.unique_user("imap-legacy-schedule").await?;
+    let link = user.link_imap().await?;
+    let subject = format!("Legacy scheduled {}", Uuid::now_v7());
+    let draft = user
+        .request(
+            Method::POST,
+            "/email/drafts",
+            Some(link),
+            Some(&json!({ "draft": {
+                "subject": subject,
+                "to": [{ "email": "recipient@example.net" }],
+                "body_text": "A draft scheduled before the routing migration."
+            }})),
+        )
+        .await?
+        .ok()?;
+    let id: Uuid = serde_json::from_value(draft["draft"]["db_id"].clone())
+        .context("draft response has no message ID")?;
+    let generation = draft["draft"]["draft_generation"]
+        .as_i64()
+        .ok_or_else(|| report!("draft response has no generation"))?;
+    user.request(
+        Method::PUT,
+        &format!("/email/drafts/scheduled/{id}?draft_generation={generation}"),
+        Some(link),
+        Some(&json!({ "send_time": "2099-01-01T09:00:00Z" })),
+    )
+    .await?
+    .ok()?;
+
+    let mut claim_lock = stack
+        .db()
+        .begin()
+        .await
+        .context("begin draft fixture transaction")?;
+    // Both providers can relabel a legacy window. Hold both claim lanes while
+    // the scheduled wake runs so it must route this draft itself.
+    for lock in [
+        "email.outlook.mutation-claims",
+        "email.mailbox.mutation-claims:OUTLOOK",
+        "email.mailbox.mutation-claims:IMAP",
+    ] {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
+            .bind(lock)
+            .execute(&mut *claim_lock)
+            .await
+            .context("hold the draft claim lock")?;
+    }
+    let mut legacy = stack
+        .db()
+        .begin()
+        .await
+        .context("begin draft fixture transaction")?;
+    sqlx::raw_sql(
+        "ALTER TABLE email_mailbox_drafts DISABLE TRIGGER email_mailbox_drafts_derive_provider;
+         ALTER TABLE email_scheduled_messages DISABLE TRIGGER email_scheduled_messages_rearm_draft;",
+    )
+    .execute(&mut *legacy)
+    .await.context("disable draft routing triggers")?;
+    let draft_rows = sqlx::query(
+        "UPDATE email_mailbox_drafts SET provider=NULL, blocked_until=NULL
+         WHERE message_id=$1 AND link_id=$2",
+    )
+    .bind(id)
+    .bind(link)
+    .execute(&mut *legacy)
+    .await
+    .context("restore the legacy draft and schedule")?
+    .rows_affected();
+    assert_eq!(draft_rows, 1);
+    let schedule_rows = sqlx::query(
+        "UPDATE email_scheduled_messages SET send_time=now()-interval '1 second'
+         WHERE message_id=$1 AND link_id=$2",
+    )
+    .bind(id)
+    .bind(link)
+    .execute(&mut *legacy)
+    .await
+    .context("restore the legacy draft and schedule")?
+    .rows_affected();
+    assert_eq!(schedule_rows, 1);
+    sqlx::raw_sql(
+        "ALTER TABLE email_mailbox_drafts ENABLE TRIGGER email_mailbox_drafts_derive_provider;
+         ALTER TABLE email_scheduled_messages ENABLE TRIGGER email_scheduled_messages_rearm_draft;",
+    )
+    .execute(&mut *legacy)
+    .await
+    .context("restore draft routing triggers")?;
+    legacy
+        .commit()
+        .await
+        .context("commit the legacy draft fixture")?;
+
+    let event = json!({ "link_id": link, "message_id": id });
+    stack.send_to_queue("scheduled", &event).await?;
+    eventually("the scheduled wake to finish", DEFAULT_TIMEOUT, || async {
+        Ok((stack.queue_depth("scheduled").await? == 0).then_some(()))
+    })
+    .await?;
+    let routed: Option<String> =
+        sqlx::query_scalar("SELECT provider::text FROM email_mailbox_drafts WHERE message_id=$1")
+            .bind(id)
+            .fetch_one(stack.db())
+            .await
+            .context("read the provider after the scheduled wake")?;
+    assert_eq!(
+        routed.as_deref(),
+        Some("IMAP"),
+        "the wake must route the draft before a worker claims it"
+    );
+    claim_lock
+        .commit()
+        .await
+        .context("release the draft claim locks")?;
+
+    preview(&user, link, "sent", &subject).await?;
+    stack.send_to_queue("scheduled", &event).await?;
+    eventually(
+        "the duplicate scheduled wake to finish",
+        DEFAULT_TIMEOUT,
+        || async { Ok((stack.queue_depth("scheduled").await? == 0).then_some(())) },
+    )
+    .await?;
+
+    let captured = stack.imap_lab()?.received().await?;
+    assert_eq!(
+        captured["messages"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|message| message["Subject"] == subject)
+            .count(),
+        1,
+    );
+    stack.finish().await
+}

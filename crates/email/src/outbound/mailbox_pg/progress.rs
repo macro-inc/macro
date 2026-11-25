@@ -183,16 +183,25 @@ impl MailboxProgressRepository for PgMailboxSync {
             .map_err(db_error)?;
         let row = sqlx::query!(
             r#"
-            SELECT count(*) FILTER (WHERE s.initial_complete) AS "polls_due!",
-                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(s.next_run_at) FILTER (WHERE s.initial_complete))), 0)::bigint AS "oldest_poll_due_seconds!",
-                count(*) FILTER (WHERE NOT s.initial_complete) AS "import_rounds_due!",
-                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(s.next_run_at) FILTER (WHERE NOT s.initial_complete))), 0)::bigint AS "oldest_import_round_due_seconds!"
-            FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-            WHERE s.kind = 'mail_folder' AND s.next_run_at <= now()
-                AND (s.lease_until IS NULL OR s.lease_until < now())
-                AND l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL
-                AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
-        "#
+            WITH eligible AS (
+                SELECT s.initial_complete,
+                    GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) AS due_at
+                FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+                WHERE s.kind = 'mail_folder' AND s.parked_at IS NULL
+                    AND s.provider = $1::text::email_user_provider_enum
+                    AND l.provider = s.provider AND l.sync_generation = s.generation
+                    AND l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL
+            )
+            SELECT count(*) FILTER (WHERE initial_complete) AS "polls_due!",
+                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(due_at) FILTER (WHERE initial_complete))), 0)::bigint AS "oldest_poll_due_seconds!",
+                count(*) FILTER (WHERE NOT initial_complete) AS "import_rounds_due!",
+                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(due_at) FILTER (WHERE NOT initial_complete))), 0)::bigint AS "oldest_import_round_due_seconds!"
+            FROM eligible
+            WHERE due_at <= now()
+        "#,
+            self.provider.as_str()
         )
         .fetch_one(&mut *tx)
         .await

@@ -105,12 +105,11 @@ impl PgMailboxSync {
         &self,
     ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
-        sqlx::query!(
-            r#"
-            SET LOCAL statement_timeout = '15s'
-            "#,
+        sqlx::query_scalar!(
+            "SELECT set_config('statement_timeout', $1, true)",
+            mutation_claims::MUTATION_STATEMENT_TIMEOUT,
         )
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await
         .map_err(db_error)?;
         // The rollback binary knows only this key. Take it first, for Outlook

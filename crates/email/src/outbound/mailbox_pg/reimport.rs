@@ -37,7 +37,7 @@ impl FolderReimportRepository for PgMailboxSync {
         let Some(row) = sqlx::query!(
             r#"
             SELECT
-                l.provider = $3::text::email_user_provider_enum AS "outlook!",
+                l.provider = $3::text::email_user_provider_enum AS "provider_matches!",
                 l.is_sync_active
                 AND NOT l.needs_reauth AS "active!",
                 l.sync_generation,
@@ -102,7 +102,7 @@ impl FolderReimportRepository for PgMailboxSync {
         else {
             return Ok(LinkReimport::NotOutlook);
         };
-        Ok(if !row.outlook {
+        Ok(if !row.provider_matches {
             LinkReimport::NotOutlook
         } else if !row.active {
             LinkReimport::Inactive

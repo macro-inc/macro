@@ -3,6 +3,8 @@ use super::MailboxError;
 use std::future::Future;
 use uuid::Uuid;
 
+pub const IMAP_CATCHUP_IDLE_SECONDS: u32 = 30;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum CatchupMode {
@@ -86,7 +88,10 @@ impl<R: ImapCatchupRepository> ImapCatchupService<R> {
             let Some(lease) = self.0.claim(Uuid::now_v7(), 120).await? else {
                 return Ok(CatchupTick::Busy);
             };
-            self.0.advance(&lease, 16, 30).await.map(CatchupTick::Page)
+            self.0
+                .advance(&lease, 16, IMAP_CATCHUP_IDLE_SECONDS)
+                .await
+                .map(CatchupTick::Page)
         }
         .await;
         let (outcome, counts) = match &result {

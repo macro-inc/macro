@@ -121,28 +121,34 @@ async fn schedule_changes_and_cancel_rearm_without_sending_early(db: PgPool) {
 async fn a_legacy_null_provider_is_relabelled_before_the_correct_gateway_claims_it(db: PgPool) {
     let (imap, _, input, _) =
         setup_for_provider(&db, false, crate::domain::models::UserProvider::Imap).await;
-    // This is the representation of a row inserted before the nullable routing
-    // column existed. All new writers derive routing through the trigger.
+    mark_legacy(&db, input.db_id).await;
+    let mut held = db.begin().await.unwrap();
     sqlx::query!(
-        "ALTER TABLE email_mailbox_drafts DISABLE TRIGGER email_mailbox_drafts_derive_provider"
-    )
-    .execute(&db)
-    .await
-    .unwrap();
-    sqlx::query!(
-        "UPDATE email_mailbox_drafts SET provider=NULL WHERE message_id=$1",
+        "SELECT message_id FROM email_mailbox_drafts WHERE message_id = $1 FOR UPDATE",
         input.db_id
     )
-    .execute(&db)
-    .await
-    .unwrap();
-    sqlx::query!(
-        "ALTER TABLE email_mailbox_drafts ENABLE TRIGGER email_mailbox_drafts_derive_provider"
-    )
-    .execute(&db)
+    .fetch_one(&mut *held)
     .await
     .unwrap();
     let outlook = PgMailboxSync::new(db.clone());
+    assert!(matches!(
+        outlook
+            .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap(),
+        SyncClaim::Idle
+    ));
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT provider::text FROM email_mailbox_drafts WHERE message_id=$1",
+            input.db_id
+        )
+        .fetch_one(&mut *held)
+        .await
+        .unwrap(),
+        None,
+    );
+    held.commit().await.unwrap();
     assert!(matches!(
         outlook
             .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
@@ -170,8 +176,96 @@ async fn a_legacy_null_provider_is_relabelled_before_the_correct_gateway_claims_
     assert_eq!(lease.message_id, input.db_id);
 }
 
+async fn mark_legacy(db: &PgPool, id: Uuid) {
+    // This is the representation of a row inserted before the nullable routing
+    // column existed. All new writers derive routing through the trigger.
+    sqlx::query!(
+        "ALTER TABLE email_mailbox_drafts DISABLE TRIGGER email_mailbox_drafts_derive_provider"
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_drafts SET provider=NULL WHERE message_id=$1",
+        id
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "ALTER TABLE email_mailbox_drafts ENABLE TRIGGER email_mailbox_drafts_derive_provider"
+    )
+    .execute(db)
+    .await
+    .unwrap();
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_parent_provider_change_after_the_window_cannot_route_a_wrong_gateway(db: PgPool) {
+async fn an_edit_routes_a_legacy_draft_before_the_next_claim(db: PgPool) {
+    let (_, repo, mut input, link) = setup(&db, true).await;
+    mark_legacy(&db, input.db_id).await;
+    input.body_text = Some("Edited before the legacy claim".into());
+    repo.insert_message(
+        &input,
+        &UpsertedContacts {
+            from_contact_id: None,
+            recipients: Vec::new(),
+        },
+        link,
+        None,
+        true,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT provider::text FROM email_mailbox_drafts WHERE message_id=$1",
+            input.db_id,
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap()
+        .as_deref(),
+        Some("OUTLOOK")
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn scheduling_a_legacy_draft_routes_only_that_draft_in_the_same_transaction(db: PgPool) {
+    let (_, _, input, link) =
+        setup_for_provider(&db, true, crate::domain::models::UserProvider::Imap).await;
+    mark_legacy(&db, input.db_id).await;
+
+    let mut tx = db.begin().await.unwrap();
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now()+interval '1 hour',$3)",link,input.db_id,ACTOR)
+        .execute(&mut *tx).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT provider::text FROM email_mailbox_drafts WHERE message_id=$1",
+            input.db_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap()
+        .as_deref(),
+        Some("IMAP")
+    );
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT provider::text FROM email_mailbox_drafts WHERE message_id=$1",
+            input.db_id,
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_healthy_window_allows_parent_writes_but_stale_routing_cannot_claim(db: PgPool) {
     let (outlook, _, input, link) = setup(&db, false).await;
     let mut claim = outlook.mutation_claim_transaction().await.unwrap();
     let window = sqlx::query_file!(
@@ -183,11 +277,21 @@ async fn a_parent_provider_change_after_the_window_cannot_route_a_wrong_gateway(
     .await
     .unwrap();
     assert!(window.ids.contains(&input.db_id));
-    // Unsupported parent mutation is still fenced at the actual acquisition.
+    // Healthy windows do not lock the parent. Unsupported provider
+    // mutations are still fenced at the actual acquisition.
+    let mut parent = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id=$1 FOR NO KEY UPDATE NOWAIT",
+        link
+    )
+    .fetch_one(&mut *parent)
+    .await
+    .unwrap();
     sqlx::query!("UPDATE email_links SET provider='IMAP' WHERE id=$1", link)
-        .execute(&db)
+        .execute(&mut *parent)
         .await
         .unwrap();
+    parent.commit().await.unwrap();
     let acquired = sqlx::query_file!(
         "src/outbound/mailbox_pg/drafts/claim/acquire.sql",
         Uuid::now_v7(),
