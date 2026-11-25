@@ -1,8 +1,15 @@
 import { INBOX_FILTER_ENTRY_KEY } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
-import type { EntryPersistenceHandle } from '@components/app/split-layout/entry-persistence';
+import { makePersistedState } from '@app/lib/persistence';
+import type { EntryState } from '@components/app/split-layout/layoutManager';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import { createRoot } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
-import { createEmailViewPersistence } from './persistence';
+import { emailTabFilterState } from './filters/email-saved-view';
+import {
+  type CreateEmailViewPersistenceOptions,
+  createEmailViewPersistence,
+} from './persistence';
 import type { EmailViewState } from './types';
 
 // The soup barrel persistence imports opens real sockets at module scope.
@@ -32,12 +39,13 @@ describe('createEmailViewPersistence', () => {
       inboxId: 'inbox',
       emailAddress: 'resident@example.com',
     };
-    const handle: EntryPersistenceHandle = {
+    const handle: CreateEmailViewPersistenceOptions['handle'] = {
       currentEntryState: () => ({
         'email.view': { version: 1, tab: 'all', aliasFilter },
         [INBOX_FILTER_ENTRY_KEY]: ['inbox'],
       }),
       registerEntryStateCaptor: () => () => {},
+      captureEntryState: () => {},
     };
     const { storages } = createEmailViewPersistence({
       handle,
@@ -52,7 +60,7 @@ describe('createEmailViewPersistence', () => {
     expect(state.inboxIds).toEqual(['inbox']);
   });
   it('restores a stored archived tab', () => {
-    const handle: EntryPersistenceHandle = {
+    const handle: CreateEmailViewPersistenceOptions['handle'] = {
       currentEntryState: () => ({
         'email.view': {
           version: 1,
@@ -62,6 +70,7 @@ describe('createEmailViewPersistence', () => {
         },
       }),
       registerEntryStateCaptor: () => () => {},
+      captureEntryState: () => {},
     };
     const { storages } = createEmailViewPersistence({
       handle,
@@ -80,9 +89,10 @@ describe('createEmailViewPersistence', () => {
   });
 
   it('keeps the Focus tab and its sort per user', () => {
-    const handle: EntryPersistenceHandle = {
+    const handle: CreateEmailViewPersistenceOptions['handle'] = {
       currentEntryState: () => ({}),
       registerEntryStateCaptor: () => () => {},
+      captureEntryState: () => {},
     };
     const { storages } = createEmailViewPersistence({
       handle,
@@ -115,6 +125,7 @@ describe('createEmailViewPersistence', () => {
       handle: {
         currentEntryState: () => ({}),
         registerEntryStateCaptor: () => () => {},
+        captureEntryState: () => {},
       },
       userId: () => 'priority-sort-user',
       restoreEntryState: false,
@@ -141,6 +152,7 @@ describe('createEmailViewPersistence', () => {
           captors.set(key, capture);
           return () => {};
         },
+        captureEntryState: () => {},
       },
       userId: () => undefined,
       restoreLocalState: false,
@@ -177,9 +189,10 @@ describe('createEmailViewPersistence', () => {
   });
 
   const restoreFrom = (stored: unknown) => {
-    const handle: EntryPersistenceHandle = {
+    const handle: CreateEmailViewPersistenceOptions['handle'] = {
       currentEntryState: () => ({ 'email.view': stored }),
       registerEntryStateCaptor: () => () => {},
+      captureEntryState: () => {},
     };
     const { storages } = createEmailViewPersistence({
       handle,
@@ -228,5 +241,94 @@ describe('createEmailViewPersistence', () => {
       subject: [],
       starred: false,
     });
+  });
+});
+
+/**
+ * One split entry of a browser tab, kept in memory like the split manager's:
+ * its captors write it only when asked, which the manager also does right
+ * before a navigation.
+ */
+function splitEntry(): CreateEmailViewPersistenceOptions['handle'] {
+  let entry: EntryState | undefined;
+  const captors = new Map<string, () => unknown>();
+  return {
+    currentEntryState: () => entry,
+    registerEntryStateCaptor: (key, capture) => {
+      captors.set(key, capture);
+      return () => {
+        if (captors.get(key) === capture) captors.delete(key);
+      };
+    },
+    captureEntryState: () => {
+      if (captors.size === 0) return;
+      entry = { ...entry };
+      for (const [key, capture] of captors) entry[key] = capture();
+    },
+  };
+}
+
+function mountInbox(
+  handle: CreateEmailViewPersistenceOptions['handle'],
+  userId: string
+) {
+  return createRoot((dispose) => {
+    const [state, setState] = makePersistedState(
+      createStore<EmailViewState>({
+        ...current(),
+        ...emailTabFilterState('important'),
+      }),
+      createEmailViewPersistence({
+        handle,
+        userId: () => userId,
+        restorePreferences: false,
+      })
+    );
+    return { state, setState, dispose };
+  });
+}
+
+describe('two tabs of one browser', () => {
+  it('brings a view that mounts again in its entry back on its own filters', () => {
+    const tabA = splitEntry();
+    const inboxInA = mountInbox(tabA, 'two-tabs-remount-user');
+    inboxInA.setState('facets', 'attachments', ['attachment-pdf']);
+
+    // Tab B opens on All mail: its URL resets the filters it restored, and it
+    // filters PDFs and one inbox there. Both save over the user-level copy.
+    const tabB = mountInbox(splitEntry(), 'two-tabs-remount-user');
+    tabB.setState({ tab: 'all', ...emailTabFilterState('all') });
+    tabB.setState('facets', 'attachments', ['attachment-pdf']);
+    tabB.setState('inboxIds', ['inbox-b']);
+
+    // A newer build takes the local cache over: tab A's view mounts again in
+    // the same entry, without a navigation.
+    inboxInA.dispose();
+    const remounted = mountInbox(tabA, 'two-tabs-remount-user');
+
+    expect(remounted.state.tab).toBe('important');
+    expect(remounted.state.facets.attachments).toEqual(['attachment-pdf']);
+    expect(remounted.state.conditions?.importance).toBe('signal');
+    expect(remounted.state.inboxIds).toBeUndefined();
+    remounted.dispose();
+    tabB.dispose();
+  });
+
+  it('starts a reloaded tab and a new tab from the copy the last tab saved', () => {
+    const inboxInA = mountInbox(splitEntry(), 'two-tabs-reload-user');
+    inboxInA.setState('facets', 'attachments', ['attachment-pdf']);
+    const tabB = mountInbox(splitEntry(), 'two-tabs-reload-user');
+    tabB.setState({ tab: 'all', ...emailTabFilterState('all') });
+    tabB.setState('facets', 'attachments', ['attachment-pdf']);
+    inboxInA.dispose();
+    tabB.dispose();
+
+    // A reload or a new tab has no entry yet: split entries live in memory.
+    for (const handle of [splitEntry(), splitEntry()]) {
+      const fresh = mountInbox(handle, 'two-tabs-reload-user');
+      expect(fresh.state.tab).toBe('all');
+      expect(fresh.state.facets).toEqual({ attachments: ['attachment-pdf'] });
+      fresh.dispose();
+    }
   });
 });

@@ -9,6 +9,7 @@ import {
   createEntryPersistenceStorage,
   type EntryPersistenceHandle,
 } from '@components/app/split-layout/entry-persistence';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
@@ -110,10 +111,16 @@ function createEmailEntryStorage(options: {
       if (!options.restore) return undefined;
 
       const restored = emailEntryStateSchema.parse(stored);
+      // The inbox key is recorded with this one and restores after it, but
+      // records every inbox as nothing: start from every inbox, so the copy
+      // another tab saved doesn't pick the inbox.
       return {
         ...current,
         tab: restored.tab,
         search: restored.search,
+        inboxIds: restored.aliasFilter
+          ? [restored.aliasFilter.inboxId]
+          : undefined,
         aliasFilter: restored.aliasFilter,
         ...restoreEmailTabFilters(
           restored.tab,
@@ -292,8 +299,41 @@ export function createEmailListEntryStorage(
   });
 }
 
+/**
+ * A view can mount again without leaving its split entry: when a newer build
+ * takes the local cache over, an older tab drops its queries and every route
+ * view mounts once sign-in is back. The split manager writes the entry only
+ * before a navigation, so record it as soon as the tab or filters change, and
+ * once after mounting; the view then comes back on this tab's own filters,
+ * not the user-level copy another tab saved last.
+ */
+function createEntryRecorder(
+  handle: Pick<SplitHandle, 'captureEntryState'>
+): PersistenceStorage<EmailViewState> {
+  let recorded: string | undefined;
+  const serialize = (state: EmailViewState) =>
+    JSON.stringify(selectLocalState(state));
+
+  return {
+    restore: () => undefined,
+    initialize: (state) => {
+      recorded = serialize(state);
+      // After setup, so the split's other captors are registered and this one
+      // doesn't write the layout while the view is still being created.
+      queueMicrotask(() => handle.captureEntryState());
+    },
+    write: (state) => {
+      const serialized = serialize(state);
+      if (serialized === recorded) return;
+
+      recorded = serialized;
+      handle.captureEntryState();
+    },
+  };
+}
+
 export type CreateEmailViewPersistenceOptions = {
-  handle: EntryPersistenceHandle;
+  handle: EntryPersistenceHandle & Pick<SplitHandle, 'captureEntryState'>;
   userId: Accessor<string | undefined>;
   restoreEntryState?: boolean;
   restoreLocalState?: boolean;
@@ -323,6 +363,7 @@ export function createEmailViewPersistence(
       }),
       createEmailEntryStorage({ handle: options.handle, restore }),
       createInboxIdsEntryStorage({ handle: options.handle, restore }),
+      createEntryRecorder(options.handle),
     ],
   };
 }
