@@ -249,6 +249,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   let entityFilterUnavailable = false;
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
+  // An older native build has no sync fence; after its first refusal no edit
+  // calls it again.
+  let syncFenceUnavailable = false;
   let peopleUnavailable = false;
   let peopleSqlUnavailable = false;
   let contactSyncUnavailable = false;
@@ -1226,12 +1229,16 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async syncFence(keys: string[]): Promise<void> {
+      if (syncFenceUnavailable) return;
       try {
         await ready;
         await request<void>(SYNC_FENCE_COMMAND, { keys });
-      } catch {
-        // No native cache, or an older build without the command: either
-        // way no run can write the records back.
+      } catch (error) {
+        // An older build without the command runs no streamed sync, and a
+        // cache that cannot answer holds no run: either way no run can write
+        // the records back.
+        if (isMissingCommand(error, SYNC_FENCE_COMMAND))
+          syncFenceUnavailable = true;
       }
     },
 

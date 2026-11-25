@@ -1922,6 +1922,29 @@ describe('createTauriCacheHost', () => {
       }
     });
 
+    it('asks an older native build without the sync fence only once', async () => {
+      invokeMock.mockImplementation((command: string) =>
+        command === 'graphql_cache_sync_fence'
+          ? Promise.reject(
+              new Error('Command graphql_cache_sync_fence not found')
+            )
+          : Promise.resolve(null)
+      );
+      const host = createTauriCacheHost({ scope: 'sync-fence-missing' });
+      try {
+        const keys = ['GraphqlSoupEmailThread:thread-1'];
+        await expect(host.syncFence!(keys)).resolves.toBeUndefined();
+        await expect(host.syncFence!(keys)).resolves.toBeUndefined();
+        expect(
+          invokeMock.mock.calls.filter(
+            ([command]) => command === 'graphql_cache_sync_fence'
+          )
+        ).toHaveLength(1);
+      } finally {
+        host.dispose();
+      }
+    });
+
     it('has no run to stop when the native cache failed to start', async () => {
       invokeMock.mockImplementation((command: string) =>
         command === 'graphql_cache_init_with_schema'
