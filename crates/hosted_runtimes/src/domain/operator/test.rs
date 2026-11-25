@@ -3,6 +3,7 @@ mod agent;
 mod data_disk;
 mod effect_concurrency;
 mod host_scope;
+mod image_upgrade;
 mod moves;
 mod redeploy;
 mod setup_notice;
@@ -39,6 +40,8 @@ enum FakeFleetError {
     Missing,
     #[error("request rejected")]
     Rejected,
+    #[error("golden not ready")]
+    GoldenNotReady,
 }
 
 impl FleetError for FakeFleetError {
@@ -70,6 +73,12 @@ struct FakeFleet {
     instances: Mutex<Vec<FleetInstance>>,
     /// The host name it registers; `runtime-dev-1` when unset.
     host_name: Option<&'static str>,
+    /// What `staged_image` answers, first to last; the last one repeats.
+    staged: Mutex<Vec<crate::domain::image_upgrade::StagedImage>>,
+    /// Images whose system disk does not boot.
+    broken_images: Mutex<Vec<String>>,
+    /// Images whose golden is still being built.
+    building_images: Mutex<Vec<String>>,
 }
 
 const BASE_IMAGE: &str = "macro-box/2026-11-01";

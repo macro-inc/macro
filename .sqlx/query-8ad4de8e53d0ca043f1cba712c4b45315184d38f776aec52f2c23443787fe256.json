@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE image_upgrade\n            SET state = $2, error = $3, sources = $4, updated_at = $5,\n                finished_at = CASE WHEN $6::boolean THEN $5::timestamptz END,\n                leased_by = CASE WHEN $6::boolean THEN NULL ELSE leased_by END,\n                leased_until = CASE WHEN $6::boolean THEN NULL ELSE leased_until END\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "image_upgrade_state",
+            "kind": {
+              "Enum": [
+                "staging",
+                "rolling",
+                "paused",
+                "done",
+                "failed"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ad4de8e53d0ca043f1cba712c4b45315184d38f776aec52f2c23443787fe256"
+}

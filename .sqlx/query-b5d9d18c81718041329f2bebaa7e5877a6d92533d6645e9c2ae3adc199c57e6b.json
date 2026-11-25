@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT upgrade_id, computer_id, position,\n                   state AS \"state: ComputerUpgradeState\", old_image, new_image,\n                   phase_started_at, reconnected_at, error\n            FROM image_upgrade_computer\n            WHERE upgrade_id = $1\n            ORDER BY position\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "upgrade_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "position",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "state: ComputerUpgradeState",
+        "type_info": {
+          "Custom": {
+            "name": "image_upgrade_computer_state",
+            "kind": {
+              "Enum": [
+                "waiting",
+                "replacing",
+                "verifying",
+                "rolling_back",
+                "upgraded",
+                "skipped",
+                "rolled_back",
+                "rollback_failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "old_image",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "new_image",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "phase_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "reconnected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b5d9d18c81718041329f2bebaa7e5877a6d92533d6645e9c2ae3adc199c57e6b"
+}
