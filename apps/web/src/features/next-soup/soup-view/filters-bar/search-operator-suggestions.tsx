@@ -1,9 +1,48 @@
 import { SearchOperatorText } from '@app/components/view-shell/search-operator-text';
-import type { SearchOperatorCompletion } from '@app/features/next-soup/core/search-operator-completions';
+import type {
+  SearchOperatorCompletion,
+  SearchOperatorWordFilter,
+} from '@app/features/next-soup/core/search-operator-completions';
 import { t } from '@app/lib/i18n';
+import { UserIcon } from '@core/component/UserIcon';
+import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
 import { cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+
+/** What the filter a plain word stands for finds. */
+const wordFilterLabel = (filter: SearchOperatorWordFilter) =>
+  match(filter)
+    .with('type:task', () => t('searchOperators.wordTasks'))
+    .with('type:email', () => t('searchOperators.wordEmail'))
+    .with('type:doc', () => t('searchOperators.wordDocs'))
+    .with('is:unread', () => t('searchOperators.wordUnread'))
+    .exhaustive();
+
+/** The operator a row puts in the field, to learn it by, as Mail shows it. */
+function OperatorHint(props: { text: string }) {
+  return (
+    <span class="min-w-0 shrink truncate font-mono text-xs text-ink-extra-muted">
+      {props.text}
+    </span>
+  );
+}
+
+/** A row for a plain word: what it finds, named, beside the operator. */
+function PlainWordRow(
+  props: Pick<
+    Extract<SearchOperatorCompletion, { kind: 'word' | 'named' }>,
+    'insert'
+  > & { icon: JSX.Element; label: string }
+) {
+  return (
+    <>
+      {props.icon}
+      <span class="min-w-0 flex-1 truncate">{props.label}</span>
+      <OperatorHint text={props.insert} />
+    </>
+  );
+}
 
 /** What a row adds to the operator it writes, when that says something new. */
 function rowDetail(row: SearchOperatorCompletion): string | undefined {
@@ -66,18 +105,72 @@ export function SearchOperatorSuggestions(props: {
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => props.onPick(index())}
           >
-            <span class="min-w-0 flex-1 truncate whitespace-pre">
-              <SearchOperatorText
-                parts={[{ text: row.insert, operator: true }]}
-              />
-            </span>
-            <Show when={rowDetail(row)}>
-              {(detail) => (
-                <span class="min-w-0 shrink truncate text-xs text-ink-extra-muted">
-                  {detail()}
-                </span>
-              )}
-            </Show>
+            <Switch
+              fallback={
+                <>
+                  <span class="min-w-0 flex-1 truncate whitespace-pre">
+                    <SearchOperatorText
+                      parts={[{ text: row.insert, operator: true }]}
+                    />
+                  </span>
+                  <Show when={rowDetail(row)}>
+                    {(detail) => (
+                      <span class="min-w-0 shrink truncate text-xs text-ink-extra-muted">
+                        {detail()}
+                      </span>
+                    )}
+                  </Show>
+                </>
+              }
+            >
+              <Match when={row.kind === 'word' && row}>
+                {(word) => (
+                  <PlainWordRow
+                    insert={word().insert}
+                    label={wordFilterLabel(word().filter)}
+                    icon={
+                      <FunnelIcon
+                        aria-hidden="true"
+                        class="size-4 shrink-0 text-ink-muted"
+                      />
+                    }
+                  />
+                )}
+              </Match>
+              <Match when={row.kind === 'named' && row}>
+                {(named) => {
+                  const name = () =>
+                    named().person.name ?? named().person.email;
+                  return (
+                    <PlainWordRow
+                      insert={named().insert}
+                      label={
+                        named().name === 'assignee'
+                          ? t('searchOperators.assignedToPerson', {
+                              name: name(),
+                            })
+                          : t('searchOperators.fromPerson', { name: name() })
+                      }
+                      icon={
+                        <span aria-hidden="true" class="flex shrink-0">
+                          <UserIcon
+                            id={
+                              named().person.id ??
+                              `macro|${named().person.email}`
+                            }
+                            name={name()}
+                            size="sm"
+                            isDeleted={false}
+                            suppressClick
+                            showTooltip={false}
+                          />
+                        </span>
+                      }
+                    />
+                  );
+                }}
+              </Match>
+            </Switch>
           </div>
         )}
       </For>

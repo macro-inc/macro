@@ -50,3 +50,17 @@ it('keeps the same focused input through mode and Enter changes', () => {
   expect(SearchState.query()).toBe('');
   expect(navigate).toHaveBeenCalledWith('home');
 });
+
+it('offers the search tips while the field is empty', () => {
+  SearchState.open();
+  render(() => <MobileSearchInput />);
+  fireEvent.click(screen.getByRole('button', { name: 'Search tips' }));
+  expect(screen.getByText('Assigned to you')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'All search operators' })
+  ).toBeTruthy();
+  fireEvent.input(screen.getByPlaceholderText('Search…'), {
+    target: { value: 'launch' },
+  });
+  expect(screen.queryByRole('button', { name: 'Search tips' })).toBeNull();
+});

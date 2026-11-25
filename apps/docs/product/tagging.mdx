@@ -47,12 +47,12 @@ Renaming or recoloring a tag keeps its identity, so the change flows to every it
 
 ## Filtering and search
 
-In any Block, go to **Filter → Tags** to show only the items carrying a tag. To filter across your entire workspace at once, use the same **Tags** chip in the filter menu of [search](/product/search#filtering-by-tags). Select two or more tags and a match-mode toggle appears:
+In any Block, go to **Filter → Tags** to show only the items carrying a tag. To search across your entire workspace at once, type a [`tag:` operator](/product/search#search-operators) in the Search field:
 
-- **Any** — items that have any of the selected tags (the default)
-- **All** — items that have every selected tag, for example everything tagged both `marketing` and `q3-launch`
+- `tag:marketing OR tag:q3-launch` finds items that have either tag
+- `tag:marketing tag:q3-launch` finds items that have both tags
 
-Clicking a tag pill anywhere jumps straight to everything else carrying it.
+Clicking a tag pill anywhere jumps straight to everything else carrying it, opening Search on that tag.
 
 ## Managing your tags
 

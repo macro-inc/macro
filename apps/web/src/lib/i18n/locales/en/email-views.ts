@@ -102,10 +102,8 @@ export default {
   searchWordSent: 'In Sent',
   searchWordLastDay: 'In the last day',
   searchWordThisWeek: 'In the last 7 days',
-  searchTips: 'Search tips',
   searchTipSubject: 'Subject contains “{{words}}”',
   searchTipPhrase: 'Contains “{{words}}”',
   searchTipLeaveOut: 'Leaves out “{{words}}”',
-  searchAllOperators: 'All search operators',
   archived: 'Archived',
 };

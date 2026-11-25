@@ -52,6 +52,26 @@ describe('searchOperatorCompletions', () => {
     expect(inserts('in:inbox')).toEqual([]);
   });
 
+  it('offers the filter a plain word stands for, and the person a name starts', () => {
+    expect(inserts('budget tasks')).toEqual(['type:task']);
+    expect(inserts('Docs')).toEqual(['type:doc']);
+    expect(inserts('mail')).toEqual(['type:email']);
+    expect(inserts('unread')).toEqual(['is:unread']);
+    // Any word of the name, as Mail's search offers them.
+    expect(inserts('ana')).toEqual([
+      'from:ana@example.com',
+      'assignee:ana@example.com',
+    ]);
+    expect(inserts('lim')).toEqual([
+      'from:ana@example.com',
+      'assignee:ana@example.com',
+    ]);
+    // Too short to look up, finished, or inside a phrase: no rows.
+    expect(inserts('an')).toEqual([]);
+    expect(inserts('tasks ')).toEqual([]);
+    expect(inserts('"tasks')).toEqual([]);
+  });
+
   it('offers nothing once the operator is whole', () => {
     expect(inserts('type:task')).toEqual([]);
     expect(inserts('assignee:me')).toEqual([]);

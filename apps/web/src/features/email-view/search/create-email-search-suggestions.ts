@@ -1,5 +1,6 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
+import { foldName } from '@core/util/name-match-score';
 import {
   type Accessor,
   createEffect,
@@ -74,17 +75,6 @@ export function emailSearchValueBeingTyped(
  * search.
  */
 const MIN_NAME_LETTERS = 3;
-
-/**
- * Lowercase without accents, and with one apostrophe, so `jose` finds José
- * and a phone's `o’neil` finds O'Neil.
- */
-const foldName = (text: string) =>
-  text
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replaceAll('’', "'")
-    .toLowerCase();
 
 /**
  * A plain word typed at the end of the field that could start someone's
