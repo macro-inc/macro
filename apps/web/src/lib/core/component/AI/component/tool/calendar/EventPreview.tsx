@@ -236,11 +236,13 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
       ? expandCalendarToolPreviewEvents(event, window)
       : [];
   });
+  // The id arrives through a getter that rereads the whole review record.
+  const createdEventId = createMemo(() => props.createdEventId);
   const shownEvents = createMemo(() =>
     calendarToolPreviewEvents({
       existing: occurrenceData.visibleEvents(),
       draft: previewEvents(),
-      createdEventId: props.createdEventId,
+      createdEventId: createdEventId(),
       limit: MAX_EXISTING_PREVIEW_EVENTS,
     })
   );
