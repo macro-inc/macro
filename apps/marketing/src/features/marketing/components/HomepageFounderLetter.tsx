@@ -15,9 +15,8 @@ export function HomepageFounderLetter() {
           and MCP.
         </p>
         <p>
-          We built Macro to be one open source system for our whole company, to
-          save money and unify everything into one place for our team and our
-          agents.
+          We built Macro to be one open source system for the whole company, to
+          save money and keep everything in one place for teams and agents.
         </p>
       </div>
       <footer class="homepage-founder-letter-signature">
