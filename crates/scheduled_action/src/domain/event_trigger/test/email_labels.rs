@@ -159,16 +159,42 @@ fn a_label_routine_runs_labeled_mail_as_a_label_event() {
         run
     );
 
-    // A routine watching new mail as well runs it as new mail, which keeps
-    // no labels: code from before them can't read a run that does.
+    // A routine watching new mail as well runs it as new mail, and keeps its
+    // labels for its label filter. One that watches only new mail keeps none:
+    // code from before them can't read a run that does.
     let both = filters(json!([
         { "events": ["email.message_received"] },
         { "events": ["email.labeled"] },
     ]));
     let receipt = both.run_event(&mail);
     assert_eq!(receipt.event_name(), EventName::EmailMessageReceived);
-    let kept = serde_json::to_value(&receipt).unwrap();
+    assert_eq!(receipt.labels_gained(), [label()]);
+    let receipts_only = filters(json!([{ "events": ["email.message_received"] }]));
+    let kept = serde_json::to_value(receipts_only.run_event(&mail)).unwrap();
     assert!(kept.get("labels_gained").is_none());
+}
+
+#[test]
+fn a_label_filter_without_a_condition_runs_mail_a_receipt_condition_turns_away() {
+    let routine = filters(json!([
+        { "events": ["email.message_received"], "condition": "Is it an invoice?" },
+        { "events": ["email.labeled"], "labels": [LABEL] },
+    ]));
+    let mail = received(&[LABEL]).normalize().unwrap();
+    let run = routine.run_event(&mail);
+    let stored: EventReference =
+        serde_json::from_str(&serde_json::to_string(&run).unwrap()).unwrap();
+    assert!(matches!(
+        routine.condition_requirement(&stored),
+        ConditionRequirement::Unconditional
+    ));
+
+    // Mail without that label still asks the receipt's question.
+    let unlabeled = routine.run_event(&received(&[]).normalize().unwrap());
+    assert!(matches!(
+        routine.condition_requirement(&unlabeled),
+        ConditionRequirement::AnyOf(_)
+    ));
 }
 
 #[test]

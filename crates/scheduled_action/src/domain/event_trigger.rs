@@ -785,9 +785,12 @@ impl EventFilters {
                 *property_change = None;
             }
             *inbox = None;
-            // Only an email.labeled run reads them, and code from before them
-            // can't read a run that keeps them.
-            if kept.event_name != EventName::EmailLabeled {
+            // A routine watching email.labeled checks them again at dispatch,
+            // whatever its run is named: a received-mail run admitted by its
+            // label filter alone must not take on a receipt condition. Other
+            // routines drop them, since code from before them can't read a
+            // run that keeps them; label routines only exist once it can.
+            if kept.event_name != EventName::EmailLabeled && !self.watches_email_labels() {
                 labels_gained.clear();
             }
         }

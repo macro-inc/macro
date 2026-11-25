@@ -286,7 +286,15 @@ fn a_run_is_dispatched_in_the_trace_its_event_was_admitted_in() {
     let mut pending = service(1, false).state.pending.lock().unwrap().remove(0);
     pending.traceparent = admission.in_scope(crate::trace_context::current);
     drop(admission);
-    drop(run_span(&pending));
+    // The worker tests beside this one make the same span with no subscriber,
+    // in parallel, and can leave its callsite cached as disabled.
+    let run = (0..5)
+        .find_map(|_| {
+            tracing::callsite::rebuild_interest_cache();
+            Some(run_span(&pending)).filter(|span| !span.is_disabled())
+        })
+        .expect("the run span is recorded");
+    drop(run);
 
     let run = recorded.finished("routine.event_run");
     assert_eq!(run.span_context.trace_id(), admitted_in.trace_id());

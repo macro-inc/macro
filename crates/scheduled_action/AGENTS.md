@@ -565,9 +565,13 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `email.labeled` when only those matched; a routine watching both runs it
   once, as received mail. A label event marked `automated` (an agent's or a
   routine's write) is rejected as `UnsafeAttribution`, like a `routine_id`.
-  Only `email.labeled` runs keep `labels_gained` in `event_context`. Code from
-  before `email.labeled` can't read those runs (see the `EventReference` note
-  below), so turn its flag on only once every replica runs code that knows it.
+  Runs of a routine with an `email.labeled` filter keep `labels_gained` in
+  `event_context`, also when they run as received mail, so dispatch applies
+  the requirement of every filter that took the event (a label filter without
+  a condition beside a conditional receipt filter runs the mail). Other runs
+  drop them. Code from before `email.labeled` can't read the runs that keep
+  them (see the `EventReference` note below), so turn its flag on only once
+  every replica runs code that knows it.
 - Received and labeled mail is for its inbox's owner and for each account that inbox is
   delegated to (multi-inbox, `macro_user_links`): admission asks the
   `InboxDelegates` port (`PgInboxDelegates`) once per event, and only when a
