@@ -166,6 +166,13 @@ pub fn decode_record(bytes: &[u8]) -> Result<Record, CodecError> {
     }
 }
 
+/// Leading bytes of a stored record that [`record_keys_sort_after`] needs:
+/// enough to inflate a deflated record's first field key.
+pub const RECORD_PROBE_BYTES: usize = 512;
+
+/// Inflated bytes [`record_keys_sort_after`] reads a first field key from.
+const PROBE_INFLATE_BYTES: usize = 256;
+
 /// Output space a thread's first inflate starts with.
 const INFLATE_INITIAL_BYTES: usize = 64 * 1024;
 
@@ -227,6 +234,70 @@ fn inflate_record<T>(
         }
         result
     })
+}
+
+/// Whether every field key of the stored record whose leading bytes are
+/// `prefix` ([`encode_record`]'s output, or its first [`RECORD_PROBE_BYTES`])
+/// sorts after each of `keys`, read without decoding the record. A record's
+/// fields are encoded in key order, so only its first key is read. False
+/// when `prefix` is too short to show that key or does not read as a record.
+pub fn record_keys_sort_after(prefix: &[u8], keys: &[&str]) -> bool {
+    let Some((encoding, payload)) = prefix.split_first() else {
+        return false;
+    };
+    match *encoding {
+        RECORD_ENCODING_RAW => first_key_sorts_after(payload, keys),
+        RECORD_ENCODING_DEFLATE => {
+            let mut output = [0; PROBE_INFLATE_BYTES];
+            INFLATER
+                .try_with(|cell| {
+                    let stream = &mut cell.borrow_mut().stream;
+                    stream.reset(false);
+                    // A prefix of the stream inflates to a prefix of the record.
+                    let status =
+                        stream.decompress(payload, &mut output, zlib_rs::InflateFlush::NoFlush);
+                    let length = usize::try_from(stream.total_out())
+                        .unwrap_or(usize::MAX)
+                        .min(output.len());
+                    status.is_ok() && first_key_sorts_after(&output[..length], keys)
+                })
+                .unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+/// Whether the first key of the postcard record in `bytes` sorts after each
+/// of `keys`; a record without fields has none to sort before them.
+fn first_key_sorts_after(mut bytes: &[u8], keys: &[&str]) -> bool {
+    let Some(fields) = length_prefix(&mut bytes) else {
+        return false;
+    };
+    if fields == 0 {
+        return true;
+    }
+    let Some(length) = length_prefix(&mut bytes) else {
+        return false;
+    };
+    bytes
+        .get(..length)
+        .is_some_and(|first| keys.iter().all(|key| first > key.as_bytes()))
+}
+
+/// Reads one postcard length: a varint of at most four bytes, which any
+/// record [`RECORD_MAX_INFLATED_BYTES`] bounds fits in. A longer one is not
+/// read, so no length wraps.
+fn length_prefix(bytes: &mut &[u8]) -> Option<usize> {
+    let mut length = 0;
+    for shift in [0, 7, 14, 21] {
+        let (&byte, rest) = bytes.split_first()?;
+        *bytes = rest;
+        length |= usize::from(byte & 0x7f) << shift;
+        if byte & 0x80 == 0 {
+            return Some(length);
+        }
+    }
+    None
 }
 
 fn tagged(encoding: u8, payload: &[u8]) -> Vec<u8> {
@@ -594,6 +665,60 @@ mod tests {
     fn miniz_deflated(record: &Record) -> Vec<u8> {
         let compressed = miniz_oxide::deflate::compress_to_vec(&encode(record), 3);
         tagged(RECORD_ENCODING_DEFLATE, &compressed)
+    }
+
+    #[test]
+    fn a_record_probe_reads_only_the_first_key() {
+        let mut fields = record_with_body("short body");
+        fields
+            .fields
+            .insert("id".into(), CacheValue::String("1".into()));
+        let mut marked = fields.clone();
+        marked
+            .fields
+            .insert("__cacheIdentityTarget".into(), CacheValue::Bool(true));
+        let mut capital = fields.clone();
+        capital.fields.insert("Zeta".into(), CacheValue::Bool(true));
+        // Text that deflates to far more than the probe reads.
+        let body = (0..4_000u64)
+            .map(|i| format!("{:x} ", i.wrapping_mul(2_654_435_761) % 1_000_003))
+            .collect::<String>();
+        let long = record_with_body(&body);
+        let mut long_marked = long.clone();
+        long_marked
+            .fields
+            .insert("__cacheIdentityDeleted".into(), CacheValue::Bool(true));
+        let keys = ["__cacheIdentityDeleted", "__cacheIdentityTarget"];
+        for (record, after) in [
+            (Record::default(), true),
+            (fields, true),
+            (marked, false),
+            // A key before `_` could precede the ones probed for.
+            (capital, false),
+            (long, true),
+            (long_marked, false),
+        ] {
+            let bytes = encode_record(&record);
+            let prefix = &bytes[..bytes.len().min(RECORD_PROBE_BYTES)];
+            assert_eq!(record_keys_sort_after(prefix, &keys), after, "{record:?}");
+            assert_eq!(record_keys_sort_after(&bytes, &keys), after, "{record:?}");
+        }
+        let long = encode_record(&record_with_body(&body));
+        assert_eq!(long.first(), Some(&RECORD_ENCODING_DEFLATE));
+        assert!(long.len() > 4 * RECORD_PROBE_BYTES);
+        // Too little of a record to show its first key, or bytes no record
+        // starts with, may hold anything.
+        assert!(!record_keys_sort_after(&long[..3], &keys));
+        assert!(!record_keys_sort_after(
+            &encode_record(&record_with_body("x"))[..4],
+            &keys
+        ));
+        assert!(!record_keys_sort_after(&[], &keys));
+        assert!(!record_keys_sort_after(&[9, 0], &keys));
+        assert!(!record_keys_sort_after(
+            &[RECORD_ENCODING_RAW, 0xff, 0xff, 0xff, 0xff, 0x01],
+            &keys
+        ));
     }
 
     fn record_with_body(body: &str) -> Record {

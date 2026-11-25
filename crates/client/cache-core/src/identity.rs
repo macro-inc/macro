@@ -1,5 +1,6 @@
 //! Durable bindings between optimistic entity handles and server identities.
 
+use crate::codec;
 use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
 use serde::{Deserialize, Serialize};
@@ -199,6 +200,14 @@ pub fn identity_metadata(mut record: Record) -> Option<Record> {
         IDENTITY_METADATA_FIELDS.contains(&field.as_str()) || field == "id" || field == "__typename"
     });
     Some(record)
+}
+
+/// Whether the stored record whose leading bytes are `prefix` (its first
+/// [`codec::RECORD_PROBE_BYTES`] are enough) holds no identity metadata,
+/// read without decoding it; false when that cannot be told without
+/// decoding it.
+pub fn holds_no_identity_metadata(prefix: &[u8]) -> bool {
+    codec::record_keys_sort_after(prefix, &IDENTITY_METADATA_FIELDS)
 }
 
 /// Rebase normalized records and their links; arbitrary text is never rewritten.
@@ -608,5 +617,32 @@ mod tests {
                 ),
             ]))
         );
+    }
+
+    #[test]
+    fn a_records_first_bytes_tell_whether_it_holds_identity_metadata() {
+        let mut record = Record::default();
+        record
+            .fields
+            .insert("__typename".into(), CacheValue::String("Note".into()));
+        record
+            .fields
+            .insert("id".into(), CacheValue::String("1".into()));
+        record
+            .fields
+            .insert("body".into(), CacheValue::String("text ".repeat(400)));
+        let bytes = crate::codec::encode_record(&record);
+        assert!(holds_no_identity_metadata(
+            &bytes[..bytes.len().min(codec::RECORD_PROBE_BYTES)]
+        ));
+        for field in IDENTITY_METADATA_FIELDS {
+            let mut marked = record.clone();
+            marked.fields.insert(field.into(), CacheValue::Bool(true));
+            let bytes = crate::codec::encode_record(&marked);
+            assert!(
+                !holds_no_identity_metadata(&bytes[..bytes.len().min(codec::RECORD_PROBE_BYTES)]),
+                "{field}"
+            );
+        }
     }
 }

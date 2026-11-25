@@ -123,8 +123,14 @@ const RECORD_COUNT: &str = "SELECT COUNT(*) FROM records";
 /// Every record but the cache's own, with its value.
 const RECORD_VALUES: &str =
     "SELECT __typename, id, value FROM records WHERE __typename <> '__meta'";
-/// One type's records, with their values.
-const TYPE_RECORD_VALUES: &str = "SELECT __typename, id, value FROM records WHERE __typename = ?1";
+/// Every record but the cache's own, with its first `?1` bytes.
+const RECORD_PROBES: &str =
+    "SELECT __typename, id, substr(value, 1, ?1) FROM records WHERE __typename <> '__meta'";
+/// The records of type `?2`, with their first `?1` bytes.
+const TYPE_RECORD_PROBES: &str =
+    "SELECT __typename, id, substr(value, 1, ?1) FROM records WHERE __typename = ?2";
+/// One record's value.
+const RECORD_VALUE: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 /// Puts back a record a tier dropped, but never over one it kept.
 const RECORD_RESTORE: &str =
     "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING";
@@ -341,7 +347,7 @@ fn apply(
             every_document,
         } => {
             let aliases = queue_aliases(connection, decode_record)?;
-            let kept = dropped_identity(connection, decode_record, Some(changed))?;
+            let kept = dropped_identity(connection, Some(changed))?;
             // Facts go before the documents, which would otherwise cascade
             // to them one document at a time.
             if *every_document {
@@ -382,7 +388,7 @@ fn apply(
         }
         Tier::Reset(_) => {
             let aliases = queue_aliases(connection, decode_record)?;
-            let kept = dropped_identity(connection, decode_record, None)?;
+            let kept = dropped_identity(connection, None)?;
             adoption.dropped_records = clear_records(connection)?;
             restore_identity(connection, &kept)?;
             // No queued projection is left to compose a shadow from.
@@ -679,48 +685,99 @@ fn queue_aliases(
 }
 
 /// The identity metadata ([`identity::identity_metadata`]) of each record of
-/// `typenames`, or of every record but the cache's own for `None`, from
-/// records `decode` reads, before a tier drops them. A write made later
-/// through a created record's local key, its settlement and a stale response
-/// read it whether or not a queued write names the record when the tier
-/// runs, so it stays for every record, as the engine's own snapshot
-/// retirement keeps it. A record `decode` cannot read holds nothing to keep.
+/// `typenames`, or of every record but the cache's own for `None`, before a
+/// tier drops them. A write made later through a created record's local key,
+/// its settlement and a stale response read it whether or not a queued write
+/// names the record when the tier runs, so it stays for every record, as the
+/// engine's own snapshot retirement keeps it. Most records hold none, which
+/// their first bytes show ([`identity::holds_no_identity_metadata`]); only
+/// the others are read whole and decoded. A record that does not decode holds
+/// nothing to keep.
 fn dropped_identity(
     connection: &Db,
-    decode: record_batch::RecordDecoder,
     typenames: Option<&BTreeSet<String>>,
 ) -> Result<Vec<(RecordKey, Record)>, TursoStorageError> {
-    let mut kept = Vec::new();
+    let probe = Value::from_i64(
+        i64::try_from(cache_core::codec::RECORD_PROBE_BYTES).map_err(|_| invariant())?,
+    );
+    let mut candidates = Vec::new();
     let mut visit = |row: &Row| {
-        let mut values = row.get_values();
-        let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(Value::Blob(bytes)), None) =
-            (values.next(), values.next(), values.next(), values.next())
-        else {
-            return Err(invariant());
-        };
-        if let Some(record) = decode(bytes).ok().and_then(identity::identity_metadata) {
-            let key = RecordKey {
-                typename: typename.as_str().to_owned(),
-                id: id.as_str().to_owned(),
-            };
-            kept.push((key, record));
+        let (typename, id, prefix) = record_row(row)?;
+        if !identity::holds_no_identity_metadata(prefix) {
+            candidates.push(record_key(typename, id));
         }
         Ok(())
     };
     match typenames {
-        None => driver::query_each(connection, RECORD_VALUES, Vec::new(), &mut visit)?,
+        None => driver::query_each(connection, RECORD_PROBES, vec![probe], &mut visit)?,
         Some(typenames) => {
             for typename in typenames {
                 driver::query_each(
                     connection,
-                    TYPE_RECORD_VALUES,
-                    vec![text(typename)],
+                    TYPE_RECORD_PROBES,
+                    vec![probe.clone(), text(typename)],
                     &mut visit,
                 )?;
             }
         }
     }
+    let mut kept = Vec::new();
+    for key in candidates {
+        let rows = driver::query(
+            connection,
+            RECORD_VALUE,
+            vec![text(&key.typename), text(&key.id)],
+        )?;
+        let [row] = rows.as_slice() else {
+            return Err(invariant());
+        };
+        let Value::Blob(bytes) = required_value(row, 0)? else {
+            return Err(invariant());
+        };
+        if let Some(record) = decode_record(bytes)
+            .ok()
+            .and_then(identity::identity_metadata)
+        {
+            kept.push((key, record));
+        }
+    }
     Ok(kept)
+}
+
+/// [`dropped_identity`] for a previous cache format's records, which `decode`
+/// reads: every record but the cache's own is read whole.
+fn previous_format_identity(
+    connection: &Db,
+    decode: record_batch::RecordDecoder,
+) -> Result<Vec<(RecordKey, Record)>, TursoStorageError> {
+    let mut kept = Vec::new();
+    driver::query_each(connection, RECORD_VALUES, Vec::new(), |row| {
+        let (typename, id, bytes) = record_row(row)?;
+        if let Some(record) = decode(bytes).ok().and_then(identity::identity_metadata) {
+            kept.push((record_key(typename, id), record));
+        }
+        Ok(())
+    })?;
+    Ok(kept)
+}
+
+/// A `(typename, id, bytes)` row's values.
+fn record_row(row: &Row) -> Result<(&str, &str, &[u8]), TursoStorageError> {
+    let mut values = row.get_values();
+    let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(Value::Blob(bytes)), None) =
+        (values.next(), values.next(), values.next(), values.next())
+    else {
+        return Err(invariant());
+    };
+    Ok((typename.as_str(), id.as_str(), bytes.as_slice()))
+}
+
+/// The key of the record `typename` and `id` name.
+fn record_key(typename: &str, id: &str) -> RecordKey {
+    RecordKey {
+        typename: typename.to_owned(),
+        id: id.to_owned(),
+    }
 }
 
 /// Each key of `targets` to the end of its chain of aliases, as the engine
@@ -743,8 +800,8 @@ fn chain_ends(targets: &IdentityMap) -> IdentityMap {
 
 /// What dropping every record of a previous cache format keeps: the
 /// records a reset keeps ([`KEPT_RECORDS`]) and every record's identity
-/// metadata ([`dropped_identity`]), read in that format and written back in
-/// this one.
+/// metadata ([`previous_format_identity`]), read in that format and written
+/// back in this one.
 pub(super) struct KeptIdentity {
     /// [`KEPT_RECORDS`]' rows, as `(typename, id, record)`.
     kept: Vec<(String, String, Record)>,
@@ -768,7 +825,7 @@ pub(super) fn keep_identity(
     }
     Ok(KeptIdentity {
         kept,
-        identity: dropped_identity(connection, decode, None)?,
+        identity: previous_format_identity(connection, decode)?,
     })
 }
 

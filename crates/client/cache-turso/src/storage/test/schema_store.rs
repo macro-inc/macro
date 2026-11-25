@@ -652,8 +652,17 @@ fn a_dropped_records_shadow_under_its_server_key_goes_and_its_identity_stays() {
 /// create's alias from its local key to the server's and the coalescing UUID
 /// on the server's record, and a deletion tombstone. A write made later
 /// through the local key, its settlement and a stale response read them.
+/// The server's record is large enough to be stored deflated.
 async fn settle_writes_none_queued(storage: &mut TursoStorage) {
     let mut server = record("note");
+    server.fields.insert(
+        "body".into(),
+        cache_core::value::CacheValue::String(
+            (0..2_000u64)
+                .map(|i| format!("{:x} ", i.wrapping_mul(2_654_435_761) % 1_000_003))
+                .collect(),
+        ),
+    );
     server.fields.insert(
         cache_core::identity::MUTATION_UUID_FIELD.into(),
         cache_core::value::CacheValue::String("settled".into()),
@@ -680,7 +689,11 @@ async fn settle_writes_none_queued(storage: &mut TursoStorage) {
 /// identity metadata and nothing else.
 async fn assert_unqueued_identity_kept(storage: &TursoStorage, context: &str) {
     let records = storage
-        .get_batch(&[key("Note:settled-local"), key("Note:settled"), key("Note:gone")])
+        .get_batch(&[
+            key("Note:settled-local"),
+            key("Note:settled"),
+            key("Note:gone"),
+        ])
         .await
         .unwrap();
     assert_eq!(
@@ -696,6 +709,7 @@ async fn assert_unqueued_identity_kept(storage: &TursoStorage, context: &str) {
         "{context}"
     );
     assert!(!server.fields.contains_key("value"), "{context}");
+    assert!(!server.fields.contains_key("body"), "{context}");
     let gone = records[2].as_ref().expect(context);
     assert_eq!(
         gone.fields.get(cache_core::identity::DELETED_FIELD),
@@ -716,7 +730,10 @@ fn a_tier_keeps_the_identity_of_every_record_it_drops() {
                 populate(TursoStorage::open_in_memory("schema-unqueued-identity").unwrap()).await;
             settle_writes_none_queued(&mut storage).await;
 
-            assert_eq!(adopt(&storage, sdl, &ProjectionInputs::none()).change, change);
+            assert_eq!(
+                adopt(&storage, sdl, &ProjectionInputs::none()).change,
+                change
+            );
             assert_unqueued_identity_kept(&storage, &format!("{change:?}")).await;
         }
     });
