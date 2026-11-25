@@ -20,7 +20,7 @@ move, Enter or a click writes the row, Escape hides them. As in Mail, a plain wo
 offers the filter it stands for first (`tasks` gives `type:task`, also `email`,
 `docs`, `unread`), and a word of three letters or more that starts a person's
 name offers `from:` and `assignee:` them; Enter alone still searches the words.
-Hovering the info button beside the `Search` title lists seven operators with
+Hovering the info button beside the `Search` title lists eight operators with
 what each finds, and pressing it (or `All search operators`) opens the docs'
 `#search-operators` section; on touch, the empty bottom field has an info
 button beside the X that opens the same list as a `Search tips` sheet. With words beside them the
@@ -28,8 +28,8 @@ service reads the operators; operators alone (`assignee:me`) list through the
 view's feed with the filters they set. A minus before a word or quoted phrase
 (`budget -draft`) leaves out every result holding it, the name matches below
 included; minus words alone wait for a word, as an operator still being typed
-does, unless the search is of email alone. Opening Search on a tag writes `tag:`, a
-Command K category writes `type:`, the universal input writes its extracted
+does, unless the search is of email alone. Opening Search on a tag writes
+`tag:`, a Command K category writes `type:`, the universal input writes its extracted
 filters as operators, and clicking a tag on a Search result adds `tag:`.
 
 `Best Matches` are the three best name matches, listed before the search service
