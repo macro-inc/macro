@@ -90,6 +90,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
   replies) with every tag they do not know, so a new message index writes its
   pastes the same way.
+- A channel message also writes its web links (`parsers::message_links`):
+  every `<m-link>` URL, which its text replaces with the label, and every
+  `http(s)://` or `www.` URL in its text and pastes, each once. A message
+  indexed before the `links` mapping gains them only when it is reindexed
+  (`POST /internal/backfill/channels`) or edited.
 - A thread reindex deletes, and a message upsert skips, every message its
   mailbox facts put in Trash or Junk or mark gone at the provider
   (`ParsedSearchMessage::excluded_from_search`, read from

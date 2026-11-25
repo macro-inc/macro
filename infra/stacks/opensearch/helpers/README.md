@@ -58,6 +58,17 @@ for future imports. Running `create_indices.ts` alone does not clear an existing
 `copy_to` parameter. After applying, verify a body search returns
 `highlight.content` and an imported-author search still finds its message.
 
+## Channel message links
+
+`links` on the channels index holds each message's link URLs, analyzed by the
+built-in `pattern` analyzer, so `create_indices.ts` adds it to the live index
+in place (no close, no new index version). Apply it with
+`DRY_RUN=false bun scripts/create_indices.ts` and check it with
+`verify_mappings.ts`, before or after the search code deploys: until messages
+carry the field, the search finds nothing in it. New and edited messages are
+written with their links; existing ones gain them when search-processing
+backfills their channels (`POST /internal/backfill/channels`).
+
 ## Manual provisioning
 
 Provision indices and aliases manually using the canonical declarations in

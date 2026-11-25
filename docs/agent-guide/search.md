@@ -99,6 +99,13 @@ under three characters matches as a whole word in document, chat, call and
 email content (`pr` finds "PR", not "project"); names and channel messages
 still match it as a prefix.
 
+A channel or DM message also matches the words of the web links it shares,
+whether its text shows the URL or a label: the names in the host
+(`sketchpad` finds `app.sketchpad.design`), the domain (`sketchpad.design`) and
+the words of the path. A message found only through a link shows that link as
+its snippet, with the match highlighted. `http`, `https` and `www` alone find
+only messages whose text holds them.
+
 Contacts, agent sessions and commands list before the local cache answers a
 typed query. While it has not, Command-K and phone name search show
 **Searching…** under the listed rows, once the wait passes 300 ms. It is most

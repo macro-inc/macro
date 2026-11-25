@@ -202,6 +202,17 @@ projects.
   `email_operators.rs` runs every shape of term up to the cap of 50 terms. A
   `has_child` clause counts as one in its parent's query and has its own
   limit.
+- Channel messages carry their link URLs in `links`, analyzed by the
+  built-in `pattern` analyzer, which splits a host into its names
+  (`app.example.design` -> app, example, design); `content_text` keeps a host
+  whole, so a site name inside a subdomain never matched. A built-in analyzer
+  needs no analysis settings, so the field was added to the live index in
+  place; a change to `content_text` would need a new index version and a full
+  reindex. Each content term also matches `links` (`query::link_query`): its
+  words split the same way, all in one URL, `http`, `https` and `www` left
+  out. A hit matched only there takes its `links` highlight as its content
+  snippet (`parse_highlight_hit`), as `source_names` stands in for a calendar
+  name. `tests/content_search/channel_links.rs` checks it against a real index.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:
