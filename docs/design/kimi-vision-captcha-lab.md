@@ -91,11 +91,12 @@ Browser Tests job.
 
 ## Live result
 
-2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, shapes quiz:
+2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, shapes quiz
+(10 runs, then 5 more after the review fixes to the runner):
 
 | Family | Attempts | Solved | Incorrect | Errors | Planner latency | Tokens per call |
 | --- | --- | --- | --- | --- | --- | --- |
-| shapes and position | 10 | 10 | 0 | 0 | 0.9–1.9 s (median ≈1.0 s) | 713–756 |
+| shapes and position | 15 | 15 | 0 | 0 | 0.9–1.9 s (median ≈1.05 s) | 713–756 |
 
 The first attempt, with Kimi's default reasoning on, returned no content
 within the 64-token cap (5 `model_error`, no actions); reasoning is now off.

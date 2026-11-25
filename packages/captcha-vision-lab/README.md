@@ -69,6 +69,11 @@ doppler run -p shared_ai -c lcl --only-secrets FIREWORK_API_KEY -- \
 
 `--challenges` is capped at 5 per run.
 
+With the local stack up (`just run_local`), the same commands apply
+unchanged: the lab uses none of the stack's services, and ordinary agent
+browsing (starter-agent's browser and CAPTCHA tests on a real Chromium)
+sends nothing to the stand-in and writes no lab records.
+
 ## Records
 
 One JSON file per challenge in `--records-dir` (default `lab-records/`,
