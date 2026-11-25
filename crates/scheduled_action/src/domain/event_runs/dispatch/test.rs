@@ -599,3 +599,56 @@ async fn email_label_runs_wait_for_their_own_rollout() {
         DispatchResult::Cancelled(CancellationReason::NotEnabled)
     );
 }
+
+#[tokio::test]
+async fn without_their_rollout_label_filters_leave_a_receipt_condition_in_place() {
+    let mut config = configuration();
+    config.filters = serde_json::from_value(json!([
+        { "events": ["email.message_received"], "condition": "Is this an invoice?" },
+        { "events": ["email.labeled"] },
+    ]))
+    .unwrap();
+    let received: EventReference = serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(), "event_name": "email.message_received",
+        "entity_id": generate_uuid_v7(), "message_id": generate_uuid_v7(),
+        "labels_gained": [generate_uuid_v7()],
+    }))
+    .unwrap();
+    for (labels_on, asked) in [(false, true), (true, false)] {
+        let (repo, access, executor, _) = setup();
+        let pending = PendingEventRun {
+            action_id: config.action_id,
+            revision: config.revision,
+            event: received.clone(),
+            admitted_at: Utc::now(),
+            traceparent: None,
+        };
+        repo.0.lock().unwrap().configurations = vec![config.clone()];
+        repo.0.lock().unwrap().pending = vec![pending.clone()];
+        let conditions = Arc::new(Conditions::default());
+        conditions
+            .verdicts
+            .lock()
+            .unwrap()
+            .push_back(Ok(ConditionVerdict::NotMet(probability(0.25))));
+        let result = if labels_on {
+            let service = EventDispatchService::new(repo, access, executor, ROLLED_OUT)
+                .with_conditions(conditions.clone());
+            dispatch(&service, pending).await.unwrap()
+        } else {
+            let service = EventDispatchService::new(repo, access, executor, EmailLabelsOff)
+                .with_conditions(conditions.clone());
+            dispatch(&service, pending).await.unwrap()
+        };
+        assert_eq!(
+            !conditions.calls.lock().unwrap().is_empty(),
+            asked,
+            "labels on: {labels_on}"
+        );
+        assert_eq!(
+            result == DispatchResult::Cancelled(CancellationReason::ConditionNotMet),
+            asked,
+            "labels on: {labels_on}"
+        );
+    }
+}

@@ -142,14 +142,14 @@ impl<
         };
         let rollout = async {
             let events = self.rollout.enabled_for(owner).await?;
-            if !events || pending.event.event_name() != EventName::EmailLabeled {
-                return Ok(events);
+            if !events || pending.event.labels_gained().is_empty() {
+                return Ok((events, true));
             }
-            self.rollout.email_labels_enabled_for(owner).await
+            Ok((true, self.rollout.email_labels_enabled_for(owner).await?))
         };
-        match rollout.await {
-            Ok(true) => {}
-            Ok(false) => return self.cancel(&pending, CancellationReason::NotEnabled).await,
+        let labels_enabled = match rollout.await {
+            Ok((true, labels)) => labels,
+            Ok((false, _)) => return self.cancel(&pending, CancellationReason::NotEnabled).await,
             // An unreadable flag leaves the run pending, like authorization
             // below, until the retry window closes.
             Err(error) if Utc::now() < pending.admitted_at + CONDITION_RETRY_WINDOW => {
@@ -164,6 +164,22 @@ impl<
                 );
                 return self.cancel(&pending, CancellationReason::NotEnabled).await;
             }
+        };
+        // Without their rollout, label filters take no part: a run only they
+        // took is cancelled, and one a receipt filter took too is weighed as
+        // plain received mail, under that filter's condition.
+        let event = if labels_enabled {
+            pending.event.clone()
+        } else {
+            pending.event.without_labels()
+        };
+        if !labels_enabled
+            && (event.event_name() == EventName::EmailLabeled
+                || !configuration
+                    .filters
+                    .matches(&event, configuration.activated_at))
+        {
+            return self.cancel(&pending, CancellationReason::NotEnabled).await;
         }
         // Unavailability propagates without cancelling or claiming queued work.
         let Some(access) = self.access.authorize(owner, &pending.event).await? else {
@@ -177,7 +193,7 @@ impl<
             Err(reason) => return self.cancel(&pending, reason).await,
         };
         if let ConditionRequirement::AnyOf(conditions) =
-            configuration.filters.condition_requirement(&pending.event)
+            configuration.filters.condition_requirement(&event)
         {
             match self.conditions.check(owner, &authorized, &conditions).await {
                 Ok(ConditionVerdict::Met(_)) => {}

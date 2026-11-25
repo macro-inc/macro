@@ -1070,6 +1070,21 @@ impl EventReference {
             EventSource::Github(_) => &[],
         }
     }
+    /// The same event without the labels its thread gained, as a routine
+    /// with no label filters keeps it.
+    pub fn without_labels(&self) -> Self {
+        let mut event = self.clone();
+        if let EventSource::Entity {
+            labels_gained,
+            inbox,
+            ..
+        } = &mut event.source
+        {
+            labels_gained.clear();
+            *inbox = None;
+        }
+        event
+    }
     /// The other name a filter may watch this event by. Status and priority
     /// changes also match any-property selectors, and mail that arrives
     /// labeled matches label routines. The original event ID still

@@ -433,7 +433,9 @@ each run.
   (`NotEnabled`) for owners without it. Pausing an event routine never needs
   it. Without PostHog configured, no one has it and the host starts no event
   intake. An `email.labeled` trigger also needs `enable-email-labeled-trigger`
-  (`EmailLabelsDisabled`, 400, and `NotEnabled` at dispatch); the host treats
+  (`EmailLabelsDisabled`, 400; at dispatch a run only label filters took is
+  cancelled `NotEnabled`, and one a receipt filter took too runs as plain
+  received mail, under the receipt filter's condition); the host treats
   it as on in dev and local while that key doesn't exist
   (`FlaggedEventRoutines::with_email_labels_without_flag`).
 - Not here: the target being run (an agent turn, a routine's tool logic) →
