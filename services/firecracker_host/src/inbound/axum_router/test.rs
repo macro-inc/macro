@@ -9,7 +9,8 @@ use firecracker_host_api::exec::{ExecRequest, Frame, MAX_FRAME_BYTES, read_frame
 use firecracker_host_api::{
     Action, Computer, ComputerId, ComputerResources, ComputerRole, ControlPlaneId, CreateComputer,
     EnrollmentDocument, EnrollmentGeneration, ErrorCode, GoldenImage, GoldenKey, GoldenState,
-    GuestImage, HostInfo, HostLimits, NetworkSlots, PairingId, PowerState, ReplaceSystemDisk, SetEnrollment,
+    GuestImage, HostInfo, HostLimits, ImageState, NetworkSlots, PairingId, PowerState,
+    ReplaceSystemDisk, SetEnrollment, StageImage, StagedImage,
 };
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -25,6 +26,7 @@ use crate::domain::service::HostError;
 struct FakeOperations {
     computers: Mutex<HashMap<ComputerId, Computer>>,
     limits: Mutex<Option<HostLimits>>,
+    images: Mutex<Vec<StagedImage>>,
 }
 
 fn computer(computer_id: ComputerId, request: &CreateComputer) -> Computer {
@@ -69,6 +71,19 @@ impl HostOperations for FakeOperations {
 
     fn goldens(&self) -> Vec<GoldenImage> {
         Vec::new()
+    }
+
+    fn stage_image(&self, request: StageImage) -> Result<StagedImage, HostError> {
+        let staged = StagedImage {
+            image: request.image,
+            state: ImageState::Staging,
+        };
+        self.images.lock().unwrap().push(staged.clone());
+        Ok(staged)
+    }
+
+    fn images(&self) -> Vec<StagedImage> {
+        self.images.lock().unwrap().clone()
     }
 
     async fn set_host_limits(&self, limits: HostLimits) -> Result<(), HostError> {
@@ -335,6 +350,13 @@ async fn the_client_and_the_router_agree_on_every_route() {
         .await
         .unwrap();
     assert!(matches!(golden.state, GoldenState::Ready { .. }));
+    let stage = StageImage {
+        image: GuestImage::try_new("macro-box/2").unwrap(),
+        files: Vec::new(),
+    };
+    let staged = client.stage_image(&stage).await.unwrap();
+    assert_eq!(staged.state, ImageState::Staging);
+    assert_eq!(client.images().await.unwrap(), vec![staged]);
 
     let created = client
         .create(computer_id(), &create_request("macro-box/1"))

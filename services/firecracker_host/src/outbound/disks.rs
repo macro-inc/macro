@@ -352,7 +352,11 @@ fn system_disk_of_file(name: &str) -> Option<SystemDisk> {
     if name == ROOTFS_FILE {
         return Some(SystemDisk(0));
     }
-    let generation: u32 = name.strip_prefix("rootfs.")?.strip_suffix(".ext4")?.parse().ok()?;
+    let generation: u32 = name
+        .strip_prefix("rootfs.")?
+        .strip_suffix(".ext4")?
+        .parse()
+        .ok()?;
     (generation > 0 && system_disk_file_name(SystemDisk(generation)) == name)
         .then_some(SystemDisk(generation))
 }
@@ -605,10 +609,8 @@ impl Disks for FileDisks {
                 continue;
             };
             // A clone cut short leaves its staged `.ext4.new` too.
-            let disk = system_disk_of_file(&name).or_else(|| {
-                name.strip_suffix(".new")
-                    .and_then(system_disk_of_file)
-            });
+            let disk = system_disk_of_file(&name)
+                .or_else(|| name.strip_suffix(".new").and_then(system_disk_of_file));
             if let Some(disk) = disk
                 && !keep.contains(&disk)
             {

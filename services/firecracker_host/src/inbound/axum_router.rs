@@ -4,6 +4,7 @@
 //! - `GET /v1/host`: the host, its capacity and goldens.
 //! - `PUT /v1/host/limits`: its memory limits.
 //! - `GET /v1/goldens`, `POST /v1/goldens`: list, build one.
+//! - `GET /v1/images`, `POST /v1/images`: list, stage one.
 //! - `GET /v1/computers`: every computer.
 //! - `GET | PUT | DELETE /v1/computers/{computer_id}`: read, create, destroy.
 //! - `PUT | DELETE /v1/computers/{computer_id}/enrollment`: replace, clear.
@@ -33,7 +34,7 @@ use axum::{Json, Router};
 use firecracker_host_api::exec::{ExecRequest, Frame, MAX_FRAME_BYTES, read_frame, write_frame};
 use firecracker_host_api::{
     Action, Computer, ComputerId, CreateComputer, ErrorCode, ErrorResponse, GoldenImage, GoldenKey,
-    GoldenState, HostInfo, HostLimits, ReplaceSystemDisk, SetEnrollment,
+    GoldenState, HostInfo, HostLimits, ReplaceSystemDisk, SetEnrollment, StageImage, StagedImage,
 };
 use futures::{SinkExt, StreamExt};
 
@@ -68,6 +69,10 @@ pub fn host_router<Operations: HostOperations>(state: HostRouterState<Operations
         .route(
             "/v1/goldens",
             get(goldens::<Operations>).post(build_golden::<Operations>),
+        )
+        .route(
+            "/v1/images",
+            get(images::<Operations>).post(stage_image::<Operations>),
         )
         .route("/v1/computers", get(list::<Operations>))
         .route(
@@ -342,6 +347,40 @@ pub(crate) async fn power<Operations: HostOperations>(
     Path((computer_id, action)): Path<(ComputerId, Action)>,
 ) -> Result<Json<Computer>, HostError> {
     state.service.power(computer_id, action).await.map(Json)
+}
+
+/// Every image on the host and where its staging stands.
+#[utoipa::path(
+    get,
+    path = "/v1/images",
+    responses((status = 200, body = Vec<StagedImage>)),
+    tag = "images"
+)]
+#[tracing::instrument(skip_all)]
+pub(crate) async fn images<Operations: HostOperations>(
+    State(state): Service<Operations>,
+) -> Json<Vec<StagedImage>> {
+    Json(state.service.images())
+}
+
+/// Stage an image (download, check, put in place) unless it is in place
+/// with these contents. Answers at once; `GET /v1/images` shows the outcome.
+#[utoipa::path(
+    post,
+    path = "/v1/images",
+    request_body = StageImage,
+    responses(
+        (status = 200, body = StagedImage),
+        (status = 422, body = ErrorResponse, description = "invalidRequest"),
+    ),
+    tag = "images"
+)]
+#[tracing::instrument(skip_all, fields(image = %request.image), err)]
+pub(crate) async fn stage_image<Operations: HostOperations>(
+    State(state): Service<Operations>,
+    Json(request): Json<StageImage>,
+) -> Result<Json<StagedImage>, HostError> {
+    state.service.stage_image(request).map(Json)
 }
 
 /// Boot the computer from a system disk of another image, or back to its

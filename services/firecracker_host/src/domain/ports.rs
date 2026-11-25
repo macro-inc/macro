@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use firecracker_host_api::{
     Action, Computer, ComputerId, CreateComputer, DiskBackend, GoldenImage, GoldenKey, GuestImage,
-    HostInfo, HostLimits, SetEnrollment, Usage,
+    HostInfo, HostLimits, SetEnrollment, StageImage, StagedImage, Usage,
 };
 
 use crate::domain::service::HostError;
@@ -185,6 +185,13 @@ pub trait Goldens: Send + Sync + 'static {
 
     /// Images installed on the host.
     fn images(&self) -> Vec<GuestImage>;
+
+    /// Stage `request`'s image in the background unless it is staging, or
+    /// in place with these contents; where it stands now.
+    fn stage_image(&self, request: StageImage) -> StagedImage;
+
+    /// Every image in place, staging, failed or in conflict.
+    fn staged_images(&self) -> Vec<StagedImage>;
 }
 
 /// What a new process starts from; its Display (`golden`, `hibernation`,
@@ -378,6 +385,12 @@ pub trait HostOperations: Send + Sync + 'static {
 
     /// Every golden.
     fn goldens(&self) -> Vec<GoldenImage>;
+
+    /// Stage an image; see [`StageImage`].
+    fn stage_image(&self, request: StageImage) -> Result<StagedImage, HostError>;
+
+    /// Every image and where its staging stands.
+    fn images(&self) -> Vec<StagedImage>;
 
     /// Build a golden unless it is ready or building.
     fn build_golden(&self, key: GoldenKey) -> Result<GoldenImage, HostError>;

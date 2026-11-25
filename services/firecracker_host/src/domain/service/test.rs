@@ -6,7 +6,7 @@ use firecracker_host_api::mmds::Document;
 use firecracker_host_api::{
     Action, ComputerId, ComputerResources, ControlPlaneId, CreateComputer, DiskBackend,
     EnrollmentDocument, EnrollmentGeneration, ErrorCode, GoldenImage, GoldenKey, GuestImage,
-    HostLimits, PairingId, PowerState, Usage,
+    HostLimits, ImageState, PairingId, PowerState, StageImage, StagedImage, Usage,
 };
 use uuid::Uuid;
 
@@ -165,6 +165,15 @@ impl Goldens for FakeGoldens {
         Vec::new()
     }
     fn images(&self) -> Vec<GuestImage> {
+        Vec::new()
+    }
+    fn stage_image(&self, request: StageImage) -> StagedImage {
+        StagedImage {
+            image: request.image,
+            state: ImageState::Staging,
+        }
+    }
+    fn staged_images(&self) -> Vec<StagedImage> {
         Vec::new()
     }
 }

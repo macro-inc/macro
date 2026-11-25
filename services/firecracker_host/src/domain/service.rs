@@ -10,8 +10,7 @@ use chrono::Utc;
 use firecracker_host_api::mmds::{Document, Identity, MacroData, Network};
 use firecracker_host_api::{
     Action, Computer, ComputerId, CreateComputer, ErrorCode, GoldenKey, GuestImage, HostLimits,
-    LaunchSource,
-    LaunchTimings, PowerState,
+    LaunchSource, LaunchTimings, PowerState,
 };
 use std::time::Instant;
 use tokio::sync::Mutex;
@@ -110,6 +109,13 @@ pub enum InvalidRequest {
     /// The image name cannot become a path.
     #[error("image {0} is not a valid image name")]
     UnsafeImage(GuestImage),
+    /// An image to stage must name vmlinux, rootfs.ext4 and boot_args
+    /// once each.
+    #[error("an image to stage names vmlinux, rootfs.ext4 and boot_args once each")]
+    ImageFiles,
+    /// An image file must come over HTTPS and be at most 64 GiB.
+    #[error("{0} must be fetched over https and be at most 64 GiB")]
+    ImageSource(firecracker_host_api::ImageFileName),
     /// Host limits whose squeeze window is upside down.
     #[error(transparent)]
     HostLimits(#[from] firecracker_host_api::InvalidHostLimits),

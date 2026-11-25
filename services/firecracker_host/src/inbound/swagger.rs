@@ -11,6 +11,8 @@ use utoipa::OpenApi;
         super::axum_router::set_host_limits,
         super::axum_router::goldens,
         super::axum_router::build_golden,
+        super::axum_router::images,
+        super::axum_router::stage_image,
         super::axum_router::list,
         super::axum_router::computer,
         super::axum_router::create,
@@ -31,6 +33,7 @@ use utoipa::OpenApi;
     tags(
         (name = "host", description = "The host"),
         (name = "goldens", description = "Golden snapshots"),
+        (name = "images", description = "Guest images"),
         (name = "computers", description = "Computers"),
         (name = "moves", description = "Moving computers between hosts"),
     )

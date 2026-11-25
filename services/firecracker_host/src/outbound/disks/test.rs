@@ -107,7 +107,10 @@ async fn a_system_disk_is_cloned_beside_the_others_and_leftovers_go() {
     use crate::outbound::layout::Layout;
 
     let directory = tempfile::tempdir().unwrap();
-    let layout = Layout::new(directory.path().join("durable"), directory.path().join("images"));
+    let layout = Layout::new(
+        directory.path().join("durable"),
+        directory.path().join("images"),
+    );
     let key = GoldenKey {
         image: GuestImage::try_new("macro-box/next").unwrap(),
         vcpus: 2,
@@ -139,7 +142,12 @@ async fn a_system_disk_is_cloned_beside_the_others_and_leftovers_go() {
     );
     let computer = layout.computer(record.computer_id);
     std::fs::create_dir_all(&computer).unwrap();
-    for name in ["rootfs.ext4", "rootfs.4.ext4", "rootfs.5.ext4.new", "home.ext4"] {
+    for name in [
+        "rootfs.ext4",
+        "rootfs.4.ext4",
+        "rootfs.5.ext4.new",
+        "home.ext4",
+    ] {
         std::fs::write(computer.join(name), b"x").unwrap();
     }
     let disks = FileDisks::new(layout, Containers::Xfs, 1);

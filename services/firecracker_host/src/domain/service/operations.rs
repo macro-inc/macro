@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use firecracker_host_api::{
     Action, Computer, ComputerId, CreateComputer, GoldenImage, GoldenKey, GuestImage, HostInfo,
-    HostLimits, SetEnrollment,
+    HostLimits, SetEnrollment, StageImage, StagedImage,
 };
 
 use super::{HostError, HostProbe, HostService};
@@ -30,6 +30,14 @@ where
 
     fn build_golden(&self, key: GoldenKey) -> Result<GoldenImage, HostError> {
         HostService::build_golden(self, key)
+    }
+
+    fn stage_image(&self, request: StageImage) -> Result<StagedImage, HostError> {
+        HostService::stage_image(self, request)
+    }
+
+    fn images(&self) -> Vec<StagedImage> {
+        HostService::images(self)
     }
 
     async fn list(&self) -> Result<Vec<Computer>, HostError> {

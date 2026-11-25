@@ -609,6 +609,7 @@ zip-inflate = { package = "zip", version = "9.0.5", default-features = false, fe
 ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
+zstd = "0.14.3"
 
 [patch.crates-io]
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.

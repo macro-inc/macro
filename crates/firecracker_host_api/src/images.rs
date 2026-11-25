@@ -68,6 +68,16 @@ impl Sha256Digest {
         }
     }
 
+    /// The digest a hasher produced.
+    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+        use std::fmt::Write;
+        let mut digest = String::with_capacity(64);
+        for byte in bytes {
+            let _ = write!(digest, "{byte:02x}");
+        }
+        Self(digest)
+    }
+
     /// The hex digits.
     pub fn as_str(&self) -> &str {
         &self.0

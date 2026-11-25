@@ -347,13 +347,9 @@ async fn killed_after_dropping_the_previous_disk_from_the_record_its_file_goes_a
     // The record already dropped disk 1 (the previous one); its file stayed.
     let store = FakeStore::default();
     saved(&store, &record(PowerState::Stopped, None)).await;
-    let host = super::super::test::host_with_disks(
-        store,
-        disks_with(&[0, 1]),
-        FakeMachines::default(),
-        1,
-    )
-    .await;
+    let host =
+        super::super::test::host_with_disks(store, disks_with(&[0, 1]), FakeMachines::default(), 1)
+            .await;
 
     assert_eq!(files_left(&host), [0]);
 }
@@ -363,13 +359,9 @@ async fn killed_after_the_clone_before_the_save_the_computer_boots_its_old_disk(
     let store = FakeStore::default();
     let stopped = record(PowerState::Stopped, None);
     saved(&store, &stopped).await;
-    let host = super::super::test::host_with_disks(
-        store,
-        disks_with(&[0, 1]),
-        FakeMachines::default(),
-        1,
-    )
-    .await;
+    let host =
+        super::super::test::host_with_disks(store, disks_with(&[0, 1]), FakeMachines::default(), 1)
+            .await;
 
     assert_eq!(files_left(&host), [0]);
     let computer = host
@@ -398,13 +390,9 @@ async fn killed_after_the_save_before_the_boot_both_disks_stay_and_a_start_cold_
         image: old_image.clone(),
     });
     saved(&store, &swapped).await;
-    let host = super::super::test::host_with_disks(
-        store,
-        disks_with(&[0, 1]),
-        FakeMachines::default(),
-        1,
-    )
-    .await;
+    let host =
+        super::super::test::host_with_disks(store, disks_with(&[0, 1]), FakeMachines::default(), 1)
+            .await;
 
     assert_eq!(files_left(&host), [0, 1]);
     let computer = host

@@ -139,7 +139,11 @@ impl ComputerRecord {
     /// previous one if any. Any other file is a leftover.
     pub fn system_disks(&self) -> Vec<SystemDisk> {
         let mut disks = vec![self.system_disk];
-        disks.extend(self.previous_system_disk.as_ref().map(|previous| previous.disk));
+        disks.extend(
+            self.previous_system_disk
+                .as_ref()
+                .map(|previous| previous.disk),
+        );
         disks
     }
 

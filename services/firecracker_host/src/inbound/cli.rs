@@ -14,7 +14,7 @@ use firecracker_host_api::moves::{
 use firecracker_host_api::{
     Action, ComputerId, ComputerResources, ComputerRole, ControlPlaneId, CreateComputer,
     EnrollmentDocument, EnrollmentGeneration, GoldenKey, GuestImage, PairingId, ReplaceSystemDisk,
-    SetEnrollment,
+    SetEnrollment, StageImage,
 };
 use rootcause::Report;
 use serde::Deserialize;
@@ -63,6 +63,14 @@ pub enum ClientCommand {
         vcpus: u8,
         #[arg(long)]
         memory_mib: u32,
+    },
+    /// Every image and where its staging stands.
+    Images,
+    /// Stage an image from a JSON `StageImage` request (image, files with
+    /// url, sha256 and bytes); answers at once, see `images`.
+    StageImage {
+        #[arg(long)]
+        request_file: PathBuf,
     },
     /// Every computer.
     List,
@@ -328,6 +336,11 @@ async fn run_command(endpoint: PathBuf, command: ClientCommand) -> Result<i32, C
         }
         ClientCommand::Hibernate { computer_id } => {
             power(&client, computer_id, Action::Hibernate).await?
+        }
+        ClientCommand::Images => json(&client.images().await?)?,
+        ClientCommand::StageImage { request_file } => {
+            let request: StageImage = serde_json::from_slice(&std::fs::read(request_file)?)?;
+            json(&client.stage_image(&request).await?)?
         }
         ClientCommand::ReplaceSystemDisk { computer_id, image } => json(
             &client
