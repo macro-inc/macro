@@ -24,6 +24,8 @@ struct StagedThreadLabels {
     all_ids: Vec<Uuid>,
     /// Messages that gain or lose the label; only these go to Gmail or revert.
     changed_ids: Vec<Uuid>,
+    /// Whether the thread gained a label someone made.
+    gained: bool,
 }
 
 impl StagedThreadLabels {
@@ -285,7 +287,7 @@ where
         let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
         let labels_by_message = self
             .email_repo
-            .labels_by_message_ids(&message_ids)
+            .labels_by_message_ids(&message_ids, Some(&macro_id))
             .await
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
         let unread_label_id = labels_by_message
@@ -693,6 +695,7 @@ where
             all_ids: staged.messages.iter().map(|m| m.db_id).collect(),
             messages: staged.messages,
             changed_ids: staged.changed_ids,
+            gained: staged.thread_gained,
         })
     }
 
@@ -794,6 +797,7 @@ where
                 thread.thread_id,
                 &label,
                 add,
+                thread.gained,
                 &cancelled_send_ids,
                 actor.clone(),
             );
@@ -842,13 +846,19 @@ where
     /// macro.email event for that label (see
     /// [`EmailMacroEvent::thread_label_change`]). Scheduled sends cancelled
     /// by trashing publish `message_send_cancelled`. Actor is not tracked on
-    /// this path — the inbox owner is on `link`.
+    /// this path — the inbox owner is on `link`. `gained` says the thread
+    /// didn't have the label before.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the parts of one published change"
+    )]
     fn publish_thread_label_events(
         &self,
         link: &Link,
         thread_id: Uuid,
         label: &LinkLabel,
         add: bool,
+        gained: bool,
         cancelled_send_ids: &[Uuid],
         actor: Option<macro_user_id::user_id::MacroUserIdStr<'static>>,
     ) {
@@ -865,6 +875,9 @@ where
             add,
             EmailEventOrigin::UserAction,
         );
+        let gained_ids = if gained { vec![label.id] } else { Vec::new() };
+        let event =
+            event.with_labels_gained(None, gained_ids, agent_correlation::context::by_program());
 
         self.publish_email_event(&event);
 

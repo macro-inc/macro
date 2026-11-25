@@ -227,14 +227,34 @@ export function recoverFromFailedLoad(
     page.reload('failed_load_recovery');
     return;
   }
-  promptReloadForFailedLoad({
-    ...page,
-    reload(reason) {
-      if (reason !== 'cache_replaced_automatic' || reloadOnce.claim(build)) {
-        page.reload(reason);
-      }
-    },
-  });
+  promptReloadForFailedLoad(reloadingOnce(page, reloadOnce, build));
+}
+
+/** `page`, which reloads by itself once per `build`. */
+const reloadingOnce = (
+  page: ReloadPage,
+  reloadOnce: ReloadOnce,
+  build: string
+): ReloadPage => ({
+  ...page,
+  reload(reason) {
+    if (reason !== 'cache_replaced_automatic' || reloadOnce.claim(build)) {
+      page.reload(reason);
+    }
+  },
+});
+
+/**
+ * A newer build of the app has the local cache, so the tab should move to that
+ * build. A server that still serves this build would bring the tab back to the
+ * same place, so it reloads by itself once per build per tab session.
+ */
+export function reloadForSupersededCache(
+  page: ReloadPage = browserPage,
+  reloadOnce: ReloadOnce = sessionReloadOnce,
+  build: string = currentBuild
+): void {
+  reloadForNewerBuild(reloadingOnce(page, reloadOnce, build));
 }
 
 /** Test seam: forget the scheduled reload and every hold. */

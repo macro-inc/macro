@@ -99,7 +99,15 @@ export function TagMention(props: TagMentionDecoratorProps) {
     if (isAuthenticated() !== true) return;
 
     const tag = resolvedTag();
-    navigateToTag(split.openWithSplit, tag, { handle: panel?.handle });
+    navigateToTag(
+      split.openWithSplit,
+      {
+        optionId: tag.optionId,
+        propertyDefinitionId: tag.propertyDefinitionId,
+        label: tag.name,
+      },
+      { handle: panel?.handle }
+    );
   };
 
   if (editor) {

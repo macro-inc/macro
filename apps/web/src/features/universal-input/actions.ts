@@ -62,8 +62,10 @@ import {
 import { buildRecurrenceLines } from '../calendar/utils/recurrence';
 import { authoredMentions } from '../channel/Input/message-payload';
 import { searchNeedsKeywords } from '../next-soup/core/search-filters';
-import { compileSearchQuery } from '../next-soup/core/search-query';
+import { searchFiltersOperatorText } from '../next-soup/core/search-operator-filters';
 import { createGlobalSearchOpener } from '../next-soup/open-search';
+import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { createTagOptions } from '../next-soup/soup-view/filters-bar/tag-filter-state';
 import type { InputCapabilities } from './context/capabilities';
 import type { InputFields, Intent, Submission } from './core/input';
 import { type Recipient, resolveRecipients } from './core/recipients';
@@ -123,6 +125,7 @@ export function createInputActions(
   const people = useInputPeople(fields, host.intent, destinations);
   const person = people.lookup;
   const searchableChannels = useQuickAccess().useList('channel', 'dm');
+  const tagOptions = createTagOptions();
   const searchChannels = (): Recipient[] =>
     searchableChannels.items().map((channel) => ({
       id: channel.id,
@@ -361,13 +364,24 @@ export function createInputActions(
           searchChannels(),
           email.accounts.inboxes()
         );
+        // The draft's filters become operators in the Search field, which
+        // shows the whole search; its tags and channels stay bound to the
+        // ids picked, so a DM or an emoji-only tag still narrows it.
+        const operators = searchFiltersOperatorText(state, {
+          userId,
+          tag: (id) => tagOptions.optionsById().get(id)?.label,
+          channel: (id) =>
+            searchChannels().find((channel) => channel.id === id)?.label,
+          inbox: (id) =>
+            email.accounts.inboxes().find((inbox) => inbox.id === id)
+              ?.email_address,
+        });
+        const preset = getViewPreset('search');
         const search = {
-          query: f.query.trim(),
-          filters: compileSearchQuery(state),
-          clientFilters: {
-            and: ['search-supported' as const],
-            or: state.type === 'all' ? [] : [state.type],
-          },
+          query: [operators.text, f.query.trim()].filter(Boolean).join(' '),
+          bindings: operators.bindings,
+          filters: preset?.filters ?? {},
+          clientFilters: preset?.clientFilters ?? {},
         };
         return { message: 'Search opened', open: () => openSearch(search) };
       })

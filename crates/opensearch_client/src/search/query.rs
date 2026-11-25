@@ -42,7 +42,7 @@ pub(crate) struct CreateQueryParams<'a> {
 /// ([`single_word_prefix`]); any other partial term, a shorter word or several
 /// words, stays a `match_phrase_prefix` that expands to only the first
 /// `max_expansions` terms of a shard.
-pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
+pub(crate) fn create_query<'a>(params: CreateQueryParams<'_>) -> QueryType<'a> {
     let CreateQueryParams {
         query_key,
         field,
@@ -164,6 +164,63 @@ pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType
     )
 }
 
+/// Words nearly every link URL starts with, which a link query leaves out
+/// where they start the term; inside a path (`/http/guide`) they stay, or a
+/// phrase would miss the words around them.
+const LINK_BOILERPLATE_WORDS: [&str; 3] = ["http", "https", "www"];
+
+/// Words that name no site on their own: the link boilerplate and the
+/// endings most hosts share. A term whose words are only these, or the start
+/// of one (`htt`, `co`, typed on the way to `https://` or `company`), matches
+/// no link; beside other words (`example.com`) they still narrow it.
+const NO_SITE_WORDS: [&str; 6] = ["http", "https", "www", "com", "org", "net"];
+
+/// The query a content term runs against a field of link URLs, which the
+/// built-in `pattern` analyzer splits at every character that is not an ASCII
+/// letter, digit or `_`: `https://app.sketchpad.example/a` is `https`, `app`,
+/// `sketchpad`, `example`, `a`. The term is split the same way and matched by
+/// [`create_query`]'s rules for those words, as message text is: one word as
+/// a prefix, several in order with the last a prefix (`sketchpad.example`
+/// finds `app.sketchpad.example`, `example.com` no `github.com/example`).
+/// `http`, `https` and `www` that start the term are left out. A term that names no
+/// site ([`NO_SITE_WORDS`]), one with a letter or digit outside ASCII, which
+/// the analyzer would split into looser ASCII pieces (`über` into `ber`), and
+/// a regexp term match no link.
+pub(crate) fn link_query<'a>(
+    query_key: QueryKey,
+    field: &str,
+    term: &str,
+) -> Option<QueryType<'a>> {
+    let non_ascii = term.chars().any(|c| !c.is_ascii() && c.is_alphanumeric());
+    if query_key == QueryKey::Regexp || non_ascii {
+        return None;
+    }
+    let words: Vec<&str> = term
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|word| !word.is_empty())
+        .skip_while(|word| {
+            LINK_BOILERPLATE_WORDS
+                .iter()
+                .any(|boilerplate| word.eq_ignore_ascii_case(boilerplate))
+        })
+        .collect();
+    let names_no_site = words.iter().all(|word| {
+        NO_SITE_WORDS.iter().any(|no_site| {
+            no_site
+                .get(..word.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(word))
+        })
+    });
+    if names_no_site {
+        return None;
+    }
+    Some(create_query(CreateQueryParams {
+        query_key,
+        field,
+        term: &words.join(" "),
+    }))
+}
+
 impl QueryKey {
     /// Creates a query key given a match type
     pub fn from_match_type(match_type: &str) -> Result<Self> {
@@ -193,13 +250,15 @@ pub(crate) fn generate_terms_must_query<'a>(
     terms: impl Into<Cow<'a, [&'a str]>>,
     combine: TermCombine,
 ) -> QueryType<'a> {
-    generate_terms_must_query_for_fields(query_key, &[field], terms, combine)
+    generate_terms_must_query_for_fields(query_key, &[field], None, terms, combine)
 }
 
-/// Each term must match at least one field on the same document.
+/// Each term must match at least one field on the same document, or a link
+/// URL in `link_field` ([`link_query`]).
 pub(crate) fn generate_terms_must_query_for_fields<'a>(
     query_key: QueryKey,
     fields: &[&'a str],
+    link_field: Option<&str>,
     terms: impl Into<Cow<'a, [&'a str]>>,
     combine: TermCombine,
 ) -> QueryType<'a> {
@@ -208,17 +267,25 @@ pub(crate) fn generate_terms_must_query_for_fields<'a>(
     let queries: Vec<_> = terms
         .iter()
         .map(|term| {
+            let mut queries: Vec<QueryType<'a>> = fields
+                .iter()
+                .map(|field| {
+                    create_query(CreateQueryParams {
+                        query_key,
+                        field,
+                        term,
+                    })
+                })
+                .collect();
+            queries.extend(link_field.and_then(|field| link_query(query_key, field, term)));
+            if queries.len() == 1
+                && let Some(query) = queries.pop()
+            {
+                return query;
+            }
             let mut alternatives = BoolQueryBuilder::new();
             alternatives.minimum_should_match(1);
-            for field in fields {
-                let query = create_query(CreateQueryParams {
-                    query_key,
-                    field,
-                    term,
-                });
-                if fields.len() == 1 {
-                    return query;
-                }
+            for query in queries {
                 alternatives.should(query);
             }
             alternatives.build().into()

@@ -248,13 +248,14 @@ expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no
 foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
-- If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- If a concurrent index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
 - `idx_ep_crm_record_references_gin` (migration `20261119222316`) holds only the `entity_properties` values that reference a company or contact outside the Companies and Contacts properties and database rows. Soup's CRM property edges use it by repeating its predicate; keep the two in step. If its concurrent build is interrupted, inspect `pg_index.indisvalid` and drop only the invalid index before retrying.
 - `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
-`hosted_runtimes`.
+`hosted_runtimes`. So are `image_upgrade` and `image_upgrade_computer`
+(operator image upgrades); their rows go with their computer.
 
 `password_item_entities`, `password_folders`, `password_activity`,
 `password_write_intents`, `password_totp_enrollments`, `password_team_lifecycle`,
@@ -289,3 +290,9 @@ locks all endpoints, acquires source rows with NOWAIT, and revalidates the snaps
 before writes. Historical oversized snapshots remain untruncated. The local PG14
 fixture uses `max_locks_per_transaction=8192`; verify production lock-memory capacity
 for historical endpoint cardinalities before deployment.
+
+`import_entity_notion_review_sources_idx` bounds review dependency reconciliation
+by `(review_id, user_id)` for staged Notion data sources. Keep those literal
+predicates aligned with the import query. Entering/leaving that subset maintains
+one extra index entry; metadata is absent from the predicate so ordinary plan
+metadata updates can remain HOT. The general review index still serves page rows.

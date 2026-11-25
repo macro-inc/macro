@@ -7,6 +7,7 @@ pub mod enrollment;
 pub(crate) mod fakes;
 pub mod ids;
 pub mod image;
+pub mod image_upgrade;
 pub mod lifecycle;
 pub mod models;
 pub mod moves;

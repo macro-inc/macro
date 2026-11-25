@@ -269,6 +269,16 @@ impl EmailRepo for EmailPgRepo {
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<EmailThreadPreview>, EmailErr> {
+        self.previews_page_for_view_cursor(query, user_id)
+            .await
+            .map(|page| page.previews)
+    }
+
+    async fn previews_page_for_view_cursor(
+        &self,
+        query: PreviewCursorQuery,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<crate::domain::models::PreviewCursorPage, EmailErr> {
         preview::previews_for_view_cursor(
             &self.pool,
             query,
@@ -290,8 +300,12 @@ impl EmailRepo for EmailPgRepo {
         preview::contacts_by_thread_ids(&self.pool, thread_ids).await
     }
 
-    async fn labels_by_thread_ids(&self, thread_ids: &[Uuid]) -> Result<Vec<Label>, Self::Err> {
-        preview::labels_by_thread_ids(&self.pool, thread_ids).await
+    async fn labels_by_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
+    ) -> Result<Vec<Label>, Self::Err> {
+        preview::labels_by_thread_ids(&self.pool, thread_ids, reader).await
     }
 
     async fn link_by_fusionauth_and_macro_id(
@@ -389,8 +403,9 @@ impl EmailRepo for EmailPgRepo {
     async fn labels_by_message_ids(
         &self,
         message_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err> {
-        message::labels_by_message_ids(&self.pool, message_ids).await
+        message::labels_by_message_ids(&self.pool, message_ids, reader).await
     }
 
     async fn calendar_invitations_by_message_ids(

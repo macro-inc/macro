@@ -26,7 +26,7 @@ export function TimePill(props: TimePillProps): JSX.Element {
           : t('timeTracking.pillEmptyLabel')
       }
       class={propertyPillClasses({
-        variant: 'outline',
+        variant: 'secondary',
         size: 'xs',
         empty: !logged(),
         class: local.class,
@@ -34,7 +34,7 @@ export function TimePill(props: TimePillProps): JSX.Element {
       {...rest}
     >
       <span class="inline-flex min-w-0 items-center gap-1">
-        <ClockIcon class="size-3.5 shrink-0" aria-hidden="true" />
+        <ClockIcon class="size-3 touch:size-4 shrink-0" aria-hidden="true" />
         <Show when={logged()} fallback={t('timeTracking.pill')}>
           <span class="tabular-nums">{formatLength(local.minutes)}</span>
         </Show>

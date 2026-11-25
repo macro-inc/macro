@@ -26,6 +26,28 @@ type Mode =
   | { kind: 'edit'; entry: TimeEntryFieldsFragment };
 
 /**
+ * One's own entry, which a tap anywhere on opens for editing. The button lies
+ * over the row rather than around it, so the note's Show more stays a button
+ * of its own.
+ */
+function EditableEntry(props: {
+  onEdit: () => void;
+  children: JSX.Element;
+}): JSX.Element {
+  return (
+    <div class="relative w-full">
+      {props.children}
+      <button
+        type="button"
+        class="absolute inset-0"
+        aria-label={t('timeTracking.editEntry')}
+        onClick={() => props.onEdit()}
+      />
+    </div>
+  );
+}
+
+/**
  * The Time pill and its bottom sheet, on touch devices. Given `open`, the
  * sheet opens for whoever holds it (My week's Log time) and the pill stays
  * out.
@@ -192,31 +214,33 @@ export function TaskTimeSheet(
                         person={props.person}
                         row={(entry, content) => (
                           <Show when={entry.canEdit} fallback={content}>
+                            {/* At rest the row lets the sheet's glass through, as
+                                others' rows do; only a swipe fills it, over the
+                                actions it then reveals. */}
                             <SwipableRow
                               id={entry.id}
+                              class="group/entry"
+                              rowBgClass="bg-transparent group-data-swipe-interacting/entry:bg-menu"
                               swipeLeftColor="bg-failure"
                               swipeLeftRevealedComponent={
                                 <TrashIcon
-                                  class="size-6 text-surface"
+                                  class="size-6 text-surface opacity-0 group-data-swipe-interacting/entry:opacity-100"
                                   aria-label={t('timeTracking.deleteEntry')}
                                 />
                               }
                               swipeRightColor="bg-accent"
                               swipeRightRevealedComponent={
                                 <PencilIcon
-                                  class="size-6 text-surface"
+                                  class="size-6 text-surface opacity-0 group-data-swipe-interacting/entry:opacity-100"
                                   aria-label={t('timeTracking.editEntry')}
                                 />
                               }
                             >
-                              <button
-                                type="button"
-                                class="w-full text-left"
-                                aria-description={t('timeTracking.editEntry')}
-                                onClick={() => setMode({ kind: 'edit', entry })}
+                              <EditableEntry
+                                onEdit={() => setMode({ kind: 'edit', entry })}
                               >
                                 {content}
-                              </button>
+                              </EditableEntry>
                             </SwipableRow>
                           </Show>
                         )}

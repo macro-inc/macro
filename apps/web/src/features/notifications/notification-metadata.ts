@@ -36,6 +36,23 @@ export function reactionText(content: {
   return `Reacted ${content.emoji} to: ${content.messageContent}`;
 }
 
+/**
+ * A finished routine run's body, as the notification service words it. A run
+ * refused for a disconnected app names the apps to reconnect.
+ */
+export function routineRunText(content: {
+  outcome: 'succeeded' | 'failed';
+  appsToConnect?: readonly string[];
+}): string {
+  if (content.outcome !== 'failed') return 'Its run finished.';
+  const apps = content.appsToConnect ?? [];
+  const last = apps.at(-1);
+  if (!last) return 'Its run failed.';
+  const rest = apps.slice(0, -1);
+  const names = rest.length ? `${rest.join(', ')} and ${last}` : last;
+  return `It needs ${names} connected to run. Reconnect ${rest.length ? 'them' : 'it'}.`;
+}
+
 export function getNotificationAction(n: UnifiedNotification): string {
   return (
     match(n.notification_metadata.tag)
@@ -119,6 +136,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('github_pr_mention', () => 'mentioned you in')
       .with('github_pr_review', () => 'reviewed')
       .with('inbox_reauth_required', () => 'needs reconnection')
+      .with('crm_email_sharing_changed', () => 'changed')
       // The bot is the actor: "<bot> finished <session>".
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
@@ -213,6 +231,7 @@ export function getNotificationTargetName(
       )
       .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
+      .with({ tag: 'crm_email_sharing_changed' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with({ tag: 'computer_setup' }, () => undefined)
@@ -296,6 +315,10 @@ export function getNotificationContent(
       .with({ tag: 'calendar_event_join_request' }, () => undefined)
       .with({ tag: 'password_access_requested' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
+      // Names nothing the recipient may not see: their rules show the rest.
+      .with({ tag: 'crm_email_sharing_changed' }, () =>
+        t('crm.emailSharingChangedBody')
+      )
       .with(
         { tag: 'agent_session_settled' },
         (m) => m.content.excerpt ?? undefined
@@ -305,9 +328,7 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
-      .with({ tag: 'routine_run_finished' }, (m) =>
-        m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
-      )
+      .with({ tag: 'routine_run_finished' }, (m) => routineRunText(m.content))
       .with({ tag: 'agent_sign_in_expiry' }, (m) => {
         const agent = agentDisplayName(m.content.agent);
         const when = match(m.content.stage)
@@ -415,6 +436,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'password_access_requested' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
+      .with({ tag: 'crm_email_sharing_changed' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'agent_sign_in_expiry' }, () => false)
       .with({ tag: 'computer_setup' }, () => false)

@@ -17,8 +17,14 @@ import {
   watched,
 } from '../../capabilities/heartbeat/schedules.ts';
 import { beat } from '../../capabilities/heartbeat/tick.ts';
+import { prefix as laterPrefix } from '../../capabilities/later/index.ts';
+import { millisecondsSince, recordOutcome } from './outcome.ts';
 
 const schedulesSource = 'schedules';
+/** A task handed over with doLater, from its run's start to its end. */
+const taskSpan = 'agent.task';
+/** Any other schedule that wakes the agent. */
+const scheduledWakeSpan = 'agent.scheduled_wake';
 const reason = 'reason';
 const Firing = z.object({ name: z.string() });
 
@@ -115,8 +121,22 @@ export const heartbeatHandlers = (clock: {
           await finish();
           return;
         }
+        // A task's run is one span, in the trace of the hand-over that set it.
+        const task = fired.name.startsWith(laterPrefix);
         void context
-          .wake(action.text)
+          .trace(
+            task ? taskSpan : scheduledWakeSpan,
+            async (span) => {
+              if (task) span.set('agent.task_id', fired.name);
+              const queued = millisecondsSince(fired.due, context.clock.now());
+              if (queued !== undefined)
+                span.set('agent.schedule.late_ms', queued);
+              const woke = await context.wake(action.text);
+              recordOutcome(span, 'agent.schedule', woke);
+              return woke;
+            },
+            action.traceparent
+          )
           .then((woke) => (woke.kind === 'done' ? finish() : undefined))
           .catch(() => undefined);
       }

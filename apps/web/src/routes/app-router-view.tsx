@@ -1,6 +1,6 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { AgentsViewSkeleton } from '@app/features/agents-view/agents-view-skeleton';
-import { AgentSignup, MobileWebSignup } from '@app/features/auth/auth';
+import { AgentSignup } from '@app/features/auth/auth';
 import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-skeleton';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
@@ -88,6 +88,7 @@ import {
   GithubConnectRoutePage,
   LoginPage,
   LoginPopupSuccess,
+  MobileEmailSignupRedirect,
   OnboardingPage,
   PublicBookingRoutePage,
   SignupPage,
@@ -294,7 +295,7 @@ export function appRouteElements(): JSX.Element {
         <Route definition={welcomeRoute} component={WelcomePage} />
         <Route
           definition={mobileEmailSignupRoute}
-          component={MobileWebSignup}
+          component={MobileEmailSignupRedirect}
         />
         <Route definition={onboardingRoute} component={OnboardingPage} />
         <Route definition={inviteRoute} component={InviteWelcome} />

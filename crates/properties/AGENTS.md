@@ -71,6 +71,10 @@ events to the `macro.properties` Kafka topic.
 
 ## Gotchas
 
+- `outbound/record_merge` moves a merged CRM record's values and the
+  references to it inside the merging domain's transaction, taking each
+  row's writer lock in key order first. It never touches database cells,
+  which move through the databases write path.
 - CRM companies and contacts hold values the same way (`CrmCompany` ↔
   `COMPANY`, `CrmContact` ↔ `CONTACT`): receipts come from `entity_access`'s
   CRM rules (current membership, `crm_access`, hidden records for admins and

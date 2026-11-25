@@ -13,7 +13,7 @@ import { useVisibleEmailTab } from '../../use-visible-email-tab';
 /** The Inbox's pills on touch; any other view, or a search, shows its name. */
 export function EmailMobileTabs() {
   const isVisible = useVisibleEmailTab();
-  const { state, setTab, shownTab, showsInboxTabs, tagViewTitle } =
+  const { state, setTab, shownTab, showsInboxTabs, filterViewTitle } =
     useEmailView();
   const tabs = () =>
     showsInboxTabs()
@@ -34,7 +34,7 @@ export function EmailMobileTabs() {
         <Show when={!showsInboxTabs()}>
           <MobileHeader.Island>
             <span class="truncate text-sm font-medium">
-              {tagViewTitle() ?? emailShownViewTitle(shownTab())}
+              {filterViewTitle() ?? emailShownViewTitle(shownTab())}
             </span>
           </MobileHeader.Island>
         </Show>

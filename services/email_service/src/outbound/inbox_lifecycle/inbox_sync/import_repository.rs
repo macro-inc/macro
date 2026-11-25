@@ -85,14 +85,14 @@ impl InboxSyncMessageStore for PgInboxSync {
         thread: Uuid,
         message: &mut service::message::Message,
         resync: Option<&InboxSyncResync>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<Uuid>, Self::Err> {
         let resync = resync.map(
             |snapshot| email_db_client::messages::insert::ResyncSnapshot {
                 stored_labels: snapshot.stored_labels.clone(),
                 pending_labels: snapshot.pending_labels.clone(),
             },
         );
-        email_db_client::messages::insert::insert_message(
+        email_db_client::messages::insert::insert_message_gaining_labels(
             &self.0,
             thread,
             message,
@@ -111,6 +111,12 @@ impl InboxSyncMessageStore for PgInboxSync {
         email_db_client::threads::insert::insert_thread_and_messages(&self.0, thread, link)
             .await
             .map(|_| ())
+            .map_err(Into::into)
+    }
+    async fn labels_new_to_thread(&self, message: Uuid) -> Result<Vec<Uuid>, Self::Err> {
+        email_db_client::labels::thread_gain::new_to_thread(&self.0, message)
+            .await
+            .map_err(anyhow::Error::from)
             .map_err(Into::into)
     }
     async fn message_ids(&self, link: Uuid, provider: &str) -> Result<(Uuid, Uuid), Self::Err> {

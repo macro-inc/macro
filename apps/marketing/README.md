@@ -14,29 +14,28 @@ future re-enablement.
 
 Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both website entry styles. Keep public website text selectable with native browser behavior; restrict `user-select: none` to interactive controls that need it, never the page globally.
 
-The homepage uses the feature-page hero with the live site's headline and subhead.
-Break the H1 after “The unified workspace” and keep the supporting H2 “Macro
-replaces 27+ apps with one connected system for humans and agents.”
-on two lines below it on desktop, breaking after “connected.” Below 700px, left-align the hero and use the
-product-list subhead ending in “Everything links to everything else.” Keep Get
+The homepage uses the feature-page hero.
+Keep the H1 “A new kind of office suite.” on a single line across desktop and mobile, and keep the supporting H2 “Macro
+replaces 27+ apps with one connected workspace for humans and agents.”
+on two lines below it, breaking after “connected.” Below 700px, left-align the hero. Keep Get
 Macro (signup) beside Book a demo. `HomepageTour` follows in an 800px
 maximum desktop frame at 16:9. Each module
 (Home, Mail, Chat, Tasks, Calendar, Docs, CRM, Calls) has a tab showing its
 captured app window on a `TutorialWallpaper`. The tour advances every five
 seconds until the visitor picks a tab, uses the arrow keys or the Next button,
-and never advances under reduced motion. A phone shows the window's left part
-at a readable size, and the tab strip fades at the edge where more tabs
-continue. Below the tour, two faded vertical rules separate the backing, security,
+and never advances under reduced motion. A phone aligns the frame with the hero's
+left inset and bleeds it flush to the right viewport edge, showing the window's
+left part at a readable size with wallpaper visible below it while the wider tab
+strip fades at the edge where more tabs continue. Below the tour, two faded vertical rules separate the backing, security,
 and GitHub badges. The GitHub badge links to the repository and refreshes its
-star count on mount above the August trending caption. `HomepageSections`
+star count on mount above the August trending caption. `HomepageFounderLetter`
+then introduces Macro in the 640px reading column with a short founder note and signature above the first section divider. `HomepageSections`
 then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with a centered
-graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and two or three sentences above
-the capture, with a “Learn about [feature] →” link where the product has a page.
-Let the heading wrap at its normal size. Follow each capture with two short
-sentences in the same type as the introduction. Draw on the founder's letter,
-the repository README, and the competitor notes for the reason we built the
-Block or an example of how we use it. Use `ProductCopy` for linked Block names. Below 768px, pricing lists the included modules with an icon and a link to each page. The captures
+graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading (tightened where needed for a single mobile line) and one simple sentence that fills nearly two lines on desktop above
+the capture. Place two frosted dark glass pills on the bottom right of each capture: a “Watch · [length]” button that opens `TutorialVideoDialog` (auto-playing the Block's walkthrough video) and a “Learn about [feature] →” link to that Block's page.
+Scale mobile section headings with `clamp(22px, 6.2vw, 27px)` so short headings fit on one line while longer ones wrap naturally. Follow each capture with one or two short
+sentences in the same type as the introduction that reference other Blocks with `ProductCopy` icon links and explain how they integrate. Below 768px, pricing lists the included modules with an icon and a link to each page. Follow the feature sections with `HomepageTestimonials`, `HomepageBlog` (a horizontal strip on desktop and a vertical post list on phones), and `HomepageClosing`. The captures
 in `src/assets/homepage/`
 come from the in-app tutorial videos and show demo data. Mount shared UI styles
 scoped to `.macro-homepage` for direct loads and client-side navigation. Keep the
@@ -59,7 +58,7 @@ Lazy-load the lower `HomepageSections` chunk inside its own Suspense boundary so
 
 Keep legal pages (`/terms`, `/privacy`, `/dpa`, `/partners/terms`, and `/delete-account`) on the shared `RouteLegal.css` layout: centered slab titles and dates, a 640px reading column, Inter body copy, and spaced section rules. Preserve legal wording, clause numbering, and DPA table navigation when changing presentation.
 
-Use quiet text links labeled “Learn about [feature] →” under each homepage section's introduction, set in Inter at 370 weight, 14px desktop / 13px phone, and 1.65 line height. Scale arrows to the text. Preserve 44px touch targets and direct product-page destinations.
+On each homepage product capture, place the “Watch · [length]” video dialog trigger and “Learn about [feature] →” page link together in the bottom-right corner as frosted glass pills; keep “Learn about pricing →” under the mobile-only pricing introduction.
 The hero never intercepts scrolling. The shared website sidebar handles
 navigation; do not add a separate homepage index.
 Hide the homepage Downloads and Links resources rail below 1440px instead of
@@ -124,7 +123,9 @@ in the router, preload map, site search, and prerender list.
 
 Hero descriptions fill their available width up to the shared maximum rather
 than shrink-wrapping their text, so Safari does not wrap a planned desktop line
-before the explicit line break. Phone copy remains free to wrap.
+before the explicit line break. Keep hero descriptions slightly narrower than
+the H1 across 2–3 balanced lines with no 1–3 word hanging last line; tune copy
+rather than changing font size. Phone copy remains free to wrap.
 
 The Email hero uses side-by-side Google and Microsoft signup links, matching the onboarding provider buttons and retaining the shared signup journey and CTA tracking. On phones, shorten the visible labels to provider names while keeping full accessible labels. Omit the separate provider compatibility caption and duplicated provider illustration section.
 
@@ -147,6 +148,7 @@ product demos, including changing walkthrough narration inside their footer
 controls; retain useful keyboard shortcuts and controls.
 Write it the way the founder talks to another founder: plain words, “we,” the
 competitor by name when the comparison is specific, and why we built it.
+Keep punctuation light (commas only when truly needed for clarity) and write with natural, conversational flow rather than staccato parallelisms, em-dash punchlines, or formulaic openers.
 Feature and benefit introductions use two paragraphs (one for Calls) from `product-introductions.ts` immediately
 below the hero tutorial and above the feature sections. On phones, align product introductions and hero tutorials to the same 20px viewport inset: 12px from the page shell plus 8px from the product page, with no extra width inset on either element. Use the H2 section body
 typography: explain what we wanted from existing tools, then
@@ -245,7 +247,7 @@ browser verification. The Vite boundary plugin additionally rejects app and
 workspace modules in the resolved production build.
 
 Normal navigation and explicit public endpoints are allowed: links to `/app`,
-Google sign-in, and the unauthenticated mobile email handoff do not load app UI.
+and Google sign-in do not load app UI.
 Public integration selections are preview preferences, not OAuth connections.
 Local preview data must not be presented as server-backed account state.
 The preview proceeds from integration selection directly to workspace setup;
@@ -271,7 +273,7 @@ the authenticated `/app/*` routes. In standalone dev and preview servers,
 GET/HEAD navigation to `/app` or `/app/*` redirects to the same path and query
 on `VITE_APP_BASE_URL` (default `https://macro.com`), where signup and the real
 app run. Set it to the separate `apps/web` origin for local signup testing. This prevents Vite's
-website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phone clicks still open `/mobile-signup`. Verify a real document navigation, not only a changed URL. Production routing
+website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phones open `/app/signup` too. The retired `/mobile-signup` and `/mobile-signup-sent` paths only forward to `/app/signup` with their query. In Instagram, Facebook and Threads in-app browsers, signup links go through `leaveInAppBrowser` (`utilCta`): iOS hands the page to Safari (`x-safari-https://`, iOS 17+), Android to the default browser (`intent://`), each with the ad parameters appended and loading in place if the page is still showing after 1.5 seconds; an unknown platform opens a new tab. Route new signup links through `handleCtaClick` or `handleSignupLinkClick`, never a bare `href`. Verify a real document navigation, not only a changed URL. Production routing
 is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha” and says “Available for macOS and
@@ -282,7 +284,14 @@ tablets (an iPad's Mac user agent is told apart by its touch screen) and
 undetected computers (and the prerendered HTML) get every installer as equal
 secondary buttons and a note pointing to the web app; Windows's note says a
 native Windows app is on the way. Platforms come from `DESKTOP_PLATFORMS` in
-`desktopDownloads.ts`, so a new installer (Intel Mac) is one entry there.
+`desktopDownloads.ts`. The Intel Mac installer is offered only once
+`seo/download-redirects.json` has `/download/mac-intel` (added after the first
+release that publishes it). Then a Mac's button is for the chip Chromium's
+architecture hint (`navigator.userAgentData`) reports, Apple silicon when the
+browser can't say, the other chip is the first “Also available for” link, and a
+browser that can't say adds "Not sure? Apple menu → About This Mac shows your
+chip." Off a Mac both read “Mac (Apple silicon)” and “Mac (Intel)”. Intel clicks
+send `platform: 'macos-intel'`.
 The buttons and links send `desktop_download_clicked` and link to
 `/download/mac` and `/download/linux`, which redirect to the current release's
 installers (`seo/download-redirects.json`), so the page never names a version
@@ -363,13 +372,13 @@ meta-ads repository's tutorial sets, taken at about 1000×600 in dark mode at 2x
 and stored as WebP in `src/features/marketing/assets/screens/`. Register each
 capture in `core/feature-screens.ts` with its alt text and an optional `focus`
 rectangle (capture pixels) that `FeatureScreenshot` outlines in the app accent.
-The screen sits on a flat, borderless stage with a 50% opaque `#101010` background.
+On feature pages with their own hero palette, the screen sits on a toned `TutorialWallpaper` stage (varied per section with a subtle dark atmospheric scrim and grain); pages without a dedicated feature palette keep the flat 50% `#101010` stage.
 On phones the canvas is up to 640px wide, sized so the focus fits, and scrolls sideways starting on it.
 When the focus is too wide for that (about 580 capture pixels or more), add a
 `narrow` frame: the same scene captured at 400×700, where the app uses its narrow
 layout, with the focus measured on the same element; phones show it instead. The
 build fails if an outline starts clipped on a phone. `FeaturePhoneScreens`
-adds an "On your phone." row of mobile captures from `phoneScreens`. Fit the cards within the desktop reading column and let the row scroll sideways on phones. Children
+adds a row of mobile captures from `phoneScreens` without a separate section heading or intro text; keep each phone card's slab title on 1 line and its Inter caption to 2–3 balanced lines. Fit the cards within the desktop reading column and let the row scroll sideways on phones. Children
 passed with a `screen` render below it, for real links, videos, and setup steps.
 Drop a section the app cannot show rather than drawing it, and keep `Macro
 <Product>` names in section copy so `ProductCopy` renders their linked mentions.

@@ -444,6 +444,7 @@ fn browser() -> Job {
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
         .add_step(run_agent_screen_browser_tests())
+        .add_step(run_captcha_vision_lab_gate())
         .add_step(steps::teardown_nix())
 }
 
@@ -797,6 +798,21 @@ fn run_agent_screen_browser_tests() -> Step<Run> {
         .run("bunx playwright install-deps chromium\njust test-agent-screen-browser")
         .if_condition(PATH_CHECK.outputs.agent_screen_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+const CAPTCHA_LAB_GATE: &str = indoc::indoc! {r#"
+    bun install --frozen-lockfile
+    bun run check:gate
+"#};
+
+/// The CAPTCHA vision lab's checks that start no browser. The lab is outside
+/// the root workspace, so it has its own install. Run on every browser job so
+/// the lab's isolation test scans the whole repo. Its browser tests run in
+/// `captcha_vision_lab.rs`, which gates nothing.
+fn run_captcha_vision_lab_gate() -> Step<Run> {
+    Step::new("CAPTCHA Vision Lab Checks")
+        .run(CAPTCHA_LAB_GATE.trim_end())
+        .working_directory(xtask_paths::repo_dir!("packages/captcha-vision-lab"))
 }
 
 fn cycles_import_check() -> Step<Run> {

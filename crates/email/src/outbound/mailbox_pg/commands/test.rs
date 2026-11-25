@@ -1,5 +1,6 @@
 use super::*;
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::{models::mailbox_action::MailboxAction, ports::EmailRepo};
 use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -15,11 +16,13 @@ async fn setup(
 ) {
     let (sync, link) = fixture(db).await;
     let stream = sync
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -400,7 +403,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
         .await
         .unwrap();
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -412,7 +417,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
     .await
     .unwrap();
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -435,7 +442,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
         .unwrap();
     assert!(
         !repo
-            .labels_by_message_ids(&[message])
+            .labels_by_message_ids(&[message], Some(&owner()))
             .await
             .unwrap()
             .get(&message)
@@ -463,7 +470,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .is_empty()
     );
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -474,7 +483,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
     sync.delete_label(&owner(), link, label).await.unwrap();
     assert!(
         !repo
-            .labels_by_message_ids(&[message])
+            .labels_by_message_ids(&[message], Some(&owner()))
             .await
             .unwrap()
             .get(&message)

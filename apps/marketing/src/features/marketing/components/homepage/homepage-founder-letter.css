@@ -1,0 +1,70 @@
+.homepage-founder-letter {
+  width: min(640px, calc(100% - 64px));
+  margin: 40px auto 64px;
+  text-align: left;
+  font-family: 'Inter Variable', Inter, sans-serif;
+}
+
+.homepage-founder-letter-body {
+  display: grid;
+  gap: 20px;
+}
+
+.homepage-founder-letter-body p {
+  margin: 0;
+  color: var(--feature-copy-color, var(--color-ink-muted));
+  font: 370 17.5px/1.8 'Inter Variable', Inter, sans-serif;
+  letter-spacing: normal;
+  text-wrap: wrap;
+}
+
+.homepage-founder-letter-signature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 29px;
+}
+
+.homepage-founder-letter-signature img {
+  display: block;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--color-edge-muted);
+}
+
+.homepage-founder-letter-author {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-ink-muted);
+}
+
+.homepage-founder-letter-name {
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@media (max-width: 699px) {
+  .homepage-founder-letter {
+    width: min(540px, calc(100% - 32px));
+    margin: 36px auto 48px;
+  }
+
+  .homepage-founder-letter-body {
+    gap: 16px;
+  }
+
+  .homepage-founder-letter-body p {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .homepage-founder-letter-signature {
+    margin-top: 25px;
+  }
+}

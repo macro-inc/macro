@@ -99,6 +99,39 @@ function FixtureLayout(parts: InputLayoutParts) {
   );
 }
 
+/**
+ * The Search field with operators inside a header that clips what overflows
+ * it, as a split header does, over a result its suggestion rows must cover.
+ */
+function OperatorSearchbarFixture() {
+  const [query, setQuery] = createSignal('');
+  const [opened, setOpened] = createSignal(0);
+  return (
+    <div>
+      <div class="relative isolate h-12 overflow-clip border-b border-edge">
+        <div class="flex h-full items-center px-2">
+          <SearchbarInput
+            operators
+            floatingSuggestions
+            label="Operator search"
+            value={query()}
+            onChange={setQuery}
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        class="block h-60 w-full text-left"
+        onClick={() => setOpened((count) => count + 1)}
+      >
+        First result
+      </button>
+      <output data-testid="operator-query">{query()}</output>
+      <output data-testid="opened-results">{opened()}</output>
+    </div>
+  );
+}
+
 function SearchbarFixture() {
   const [query, setQuery] = createSignal('');
   const [changes, setChanges] = createSignal(0);
@@ -764,6 +797,11 @@ export function UniversalInputFixture(
                 </Show>
                 <Show when={!props.embedded && params.has('searchbar')}>
                   <SearchbarFixture />
+                </Show>
+                <Show
+                  when={!props.embedded && params.has('operator-searchbar')}
+                >
+                  <OperatorSearchbarFixture />
                 </Show>
                 <Show when={!props.embedded && params.has('pagination')}>
                   <PaginationFixture short={params.has('short')} />

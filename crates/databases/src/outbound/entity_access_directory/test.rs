@@ -50,6 +50,7 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 async fn create_database(pool: &PgPool, owner: &MacroUserIdStr<'static>) -> Database {
     PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
         .create_database(
+            models_databases::DatabaseId::new(),
             &CreateDatabase {
                 name: "Offsite".to_string(),
                 owner_id: owner.clone(),
@@ -57,6 +58,7 @@ async fn create_database(pool: &PgPool, owner: &MacroUserIdStr<'static>) -> Data
                 first_table: None,
             },
             FirstTable {
+                ids: None,
                 name: "Table 1".into(),
                 title_column: "Name",
             },
