@@ -2661,7 +2661,10 @@ export type UnifiedSearchRequest = {
      * address; `in:#` a channel name; and, beside `type:channel` or
      * `type:call`, `from:` a sender or speaker. `OR` between two of the
      * same operator joins them (`tag:a OR tag:b`); repeated without it,
-     * each must hold. Operators with no word beside them search only email.
+     * each must hold, except that two `from:` on calls, and tags joined by
+     * `OR` beside another tag, are refused with a 400. Only a search of
+     * email alone runs on operators with no word beside them; any other is
+     * refused with a 400.
      * When the search reaches email it also reads Gmail's operators:
      * `subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,
      * `signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,
@@ -2669,9 +2672,10 @@ export type UnifiedSearchRequest = {
      * `is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
      * (`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
      * `1y`), and a minus before an operator to leave matching mail out. A
-     * query that types an operator searches email only. A minus before a
-     * word or quoted phrase leaves out mail containing it beside an operator
-     * or in a search of email alone; elsewhere it is part of the word.
+     * query that types one of these Gmail operators searches email only. A
+     * minus before a word or quoted phrase leaves out mail containing it
+     * beside an operator or in a search of email alone; elsewhere it is part
+     * of the word.
      */
     query: string;
     /**

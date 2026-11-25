@@ -108,3 +108,22 @@ async fn names_resolve_to_the_viewers_own_tags_and_inboxes(pool: PgPool) {
         "an inbox the viewer doesn't read"
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("operator_names", "operator_names_crowded")
+    )
+)]
+async fn a_channel_name_reaches_past_newer_groups_named_otherwise(pool: PgPool) {
+    let found = source(pool)
+        .channels_named(&viewer(), "ana lima", 20)
+        .await
+        .unwrap();
+
+    assert!(
+        found.contains(&"d5000000-0000-0000-0000-0000000000ff".parse().unwrap()),
+        "25 newer groups of Ana and someone else fill the first page: {found:?}"
+    );
+}

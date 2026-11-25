@@ -210,8 +210,10 @@ per-entity-type search plus a unified search across them — mounted into
   `unattended` for calls), `priority:`, `assignee:` and `author:` narrow to
   tasks (`author:` beside `type:doc` to documents); `tag:` to the tagged
   kinds; `inbox:<address>` to email; `in:#<channel>` (the whole name the
-  caller sees, DMs left out) to channels and calls, and in a search that
-  reaches neither it stays Mail's label operator; `from:` is the email
+  caller sees, DMs left out, reading up to `MAX_CANDIDATE_PAGES` pages of
+  candidates since an unnamed group matches by one member's name) to
+  channels and calls, and where the request or the other operators leave
+  neither it stays Mail's label operator; `from:` is the email
   operator unless `type:` leaves email out and names channels or calls,
   where it names senders and speakers, and then channel and call names no
   longer match (a name says nothing of who posted or spoke). People are `me`

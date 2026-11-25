@@ -354,8 +354,9 @@ pub(in crate::api::search) struct SearchOperators {
 }
 
 /// Reads the operators out of `terms`. `reaches_channels` says whether the
-/// search can reach channels or calls; without them `in:#` names a Mail
-/// label, which the email operators read.
+/// request can reach channels or calls. `in:#` names channels only while the
+/// other operators leave channels or calls to search too; otherwise it is a
+/// Mail label, which the email operators read.
 pub(in crate::api::search) fn read_search_operators(
     terms: Vec<String>,
     reaches_channels: bool,
@@ -373,6 +374,19 @@ pub(in crate::api::search) fn read_search_operators(
     let reads_from = types.is_some_and(|types| {
         !types.has(Kinds::EMAIL) && types.has(Kinds::CHANNELS.or(Kinds::CALLS))
     });
+    let narrowed = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Operator(group)
+                if !matches!(group.name, Name::Type | Name::Channel)
+                    && readable(group, reads_from, false) =>
+            {
+                Some(narrowed_by(group, types))
+            }
+            _ => None,
+        })
+        .fold(types.unwrap_or(Kinds::ALL), Kinds::and);
+    let reads_channels = reaches_channels && narrowed.has(Kinds::CHANNELS.or(Kinds::CALLS));
 
     let mut read = SearchOperators {
         types,
@@ -381,7 +395,7 @@ pub(in crate::api::search) fn read_search_operators(
     for entry in entries {
         match entry {
             Entry::Word(word) => read.terms.push(word),
-            Entry::Operator(group) if readable(&group, reads_from, reaches_channels) => {
+            Entry::Operator(group) if readable(&group, reads_from, reads_channels) => {
                 read.operators += group.values.len();
                 read.groups.push(group);
             }
@@ -391,12 +405,21 @@ pub(in crate::api::search) fn read_search_operators(
     read
 }
 
+/// The kinds `group` narrows a search to: those it applies to when `type:`
+/// names kinds, else those it implies.
+fn narrowed_by(group: &Group, types: Option<Kinds>) -> Kinds {
+    match types {
+        Some(_) => group.applies(),
+        None => group.implied(),
+    }
+}
+
 /// Whether `group` can apply. A call has one status, so two different call
 /// statuses joined by `OR` name no filter and stay words.
-fn readable(group: &Group, reads_from: bool, reaches_channels: bool) -> bool {
+fn readable(group: &Group, reads_from: bool, reads_channels: bool) -> bool {
     match group.name {
         Name::From => reads_from,
-        Name::Channel => reaches_channels,
+        Name::Channel => reads_channels,
         Name::Status => group.call_statuses().len() <= 1,
         _ => true,
     }
@@ -422,10 +445,7 @@ impl SearchOperators {
     fn kinds(&self) -> Kinds {
         let mut kinds = self.types.unwrap_or(Kinds::ALL);
         for group in self.groups.iter().filter(|group| group.name != Name::Type) {
-            kinds = kinds.and(match self.types {
-                Some(_) => group.applies(),
-                None => group.implied(),
-            });
+            kinds = kinds.and(narrowed_by(group, self.types));
         }
         kinds
     }

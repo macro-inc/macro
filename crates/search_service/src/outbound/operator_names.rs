@@ -23,6 +23,9 @@ const NAMED_CHANNEL_TYPES: [ChannelType; 3] =
 #[cfg(test)]
 mod test;
 
+/// Most pages of candidates one channel name reads.
+const MAX_CANDIDATE_PAGES: usize = 5;
+
 pub(crate) struct OperatorNamesPgSource {
     pub db: ReadOnlyPool,
 }
@@ -59,34 +62,43 @@ impl OperatorNameSource for OperatorNamesPgSource {
         limit: usize,
     ) -> Result<Vec<Uuid>, Report> {
         let patterns = [format!("^{}$", escape_regex(name))];
-        let matches = match_channel_names(
-            &self.db,
-            ChannelNameSearch {
-                viewer_user_id: MacroUserIdStr(user.clone()),
-                patterns: &patterns,
-                regex_patterns: true,
-                channel_ids: &[],
-                channel_types: &NAMED_CHANNEL_TYPES,
-                after: None,
-                limit: i64::try_from(limit).unwrap_or(i64::MAX),
-            },
-        )
-        .await
-        .map_err(|error| rootcause::report!("{error:#}"))?;
-        // An unnamed group matches by any one member's name; keep only the
-        // channels whose whole name, as the caller sees it, is `name`.
-        let ids: Vec<Uuid> = matches.into_iter().map(|hit| hit.channel_id).collect();
-        let names = batch_resolve_channel_names(&self.db, &ids, MacroUserIdStr(user.clone()))
+        let page_size = i64::try_from(limit).unwrap_or(i64::MAX);
+        let wanted = name.to_lowercase();
+        let mut named = Vec::new();
+        let mut after = None;
+        // An unnamed group matches by any one member's name, so a page can
+        // hold channels whose whole name, as the caller sees it, isn't
+        // `name`; read on until `limit` channels have it or none are left.
+        for _ in 0..MAX_CANDIDATE_PAGES {
+            let page = match_channel_names(
+                &self.db,
+                ChannelNameSearch {
+                    viewer_user_id: MacroUserIdStr(user.clone()),
+                    patterns: &patterns,
+                    regex_patterns: true,
+                    channel_ids: &[],
+                    channel_types: &NAMED_CHANNEL_TYPES,
+                    after,
+                    limit: page_size,
+                },
+            )
             .await
             .map_err(|error| rootcause::report!("{error:#}"))?;
-        let wanted = name.to_lowercase();
-        Ok(ids
-            .into_iter()
-            .filter(|id| {
+            let ids: Vec<Uuid> = page.iter().map(|hit| hit.channel_id).collect();
+            let names = batch_resolve_channel_names(&self.db, &ids, MacroUserIdStr(user.clone()))
+                .await
+                .map_err(|error| rootcause::report!("{error:#}"))?;
+            named.extend(ids.into_iter().filter(|id| {
                 names
                     .get(id)
                     .is_some_and(|shown| shown.to_lowercase() == wanted)
-            })
-            .collect())
+            }));
+            if named.len() >= limit || page.len() < limit {
+                break;
+            }
+            after = page.last().map(|hit| (hit.updated_at, hit.channel_id));
+        }
+        named.truncate(limit);
+        Ok(named)
     }
 }

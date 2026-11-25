@@ -274,6 +274,23 @@ fn in_hash_names_a_label_in_a_search_that_cannot_reach_channels() {
 }
 
 #[test]
+fn in_hash_names_a_label_where_the_other_operators_leave_only_email() {
+    for query in [
+        "type:email in:#travel lunch",
+        "inbox:ana@example.com in:#travel lunch",
+    ] {
+        let (filters, read, _) = apply(query);
+
+        assert!(
+            read.terms.contains(&"in:#travel".to_string()),
+            "{query}: {:?}",
+            read.terms
+        );
+        assert_eq!(kinds(&filters), ["emails"], "{query}");
+    }
+}
+
+#[test]
 fn named_operators_narrow_to_the_kinds_they_apply_to() {
     let (filters, read, _) = apply("tag:finance launch");
     assert_eq!(
