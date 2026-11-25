@@ -125,6 +125,11 @@ export async function fetchContactReferencePage(
     },
   };
 }
+/** Named people across the directory: the fixture's directory is the rows it
+ * registered, which the cache already searches, so the server names nobody. */
+export async function fetchContactNamedPeople() {
+  return { user: { id: VIEWER, contactsNamedBy: [] } };
+}
 /** The server fallback page; this fixture's contacts are all local. */
 export async function fetchContactDirectoryPage(
   _variables: unknown,

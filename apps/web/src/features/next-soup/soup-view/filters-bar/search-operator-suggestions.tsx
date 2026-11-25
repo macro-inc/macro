@@ -42,7 +42,7 @@ export function SearchOperatorSuggestions(props: {
       id={props.listId}
       role="listbox"
       aria-label={t('searchOperators.suggestions')}
-      class="menu-surface absolute top-full left-0 z-item-options-menu mt-1 flex w-full min-w-64 max-w-md flex-col rounded-xl p-1"
+      class="menu-surface flex w-full min-w-64 max-w-md flex-col rounded-xl p-1"
     >
       <For each={props.rows}>
         {(row, index) => (

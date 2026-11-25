@@ -195,6 +195,8 @@ export interface SoupViewContextValues {
   initialize: (options?: SoupViewInitializeOptions) => void;
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
+  /** Search has nothing to search for yet, such as an operator half typed. */
+  searchAwaitingInput: Accessor<boolean>;
   setSearchText: (value: string) => void;
   /** What openers' tokens in the Search query stand for, by id. */
   searchBindings: Accessor<SearchOperatorBinding[]>;
@@ -1783,6 +1785,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     items,
     rows: soup.rows,
     searchText: search.searchText,
+    searchAwaitingInput,
     setSearchText: search.setSearchText,
     searchBindings,
     setSearchBindings,
