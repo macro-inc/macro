@@ -16,6 +16,7 @@ mod outlook_import;
 mod outlook_subscriptions;
 mod poll_schedule;
 mod projection_retries;
+mod reauthorization;
 mod retries;
 mod unstorable_values;
 
