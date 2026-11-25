@@ -2814,7 +2814,12 @@ titles/times. Only the active composer is mounted. A single email or event has n
 deck header, position counter, navigation, or batch action.
 Navigation and batch submission save the visible editor first. Completed and
 dismissed items stay in the stack, with their saved state. Calendar cards reuse
-the existing event composer and offer **Create all** for a batch. Questions keep
+the existing event composer and offer **Create all** for a batch. Once an item's
+event is created (from the card or by the agent after approval), its preview
+draws that event, in its calendar's color, in the draft's place once an
+occurrence of it loads in the preview's window. Until then, or if the event
+moved out of that window, the draft stays; a dismissed or failed item keeps the
+draft too. Questions keep
 the existing ACP `AskUser` interaction. Batch submission checks every selected
 draft before starting any sends/creates, and waits for attachments still
 uploading in the active email.
@@ -2910,7 +2915,8 @@ the existing card without adding a second timeline row when that card is
 already in the thread. Import reviews add "Import plan ready" with the plan's
 counts once planning finishes, and settle as "Import finished", "Import
 failed" or "Import cancelled" with imported, failed and by-hand counts.
-Linear and Jira imports name their tracker ("Linear import plan ready · 40
+If database copies stopped partway through, the row also shows how many
+database rows survived. Linear and Jira imports name their tracker ("Linear import plan ready · 40
 tasks · 3 projects", "Jira import finished"). The row never shows the
 report's error text. The row stays on one line and
 truncates on phones.

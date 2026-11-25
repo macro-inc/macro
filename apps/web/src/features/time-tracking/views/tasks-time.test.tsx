@@ -1,3 +1,4 @@
+import { PROPERTY_OPTION_IDS } from '@property/identifiers';
 import type {
   TimeEntryFieldsFragment,
   TimeSummaryFieldsFragment,
@@ -16,6 +17,7 @@ import { ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../context/time-tracking-context';
 import type { RunningTimerState } from '../primitives/running-timer';
+import * as reportTaskModule from '../queries/report-task';
 import * as summaryModule from '../queries/time-summary';
 import { reportTask, TEST_TASK_PARTS } from '../tests/report-task';
 import { TasksTimeDesktop } from './tasks-time';
@@ -89,7 +91,57 @@ const day = (date: string): Key => ({
   task: null,
 });
 
-const summaryState = vi.hoisted(() => ({ withoutTaskA: false }));
+const summaryState = vi.hoisted(() => ({
+  withoutTaskA: false,
+  withTaskB: false,
+}));
+
+/** Tasks read on their own, in the order the sheet asked for them. */
+const taskReads = vi.hoisted(() => [] as string[]);
+vi.mock('../queries/report-task', async () => {
+  const { createMemo, createSignal } = await import('solid-js');
+  const { PROPERTY_OPTION_IDS } = await import('@property/identifiers');
+  const { reportTask } = await import('../tests/report-task');
+  const [answered, setAnswered] = createSignal(true);
+  return {
+    /** Whether reads have answered yet; true unless a test holds them back. */
+    setReadsAnswered: setAnswered,
+    createReportTaskQuery: (taskId: () => string | undefined) => {
+      const id = createMemo(() => {
+        const value = taskId();
+        if (value) taskReads.push(value);
+        return value;
+      });
+      return () =>
+        answered() && id() === 'task-b'
+          ? reportTask('task-b', 'Review the plan', {
+              status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+              priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+            })
+          : undefined;
+    },
+  };
+});
+const setReadsAnswered = (value: boolean) =>
+  (
+    reportTaskModule as unknown as { setReadsAnswered(value: boolean): void }
+  ).setReadsAnswered(value);
+
+const taskBGroup = () => ({
+  key: {
+    by: 'TASK' as const,
+    userId: null,
+    taskId: 'task-b',
+    date: null,
+    task: reportTask('task-b', 'Review the plan', {
+      status: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+      priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+    }),
+  },
+  minutes: 15,
+  taskCount: 1,
+  rows: [{ key: day('2026-11-24'), minutes: 15 }],
+});
 
 function summaryFor(input: TimeSummaryInput): TimeSummaryFieldsFragment {
   if (input.scope === 'MINE' && summaryState.withoutTaskA)
@@ -148,6 +200,7 @@ function summaryFor(input: TimeSummaryInput): TimeSummaryFieldsFragment {
               { key: day('2026-11-29'), minutes: 15 },
             ],
           },
+          ...(summaryState.withTaskB ? [taskBGroup()] : []),
         ];
   return {
     from: input.from,
@@ -190,9 +243,18 @@ const bumpSummary = () =>
 
 beforeEach(() => {
   log.mockResolvedValue(ok({ kind: 'committed', data: undefined }));
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   log.mockReset();
   update.mockReset();
   refetch.mockClear();
@@ -203,7 +265,10 @@ afterEach(() => {
   taskTime.refetch.mockClear();
   taskTime.hasOlder = false;
   summaryState.withoutTaskA = false;
+  summaryState.withTaskB = false;
   inputs.length = 0;
+  taskReads.length = 0;
+  setReadsAnswered(true);
 });
 
 function renderWeek(
@@ -225,6 +290,7 @@ function renderWeek(
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 1 }}
         showWeekends={() => options.showWeekends ?? false}
         person={(userId) => <span>{userId}</span>}
+        entryPerson={{ avatar: () => null, name: (userId) => userId }}
         task={TEST_TASK_PARTS}
         onOpenTask={onOpenTask}
         editAccess={(_taskId, render) =>
@@ -389,7 +455,7 @@ it('opens a task from its name, and from its status and priority', () => {
   });
 });
 
-it('puts a picked task on the sheet and starts a timer on a picked task', async () => {
+it('puts a picked task on the sheet with its status and priority, and starts a timer on a picked task', async () => {
   renderWeek('week');
 
   fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
@@ -401,13 +467,67 @@ it('puts a picked task on the sheet and starts a timer on a picked task', async 
       name: /Review the plan/,
     })
   ).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Status of task-b' })).toBeNull();
+  const lead = screen.getByRole('button', { name: 'Status of task-b' });
+  expect(lead.dataset).toMatchObject({
+    status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+    priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+  });
+  expect(taskReads).toEqual(['task-b']);
 
   fireEvent.click(screen.getByRole('button', { name: 'Start timer' }));
   fireEvent.click(
     await screen.findByRole('button', { name: 'Pick Review the plan' })
   );
   expect(startTimer).toHaveBeenCalledWith('task-b');
+});
+
+it('holds a picked task’s status and priority place, unseen, while the task is read', async () => {
+  setReadsAnswered(false);
+  renderWeek('week');
+  fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Pick Review the plan' })
+  );
+  const row = within(screen.getByRole('table', { name: 'My week' })).getByRole(
+    'row',
+    { name: /Review the plan/ }
+  );
+
+  expect(
+    within(row).queryByRole('button', { name: 'Status of task-b' })
+  ).toBeNull();
+  expect(
+    within(row).getByRole('button', { name: 'Status of task-b', hidden: true })
+  ).toBeTruthy();
+
+  setReadsAnswered(true);
+
+  expect(
+    within(row).getByRole('button', { name: 'Status of task-b' })
+  ).toBeTruthy();
+});
+
+it('keeps a picked task’s status and priority in place when its first time is logged', async () => {
+  renderWeek('week');
+  fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Pick Review the plan' })
+  );
+  const lead = screen.getByRole('button', { name: 'Status of task-b' });
+  expect(lead.dataset.status).toBe(PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS);
+
+  summaryState.withTaskB = true;
+  bumpSummary();
+
+  expect(screen.getByRole('button', { name: 'Status of task-b' })).toBe(lead);
+  expect(lead.dataset).toMatchObject({
+    status: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+    priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+  });
+  expect(
+    screen.getByRole('button', { name: /^Review the plan, Tue, Nov 24: 15m$/ })
+  ).toBeTruthy();
+  expect(taskReads).toEqual(['task-b']);
 });
 
 it('reads Team by person and day, read-only, with weekends when shown', () => {

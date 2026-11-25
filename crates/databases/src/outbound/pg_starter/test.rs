@@ -262,6 +262,7 @@ async fn existing_database_skips_seed_even_after_it_is_deleted(pool: PgPool) {
     let data = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
     let database = data
         .create_database(
+            models_databases::DatabaseId::new(),
             &CreateDatabase {
                 name: "Already mine".into(),
                 owner_id: viewer().user_id,
@@ -269,6 +270,7 @@ async fn existing_database_skips_seed_even_after_it_is_deleted(pool: PgPool) {
                 first_table: None,
             },
             FirstTable {
+                ids: None,
                 name: "Tasks".into(),
                 title_column: "Name",
             },

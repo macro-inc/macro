@@ -662,6 +662,13 @@ impl AccessRepository for MockRepo {
         )
     }
 
+    async fn get_merged_crm_company_ids(
+        &self,
+        _company_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        Ok(Default::default())
+    }
+
     async fn get_crm_contact_access(
         &self,
         _contact_id: &str,

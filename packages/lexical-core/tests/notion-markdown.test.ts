@@ -4,6 +4,7 @@ import type {
   SerializedLexicalNode,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
+import sharedDatabaseGrammar from '../../../crates/import_notion/fixtures/database_occurrences.md?raw';
 import {
   notionMarkdownToLoroSnapshot,
   notionMarkdownToSerializedEditorState,
@@ -46,6 +47,198 @@ function convert(markdown: string): Node[] {
   return blocks(notionMarkdownToSerializedEditorState(markdown, LINKS));
 }
 
+it('uses the shared Rust fixture without drifting inline or self-closing ordinals', () => {
+  const markdown = sharedDatabaseGrammar;
+  const state = notionMarkdownToSerializedEditorState(markdown, {
+    pages: {},
+    users: {},
+    databases: [0, 1, 2, 3, 4].map((ordinal) => ({
+      containerId: 'd9824bdc84454327be8b5b47500af6ce',
+      ordinal,
+      target: {
+        databaseId: 'database-1',
+        tableId: 'table-1',
+        viewId: `view-${ordinal}`,
+      },
+    })),
+  });
+  const cards = blocks(state).filter((node) => node.type === 'document-card');
+  expect(cards.map((node) => node.documentName)).toEqual([
+    'External tasks',
+    'External tasks again',
+    'Mid-line tasks',
+    'Self-closing tasks',
+    'Final tasks',
+  ]);
+  expect(cards.map((node) => node.blockParams)).toEqual(
+    [0, 1, 2, 3, 4].map((ordinal) => ({
+      tableId: 'table-1',
+      viewId: `view-${ordinal}`,
+    }))
+  );
+});
+
+// Enhanced markdown fixture: Notion-Version 2026-03-11, documented at
+// https://developers.notion.com/guides/data-apis/enhanced-markdown#page-and-database-references
+// IDs are synthetic; replace/extend with captured workspace responses later.
+it('places an imported database card between the surrounding page blocks', () => {
+  const state = notionMarkdownToSerializedEditorState(
+    'Before\n<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Tasks</database>\nAfter',
+    {
+      pages: {},
+      users: {},
+      databases: [
+        {
+          containerId: '11111111111141118111111111111111',
+          ordinal: 0,
+          target: {
+            databaseId: 'database-1',
+            tableId: 'table-1',
+            viewId: 'view-1',
+          },
+        },
+      ],
+    }
+  );
+  expect(state.root.children.map((node) => node.type)).toEqual([
+    'paragraph',
+    'document-card',
+    'paragraph',
+  ]);
+  expect(state.root.children[1]).toMatchObject({
+    documentId: 'database-1',
+    documentName: 'Tasks',
+    blockName: 'database',
+    blockParams: { tableId: 'table-1', viewId: 'view-1' },
+  });
+  expect(text(state.root.children[0])).toBe('Before');
+  expect(text(state.root.children[2])).toBe('After');
+});
+
+it('keeps repeated linked placements on one database with distinct views through nested containers', () => {
+  const state = notionMarkdownToSerializedEditorState(
+    '<database url="https://www.notion.so/11111111-1111-4111-8111-111111111111" inline="true">First</database>\n<columns>\n<column>\n<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Second</database>\n</column>\n</columns>',
+    {
+      pages: {},
+      users: {},
+      databases: [
+        {
+          containerId: '11111111111141118111111111111111',
+          ordinal: 0,
+          target: { databaseId: 'db', tableId: 'table', viewId: 'first' },
+        },
+        {
+          containerId: '11111111111141118111111111111111',
+          ordinal: 1,
+          target: { databaseId: 'db', tableId: 'table', viewId: 'second' },
+        },
+      ],
+    }
+  );
+  expect(state.root.children).toHaveLength(2);
+  expect(state.root.children[0]).toMatchObject({
+    type: 'document-card',
+    documentId: 'db',
+    blockParams: { tableId: 'table', viewId: 'first' },
+  });
+  expect(state.root.children[1]).toMatchObject({
+    type: 'document-card',
+    documentId: 'db',
+    blockParams: { tableId: 'table', viewId: 'second' },
+  });
+});
+
+it('keeps named reason-specific links for failed placements even if the container is in the page map', () => {
+  const state = notionMarkdownToSerializedEditorState(
+    '<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Private tasks</database>\n<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Deleted tasks</database>\n<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Skipped tasks</database>',
+    {
+      pages: {
+        '11111111111141118111111111111111': {
+          documentId: 'page',
+          name: 'Page',
+        },
+      },
+      users: {},
+      databases: [
+        {
+          containerId: '11111111111141118111111111111111',
+          ordinal: 0,
+          target: { reason: 'noAccess' },
+        },
+        {
+          containerId: '11111111111141118111111111111111',
+          ordinal: 1,
+          target: { reason: 'notFound' },
+        },
+        {
+          containerId: '11111111111141118111111111111111',
+          ordinal: 2,
+          target: { reason: 'notImported' },
+        },
+      ],
+    }
+  );
+  expect(blocks(state).map(text)).toEqual([
+    'Private tasks (no access)',
+    'Deleted tasks (not found)',
+    'Skipped tasks (not imported)',
+  ]);
+  for (const paragraph of state.root.children) {
+    expect(children(paragraph)[0]).toMatchObject({
+      type: 'link',
+      url: 'https://www.notion.so/11111111111141118111111111111111',
+    });
+  }
+});
+
+it('does not count database markup in code as a placement and allows the default view', async () => {
+  const markdown =
+    '```html\n<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Example</database>\n```\n<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Tasks</database>';
+  const links = {
+    pages: {},
+    users: {},
+    databases: [
+      {
+        containerId: '11111111111141118111111111111111',
+        ordinal: 0,
+        target: { databaseId: 'db', tableId: 'table' },
+      },
+    ],
+  };
+  const state = notionMarkdownToSerializedEditorState(markdown, links);
+  expect(state.root.children[0].type).toBe('custom-code');
+  expect(state.root.children[1]).toMatchObject({
+    type: 'document-card',
+    documentId: 'db',
+    blockParams: { tableId: 'table' },
+  });
+  const snapshot = await notionMarkdownToLoroSnapshot(markdown, links);
+  expect(snapshot.snapshot.byteLength).toBeGreaterThan(0);
+  expect(snapshot.markdown).toContain('<m-document-card>');
+  expect(snapshot.markdown).toContain('"tableId":"table"');
+});
+
+it('uses the container path rather than a view query parameter to resolve a placement', () => {
+  const state = notionMarkdownToSerializedEditorState(
+    '<database url="https://www.notion.so/Tasks-11111111111141118111111111111111?v=22222222222242228222222222222222" inline="true">Tasks</database>',
+    {
+      pages: {},
+      users: {},
+      databases: [
+        {
+          containerId: '11111111111141118111111111111111',
+          ordinal: 0,
+          target: { databaseId: 'db', tableId: 'table' },
+        },
+      ],
+    }
+  );
+  expect(state.root.children[0]).toMatchObject({
+    type: 'document-card',
+    documentId: 'db',
+  });
+});
+
 describe('Notion markdown to Lexical', () => {
   it('turns a mapped page mention into a document mention', () => {
     const [paragraph] = convert(
@@ -82,6 +275,62 @@ describe('Notion markdown to Lexical', () => {
       url: 'https://www.notion.so/1111111111111111111111111111aaaa',
     });
     expect(text(link)).toBe('Elsewhere');
+  });
+
+  it.each([
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7',
+    'https://notion.so/3fb60732-3e2e-8062-9886-fc0c028d50a7',
+    'https://www.notion.so/?p=3fb607323e2e80629886fc0c028d50a7',
+  ])(
+    'rewrites an ordinary link to an exactly mapped Notion page (%s)',
+    (url) => {
+      const [paragraph] = convert(`[Quarterly plan](${url})`);
+      const [link] = children(paragraph);
+      expect(link.type).toBe('link');
+      expect(link.url).toEqual(expect.any(String));
+      expect(new URL(String(link.url), 'https://macro.com').pathname).toBe(
+        '/app/md/0e5b6a2c-7c39-4a63-9a0c-5c1f2f6c0001'
+      );
+      expect(text(link)).toBe('Quarterly plan');
+    }
+  );
+
+  it.each([
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7#12345678123412341234123456789abc',
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7?p=11111111111141118111111111111111',
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7-extra',
+    'https://www.notion.so.example.test/Roadmap-3fb607323e2e80629886fc0c028d50a7',
+    'https://example.test/?p=3fb607323e2e80629886fc0c028d50a7',
+    'https://www.notion.so/11111111111141118111111111111111',
+  ])('keeps the original URL of an unverified Notion mention (%s)', (url) => {
+    const [paragraph] = convert(
+      `<mention-page url="${url}">Reference</mention-page>`
+    );
+    const [link] = children(paragraph);
+    expect(link).toMatchObject({ type: 'link', url });
+    expect(text(link)).toBe('Reference');
+  });
+
+  it('keeps an unverified database view link when its view ID matches a page mapping', () => {
+    const url =
+      'https://www.notion.so/Work-Board-11111111111141118111111111111111?v=3fb607323e2e80629886fc0c028d50a7';
+    const [paragraph] = convert(
+      `See <mention-database url="${url}">Work Board</mention-database>.`
+    );
+    expect(children(paragraph)[1]).toMatchObject({ type: 'link', url });
+    expect(text(children(paragraph)[1])).toBe('Work Board');
+  });
+
+  it('leaves a mapped Notion link literal inside inline and fenced code', () => {
+    const markdownLink =
+      '[Roadmap](https://www.notion.so/3fb607323e2e80629886fc0c028d50a7)';
+    const [paragraph, codeBlock] = convert(
+      `\`${markdownLink}\`\n\n\`\`\`md\n${markdownLink}\n\`\`\``
+    );
+    const [inlineCode] = children(paragraph);
+    expect(inlineCode).toMatchObject({ type: 'text', text: markdownLink });
+    expect(codeBlock.type).toBe('custom-code');
+    expect(text(codeBlock)).toBe(markdownLink);
   });
 
   it('turns a matched person into a user mention and anyone else into text', () => {
@@ -258,7 +507,12 @@ After outer`);
     expect(
       nodes.map((node) => children(node).map((child) => child.type))
     ).toEqual([['document-mention'], ['link'], [], ['link']]);
-    expect(nodes.map(text)).toEqual(['', 'Bookmark', '', 'Bugs']);
+    expect(nodes.map(text)).toEqual([
+      '',
+      'Bookmark',
+      '',
+      'Bugs (unresolved database)',
+    ]);
   });
 
   it('keeps span text, applies underline, and drops block attributes', () => {
