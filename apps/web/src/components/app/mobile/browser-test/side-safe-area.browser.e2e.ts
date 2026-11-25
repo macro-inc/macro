@@ -132,16 +132,37 @@ test('turning the phone over moves the column fade to the other side', async ({
   await expect(page.locator('[data-mobile-top-edge-fade-column]')).toHaveCount(
     1
   );
-  // The pane keeps its size and only moves, so nothing resizes.
+  // The frame's padding swaps sides: the pane keeps its size and only moves.
   await page.evaluate((inset) => {
     const style = document.documentElement.style;
     style.setProperty('--safe-right', '0px');
     style.setProperty('--safe-left', `${inset}px`);
-    window.dispatchEvent(new Event('orientationchange'));
   }, SAFE_RIGHT);
   await expect(page.locator('[data-mobile-top-edge-fade-column]')).toHaveCount(
     1
   );
+  const column = await rect(page, '[data-mobile-top-edge-fade-column]');
+  expect(column?.left).toBe(0);
+  expect(column?.width).toBe(SAFE_RIGHT);
+});
+
+test('a pane sliding back into place picks the column fade back up', async ({
+  page,
+}) => {
+  await page.goto(`/side-safe-area.html?safeLeft=${SAFE_RIGHT}`);
+  await scrollUp(page);
+  const columns = page.locator('[data-mobile-top-edge-fade-column]');
+  await expect(columns).toHaveCount(1);
+  const slide = (transform: string) =>
+    page.evaluate((transform) => {
+      const pane = document.querySelector<HTMLElement>('[data-pane]');
+      if (pane) pane.style.transform = transform;
+    }, transform);
+  // A swipe back moves the revealed pane with a transform, never resizing it.
+  await slide('translateX(200px)');
+  await expect(columns).toHaveCount(0);
+  await slide('');
+  await expect(columns).toHaveCount(1);
   const column = await rect(page, '[data-mobile-top-edge-fade-column]');
   expect(column?.left).toBe(0);
   expect(column?.width).toBe(SAFE_RIGHT);

@@ -1,15 +1,14 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
-import { makeEventListener } from '@solid-primitives/event-listener';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { autoUpdate } from '@floating-ui/dom';
 import { Layer } from '@ui';
 import {
   type Accessor,
   createEffect,
   createSignal,
   For,
-  on,
+  onCleanup,
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
@@ -77,14 +76,22 @@ function SafeAreaColumnFades(props: {
   const active = () =>
     (panel?.isPanelActive() ?? true) && (region?.isActive() ?? true);
   const [placement, setPlacement] = createSignal<ColumnPlacement>();
-  const measure = () =>
-    setPlacement(active() ? columnPlacement(props.fade()) : undefined);
-  createEffect(on(active, measure));
-  // Folding or a side safe area appearing resize the pane, and with it the
-  // fade. Turning the phone over moves the safe area without a resize.
-  createResizeObserver(props.fade, measure);
-  makeEventListener(window, 'resize', measure, { passive: true });
-  makeEventListener(window, 'orientationchange', measure, { passive: true });
+  createEffect(() => {
+    const fade = props.fade();
+    if (!fade || !active()) {
+      setPlacement(undefined);
+      return;
+    }
+    // Re-measure whenever the fade resizes or moves: folding, a side safe
+    // area appearing, a pane sliding back into place after a swipe, or the
+    // frame's padding swapping sides when the phone turns over.
+    onCleanup(
+      autoUpdate(fade, fade, () => setPlacement(columnPlacement(fade)), {
+        ancestorScroll: false,
+        layoutShift: true,
+      })
+    );
+  });
   return (
     <Show when={placement()}>
       {(columns) => (
