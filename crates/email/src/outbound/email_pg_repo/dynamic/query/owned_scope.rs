@@ -87,8 +87,8 @@ use super::super::SqlFragment;
 use super::super::filters::{
     AddressSuperset, ContactScope, build_address_superset, build_contact_scope,
     build_label_superset, build_label_tree_predicate, build_thread_conjunct_filter,
-    build_thread_conjunct_filter_without_labels, get_sort_timestamp_field,
-    only_address_message_terms, top_level_owners,
+    build_thread_conjunct_filter_without_labels, build_view_thread_filter,
+    get_sort_timestamp_field, only_address_message_terms, top_level_owners,
 };
 use super::{
     QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select_with,
@@ -317,10 +317,29 @@ pub(super) struct OwnedRead<'a> {
     walked_match: Option<SqlFragment>,
 }
 
+/// Views other than All Mail a label read walks: each sorts by a thread
+/// column with an index in that order per inbox, and restricts threads only
+/// through [`build_view_thread_filter`] and the preview pick. Spam and Trash
+/// sort by their folder's own date, and a user-label view by its label.
+fn walks_threads(view: &PreviewView) -> bool {
+    matches!(
+        view,
+        PreviewView::StandardLabel(
+            PreviewViewStandardLabel::Inbox
+                | PreviewViewStandardLabel::Sent
+                | PreviewViewStandardLabel::Drafts
+                | PreviewViewStandardLabel::Starred
+                | PreviewViewStandardLabel::Important
+                | PreviewViewStandardLabel::Other
+        )
+    )
+}
+
 impl<'a> OwnedRead<'a> {
     /// A read for an owned All Mail request whose filter has one positive
-    /// OR-tree of addresses among its top-level terms; other requests get
-    /// their params back.
+    /// OR-tree of addresses among its top-level terms, or for an owned
+    /// request on a view sorted by a thread column whose filter has one
+    /// positive OR-tree of labels; other requests get their params back.
     pub(super) fn new(
         view: &'a PreviewView,
         email_filter: &'a Expr<EmailLiteral>,
@@ -332,10 +351,12 @@ impl<'a> OwnedRead<'a> {
         // drop most of the inbox window in the preview pick, which the probe
         // can't foresee: the read would walk the window and then read the
         // superset, slower than the general builder's one statement.
-        let covered = matches!(
+        let all = matches!(
             view,
             PreviewView::StandardLabel(PreviewViewStandardLabel::All)
-        ) && params.team_id.is_none()
+        );
+        let covered = (all || walks_threads(view))
+            && params.team_id.is_none()
             && !uses_view_history(email_filter, &params.sort_method_str)
             && matches!(params.shared, SharedEmailFilter::Exclude)
             && params.project_scope.is_none()
@@ -350,7 +371,7 @@ impl<'a> OwnedRead<'a> {
             .copied()
             .filter(|inbox| owners.iter().all(|owner| owner == inbox))
             .collect();
-        let addresses = only_address_message_terms(email_filter)
+        let addresses = (all && only_address_message_terms(email_filter))
             .then(|| {
                 build_address_superset(
                     email_filter,
@@ -372,7 +393,14 @@ impl<'a> OwnedRead<'a> {
                 Some(superset) => (
                     superset,
                     tuning.for_labels(),
-                    build_thread_conjunct_filter_without_labels(email_filter, sort_ts_field),
+                    {
+                        let mut terms = build_view_thread_filter(view);
+                        terms.extend(build_thread_conjunct_filter_without_labels(
+                            email_filter,
+                            sort_ts_field,
+                        ));
+                        terms
+                    },
                     Some(build_label_tree_predicate(email_filter, sort_ts_field)),
                 ),
                 None => return Err(Box::new(params)),
@@ -397,6 +425,7 @@ impl<'a> OwnedRead<'a> {
         name = "email.owned_address_read",
         skip_all,
         fields(
+            view = %self.view,
             inboxes = self.inboxes.len(),
             superset_rows = Empty,
             streams = Empty,

@@ -217,6 +217,87 @@ async fn a_spent_walk_budget_says_where_the_list_goes_on(
     Ok(())
 }
 
+/// A label on another tab walks that tab's threads in its own order and
+/// lists what the general builder lists. Spam and Trash, sorted by their
+/// folder's date, stay on the general builder.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn a_label_on_another_tab_lists_what_the_general_builder_lists(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let owner = inbox_owner(&pool).await;
+    // Work on every message of the odd threads, so each tab lists some.
+    sqlx::query!(
+        "INSERT INTO email_message_labels (message_id, label_id) SELECT m.id, $1 FROM email_messages m JOIN email_threads t ON t.id = m.thread_id WHERE t.link_id = $2 AND right(t.id::text, 1) IN ('1', '3', '5', '7', '9') ON CONFLICT DO NOTHING",
+        Uuid::parse_str(WORK)?,
+        Uuid::parse_str(OWN_INBOX)?,
+    )
+    .execute(&pool)
+    .await?;
+    let read = |view: PreviewViewStandardLabel,
+                filter: Expr<EmailLiteral>,
+                tuning: Option<dynamic::OwnedReadTuning>| {
+        let pool = pool.clone();
+        let owner = owner.clone();
+        async move {
+            let view = PreviewView::StandardLabel(view);
+            let query = Query::new(None, SimpleSortMethod::UpdatedAt, Arc::new(filter));
+            let (rows, stats) = dynamic::dynamic_email_thread_cursor_owned_with(
+                &pool,
+                &[Uuid::parse_str(OWN_INBOX)?],
+                50,
+                &view,
+                query,
+                owner.as_ref(),
+                None,
+                tuning,
+            )
+            .await?;
+            anyhow::Ok((
+                rows.iter()
+                    .map(|row| row.id.to_string())
+                    .collect::<Vec<_>>(),
+                stats,
+            ))
+        }
+    };
+    let filters = || {
+        [
+            label(WORK),
+            label(IMPORTANT),
+            Expr::or(label(WORK), label(IMPORTANT)),
+        ]
+    };
+    for view in [
+        PreviewViewStandardLabel::Inbox,
+        PreviewViewStandardLabel::Sent,
+        PreviewViewStandardLabel::Drafts,
+        PreviewViewStandardLabel::Starred,
+        PreviewViewStandardLabel::Important,
+        PreviewViewStandardLabel::Other,
+    ] {
+        for filter in filters() {
+            let (general, _) = read(view.clone(), filter.clone(), None).await?;
+            let (walking, stats) = read(view.clone(), filter.clone(), Some(WALK)).await?;
+            assert!(
+                stats.is_some(),
+                "{view:?} {filter:?} took the general builder"
+            );
+            assert_eq!(walking, general, "{view:?} {filter:?}");
+        }
+    }
+    for view in [
+        PreviewViewStandardLabel::Spam,
+        PreviewViewStandardLabel::Trash,
+    ] {
+        let (_, stats) = read(view.clone(), label(WORK), Some(WALK)).await?;
+        assert!(stats.is_none(), "{view:?} took the walk");
+    }
+    Ok(())
+}
+
 /// The windows shrink to what is left of the budget, so a request never
 /// walks past it.
 #[sqlx::test(
