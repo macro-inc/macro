@@ -236,15 +236,7 @@ pub async fn merge_entity_values_in(
     )
     .fetch_all(&mut *conn)
     .await?;
-    let unreviewed = sqlx::query_scalar!(
-        r#"SELECT EXISTS (
-               SELECT 1 FROM entity_properties WHERE entity_type = $1 AND entity_id = ANY($2)
-           ) AS "unreviewed!""#,
-        entity_type as EntityType,
-        sources,
-    )
-    .fetch_one(&mut *conn)
-    .await?;
+    let unreviewed = values_remain_in(&mut *conn, entity_type, sources).await?;
 
     let mut merged = MergedEntityValues {
         unreviewed,
@@ -268,6 +260,27 @@ pub async fn merge_entity_values_in(
         })
         .collect();
     Ok(merged)
+}
+
+/// Whether any of `entity_ids` still holds a value. A merge asks after moving
+/// and deleting what it read, and again as its last statement: one attached
+/// since has no writer lock the merge holds, so the merge refuses instead.
+/// Only a value committed between that last check and the merge's own commit
+/// is left on the merged id, as values of a deleted company are today.
+pub async fn values_remain_in(
+    conn: &mut PgConnection,
+    entity_type: EntityType,
+    entity_ids: &[String],
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+               SELECT 1 FROM entity_properties WHERE entity_type = $1 AND entity_id = ANY($2)
+           ) AS "unreviewed!""#,
+        entity_type as EntityType,
+        entity_ids,
+    )
+    .fetch_one(conn)
+    .await
 }
 
 /// The rows outside databases whose entity references name one of

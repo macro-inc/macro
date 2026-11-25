@@ -1013,6 +1013,20 @@ where
         .execute(&mut *tx)
         .await
         .map_err(db)?;
+        // Last, so a value attached while the merge ran is refused rather
+        // than left on an id that no longer names a company.
+        let sources: Vec<String> = command
+            .targets
+            .sources()
+            .iter()
+            .map(Uuid::to_string)
+            .collect();
+        if property_merge::values_remain_in(&mut tx, PropertyEntityType::Company, &sources)
+            .await
+            .map_err(db)?
+        {
+            return Err(MergeError::PreviewStale);
+        }
         tx.commit().await.map_err(db)?;
         Ok(MergeCommitted {
             outcome,
