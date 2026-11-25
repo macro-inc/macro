@@ -62,6 +62,7 @@ async fn empty_ids_only_returns_empty_without_querying_db() {
         },
         "handbook".to_string(),
         &[],
+        &[],
         false,
         10,
         SearchCursorOption::NotDone(None),
