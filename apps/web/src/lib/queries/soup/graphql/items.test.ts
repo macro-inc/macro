@@ -5727,4 +5727,63 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       dispose();
     }
   });
+
+  it('ignores out-of-order currentRevision reads after disable and re-enable', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const staleRead = deferred<string>();
+    const freshRead = deferred<string>();
+    const entityFilter = vi.fn(async () => ({
+      kind: 'reconciled' as const,
+      revision: parseCacheRevision('5'),
+      keys: [],
+      retainedKeys: [],
+      optimistic: false,
+    }));
+    const currentRevision = vi
+      .fn<() => Promise<string>>()
+      .mockImplementationOnce(() => staleRead.promise)
+      .mockImplementationOnce(() => freshRead.promise);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: false,
+      currentRevision,
+      entityFilter,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    const [enabled, setEnabled] = createSignal(true);
+    const { dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(
+        () => ({ sortMethod: 'UPDATED_AT', limit: 20 }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    try {
+      expect(currentRevision).toHaveBeenCalledTimes(1);
+      // Disable and re-enable before the initial currentRevision read settles.
+      setEnabled(false);
+      setEnabled(true);
+      expect(currentRevision).toHaveBeenCalledTimes(2);
+
+      // Network page arrives at revision 5 and the newer read resolves first.
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [{ id: 'fresh' }], next_cursor: null }),
+        { source: 'live-network', revision: '5' }
+      );
+      freshRead.resolve('5');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(entityFilter).not.toHaveBeenCalled();
+
+      // The earlier slow read settles with revision 1 and must not rewind the
+      // current revision behind the authoritative network revision.
+      staleRead.resolve('1');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(entityFilter).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
 });

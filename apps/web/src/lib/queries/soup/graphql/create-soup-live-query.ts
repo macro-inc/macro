@@ -301,7 +301,9 @@ export function createSoupLiveQuery(
     on(getGraphqlSoupCacheHost, (host) => {
       if (!host) return;
       cacheGeneration += 1;
+      let revisionRequest = 0;
       const invalidateGeneration = () => {
+        revisionRequest += 1;
         localRequest += 1;
         setCurrentCacheRevision(undefined);
         setNetworkAuthorityRevision(undefined);
@@ -311,11 +313,13 @@ export function createSoupLiveQuery(
         setLocalMailCurrent(false);
       };
       const observeCurrentRevision = async () => {
+        const request = ++revisionRequest;
         const observedGeneration = cacheGeneration;
         const observedObservation = cacheObservation;
         try {
           const revision = await host.currentRevision();
           if (
+            request === revisionRequest &&
             observedGeneration === cacheGeneration &&
             observedObservation === cacheObservation
           ) {
@@ -368,6 +372,7 @@ export function createSoupLiveQuery(
           );
           fireAndForget(observeCurrentRevision(), 'soup-live-query');
           onCleanup(() => {
+            revisionRequest += 1;
             onGenerationReset = undefined;
             finishStaleFallback(true);
             deferral.dispose();
@@ -376,6 +381,7 @@ export function createSoupLiveQuery(
         })
       );
       onCleanup(() => {
+        revisionRequest += 1;
         finishStaleFallback(true);
         cacheGeneration += 1;
         unsubscribeGeneration();

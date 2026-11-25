@@ -1,5 +1,11 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import { createMemo, createRoot, createSignal, onCleanup } from 'solid-js';
+import {
+  batch,
+  createMemo,
+  createRoot,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() =>
@@ -33,6 +39,10 @@ const createChannelDetailQuery = vi.hoisted(() =>
   }))
 );
 
+const userIdMock = vi.hoisted(() => ({
+  get: (): string => 'user-1',
+}));
+
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery }));
 vi.mock('@queries/channel/detail', () => ({ createChannelDetailQuery }));
 vi.mock('@entity', () => ({
@@ -41,7 +51,7 @@ vi.mock('@entity', () => ({
     entity.type === 'channel_thread',
 }));
 vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'user-1',
+  useUserId: () => () => userIdMock.get(),
   useIsAuthenticated: () => () => true,
 }));
 vi.mock('@queries/client', async () => {
@@ -433,6 +443,153 @@ describe('channels resolved by id', () => {
       setCacheStatus('ready');
       expect(result.isLoading()).toBe(false);
       expect([...result.pendingIds()]).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('clears previously resolved channels on account switch even when the new account has zero IDs', () => {
+    const [userId, setUserId] = createSignal('user-1');
+    userIdMock.get = userId;
+    useSoupAstItemsQuery.mockImplementation(() => ({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      hasPageData: true,
+      hasNextPage: false,
+      data: { entities: [channelEntity('old-account-channel')] },
+    }));
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(['old-account-channel']);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(result.channels().map((ch) => ch.id)).toEqual([
+        'old-account-channel',
+      ]);
+      // Switch account and clear IDs in the same reactive flush so the reset
+      // path executes with nextBatches = [] while nextAccount is still truthy.
+      batch(() => {
+        setUserId('user-2');
+        setIds([]);
+      });
+      expect(result.channels()).toEqual([]);
+    } finally {
+      dispose();
+      userIdMock.get = () => 'user-1';
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('keeps rows from a retired bucket visible during compaction while the receiving query is pending or fails', () => {
+    const batchStates: Array<{
+      pending: ReturnType<typeof createSignal<boolean>>;
+      error: ReturnType<typeof createSignal<Error | undefined>>;
+      entities: ReturnType<typeof createSignal<ChannelEntity[]>>;
+      disposed: boolean;
+    }> = [];
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const initialMatches =
+        JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
+      const pending = createSignal(false);
+      const error = createSignal<Error | undefined>(undefined);
+      const entities = createSignal(
+        initialMatches.map((id) => channelEntity(id))
+      );
+      const state = { pending, error, entities, disposed: false };
+      batchStates.push(state);
+      onCleanup(() => {
+        state.disposed = true;
+      });
+      return {
+        isEnabled: true,
+        get isPending() {
+          return pending[0]();
+        },
+        get isLoading() {
+          return pending[0]();
+        },
+        get isFetching() {
+          return pending[0]();
+        },
+        get fetchError() {
+          return error[0]();
+        },
+        get hasPageData() {
+          return !pending[0]();
+        },
+        hasNextPage: false,
+        get data() {
+          if (pending[0]())
+            throw new Error('A pending query resource was read');
+          return { entities: entities[0]() };
+        },
+      };
+    });
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(initialIds);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(batchStates).toHaveLength(4);
+      expect(result.channels()).toHaveLength(1501);
+
+      // Put all receiving batches into a pending state (simulating a cache miss
+      // for moved IDs) and shrink to 1 surviving ID per bucket so compaction
+      // merges 2 buckets into the remaining 2.
+      for (const state of batchStates) state.pending[1](true);
+      const surviving = ['ch-0000', 'ch-0500', 'ch-1000', 'ch-1500'];
+      setIds(surviving);
+
+      expect(batchStates.filter((s) => s.disposed)).toHaveLength(2);
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // Even if the receiving queries transition from pending to failed,
+      // already-resolved rows stay visible.
+      batch(() => {
+        for (const state of batchStates) {
+          if (state.disposed) continue;
+          state.pending[1](false);
+          state.error[1](new Error('offline'));
+        }
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // Once a receiving query settles authoritatively without error, it owns
+      // the merged IDs and drops any omitted ID.
+      batch(() => {
+        for (const state of batchStates) {
+          if (state.disposed) continue;
+          state.error[1](undefined);
+          state.entities[1](
+            surviving.filter((id) => id !== 'ch-0000').map(channelEntity)
+          );
+        }
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(['ch-0500', 'ch-1000', 'ch-1500']);
     } finally {
       dispose();
       useSoupAstItemsQuery.mockReset();

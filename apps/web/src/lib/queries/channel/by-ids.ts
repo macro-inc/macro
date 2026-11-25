@@ -131,6 +131,8 @@ export function useChannelsByIdsQuery(
 type ChannelBatch = {
   ids: Accessor<readonly string[]>;
   setIds: (next: readonly string[]) => void;
+  absorb: (rows: readonly ChannelEntity[]) => void;
+  snapshotRows: () => ChannelEntity[];
   query: SoupAstItemsQuery;
   channels: Accessor<ChannelEntity[]>;
   unresolved: Accessor<string[]>;
@@ -167,22 +169,7 @@ export function useCachedChannelsByIds(
       const query = useChannelsByIdsQuery(batchIds, () => ({
         cacheFirst: true,
       }));
-      // A refresh must not empty sections that already resolved their members.
-      // Filter to current bucket membership so removed IDs drop immediately.
-      const channels = createMemo<ChannelEntity[]>((previous) => {
-        const activeIds = batchIdSet();
-        if (!queryReadyGate(query)) {
-          return previous.filter((channel) => activeIds.has(channel.id));
-        }
-        return query.data.entities.filter(
-          (entity): entity is ChannelEntity =>
-            isChannelEntity(entity) && activeIds.has(entity.id)
-        );
-      }, []);
-      const unresolved = createMemo(() => {
-        const loaded = new Set(channels().map((channel) => channel.id));
-        return batchIds().filter((id) => !loaded.has(id));
-      });
+      const handoff = new Map<string, ChannelEntity>();
       const error = () => query.fetchError ?? query.error;
       const loading = () =>
         !error() &&
@@ -190,9 +177,57 @@ export function useCachedChannelsByIds(
           query.isFetching ||
           query.hasNextPage ||
           query.cacheStatus === 'loading');
+      // A refresh or compaction handoff must not empty sections that already
+      // resolved their members. Filter to current bucket membership so removed
+      // IDs drop immediately.
+      const channels = createMemo<ChannelEntity[]>((previous) => {
+        const activeIds = batchIdSet();
+        for (const id of handoff.keys()) {
+          if (!activeIds.has(id)) handoff.delete(id);
+        }
+        const mergeHandoff = (rows: ChannelEntity[]) => {
+          if (handoff.size === 0) return rows;
+          const present = new Set(rows.map((row) => row.id));
+          let merged: ChannelEntity[] | undefined;
+          for (const [id, row] of handoff) {
+            if (!present.has(id)) {
+              merged ??= [...rows];
+              merged.push(row);
+            }
+          }
+          return merged ?? rows;
+        };
+        if (!queryReadyGate(query)) {
+          return mergeHandoff(
+            previous.filter((channel) => activeIds.has(channel.id))
+          );
+        }
+        const resolved = query.data.entities.filter(
+          (entity): entity is ChannelEntity =>
+            isChannelEntity(entity) && activeIds.has(entity.id)
+        );
+        for (const channel of resolved) handoff.delete(channel.id);
+        if (handoff.size > 0) {
+          if (loading() || error() || !query.hasPageData) {
+            return mergeHandoff(resolved);
+          }
+          handoff.clear();
+        }
+        return resolved;
+      }, []);
+      const unresolved = createMemo(() => {
+        const loaded = new Set(channels().map((channel) => channel.id));
+        return batchIds().filter((id) => !loaded.has(id));
+      });
+      const absorb = (rows: readonly ChannelEntity[]) => {
+        for (const row of rows) handoff.set(row.id, row);
+      };
+      const snapshotRows = () => [...handoff.values(), ...untrack(channels)];
       return {
         ids: batchIds,
         setIds: setBatchIds,
+        absorb,
+        snapshotRows,
         query,
         channels,
         unresolved,
@@ -219,8 +254,12 @@ export function useCachedChannelsByIds(
       }
 
       // Reset the complete query graph across account or enablement resets.
+      let listChanged = false;
       if (!currentEnabled || currentAccount !== nextAccount) {
-        disposeAll();
+        if (activeBatches.length > 0) {
+          disposeAll();
+          listChanged = true;
+        }
       }
       currentEnabled = nextEnabled;
       currentAccount = nextAccount;
@@ -232,7 +271,6 @@ export function useCachedChannelsByIds(
         nextIds: string[];
         dirty: boolean;
       }> = [];
-      let listChanged = false;
 
       // Keep untouched 500-ID batches intact when individual IDs churn.
       for (const entry of activeBatches) {
@@ -295,6 +333,9 @@ export function useCachedChannelsByIds(
             ...small.bucket.nextIds,
           ].sort();
           target.bucket.dirty = true;
+          // Preserve already-resolved rows from the retired bucket while the
+          // receiving query resolves its merged ID set.
+          target.bucket.entry.absorb(small.bucket.entry.snapshotRows());
           small.bucket.entry.dispose();
           retired.add(small.index);
           listChanged = true;
