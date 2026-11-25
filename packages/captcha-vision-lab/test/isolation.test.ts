@@ -11,7 +11,7 @@ const REPOSITORY = join(PACKAGE, '..', '..');
 
 describe('isolation', () => {
   test('no code outside the lab names it', () => {
-    // Only docs and CI may mention the lab.
+    // Only docs and CI (and the generator of its workflow) may mention the lab.
     const found = Bun.spawnSync(
       [
         'git',
@@ -24,6 +24,7 @@ describe('isolation', () => {
         ':!packages/captcha-vision-lab',
         ':!docs',
         ':!.github',
+        ':!tooling/xtask/crates/xtask_workflows',
       ],
       { cwd: REPOSITORY }
     );
