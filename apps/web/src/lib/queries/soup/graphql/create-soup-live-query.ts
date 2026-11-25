@@ -203,21 +203,20 @@ export function createSoupLiveQuery(
       networkInput() !== undefined
     );
   });
-  // Decided per list and client when it starts to fetch, since a write while
-  // it waited disabled may have made the answer stale. A list reading the
-  // network keeps that policy: a policy change discards loaded pages.
+  // Decided once per list and client, when it first starts to fetch: a write
+  // while it waited disabled may have made the answer stale, and a policy
+  // change afterwards would discard the pages it loaded.
   const freshDecision = createMemo((previous?: FreshDecision) => {
     const key = inputKey();
-    const freshFor = staleTime();
     const client = getGraphqlSoupClient();
+    if (previous?.key === key && previous.client === client) return previous;
     if (!fetches()) return previous;
-    const same = previous?.key === key && previous.client === client;
-    if (same && !previous.fresh) return previous;
+    const freshFor = staleTime();
     const fresh = untrack(
       () =>
         freshFor !== undefined && soupNetworkAnswerFresh(client, key, freshFor)
     );
-    return same && previous.fresh === fresh ? previous : { key, client, fresh };
+    return { key, client, fresh };
   });
   const answeredFresh = () => freshDecision()?.fresh ?? false;
   type ServerProjection = {

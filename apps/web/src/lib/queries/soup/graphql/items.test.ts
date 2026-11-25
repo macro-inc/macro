@@ -2711,6 +2711,24 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       setEnabled(true);
       expect(policies()).not.toContain('cache-first');
       dispose();
+      // A list that took its cached page keeps that policy too, through a
+      // write while disabled: changing it would drop the pages it loaded.
+      const [reading, setReading] = createSignal(true);
+      const cached = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: reading(), staleTime: 60_000 })
+        );
+        return dispose;
+      });
+      const before = policies().length;
+      setReading(false);
+      await refreshActiveGraphqlSoupQueries();
+      setReading(true);
+      expect(new Set(policies().slice(before))).toEqual(
+        new Set(['cache-first'])
+      );
+      cached();
     } finally {
       vi.useRealTimers();
     }
