@@ -21,6 +21,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{Applied, ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::{ComputerResources, ComputerSize};
+use crate::domain::telemetry::invite_purchase_phase;
 
 mod agents;
 pub use agents::PgComputerAgents;
@@ -361,7 +362,7 @@ impl ComputerRepo for PgComputerRepo {
             default_agent_id: None,
             image: None,
         };
-        tx.commit().await?;
+        invite_purchase_phase(reservation.agent.is_some(), "commit", tx.commit()).await?;
         Self::record_setup(&computer, &computer.state, &finished_setup);
         Ok(Some(computer))
     }
