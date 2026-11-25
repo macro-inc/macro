@@ -39,8 +39,32 @@ import {
  */
 const SYNC_RETRY_COUNT = 5;
 const SYNC_RETRY_SCHEDULE = Schedule.exponential('2 seconds');
-/** How long to wait before asking a busy server again (its `Retry-After`). */
+/** How long to wait before asking a busy server again, unless its
+ * `Retry-After` says otherwise. */
 const SYNC_BUSY_PAUSE_MS = 30_000;
+/** The longest a server's `Retry-After` holds the sync back: a user's
+ * hourly stream budget. */
+const SYNC_BUSY_PAUSE_MAX_MS = 60 * 60_000;
+
+/** How long to wait before asking a busy server again. */
+function busyPauseMs(failure: SyncFailure): number {
+  const asked = failure.kind === 'http' ? failure.retryAfterMs : undefined;
+  if (asked === undefined || !Number.isFinite(asked)) return SYNC_BUSY_PAUSE_MS;
+  return Math.min(Math.max(asked, 1_000), SYNC_BUSY_PAUSE_MAX_MS);
+}
+
+/** Runs `attempt` again after each busy answer, as long as the server asks. */
+function retryWhileBusy<A, R>(
+  attempt: Effect.Effect<A, SyncFailure, R>
+): Effect.Effect<A, SyncFailure, R> {
+  return attempt.pipe(
+    Effect.catchIf(isServerBusy, (failure) =>
+      Effect.sleep(busyPauseMs(failure)).pipe(
+        Effect.andThen(Effect.suspend(() => retryWhileBusy(attempt)))
+      )
+    )
+  );
+}
 /**
  * A lane that fails this many times in one pass is left out of that pass's
  * later streams; it resumes from its saved state on the next pass.
@@ -95,8 +119,8 @@ export type StreamedSyncHost = CacheHost & SyncHost;
 /**
  * One stream of `pass`, retried with backoff (except `unsupported`, which a
  * server's refusal of the stream counts as). A busy
- * server is asked again every `SYNC_BUSY_PAUSE_MS` for as long as it stays
- * busy, without spending retries. Every attempt sends the cache's saved lane
+ * server is asked again after its `Retry-After` (`SYNC_BUSY_PAUSE_MS` when it
+ * gives none) for as long as it stays busy, without spending retries. Every attempt sends the cache's saved lane
  * state, from which the server plans it again, so it resumes rather than
  * restarts, and is one span of `trace`. Interrupting it stops the host's run. With `stopAfterMs`, an
  * attempt still running then is stopped (pages written so far are kept) and
@@ -140,10 +164,7 @@ const runSyncStream = (
             Effect.timeoutOption(stopAfterMs),
             Effect.map(Option.flatten)
           ),
-    Effect.retry({
-      schedule: Schedule.spaced(SYNC_BUSY_PAUSE_MS),
-      while: isServerBusy,
-    }),
+    retryWhileBusy,
     Effect.retry({
       times: SYNC_RETRY_COUNT,
       schedule: SYNC_RETRY_SCHEDULE,

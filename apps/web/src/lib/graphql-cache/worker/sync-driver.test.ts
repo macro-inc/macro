@@ -256,6 +256,24 @@ describe('CacheSyncDriver', () => {
     expect(engine.syncFeed).not.toHaveBeenCalled();
   });
 
+  it("carries a refusal's Retry-After seconds", async () => {
+    const engine = fakeEngine([]);
+    const { sync } = driver(
+      engine,
+      vi.fn(
+        async () =>
+          new Response('over budget', {
+            status: 429,
+            headers: { 'retry-after': '1200' },
+          })
+      )
+    );
+    await expect(sync.start(ARGS)).resolves.toMatchObject({
+      ok: false,
+      failure: { kind: 'http', status: 429, retryAfterMs: 1_200_000 },
+    });
+  });
+
   it('allows one run at a time and stops it on request, keeping progress', async () => {
     const engine = fakeEngine([1]);
     let fetched!: () => void;

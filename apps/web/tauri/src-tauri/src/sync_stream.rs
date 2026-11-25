@@ -8,7 +8,7 @@ use graphql_cache_plugin::sync::{
     SyncHttpError, SyncHttpRequest, SyncHttpResponse, SyncResponseBody, SyncStreamOpener,
 };
 use reqwest::cookie::CookieStore;
-use reqwest::header::{CONTENT_ENCODING, HeaderMap, HeaderName, HeaderValue};
+use reqwest::header::{CONTENT_ENCODING, HeaderMap, HeaderName, HeaderValue, RETRY_AFTER};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -66,9 +66,15 @@ impl SyncStreamOpener for CookieSyncOpener {
             .get(CONTENT_ENCODING)
             .and_then(|value| value.to_str().ok())
             .map(str::to_owned);
+        let retry_after_seconds = response
+            .headers()
+            .get(RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.trim().parse().ok());
         Ok(SyncHttpResponse {
             status: response.status().as_u16(),
             content_encoding,
+            retry_after_seconds,
             body: Box::new(ResponseBody(response)),
         })
     }

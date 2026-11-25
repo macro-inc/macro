@@ -247,6 +247,23 @@ describe('runStreamedSync', () => {
     expect(runSyncPass).toHaveBeenCalledTimes(9);
   });
 
+  it("waits as long as a busy server's Retry-After asks", async () => {
+    runSyncPass.mockResolvedValueOnce(complete).mockResolvedValueOnce({
+      ok: false,
+      // The user's stream budget for the hour is spent: 20 minutes left.
+      failure: { kind: 'http', status: 429, retryAfterMs: 20 * 60_000 },
+    });
+    runSyncPass.mockResolvedValueOnce(complete);
+    const run = Effect.runPromise(runStreamedSync(asHost(fakeHost())));
+    await settle(
+      new Promise((resolve) => setTimeout(resolve, 19 * 60_000)),
+      19 * 60
+    );
+    expect(runSyncPass).toHaveBeenCalledTimes(2);
+    await settle(run, 120);
+    expect(runSyncPass).toHaveBeenCalledTimes(3);
+  });
+
   it('still gives up on a second-pass stream that keeps failing', async () => {
     runSyncPass
       .mockResolvedValueOnce(complete)

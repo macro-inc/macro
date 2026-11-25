@@ -98,6 +98,7 @@ impl SyncStreamOpener for FakeOpener {
         Ok(SyncHttpResponse {
             status,
             content_encoding: self.encoding.clone(),
+            retry_after_seconds: None,
             body: Box::new(FakeBody {
                 chunks: chunks.into(),
                 log: self.bodies.clone(),

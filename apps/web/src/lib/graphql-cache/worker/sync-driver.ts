@@ -242,6 +242,13 @@ async function network<T>(request: Promise<T>): Promise<T> {
 }
 
 /** A run stopped by its host: `stop`, an engine drain or a cache reset. */
+/** A `Retry-After` header in seconds, as milliseconds. */
+function retryAfterMsOf(headers: Headers): number | undefined {
+  const value = headers.get('retry-after')?.trim();
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  return Number(value) * 1_000;
+}
+
 export function abortedError(message = 'the sync run was stopped'): Error {
   return Object.assign(new Error(message), { cacheSyncFailure: 'aborted' });
 }
@@ -423,9 +430,11 @@ export class CacheSyncDriver {
       );
       if (!response.ok) {
         await cancelQuietly(response.body ?? undefined);
+        const retryAfterMs = retryAfterMsOf(response.headers);
         return await this.stopped(began, {
           kind: 'http',
           status: response.status,
+          ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
         });
       }
       if (!response.body) {

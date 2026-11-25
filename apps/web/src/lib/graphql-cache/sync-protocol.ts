@@ -58,7 +58,8 @@ export type SyncFailure =
   | { kind: 'busy' }
   | { kind: 'unsupported' }
   | { kind: 'aborted' }
-  | { kind: 'http'; status: number }
+  /** `retryAfterMs`: the response's `Retry-After`, when it gave seconds. */
+  | { kind: 'http'; status: number; retryAfterMs?: number }
   | { kind: 'stream'; message: string }
   /**
    * The host gave the connection up: no response, or no response bytes, for

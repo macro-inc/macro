@@ -82,6 +82,8 @@ pub struct SyncHttpResponse {
     /// The `content-encoding` response header, if any. The body is passed on
     /// as received; the run decodes `gzip` itself.
     pub content_encoding: Option<String>,
+    /// The `retry-after` response header, when it gives seconds.
+    pub retry_after_seconds: Option<u64>,
     /// The body; dropping it closes the connection, which stops the server.
     pub body: Box<dyn SyncResponseBody>,
 }
@@ -458,6 +460,9 @@ async fn read_stream(
     if !(200..300).contains(&response.status) {
         return Err(SyncFailure::Http {
             status: response.status,
+            retry_after_ms: response
+                .retry_after_seconds
+                .map(|seconds| seconds.saturating_mul(1_000)),
         });
     }
     let decoder = BodyDecoder::new(response.content_encoding.as_deref())?;

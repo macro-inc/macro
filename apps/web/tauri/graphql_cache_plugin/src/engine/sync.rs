@@ -37,6 +37,9 @@ pub enum SyncFailure {
     Http {
         /// Response status.
         status: u16,
+        /// The response's `Retry-After`, when it gave one in seconds.
+        #[serde(rename = "retryAfterMs", skip_serializing_if = "Option::is_none")]
+        retry_after_ms: Option<u64>,
     },
     /// The request failed, or the stream broke the contract or ended early.
     Stream {
