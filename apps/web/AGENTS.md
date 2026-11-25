@@ -784,7 +784,8 @@ Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a
 range, and checks their name labels above the header and under it once
 scrolled, and keyboard (Shift+Arrow) ranges whose moving corner stays in
-view: `just test-database-browser`. Keep the outline an overlay, never a
+view: `just test-database-browser`. The same CI suite measures import-plan row titles and controls at
+390px phone and desktop widths through its backend-free row fixture. Keep the outline an overlay, never a
 border on the cell. Virtual rows are transformed, so each is its own stacking
 context: a row carrying labels rises above the header only while its top edge
 is in view.
@@ -1898,6 +1899,33 @@ stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
+Import review metadata decodes `plan.dependencyOf` into **Linked from** and
+`plan.inlineOn` into **Linked from** labels on existing rows. Readable sources
+inside the selection default to Copy. External dependencies start unticked as
+Link; ticking removes their id from the saved draft's excluded list. Including
+a parent must not opt in external children. Refresh the saved review when new
+dependencies arrive, keeping them excluded until its defaults are saved. Use
+ordinary inclusion and sharing controls;
+unavailable by-hand rows stay disabled and show their reason. Desktop and touch
+keep the same controls; phone rows let titles wrap, put counts and badges on a second line, and wrap
+**Linked from** onto its own full-width line below them. Keep editable per-row
+sharing controls available even when the current sharing choices are uniform. On phones, the counted notices disclosure starts collapsed
+before the tree in both the card and full review; expanding it preserves every
+warning. Desktop keeps its inline title/control layout and labels, and starts the same counted notices disclosure expanded.
+Use confirmed write counts for the completed Notion outcome. Open Needs
+attention on phone and desktop and show a count when items failed. Place a
+run-level error above the failed items when it adds separate context. Call out
+rows and tasks that survived an unfinished copy. Use typed totals
+for the outcome and disclosures so bounded samples don't change the counts.
+Show **Needs you** separately from review skips and retain each item's reason
+after approval, even when the ledger no longer schedules the item for writing.
+Group changes by source and view identity and label each tab choice with its
+placement. Omit the report when it has no details.
+The flat warning disclosure is the fallback for legacy reports and other phases.
+While any rows are undecided, the summary says
+**Deciding what to import…** rather than describing an empty import. Imported
+approximated views use a short **≈** suffix; never parse user-visible view names
+to infer typed view state.
 Desktop shows every import run in the corner's import tray
 (`features/import-jobs`, in `ToastRegion`), independent of the import dialog
 and never on phones. Its backend-free check is

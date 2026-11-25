@@ -21,6 +21,10 @@ pub struct NotionSnapshotRequest<'a> {
 /// Notion ids (dashless, lowercase) mapped to the Macro objects they became.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
 pub struct NotionSnapshotLinks {
+    /// Page-local database card placements.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub databases: Vec<NotionSnapshotDatabaseOccurrence>,
+
     /// Notion page id → the Macro document it became.
     pub pages: HashMap<String, NotionSnapshotPage>,
     /// Notion user id → the Macro user they are.
@@ -62,7 +66,105 @@ struct NotionSnapshotResponse {
     markdown: String,
 }
 
+/// An exact Notion source, and its selected view when present.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotionLinkReference {
+    /// Normalized page or container id.
+    pub id: String,
+    /// Normalized view id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_id: Option<String>,
+}
+
+/// A verified Macro destination.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum NotionLinkDestination {
+    /// A confirmed imported page.
+    Page {
+        /// Document identity.
+        document_id: String,
+    },
+    /// A confirmed imported database.
+    Database {
+        /// Database identity.
+        database_id: String,
+        /// Starter table identity.
+        table_id: String,
+        /// Saved view at the requested tab.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        view_id: Option<String>,
+    },
+}
+
+/// A replacement of one exact reference.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NotionLinkReplacement {
+    /// The exact Notion reference.
+    #[serde(flatten)]
+    pub source: NotionLinkReference,
+    /// The confirmed Macro target.
+    pub destination: NotionLinkDestination,
+}
+
+/// A snapshot's reference inventory and optional link-only update.
+#[derive(Debug, serde::Deserialize)]
+pub struct NotionLinkDelta {
+    /// Base64 revision from the snapshot's version vector.
+    pub revision: String,
+    /// Exact Notion references in supported link nodes.
+    pub references: Vec<NotionLinkReference>,
+    /// Count of changed link nodes.
+    pub rewritten: usize,
+    /// Base64 of the update.
+    pub update: Option<String>,
+}
+
+impl NotionLinkDelta {
+    /// Decode the snapshot's expected revision.
+    pub fn revision_bytes(&self) -> Result<Vec<u8>> {
+        Ok(base64::engine::general_purpose::STANDARD.decode(&self.revision)?)
+    }
+
+    /// Decode the link delta when at least one hyperlink changed.
+    pub fn update_bytes(&self) -> Result<Option<Vec<u8>>> {
+        self.update
+            .as_ref()
+            .map(|update| Ok(base64::engine::general_purpose::STANDARD.decode(update)?))
+            .transpose()
+    }
+}
+
 impl LexicalClient {
+    /// Inspect a bounded snapshot and optionally prepare an href-only Loro delta.
+    #[tracing::instrument(skip_all, fields(snapshot_bytes = snapshot.len(), replacements = replacements.len()), err)]
+    pub async fn notion_link_delta(
+        &self,
+        snapshot: &[u8],
+        replacements: &[NotionLinkReplacement],
+    ) -> Result<NotionLinkDelta> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/snapshot/notion-links", self.url))
+            .headers(headers)
+            .json(&serde_json::json!({
+                "snapshot": base64::engine::general_purpose::STANDARD.encode(snapshot),
+                "replacements": replacements,
+            }))
+            .timeout(std::time::Duration::from_secs(15))
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(response.json().await?)
+    }
+
     /// Convert a Notion page to a new document's Loro snapshot.
     #[tracing::instrument(
         skip(self, request),
@@ -99,52 +201,51 @@ impl LexicalClient {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod test;
 
-    #[test]
-    fn the_request_matches_the_lexical_service_schema() {
-        let request = NotionSnapshotRequest {
-            markdown: "See <mention-page url=\"https://www.notion.so/p\">Plan</mention-page>",
-            links: NotionSnapshotLinks {
-                pages: [(
-                    "3fb607323e2e80629886fc0c028d50a7".to_string(),
-                    NotionSnapshotPage {
-                        document_id: "0e5b6a2c-7c39-4a63-9a0c-5c1f2f6c0001".to_string(),
-                        name: "Plan".to_string(),
-                    },
-                )]
-                .into(),
-                users: [(
-                    "12345678123412341234123456789abc".to_string(),
-                    NotionSnapshotUser {
-                        user_id: "macro|teo@acme.test".to_string(),
-                        email: "teo@acme.test".to_string(),
-                    },
-                )]
-                .into(),
-            },
-        };
+/// A page-local database placement.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotionSnapshotDatabaseOccurrence {
+    /// Normalized external container identity.
+    pub container_id: String,
+    /// Placement number for this container.
+    pub ordinal: usize,
+    /// Card destination or named source fallback.
+    pub target: NotionSnapshotDatabaseTarget,
+}
 
-        assert_eq!(
-            serde_json::to_value(&request).unwrap(),
-            serde_json::json!({
-                "markdown": "See <mention-page url=\"https://www.notion.so/p\">Plan</mention-page>",
-                "links": {
-                    "pages": {
-                        "3fb607323e2e80629886fc0c028d50a7": {
-                            "documentId": "0e5b6a2c-7c39-4a63-9a0c-5c1f2f6c0001",
-                            "name": "Plan"
-                        }
-                    },
-                    "users": {
-                        "12345678123412341234123456789abc": {
-                            "userId": "macro|teo@acme.test",
-                            "email": "teo@acme.test"
-                        }
-                    }
-                }
-            })
-        );
-    }
+/// A card requires both destination database and table identity.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(untagged, rename_all_fields = "camelCase")]
+pub enum NotionSnapshotDatabaseTarget {
+    /// Existing editable database.
+    Resolved {
+        /// Database identity.
+        database_id: String,
+        /// Table identity.
+        table_id: String,
+        /// Translated saved view.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        view_id: Option<String>,
+    },
+    /// Retained source link.
+    Fallback {
+        /// Why this placement could not become a card.
+        reason: NotionSnapshotDatabaseFallback,
+    },
+}
+
+/// Reasons accepted by the database card converter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NotionSnapshotDatabaseFallback {
+    /// The connection cannot read it.
+    NoAccess,
+    /// The source is missing.
+    NotFound,
+    /// The review did not import it as a database.
+    NotImported,
+    /// No unambiguous destination could be chosen.
+    Unresolved,
 }

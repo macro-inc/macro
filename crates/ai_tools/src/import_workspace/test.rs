@@ -9,14 +9,14 @@ use models_properties::service::property_definition_with_options::PropertyDefini
 use models_properties::shared::{DataType, PropertyOwner};
 use uuid::Uuid;
 
-use super::new_database;
+use super::{imported_database, new_database};
 
 #[test]
 fn a_new_database_is_written_into_its_starter_table_and_title_column() {
     let database_id = Uuid::from_u128(0x0dbb_0000_0000_0000_0000_0000_0000_0001);
-    let table_id = Uuid::from_u128(0x7ab1_0000_0000_0000_0000_0000_0000_0001);
-    let column_id = Uuid::from_u128(0xc01a_0000_0000_0000_0000_0000_0000_0001);
-    let detail = DatabaseDetail {
+    let table_id = Uuid::from_u128(0x3eea_9157_4b34_5868_9289_128a_1c46_158f);
+    let column_id = Uuid::from_u128(0x72b7_ed21_cb40_5b8f_a255_21df_72f5_5105);
+    let mut detail = DatabaseDetail {
         database: Database {
             appearance: None,
             id: DatabaseId::from_uuid(database_id),
@@ -81,6 +81,14 @@ fn a_new_database_is_written_into_its_starter_table_and_title_column() {
             title_column: ColumnId::from_uuid(column_id),
         }
     );
+    // A teammate may put another table first. The original marker still names
+    // the imported dataset, and a missing marker target must never be guessed.
+    let mut other = detail.tables[0].clone();
+    other.table.id = TableId::from_uuid(Uuid::from_u128(99));
+    detail.tables.insert(0, other);
+    let reused = imported_database(&detail, TableId::from_uuid(table_id)).unwrap();
+    assert_eq!(reused.table, TableId::from_uuid(table_id));
+    assert!(imported_database(&detail, TableId::from_uuid(Uuid::from_u128(100))).is_err());
 }
 
 #[test]
@@ -100,13 +108,21 @@ fn a_new_database_without_a_starter_table_is_refused() {
         tables: vec![],
     };
 
-    assert!(new_database(&detail).is_err());
+    assert!(matches!(
+        new_database(&detail)
+            .unwrap_err()
+            .downcast_ref::<import::domain::ports::DatabaseWriteFailure>(),
+        Some(import::domain::ports::DatabaseWriteFailure::MissingStarterTable)
+    ));
 }
 
 #[test]
 fn a_new_database_whose_starter_table_has_no_column_is_refused() {
     let database_id = Uuid::from_u128(0x0dbb_0000_0000_0000_0000_0000_0000_0003);
-    let table_id = Uuid::from_u128(0x7ab1_0000_0000_0000_0000_0000_0000_0003);
+    let table_id =
+        *databases::domain::models::FirstTableIds::for_database(DatabaseId::from_uuid(database_id))
+            .table
+            .as_uuid();
     let detail = DatabaseDetail {
         database: Database {
             appearance: None,
@@ -132,5 +148,32 @@ fn a_new_database_whose_starter_table_has_no_column_is_refused() {
         }],
     };
 
-    assert!(new_database(&detail).is_err());
+    assert!(matches!(
+        new_database(&detail)
+            .unwrap_err()
+            .downcast_ref::<import::domain::ports::DatabaseWriteFailure>(),
+        Some(import::domain::ports::DatabaseWriteFailure::MissingTitleColumn)
+    ));
+}
+
+#[test]
+fn folder_access_errors_remain_run_wide_but_database_access_is_source_scoped() {
+    use entity_access::domain::models::AccessError;
+    use import::domain::ports::DatabaseWriteFailure;
+    assert!(matches!(
+        super::database_folder_access_failure(AccessError::Unauthorized),
+        DatabaseWriteFailure::FolderUnavailable
+    ));
+    assert!(matches!(
+        super::database_folder_access_failure(AccessError::NotFound("private folder".into())),
+        DatabaseWriteFailure::FolderUnavailable
+    ));
+    assert!(matches!(
+        super::database_write_failure(databases::domain::models::DatabaseError::NotFound),
+        DatabaseWriteFailure::NotFound
+    ));
+    assert!(matches!(
+        super::database_access_failure(AccessError::Unauthorized),
+        DatabaseWriteFailure::PermissionDenied
+    ));
 }
