@@ -388,3 +388,31 @@ fn a_hydrate_that_gave_way_to_a_schema_install_still_lands() {
         assert!(!result.write_result.changed.is_empty(), "the hydrate wrote");
     });
 }
+
+/// An older bundle sends no `background`: its query writes are commands, so
+/// one keeps its place ahead of a commit that queues after it and lands
+/// first, as before.
+#[test]
+fn a_write_without_the_background_flag_keeps_its_place() {
+    block_on(async {
+        let handle = spawn_handle();
+        handle.write(threads(1, "thread-a", false)).await.unwrap();
+        let claim = claimed_mark_seen(&handle).await;
+
+        let noop = std::task::Waker::noop();
+        let held = handle.inner.write().await;
+        let mut write = Box::pin(handle.write(threads(1, "thread-a", false)));
+        assert!(poll_once(write.as_mut(), noop).is_pending());
+        let mut commit = Box::pin(commit_mark_seen(&handle, claim));
+        assert!(poll_once(commit.as_mut(), noop).is_pending());
+        drop(held);
+
+        assert!(
+            poll_once(commit.as_mut(), noop).is_pending(),
+            "the write goes first"
+        );
+        write.await.unwrap();
+        commit.await.unwrap();
+        assert_eq!(read_threads(&handle, 1)["isRead"], true);
+    });
+}
