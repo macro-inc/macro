@@ -715,3 +715,28 @@ fn a_reply_rolled_back_and_sent_again_shows() {
         assert_eq!(preview.as_array().unwrap().len(), 2);
     });
 }
+
+#[test]
+fn a_previewed_reply_without_a_row_stays_out_of_the_thread() {
+    block_on(async {
+        let r2 = reply("r2", "~21", "m1");
+        let mut engine = threaded_channel(std::slice::from_ref(&r2)).await;
+        let own = reply(REPLY, "~91", "m1");
+        queue_reply(
+            &mut engine,
+            &threaded("m1", &[r2.clone(), own.clone()]),
+            &own,
+        )
+        .await;
+
+        let spans = [None, Some("m1")];
+        let spans = spans.map(|thread| coverage(thread, TIMELINE_START, TIMELINE_HEAD));
+        let reset = ChannelTimelineCommit {
+            reset: true,
+            ..page("c1", "20", spans.into())
+        };
+        push(&mut engine, "20", &[replied(&[])], &reset).await;
+        write_undated(&mut engine, &r2).await;
+        assert_eq!(thread(&mut engine).await, [REPLY]);
+    });
+}

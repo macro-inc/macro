@@ -16,36 +16,33 @@ pub(super) fn sent_message(uuid: Uuid) -> EntityKey<'static> {
     EntityKey::entity(MESSAGE_TYPENAME, &[&uuid.to_string()])
 }
 
-/// Takes out of `updates` the entries they only name that `held`, what is under
-/// them, cannot show: a list naming one would not be readable.
-pub(super) fn leave_out_unheld(
+/// Takes the entries `updates` only name out of them: a name changes nothing. One
+/// that `held`, what is under it, cannot show also leaves the lists naming it,
+/// which would not be readable.
+pub(super) fn drop_names(
     updates: &mut RecordUpdates,
     held: &HashMap<EntityKey<'static>, Option<Record>>,
 ) {
-    let shows = |key: &EntityKey<'static>| {
-        let record = held.get(key).and_then(Option::as_ref);
-        record.is_some_and(|record| project_channel_timeline(key, record).is_some())
-    };
-    let unheld = |(key, update): &(&EntityKey<'static>, &Record)| {
+    let mut unheld = BTreeSet::new();
+    updates.retain(|key, update| {
         let mut fields = update.fields.keys();
         let only_named = fields.all(|field| field == "id" || field == "__typename");
-        only_named && is_channel_entry(key) && !shows(key)
-    };
-    let unheld: BTreeSet<_> = updates
-        .iter()
-        .filter(unheld)
-        .map(|(key, _)| key.clone())
-        .collect();
+        if !only_named || !is_channel_entry(key) {
+            return true;
+        }
+        let record = held.get(key).and_then(Option::as_ref);
+        if record.is_none_or(|record| project_channel_timeline(key, record).is_none()) {
+            unheld.insert(key.clone());
+        }
+        false
+    });
     if unheld.is_empty() {
         return;
     }
-    updates.retain(|key, _| !unheld.contains(key));
-    for value in updates
+    let values = updates
         .values_mut()
-        .flat_map(|update| update.fields.values_mut())
-    {
-        unlist(value, &unheld);
-    }
+        .flat_map(|update| update.fields.values_mut());
+    values.for_each(|value| unlist(value, &unheld));
 }
 
 fn unlist(value: &mut CacheValue, keys: &BTreeSet<EntityKey<'static>>) {
