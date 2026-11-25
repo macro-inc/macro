@@ -139,8 +139,8 @@ export function WhenTime(props: {
         ref={anchor}
         class={cn(
           'relative shrink-0 bg-control focus-within:inset-ring-[1.5px] focus-within:inset-ring-accent',
-          'h-[30px] min-w-0 flex-1 rounded-lg text-sm',
-          props.compact && 'h-8 w-24.5 flex-none'
+          'h-8 min-w-0 flex-1 rounded-lg text-sm',
+          props.compact && 'w-24.5 flex-none'
         )}
       >
         <span class="relative block size-full">
