@@ -49,6 +49,14 @@ maps a data source onto Macro database columns and cells
 
 ## Gotchas
 
+- Each request is one `notion.request` span with typed fields only:
+  `endpoint` (`NotionEndpoint`), `method`, `attempts`, the final `status`,
+  `outcome` (`RequestOutcome`), and on failure `error_class` and
+  `transport_class`; a final failure also logs one `warn!` with the same
+  fields. Never record a request's path, query, body, or Notion's response.
+  `NotionError`'s `Display` and `Debug` show only its class, status and
+  transport class, so `?error` stays safe. Planning stage spans
+  (`notion.plan.*`) carry a typed `stage` (`PlanStage`).
 - Read-only by construction: the REST client can only send a `NotionRead`
   (GETs, plus the read POSTs `/v1/search` and `/v1/data_sources/{id}/query`);
   never add a variant that writes to the user's Notion.

@@ -13,7 +13,11 @@ use super::model::{
 use super::views::{NotionView, ViewScope};
 
 /// Why a Notion request failed.
-#[derive(Debug, thiserror::Error)]
+///
+/// `Display` and `Debug` name the failure's kind, status and transport class
+/// only. Notion's message, a decode error and a transport report can quote
+/// workspace content, object ids or URLs, so they never reach logs or spans.
+#[derive(thiserror::Error)]
 pub enum NotionError {
     /// Notion (or the proxy) asked us to slow down and retries ran out.
     #[error("Notion rate limited the import; retry after {retry_after:?}")]
@@ -28,27 +32,44 @@ pub enum NotionError {
     #[error("the Notion connection may not read this object")]
     Forbidden,
     /// Notion answered with an error the importer does not handle.
-    #[error("Notion could not complete the request: {body}")]
+    #[error("Notion could not complete the request (HTTP {status})")]
     Upstream {
         /// The HTTP status.
         status: u16,
-        /// The response body, truncated.
+        /// Notion's explanation, truncated. Never logged.
         body: String,
     },
     /// Notion answered with a shape the importer could not read.
-    #[error("unexpected Notion response: {0}")]
-    Decode(String),
+    #[error("unexpected Notion response")]
+    Decode(
+        /// What could not be read. Never logged.
+        String,
+    ),
     /// One source's saved view list did not finish; retry before approximating it.
     #[error("the source saved-view list is incomplete")]
     IncompleteViewList,
     /// The request did not complete.
-    #[error("Notion request failed: {report:?}")]
+    #[error("Notion request did not complete ({class})")]
     Transport {
         /// What went wrong on the way, as far as the connection can tell.
         class: TransportClass,
-        /// The underlying report.
+        /// The underlying report. Never logged: it can carry the proxy URL.
         report: rootcause::Report,
     },
+}
+
+impl std::fmt::Debug for NotionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = formatter.debug_struct("NotionError");
+        debug.field("class", &self.class());
+        if let Some(status) = self.status() {
+            debug.field("status", &status);
+        }
+        if let Some(class) = self.transport_class() {
+            debug.field("transport_class", &class);
+        }
+        debug.finish()
+    }
 }
 
 impl NotionError {

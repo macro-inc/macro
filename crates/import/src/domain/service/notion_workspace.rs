@@ -252,6 +252,12 @@ where
         self.current_report(user).await
     }
 
+    #[tracing::instrument(
+        name = "workspace_import.attach_review",
+        skip(self, user),
+        fields(review_id = %review_id, agent_session_id = %session_id),
+        err
+    )]
     async fn attach_notion_review(
         &self,
         user: &MacroUserIdStr<'static>,

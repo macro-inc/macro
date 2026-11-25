@@ -90,8 +90,40 @@ fn transport(error: ConnectorsError) -> NotionError {
 }
 
 /// What the connection can tell about a request that did not complete.
-fn transport_class(_: &ConnectorsError) -> TransportClass {
-    TransportClass::Other
+fn transport_class(error: &ConnectorsError) -> TransportClass {
+    match error {
+        ConnectorsError::NeedsReauth(_) => TransportClass::NeedsReauth,
+        ConnectorsError::NotFound(_) => TransportClass::NotConnected,
+        ConnectorsError::Internal(report) => report
+            .iter_reports()
+            .find_map(|report| {
+                report
+                    .downcast_current_context::<reqwest::Error>()
+                    .or_else(|| {
+                        // Pipedream's proxy client reports through anyhow.
+                        report
+                            .downcast_current_context::<anyhow::Error>()?
+                            .chain()
+                            .find_map(|cause| cause.downcast_ref::<reqwest::Error>())
+                    })
+            })
+            .map_or(TransportClass::Other, http_class),
+        ConnectorsError::UnknownApp(_)
+        | ConnectorsError::NonPublicServer(_)
+        | ConnectorsError::EmptyName => TransportClass::Other,
+    }
+}
+
+fn http_class(error: &reqwest::Error) -> TransportClass {
+    if error.is_timeout() {
+        TransportClass::Timeout
+    } else if error.is_connect() {
+        TransportClass::Connect
+    } else if error.is_body() || error.is_decode() {
+        TransportClass::Body
+    } else {
+        TransportClass::Other
+    }
 }
 
 /// Sends Notion REST requests through one user's Notion connection.
