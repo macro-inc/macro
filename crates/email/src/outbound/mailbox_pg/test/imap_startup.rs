@@ -112,6 +112,7 @@ async fn imap_startup_catchup_wakes_current_cursors_without_stealing_leases(db: 
             initial_complete: false,
             lease_id: held,
             fence: 0,
+            due_at: chrono::Utc::now(),
             notification: None,
         },
         SyncRetry::Local(120),
@@ -190,7 +191,9 @@ async fn successful_imap_commits_preserve_hints_even_when_their_timestamps_prece
     .execute(&db)
     .await
     .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     repo.commit_catalog(&catalog, &[]).await.unwrap();
     let due = sqlx::query!(
         r#"

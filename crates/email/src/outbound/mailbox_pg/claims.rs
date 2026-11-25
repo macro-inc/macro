@@ -22,6 +22,7 @@ struct ClaimedStream {
     position: Option<String>,
     initial_complete: bool,
     fence: i64,
+    next_run_at: chrono::DateTime<chrono::Utc>,
     notified_at: Option<chrono::DateTime<chrono::Utc>>,
     notified_traceparent: Option<String>,
     import_started_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -98,7 +99,7 @@ impl PgMailboxSync {
             FROM candidate c, email_links l
             WHERE s.id = c.id AND l.id = s.link_id
             RETURNING s.id, s.link_id, s.generation, l.grant_generation,
-                s.scope_id, s.position, s.initial_complete, s.fence,
+                s.scope_id, s.position, s.initial_complete, s.fence, s.next_run_at,
                 s.notified_at, c.notified_traceparent, s.import_started_at
             "#,
                 &window.ids,
@@ -137,6 +138,7 @@ impl PgMailboxSync {
                 initial_complete: row.initial_complete,
                 lease_id,
                 fence: row.fence,
+                due_at: row.next_run_at,
                 notification: notification(row.notified_at, row.notified_traceparent),
             }))
         }

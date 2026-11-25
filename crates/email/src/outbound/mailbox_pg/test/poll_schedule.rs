@@ -49,6 +49,7 @@ async fn claim(repo: &PgMailboxSync) -> StreamLease {
     repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap()
 }
 

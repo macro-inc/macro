@@ -6,6 +6,7 @@ use crate::domain::events::EmailMacroEvent;
 use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::projection::ProjectionClaim;
 use crate::domain::mailbox::projection::*;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::mailbox::{
     MailboxError, MailboxIngest, MailboxKey, MailboxSyncRepository, MessageRetry,
 };
@@ -372,7 +373,9 @@ async fn failed_refresh_preserves_independent_message_effects_and_durable_retry(
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = repo
         .claim_message(Uuid::now_v7())
         .await

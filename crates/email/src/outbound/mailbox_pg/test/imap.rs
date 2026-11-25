@@ -92,7 +92,9 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
         .unwrap()
         .into_lease()
         .unwrap();
-    repo.commit_page(&stream, &page()).await.unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = repo
         .claim_message(Uuid::from_u128(101))
         .await
