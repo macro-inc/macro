@@ -262,6 +262,25 @@ describe('a write the device takes', () => {
     expect(unhandled).not.toHaveBeenCalled();
   });
 
+  it('sends however the work beside it ends', async () => {
+    const sent = Promise.withResolvers<ReturnType<typeof message>>();
+    mocks.device.send.mockReturnValue(sent.promise);
+    mocks.track.mockImplementationOnce(() => {
+      throw new Error('no analytics');
+    });
+    const sending = mountWrites().send.mutateAsync(
+      sendTo(CHANNEL, {
+        onOptimisticInsert: () => {
+          throw new Error('the composer is gone');
+        },
+      })
+    );
+    const confirmed = message(CHANNEL, 'm1');
+    sent.resolve(confirmed);
+    await expect(sending).resolves.toBe(confirmed);
+    expect(toast.failure).not.toHaveBeenCalled();
+  });
+
   it('is handed over with no connection, which only its queue waits for', async () => {
     onlineManager.setOnline(false);
     await mountWrites().send.mutateAsync(sendTo(CHANNEL));

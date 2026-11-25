@@ -72,6 +72,16 @@ async function orToast<T>(write: Promise<T>, failure: string): Promise<T> {
   }
 }
 
+/** Work beside a write, whose failure says nothing about the write. */
+function beside<T>(work: () => T): T | undefined {
+  try {
+    return work();
+  } catch (error) {
+    Telemetry.error(error, { surface: 'messages' });
+    return undefined;
+  }
+}
+
 /**
  * Sends a channel message through the device's queue, which shows it from the
  * moment it is sent and keeps it across a lost connection.
@@ -88,21 +98,26 @@ export async function sendFromDevice(
   const { channelId, message } = send;
   const trace = options.parentSpan ?? Telemetry.captureContext();
   markMessageSent(`channel:${send.id}`);
-  const sending = trace.run(() => channelWrites(host).send(send));
-  options.onOptimisticInsert?.();
-  const updatedAt = optimisticUpdateSoupItemUpdatedAt(
-    channelId,
-    'channel',
-    new Date().toISOString()
+  const sending = orToast(
+    trace.run(() => channelWrites(host).send(send)),
+    'Failed to send message'
+  );
+  beside(() => options.onOptimisticInsert?.());
+  const updatedAt = beside(() =>
+    optimisticUpdateSoupItemUpdatedAt(
+      channelId,
+      'channel',
+      new Date().toISOString()
+    )
   );
   let sent: Message;
   try {
-    sent = await orToast(sending, 'Failed to send message');
+    sent = await sending;
   } catch (error) {
-    updatedAt?.rollback();
+    beside(() => updatedAt?.rollback());
     throw error;
   }
-  trace.run(() => {
+  const afterSend = () => {
     // Sending is a `messaged` activity server-side; stamp the touch now so the
     // Recent order moves the channel up without waiting on the activity
     // consumer, which the refetch below can outrun.
@@ -123,7 +138,8 @@ export async function sendFromDevice(
       attachmentsLength: message.attachments?.length ?? 0,
       isThreadReply,
     });
-  });
+  };
+  beside(() => trace.run(afterSend));
   return sent;
 }
 
