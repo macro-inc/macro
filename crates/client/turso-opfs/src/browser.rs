@@ -226,6 +226,22 @@ impl OpfsOwner {
         Sidecar::new(self.id, self.database_path())
     }
 
+    /// Returns whether exactly one of the two approved paths exists, which
+    /// [`open`](Self::open) answers with [`OpenResult::ResetRequired`] after it
+    /// created the other. Creates nothing. A path that cannot be looked up is
+    /// left for `open` to report.
+    pub async fn is_torn(&self) -> bool {
+        let Ok(root) = worker_root().await else {
+            return false;
+        };
+        let mut exists = [false; 2];
+        for role in FileRole::ALL {
+            let entry = JsFuture::from(root.get_file_handle(self.paths.get(role))).await;
+            exists[role.index()] = !entry.is_err_and(|error| is_not_found(&error));
+        }
+        exists[0] != exists[1]
+    }
+
     /// Physically wipes and recreates both approved paths before any open.
     ///
     /// This is the recovery path after abrupt worker loss or a pre-open entry

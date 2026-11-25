@@ -684,10 +684,11 @@ the exception, until the wipe has made some. A copy the old database had taken a
 that database can still say, is forgotten; one that may have been taken, because
 the database lost what it says or one of its two files, is queued but called
 `partial`. An open that lost something leaves the side file saying so, and only that;
-the engine removes it once it has told the coordinator (`queueLossTold` after
-`engine-ready`), and until then every later open, of whatever build, tells it again.
-A database reset for want of one of its two files is noted there as a loss too, even
-when no copy says what it queued. A side file that cannot be read three times over is given up as
+the engine removes it (`queueLossTold`) at the first request or heartbeat after
+`engine-ready`, which shows that the coordinator took it and so told its pages, and
+until then every later open tells it again.
+A database with one of its two files gone is noted there as a loss too before it is
+opened and reset, even when no copy says what it queued. A side file that cannot be read three times over is given up as
 `unreadable` rather than queued behind newer writes later; only one that can be neither
 removed nor emptied then can still come back, behind them and as `partial`. Records, the
 projections and index facts the server's answers gave them, and everything else

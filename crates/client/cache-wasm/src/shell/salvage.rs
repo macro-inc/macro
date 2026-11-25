@@ -155,25 +155,36 @@ pub(super) async fn wipe_keeping_queue(
 /// Notes that a database about to be reset for want of one of its files may
 /// have held the copy in `file`, or a queue that `file` has no copy of: a later
 /// engine would find only its successor. Returns how much longer the side file is.
-async fn doubt(sidecar: &Sidecar, end: u64, file: &SalvageFile) -> u64 {
-    // A copy nothing took is what a wipe cut short leaves.
-    if file.queue().is_some() && file.imports() == 0 {
-        return 0;
+async fn doubt(sidecar: &Sidecar, end: u64, file: &SalvageFile) -> Result<u64, OpfsError> {
+    if untaken(file) {
+        return Ok(0);
     }
     let frame = SalvageFile::loss(QueueLoss::default());
     match sidecar.write_tail(end, &frame).await {
-        Ok(()) => frame.len() as u64,
-        Err(_) => 0,
+        Ok(()) => Ok(frame.len() as u64),
+        Err(error) if error.kind() == OpfsErrorKind::Busy => Err(error),
+        Err(_) => Ok(0),
     }
 }
 
-/// [`doubt`], for an engine that wipes nothing else.
-pub(super) async fn doubt_copy(sidecar: &Sidecar) -> Result<(), JsValue> {
-    let read = read_file(sidecar).await;
-    if let Some(file) = read.map_err(|error| storage_err_js(&error))? {
-        doubt(sidecar, file.end(), &file).await;
+/// A copy nothing took is what a wipe cut short leaves.
+fn untaken(file: &SalvageFile) -> bool {
+    file.queue().is_some() && file.imports() == 0
+}
+
+/// [`doubt`], for an engine about to open its database for the first time.
+/// Opening creates the file that is missing, and nobody could tell after that.
+pub(super) async fn doubt_torn(owner: OpfsOwner, sidecar: &Sidecar) -> Result<OpfsOwner, JsValue> {
+    if !owner.is_torn().await {
+        return Ok(owner);
     }
-    Ok(())
+    let (owner, file) = or_release(owner, read_file(sidecar).await).await?;
+    let Some(file) = file else {
+        return Ok(owner);
+    };
+    let doubted = doubt(sidecar, file.end(), &file).await;
+    let (owner, _) = or_release(owner, doubted).await?;
+    Ok(owner)
 }
 
 /// The side file, or nothing when it cannot be read. A failure that passes
@@ -285,11 +296,18 @@ async fn read_before_wipe(
     {
         read.end += attempt.len() as u64;
     }
+    let owner = if owner.is_torn().await {
+        let doubted = doubt(sidecar, read.end, &file).await;
+        let (owner, written) = or_release(owner, doubted).await?;
+        read.end += written;
+        owner
+    } else {
+        owner
+    };
     let session = match owner.open().await {
         Ok(OpenResult::Ready(session)) => session,
         // One file of the pair alone is a wipe or a creation cut short.
         Ok(OpenResult::ResetRequired(session)) => {
-            read.end += doubt(sidecar, read.end, &file).await;
             let owner = session
                 .reset()
                 .await
@@ -437,11 +455,12 @@ impl Crossing {
             .map_err(|error| storage_err_js(&error))?;
         let unread = read.is_none();
         let file = read.unwrap_or_default();
+        // As `doubt` has it, which may have had no room.
+        if unread || (self.torn && !untaken(&file)) {
+            report.lose();
+        }
         if !unread && file.is_blank() && !self.unwritten {
             return leave(sidecar, report).await;
-        }
-        if unread || (self.torn && file.imports() > 0) {
-            report.lose();
         }
         report.dropped += file.dropped();
         let (end, lost, abandoned) = (file.end(), file.lost(), file.abandoned());

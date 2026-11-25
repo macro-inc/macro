@@ -5,6 +5,12 @@ use std::cell::Cell;
 
 const UUID: &str = "00000000-0000-4000-8000-000000000011";
 
+/// Lets no note of a loss into a side file, as on a full disk.
+const REFUSE_LOSSES: &str = "const frame = args[0];
+    if (frame.byteLength === 22 && frame[12] === 4)
+      throw new DOMException('full', 'QuotaExceededError');
+    return original(...args);";
+
 fn side_file(scope: &str) -> String {
     format!("{}-salvage", database_identity(scope))
 }
@@ -594,16 +600,12 @@ async fn a_copy_of_a_torn_database_is_never_called_kept_when_its_doubt_does_not_
     wipe_and_die(SCOPE).await;
     let mut copy = read_side_file(SCOPE).await;
     copy.extend(SalvageFile::import_attempt());
-    let refuse_losses = "const frame = args[0];
-        if (frame.byteLength === 22 && frame[12] === 4)
-          throw new DOMException('full', 'QuotaExceededError');
-        return original(...args);";
     for recovery in [false, true] {
         let (engine, _, _) = open(SCOPE, false).await;
         resolved(engine.close()).await;
         remove_opfs_file(&database_identity(SCOPE)).await;
         write_side_file(SCOPE, &copy).await;
-        break_side_files("write", refuse_losses).await;
+        break_side_files("write", REFUSE_LOSSES).await;
         let (engine, _, queue) = open(SCOPE, recovery).await;
         restore_side_files().await;
         assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
@@ -643,6 +645,62 @@ async fn a_copy_of_a_torn_database_is_never_called_kept_after_a_death() {
         resolved(engine.close()).await;
     }
     destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_says_so_after_a_death_at_creating_its_missing_file() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-create";
+    closed_with_queue(SCOPE).await;
+    let wal = format!("{}-wal", database_identity(SCOPE));
+    remove_opfs_file(&wal).await;
+    run_js(
+        "const directory = FileSystemDirectoryHandle.prototype;
+         const original = directory.getFileHandle;
+         self.restoreFiles = () => { directory.getFileHandle = original; };
+         directory.getFileHandle = async function (file, options) {
+           const handle = await original.call(this, file, options);
+           if (file === name && options?.create)
+             throw new DOMException('died', 'UnknownError');
+           return handle;
+         };
+         return Promise.resolve();",
+        &wal,
+    )
+    .await;
+    let died = open_cache_inner(SCOPE.into(), None, false, None, false).await;
+    run_js("self.restoreFiles(); return Promise.resolve();", "").await;
+    assert!(died.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_is_not_opened_while_its_side_file_is_busy() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-busy";
+    closed_with_queue(SCOPE).await;
+    remove_opfs_file(&format!("{}-wal", database_identity(SCOPE))).await;
+    hold_side_file(SCOPE).await;
+    let busy = open_cache_inner(SCOPE.into(), None, false, None, false).await;
+    release_side_file().await;
+    assert!(busy.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_says_so_when_its_doubt_does_not_fit() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-blank";
+    for recovery in [false, true] {
+        closed_with_queue(SCOPE).await;
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        break_side_files("write", REFUSE_LOSSES).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        restore_side_files().await;
+        assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]), "{recovery}");
+        close_and_destroy(&engine, SCOPE).await;
+    }
 }
 
 #[wasm_bindgen_test(async)]

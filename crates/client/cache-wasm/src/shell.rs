@@ -1111,6 +1111,7 @@ async fn open_or_wipe(
     sidecar: &Sidecar,
     crossing: Crossing,
 ) -> Result<(TursoStorage, CacheOpenOutcome, Crossing), JsValue> {
+    let owner = salvage::doubt_torn(owner, sidecar).await?;
     let (owner, reset_outcome, crossing) = match open_owner(owner).await? {
         OpenResult::Ready(session) => {
             let connected = session.connect().map_err(err_js)?;
@@ -1131,7 +1132,6 @@ async fn open_or_wipe(
             }
         }
         OpenResult::ResetRequired(session) => {
-            salvage::doubt_copy(sidecar).await?;
             let owner = session
                 .reset()
                 .await
