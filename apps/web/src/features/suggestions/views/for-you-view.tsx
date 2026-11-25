@@ -16,6 +16,7 @@ import {
   For,
   Match,
   on,
+  onCleanup,
   Show,
   Switch,
   untrack,
@@ -151,14 +152,25 @@ export function ForYouView(props: {
     const known = kind === 'rows' || kind === 'empty';
     return known && !shownTopicKey() ? props.topicKey : undefined;
   });
-  const letGo = async (key: string) => {
-    const read = await props.feed.reread();
-    if (read && missing() === key) props.onTopicGone();
-  };
-  createEffect(() => {
-    const key = missing();
-    if (key) fireAndForget(letGo(key), 'suggestions.topic_gone');
+  let asking: string | undefined;
+  let left = false;
+  onCleanup(() => {
+    left = true;
   });
+  const letGo = async (key: string) => {
+    if (asking === key) return;
+
+    asking = key;
+    const read = await props.feed.reread();
+    if (asking === key) asking = undefined;
+    if (read && !left && missing() === key) props.onTopicGone();
+  };
+  // Asked again with each feed that still lacks it, should the read fail.
+  createEffect(
+    on([missing, () => props.feed.topics()], ([key]) => {
+      if (key) fireAndForget(letGo(key), 'suggestions.topic_gone');
+    })
+  );
   const groups = () => props.feed.groups(props.list, topic());
   const name = () => {
     const shown = topic();
@@ -278,12 +290,13 @@ export function ForYouView(props: {
     <li
       class="scroll-mt-4"
       ref={(element) => {
-        if (untrack(entry).suggestion.id !== props.focusedId) return;
+        const { id } = untrack(entry).suggestion;
+        if (id !== props.focusedId) return;
 
         onElementConnect(element, () => {
-          if (scrolledTo === props.focusedId) return;
+          if (id !== props.focusedId || id === scrolledTo) return;
 
-          scrolledTo = props.focusedId;
+          scrolledTo = id;
           element.scrollIntoView({ block: 'start' });
         });
       }}

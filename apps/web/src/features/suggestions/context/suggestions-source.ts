@@ -11,7 +11,7 @@ export type SuggestionsSource = {
   /** The feed in the server's order, with its counts; undefined until loaded. */
   feed: Accessor<SuggestionFeed | undefined>;
   /**
-   * Read the feed from the server, or wait for the read already out. Answers
+   * Read the feed from the server now, whatever read is already out. Answers
    * whether it was read: the feed shown may be a cached one until then.
    */
   reread(): Promise<boolean>;

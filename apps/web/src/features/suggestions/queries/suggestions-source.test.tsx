@@ -445,20 +445,16 @@ it('rereads a cached feed from the server, and says whether it could', async () 
   expect(source.feed()).toBeDefined();
 });
 
-it('waits for a read already out instead of starting another', async () => {
-  const { source } = mount(60_000);
+it('rereads the feed even while an older read is out', async () => {
+  const { client, source } = mount(60_000);
   await waitFor(() => expect(source.feed()).toBeDefined());
-  let answer: () => void = () => {};
-  server.gates.push(
-    new Promise<void>((resolve) => {
-      answer = resolve;
-    })
-  );
+  // A poll that asked before: what it answers may be out of date.
+  server.gates.push(new Promise<void>(() => {}));
+  const { queryKey } = suggestionsKeys.feed('user-1');
+  fireAndForget(client.invalidateQueries({ queryKey }), 'test');
+  await waitFor(() => expect(server.gates).toHaveLength(0));
   const reads = server.reads;
-  const first = source.reread();
-  const second = source.reread();
-  answer();
 
-  expect(await Promise.all([first, second])).toEqual([true, true]);
+  expect(await source.reread()).toBe(true);
   expect(server.reads).toBe(reads + 1);
 });
