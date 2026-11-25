@@ -126,9 +126,10 @@ async fn schema_change_cost_on_a_retained_browser_cache() {
             let open_ms = js_sys::Date::now() - started;
             resolved(engine.close()).await;
             let started = js_sys::Date::now();
-            let (engine, _, _, again) = open_cache_inner(BENCH_SCOPE.into(), None, false, None, false)
-                .await
-                .expect("reopen bench cache");
+            let (engine, _, _, again) =
+                open_cache_inner(BENCH_SCOPE.into(), None, false, None, false)
+                    .await
+                    .expect("reopen bench cache");
             let reopen_ms = js_sys::Date::now() - started;
             resolved(engine.close()).await;
             web_sys_log(&format!(
