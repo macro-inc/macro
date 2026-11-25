@@ -97,6 +97,37 @@ async fn seeded_pricing_is_available(pool: PgPool) {
     assert_eq!(repo.get_pricing("nonexistent-model").await.unwrap(), None);
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn gemini_4_global_standard_rates_bill_cached_input_and_thoughts(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    for (model, input, cached, output, expected_total) in [
+        ("gemini-4-neon", 3.0, 0.15, 15.0, 0.000204),
+        ("gemini-4-carbon", 4.0, 0.20, 20.0, 0.000272),
+    ] {
+        let pricing = repo.get_pricing(model).await.unwrap().unwrap();
+        assert_eq!(
+            pricing,
+            ModelPricing::Tokens {
+                input,
+                output,
+                cache_read: Some(cached),
+                cache_write: None,
+            }
+        );
+        let cost = crate::Price::compute(
+            pricing,
+            UsageAmount::Tokens {
+                input: 30,
+                output: 2 + 5,
+                cache_read: 60,
+                cache_write: 0,
+            },
+        )
+        .unwrap();
+        assert!((cost.total - expected_total).abs() < 0.00000001, "{model}");
+    }
+}
+
 /// Usage on an agent's own key references that key, and forgetting the key
 /// keeps the usage while dropping the reference.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
