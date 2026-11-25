@@ -123,7 +123,7 @@ data:
       defaults:
         ingestion:
           burst_size_bytes: 40000000
-          max_traces_per_user: 50000
+          max_traces_per_user: 30000
           rate_limit_bytes: 30000000
           rate_strategy: local
         metrics_generator:

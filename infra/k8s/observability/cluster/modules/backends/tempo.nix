@@ -156,8 +156,9 @@ in
           };
         };
 
-        metricsGenerator = stateless "metrics-generator" 2 "256Mi" "1Gi" // {
+        metricsGenerator = stateless "metrics-generator" 2 "256Mi" "2Gi" // {
           enabled = true;
+          extraEnv = goMemLimit 2048;
           kind = "StatefulSet";
           persistence = volume;
           config = {

@@ -44,8 +44,8 @@ data:
       max_cache_freshness_per_query: 10m
       max_query_parallelism: 4
       max_query_series: 2000
-      per_stream_rate_limit: 4MB
-      per_stream_rate_limit_burst: 16MB
+      per_stream_rate_limit: 6MB
+      per_stream_rate_limit_burst: 24MB
       query_timeout: 300s
       reject_old_samples: true
       reject_old_samples_max_age: 168h

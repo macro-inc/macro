@@ -53,11 +53,11 @@
       # Every sender together, counting structured metadata.
       ingestion_rate_mb = 24;
       ingestion_burst_size_mb = 48;
-      # A service's logs from one environment are one stream (its instances
-      # aren't labels), so this is what keeps one service from using the whole
-      # rate. Sharding would split a busy stream and multiply it.
-      per_stream_rate_limit = "4MB";
-      per_stream_rate_limit_burst = "16MB";
+      # Our services' logs from one environment are one stream (they send no
+      # instance label), so this keeps one from using the whole rate. Sharding
+      # would split a busy stream and multiply it.
+      per_stream_rate_limit = "6MB";
+      per_stream_rate_limit_burst = "24MB";
       shard_streams.enabled = false;
       max_query_parallelism = 4;
       # The CI dashboard groups PR steps by workflow, job and step: about 600 a day.
@@ -108,8 +108,9 @@
       rate_strategy = "local";
       rate_limit_bytes = 30000000;
       burst_size_bytes = 40000000;
-      # Live traces of one ingester; dev alone peaked at 4k.
-      max_traces_per_user = 50000;
+      # Live traces of one ingester, and of one metrics generator's local
+      # blocks; dev alone peaked at 4k.
+      max_traces_per_user = 30000;
     };
     query_frontend.metrics.concurrent_jobs = 4;
     storage.trace = {
