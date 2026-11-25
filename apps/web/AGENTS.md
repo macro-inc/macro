@@ -906,6 +906,13 @@ or mention in it presses the row and opens nothing. The same suite's
 `preview-links.browser.e2e.ts` clicks, Cmd-clicks, middle-clicks and taps a
 link in a row and in an unfolded stack; the Signal suite's
 (`next-soup/soup-view/views/inbox/browser-test`) taps one in a Home card.
+Search snippets are a picture of the message too: `SearchContent`
+(`features/entity/extractors-search`), which every snippet renders through
+(channel message search rows, a result's Show more hits, the agent Search
+card), is `inert`, so pressing a link in one opens the result; a highlight
+splits a URL, so a live link opened only its first part. Run
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts search-snippet.browser.e2e.ts`,
+which presses a snippet's link on desktop and taps it on phone.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line

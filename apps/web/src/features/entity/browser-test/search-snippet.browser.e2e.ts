@@ -106,9 +106,7 @@ test.describe('desktop', () => {
     await openFixture(page);
     const wide = page.getByTestId('list-wide');
     await expect(highlight(wide)).toBeVisible();
-    await expect(wide).toContainText(
-      'https://app.sketchpad.example/file/0ABC'
-    );
+    await expect(wide).toContainText('https://app.sketchpad.example/file/0ABC');
   });
 });
 

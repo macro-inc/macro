@@ -42,8 +42,7 @@ const message: WithSearch<ChannelMessageEntity> = {
       {
         type: 'channel',
         id: 'message-1',
-        content:
-          'https://app.<macro_em>sketchpad</macro_em>.example/file/0ABC',
+        content: 'https://app.<macro_em>sketchpad</macro_em>.example/file/0ABC',
         senderId: 'macro|sender@example.com',
         sentAt: SENT_AT,
         location: { type: 'channel', messageId: 'message-1' },

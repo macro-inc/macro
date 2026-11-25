@@ -39,11 +39,7 @@ export function SearchContent(props: SearchContentProps) {
           fallback={<span class="italic text-ink-disabled">No content</span>}
         >
           {(trimmedContent) => (
-            <StaticMarkdown
-              inert
-              markdown={trimmedContent()}
-              theme={theme()}
-            />
+            <StaticMarkdown inert markdown={trimmedContent()} theme={theme()} />
           )}
         </Show>
       )}
