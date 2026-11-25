@@ -26,3 +26,14 @@ fn smoke_launches_on_a_runner_that_can_start_webview2() {
         "{yaml}"
     );
 }
+
+#[test]
+fn only_the_smoke_build_opens_devtools() {
+    let smoke = smoke_yaml();
+    // The frontend job writes the DevTools config; the launch job reads the page.
+    assert_eq!(smoke.matches("DEVTOOLS_PORT: '9222'").count(), 2, "{smoke}");
+    let release = crate::workflows::build_desktop_on_tag::build_desktop_on_tag()
+        .to_string()
+        .expect("release workflow should serialize");
+    assert!(!release.contains("DEVTOOLS_PORT: "), "{release}");
+}

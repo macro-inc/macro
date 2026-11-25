@@ -140,7 +140,7 @@ pub fn build_desktop_on_tag() -> Workflow {
         )
         .add_job(
             desktop_windows::LAUNCH_WINDOWS,
-            desktop_windows::launch_job(resolved_ref())
+            desktop_windows::launch_job(resolved_ref(), desktop_windows::Purpose::Release)
                 .add_needs(RESOLVE_REF)
                 .add_needs(desktop_windows::BUILD_WINDOWS),
         )

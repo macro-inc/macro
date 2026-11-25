@@ -12,11 +12,12 @@
 //! reviewers and wait timers.
 //!
 //! Every build installs the installer silently and checks what it registered;
-//! the launch job installs it again, launches it, checks its page over the
-//! WebView2 DevTools protocol and uninstalls, and only then uploads it for the
+//! the launch job installs it again, launches it, checks that Macro and
+//! WebView2 start and stay up, and uninstalls, and only then uploads it for the
 //! release. `Desktop Windows smoke` does the same, unsigned, for pull requests
-//! that touch the app. `PR CI` calls it outside `CI gate`. Generated into
-//! `desktop_windows.yml`.
+//! that touch the app; its build alone opens WebView2's DevTools port
+//! ([`DEVTOOLS_PORT`]), so its launch job also checks the page loaded. `PR CI`
+//! calls it outside `CI gate`. Generated into `desktop_windows.yml`.
 
 use gh_workflow::expr::typed::{
     Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, github,
@@ -35,6 +36,12 @@ mod test;
 
 /// The tauri-cli release nixpkgs bundles the AppImage with.
 const TAURI_CLI_VERSION: &str = "2.11.4";
+
+/// WebView2's DevTools port in the pull request smoke build, which is never
+/// signed or published. Tauri's WebView2 switches make WebView2 ignore
+/// `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` and its per-app policy, so the
+/// build sets the window's `additionalBrowserArgs` instead.
+const DEVTOOLS_PORT: &str = "9222";
 
 /// The GitHub environment whose OIDC subject the signing identity trusts:
 /// `repo:macro-inc/macro:environment:desktop-windows-signing`.
@@ -101,7 +108,8 @@ const SIGNING: StepHandle<SigningOutputs> = StepHandle::new(
 pub(crate) enum Purpose {
     /// A desktop tag: signed and published when configured to be.
     Release,
-    /// A pull request: unsigned, never published, no PostHog key.
+    /// A pull request: unsigned, never published, no PostHog key, with
+    /// WebView2's DevTools port open.
     Smoke,
 }
 
@@ -125,7 +133,7 @@ pub fn desktop_windows_smoke() -> Workflow {
         )
         .add_job(
             LAUNCH_WINDOWS,
-            launch_job(github().git_ref()).add_needs(BUILD_WINDOWS),
+            launch_job(github().git_ref(), Purpose::Smoke).add_needs(BUILD_WINDOWS),
         )
 }
 
@@ -137,7 +145,8 @@ fn frontend_artifact() -> String {
 }
 
 /// Builds `.#tauri-frontend` with the release identity of `ref_expr` and
-/// uploads it with the Tauri config the Windows build merges.
+/// uploads it with the Tauri configs the Windows build merges: the release
+/// identity and, for [`Purpose::Smoke`], the DevTools switches.
 pub(crate) fn frontend_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
     let build = Step::new("Build frontend with Nix")
         .run(include_str!("scripts/build_windows_frontend.sh"))
@@ -146,7 +155,7 @@ pub(crate) fn frontend_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
         Purpose::Release => build
             .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
             .add_env(("REQUIRE_POSTHOG_API_KEY", "true")),
-        Purpose::Smoke => build,
+        Purpose::Smoke => build.add_env(("DEVTOOLS_PORT", DEVTOOLS_PORT)),
     };
     Job::default()
         .name("Build Windows frontend")
@@ -260,10 +269,21 @@ fn installer_artifact() -> String {
     )
 }
 
-/// Installs the built installer, launches Macro, checks its page and
+/// Installs the built installer, launches Macro, checks that it and WebView2
+/// start and stay up (and, for [`Purpose::Smoke`], that its page loaded), and
 /// uninstalls. A Namespace Windows runner cannot do this part: it runs jobs
 /// elevated in session 0, where WebView2 fails to start (0x80080005).
-pub(crate) fn launch_job(ref_expr: Expr<Str>) -> Job {
+pub(crate) fn launch_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
+    let launch = Step::new("Install, launch and uninstall")
+        .run(include_str!("scripts/windows_installer_smoke.ps1"))
+        .shell("pwsh")
+        .add_env(("INSTALLER", "artifacts/*-windows-setup.exe"))
+        .add_env(("EXPECT_SIGNED", BUILD_WINDOWS.outputs.signed.read()))
+        .add_env(("LAUNCH", "true"));
+    let launch = match purpose {
+        Purpose::Release => launch,
+        Purpose::Smoke => launch.add_env(("DEVTOOLS_PORT", DEVTOOLS_PORT)),
+    };
     Job::default()
         .name("Launch Windows installer")
         .runs_on(runners::GITHUB_WINDOWS)
@@ -275,14 +295,7 @@ pub(crate) fn launch_job(ref_expr: Expr<Str>) -> Job {
                 .path("artifacts")
                 .step(),
         )
-        .add_step(
-            Step::new("Install, launch and uninstall")
-                .run(include_str!("scripts/windows_installer_smoke.ps1"))
-                .shell("pwsh")
-                .add_env(("INSTALLER", "artifacts/*-windows-setup.exe"))
-                .add_env(("EXPECT_SIGNED", BUILD_WINDOWS.outputs.signed.read()))
-                .add_env(("LAUNCH", "true")),
-        )
+        .add_step(launch)
         .add_step(upload_release_installer())
 }
 

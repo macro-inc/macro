@@ -25,12 +25,28 @@ cargo install tauri-cli --version "=$TAURI_CLI_VERSION" --locked --root "$RUNNER
 PATH="$(cygpath -u "$RUNNER_TEMP")/tauri-cli/bin:$PATH"
 export PATH
 
-release_config=$(cygpath -w "$PWD/windows-input/tauri.release.json")
+signing_config=$(cygpath -u "$TAURI_SIGNING_CONFIG")
+configs=(--config "$(cygpath -w "$PWD/windows-input/tauri.release.json")" --config "$TAURI_SIGNING_CONFIG")
+# Only the unsigned pull request build opens WebView2's DevTools port (see
+# build_windows_frontend.sh). Nothing else that is merged may open it, so a
+# build that can be signed or published never does.
+for config in "$app/tauri.conf.json" "$app/tauri.windows.conf.json" windows-input/tauri.release.json "$signing_config"; do
+  if grep -q remote-debugging "$config"; then
+    echo "$config opens the WebView2 DevTools port" >&2
+    exit 1
+  fi
+done
+devtools=windows-input/tauri.devtools.json
+if [ -f "$devtools" ]; then
+  if grep -q signCommand "$signing_config"; then
+    echo "A signed build never opens the WebView2 DevTools port" >&2
+    exit 1
+  fi
+  configs+=(--config "$(cygpath -w "$PWD/$devtools")")
+fi
 (
   cd "$app"
-  cargo tauri build --verbose --bundles nsis \
-    --config "$release_config" \
-    --config "$TAURI_SIGNING_CONFIG"
+  cargo tauri build --verbose --bundles nsis "${configs[@]}"
 )
 
 version=$(cat windows-input/version)

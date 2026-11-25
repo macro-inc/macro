@@ -705,8 +705,15 @@ Release builds come from `Build Desktop on Tag` (`xtask_workflows`'
 and the installer with MSVC and the pinned `tauri-cli`, installs it silently and
 checks the `macro://` handler. WebView2 cannot start there (the runner runs jobs
 elevated in session 0), so a GitHub-hosted `windows-2025` job installs it again,
-launches it, checks its page over the WebView2 DevTools protocol and uninstalls
-it; only an installer that passed reaches the release. A Windows failure leaves
+launches it, checks that Macro and WebView2 start and stay up for 30 seconds,
+and uninstalls it; only an installer that passed reaches the release. The
+unsigned pull request build (`Desktop Windows smoke`, never published) is the
+only one that opens WebView2's DevTools port, through the window's
+`additionalBrowserArgs` (Tauri's own switches make WebView2 ignore
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`), so its launch job also checks the page
+loaded over the DevTools protocol. A build that may be signed fails if any
+config it merges opens the port, and the release launch check fails if WebView2
+started with it. A Windows failure leaves
 the macOS and Linux release alone; Windows users stay on their version, and
 rerunning the failed Windows jobs adds `windows-x86_64` to that version's feed,
 as for Intel below. The release does wait for the Windows jobs to end, so keep the
