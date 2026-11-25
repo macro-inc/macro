@@ -171,8 +171,9 @@ export function searchDraftText(
   // A name no channel or inbox was matched to is written as typed, standing
   // for no id.
   const unmatched = new Set(filters.unresolved);
+  const text = [operators.text, fields.query.trim()].filter(Boolean).join(' ');
   return {
-    text: [operators.text, fields.query.trim()].filter(Boolean).join(' '),
+    text,
     bindings: operators.bindings.filter((binding) => {
       const ids =
         'channelIds' in binding
@@ -182,6 +183,9 @@ export function searchDraftText(
             : [];
       return !ids.some((id) => unmatched.has(id));
     }),
-    unresolved: filters.unresolved,
+    // The extracted words can hold an operator too, such as `from:Pat`.
+    unresolved: [
+      ...new Set([...filters.unresolved, ...unresolvedSearchPeople(text)]),
+    ],
   };
 }

@@ -79,6 +79,19 @@ describe('searchDraftText', () => {
     expect(unresolvedSearchPeople(draft.text)).toEqual(['Pat', 'Pat Lee']);
   });
 
+  it('holds a name the extracted words type where an address is needed', () => {
+    const draft = searchDraftText(
+      {
+        query: 'from:Pat budget',
+        searchFilters: filters({}),
+        searchBindings: '',
+      },
+      lookups
+    );
+    expect(draft.text).toBe('type:channel from:Pat budget');
+    expect(draft.unresolved).toEqual(['Pat']);
+  });
+
   it('reads an edited field as the whole search, with the bindings it kept', () => {
     const draft = searchDraftText(
       {
