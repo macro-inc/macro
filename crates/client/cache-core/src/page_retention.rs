@@ -42,6 +42,30 @@ pub(crate) fn omit_hydration_pages(updates: &mut RecordUpdates) {
     }
 }
 
+/// The viewer's channel reads. The timeline index answers them, so what one read
+/// listed is of no use later, and one per page read would make every write of the
+/// viewer larger for good.
+const CHANNEL_READS: [&str; 4] = [
+    "channelTimeline",
+    "channelThread",
+    "channelMessage",
+    "channelChanges",
+];
+
+/// Remove the viewer's channel reads from a response's updates. Their messages
+/// and activities stay.
+pub(crate) fn omit_channel_reads(updates: &mut RecordUpdates) {
+    for record in updates.values_mut() {
+        if record.typename() == Some(SOUP_PAGE_OWNER) {
+            record.fields.retain(|key, _| {
+                !key.split('(')
+                    .next()
+                    .is_some_and(|name| CHANNEL_READS.contains(&name))
+            });
+        }
+    }
+}
+
 pub(crate) fn updated_pages(base: &Record, update: &Record) -> Vec<String> {
     if base.typename() != Some(SOUP_PAGE_OWNER) && update.typename() != Some(SOUP_PAGE_OWNER) {
         return Vec::new();

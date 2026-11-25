@@ -1657,7 +1657,7 @@ impl<S: Storage> Engine<S> {
 
     /// Turns a response's normalized records into those it writes: adds the
     /// records the host derives from it, refuses an unfenced contact, and
-    /// drops hydration pages unless they are kept.
+    /// drops channel reads, and hydration pages unless they are kept.
     fn complete_network_records(
         schema: &crate::meta::Schema,
         response_records: Option<ResponseRecords>,
@@ -1678,6 +1678,7 @@ impl<S: Storage> Engine<S> {
         {
             return Err(EngineError::UnfencedContactWrite);
         }
+        crate::page_retention::omit_channel_reads(updates);
         if !retain_pages {
             crate::page_retention::omit_hydration_pages(updates);
         }
