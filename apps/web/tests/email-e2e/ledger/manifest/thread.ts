@@ -1156,12 +1156,10 @@ export const thread = {
       id: 'STL-092',
       surface: 'SL-39',
       fn: ['F-127'],
-      state: 'toast "Download failed"',
+      state: 'toast "Unable to download file"',
       trigger: 'attachment download fails',
-      source: [ATTACHMENTS],
-      toasts: [
-        'src/features/email-message/attachment-action-adapter.ts#Download failed',
-      ],
+      // The shared file download controller raises it, outside email's code.
+      source: [ATTACHMENTS, 'src/lib/core/util/createFileDownload.ts'],
     },
     {
       id: 'STL-093',
