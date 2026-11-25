@@ -75,9 +75,16 @@ export function emailSearchValueBeingTyped(
  */
 const MIN_NAME_LETTERS = 3;
 
-/** Lowercase without accents, so `jose` finds José. */
+/**
+ * Lowercase without accents, and with one apostrophe, so `jose` finds José
+ * and a phone's `o’neil` finds O'Neil.
+ */
 const foldName = (text: string) =>
-  text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replaceAll('’', "'")
+    .toLowerCase();
 
 /**
  * A plain word typed at the end of the field that could start someone's

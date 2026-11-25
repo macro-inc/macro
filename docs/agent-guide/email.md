@@ -172,9 +172,9 @@ focus in the field, since an empty one closes on blur.
 People and labels are read only while the field has focus and such an
 operator is typed (people also for a plain word of three letters or more). Picking one finishes it the same way. A row is the
 filter's text, drawn as an operator, with a few words beside it only when
-they say something the text does not (a row a plain word offers names what
-it finds, with its operator beside it to learn) (`to:` also covers Cc and Bcc;
-`after:` counts its day, `before:` does not). Typing changes the rows, so it
+they say something the text does not (`to:` also covers Cc and Bcc;
+`after:` counts its day, `before:` does not). A row a plain word offers
+instead names what it finds, with its operator beside it to learn. Typing changes the rows, so it
 also clears the row the arrow keys picked out. Operators stay ordinary text (caret,
 selection, `Backspace`, paste), and every one the search service would read,
 once complete and valid (`in:sent`, `subject:"team lunch"`, `-from:ana`,

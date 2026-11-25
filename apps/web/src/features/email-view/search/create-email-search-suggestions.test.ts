@@ -261,7 +261,7 @@ it('offers mail from and to someone a plain word names', () => {
   });
 });
 
-it('matches a name without its accents', () => {
+it('matches the people found by name without accents or apostrophe spelling', () => {
   createRoot((dispose) => {
     const [search, setSearch] = createSignal('');
     const suggestions = createEmailSearchSuggestions({
@@ -274,6 +274,7 @@ it('matches a name without its accents', () => {
       scopeAvailable: () => true,
       people: () => [
         { id: 'u3', email: 'jose@example.com', name: 'José Ruiz' },
+        { id: 'u4', email: 'oneil@example.com', name: "Ana O'Neil" },
       ],
     });
     suggestions.setFocused(true);
@@ -281,6 +282,11 @@ it('matches a name without its accents', () => {
     expect(recentListed(suggestions)).toEqual([
       'from:jose@example.com ',
       'to:jose@example.com ',
+    ]);
+    setSearch('o’neil');
+    expect(recentListed(suggestions)).toEqual([
+      'from:oneil@example.com ',
+      'to:oneil@example.com ',
     ]);
     dispose();
   });
