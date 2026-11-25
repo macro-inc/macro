@@ -356,7 +356,7 @@ async fn without_a_provisioner_a_missing_vault_stays_not_provisioned() {
         repository: repository.clone(),
         provider,
         availability: Arc::new(FakeAvailability),
-        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
+        setup: Arc::new(crate::domain::service::test::fakes::NoSetup),
     };
     let result = service.create(&owner, team, login(Uuid::now_v7())).await;
     assert_eq!(result.err(), Some(Error::NotProvisioned));

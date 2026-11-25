@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 async fn sharing_canonicalizes_recipient_identity_before_grants_are_persisted() {
     let repository = Arc::new(FakeRepository::new());
     let service = PasswordService {
-        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
+        setup: Arc::new(crate::domain::service::test::fakes::NoSetup),
         repository: repository.clone(),
         provider: Arc::new(FakeProvider::new()),
         availability: Arc::new(FakeAvailability),
@@ -101,7 +101,7 @@ async fn disabled_and_nonmember_calls_never_acquire_vault_lease_admission() {
     for enabled in [true, false] {
         let repository = Arc::new(FakeRepository::new());
         let service = PasswordService {
-            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
+            setup: Arc::new(crate::domain::service::test::fakes::NoSetup),
             repository: repository.clone(),
             provider: Arc::new(FakeProvider::new()),
             availability: if enabled {
@@ -226,7 +226,7 @@ async fn team_default_private_admin_and_departure_preserve_creator_and_values() 
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
-        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
+        setup: Arc::new(crate::domain::service::test::fakes::NoSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),
@@ -420,7 +420,7 @@ async fn canonical_agent_recipient_is_rejected_before_persisting_grants() {
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
-        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
+        setup: Arc::new(crate::domain::service::test::fakes::NoSetup),
         repository: repository.clone(),
         provider,
         availability: Arc::new(FakeAvailability),
@@ -506,7 +506,7 @@ async fn omitted_private_choice_defaults_to_team_edit_sharing() {
         .unwrap()
         .insert(actor.user_id.to_string(), vec![team]);
     let service = PasswordService {
-        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
+        setup: Arc::new(crate::domain::service::test::fakes::NoSetup),
         repository: repository.clone(),
         provider: Arc::new(FakeProvider::new()),
         availability: Arc::new(FakeAvailability),
@@ -529,7 +529,7 @@ async fn omitted_private_choice_defaults_to_team_edit_sharing() {
 async fn can_edit_reflects_current_grants_without_grant_management() {
     let repository = Arc::new(FakeRepository::new());
     let service = PasswordService {
-        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
+        setup: Arc::new(crate::domain::service::test::fakes::NoSetup),
         repository: repository.clone(),
         provider: Arc::new(FakeProvider::new()),
         availability: Arc::new(FakeAvailability),

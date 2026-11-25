@@ -1072,6 +1072,25 @@ impl VaultSetup for FakeVaultSetup {
     }
 }
 
+/// No provisioner, as composed before automatic setup is deployed.
+pub struct NoSetup;
+#[async_trait]
+impl VaultSetup for NoSetup {
+    fn configured(&self) -> bool {
+        false
+    }
+    async fn provision(
+        &self,
+        _team: TeamId,
+        _deadline: std::time::Duration,
+    ) -> Result<Provisioned, SetupError> {
+        Err(SetupError::Unavailable)
+    }
+    async fn namespace_exists(&self, _team: TeamId) -> Result<bool, SetupError> {
+        Err(SetupError::Unavailable)
+    }
+}
+
 pub struct FakeAvailability;
 #[async_trait]
 impl Availability for FakeAvailability {
