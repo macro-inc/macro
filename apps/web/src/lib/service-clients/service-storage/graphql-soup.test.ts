@@ -2372,9 +2372,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(visible()).toBeUndefined();
       expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
       // A list answered by the network now was never written to the cache.
-      const freshness = await import(
-        '@queries/soup/graphql/network-freshness'
-      );
+      const freshness = await import('@queries/soup/graphql/network-freshness');
       freshness.recordSoupNetworkAnswer(client, 'list');
       expect(freshness.soupNetworkAnswerFresh(client, 'list', 60_000)).toBe(
         true
