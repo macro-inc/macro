@@ -108,31 +108,34 @@ pub(super) async fn wipe_keeping_queue(
     scope: &str,
     owner: OpfsOwner,
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
-    wipe_keeping(scope, owner, false).await
+    wipe_keeping(scope, owner, &QueueReport::default()).await
 }
 
 /// [`wipe_keeping_queue`], after an open that told `earlier`. A loss in it
 /// that the side file does not note goes with the copy, which then says writes
 /// were lost before it, as one behind a noted loss does: whoever imports it,
-/// this engine or one after it dies, tells the loss.
+/// this engine or one after it dies, tells the loss. A noted one the wipe
+/// cannot read is written over, so the wipe counts it with its own.
 pub(super) async fn wipe_keeping_queue_after(
     scope: &str,
     owner: OpfsOwner,
     earlier: &QueueReport,
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
-    wipe_keeping(scope, owner, earlier.lost() && !earlier.noted).await
+    wipe_keeping(scope, owner, earlier).await
 }
 
 async fn wipe_keeping(
     scope: &str,
     owner: OpfsOwner,
-    untold: bool,
+    earlier: &QueueReport,
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
+    let untold = earlier.lost() && !earlier.noted;
     let started = query_telemetry::now_ms();
     // Once the queue is read from here on, nothing may keep it from the file.
     let held = owner.sidecar().hold().await;
     let (owner, sidecar) = or_release(owner, held).await?;
     let (owner, file) = or_release(owner, read_file(&sidecar).await).await?;
+    let unread = file.is_none();
     // Either way the file cannot say what else is lost once a queue follows in
     // it, so the copy says so itself.
     let doubted = untold
@@ -143,6 +146,9 @@ async fn wipe_keeping(
         read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default(), doubted).await?;
     if doubted {
         read.report.lose();
+    }
+    if unread && earlier.noted {
+        read.report.dropped += earlier.dropped;
     }
     read.write_queue(&sidecar).await;
     let queue = read.queue.take().map(|queue| match doubted {
@@ -434,12 +440,13 @@ impl QueueReport {
 
     /// What an open told, then a wipe of the database it opened and the open
     /// that followed: what the later one kept, and every loss, each once. A
-    /// count is what is known: one a side file could not give back is lost
-    /// with it, as on any open that cannot read the side file, and the
-    /// outcome still says writes were lost.
+    /// count is what is known: one a side file could not give back after the
+    /// wipe is lost with it, as on any open that cannot read the side file,
+    /// and the outcome still says writes were lost.
     pub(super) fn then(self, later: Self) -> Self {
-        // The later open read back what the side file notes and counted it,
-        // or could not read it and counted what it found.
+        // The later open counted what the side file notes, read back or, when
+        // its wipe could not read it, from this report. Only an import that
+        // could not read what the wipe left counts less.
         let (earlier, dropped) = match self.noted {
             true => (QueueOutcome::None, 0),
             false => (self.outcome, self.dropped),

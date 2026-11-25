@@ -435,43 +435,52 @@ async fn a_copy_taken_after_a_loss_nobody_noted_tells_it_to_whoever_imports_it()
 #[wasm_bindgen_test(async)]
 async fn a_copy_taken_when_the_side_file_could_not_be_read_tells_a_loss_to_whoever_imports_it() {
     const SCOPE: &str = "cache-wasm-salvage-unread-copy";
-    closed_with_queue(SCOPE).await;
-    let loss = QueueLoss {
-        abandoned: false,
-        dropped: 1,
-    };
-    write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
-    let noted = QueueReport {
-        outcome: QueueOutcome::Unreadable,
-        dropped: 1,
-        noted: true,
-        ..QueueReport::default()
-    };
-    // The wipe cannot read the note back, no loss note reaches the side file
-    // after it, and the engine dies before it opens the next database.
-    let files = "FileSystemFileHandle.prototype.createSyncAccessHandle";
-    run_js(
-        &format!("self.untouchedFiles = {files}; return Promise.resolve();"),
-        "",
-    )
-    .await;
-    break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
-    break_side_files("write", REFUSE_LOSSES).await;
-    let owner = owner(SCOPE).await;
-    let Ok((owner, _)) = wipe_keeping_queue_after(SCOPE, owner, &noted).await else {
-        panic!("wipe keeps the queue")
-    };
-    owner.release().await.expect("release");
-    run_js(
-        &format!("{files} = self.untouchedFiles; return Promise.resolve();"),
-        "",
-    )
-    .await;
-    let (engine, _, queue) = open(SCOPE, false).await;
-    // The count went with the note.
-    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
-    assert_kept(&engine, SCOPE).await;
-    close_and_destroy(&engine, SCOPE).await;
+    // The wipe writes over the note it cannot read, so the note it leaves
+    // counts the earlier loss too, unless the side file refuses it as well.
+    for (losses_refused, counted) in [(true, 0), (false, 2)] {
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 2,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        let noted = QueueReport {
+            outcome: QueueOutcome::Unreadable,
+            dropped: 2,
+            noted: true,
+            ..QueueReport::default()
+        };
+        // The wipe cannot read the note back, and the engine dies before it
+        // opens the next database.
+        let files = "FileSystemFileHandle.prototype.createSyncAccessHandle";
+        run_js(
+            &format!("self.untouchedFiles = {files}; return Promise.resolve();"),
+            "",
+        )
+        .await;
+        break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+        if losses_refused {
+            break_side_files("write", REFUSE_LOSSES).await;
+        }
+        let owner = owner(SCOPE).await;
+        let Ok((owner, _)) = wipe_keeping_queue_after(SCOPE, owner, &noted).await else {
+            panic!("wipe keeps the queue")
+        };
+        owner.release().await.expect("release");
+        run_js(
+            &format!("{files} = self.untouchedFiles; return Promise.resolve();"),
+            "",
+        )
+        .await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["partial", 1, counted]),
+            "losses refused: {losses_refused}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
 }
 
 #[wasm_bindgen_test]
@@ -489,7 +498,8 @@ fn a_noted_loss_keeps_its_count_when_the_later_open_could_not_read_it() {
         noted: true,
         ..QueueReport::default()
     };
-    // Read back, the note is among what the later open counted.
+    // Read back, or counted by a wipe that could not read it, the note is
+    // among what the later open counted.
     assert_eq!(earlier.then(later(3)).dropped, 3);
     // Unread, only the earlier open knows its count.
     assert_eq!(earlier.then(later(0)).dropped, 2);
