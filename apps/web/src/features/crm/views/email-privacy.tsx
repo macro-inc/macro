@@ -125,7 +125,9 @@ function DomainBlocklist(props: {
               // its own line in the phone settings sheet.
               class="flex-nowrap"
             >
-              <Show when={canRemove()}>
+              {/* A conditional child, not <Show>: SettingsRow renders its
+                  control column for any truthy child, and Show is one. */}
+              {canRemove() ? (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -141,7 +143,7 @@ function DomainBlocklist(props: {
                 >
                   {t('crm.privacyRemove')}
                 </Button>
-              </Show>
+              ) : undefined}
             </SettingsRow>
           )}
         </For>

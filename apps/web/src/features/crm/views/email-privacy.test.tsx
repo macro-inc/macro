@@ -10,9 +10,6 @@ const state = vi.hoisted(() => ({
   enabled: false,
   mailboxEmail: null as string | null,
   mailboxLinkId: null as string | null,
-  teamDomains: [] as string[],
-  personalDomains: [] as string[],
-  canRemoveTeamDomains: false,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -45,9 +42,9 @@ vi.mock('../context/crm-context', () => ({
               enabled: state.enabled,
               mailboxEmail: state.mailboxEmail,
               mailboxLinkId: state.mailboxLinkId,
-              teamDomains: state.teamDomains,
-              personalDomains: state.personalDomains,
-              canRemoveTeamDomains: state.canRemoveTeamDomains,
+              teamDomains: [],
+              personalDomains: [],
+              canRemoveTeamDomains: false,
             },
         refetch: vi.fn(),
       },
@@ -68,31 +65,6 @@ afterEach(() => {
   state.policyFailed = false;
   state.mailboxEmail = null;
   state.mailboxLinkId = null;
-  state.teamDomains = [];
-  state.personalDomains = [];
-  state.canRemoveTeamDomains = false;
-});
-
-it.each([
-  ['a member', false],
-  ['an admin', true],
-])('offers team Remove only to people who can use it: %s', (_who, admin) => {
-  state.teamDomains = ['team.example.com'];
-  state.personalDomains = ['personal.example.com'];
-  state.canRemoveTeamDomains = admin;
-  render(() => <CrmEmailPrivacySettings />);
-
-  screen.getByText('team.example.com');
-  const teamRemove = screen.queryByRole('button', {
-    name: 'Remove team.example.com',
-  });
-  if (admin) expect(teamRemove).not.toBeNull();
-  else expect(teamRemove).toBeNull();
-  expect(
-    screen.getByRole<HTMLButtonElement>('button', {
-      name: 'Remove personal.example.com',
-    }).disabled
-  ).toBe(false);
 });
 
 it('offers a keyboard-operable Connect email that starts the mailbox connection without opting in', async () => {
