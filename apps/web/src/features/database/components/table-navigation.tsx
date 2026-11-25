@@ -36,6 +36,7 @@ import { isDatabaseNameTaken } from '../core/property-creation';
 import type { CreateTable } from '../core/table-creation';
 import { createInlineRename } from './inline-rename';
 import { NewTableTab } from './new-table-tab';
+import { revealInRail } from './reveal-in-rail';
 
 export function TableNavigation(props: {
   tables: { id: string; name: string }[];
@@ -56,6 +57,8 @@ export function TableNavigation(props: {
   onDelete?: (tableId: string) => void;
   /** What else deleting a table removes, e.g. the forms writing to it. */
   deleteConsequence?: (tableId: string) => string | undefined;
+  /** The tab list, for a host that binds keys to the tables. */
+  tabsRef?: (element: HTMLElement) => void;
 }) {
   const [deleting, setDeleting] = createSignal<{ id: string; name: string }>();
   const [open, setOpen] = createSignal(false);
@@ -172,12 +175,7 @@ export function TableNavigation(props: {
     const selected =
       rail?.querySelector<HTMLElement>('input[aria-label="Table name"]') ??
       rail?.querySelector<HTMLElement>('[data-selected]');
-    if (!rail || !selected) return;
-    const viewport = rail.getBoundingClientRect();
-    const tab = selected.getBoundingClientRect();
-    if (tab.left < viewport.left) rail.scrollLeft += tab.left - viewport.left;
-    else if (tab.right > viewport.right)
-      rail.scrollLeft += tab.right - viewport.right;
+    if (rail && selected) revealInRail(rail, selected);
   };
   createResizeObserver(tabRail, revealSelectedTable);
   createEffect(
@@ -229,7 +227,13 @@ export function TableNavigation(props: {
               activationMode="manual"
               class="min-w-0"
             >
-              <TabSelector.List ref={setTabRail} aria-label="Database tables">
+              <TabSelector.List
+                ref={(element: HTMLDivElement) => {
+                  setTabRail(element);
+                  props.tabsRef?.(element);
+                }}
+                aria-label="Database tables"
+              >
                 <Key
                   each={props.tables.filter(
                     (table) => table.id !== createdTableId()

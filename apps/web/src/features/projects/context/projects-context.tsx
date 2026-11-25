@@ -54,6 +54,11 @@ export type ProjectCreationInput = {
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
   userId: Accessor<string | undefined>;
+  /**
+   * Whether a project's dates read as a range and edit their start too; see
+   * `enable-task-start-date`. A host without it shows the due date alone.
+   */
+  startDatesEnabled?: Accessor<boolean>;
   createCollectionSource(
     filters?: Accessor<ProjectFilters>,
     enabled?: Accessor<boolean>

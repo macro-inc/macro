@@ -1,0 +1,21 @@
+# The viewer's last view of a channel, as its cached record holds it.
+fragment ChannelViewedAtFields on GraphqlSoupChannel {
+	id
+	viewedAt
+}
+
+# Local cache entrypoint only: stamps a recorded view on the channel's record,
+# which the server's soup updates do not carry, without rewriting its other
+# fields.
+subscription ChannelViewedAtCacheWrite {
+	soupUpdates {
+		__typename
+		... on SoupUpdated {
+			item {
+				__typename
+				id
+				... on GraphqlSoupChannel { viewedAt }
+			}
+		}
+	}
+}

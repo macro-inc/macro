@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::{
     domain::{
         models::{ResolvedDraftInput, UpsertedContacts},
@@ -15,6 +16,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod delivery_status;
 mod lock_timeouts;
+mod outlook_changes;
 mod sent_view;
 
 const ACTOR: &str = "macro|outlook-test@example.com";
@@ -41,7 +43,9 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v3");
     remote.content.message.is_sent = true;
@@ -374,7 +378,7 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
             message:serde_json::from_value(serde_json::json!({"db_id":lease.message_id,"link_id":lease.mailbox.link_id,"subject":"Local subject"})).unwrap(),
             from:models_email::service::address::ContactInfo {email:"outlook-test@example.com".into(),name:None,photo_url:None},parent_message_id:None,references:None,
         },files:Vec::new(),removals:Vec::new()},
-        draft:Some(ProviderDraft {id:ProviderId::new("a").unwrap(),conversation_id:ProviderId::new("conversation").unwrap(),version:Some("v2".into()),is_draft:true,content_fingerprint:Some("unchanged-body".into()),app_revision:Some(lease.revision as u64)}),
+        draft:Some(ProviderDraft {id:ProviderId::new("a").unwrap(),conversation_id:ProviderId::new("conversation").unwrap(),version:Some("v2".into()),is_draft:true,content_fingerprint:Some("unchanged-body".into()),field_digests:Default::default(),app_revision:Some(lease.revision as u64)}),
         submission_started:matches!(stage,DraftStage::Submitting | DraftStage::Confirming),
         completed_files:0,completed_removals:0,transfer:None,
     }
@@ -480,7 +484,9 @@ async fn remote_ingestion_preserves_an_unsynced_local_edit_and_records_remote_co
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     assert_eq!(work.provider_id.as_str(), "a");
     let mut remote = snapshot(
@@ -717,7 +723,9 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(
         link,
@@ -857,9 +865,11 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
     sync.record_write_version(&command, &target, "v2", "v3")
         .await
         .unwrap();
-    let retained=sqlx::query!("SELECT base_version,checkpoint->'draft'->>'version' AS checkpoint_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
+    let retained=sqlx::query!("SELECT base_version,checkpoint->'draft'->>'version' AS checkpoint_version,base_content->>'version' AS content_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
     assert_eq!(retained.base_version.as_deref(), Some("v3"));
     assert_eq!(retained.checkpoint_version.as_deref(), Some("v3"));
+    // Macro's own move keeps the content, so its baseline moves with it.
+    assert_eq!(retained.content_version.as_deref(), Some("v3"));
     // A local content edit accepted during organization keeps the verified
     // provider baseline, even before the ordinary mailbox read catches up.
     let mut edited = input.clone();
@@ -885,8 +895,9 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
             .unwrap()
             .is_none()
     );
-    let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
+    let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject,base_content->>'version' AS content_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
     assert_eq!(retained.base_version.as_deref(), Some("v4"));
+    assert_eq!(retained.content_version.as_deref(), Some("v4"));
     assert_eq!(retained.subject.as_deref(), Some("Edited while starring"));
     let snapshot = email_api_client::domain::models::MailboxOrganization {
         is_sent: false,

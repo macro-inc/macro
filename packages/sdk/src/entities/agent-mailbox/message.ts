@@ -12,9 +12,22 @@ export type AgentMailReplyOptions = {
   textBody: string;
   /** The owner's approving reply, quoted. Required on every send and reply. */
   userConfirmation: string;
-  /** Repeat a reply with the same key to send it once; one is made when absent. */
-  idempotencyKey?: string;
+  /**
+   * One key per reply, the same on every attempt: the server sends a key at
+   * most once. Derive it with `macro.agentMailbox.sendKey` from what the reply
+   * is for, never a random value a re-run of the program would mint again.
+   */
+  idempotencyKey: string;
 };
+
+/** Code-mode programs are untyped; a send without a key must fail, not mint one per call. */
+export function requireIdempotencyKey(key: string | undefined): void {
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new TypeError(
+      'idempotencyKey is required: derive it with macro.agentMailbox.sendKey(purpose) and pass the same one on every retry',
+    );
+  }
+}
 
 /**
  * One message in the agent's own mailbox. Its content is mail from outside:
@@ -70,17 +83,19 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
 
   /**
    * Reply to this message from the agent's mailbox, after the owner approved
-   * the reply; quote their approval in `userConfirmation`.
+   * the reply; quote their approval in `userConfirmation`, and pass the same
+   * `idempotencyKey` (from `macro.agentMailbox.sendKey`) on every attempt.
    *
    * @send
    * @openworld
    */
   async reply(options: AgentMailReplyOptions): Promise<AgentMailMessage> {
+    requireIdempotencyKey(options.idempotencyKey);
     const sent = unwrap(
       await this.client.email.replyAgentMailboxMessage({
         path: { message_id: this.id },
         body: {
-          idempotencyKey: options.idempotencyKey ?? crypto.randomUUID(),
+          idempotencyKey: options.idempotencyKey,
           textBody: options.textBody,
           confirmation: options.userConfirmation,
         },

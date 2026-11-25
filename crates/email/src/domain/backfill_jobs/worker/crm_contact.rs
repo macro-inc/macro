@@ -25,8 +25,9 @@ use models_email::service::{
 ///
 /// Each population holds one of its team's CRM population slots, so one
 /// team's consent backfill can't occupy a database connection per worker.
-/// A refused slot, or a population that timed out waiting for a CRM lock,
-/// is deferred like a busy backfill write instead of spending a delivery.
+/// A refused slot is deferred for minutes, since the team is paused or busy;
+/// a population that timed out waiting for a CRM lock is deferred like a
+/// busy backfill write. Neither spends a delivery.
 #[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
 pub(super) async fn populate_crm_contact<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
@@ -57,7 +58,7 @@ where
         return Ok(());
     };
 
-    let slot = super::admit_write_slot(ctx.effects.acquire_crm(team_id).await)?;
+    let slot = super::admit_crm_slot(ctx.effects.acquire_crm(team_id).await)?;
     slot.hold(ctx.crm.populate_contact(&team_id, link, p))
         .await
         .map_err(|e| {

@@ -149,10 +149,27 @@ pub struct AwsMailboxKms {
     kms_key_id: String,
 }
 
+/// Longest one KMS call may take, retries included, so a provisioning step
+/// stays well inside the mailbox lease (`LEASE_TTL`).
+pub const KMS_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 impl AwsMailboxKms {
     /// Encrypt under `kms_key_id`, a key used for nothing else, and decrypt.
+    /// Every call gives up after [`KMS_CALL_TIMEOUT`].
     pub fn new(client: aws_sdk_kms::Client, kms_key_id: String) -> Self {
-        Self { client, kms_key_id }
+        let config = client
+            .config()
+            .to_builder()
+            .timeout_config(
+                aws_sdk_kms::config::timeout::TimeoutConfig::builder()
+                    .operation_timeout(KMS_CALL_TIMEOUT)
+                    .build(),
+            )
+            .build();
+        Self {
+            client: aws_sdk_kms::Client::from_conf(config),
+            kms_key_id,
+        }
     }
 }
 

@@ -157,6 +157,11 @@ export type SplitMount = BlockMount | ComponentMount;
 
 export type PopoverSplitOptions = {
   content: SplitContent;
+  /**
+   * Most of the window rather than the default dialog width: for content
+   * built around a picture, such as an agent's screen.
+   */
+  wide?: boolean;
   /** Handles a close request. Call `close` to finish closing the popover. */
   onClose?: (close: () => void) => void;
 };
@@ -1442,12 +1447,23 @@ export function createSplitLayout(
       return existing.topLevelSplit;
     }
 
+    const existingSplits = new Set(state.splits.map((split) => split.id));
     const result = openPane(initialContent, {
       beside,
       referredFrom,
       activate: activate ?? false,
       allowDuplicate,
     });
+    // The router hands content another pane already shows (a hosted detail
+    // that findOpenView can't see) to that pane instead of a new one; bring
+    // it up as the open asked, as a replace does.
+    if (activate) {
+      afterNavigation(result, (outcome) => {
+        if (outcome.status !== 'committed') return;
+        const split = splitOf(outcome.pane);
+        if (existingSplits.has(split)) activateSplit(split);
+      });
+    }
     if (result instanceof Promise) return;
     if (result.status !== 'committed') return;
 

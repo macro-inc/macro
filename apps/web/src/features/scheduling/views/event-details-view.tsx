@@ -6,6 +6,8 @@ import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { createSignal, Show } from 'solid-js';
 import { EventReview } from '../components/event-review';
 import { SchedulingDrawerHeader } from '../components/scheduling-drawer-header';
+import { useScheduling } from '../context/scheduling-context';
+import { bookingAccountLabel } from '../core/booking-account';
 import type {
   AvailabilitySchedule,
   EventType,
@@ -26,6 +28,7 @@ type EventDetailsDialogProps = {
 };
 
 export function EventDetailsDialog(props: EventDetailsDialogProps) {
+  const accounts = useScheduling().bookingAccounts;
   const [open, setOpen] = createSignal(true);
   const active = () => props.event.enabled && !props.event.requiresConfirmation;
   let editing: EventType | undefined;
@@ -58,6 +61,9 @@ export function EventDetailsDialog(props: EventDetailsDialogProps) {
       draft={props.event}
       link={props.link}
       schedule={props.schedule}
+      account={
+        props.team ? undefined : bookingAccountLabel(props.event, accounts())
+      }
       members={props.members}
       team={props.team}
       active={active()}

@@ -5,6 +5,7 @@ import { CONTACT_SECTIONS, type ContactSection } from './core/record';
 import { createAppCrmContext } from './crm-adapter';
 import { Contact as View } from './views/contact-detail';
 import { ContactVisibilityButton as VisibilityButton } from './views/contact-visibility-button';
+import { useRecordTabKeys } from './views/record-tab-keys';
 
 export type { ContactSection } from './core/record';
 
@@ -22,7 +23,14 @@ export function ContactTabs(props: {
   onChange: (section: ContactSection) => void;
   compact?: boolean;
 }) {
-  return <RecordTabs sections={CONTACT_SECTIONS} {...props} />;
+  const tabsRef = useRecordTabKeys({
+    sections: () => CONTACT_SECTIONS,
+    value: () => props.value,
+    onChange: (section) => props.onChange(section),
+  });
+  return (
+    <RecordTabs sections={CONTACT_SECTIONS} tabsRef={tabsRef} {...props} />
+  );
 }
 
 /** The contact visibility action, for a host's top bar. */

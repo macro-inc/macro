@@ -65,7 +65,8 @@ async fn creates_an_inbox_with_the_provisioning_key_tag_and_idempotency_key() {
 #[tokio::test]
 async fn create_failures_map_to_what_provisioning_decides_on() {
     for (status, expected) in [
-        (409, "address taken"),
+        // A conflict the provider does not name as the address is retried.
+        (409, "provider unavailable"),
         (402, "provider credentials are missing or refused"),
         (401, "provider credentials are missing or refused"),
         (429, "provider throttled the request"),
@@ -352,7 +353,7 @@ async fn revoking_all_access_revokes_only_keys_scoped_to_exactly_that_mailbox() 
         .mount(&server)
         .await;
 
-    adapter.revoke_all_access(&inbox_id()).await.unwrap();
+    adapter.revoke_all_access(&inbox_id(), None).await.unwrap();
 
     let deletes = server
         .received_requests()
@@ -381,10 +382,13 @@ async fn a_lost_create_is_never_matched_to_another_owners_inbox() {
 
     let found = adapter
         .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
-        .await
-        .unwrap();
+        .await;
 
-    assert_eq!(found, None);
+    // Neither inbox is taken for it, and the unfiltered listing proves nothing.
+    assert!(
+        matches!(found, Err(ProviderError::Unavailable)),
+        "{found:?}"
+    );
 }
 
 #[tokio::test]
@@ -407,4 +411,157 @@ async fn two_inboxes_with_the_same_owner_tag_are_refused_rather_than_guessed() {
         .await;
 
     assert!(matches!(found, Err(ProviderError::Unavailable)));
+}
+
+#[tokio::test]
+async fn a_conflict_on_send_or_reply_is_retryable_not_a_rejection() {
+    let (server, adapter) = adapter().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(409)
+                .set_body_json(json!({"error": {"code": "idempotency_in_progress"}})),
+        )
+        .mount(&server)
+        .await;
+    let key = MailboxKey::new(SCOPED_KEY.to_owned());
+    let message = OutgoingMessage {
+        to: vec!["person@example.com".to_owned()],
+        cc: vec![],
+        subject: "Hi".to_owned(),
+        text_body: "Hello".to_owned(),
+    };
+
+    let sent = adapter
+        .send(&inbox_id(), &key, &message, Uuid::from_u128(1))
+        .await;
+    let reply = adapter
+        .reply(
+            &inbox_id(),
+            &key,
+            &ProviderMessageId("m-1".to_owned()),
+            &ReplyMessage {
+                text_body: "Thanks".to_owned(),
+            },
+            Uuid::from_u128(2),
+        )
+        .await;
+
+    assert!(matches!(sent, Err(ProviderError::Unavailable)), "{sent:?}");
+    assert!(
+        matches!(reply, Err(ProviderError::Unavailable)),
+        "{reply:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_create_conflict_is_a_taken_address_only_when_the_provider_says_so() {
+    for (code, taken) in [
+        ("address_taken", true),
+        // Undocumented codes, however close they read, are retried under
+        // the same key rather than guessed as a taken address.
+        ("email_taken", false),
+        ("local_part_unavailable", false),
+        ("request_exists", false),
+        ("temporarily_unavailable", false),
+        ("idempotency_key_in_use", false),
+        ("request_in_progress", false),
+        ("conflict", false),
+        ("", false),
+    ] {
+        let (server, adapter) = adapter().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/inboxes"))
+            .respond_with(
+                ResponseTemplate::new(409).set_body_json(json!({"error": {"code": code}})),
+            )
+            .mount(&server)
+            .await;
+
+        let created = adapter.create_mailbox(&create_request()).await;
+
+        if taken {
+            assert!(
+                matches!(created, Err(ProviderError::AddressTaken)),
+                "{code}: {created:?}"
+            );
+        } else {
+            assert!(
+                matches!(created, Err(ProviderError::Unavailable)),
+                "{code}: {created:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn revoking_all_access_skips_the_credential_already_revoked() {
+    let (server, adapter) = adapter().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/api-keys"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"api_keys": [
+                {"key_id": "stored", "inbox_ids": [inbox_id().0]},
+                {"key_id": "minted-never-stored", "inbox_ids": [inbox_id().0]},
+            ], "count": 2}
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v1/api-keys/minted-never-stored"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v1/api-keys/stored"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    adapter
+        .revoke_all_access(&inbox_id(), Some(&ProviderGrantId("stored".to_owned())))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_listing_with_no_inbox_under_the_tag_proves_nothing_and_is_retried() {
+    let other_tag = format!("macro-agent-mailbox:{}", Uuid::from_u128(8));
+    let (server, adapter) = adapter().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/inboxes"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"inboxes": [{"inbox_id": "someone-else", "email": "x@example.net", "tags": [other_tag]}], "count": 1}
+        })))
+        .mount(&server)
+        .await;
+
+    let found = adapter
+        .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
+        .await;
+
+    assert!(
+        matches!(found, Err(ProviderError::Unavailable)),
+        "{found:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_empty_filtered_listing_means_no_inbox_under_the_tag() {
+    let (server, adapter) = adapter().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/inboxes"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data": {"inboxes": [], "count": 0}})),
+        )
+        .mount(&server)
+        .await;
+
+    let found = adapter
+        .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
+        .await
+        .unwrap();
+
+    assert!(found.is_none());
 }

@@ -1,7 +1,5 @@
-import { setCookie } from '@core/util/cookies';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  adAttributionForCapture,
   clearMobileEmailAttribution,
   mobileEmailPersonProperties,
   rememberMobileEmailAttribution,
@@ -65,20 +63,6 @@ describe('mobile email attribution', () => {
         $initial_signup_flow: 'mobile_email',
         $initial_utm_medium: 'paid',
       },
-    });
-  });
-
-  it('sends the capture page parameters, with the url winning over an older cookie', () => {
-    setCookie('utm_source', 'newsletter', 1);
-    setCookie('utm_medium', 'email', 1);
-    window.history.replaceState(
-      {},
-      '',
-      '/app/mobile-email-signup?utm_source=facebook&page=1'
-    );
-    expect(adAttributionForCapture()).toEqual({
-      utm_source: 'facebook',
-      utm_medium: 'email',
     });
   });
 

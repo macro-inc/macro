@@ -301,7 +301,16 @@ async fn failure(response: Response, operation: Operation) -> ProviderError {
         }
         StatusCode::FORBIDDEN => ProviderError::NotConfigured,
         StatusCode::NOT_FOUND => ProviderError::NotFound,
-        StatusCode::CONFLICT if operation == Operation::CreateInbox => ProviderError::AddressTaken,
+        // Only a conflict the provider names as the address is a taken
+        // address. Any other (an idempotent create still in flight) is
+        // retried under the same key: reading it as taken would make a
+        // second, suffixed mailbox and orphan the first.
+        StatusCode::CONFLICT if operation == Operation::CreateInbox && names_the_address(&code) => {
+            ProviderError::AddressTaken
+        }
+        StatusCode::CONFLICT if operation == Operation::CreateInbox => ProviderError::Unavailable,
+        // An idempotent request still in flight: retry under the same key.
+        StatusCode::CONFLICT if operation == Operation::Send => ProviderError::Unavailable,
         StatusCode::TOO_MANY_REQUESTS if operation == Operation::Send => ProviderError::SendLimit,
         StatusCode::TOO_MANY_REQUESTS => ProviderError::Throttled,
         status if status.is_server_error() => ProviderError::Unavailable,
@@ -313,6 +322,17 @@ async fn failure(response: Response, operation: Operation) -> ProviderError {
         "deadsimple.email refused a request"
     );
     error
+}
+
+/// Create-conflict codes that mean the address itself is taken. The
+/// provider's documentation lists no `409` for `POST /v1/inboxes`, so this
+/// holds only the code the fake vendor uses; add a code only once the provider
+/// confirms it. Every other conflict is retried under the same key.
+const ADDRESS_TAKEN_CODES: [&str; 1] = ["address_taken"];
+
+/// Whether a create conflict's error code says the address is taken.
+fn names_the_address(code: &str) -> bool {
+    ADDRESS_TAKEN_CODES.contains(&code)
 }
 
 async fn send_request(request: RequestBuilder) -> Result<Response, ProviderError> {
@@ -415,9 +435,12 @@ impl MailboxProvisioner for DeadSimple {
         let first = owned.next();
         if first.is_none() && listed > 0 {
             // The provider listed inboxes but none carries the tag: its tag
-            // filter or field isn't what this adapter expects, and a lost
-            // create can't be found.
+            // filter or field isn't what this adapter expects, so "nothing
+            // under the tag" is not proven, and a caller deciding to create
+            // or replace on it could leave a lost create behind. Only an
+            // empty filtered listing means none.
             tracing::warn!(agent_mailbox.id = %owner_tag, listed, "provider tag listing matched no inbox");
+            return Err(ProviderError::Unavailable);
         }
         if owned.next().is_some() {
             tracing::error!(agent_mailbox.id = %owner_tag, "two provider inboxes carry one mailbox's owner tag");
@@ -460,14 +483,19 @@ impl MailboxProvisioner for DeadSimple {
     }
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.revoke_scoped_keys", skip_all, err)]
-    async fn revoke_all_access(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
+    async fn revoke_all_access(
+        &self,
+        mailbox: &ProviderMailboxId,
+        already_revoked: Option<&ProviderGrantId>,
+    ) -> Result<(), ProviderError> {
         let keys: ApiKeyList =
             data(self.admin(Method::GET, "/v1/api-keys")?, Operation::Other).await?;
         // Only keys scoped to exactly this mailbox: never an account-wide key.
         let scoped = keys
             .api_keys
             .into_iter()
-            .filter(|key| key.inbox_ids.as_slice() == std::slice::from_ref(&mailbox.0));
+            .filter(|key| key.inbox_ids.as_slice() == std::slice::from_ref(&mailbox.0))
+            .filter(|key| already_revoked.is_none_or(|revoked| revoked.0 != key.key_id));
         for key in scoped {
             self.revoke_access(&ProviderGrantId(key.key_id)).await?;
         }

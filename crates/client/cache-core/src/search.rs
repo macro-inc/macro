@@ -234,7 +234,21 @@ pub fn validate_search_request(request: &SearchRequest) -> Result<Vec<String>, S
 /// of a current profile. Storage backends delete any old derived row in that
 /// case, in the same transaction as the base-record upsert.
 pub fn project_search_documents(key: &EntityKey<'static>, record: &Record) -> Vec<SearchDocument> {
-    project_quick_access(key, record).into_iter().collect()
+    project_quick_access(key, record, || source_hash(&encode_record(record)))
+        .into_iter()
+        .collect()
+}
+
+/// Projects like [`project_search_documents`] for a caller that already holds
+/// the record's [`encode_record`] bytes, so the hash doesn't encode it again.
+pub fn project_encoded_search_documents(
+    key: &EntityKey<'static>,
+    record: &Record,
+    encoded: &[u8],
+) -> Vec<SearchDocument> {
+    project_quick_access(key, record, || source_hash(encoded))
+        .into_iter()
+        .collect()
 }
 
 fn quick_access_fields<'a>(
@@ -272,7 +286,11 @@ fn quick_access_fields<'a>(
         .then_some((typename, bucket, text_fields))
 }
 
-fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
+fn project_quick_access(
+    key: &EntityKey<'static>,
+    record: &Record,
+    source_hash: impl FnOnce() -> String,
+) -> Option<SearchDocument> {
     let (typename, bucket, text_fields) = quick_access_fields(key, record)?;
     let search_text = if typename == "GraphqlContact" {
         let email = string_field(record, "email").unwrap_or("");
@@ -296,7 +314,7 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
         bucket: bucket.to_owned(),
         search_text,
         timestamp_ms: quick_access_timestamp(typename, record),
-        source_hash: source_hash(record),
+        source_hash: source_hash(),
     })
 }
 
@@ -443,8 +461,8 @@ fn value_timestamp(value: &CacheValue) -> Option<i64> {
     }
 }
 
-fn source_hash(record: &Record) -> String {
-    let digest = Sha256::digest(encode_record(record));
+fn source_hash(encoded: &[u8]) -> String {
+    let digest = Sha256::digest(encoded);
     digest[..8]
         .iter()
         .map(|byte| format!("{byte:02x}"))

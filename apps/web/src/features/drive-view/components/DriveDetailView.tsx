@@ -1,6 +1,7 @@
 import {
   EntityDetail,
   entityDetailBlockType,
+  entityDetailOpensMarkdown,
 } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbItem } from '@app/components/entity-detail/EntityDetailBreadcrumbItem';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
@@ -114,12 +115,7 @@ function StackEntityDetail(props: {
   const navigationStack = useDriveDetailNavigation();
   const markdownTarget = () => {
     const target = props.entry.data;
-    const blockType = entityDetailBlockType(target);
-    return target.type === 'document' &&
-      (blockType === 'md' ||
-        blockType === 'task' ||
-        blockType === 'snippet' ||
-        blockType === 'skill')
+    return target.type === 'document' && entityDetailOpensMarkdown(target)
       ? target
       : undefined;
   };

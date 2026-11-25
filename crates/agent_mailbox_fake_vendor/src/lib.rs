@@ -26,6 +26,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use uuid::Uuid;
 
 /// The domain fake mailboxes get; never a real one.
 pub const FAKE_DOMAIN: &str = "fake-vendor.invalid";
@@ -65,13 +66,24 @@ struct VendorState {
     /// response it got. Scoped per credential, not per endpoint, as many real
     /// APIs scope it, so a key reused across operations is caught.
     replays: HashMap<String, (String, Value)>,
+    /// Random per process, so ids never repeat across restarts of the fake,
+    /// as a real provider's never do.
+    run: String,
     next_id: u64,
 }
 
 impl VendorState {
+    fn new() -> Self {
+        let run = Uuid::new_v4().simple().to_string();
+        Self {
+            run: run[..8].to_owned(),
+            ..Self::default()
+        }
+    }
+
     fn id(&mut self, prefix: &str) -> String {
         self.next_id += 1;
-        format!("{prefix}-{:08}", self.next_id)
+        format!("{prefix}-{}-{:08}", self.run, self.next_id)
     }
 }
 
@@ -87,7 +99,7 @@ impl FakeVendor {
     #[must_use]
     pub fn new(admin_key: &str) -> Self {
         Self {
-            state: Arc::new(Mutex::new(VendorState::default())),
+            state: Arc::new(Mutex::new(VendorState::new())),
             admin_key: Arc::from(admin_key),
         }
     }

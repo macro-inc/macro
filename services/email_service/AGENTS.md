@@ -257,9 +257,12 @@ the gateway `/email` prefix.
   so a stalled write can't lose its slot to another writer. Live inbox
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
 - Each CRM contact population holds one of four per-team Redis slots
-  (`acquire_crm_population_slot`), so one team's consent backfill can't hold a
-  database connection per worker. A refused slot, or a population that timed
-  out on a CRM lock (`CrmError::Contended`), is deferred like a busy write.
+  (`try_acquire_crm_population_slot`), so one team's consent backfill can't
+  hold a database connection per worker. It never waits for one: a refused
+  population (all four taken, as when the team is paused by filling its slot
+  set) is deferred 10 to 15 minutes (`admit_crm_slot`), so a paused team holds
+  no backfill worker. A population that timed out on a CRM lock
+  (`CrmError::Contended`) is deferred like a busy write.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure
@@ -325,6 +328,16 @@ the gateway `/email` prefix.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see
   `email::domain::mailbox::inbox_sync::build_contact_connections`.
+- Link-manager messages go to one of two queues by
+  `models_email`'s `LinkManagerMessage::lane(sender)`: the interactive
+  `LinkManagerQueue` (a person's removal, account deletion, reauth notices,
+  health checks a person asked for) or `LinkMaintenanceQueue` (the refresh handler's
+  refreshes, health polls and removal sweeps). Each producer names its
+  `LinkManagerSender`. A sweep removal's purge is re-sent by the lifecycle's
+  effect publisher, so unused and inactive removals keep the maintenance lane
+  by their reason; a new message kind or reason decides its lane there. Each
+  task runs one consumer per lane; `email.link_manager.message` records `lane`,
+  `kind` and `queue_wait_ms` (since SQS accepted the message).
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice. A
@@ -342,17 +355,37 @@ the gateway `/email` prefix.
 - `run_health` runs in every `pubsub_workers` task: each flushes its in-memory
   Outlook import counts every minute, and the task that wins the Redis key
   `outlook:health_snapshot` logs one "outlook mailbox health" line per Outlook
-  mailbox. Its fields, the `outlook.sync.*`, `outlook.graph_request` and
+  mailbox, and one "outlook folder line" for the mail folder claim line they
+  share. Its fields, the `outlook.sync.*`, `outlook.graph_request` and
   `outlook.token.acquire` spans and the import lifecycle logs are read by the
   Outlook sync monitors in `infra/stacks/monitoring`; rename them only
   together. Loops whose domain service logs its own deferrals use `reported`,
   the others `record`, which logs gate refusals at DEBUG.
-- `GET /internal/recent_messages/{user_id}` reads the user's own syncing
-  inboxes straight from Gmail and Outlook (`outbound/recent_inbox.rs`), not
-  the synced mailbox, so it answers before a backfill finishes. Every call
-  spends live provider quota; Gmail reads three messages at a time to stay
-  under the gate's live cap. Don't record message content or addresses on
-  its spans.
+- `GET /internal/recent_messages/{user_id}` reads from the user's own syncing
+  mailboxes straight from Gmail and Outlook (`outbound/recent_inbox.rs`) so
+  it answers before a backfill finishes. It reads the newest `limit` inbox
+  messages (at most 100), or a window with `days` (at most 30 days and 500
+  messages, with snippets on only the newest `texts`). Only a window accepts
+  `folder`, which may be `inbox` (the default) or `sent`. A sent window lists
+  Gmail's `SENT` label or Outlook's `sentitems` folder. Outlook's inbox
+  filters and sorts by `receivedDateTime`, its sent folder by `sentDateTime`,
+  and each message is dated the way its list was filtered. Each call spends provider quota.
+  Gmail reads three messages at a time. The newest-`limit` read takes the
+  live share and is refused at once. A month
+  of 500 is bulk work: a dated list (`after:`, each page its own gated
+  call) and 500 reads, about 2,505 quota units, through a second Gmail
+  client in the `Backfill` share, so sync and user writes keep the slots
+  and units held for them. That is more than one 10-second window of the
+  share, so a window read waits out the gate's refusals for 45 s from its
+  list; a read not started by then is left out, and one still running then
+  finishes, with the list pages or token refresh it is made of (cutting it
+  off could leak a gate slot). A later list page that
+  fails keeps the ids listed before it. Outlook pages through
+  `@odata.nextLink` past empty pages (at most ten pages, never one twice,
+  its query in any order) and keeps what earlier pages read when a later
+  one, or its link, fails. The `email.recent_inbox` span records the folder.
+  Keep message content and addresses off its spans. `macro_tower_layers`
+  keeps the `{user_id}` email address out of `url.path`.
 - Connecting an inbox writes its `email_links` row, which a CRM contact
   population share-locks for its whole transaction. The connect transactions
   (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)

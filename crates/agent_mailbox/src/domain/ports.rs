@@ -8,7 +8,8 @@ use crate::domain::models::{
     AgentMailbox, AgentMailboxId, CreateMailbox, EncryptedMailboxKey, MailMessage, MailboxKey,
     MailboxState, MessageList, MessagePage, OutgoingMessage, ProviderGrantId, ProviderMailboxId,
     ProviderMessageId, ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage,
-    Reservation, SendAttempt, SendLimits, SendReservation, SentMessage, StoredGrant, TeamId,
+    Reservation, SendAttempt, SendLimits, SendReservation, SentMessage, StoredGrant, SweepJob,
+    TeamId,
 };
 
 /// How a provider call failed, in the terms the service decides on.
@@ -75,10 +76,12 @@ pub trait MailboxProvisioner: Send + Sync + 'static {
         grant: &ProviderGrantId,
     ) -> impl Future<Output = Result<(), ProviderError>> + Send;
 
-    /// Revoke every credential scoped to this mailbox, stored or not.
+    /// Revoke every credential scoped to this mailbox, stored or not, except
+    /// `already_revoked` (the stored one, revoked on its own just before).
     fn revoke_all_access(
         &self,
         mailbox: &ProviderMailboxId,
+        already_revoked: Option<&ProviderGrantId>,
     ) -> impl Future<Output = Result<(), ProviderError>> + Send;
 
     /// Delete a mailbox and its mail. Deleting one already gone succeeds.
@@ -304,10 +307,13 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Count a send against the mailbox's and its team's caps, or find it
-    /// already sent, and open its audit record. A key reused with a different
+    /// already sent, recording it under its key. The mailbox's state is
+    /// rechecked under its row lock: a mailbox paused or released since the
+    /// caller read it is `NotActive`. A key reused with a different
     /// fingerprint is `KeyReused`. A retry of a send whose outcome is unknown
     /// proceeds (not fresh) without counting twice while it started after
-    /// `replayable_since`, and is refused as unknown after.
+    /// `replayable_since`, and is refused as unknown after. A key whose send
+    /// was refused may be reserved again.
     fn reserve_send(
         &self,
         mailbox: &AgentMailbox,
@@ -317,8 +323,7 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         replayable_since: DateTime<Utc>,
     ) -> impl Future<Output = Result<SendReservation, Self::Err>> + Send;
 
-    /// Record the provider's acceptance of a reserved send, in the ledger and
-    /// its audit record.
+    /// Record the provider's acceptance of a reserved send.
     fn complete_send(
         &self,
         mailbox: AgentMailboxId,
@@ -326,8 +331,8 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         sent: &SentMessage,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Drop a fresh reservation the provider definitely did not accept,
-    /// freeing its slot; its audit record stays, marked refused.
+    /// Mark a fresh reservation the provider definitely did not accept as
+    /// refused, freeing its slot; the record stays.
     fn cancel_send(
         &self,
         mailbox: AgentMailboxId,
@@ -335,16 +340,8 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete up to [`PRUNE_BATCH`](crate::domain::service::PRUNE_BATCH) send
-    /// records created before `before`, oldest first; they no longer count
-    /// toward a cap or dedupe a retry. Returns how many went.
+    /// records reserved before `before`, oldest first. Returns how many went.
     fn prune_sends(
-        &self,
-        before: DateTime<Utc>,
-    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
-
-    /// Delete up to [`PRUNE_BATCH`](crate::domain::service::PRUNE_BATCH) send
-    /// audit records created before `before`. Returns how many went.
-    fn prune_send_audit(
         &self,
         before: DateTime<Utc>,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
@@ -367,10 +364,19 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Take this round of the orphan check for the whole cluster: true for
-    /// exactly one caller per `every`, timed by the store's clock.
-    fn claim_orphan_check(
+    /// Release a failed mailbox that never recorded a provider mailbox and
+    /// that no attempt holds, so a new request can take the agent's place.
+    /// Returns whether it did.
+    fn release_failed_unreached(
         &self,
+        id: AgentMailboxId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Take this round of `job` for the whole cluster: true for exactly one
+    /// caller per `every`, timed by the store's clock.
+    fn claim_sweep_job(
+        &self,
+        job: SweepJob,
         every: chrono::Duration,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }

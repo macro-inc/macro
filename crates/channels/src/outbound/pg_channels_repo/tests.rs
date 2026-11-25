@@ -309,6 +309,253 @@ async fn is_participant_filter_inside_not_widens_candidates(pool: Pool<Postgres>
     assert!(!channels[0].is_participant);
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_by_id_read_that_mentions_participation_returns_every_channel_the_user_can_open(
+    pool: Pool<Postgres>,
+) {
+    const PRIVATE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c91);
+    sqlx::query!(
+        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id, created_at, updated_at)
+           VALUES ($1, 'private', 'private', $2, '2024-01-01', '2024-01-01')"#,
+        PRIVATE,
+        USER_B,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at)
+           VALUES ($1, $2, 'owner', '2024-01-01')"#,
+        PRIVATE,
+        USER_B,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = repo(pool);
+    // user-d is in no channel and on Team B: they can open the public
+    // channels and Team B's channel, not Team A's or the private one.
+    let named = [CH1, CH2, TEAM_A_AUTO_ACTIVE, TEAM_B_AUTO, PRIVATE]
+        .into_iter()
+        .map(|id| Expr::val(ChannelLiteral::ChannelId(id)))
+        .reduce(Expr::or)
+        .unwrap();
+    let either_participation = Expr::or(
+        Expr::val(ChannelLiteral::IsParticipant(true)),
+        Expr::val(ChannelLiteral::IsParticipant(false)),
+    );
+
+    let opened = repo
+        .get_user_channels_with_participants(channels_params(
+            NON_MEMBER,
+            Some(Arc::new(Expr::and(
+                named.clone(),
+                either_participation.clone(),
+            ))),
+        ))
+        .await
+        .unwrap();
+    let opened_ids: HashSet<Uuid> = opened.iter().map(|c| c.channel.id).collect();
+    assert_eq!(opened_ids, HashSet::from([CH1, CH2, TEAM_B_AUTO]));
+    assert!(opened.iter().all(|c| !c.is_participant));
+
+    // Reads that name ids without mentioning participation (favorites, CRM
+    // associations) stay bounded by membership, and so do lists.
+    assert!(
+        channel_ids_matching(&repo, NON_MEMBER, named)
+            .await
+            .is_empty()
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, NON_MEMBER, either_participation).await,
+        HashSet::from([TEAM_B_AUTO])
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_read_keyed_by_ids_or_team_keeps_joined_channels_only(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::NotificationState::Done;
+
+    seed_channel_list_notifications(&pool).await?;
+    let repo = repo(pool);
+    let joined: HashSet<Uuid> = repo
+        .get_user_channels_with_participants(channels_params(LEFT_USER, None))
+        .await?
+        .into_iter()
+        .map(|c| c.channel.id)
+        .collect();
+    let id = |id| Expr::val(ChannelLiteral::ChannelId(id));
+    let participant = Expr::val(ChannelLiteral::IsParticipant(true));
+    let named_ids = [CH1, TEAM_A_AUTO_ACTIVE, TEAM_A_AUTO_LEFT, TEAM_B_AUTO];
+    let named = named_ids.into_iter().map(id).reduce(Expr::or).unwrap();
+    let joined_named: HashSet<Uuid> = named_ids
+        .into_iter()
+        .filter(|id| joined.contains(id))
+        .collect();
+    assert_eq!(
+        joined_named,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_B_AUTO])
+    );
+
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, named.clone()).await,
+        joined_named
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, Expr::and(participant.clone(), named)).await,
+        joined_named
+    );
+    // Team A's left channel is the team's, but left-user left it.
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(participant, Expr::val(ChannelLiteral::TeamId(TEAM_A)))
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL])
+    );
+    let not_done = |channel| Expr::and(id(channel), Expr::is_not(channel_state(Done)));
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, not_done(TEAM_A_AUTO_ACTIVE)).await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE])
+    );
+    assert!(
+        channel_ids_matching(&repo, LEFT_USER, not_done(TEAM_B_AUTO))
+            .await
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[test]
+fn joined_candidates_start_from_named_ids_or_teams() {
+    use super::ChannelCandidates::{Joined, JoinedByChannel, JoinedKeyed, Named, WithTeamChannels};
+    use item_filters::NotificationState::Done;
+
+    let id = || Expr::val(ChannelLiteral::ChannelId(CH1));
+    let team = || Expr::val(ChannelLiteral::TeamId(TEAM_A));
+    let participant = |is| Expr::val(ChannelLiteral::IsParticipant(is));
+    let org = || Expr::val(ChannelLiteral::OrganizationId(1));
+    let pick = |filter: Expr<ChannelLiteral>| {
+        format!("{:?}", super::ChannelCandidates::for_filter(Some(filter)))
+    };
+    let want = |candidates: super::ChannelCandidates, filter: Option<Expr<ChannelLiteral>>| {
+        format!("{:?}", (candidates, filter))
+    };
+
+    assert_eq!(
+        format!("{:?}", super::ChannelCandidates::for_filter(None)),
+        want(Joined, None)
+    );
+    assert_eq!(pick(id()), want(JoinedKeyed, Some(id())));
+    assert_eq!(
+        pick(Expr::or(id(), team())),
+        want(JoinedKeyed, Some(Expr::or(id(), team())))
+    );
+    assert_eq!(
+        pick(Expr::and(participant(true), id())),
+        want(JoinedKeyed, Some(id()))
+    );
+    assert_eq!(
+        pick(Expr::and(Expr::and(team(), participant(true)), org())),
+        want(JoinedKeyed, Some(Expr::and(team(), org())))
+    );
+    assert_eq!(pick(participant(true)), want(Joined, None));
+    assert_eq!(
+        pick(Expr::or(id(), org())),
+        want(Joined, Some(Expr::or(id(), org())))
+    );
+    assert_eq!(
+        pick(Expr::is_not(id())),
+        want(Joined, Some(Expr::is_not(id())))
+    );
+    assert_eq!(
+        pick(Expr::is_not(channel_state(Done))),
+        want(JoinedByChannel, Some(Expr::is_not(channel_state(Done))))
+    );
+    assert_eq!(
+        pick(Expr::and(participant(true), channel_state(Done))),
+        want(JoinedByChannel, Some(channel_state(Done)))
+    );
+    assert_eq!(
+        pick(Expr::and(id(), channel_state(Done))),
+        want(JoinedByChannel, Some(Expr::and(id(), channel_state(Done))))
+    );
+    assert_eq!(
+        pick(Expr::and(team(), Expr::is_not(channel_state(Done)))),
+        want(
+            JoinedByChannel,
+            Some(Expr::and(team(), Expr::is_not(channel_state(Done))))
+        )
+    );
+    // Literals the SQL leaves out, and double negation, keep the id lookup.
+    let thread = || Expr::val(ChannelLiteral::ThreadId(CH2));
+    assert_eq!(
+        pick(Expr::is_not(Expr::is_not(id()))),
+        want(JoinedKeyed, Some(Expr::is_not(Expr::is_not(id()))))
+    );
+    assert_eq!(
+        pick(Expr::or(id(), thread())),
+        want(JoinedKeyed, Some(Expr::or(id(), thread())))
+    );
+    assert_eq!(
+        pick(Expr::is_not(Expr::or(Expr::is_not(id()), org()))),
+        want(
+            JoinedKeyed,
+            Some(Expr::is_not(Expr::or(Expr::is_not(id()), org())))
+        )
+    );
+    assert_eq!(
+        pick(Expr::is_not(Expr::and(id(), org()))),
+        want(Joined, Some(Expr::is_not(Expr::and(id(), org()))))
+    );
+    assert_eq!(pick(thread()), want(Joined, Some(thread())));
+    let unimportant = || Expr::val(ChannelLiteral::Importance(false));
+    assert_eq!(
+        pick(Expr::or(id(), unimportant())),
+        want(JoinedKeyed, Some(Expr::or(id(), unimportant())))
+    );
+    assert_eq!(
+        pick(Expr::and(team(), Expr::is_not(unimportant()))),
+        want(
+            JoinedKeyed,
+            Some(Expr::and(team(), Expr::is_not(unimportant())))
+        )
+    );
+    assert_eq!(
+        pick(Expr::is_not(unimportant())),
+        want(Joined, Some(Expr::is_not(unimportant())))
+    );
+    assert_eq!(pick(unimportant()), want(JoinedKeyed, Some(unimportant())));
+    let either = Expr::or(participant(true), participant(false));
+    assert_eq!(
+        pick(Expr::and(id(), either.clone())),
+        want(Named, Some(Expr::and(id(), either.clone())))
+    );
+    assert_eq!(
+        pick(Expr::and(team(), either.clone())),
+        want(WithTeamChannels, Some(Expr::and(team(), either)))
+    );
+
+    let sql = super::build_channel_list_query(&Some(Arc::new(Expr::and(participant(true), id()))))
+        .sql()
+        .to_owned();
+    assert!(!sql.contains("fcp"), "{sql}");
+    assert!(
+        sql.find("c.id = ").unwrap() < sql.find("OFFSET 0").unwrap(),
+        "the ids narrow the channels inside the fence: {sql}"
+    );
+}
+
 fn channel_state(state: item_filters::NotificationState) -> Expr<ChannelLiteral> {
     Expr::val(ChannelLiteral::NotificationState(state))
 }
@@ -486,9 +733,8 @@ async fn channel_list_unseen_or_seen_stays_on_joined_channels(
 
     // The sidebar Inbox presets send `channelDone: false` without a
     // participation literal, so the candidates are joined channels only.
-    let sql = super::build_channel_list_query(&Some(Arc::new(not_done.clone())))
-        .sql()
-        .to_owned();
+    let builder = super::build_channel_list_query(&Some(Arc::new(not_done.clone())));
+    let sql = builder.sql().to_owned();
     assert!(!sql.contains("team_user"), "{sql}");
 
     // c12 has an unseen notification but left-user left it; c21 has only a
@@ -805,6 +1051,54 @@ async fn maybe_get_dm_finds_channel_regardless_of_argument_order(pool: Pool<Post
 
     assert_eq!(forward, Some(created.id));
     assert_eq!(reverse, Some(created.id));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_viewed_at_reads_the_users_own_row_even_after_leaving(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let viewed: DateTime<Utc> = "2024-01-04T12:30:00.123456Z".parse().unwrap();
+    // The left user viewed the channel they later left; someone else viewed
+    // another channel; nobody's row says the left user viewed TEAM_A_MANUAL.
+    sqlx::query!(
+        "INSERT INTO comms_activity (id, user_id, channel_id, viewed_at, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, now(), now()),
+                (gen_random_uuid(), $4, $5, now(), now(), now()),
+                (gen_random_uuid(), $1, $6, NULL, now(), now())",
+        LEFT_USER,
+        TEAM_A_AUTO_LEFT,
+        viewed.naive_utc(),
+        USER_B,
+        TEAM_A_MANUAL,
+        TEAM_A_AUTO_ACTIVE,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let left_user = macro_user_id(LEFT_USER);
+    assert_eq!(
+        repo.get_viewed_at(left_user.clone(), TEAM_A_AUTO_LEFT)
+            .await
+            .unwrap(),
+        Some(viewed)
+    );
+    assert_eq!(
+        repo.get_viewed_at(left_user.clone(), TEAM_A_MANUAL)
+            .await
+            .unwrap(),
+        None,
+        "another user's view is not this user's"
+    );
+    assert_eq!(
+        repo.get_viewed_at(left_user, TEAM_A_AUTO_ACTIVE)
+            .await
+            .unwrap(),
+        None,
+        "a row that only records an interaction has no view"
+    );
 }
 
 #[sqlx::test(
@@ -3004,9 +3298,8 @@ fn home_unread_channel_list_reads_notifications_once() {
         channel_state,
         Expr::val(ChannelLiteral::IsParticipant(true)),
     );
-    let sql = super::build_channel_list_query(&Some(Arc::new(filter)))
-        .sql()
-        .to_owned();
+    let builder = super::build_channel_list_query(&Some(Arc::new(filter)));
+    let sql = builder.sql().to_owned();
     assert_eq!(sql.matches("FROM user_notification").count(), 1, "{sql}");
     assert!(!sql.contains("JOIN notification"), "{sql}");
     assert!(!sql.contains("team_user"), "{sql}");
@@ -3103,4 +3396,194 @@ async fn home_unread_thread_feed_matches_unseen_participant_threads(
         .await?
     );
     Ok(())
+}
+
+/// Frecency is not requested by the walk below.
+struct NoFrecency;
+
+impl frecency::domain::ports::AggregateFrecencyStorage for NoFrecency {
+    type Err = anyhow::Error;
+
+    async fn get_top_entities(
+        &self,
+        _req: frecency::domain::models::FrecencyPageRequest<'_>,
+    ) -> Result<Vec<frecency::domain::models::AggregateFrecency>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn set_aggregate(
+        &self,
+        _frecency: frecency::domain::models::AggregateFrecency,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn get_aggregate_for_user_entities<'a>(
+        &self,
+        _user_id: MacroUserIdStr<'a>,
+        _entities: &'a [model_entity::Entity<'a>],
+    ) -> Result<Vec<frecency::domain::models::AggregateFrecency>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
+/// The id and viewed time `channel_list_activity_walk.sql` gives its `i`th
+/// channel.
+fn walk_channel(i: u32) -> (Uuid, DateTime<Utc>) {
+    let viewed_at: DateTime<Utc> = "2026-01-01T00:00:00Z".parse().unwrap();
+    (
+        Uuid::from_u128(0xd000 + u128::from(i)),
+        viewed_at + chrono::Duration::minutes(i64::from(i)),
+    )
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../fixtures",
+        scripts("channels_repo", "channel_list_activity_walk")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_viewed_updated_walk_returns_every_channel_with_its_own_activity(pool: Pool<Postgres>) {
+    use crate::domain::list_service::ChannelListServiceImpl;
+    use crate::domain::models::ChannelWithLatest;
+    use crate::domain::ports::ChannelListService;
+    use models_pagination::SortOn;
+
+    let service = ChannelListServiceImpl::new(repo(pool.clone()), repo(pool.clone()), NoFrecency);
+    let request = |limit: u32, query| GetChannelsRequest {
+        macro_id: macro_user_id(USER_A),
+        limit: Some(limit),
+        include_frecency: false,
+        query,
+    };
+    let sort = SimpleSortMethod::ViewedUpdated;
+    let everything = service
+        .get_channels(request(500, Query::Sort(sort, None)))
+        .await
+        .unwrap();
+    assert!(everything.len() > 130, "the fixture adds 130 channels");
+
+    // Page as Soup and REST do: each cursor comes from the last channel's
+    // sort value as the service filled it in.
+    let mut walked: Vec<ChannelWithLatest> = Vec::new();
+    let mut query = Query::Sort(sort, None);
+    loop {
+        let page = service.get_channels(request(10, query)).await.unwrap();
+        let Some(last) = page.last() else {
+            break;
+        };
+        query = Query::Cursor(Cursor {
+            id: last.channel.channel.id,
+            limit: 10,
+            val: ChannelWithLatest::sort_on(sort)(last),
+            filter: None,
+        });
+        walked.extend(page);
+        assert!(
+            walked.len() <= everything.len(),
+            "the walk repeated a channel"
+        );
+    }
+
+    let ids = |channels: &[ChannelWithLatest]| {
+        channels
+            .iter()
+            .map(|channel| channel.channel.channel.id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(ids(&walked), ids(&everything));
+    let viewed: HashMap<Uuid, Option<DateTime<Utc>>> = walked
+        .iter()
+        .map(|channel| (channel.channel.channel.id, channel.viewed_at))
+        .collect();
+    for i in 1..=130 {
+        let (id, viewed_at) = walk_channel(i);
+        assert_eq!(viewed[&id], Some(viewed_at), "channel {i}'s viewed time");
+    }
+}
+
+/// Walks user-a's channels ten a page as Soup does and, once the first page
+/// is read, gives walk channel 1 (on no first page) activity and a view as
+/// another device would. Whether the walk still returned it.
+async fn walk_returns_channel_moved_mid_walk(
+    pool: &Pool<Postgres>,
+    sort: SimpleSortMethod,
+) -> bool {
+    use crate::domain::list_service::ChannelListServiceImpl;
+    use crate::domain::models::ChannelWithLatest;
+    use crate::domain::ports::ChannelListService;
+    use models_pagination::SortOn;
+
+    let service = ChannelListServiceImpl::new(repo(pool.clone()), repo(pool.clone()), NoFrecency);
+    let (moved, _) = walk_channel(1);
+    let mut walked = HashSet::new();
+    let mut query = Query::Sort(sort, None);
+    loop {
+        let page = service
+            .get_channels(GetChannelsRequest {
+                macro_id: macro_user_id(USER_A),
+                limit: Some(10),
+                include_frecency: false,
+                query,
+            })
+            .await
+            .unwrap();
+        let Some(last) = page.last() else {
+            break;
+        };
+        query = Query::Cursor(Cursor {
+            id: last.channel.channel.id,
+            limit: 10,
+            val: ChannelWithLatest::sort_on(sort)(last),
+            filter: None,
+        });
+        let first_page = walked.is_empty();
+        walked.extend(page.iter().map(|channel| channel.channel.channel.id));
+        if first_page {
+            assert!(
+                !walked.contains(&moved),
+                "walk channel 1 is on a later page"
+            );
+            sqlx::query!(
+                "UPDATE comms_channels SET updated_at = now() WHERE id = $1",
+                moved
+            )
+            .execute(pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "UPDATE comms_activity SET viewed_at = now() WHERE channel_id = $1",
+                moved
+            )
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+    }
+    walked.contains(&moved)
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../fixtures",
+        scripts("channels_repo", "channel_list_activity_walk")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_created_at_walk_returns_a_channel_that_moves_during_it(pool: Pool<Postgres>) {
+    // The web channel directory lane pages this way.
+    assert!(walk_returns_channel_moved_mid_walk(&pool, SimpleSortMethod::CreatedAt).await);
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../fixtures",
+        scripts("channels_repo", "channel_list_activity_walk")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_viewed_updated_walk_skips_a_channel_that_moves_during_it(pool: Pool<Postgres>) {
+    // Why the lane does not page by viewed or updated time.
+    assert!(!walk_returns_channel_moved_mid_walk(&pool, SimpleSortMethod::ViewedUpdated).await);
 }

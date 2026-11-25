@@ -217,6 +217,23 @@ line "focus usage this minute" carries that minute's tokens and dollars. The
 **Email Focus rollout** Grafana dashboard draws them; see
 [the runbook](../runbooks/email-focus.md).
 
+## Email thread opens
+
+An open thread, from Mail, a reference in a message or a link, is the routed
+view's flow (`view.mail-thread` in Mail). Its `email.thread` phase lasts until
+the first page of messages loads. Inside it, `email.thread.identity` is the wait
+for the local cache to say whether the route is an unsynced local draft; the
+thread request starts only after that answer. Both carry `email.thread_id`.
+
+When the cache has not answered within a second, or the lookup fails, the
+thread is read from the server without storing the answer, and an
+always-exported `email.thread.identity_fallback` span records
+`email.thread_id`, `email.thread.identity_fallback_reason` (`timeout` or
+`error`) and `email.thread.identity_wait_ms`. Search Tempo for
+`{ name="email.thread.identity_fallback" }` to find opens a slow or stalled
+cache held up. The span joins the view's trace when that trace is sampled, and
+starts its own otherwise.
+
 ## Contact searches
 
 Contact pickers read directory pages as they scroll, and read on by themselves
@@ -502,7 +519,8 @@ Phases you will see:
   `agent.session.load.projection_ms` with its message count; do not add the two.
   A slow fold with a similarly slow projection is main-thread store work, not
   WASM.
-- Lists and details: `channel.messages`, `channel.detail`, `email.thread`,
+- Lists and details: `channel.messages`, `channel.detail`, `email.thread`
+  (with `email.thread.identity` inside it; see [Email thread opens](#email-thread-opens)),
   `database.detail`, `database.rows`, `calendar.target`, `calendar.occurrences`
   (per mounted page), `activity.feed`, `activity.overview`, `home.items`,
   `home.list`, `drive.items`, `reviews.items`, `settings.plan`, shared Soup

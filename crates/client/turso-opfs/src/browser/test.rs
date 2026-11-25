@@ -1227,3 +1227,147 @@ async fn try_acquire_never_queues_and_removal_discards_both_paths() {
     close_sync_handle(&stuck).expect("close stuck handle");
     clean_pair(&database_name).await;
 }
+
+/// Rows of about one page each, so a transaction of this many dirties more
+/// pages than the page cache holds.
+const OVER_CACHE_ROWS: i64 = PAGE_CACHE_PAGES * 3 / 2;
+
+/// A row body of 3,000 characters that only this row has.
+fn page_sized_body(id: i64) -> String {
+    format!("{id:08}").repeat(375)
+}
+
+fn insert_page_sized_rows(connection: &Arc<Connection>) {
+    for id in 0..OVER_CACHE_ROWS {
+        let body = page_sized_body(id);
+        connection
+            .execute(format!(
+                "INSERT INTO pages (id, body) VALUES ({id}, '{body}')"
+            ))
+            .expect("insert page-sized row");
+    }
+}
+
+/// Checks that every committed row holds its own body at both ends, and a
+/// spread of rows byte for byte.
+fn assert_committed_rows(connection: &Arc<Connection>) {
+    assert_eq!(
+        query_one_i64(connection, "SELECT COUNT(*) FROM pages").expect("count rows"),
+        OVER_CACHE_ROWS
+    );
+    assert_eq!(
+        query_one_i64(
+            connection,
+            "SELECT COUNT(*) FROM pages WHERE length(body) = 3000 \
+             AND substr(body, 1, 8) = printf('%08d', id) \
+             AND substr(body, 2993, 8) = printf('%08d', id)"
+        )
+        .expect("count rows that hold their own body"),
+        OVER_CACHE_ROWS
+    );
+    for id in (0..OVER_CACHE_ROWS).step_by(97) {
+        let body = page_sized_body(id);
+        assert_eq!(
+            query_one_i64(
+                connection,
+                &format!("SELECT COUNT(*) FROM pages WHERE id = {id} AND body = '{body}'")
+            )
+            .expect("read sampled row"),
+            1,
+            "row {id} reads back as written"
+        );
+    }
+}
+
+fn wal_bytes(connected: &ConnectedOpfsSession) -> u64 {
+    connected
+        .io
+        .open_file(connected.paths.get(FileRole::Wal), OpenFlags::Create, false)
+        .expect("open registered WAL")
+        .size()
+        .expect("WAL size")
+}
+
+#[wasm_bindgen_test]
+async fn page_cache_cap_spills_transactions_larger_than_the_cache() {
+    let nonce = js_sys::Date::now() as u64;
+    let database_name = format!("page-cache-{nonce}.db");
+    clean_pair(&database_name).await;
+    let owner = OpfsOwner::acquire(&database_name)
+        .await
+        .expect("identity-bound owner");
+    let connected = connect_ready(open_ready(owner).await);
+    let connection = connected.connection();
+    assert_eq!(
+        query_one_i64(&connection, "PRAGMA cache_size").expect("read cache size"),
+        PAGE_CACHE_PAGES
+    );
+    assert_eq!(
+        query_one_i64(&connection, "PRAGMA cache_spill").expect("read pager spill state"),
+        1
+    );
+    connection
+        .execute("CREATE TABLE pages (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
+        .expect("create table");
+
+    // A transaction that dirties more pages than the cap spills some of them
+    // to the WAL before COMMIT. That only happens when the pager itself holds
+    // the cap: at Turso's 100,000-page default these rows all fit in memory.
+    connection.execute("BEGIN").expect("begin large write");
+    let wal_before = wal_bytes(&connected);
+    insert_page_sized_rows(&connection);
+    assert!(
+        wal_bytes(&connected) > wal_before,
+        "the open transaction spilled pages to the WAL"
+    );
+    assert_eq!(
+        query_one_i64(&connection, "SELECT COUNT(*) FROM pages").expect("count mid-transaction"),
+        OVER_CACHE_ROWS
+    );
+    connection.execute("COMMIT").expect("commit large write");
+    assert_committed_rows(&connection);
+
+    // A rolled-back transaction that rewrites every committed row spills too,
+    // and leaves the committed rows as they were. The WAL is emptied first:
+    // a later transaction would otherwise reuse its frames without growing it.
+    assert_eq!(
+        query_one_i64(&connection, "PRAGMA wal_checkpoint(TRUNCATE)").expect("truncate WAL"),
+        0
+    );
+    let wal_before = wal_bytes(&connected);
+    assert_eq!(wal_before, 0);
+    connection.execute("BEGIN").expect("begin discarded write");
+    connection
+        .execute("UPDATE pages SET body = 'y' || substr(body, 2)")
+        .expect("rewrite every row");
+    assert!(
+        wal_bytes(&connected) > wal_before,
+        "the discarded transaction spilled pages to the WAL"
+    );
+    connection
+        .execute("ROLLBACK")
+        .expect("roll back large write");
+    assert_committed_rows(&connection);
+    drop(connection);
+
+    // A new session reads every committed byte back from OPFS and none of the
+    // rolled-back frames.
+    let owner = connected
+        .try_close()
+        .expect("close large session")
+        .preserve()
+        .expect("preserve large pair");
+    let connected = connect_ready(open_ready(owner).await);
+    let connection = connected.connection();
+    assert_committed_rows(&connection);
+    drop(connection);
+    let owner = connected
+        .try_close()
+        .expect("close reopened session")
+        .preserve()
+        .expect("preserve reopened pair");
+    let name = owner.lock_name().to_owned();
+    owner.release().await.expect("release owner lock");
+    assert!(web_lock_available(&name).await);
+    clean_pair(&database_name).await;
+}

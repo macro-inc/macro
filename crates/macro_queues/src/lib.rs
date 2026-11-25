@@ -563,11 +563,19 @@ queue! {
             dev: "static-file-s3-event-notification-queue-dev",
             prod: "static-file-s3-event-notification-queue-prod",
         },
-        /// Queue for the email link manager / refresh handler.
+        /// The email link manager's interactive lane: what a person waits on, such
+        /// as their inbox removal (`LinkManagerMessage::lane` in `models_email`).
         pub LinkManagerQueue {
             local: "email-service-refresh-queue",
             dev: "email-service-refresh-queue-dev",
             prod: "email-service-refresh-queue-prod",
+        },
+        /// The email link manager's maintenance lane: the refresh handler's
+        /// periodic work and its bulk removals, on consumers of their own.
+        pub LinkMaintenanceQueue {
+            local: "email-service-link-maintenance-queue",
+            dev: "email-service-link-maintenance-queue-dev",
+            prod: "email-service-link-maintenance-queue-prod",
         },
         /// Queue for Gmail inbox update processing.
         ///

@@ -11,6 +11,8 @@ import { browserContext } from './capabilities/browser/context.ts';
 import { browserCapabilities } from './capabilities/browser/index.ts';
 import { callsContext } from './capabilities/calls/context.ts';
 import { callsCapabilities } from './capabilities/calls/index.ts';
+import { captchaContext } from './capabilities/captcha/context.ts';
+import { captchaCapabilities } from './capabilities/captcha/index.ts';
 import { chatContext } from './capabilities/chat/context.ts';
 import { chatCapabilities } from './capabilities/chat/index.ts';
 import { heartbeatContext } from './capabilities/heartbeat/context.ts';
@@ -81,6 +83,7 @@ export const assistant = (
   const callsEvents = callsSources({ ...base, ...calls.decorations });
   const tools = toolsContext(base);
   const browser = browserContext(base);
+  const captcha = captchaContext(base, browser.decorations.browser);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
   const mailbox = mailboxContext(base, chat.decorations.chat);
   const built = behavior()
@@ -111,6 +114,8 @@ export const assistant = (
     .use(callsHandlers(callsEvents))
     .use(browser)
     .use(browserCapabilities)
+    .use(captcha)
+    .use(captchaCapabilities)
     .use(secrets)
     .use(secretsCapabilities)
     .use(secretsHandlers(scheduled))

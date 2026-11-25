@@ -52,8 +52,17 @@ in
             inherit (cluster) region;
             # No auth block: the controller's Pod Identity credentials.
           };
-          # Only ExternalSecrets in the observability namespace may use it.
-          conditions = [ { namespaces = [ "observability" ]; } ];
+          # Only ExternalSecrets in these namespaces may use it: the
+          # observability workloads, and Argo CD's Google client
+          # (modules/platform/argocd.nix). Argo CD controls the cluster anyway.
+          conditions = [
+            {
+              namespaces = [
+                "observability"
+                "argocd"
+              ];
+            }
+          ];
         };
       })
     ];

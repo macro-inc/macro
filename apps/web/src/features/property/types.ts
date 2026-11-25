@@ -62,6 +62,8 @@ export type Property = {
   /** Property must always have a value — disables the "No <name>" clear
    * affordance in single-select editors. */
   isRequired?: boolean;
+  /** A tag set read as a select: its labels come from the tag sets, not options. */
+  isTag?: boolean;
   options?: PropertyOption[];
   /** Restricts selectable values without hiding labels for historical values. */
   allowedOptionIds?: readonly string[];
@@ -73,7 +75,7 @@ export type Property = {
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
   | { valueType: 'BOOLEAN'; value: boolean | null }
-  | { valueType: 'DATE'; value: Date | null }
+  | { valueType: 'DATE'; value: Date | null; hasTime?: boolean }
   | { valueType: 'DATE_RANGE'; value: DateRangeValue | null }
   // Multi-value types (select values are option IDs, not display values)
   | { valueType: 'SELECT_STRING'; value: string[] | null }
@@ -178,13 +180,16 @@ export type { SetPropertyValue } from '@service-properties/generated/schemas/set
 export type PropertyApiValues =
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
-  | { valueType: 'DATE'; value: Date | null }
+  | { valueType: 'DATE'; value: Date | null; hasTime?: boolean }
   | { valueType: 'DATE_RANGE'; value: DateRangeValue | null }
   | { valueType: 'BOOLEAN'; value: boolean | null }
   | { valueType: 'SELECT_STRING'; values: string[] | null }
   | { valueType: 'SELECT_NUMBER'; values: string[] | null }
   | { valueType: 'ENTITY'; refs: EntityReference[] | null }
   | { valueType: 'LINK'; values: string[] | null };
+
+/** A date property's value as it is saved: its moment and whether it has a time of day. */
+export type DateApiValue = Extract<PropertyApiValues, { valueType: 'DATE' }>;
 
 // Result type for API responses
 type ApiError = {

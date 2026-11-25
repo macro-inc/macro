@@ -14,7 +14,7 @@ holds the backfill, the audit and the tests.
    no lock on `entity_access`, `"Document"`, `"Chat"`, `"Project"` or
    `document_sub_type`, so writes cost what they did. Projected reads stay off
    (`SOUP_SOURCE_ITEMS_ENABLED` defaults to false).
-2. **Enable, in this order, following the enabling runbook:** build the two
+2. **Enable, in this order, following `docs/runbooks/source-items.md`:** build the two
    indexes only projected reads use (`"Document"(owner, "updatedAt" DESC, id
    DESC)` for the owner driver, `"UserHistory"("userId", "itemType",
    "updatedAt" DESC, "itemId" DESC)` for view-time sorts), install the triggers

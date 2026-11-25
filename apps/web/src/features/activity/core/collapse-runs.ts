@@ -62,7 +62,8 @@ export function entrySize(entry: FeedEntry): number {
 
 /**
  * The one action an entry reads as. A property run reads as the net change,
- * from the oldest event's `from` to the newest event's `to`.
+ * from the oldest event's `from` to the newest event's `to`; a run of logged
+ * time reads as its total.
  */
 export function entryAction(entry: FeedEntry): ActivityAction {
   if (entry.kind === 'single') return entry.event.action;
@@ -73,6 +74,13 @@ export function entryAction(entry: FeedEntry): ActivityAction {
     oldest.kind === 'property-changed'
   ) {
     return { ...newest, from: oldest.from };
+  }
+  if (newest.kind === 'time-logged') {
+    let minutes = 0;
+    for (const event of entry.events) {
+      if (event.action.kind === 'time-logged') minutes += event.action.minutes;
+    }
+    return { ...newest, minutes };
   }
   return newest;
 }

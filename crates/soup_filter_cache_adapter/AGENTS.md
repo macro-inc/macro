@@ -75,6 +75,16 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   `Document::parse`: one cache write passes the same text through the
   projection, notification, mail and property passes, and parsing a 20 KB Soup
   operation for each cost more than the write.
+- Hosts pass one `WriteResponse` to the notification, Mail and property passes
+  (`*_for`, `*_for_response`, `augment_authoritative_response`) so a write
+  normalizes its response once; normalizing a Soup page costs milliseconds.
+  Build it with `WriteResponse::with_updates` from the engine's
+  `Engine::normalize_network` and write with `write_normalized_query`, so the
+  passes and the write share that one normalization.
+- Hosts run those passes through `write_passes` (or `WritePasses::step` to
+  yield between them), never one by one: it reads each stored key once
+  through `Engine::pass_reads` and keeps what it read for the write that
+  follows, which reuses it only while `Storage::write_position` holds still.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under

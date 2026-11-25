@@ -285,7 +285,7 @@ where
         let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
         let labels_by_message = self
             .email_repo
-            .labels_by_message_ids(&message_ids)
+            .labels_by_message_ids(&message_ids, Some(&macro_id))
             .await
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
         let unread_label_id = labels_by_message
@@ -866,9 +866,7 @@ where
             EmailEventOrigin::UserAction,
         );
 
-        if let Some(event) = event {
-            self.publish_email_event(&event);
-        }
+        self.publish_email_event(&event);
 
         for message_id in cancelled_send_ids {
             self.publish_email_event(&EmailMacroEvent::message_send_cancelled(

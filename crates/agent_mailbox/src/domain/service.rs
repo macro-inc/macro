@@ -18,7 +18,7 @@ use crate::domain::models::{
     MailboxState, MessageDirection, MessageList, MessagePage, OutgoingMessage, OwnerApproval,
     ProviderMailboxId, ProviderMessageId, ProvisionRequest, ProvisionedMailbox,
     ProvisioningFailure, ReplyMessage, Reservation, SendAttempt, SendKind, SendLimits,
-    SendReservation, SentMessage, StoredGrant, VendorMode,
+    SendReservation, SentMessage, StoredGrant, SweepJob, VendorMode,
 };
 use crate::domain::ports::{
     AgentDirectory, AgentMailboxRepository, LeaseToken, MailboxClient, MailboxKeyCipher,
@@ -43,12 +43,11 @@ pub const MAX_SUBJECT_CHARS: usize = 998;
 /// Most messages on one page.
 pub const MAX_PAGE_SIZE: u8 = 50;
 
-/// Send records are kept this long: past the daily cap's window and the
-/// provider's 24-hour idempotency replay.
-pub const SEND_RECORD_RETENTION: Duration = Duration::days(7);
-
-/// How long one attempt holds a mailbox's lease. Every provider call in an
-/// attempt times out well inside it (a handful of calls at 20 seconds each).
+/// How long one attempt holds a mailbox's lease, never renewed. One step is
+/// bounded inside it: provisioning makes at most six provider calls (find,
+/// create, find, suffixed create, guardrails, grant) at 20 seconds each plus
+/// one KMS encrypt at 10, 130 seconds in all; a release makes four plus one
+/// revoke per extra credential scoped to the mailbox (normally none).
 pub const LEASE_TTL: Duration = Duration::minutes(3);
 
 /// How long the sweep leaves a mailbox alone after one of its steps failed.
@@ -60,10 +59,30 @@ pub const SWEEP_RETRY_DELAY: Duration = Duration::minutes(5);
 /// still counted in the windows it lands in.
 pub const SEND_RETRY_WINDOW: Duration = Duration::hours(1);
 
-/// Send audit records (ids, counts and timestamps, never content) are kept
-/// this long, to trace a complaint about a sent message to its mailbox, team
-/// and approval time.
-pub const SEND_AUDIT_RETENTION: Duration = Duration::days(400);
+/// Send records (ids, counts and timestamps, never content) are kept this
+/// long, to trace a complaint about a sent message to its mailbox, team and
+/// time. Past the caps' windows and the provider's replay window, so a key
+/// stays bound to its message for as long as it can be retried.
+pub const SEND_RETENTION: Duration = Duration::days(400);
+
+/// Provisioning stops retrying transient provider failures this long after the
+/// mailbox was reserved, and marks it failed: the provider's idempotency
+/// replay window is 24 hours.
+pub const PROVISIONING_GIVE_UP_AFTER: Duration = Duration::days(1);
+
+/// How long ago a mailbox was reserved, from its UUIDv7 id.
+fn mailbox_age(id: AgentMailboxId, now: DateTime<Utc>) -> Duration {
+    let reserved =
+        id.0.get_timestamp()
+            .map(|timestamp| timestamp.to_unix())
+            .and_then(|(seconds, nanos)| {
+                DateTime::<Utc>::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+            });
+    reserved.map_or(Duration::zero(), |reserved| now - reserved)
+}
+
+/// How often one replica prunes send records for the whole cluster.
+pub const PRUNE_EVERY: Duration = Duration::minutes(1);
 
 /// Most live agent mailboxes one team may have.
 pub const MAX_TEAM_MAILBOXES: u32 = 25;
@@ -100,6 +119,17 @@ pub struct SweepReport {
     pub failed: usize,
     /// Mailboxes another attempt held; it finishes them.
     pub skipped: usize,
+}
+
+/// What one orphan check did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OrphanReport {
+    /// Mailboxes paused because their agent account or team is gone.
+    pub paused: usize,
+    /// Mailboxes found orphaned but no longer so when rechecked.
+    pub kept: usize,
+    /// Mailboxes whose pause failed; the next check retries them.
+    pub failed: usize,
 }
 
 /// A digest of a send's parts, each length-prefixed so no two different
@@ -203,7 +233,7 @@ where
             .map_err(internal)?
             .ok_or(AgentMailboxError::NotAnAgent)?;
 
-        let reservation = self
+        let mut reservation = self
             .repository
             .reserve(
                 &request,
@@ -213,6 +243,36 @@ where
             )
             .await
             .map_err(internal)?;
+        // A new request replaces a failed mailbox that never reached the
+        // provider: a new mailbox id gets a new address suffix. Only if the
+        // provider has nothing under its owner tag (a create whose answer was
+        // lost), so nothing it made is ever left behind.
+        if let Reservation::AgentHasMailbox(other) = &reservation
+            && other.state == MailboxState::Failed
+            && other.provider_mailbox_id.is_none()
+            && self
+                .vendor
+                .find_mailbox(other.id)
+                .await
+                .map_err(mail_error)?
+                .is_none()
+            && self
+                .repository
+                .release_failed_unreached(other.id)
+                .await
+                .map_err(internal)?
+        {
+            reservation = self
+                .repository
+                .reserve(
+                    &request,
+                    AgentMailboxId::generate(),
+                    team,
+                    MAX_TEAM_MAILBOXES,
+                )
+                .await
+                .map_err(internal)?;
+        }
         let mailbox = match reservation {
             Reservation::New(mailbox) => mailbox,
             // A request id is the caller's; one reused for another agent is
@@ -232,7 +292,7 @@ where
             mailbox.state,
             MailboxState::Provisioning | MailboxState::Failed
         ) {
-            self.advance(mailbox.id).await?;
+            self.advance(mailbox.id, Utc::now()).await?;
         }
         // The request's own mailbox, whatever happened to it since: a retry of
         // an old request never answers with a newer mailbox.
@@ -276,7 +336,22 @@ where
     /// before the next, so a retry resumes rather than repeats. A mailbox
     /// paused or released meanwhile keeps that state; nothing is revoked
     /// here, so a stored credential is only ever revoked by a release.
-    async fn advance(&self, id: AgentMailboxId) -> Result<(), AgentMailboxError> {
+    #[tracing::instrument(name = "agent_mailbox.advance", skip_all, fields(agent_mailbox.id = %id, outcome = tracing::field::Empty), err)]
+    async fn advance(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
+        let result = self.advance_steps(id, now).await;
+        record_outcome(&result);
+        result
+    }
+
+    async fn advance_steps(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
         let advanced = self
             .with_lease(id, async |mut mailbox, token| {
                 if !matches!(
@@ -303,7 +378,7 @@ where
                             }
                             provisioned
                         }
-                        Err(error) => return self.stop(&mailbox, token, error).await,
+                        Err(error) => return self.stop(&mailbox, token, error, now).await,
                     },
                 };
                 mailbox.provider_mailbox_id = Some(provisioned.id.clone());
@@ -315,7 +390,7 @@ where
                         .apply_guardrails(&provisioned.id, self.limits.per_hour)
                         .await
                     {
-                        return self.stop(&mailbox, token, error).await;
+                        return self.stop(&mailbox, token, error, now).await;
                     }
 
                     // A key derived from the mailbox id: a retry
@@ -327,7 +402,7 @@ where
                         .await
                     {
                         Ok(grant) => grant,
-                        Err(error) => return self.stop(&mailbox, token, error).await,
+                        Err(error) => return self.stop(&mailbox, token, error, now).await,
                     };
                     let encrypted = self
                         .cipher
@@ -386,6 +461,12 @@ where
         };
         match self.vendor.create_mailbox(&request).await {
             Err(ProviderError::AddressTaken) => {
+                // The address may be taken by this very request's create,
+                // made but unanswered: never make a second mailbox for one
+                // owner tag.
+                if let Some(found) = self.vendor.find_mailbox(mailbox.id).await? {
+                    return Ok(found);
+                }
                 let Some(local_part) = &mailbox.requested_local_part else {
                     return Err(ProviderError::AddressTaken);
                 };
@@ -415,8 +496,16 @@ where
         mailbox: &AgentMailbox,
         token: LeaseToken,
         error: ProviderError,
+        now: DateTime<Utc>,
     ) -> Result<(), AgentMailboxError> {
+        // Transient failures are retried, but not forever: a mailbox still
+        // provisioning a day after it was reserved (its id is a UUIDv7, so
+        // it carries that time) stops as failed, where the caller sees it.
+        let given_up = mailbox_age(mailbox.id, now) > PROVISIONING_GIVE_UP_AFTER;
         let (state, failure) = match error {
+            ProviderError::Throttled | ProviderError::Unavailable if given_up => {
+                (MailboxState::Failed, ProvisioningFailure::Unavailable)
+            }
             ProviderError::Throttled | ProviderError::Unavailable => {
                 (MailboxState::Provisioning, ProvisioningFailure::Unavailable)
             }
@@ -565,7 +654,18 @@ where
     /// of a releasing mailbox, then mark it released. Reads the row as the
     /// lease found it, so a credential or mailbox recorded by an attempt that
     /// finished just before is torn down too.
+    #[tracing::instrument(name = "agent_mailbox.tear_down", skip_all, fields(agent_mailbox.id = %id, outcome = tracing::field::Empty), err)]
     async fn tear_down(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
+        let result = self.tear_down_steps(id, now).await;
+        record_outcome(&result);
+        result
+    }
+
+    async fn tear_down_steps(
         &self,
         id: AgentMailboxId,
         now: DateTime<Utc>,
@@ -587,10 +687,11 @@ where
                         .map(|found| found.id),
                 };
 
-                // Every credential scoped to the mailbox, not only the stored
-                // one: a credential minted but never stored (a failed
-                // encryption, a lost response, a mint after the replay
-                // window) is found by its scope and revoked too.
+                // The stored credential by its id, whatever the provider's
+                // listing shows (its paging is unverified); then every other
+                // credential scoped to the mailbox: one minted but never
+                // stored (a failed encryption, a lost response, a mint after
+                // the replay window) is found by its scope. Each once.
                 if let Some(grant) = &mailbox.grant {
                     self.vendor
                         .revoke_access(&grant.id)
@@ -599,7 +700,10 @@ where
                 }
                 if let Some(provider_mailbox) = &provider_mailbox {
                     self.vendor
-                        .revoke_all_access(provider_mailbox)
+                        .revoke_all_access(
+                            provider_mailbox,
+                            mailbox.grant.as_ref().map(|grant| &grant.id),
+                        )
                         .await
                         .map_err(mail_error)?;
                 }
@@ -647,7 +751,7 @@ where
         for mailbox in due {
             let id = mailbox.id;
             let outcome = match mailbox.state {
-                MailboxState::Provisioning => self.advance(id).await,
+                MailboxState::Provisioning => self.advance(id, now).await,
                 MailboxState::Releasing => self.tear_down(id, now).await,
                 MailboxState::Paused => self.expire_paused(id, paused_before, now).await,
                 MailboxState::Active | MailboxState::Failed | MailboxState::Released => Ok(()),
@@ -658,23 +762,33 @@ where
                 Err(AgentMailboxError::Busy) => report.skipped += 1,
                 Err(error) => {
                     tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox sweep step failed");
-                    self.repository
+                    // A failed deferral only means the next round retries
+                    // this mailbox sooner; the rest of this round goes on.
+                    if let Err(error) = self
+                        .repository
                         .defer_sweep(id, now + SWEEP_RETRY_DELAY)
                         .await
-                        .map_err(internal)?;
+                    {
+                        tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox sweep deferral failed");
+                    }
                     report.failed += 1;
                 }
             }
         }
 
-        self.repository
-            .prune_sends(now - SEND_RECORD_RETENTION)
+        // One replica prunes per round, so replicas never delete the same
+        // oldest rows at once.
+        let prune = self
+            .repository
+            .claim_sweep_job(SweepJob::Prune, PRUNE_EVERY)
             .await
             .map_err(internal)?;
-        self.repository
-            .prune_send_audit(now - SEND_AUDIT_RETENTION)
-            .await
-            .map_err(internal)?;
+        if prune {
+            self.repository
+                .prune_sends(now - SEND_RETENTION)
+                .await
+                .map_err(internal)?;
+        }
 
         let span = tracing::Span::current();
         span.record("agent_mailbox.sweep.advanced", report.advanced);
@@ -690,12 +804,12 @@ where
     pub async fn sweep_orphans(
         &self,
         now: DateTime<Utc>,
-    ) -> Result<Option<SweepReport>, AgentMailboxError> {
+    ) -> Result<Option<OrphanReport>, AgentMailboxError> {
         // Taken before any span opens, so the replicas that skip a round
         // leave no trace of it.
         let claimed = self
             .repository
-            .claim_orphan_check(ORPHAN_CHECK_EVERY)
+            .claim_sweep_job(SweepJob::Orphans, ORPHAN_CHECK_EVERY)
             .await
             .map_err(internal)?;
         if !claimed {
@@ -706,9 +820,9 @@ where
 
     /// The orphan check for a round this replica claimed.
     #[tracing::instrument(skip_all, fields(agent_mailbox.orphans.claimed, agent_mailbox.orphans.paused, agent_mailbox.orphans.failed), err)]
-    async fn check_orphans(&self, now: DateTime<Utc>) -> Result<SweepReport, AgentMailboxError> {
+    async fn check_orphans(&self, now: DateTime<Utc>) -> Result<OrphanReport, AgentMailboxError> {
         tracing::Span::current().record("agent_mailbox.orphans.claimed", true);
-        let mut report = SweepReport::default();
+        let mut report = OrphanReport::default();
         let mut after = None;
         loop {
             let (orphans, last) = self
@@ -720,9 +834,9 @@ where
                 match self.repository.pause_if_orphaned(mailbox.id, now).await {
                     Ok(true) => {
                         tracing::warn!(agent_mailbox.id = %mailbox.id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
-                        report.advanced += 1;
+                        report.paused += 1;
                     }
-                    Ok(false) => report.skipped += 1,
+                    Ok(false) => report.kept += 1,
                     Err(error) => {
                         tracing::warn!(agent_mailbox.id = %mailbox.id, error = %error, "agent mailbox orphan pause failed");
                         report.failed += 1;
@@ -736,7 +850,7 @@ where
         }
 
         let span = tracing::Span::current();
-        span.record("agent_mailbox.orphans.paused", report.advanced);
+        span.record("agent_mailbox.orphans.paused", report.paused);
         span.record("agent_mailbox.orphans.failed", report.failed);
         Ok(report)
     }
@@ -744,6 +858,7 @@ where
     /// Release a mailbox paused past retention, unless it was resumed since
     /// the sweep read it: the state and its timestamp are rechecked in the
     /// same write that starts the release.
+    #[tracing::instrument(name = "agent_mailbox.expire_paused", skip_all, fields(agent_mailbox.id = %id), err)]
     async fn expire_paused(
         &self,
         id: AgentMailboxId,
@@ -985,6 +1100,10 @@ where
                         .to_owned(),
                 ));
             }
+            SendReservation::NotActive(MailboxState::Paused) => {
+                return Err(AgentMailboxError::Paused);
+            }
+            SendReservation::NotActive(state) => return Err(AgentMailboxError::NotReady(state)),
             SendReservation::AlreadySent(sent) => return Ok(sent),
             SendReservation::OutcomeUnknown => return Err(AgentMailboxError::SendOutcomeUnknown),
             SendReservation::LimitReached { retry_at } => {
@@ -1013,6 +1132,17 @@ where
             }
         }
     }
+}
+
+/// Record how a provisioning or release step ended on its span: `done`,
+/// `busy` (another attempt holds the lease) or `failed`.
+fn record_outcome(result: &Result<(), AgentMailboxError>) {
+    let outcome = match result {
+        Ok(()) => "done",
+        Err(AgentMailboxError::Busy) => "busy",
+        Err(_) => "failed",
+    };
+    tracing::Span::current().record("outcome", outcome);
 }
 
 /// The send policy every email send from a program follows: an agent sends
@@ -1047,18 +1177,35 @@ const RESERVED_DISPLAY_WORDS: &[&str] = &[
     "webmaster",
 ];
 
+/// Punctuation a display name may use besides letters, digits and spaces.
+/// Everything else is refused, so the From phrase can never show an address
+/// (`@`, `<`, `>` and their lookalikes), quote itself out, carry an RFC 2047
+/// encoded word (`=?`) or a format or private-use character. No comma: it
+/// needs a quoted phrase, and the provider's quoting is unverified.
+const DISPLAY_NAME_PUNCTUATION: [char; 6] = ['.', '-', '\'', '(', ')', '&'];
+
 fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
     let invalid = |reason: &str| Err(AgentMailboxError::Invalid(format!("display name {reason}")));
     if name.trim().is_empty() || name.chars().count() > MAX_DISPLAY_NAME_CHARS {
         return invalid(&format!("must be 1 to {MAX_DISPLAY_NAME_CHARS} characters"));
     }
-    if name.chars().any(char::is_control) {
-        return invalid("may not contain control characters");
+    let allowed = |character: char| {
+        character.is_alphabetic()
+            || character.is_numeric()
+            || character == ' '
+            || DISPLAY_NAME_PUNCTUATION.contains(&character)
+    };
+    if !name.chars().all(allowed) {
+        return invalid("may use only letters, digits, spaces and . - ' ( ) &");
     }
     Ok(())
 }
 
 fn names_a_reserved_role(name: &str) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    // Compatibility forms first, so fullwidth and other variants of a
+    // reserved word read as the word.
+    let name: String = name.nfkc().collect();
     name.split(|character: char| !character.is_alphanumeric() && character != '-')
         .any(|word| RESERVED_DISPLAY_WORDS.contains(&word.to_lowercase().as_str()))
 }

@@ -7,8 +7,9 @@
 //
 // - The `outlook mailbox health` INFO log, about once a minute per Outlook
 //   mailbox: `link_id`, `queued`, `parked`, `abandoned`, `oldest_waiting_seconds`,
-//   `parked_until_max_seconds`, `imported_5m`, `seconds_since_last_import`
-//   (numbers), `sync_active`, `needs_reauth` (booleans).
+//   `parked_until_max_seconds`, `imported_5m`, `seconds_since_last_import`,
+//   `import_round_wait_seconds` (numbers), `sync_active`, `needs_reauth`
+//   (booleans).
 // - The `outlook import completed` INFO log: `link_id`, `sync_generation`,
 //   `duration_seconds`, `messages`, `folders`, `graph_calls`.
 // - Spans: `outlook.sync.{discover,enumerate,reconcile,project}` (internal, so
@@ -57,6 +58,7 @@ for (const field of [
   'seconds_since_last_import',
   'imported_5m',
   'parked_until_max_seconds',
+  'import_round_wait_seconds',
 ]) {
   new datadog.LogsMetric(`outlook-mailbox-${field.replaceAll('_', '-')}`, {
     name: `macro.outlook.mailbox.${field}`,
@@ -226,6 +228,10 @@ const dashboard = new datadog.Dashboard('outlook-sync', {
       lines(
         'Seconds since the last import by mailbox',
         `min:${MAILBOX('seconds_since_last_import')}`
+      ),
+      lines(
+        'Longest-due import round (s) by mailbox',
+        `max:${MAILBOX('import_round_wait_seconds')}`
       ),
       lines(
         'Sync work by step and outcome',

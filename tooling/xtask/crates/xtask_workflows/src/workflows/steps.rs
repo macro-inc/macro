@@ -5,7 +5,8 @@
 //! generated from their pins in `actions.lock`.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, github, input,
+    Bool, Expr, Flag, JobHandle, JobOutput, Secret, StepHandle, StepOutput, Str, Var, always,
+    github, input,
 };
 use gh_workflow::{Env, Job, Run, Step, Use};
 use xtask_paths::RuntimePath;
@@ -307,6 +308,16 @@ pub fn mount_cache_volume() -> Step<Use> {
     })
 }
 
+/// Mount the desktop app check's cache volume: the Nix store with the Tauri
+/// libraries, and cargo's registry and git checkouts (the Tauri fork is a git
+/// dependency). Compiled objects use the desktop remote sccache, so the
+/// volume keeps no `target` directory to grow with every lockfile change.
+pub fn mount_desktop_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        cache.path("/nix\n/home/runner/.cargo/registry\n/home/runner/.cargo/git")
+    })
+}
+
 /// Mount a scratch directory for building the nextest filter, plus cargo's registry
 /// and git checkouts. `cargo metadata` fetches every crate in the lockfile, which took
 /// most of the filter's time when `path-check` had no registry to start from.
@@ -572,9 +583,27 @@ pub fn node_script_calling(source: &str, function: &str) -> String {
 /// `message`, which the channel renders as markdown. Needs `jq` and `curl`,
 /// which [`runners::Runner::Small`] has.
 pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
+    post_to_macro_channel(
+        name,
+        set_message,
+        "Macro Alerts",
+        vars::MACRO_BUILD_ALERT_WEBHOOK_URL,
+        vars::MACRO_BUILD_ALERT_BOT_TOKEN,
+    )
+}
+
+/// [`post_to_macro_alerts`], to the Macro channel `channel` whose webhook is
+/// `webhook` (a repo variable), posting with the bot token `token`.
+pub fn post_to_macro_channel(
+    name: &str,
+    set_message: &str,
+    channel: &str,
+    webhook: Var,
+    token: Secret,
+) -> Step<Run> {
     let post = indoc::indoc! {r#"
         if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
-          echo 'Configure the Macro Alerts webhook URL and bot token' >&2
+          echo 'Configure the CHANNEL webhook URL and bot token' >&2
           exit 1
         fi
         jq -n --arg content "$message" '{content: $content}' |
@@ -582,15 +611,16 @@ pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
             --header 'Content-Type: application/json' \
             --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
             --data-binary @- "$MACRO_WEBHOOK_URL"
-    "#};
+    "#}
+    .replace("CHANNEL", channel);
     Step::new(name)
         .run(format!(
             "set -euo pipefail\n{}\n{post}",
             set_message.trim_end()
         ))
         .shell("bash")
-        .add_env(("MACRO_WEBHOOK_URL", vars::MACRO_BUILD_ALERT_WEBHOOK_URL))
-        .add_env(("MACRO_BOT_TOKEN", vars::MACRO_BUILD_ALERT_BOT_TOKEN))
+        .add_env(("MACRO_WEBHOOK_URL", webhook))
+        .add_env(("MACRO_BOT_TOKEN", token))
 }
 
 /// `sccache --show-stats` at the end of a job (never fails the job).
@@ -776,12 +806,16 @@ pub(crate) fn upload_artifact_action(name: &str, path: RuntimePath<'_>) -> Actio
         .retention_days(30)
 }
 
-/// Download all build artifacts into one directory for release publishing.
-pub fn download_artifacts(path: RuntimePath<'_>) -> Step<Use> {
-    ActionsDownloadArtifact::new("Download Build Artifacts")
-        .path(path.as_str())
-        .merge_multiple(true)
-        .step()
+/// Download the build artifacts (all, or those matching `pattern`) into one
+/// directory for release publishing.
+pub fn download_artifacts(path: RuntimePath<'_>, pattern: Option<&str>) -> Step<Use> {
+    let download = ActionsDownloadArtifact::new("Download Build Artifacts");
+    // A pattern keeps artifacts that are not release assets (QA results) out.
+    let download = match pattern {
+        Some(pattern) => download.pattern(pattern),
+        None => download,
+    };
+    download.path(path.as_str()).merge_multiple(true).step()
 }
 
 /// Attach build artifacts to the GitHub release for the resolved release tag.

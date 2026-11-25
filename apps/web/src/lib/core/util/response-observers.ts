@@ -18,7 +18,27 @@ export function prepareResponseObservers(
     .map((observer) => observer(input, init))
     .filter((guard) => guard !== undefined);
   if (!guards.length) return passResponse;
-  return (response) => guards.reduce((value, guard) => guard(value), response);
+  return (response) =>
+    guards.reduce((value, guard) => guard(value), redefinable(response));
+}
+
+/**
+ * Guards redefine a response's decoders and `clone`. The native HTTP plugin
+ * defines `url`, `headers` and `clone` on each response as non-configurable,
+ * so such a response is moved, stream and all, to one whose copies of those
+ * properties are configurable.
+ */
+function redefinable(response: Response): Response {
+  const own = Object.getOwnPropertyDescriptors(response);
+  if (Object.values(own).every((descriptor) => descriptor.configurable))
+    return response;
+  const copy = new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+  });
+  for (const [key, descriptor] of Object.entries(own))
+    Object.defineProperty(copy, key, { ...descriptor, configurable: true });
+  return copy;
 }
 
 const BODY_DECODERS = [

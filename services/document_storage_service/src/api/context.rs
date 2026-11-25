@@ -551,8 +551,12 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
+pub(crate) type DssBotService = BotServiceImpl<
+    PgBotsRepo,
+    DssEventBroker,
+    DssHarnessService,
+    ai_tools::ConnectorsAppCatalog<connectors::Connectors>,
+>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -680,6 +684,40 @@ pub(crate) type ChannelLabelsServiceType = ChannelLabelsServiceImpl<PgChannelLab
 /// Type alias for the channel labels router state.
 pub(crate) type DssChannelLabelsState =
     ChannelLabelsRouterState<ChannelLabelsServiceType, EntityAccessService, AuthorizationService>;
+
+/// Type alias for the time tracking service.
+pub(crate) type TimeTrackingServiceType = time_tracking::domain::service::TimeTrackingServiceImpl<
+    time_tracking::outbound::pg_time_repo::PgTimeTrackingRepository,
+    EntityAccessService,
+    time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher<DssEventBroker>,
+    time_tracking::outbound::gateway_updates::GatewayTimeTrackingUpdates,
+>;
+
+/// Type alias for the time tracking router state.
+pub(crate) type DssTimeTrackingState = time_tracking::inbound::axum_router::TimeTrackingRouterState<
+    TimeTrackingServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
+/// Type alias for the time report service.
+pub(crate) type TimeReportServiceType =
+    time_tracking::domain::report_service::TimeReportServiceImpl<
+        time_tracking::outbound::pg_report_repo::PgTimeReportRepository,
+        EntityAccessService,
+        time_tracking::outbound::project_tasks::SystemPropertyProjectTasks<
+            system_properties::SystemPropertiesServiceImpl<
+                system_properties::PgSystemPropertiesRepository,
+            >,
+        >,
+    >;
+
+/// Type alias for the time report router state.
+pub(crate) type DssTimeReportState = time_tracking::inbound::report_router::TimeReportRouterState<
+    TimeReportServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
 
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
@@ -1015,6 +1053,8 @@ pub(crate) struct ApiContext {
     pub channel_labels_state: DssChannelLabelsState,
     #[from_ref(skip)]
     pub channel_sections_state: DssChannelLabelsState,
+    pub time_tracking_state: DssTimeTrackingState,
+    pub time_report_state: DssTimeReportState,
     pub user_api_key_state: DssUserApiKeyState,
     pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
@@ -1025,6 +1065,8 @@ pub(crate) struct ApiContext {
     pub initiative_activity_state: DssInitiativeActivityState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext,
+    pub graphql_time_report_context: graphql_time_tracking::TimeReportGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
@@ -1040,6 +1082,11 @@ pub(crate) struct ApiContext {
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
     pub email_focus_reader: Arc<dyn complete_graph::EmailFocusReader>,
     pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
+    /// The Soup lists with their channels read from the primary, for pages
+    /// that ask `channelReads: PRIMARY`.
+    pub graphql_primary_channel_soup: graphql_soup::PrimaryChannelSoup<
+        <DssGraphqlSoupSchema as complete_graph::SoupSchemaService>::Service,
+    >,
     pub graphql_soup_item_loader: graphql_soup::SoupItemDataLoader,
     pub databases_state: DssDatabasesState,
     pub sql_state: DssSqlState,

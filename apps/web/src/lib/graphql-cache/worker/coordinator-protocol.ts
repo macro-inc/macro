@@ -32,6 +32,10 @@ import {
   MAX_RECORD_SELECTION_PAGE_SIZE,
   type WorkerMessage,
 } from '../protocol';
+import {
+  CACHE_UNAVAILABLE_REASONS,
+  type CacheUnavailableReason,
+} from '../telemetry';
 
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
@@ -110,6 +114,12 @@ export type TabToCoordinatorEnvelope =
       request: CacheRequest;
     }
   | {
+      /** Asks for a `pong`, to tell a lost connection from a slow engine. */
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'ping';
+      tabId: string;
+    }
+  | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'attach-engine-port';
       tabId: string;
@@ -155,6 +165,11 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'registered';
       tabId: string;
+      /** Another visible tab's engine is starting or running as this tab
+       * joins, so this tab is not about to own the cache. */
+      ownerElsewhere?: true;
+      /** Held for the coordinator's life: free means it is gone. */
+      coordinatorLockName?: string;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -206,17 +221,21 @@ export type CoordinatorToTabEnvelope =
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
-      kind: 'terminal-error';
-      error: string;
-      storageUntouched?: true;
+      kind: 'pong';
     }
   | {
-      /** Another context holds the database; stop using the cache until reload. */
+      /** The coordinator dropped this page; it may register again. */
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'connection-closed';
+      reason: string;
+    }
+  | {
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      /** Nothing can open the database for now; requests are refused until an
+       * engine does. */
       kind: 'cache-unavailable';
       reason: string;
-      /** A newer build took the database over, so retrying cannot help. */
-      superseded?: true;
+      unavailableReason: CacheUnavailableReason;
     }
   | {
       /** A newer app build took the database over. The page stops using the
@@ -1087,6 +1106,11 @@ export function validateTabToCoordinatorEnvelope(
         return pass(value as TabToCoordinatorEnvelope);
       }
       break;
+    case 'ping':
+      if (hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId'])) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
     case 'disconnect-tab':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId', 'reason']) &&
@@ -1129,8 +1153,17 @@ export function validateCoordinatorToTabEnvelope(
   switch (value.kind) {
     case 'registered':
       if (
-        hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId']) &&
-        isNonEmptyString(value.tabId)
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerElsewhere',
+          'coordinatorLockName',
+        ]) &&
+        isNonEmptyString(value.tabId) &&
+        (value.ownerElsewhere === undefined || value.ownerElsewhere === true) &&
+        (value.coordinatorLockName === undefined ||
+          isNonEmptyString(value.coordinatorLockName))
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }
@@ -1227,20 +1260,6 @@ export function validateCoordinatorToTabEnvelope(
         return pass(value as CoordinatorToTabEnvelope);
       }
       break;
-    case 'terminal-error':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'error',
-          'storageUntouched',
-        ]) &&
-        isNonEmptyString(value.error) &&
-        (value.storageUntouched === undefined ||
-          value.storageUntouched === true)
-      )
-        return pass(value as CoordinatorToTabEnvelope);
-      break;
     case 'protocol-error':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'error']) &&
@@ -1255,14 +1274,22 @@ export function validateCoordinatorToTabEnvelope(
           'coordinatorVersion',
           'kind',
           'reason',
-          'superseded',
+          'unavailableReason',
         ]) &&
         isNonEmptyString(value.reason) &&
-        (value.superseded === undefined || value.superseded === true)
+        CACHE_UNAVAILABLE_REASONS.includes(
+          value.unavailableReason as CacheUnavailableReason
+        )
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }
       break;
+    case 'pong':
+      if (hasOnlyKeys(value, ['coordinatorVersion', 'kind'])) {
+        return pass(value as CoordinatorToTabEnvelope);
+      }
+      break;
+    case 'connection-closed':
     case 'cache-superseded':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'reason']) &&
@@ -1551,6 +1578,11 @@ const TAB_LIVENESS_LOCK_PREFIX = 'graphql-cache-tab:';
 
 export const tabLivenessLockName = (scope: string, tabId: string): string =>
   `${TAB_LIVENESS_LOCK_PREFIX}${scope}:${tabId}`;
+
+/** Each coordinator has its own, so one that is gone never shares a name with
+ * the one that replaced it. */
+export const coordinatorLivenessLockName = (coordinatorId: string): string =>
+  `graphql-cache-coordinator:${coordinatorId}`;
 
 /** The tab id in a liveness lock name for `scope`, if it is one. */
 export function tabIdFromLivenessLockName(

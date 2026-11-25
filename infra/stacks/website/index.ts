@@ -143,6 +143,16 @@ const wwwRedirectCode = fs
   .readFileSync('./wwwRedirect/handler.js', 'utf-8')
   .replace('__COOKIE_PREFIX__', stack === 'prod' ? '' : 'dev-')
   .replace(
+    '__DOWNLOAD_REDIRECTS__',
+    fs.readFileSync(
+      path.resolve(
+        __dirname,
+        '../../../apps/marketing/seo/download-redirects.json'
+      ),
+      'utf-8'
+    )
+  )
+  .replace(
     '__PAGE_REDIRECTS__',
     JSON.stringify(
       compactEdgeRedirects(

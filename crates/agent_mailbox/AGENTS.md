@@ -19,7 +19,7 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
 
 ## Scope
 
-- Owns: `agent_mailboxes`, `agent_mailbox_sends`, `agent_mailbox_send_audit`, the provider adapter, the
+- Owns: `agent_mailboxes`, `agent_mailbox_sends`, `agent_mailbox_sweep_claims`, the provider adapter, the
   scoped-key cipher.
 - Not here: when a teammate gets a mailbox and who else sees it → `crates/team_agents`;
   the fake provider → `crates/agent_mailbox_fake_vendor`.
@@ -27,7 +27,9 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
 ## Boundaries
 
 - Hosted by `email_service` (`composition/agent_mailboxes.rs`).
-- Used by: `email_service_client::agent_mailboxes` (teammate service).
+- Used by: `email_service_client::agent_mailboxes`, for the teammate lifecycle in
+  `crates/team_agents`. That caller lands separately; until it does, nothing
+  provisions, pauses or releases except a direct call to the internal routes.
 
 ## Checks
 
@@ -47,17 +49,30 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
   the provider's replay window and the hourly cap), then answers
   `send_outcome_unknown`. Only a definite refusal of the attempt that made
   the reservation cancels it; a refused retry leaves it.
-- A send's key is bound to its fingerprint in the audit table, which outlives
-  the dedupe ledger; never key a cap or replay on the key alone.
+- One `agent_mailbox_sends` row per key is the dedupe, the caps (outcome not
+  `refused`) and the 400-day audit. The key is bound to its fingerprint;
+  never key a cap or replay on the key alone. `reserve_send` rechecks the
+  mailbox state under the row lock.
+- Cluster-wide jobs (orphan check, prune) run in the replica that wins
+  `claim_sweep_job`; add a job there rather than running it on every replica.
 - Team-wide caps take a per-team advisory lock before the mailbox row lock;
   keep that order everywhere.
+- `find_mailbox` answers `None` only on an empty filtered listing; any other
+  listing without the tag is `Unavailable`. Creating or replacing on a guess
+  could leave a lost create behind.
 - Provider idempotency keys come from `provider_key(mailbox, operation)`;
   never send the agent's key or a mailbox id raw.
 - Every send and reply needs the owner's quoted approval (`OwnerApproval`),
   decided in the domain: the caller is always an agent account, whatever
   credential it uses.
 - Provider content (headers, injection scores, webhooks) never authorizes anything.
-- A `402` from the provider is `NotConfigured`; the adapter never pays.
+- A `402` from the provider is `NotConfigured`; the adapter never pays. A `409`
+  on create is `AddressTaken` only for a code in `ADDRESS_TAKEN_CODES`
+  (`address_taken`, the fake's); the provider documents none, so add one only
+  once it is confirmed. Every other conflict is retried under the same key.
+- Display names are an allowlist (letters, digits, spaces, `. - ' ( ) &`),
+  never a denylist: they become the From phrase. The reserved-word check runs
+  on the NFKC form.
 - The scoped key is KMS ciphertext bound to the mailbox and user (CS-72).
   Deleting a row revokes nothing upstream: release revokes the key, then deletes.
 - Response shapes follow the provider's OpenAPI document and TypeScript SDK;

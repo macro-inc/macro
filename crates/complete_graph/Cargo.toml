@@ -44,6 +44,7 @@ graphql_properties = { path = "../graphql_properties" }
 graphql_registered_work = { path = "../graphql_registered_work" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
+graphql_time_tracking = { path = "../graphql_time_tracking" }
 graphql_work_feed = { path = "../graphql_work_feed" }
 macro_authorization = { path = "../macro_authorization", features = [
   "axum",
@@ -69,6 +70,7 @@ model_entity = { package = "model-entity", path = "../model-entity" }
 saved_views = { path = "../saved_views" }
 
 [dev-dependencies]
+time_tracking = { path = "../time_tracking", default-features = false }
 contacts = { path = "../contacts", default-features = false, features = ["ports"] }
 bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }
@@ -85,6 +87,8 @@ agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }
 calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters" }
 model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }

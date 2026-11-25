@@ -220,6 +220,92 @@ describe('runMarkdownRequest', () => {
     expect(written).toEqual({ action: 'write', revision, changed: false });
     expect(synced.commits).toBe(0);
   });
+
+  it('keeps every block between two edits far apart in a long document', async () => {
+    const lines = Array.from(
+      { length: 2100 },
+      (_, i) => `Paragraph ${i} about the work that is left.`
+    );
+    const synced = new SyncedDocument(
+      (await markdownToLoroSnapshot(lines.join('\n\n')))!
+    );
+    const before = blocks(synced.doc);
+    const { revision } = await synced.load();
+
+    lines[1] = 'Paragraph 1, edited.';
+    lines[2098] = 'Paragraph 2098, edited.';
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: revision,
+        markdown: lines.join('\n\n'),
+      },
+      synced,
+      signal()
+    );
+
+    const after = blocks(synced.doc);
+    expect(textOf(after[1])).toBe('Paragraph 1, edited.');
+    expect(textOf(after[2098])).toBe('Paragraph 2098, edited.');
+    expect(after.slice(2, 2098)).toEqual(before.slice(2, 2098));
+  });
+
+  it('reads and writes from the shallow state, without the history', async () => {
+    const synced = new SyncedDocument(
+      (await markdownToLoroSnapshot('# Plan\n\nShip the beta.'))!
+    );
+    for (const draft of ['Ship the alpha.', 'Ship the beta.']) {
+      const { revision } = await synced.load();
+      await runMarkdownRequest(
+        DOC,
+        {
+          action: 'write',
+          expectedRevision: revision,
+          markdown: `# Plan\n\n${draft}`,
+        },
+        synced,
+        signal()
+      );
+    }
+    const shallow: SyncDocumentStorage = {
+      load: async () => ({
+        snapshot: synced.doc.export({
+          mode: 'shallow-snapshot',
+          frontiers: synced.doc.frontiers(),
+        }),
+        revision: revisionOf(synced.doc),
+      }),
+      commit: (expectedRevision, update) =>
+        synced.commit(expectedRevision, update),
+    };
+
+    const read = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      shallow,
+      signal()
+    );
+    expect(read).toEqual({
+      action: 'read',
+      markdown: '# Plan\n\nShip the beta.',
+      revision: revisionOf(synced.doc),
+    });
+
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: revisionOf(synced.doc),
+        markdown: '# Plan\n\nShip the beta on Friday.',
+      },
+      shallow,
+      signal()
+    );
+    expect(textOf({ children: blocks(synced.doc) })).toBe(
+      'PlanShip the beta on Friday.'
+    );
+  });
 });
 
 /**

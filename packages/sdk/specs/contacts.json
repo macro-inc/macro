@@ -99,6 +99,87 @@
         }
       }
     },
+    "/contacts/lists/{list}/members": {
+      "get": {
+        "tags": ["contacts"],
+        "summary": "GET /contacts/lists/{list}/members handler: one page of the members of one\nof the viewer's contact lists. Read from the list-aware directory for every\nviewer, whatever store the `contacts-list-reads` flag picks for their\nother reads; stored lists may be incomplete until the list backfill has\nrun. `teammates` is the viewer's current team.",
+        "operationId": "list_contact_list_members",
+        "parameters": [
+          {
+            "name": "list",
+            "in": "path",
+            "description": "The list's key.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ContactList"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque `nextCursor` from the previous page of the same list.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size: default 100; zero or over 500 is rejected.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 500,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMembersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/contacts/search": {
       "get": {
         "tags": ["contacts"],
@@ -184,6 +265,11 @@
           }
         }
       },
+      "ContactList": {
+        "type": "string",
+        "description": "One list in a user's directory. A person is in the directory when they are\nin at least one of the owner's lists. The key (`as_ref`, parsed back with\n`FromStr`, and the same in serde) is what storage and clients see.",
+        "enum": ["teammates", "interacted", "invited", "gmail", "outlook"]
+      },
       "GetContactsResponse": {
         "type": "object",
         "description": "Response body for GET /contacts.",
@@ -195,6 +281,24 @@
               "type": "string"
             },
             "description": "The list of contact user IDs."
+          }
+        }
+      },
+      "ListMembersResponse": {
+        "type": "object",
+        "description": "Response body for GET /contacts/lists/{list}/members.",
+        "required": ["members"],
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The members' user IDs (`macro|<email>`), in ID order. Never the viewer."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Pass back as `cursor` for the next page. Only its absence means the\nlist is exhausted: a page may be short, or even empty, and still have one."
           }
         }
       },

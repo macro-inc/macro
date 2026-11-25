@@ -97,7 +97,7 @@ export function RecordReferencesSection(props: { scope?: CrmRecordScope }) {
       source={references}
       pending={!props.scope}
       empty={`Nothing references this ${props.scope?.type ?? 'record'} yet.`}
-      narrowLayout="condensed"
+      panel
     />
   );
 }

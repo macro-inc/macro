@@ -123,34 +123,36 @@ let
       ++ expressions alert.reducer condition;
     };
   # Warning and critical are mutually exclusive bands, as in the dev rules.
+  #
+  # A window with no datapoints reduces to NaN, not to no data, and a
+  # comparison with NaN is NaN, which Grafana treats as firing; noDataState
+  # never sees it. So each condition holds only for a number, and an entry
+  # with `noData = "Alerting"` fires its critical rule on NaN too. An entry's
+  # optional `floor`, a math expression over its inputs, must also hold.
   prodRulePairWith =
     makeRule: alert:
     let
       critical = builtins.toJSON alert.critical;
       warning = builtins.toJSON alert.warning;
+      past = if alert.firesWhen == "above" then ">" else "<";
+      within = if alert.firesWhen == "above" then "<=" else ">=";
+      floor = lib.optionalString (alert ? floor) " && ${alert.floor}";
+      criticalBand = "$B ${past} ${critical}${floor}";
     in
-    if alert.firesWhen == "above" then
-      [
-        (makeRule alert {
-          severity = "critical";
-          condition = "$B > ${critical}";
-        })
-        (makeRule alert {
-          severity = "warning";
-          condition = "$B > ${warning} && $B <= ${critical}";
-        })
-      ]
-    else
-      [
-        (makeRule alert {
-          severity = "critical";
-          condition = "$B < ${critical}";
-        })
-        (makeRule alert {
-          severity = "warning";
-          condition = "$B < ${warning} && $B >= ${critical}";
-        })
-      ];
+    [
+      (makeRule alert {
+        severity = "critical";
+        condition =
+          if (alert.noData or "OK") == "Alerting" then
+            "!is_number($B) || ${criticalBand}"
+          else
+            "is_number($B) && ${criticalBand}";
+      })
+      (makeRule alert {
+        severity = "warning";
+        condition = "is_number($B) && $B ${past} ${warning} && $B ${within} ${critical}${floor}";
+      })
+    ];
   prodRules = lib.concatMap (
     row: lib.concatMap (prodRulePairWith prodRule) row.alerts
   ) prodAlerts.rows;

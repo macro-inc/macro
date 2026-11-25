@@ -6,7 +6,7 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ColumnsIcon from '@icon/system/regular/columns.svg';
-import { ButtonGroup } from '@ui';
+import { ButtonGroup, cn } from '@ui';
 import { Show } from 'solid-js';
 import { EMAIL_FOCUS_SORT_OPTIONS } from '../constants';
 import { useEmailView } from '../email-view-context';
@@ -17,6 +17,8 @@ export type EmailControlsProps = {
   /** Controlled filter-menu state, so the header's `f` hotkey can open it. */
   filterOpen?: boolean;
   onFilterOpenChange?: (open: boolean) => void;
+  /** Hides the view options (sort, reading pane) when the header has no room. */
+  hideViewOptions?: boolean;
 };
 
 export function EmailControls(props: EmailControlsProps) {
@@ -45,38 +47,41 @@ export function EmailControls(props: EmailControlsProps) {
           />
         </HeaderActionGroup>
       </div>
-      <HeaderActionGroup label="Email view options" size="md">
-        <Show when={state.tab === 'focus'}>
-          <ListSortDropdown
-            grouped
-            size="icon-md"
-            label="Sort Focus"
-            value={state.focusSort}
-            options={EMAIL_FOCUS_SORT_OPTIONS}
-            onChange={setFocusSort}
-          />
-        </Show>
-        <Show when={!isTouchDevice()}>
-          <ButtonGroup.Button
-            aria-label={
-              readingPane() ? 'Hide reading pane' : 'Show reading pane'
-            }
-            tooltip={{
-              content: readingPane()
-                ? 'Hide reading pane'
-                : 'Show reading pane',
-              hotkey: TOKENS.email.toggleReadingPane,
-            }}
-            variant="ghost"
-            size="icon-md"
-            aria-pressed={readingPane()}
-            class={readingPane() ? 'text-ink' : 'text-ink-muted'}
-            onClick={() => setReadingPane(!readingPane())}
-          >
-            <ColumnsIcon class="size-4" />
-          </ButtonGroup.Button>
-        </Show>
-      </HeaderActionGroup>
+      {/* A wrapper the header's row keeps, so hiding it never adds or removes a child. */}
+      <div class={cn('contents', props.hideViewOptions && 'hidden')}>
+        <HeaderActionGroup label="Email view options" size="md">
+          <Show when={state.tab === 'focus'}>
+            <ListSortDropdown
+              grouped
+              size="icon-md"
+              label="Sort Focus"
+              value={state.focusSort}
+              options={EMAIL_FOCUS_SORT_OPTIONS}
+              onChange={setFocusSort}
+            />
+          </Show>
+          <Show when={!isTouchDevice()}>
+            <ButtonGroup.Button
+              aria-label={
+                readingPane() ? 'Hide reading pane' : 'Show reading pane'
+              }
+              tooltip={{
+                content: readingPane()
+                  ? 'Hide reading pane'
+                  : 'Show reading pane',
+                hotkey: TOKENS.email.toggleReadingPane,
+              }}
+              variant="ghost"
+              size="icon-md"
+              aria-pressed={readingPane()}
+              class={readingPane() ? 'text-ink' : 'text-ink-muted'}
+              onClick={() => setReadingPane(!readingPane())}
+            >
+              <ColumnsIcon class="size-4" />
+            </ButtonGroup.Button>
+          </Show>
+        </HeaderActionGroup>
+      </div>
     </>
   );
 }

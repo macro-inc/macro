@@ -185,6 +185,27 @@ fn own_work(alias: &str) -> String {
     )
 }
 
+/// The viewer's latest own work on each item, as `(entity_type, entity_id,
+/// touched_at)` rows, newest first and before access gates.
+///
+/// A whole feed walks the viewer's activity. A read of known items looks up
+/// each item's latest work instead (`own_work_latest_only.sql`), for the same
+/// reason as [`pending`]: recomputes run on every realtime change, and a
+/// viewer with a long history would otherwise pay for all of it each time.
+fn own_work_latest(req: &AttentionCandidateRequest<'_>) -> String {
+    match req.only {
+        Some(_) => format!(
+            include_str!("attention/own_work_latest_only.sql"),
+            own_work_ae = own_work("ae"),
+        ),
+        None => format!(
+            include_str!("attention/own_work_latest.sql"),
+            own_work_ae = own_work("ae"),
+            own_work_newer = own_work("newer"),
+        ),
+    }
+}
+
 /// Whether the `notification` row `n` places the `channel_message` candidate
 /// named by its secondary item rather than the entity it is filed under.
 fn thread_keyed(keying: AttentionKeying) -> &'static str {
@@ -200,17 +221,22 @@ fn thread_keyed(keying: AttentionKeying) -> &'static str {
 /// attention_at)` rows, one per candidate.
 ///
 /// A whole feed reads every pending notification of the viewer's. A read of
-/// known items under `FiledEntity` keying reads only those items'
-/// notifications instead: recomputes run on every realtime change, and a
-/// viewer with a long pending history would otherwise pay for all of it each
-/// time. Thread-scoped keying needs each notification's secondary item, which
-/// only the `notification` row carries, so it keeps the whole read. A probe
-/// reads none of them (see [`probe_skips_pending`]).
+/// known items reads only those items' notifications instead: recomputes run
+/// on every realtime change, and a viewer with a long pending history would
+/// otherwise pay for all of it each time. Under thread-scoped keying a thread
+/// key is reached through the notifications naming it as their secondary item
+/// (`pending_only_thread.sql`): a thread's own history, never the viewer's
+/// other notifications on its channel. A probe reads none of them (see
+/// [`probe_skips_pending`]).
 fn pending(req: &AttentionCandidateRequest<'_>) -> String {
     match (req.assume_attention, req.only, req.keying) {
         (false, Some(_), AttentionKeying::FiledEntity) => {
             include_str!("attention/pending_only.sql").to_string()
         }
+        (false, Some(_), AttentionKeying::ThreadScoped) => format!(
+            include_str!("attention/pending_only_thread.sql"),
+            thread_keyed = thread_keyed(req.keying),
+        ),
         _ => format!(
             include_str!("attention/pending.sql"),
             thread_keyed = thread_keyed(req.keying),
@@ -251,8 +277,8 @@ fn build_query(req: &AttentionCandidateRequest<'_>) -> String {
         include_str!("attention/query.sql"),
         pending = pending(req),
         attention_source = attention_source(req.assume_attention),
+        own_work_latest = own_work_latest(req),
         own_work_ae = own_work("ae"),
-        own_work_newer = own_work("newer"),
         email_inbox_gate = email_inbox_gate(),
         document_gate = document_gate(ID_SQL, filter),
         chat_gate = chat_gate(ID_SQL, filter),
@@ -308,7 +334,8 @@ pub(super) async fn attention_soup_page(
         None => (None, None),
     };
 
-    sqlx::QueryBuilder::<sqlx::Postgres>::new(sql)
+    let mut builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(sql);
+    let query = builder
         .build()
         .bind(req.user_id.as_ref())
         .bind(&types)
@@ -334,9 +361,22 @@ pub(super) async fn attention_soup_page(
                 touched_at: row.try_get("touched_at")?,
                 sort_at: row.try_get("sort_at")?,
             })
-        })
-        .fetch_all(db)
-        .await
+        });
+
+    if req.only.is_none() {
+        return query.fetch_all(db).await;
+    }
+    // A read of known items runs on every live change, on the primary for
+    // the feeds' recomputes. Its keys bound it (`pending_only*.sql`,
+    // `own_work_latest_only.sql`), so it costs what they hold however much
+    // the viewer does; a plan gone wrong must still not run on.
+    let mut transaction = db.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *transaction)
+        .await?;
+    let candidates = query.fetch_all(&mut *transaction).await?;
+    transaction.commit().await?;
+    Ok(candidates)
 }
 
 #[cfg(test)]

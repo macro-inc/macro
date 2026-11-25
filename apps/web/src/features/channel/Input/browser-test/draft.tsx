@@ -3,12 +3,13 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import type { MessageData } from '@core/messages/types';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, Match, onCleanup, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -111,7 +112,9 @@ function Fixture() {
         <PosthogProvider>
           <EntityProvider>
             <UserContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider
+                directory={staticChannelDirectory(() => [])}
+              >
                 <QuickAccessProvider>
                   <main class="min-h-screen bg-page p-4 text-ink space-y-4">
                     <h1>Channel composer draft</h1>
@@ -183,7 +186,7 @@ function Fixture() {
                     <ToastRegion />
                   </main>
                 </QuickAccessProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </UserContextProvider>
           </EntityProvider>
         </PosthogProvider>

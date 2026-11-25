@@ -2,12 +2,13 @@
 
 use crate::domain::backfill_jobs::worker::is_unstorable_sqlstate;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId,
-    RoundStart, StreamPosition, StreamToken,
+    EmailApiError, FolderRole, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage,
+    ProviderId, RoundStart, StreamPosition, StreamToken,
 };
 use live_pass::{FolderPass, LiveImportPass, StreamKind};
 use progress::{ImportCompleted, ImportTally};
 use retry::{message_retry, retry_seconds};
+use schedule::{POLL_INTERVALS, PollIntervals};
 use std::future::Future;
 use std::time::Instant;
 use telemetry::{
@@ -38,6 +39,7 @@ pub mod progress;
 pub mod projection;
 pub mod reimport;
 mod retry;
+pub mod schedule;
 pub mod settings;
 pub mod telemetry;
 pub mod watches;
@@ -80,6 +82,10 @@ pub enum MailboxError {
     /// every worker that claims it) and its lease expired.
     #[error("the message's last {0} claims ended without an outcome")]
     ClaimsUnfinished(i32),
+    /// The draft was edited outside Macro, or may have been, so neither copy
+    /// overwrites the other.
+    #[error("the draft changed outside Macro")]
+    DraftChanged(drafts::models::DraftChange),
 }
 
 /// Which projection effect deferred the work (`outlook.effect`).
@@ -202,6 +208,8 @@ pub struct StreamLease {
     pub initial_complete: bool,
     pub lease_id: Uuid,
     pub fence: i64,
+    /// When the stream came due: the claim's wait in line runs from here.
+    pub due_at: chrono::DateTime<chrono::Utc>,
     /// The stream's pending notification: the newest one that no delta
     /// checkpoint has read past yet, so a deferred or multi-page read keeps
     /// carrying it.
@@ -251,6 +259,10 @@ pub struct CommittedPage {
     pub queued: u64,
     /// Set when this page finished the mailbox's import run.
     pub import_completed: Option<ImportCompleted>,
+    /// Seconds until the stream's next poll, when the page was a checkpoint
+    /// that scheduled one; none while the stream stays due (more pages to
+    /// read, or a notification that arrived during the read).
+    pub next_poll_seconds: Option<u32>,
 }
 
 pub enum SyncLease<'a> {
@@ -297,10 +309,13 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<StreamLease>, MailboxError>> + Send;
     /// Atomically records every changed/removed ID and advances the opaque
     /// cursor only while this generation and lease fence are still current.
+    /// A checkpoint schedules the next poll by `polls`, unless a notification
+    /// arrived during the read, which leaves the stream due.
     fn commit_page(
         &self,
         lease: &StreamLease,
         page: &MailboxChangePage,
+        polls: PollIntervals,
     ) -> impl Future<Output = Result<CommittedPage, MailboxError>> + Send;
     /// Reset only this expired stream; this operation never removes messages.
     /// Its folder's live pass goes with the round it ran beside.
@@ -511,7 +526,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
-                let delay = retry_seconds(&error);
+                let delay = if error == EmailApiError::AuthRequired {
+                    REAUTHORIZATION_PROBE_SECONDS
+                } else {
+                    retry_seconds(&error)
+                };
                 let error = MailboxError::from(error);
                 self.repo
                     .release_catalog(lease, delay)
@@ -665,12 +684,15 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     span_int(page.changed.len() + page.removed.len()),
                 );
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
-                let committed = self.repo.commit_page(lease, &page).await;
+                let committed = self.repo.commit_page(lease, &page, POLL_INTERVALS).await;
                 if committed.is_ok() && live_pass::opens(lease, checkpoint, &self.live_pass) {
                     self.open_live_pass(lease).await;
                 }
                 committed.map(|committed| {
                     span.record("outlook.rows_queued", span_int(committed.queued));
+                    if let Some(seconds) = committed.next_poll_seconds {
+                        span.record("outlook.poll_interval_seconds", i64::from(seconds));
+                    }
                     delta_advanced = true;
                     folder_initial_complete |= checkpoint;
                     committed.import_completed
@@ -971,6 +993,26 @@ const IMPORT_QUEUED_AHEAD: u32 = 200;
 /// How long such a folder waits before it checks again. A mailbox imports at
 /// most about 12 messages a second, so its two pages outlast the wait.
 const IMPORT_PACE_SECONDS: u32 = 10;
+
+/// How many seconds before the discovery that creates it a folder's first
+/// import round is due: Inbox first, then Sent, then every other folder, as
+/// the re-import's phases go. Graph lists folders alphabetically, and the
+/// rounds that read the import's first two pages stay ahead of the ones
+/// `IMPORT_QUEUED_AHEAD` paced behind them on every later trip, so without
+/// this an Archive or Deleted Items folder imports before the Inbox.
+pub(crate) fn import_round_lead_seconds(role: FolderRole) -> u32 {
+    match role {
+        FolderRole::Inbox => 2,
+        FolderRole::Sent => 1,
+        _ => 0,
+    }
+}
+
+/// How long discovery waits to ask for a token again for a mailbox whose
+/// token is refused. It is the only sync work claimed while the mailbox needs
+/// reconnecting, and the sign-in service asks Microsoft again at the same
+/// pace, so a refusal that clears on its own resumes sync within the hour.
+const REAUTHORIZATION_PROBE_SECONDS: u32 = 60 * 60;
 
 /// How soon discovery looks again for a mailbox it found missing, and the
 /// longest it waits: the 12 h a working subscription waits for renewal.

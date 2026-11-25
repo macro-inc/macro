@@ -151,7 +151,7 @@ async fn revoking_all_access_finds_keys_by_their_scope() {
         .await
         .unwrap();
 
-    adapter.revoke_all_access(&mailbox.id).await.unwrap();
+    adapter.revoke_all_access(&mailbox.id, None).await.unwrap();
 
     for key in [first, second] {
         let read = adapter
@@ -169,4 +169,12 @@ async fn a_key_reused_for_another_operation_is_refused() {
     let reused = adapter.grant_access(&mailbox.id, Uuid::from_u128(1)).await;
 
     assert!(matches!(reused, Err(ProviderError::Rejected)));
+}
+
+#[test]
+fn ids_never_repeat_across_restarts_of_the_fake() {
+    let mut first_run = VendorState::new();
+    let mut second_run = VendorState::new();
+
+    assert_ne!(first_run.id("inbox"), second_run.id("inbox"));
 }

@@ -40,6 +40,9 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.ownerEvent !== undefined) {
           span.setAttr('cache.owner_event', event.ownerEvent);
         }
+        if (event.unavailableReason !== undefined) {
+          span.setAttr('cache.unavailable_reason', event.unavailableReason);
+        }
         if (event.persistence !== undefined) {
           span.setAttr('cache.persistence', event.persistence);
         }
@@ -81,6 +84,15 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         }
         if (event.oldestAgeMs !== undefined) {
           span.setAttr('cache.oldest_age_ms', event.oldestAgeMs);
+        }
+        if (event.walFrames !== undefined) {
+          span.setAttr('cache.wal_frames', event.walFrames);
+        }
+        if (event.requestKind !== undefined) {
+          span.setAttr('cache.request_kind', event.requestKind);
+        }
+        if (event.queueWaitMs !== undefined) {
+          span.setAttr('cache.queue_wait_ms', event.queueWaitMs);
         }
         try {
           if (event.name === 'graphql_cache.slow_query') {

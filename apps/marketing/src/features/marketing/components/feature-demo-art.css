@@ -118,7 +118,7 @@
 }
 /* Custom app windows share the same concentric corners as ProductDemo. */
 .feature-page .feature-demo-art[data-glass-frame]
-  :is(.email-feature-demo:not(.mail-sharing-demo) .mail-app, .homepage-pipeline-demo, .booking-story-card, .workspace-feature-scene) {
+  :is(.email-feature-demo:not(.mail-sharing-demo) .mail-app) {
   border-radius: var(--feature-frame-radius);
 }
 .feature-page .feature-demo-art[data-glass-frame] .product-demo,

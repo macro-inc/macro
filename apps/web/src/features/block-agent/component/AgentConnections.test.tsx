@@ -1,4 +1,4 @@
-import { AppConnectionContext } from '@core/pipedream/connection-context';
+import { AppConnectionContext } from '@core/connectors/connection-context';
 import {
   cleanup,
   fireEvent,
@@ -20,8 +20,9 @@ const mocks = vi.hoisted(() => ({
   reportConnected: vi.fn(),
   notify: vi.fn(),
 }));
-vi.mock('@queries/pipedream-connectors', () => ({
-  connectPipedreamApp: mocks.connect,
+vi.mock('@queries/connectors', () => ({
+  appConnectorKey: (slug: string) => `app/${slug}`,
+  connectConnector: mocks.connect,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: mocks.notify },

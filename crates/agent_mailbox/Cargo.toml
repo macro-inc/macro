@@ -44,6 +44,7 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+unicode-normalization = { workspace = true }
 urlencoding = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
 uuid = { workspace = true, features = ["v5", "v7"] }
@@ -59,6 +60,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }
 urlencoding = { workspace = true }
 wiremock = { workspace = true }
 

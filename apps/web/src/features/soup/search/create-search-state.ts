@@ -8,6 +8,7 @@ import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
+import { straightenQuotes } from '@queries/soup/search-quotes';
 import {
   type Accessor,
   createEffect,
@@ -44,7 +45,7 @@ export type CreateSearchStateOptions = {
 };
 
 export function soupSearchMatchType(query: string): SoupSearchMatchType {
-  const trimmed = query.trim();
+  const trimmed = straightenQuotes(query).trim();
   const quoted =
     trimmed.length >= 2 &&
     trimmed.startsWith('"') &&
@@ -239,6 +240,8 @@ export function createSearchState(options: CreateSearchStateOptions) {
     data,
     isSearching,
     localFuzzyResults,
+    /** The trimmed text the local name matches were found with. */
+    localSearchText: localText,
     serviceSearchResults,
     featuredIds,
     searchQuery,

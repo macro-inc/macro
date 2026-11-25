@@ -360,22 +360,87 @@ where
             for context in &batch.producer_contexts {
                 genai_telemetry::propagation::link(&tracing::Span::current(), Some(context));
             }
+            let owner = match self
+                .continuing_owner(session_id, batch.action_id, &batch.notifications)
+                .await
+            {
+                Ok(owner) => owner,
+                Err(error) => {
+                    store.release(batch.lease_id).await?;
+                    return Err(error);
+                }
+            };
             let entry = QueuedEntry {
                 action_id: batch.action_id,
                 action: AgentAction::notification(batch.notifications.clone()),
-                actor: None,
+                prompter: if owner.is_some() {
+                    agent_session::domain::model::PrompterKind::Program
+                } else {
+                    agent_session::domain::model::PrompterKind::User
+                },
+                actor: owner,
                 announce: None,
                 context: None,
                 announced: None,
                 created_at: chrono::Utc::now(),
                 client: None,
-                prompter: agent_session::domain::model::PrompterKind::User,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
             break;
         }
         Ok(())
+    }
+
+    /// The owner a waking batch acts for: only a batch that continues their
+    /// own work
+    /// ([`continues_for_owner`](crate::domain::app_connections::continues_for_owner)),
+    /// picking up the turn that asked for those apps: the latest one, which
+    /// acted for the owner and ended offering every app's connect button.
+    /// The owner connecting an app is not their word on what a bot or
+    /// someone else asked for, so continuing anyone else's turn, or an older
+    /// button from one, acts for nobody and its calls wait for the owner.
+    /// A batch sent again after an interruption already opened its turn, so
+    /// it keeps the authority that turn was given at dispatch.
+    async fn continuing_owner(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        notifications: &[agent_runtime_protocol::domain::notification::Notification],
+    ) -> Result<Option<MacroUserIdStr<'static>>> {
+        if !crate::domain::app_connections::continues_for_owner(notifications) {
+            return Ok(None);
+        }
+        let session = self.sessions.get_session(session_id).await?;
+        let Some(owner) = session.owner_id.as_user() else {
+            return Ok(None);
+        };
+        let Some(previous) = self.sessions.turn_prompter(session_id).await? else {
+            return Ok(None);
+        };
+        if previous.action_id == action_id {
+            let resumed = previous.kind == agent_session::domain::model::PrompterKind::Program
+                && previous.acting_user() == Some(owner);
+            return Ok(resumed.then(|| owner.clone()));
+        }
+        if previous.acting_user() != Some(owner) {
+            return Ok(None);
+        }
+        let Some(agent_session::domain::action_history::RecordedAction::Finished {
+            last_text: Some(reply),
+            ..
+        }) = self
+            .sessions
+            .recorded_action(session_id, previous.action_id)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let offered = crate::domain::app_connections::connect_buttons(&reply);
+        let asked = notifications
+            .iter()
+            .all(|notification| offered.contains(&notification.subject_id));
+        Ok(asked.then(|| owner.clone()))
     }
 
     /// Attach quiet events, or recover the prior turn before dispatching this

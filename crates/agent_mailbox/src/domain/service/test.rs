@@ -51,6 +51,13 @@ struct VendorState {
     lose_next_create_response: bool,
     /// The provider wrongly returns any message for a read, from any mailbox.
     leaks_across_mailboxes: bool,
+    /// Create makes the mailbox but answers 409, as an idempotent create
+    /// still in flight might, read as a taken address.
+    conflict_after_next_create: bool,
+    /// Every request that revokes a credential: (operation, grant).
+    revocations: Vec<(&'static str, String)>,
+    /// Each grant ever minted, with the inbox it is scoped to.
+    grant_inbox: HashMap<String, String>,
 }
 
 #[derive(Clone, Default)]
@@ -160,6 +167,10 @@ impl MailboxProvisioner for FakeVendor {
             state.lose_next_create_response = false;
             return Err(ProviderError::Unavailable);
         }
+        if state.conflict_after_next_create {
+            state.conflict_after_next_create = false;
+            return Err(ProviderError::AddressTaken);
+        }
         Ok(ProvisionedMailbox {
             id: ProviderMailboxId(id),
             address,
@@ -210,6 +221,7 @@ impl MailboxProvisioner for FakeVendor {
         let key = format!("dse_scoped_{}", state.grants.len() + 1);
         state.grants.insert(grant.clone(), key.clone());
         state.keys.insert(key.clone(), mailbox.0.clone());
+        state.grant_inbox.insert(grant.clone(), mailbox.0.clone());
         state
             .granted_by_key
             .insert(idempotency_key, (grant.clone(), key.clone()));
@@ -218,6 +230,7 @@ impl MailboxProvisioner for FakeVendor {
 
     async fn revoke_access(&self, grant: &ProviderGrantId) -> Result<(), ProviderError> {
         let mut state = self.0.lock().unwrap();
+        state.revocations.push(("revoke", grant.0.clone()));
         if let Some(key) = state.grants.remove(&grant.0) {
             state.keys.remove(&key);
             state.revoked_grants.push(grant.0.clone());
@@ -225,8 +238,26 @@ impl MailboxProvisioner for FakeVendor {
         Ok(())
     }
 
-    async fn revoke_all_access(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
+    async fn revoke_all_access(
+        &self,
+        mailbox: &ProviderMailboxId,
+        already_revoked: Option<&ProviderGrantId>,
+    ) -> Result<(), ProviderError> {
         let mut state = self.0.lock().unwrap();
+        // The listing still shows a key revoked a moment ago, as a provider's
+        // eventually consistent listing may: only `already_revoked` skips it.
+        let listed: Vec<String> = state
+            .grant_inbox
+            .iter()
+            .filter(|(grant, inbox)| {
+                *inbox == &mailbox.0 && already_revoked.is_none_or(|skip| &skip.0 != *grant)
+            })
+            .map(|(grant, _)| grant.clone())
+            .filter(|grant| state.revoked_grants.contains(grant))
+            .collect();
+        for grant in listed {
+            state.revocations.push(("revoke_listed", grant));
+        }
         let scoped: Vec<String> = state
             .keys
             .iter()
@@ -242,6 +273,7 @@ impl MailboxProvisioner for FakeVendor {
                 .map(|(grant, _)| grant.clone())
                 .collect();
             for grant in grants {
+                state.revocations.push(("revoke_listed", grant.clone()));
                 state.grants.remove(&grant);
                 state.revoked_grants.push(grant);
             }
@@ -427,40 +459,37 @@ struct StoredRow {
     next_sweep_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct SendRow {
     mailbox: AgentMailboxId,
     team: TeamId,
     key: Uuid,
     recipients: u32,
-    at: DateTime<Utc>,
-    sent: Option<SentMessage>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct AuditRow {
-    mailbox: AgentMailboxId,
-    key: Uuid,
-    recipients: u32,
     fingerprint: [u8; 32],
     outcome: &'static str,
     attempts: u32,
-    approved_at: DateTime<Utc>,
+    /// When it took its cap slot.
+    at: DateTime<Utc>,
+    sent: Option<SentMessage>,
 }
 
 #[derive(Default)]
 struct RepositoryState {
     rows: Vec<StoredRow>,
     sends: Vec<SendRow>,
-    audit: Vec<AuditRow>,
+    /// Cluster-wide jobs whose round is taken, as the store's claims row holds them.
+    claimed_jobs: Vec<SweepJob>,
     members: Members,
     /// Put this agent back on its team right after the orphan scan reads
     /// its page, as a person re-adding it between the read and the pause would.
     readd_after_orphan_scan: Option<(String, TeamId)>,
-    /// The hourly orphan check's round is taken; cleared when the hour passes.
-    orphan_check_claimed: bool,
     /// Resume this mailbox right after the sweep reads its batch, as a
     /// person resuming it between the read and the release would.
     resume_after_sweep_read: Option<AgentMailboxId>,
+    /// Prune rounds run, across every replica sharing this store.
+    prune_rounds: usize,
+    /// defer_sweep fails this many more times.
+    fail_defer_sweep: usize,
 }
 
 #[derive(Clone, Default)]
@@ -773,6 +802,13 @@ impl AgentMailboxRepository for FakeRepository {
     }
 
     async fn defer_sweep(&self, id: AgentMailboxId, until: DateTime<Utc>) -> Result<(), FakeError> {
+        {
+            let mut state = self.0.lock().unwrap();
+            if state.fail_defer_sweep > 0 {
+                state.fail_defer_sweep -= 1;
+                return Err(FakeError);
+            }
+        }
         self.with_row(id, |row| row.next_sweep_at = Some(until));
         Ok(())
     }
@@ -786,38 +822,37 @@ impl AgentMailboxRepository for FakeRepository {
         replayable_since: DateTime<Utc>,
     ) -> Result<SendReservation, FakeError> {
         let mut state = self.0.lock().unwrap();
-        let key = attempt.idempotency_key;
-        if state.audit.iter().any(|audit| {
-            audit.mailbox == mailbox.id
-                && audit.key == key
-                && audit.fingerprint != attempt.fingerprint
-        }) {
-            return Ok(SendReservation::KeyReused);
+        let current = state
+            .rows
+            .iter()
+            .find(|row| row.mailbox.id == mailbox.id)
+            .map(|row| row.mailbox.state)
+            .unwrap();
+        if current != MailboxState::Active {
+            return Ok(SendReservation::NotActive(current));
         }
+        let key = attempt.idempotency_key;
         if let Some(existing) = state
             .sends
-            .iter()
+            .iter_mut()
             .find(|send| send.mailbox == mailbox.id && send.key == key)
         {
-            let reservation = match &existing.sent {
-                Some(sent) => SendReservation::AlreadySent(sent.clone()),
-                None if existing.at >= replayable_since => {
-                    SendReservation::Proceed { fresh: false }
-                }
-                None => SendReservation::OutcomeUnknown,
-            };
-            if reservation == (SendReservation::Proceed { fresh: false }) {
-                let audit = state
-                    .audit
-                    .iter_mut()
-                    .find(|audit| audit.mailbox == mailbox.id && audit.key == key)
-                    .unwrap();
-                audit.attempts += 1;
+            if existing.fingerprint != attempt.fingerprint {
+                return Ok(SendReservation::KeyReused);
             }
-            return Ok(reservation);
+            match (&existing.sent, existing.outcome) {
+                (Some(sent), _) => return Ok(SendReservation::AlreadySent(sent.clone())),
+                (None, "refused") => {}
+                (None, _) if existing.at >= replayable_since => {
+                    existing.attempts += 1;
+                    return Ok(SendReservation::Proceed { fresh: false });
+                }
+                (None, _) => return Ok(SendReservation::OutcomeUnknown),
+            }
         }
 
-        let in_window = |send: &&SendRow, window: Duration| send.at > now - window;
+        let counted =
+            |send: &&SendRow, window: Duration| send.outcome != "refused" && send.at > now - window;
         let mut retry_at: Option<DateTime<Utc>> = None;
         let ours: Vec<&SendRow> = state
             .sends
@@ -826,7 +861,7 @@ impl AgentMailboxRepository for FakeRepository {
             .collect();
         let hour: Vec<&&SendRow> = ours
             .iter()
-            .filter(|send| in_window(send, Duration::hours(1)))
+            .filter(|send| counted(send, Duration::hours(1)))
             .collect();
         if hour.len() >= limits.per_hour as usize {
             retry_at = retry_at.max(
@@ -838,7 +873,7 @@ impl AgentMailboxRepository for FakeRepository {
         }
         let day: Vec<&&SendRow> = ours
             .iter()
-            .filter(|send| in_window(send, Duration::days(1)))
+            .filter(|send| counted(send, Duration::days(1)))
             .collect();
         let day_recipients: u32 = day.iter().map(|send| send.recipients).sum();
         if day.len() >= limits.per_day as usize
@@ -855,7 +890,7 @@ impl AgentMailboxRepository for FakeRepository {
             .sends
             .iter()
             .filter(|send| send.team == mailbox.team)
-            .filter(|send| in_window(send, Duration::days(1)))
+            .filter(|send| counted(send, Duration::days(1)))
             .collect();
         let team_recipients: u32 = team_day.iter().map(|send| send.recipients).sum();
         if team_recipients + attempt.recipient_count > limits.team_recipients_per_day {
@@ -871,32 +906,26 @@ impl AgentMailboxRepository for FakeRepository {
             return Ok(SendReservation::LimitReached { retry_at });
         }
 
-        state.sends.push(SendRow {
-            mailbox: mailbox.id,
-            team: mailbox.team,
-            key,
-            recipients: attempt.recipient_count,
-            at: now,
-            sent: None,
-        });
         match state
-            .audit
+            .sends
             .iter_mut()
-            .find(|audit| audit.mailbox == mailbox.id && audit.key == key)
+            .find(|send| send.mailbox == mailbox.id && send.key == key)
         {
-            Some(audit) => {
-                audit.outcome = "pending";
-                audit.attempts += 1;
-                audit.approved_at = now;
+            Some(send) => {
+                send.outcome = "pending";
+                send.attempts += 1;
+                send.at = now;
             }
-            None => state.audit.push(AuditRow {
+            None => state.sends.push(SendRow {
                 mailbox: mailbox.id,
+                team: mailbox.team,
                 key,
                 recipients: attempt.recipient_count,
                 fingerprint: attempt.fingerprint,
                 outcome: "pending",
                 attempts: 1,
-                approved_at: now,
+                at: now,
+                sent: None,
             }),
         }
         Ok(SendReservation::Proceed { fresh: true })
@@ -915,13 +944,7 @@ impl AgentMailboxRepository for FakeRepository {
             .find(|send| send.mailbox == mailbox && send.key == idempotency_key)
             .unwrap();
         send.sent = Some(sent.clone());
-        if let Some(audit) = state
-            .audit
-            .iter_mut()
-            .find(|audit| audit.mailbox == mailbox && audit.key == idempotency_key)
-        {
-            audit.outcome = "sent";
-        }
+        send.outcome = "sent";
         Ok(())
     }
 
@@ -931,33 +954,20 @@ impl AgentMailboxRepository for FakeRepository {
         idempotency_key: Uuid,
     ) -> Result<(), FakeError> {
         let mut state = self.0.lock().unwrap();
-        let before = state.sends.len();
-        state.sends.retain(|send| {
-            !(send.mailbox == mailbox && send.key == idempotency_key && send.sent.is_none())
-        });
-        if state.sends.len() != before
-            && let Some(audit) = state
-                .audit
-                .iter_mut()
-                .find(|audit| audit.mailbox == mailbox && audit.key == idempotency_key)
-        {
-            audit.outcome = "refused";
+        if let Some(send) = state.sends.iter_mut().find(|send| {
+            send.mailbox == mailbox && send.key == idempotency_key && send.outcome == "pending"
+        }) {
+            send.outcome = "refused";
         }
         Ok(())
     }
 
     async fn prune_sends(&self, before: DateTime<Utc>) -> Result<u64, FakeError> {
         let mut state = self.0.lock().unwrap();
+        state.prune_rounds += 1;
         let count = state.sends.len();
         state.sends.retain(|send| send.at >= before);
         Ok((count - state.sends.len()) as u64)
-    }
-
-    async fn prune_send_audit(&self, before: DateTime<Utc>) -> Result<u64, FakeError> {
-        let mut state = self.0.lock().unwrap();
-        let count = state.audit.len();
-        state.audit.retain(|audit| audit.approved_at >= before);
-        Ok((count - state.audit.len()) as u64)
     }
 
     async fn orphaned(
@@ -1022,9 +1032,26 @@ impl AgentMailboxRepository for FakeRepository {
         Ok(true)
     }
 
-    async fn claim_orphan_check(&self, _every: Duration) -> Result<bool, FakeError> {
+    async fn release_failed_unreached(&self, id: AgentMailboxId) -> Result<bool, FakeError> {
+        let now = Utc::now();
+        Ok(self.with_row(id, |row| {
+            let unreached = row.mailbox.state == MailboxState::Failed
+                && row.mailbox.provider_mailbox_id.is_none()
+                && row.lease.is_none_or(|(_, until)| until < now);
+            if unreached {
+                row.mailbox.state = MailboxState::Released;
+            }
+            unreached
+        }))
+    }
+
+    async fn claim_sweep_job(&self, job: SweepJob, _every: Duration) -> Result<bool, FakeError> {
         let mut state = self.0.lock().unwrap();
-        Ok(!std::mem::replace(&mut state.orphan_check_claimed, true))
+        if state.claimed_jobs.contains(&job) {
+            return Ok(false);
+        }
+        state.claimed_jobs.push(job);
+        Ok(true)
     }
 }
 
@@ -1472,9 +1499,10 @@ async fn a_refused_send_frees_its_slot_and_an_unknown_one_is_retried_once() {
     assert!(matches!(unknown, Err(AgentMailboxError::Unavailable)));
     assert!(retried.is_ok());
     let sends = &world.repository.0.lock().unwrap().sends;
+    let outcomes: Vec<_> = sends.iter().map(|send| send.outcome).collect();
     assert_eq!(
-        sends.len(),
-        1,
+        outcomes,
+        vec!["refused", "sent"],
         "the refused send no longer counts; the retried one counts once"
     );
 }
@@ -2194,8 +2222,8 @@ async fn a_refused_retry_of_an_unknown_send_keeps_its_reservation() {
         1,
         "the first attempt may have gone out; its slot stays taken"
     );
-    assert_eq!(state.audit[0].outcome, "pending");
-    assert_eq!(state.audit[0].attempts, 2);
+    assert_eq!(state.sends[0].outcome, "pending");
+    assert_eq!(state.sends[0].attempts, 2);
 }
 
 #[tokio::test]
@@ -2220,7 +2248,7 @@ async fn every_send_leaves_an_audit_record_of_counts_and_times() {
         .await
         .unwrap();
 
-    let audit = world.repository.0.lock().unwrap().audit.clone();
+    let audit = world.repository.0.lock().unwrap().sends.clone();
     let summary: Vec<_> = audit
         .iter()
         .map(|row| (row.key, row.recipients, row.outcome))
@@ -2422,7 +2450,30 @@ async fn a_display_name_naming_macro_or_an_administrator_is_dropped_not_refused(
 #[tokio::test]
 async fn a_malformed_display_name_is_refused() {
     let world = world();
-    for name in ["Ada\r\nBcc: x@example.com", &"a".repeat(65), " "] {
+    for name in [
+        "Ada\r\nBcc: x@example.com",
+        &"a".repeat(65),
+        " ",
+        "ceo@bank.example",
+        "\"Bank\" <ceo@bank.example>",
+        "Ada <ada>",
+        "Ada > Ben",
+        "Ada \"the agent\"",
+        "Ada\nBen",
+        // RFC 2047 encoded words decode to anything in a mail client.
+        "=?utf-8?B?Y2VvQGJhbmsuZXhhbXBsZQ==?=",
+        // Lookalikes of @ < >: fullwidth, small, angle quotation marks.
+        "ceo\u{FF20}bank.example",
+        "ceo\u{FE6B}bank.example",
+        "Bank \u{FF1C}ceo\u{FF1E}",
+        "Bank \u{2039}ceo\u{203A}",
+        // Format characters (bidi overrides, zero-width) and private use.
+        "Ada\u{202E}elpmaxe.knab",
+        "Ada\u{200B}",
+        "Ada\u{E000}",
+        // A comma needs the From phrase quoted; the provider's quoting is unverified.
+        "Doe, Jane",
+    ] {
         let request = ProvisionRequest {
             display_name: Some(name.to_owned()),
             ..request(ADA, 1, "ada")
@@ -2513,7 +2564,7 @@ async fn the_orphan_check_runs_once_an_hour_across_replicas() {
     world.members.lock().unwrap().remove(ADA);
     let same_hour = world.service.sweep_orphans(now).await.unwrap();
     // The hour passes.
-    world.repository.0.lock().unwrap().orphan_check_claimed = false;
+    world.repository.0.lock().unwrap().claimed_jobs.clear();
     let next_hour = world.service.sweep_orphans(now).await.unwrap();
 
     assert!(first.is_some());
@@ -2559,7 +2610,7 @@ async fn a_reply_counts_the_recipients_it_goes_to() {
         .await
         .unwrap();
 
-    let audit = world.repository.0.lock().unwrap().audit.clone();
+    let audit = world.repository.0.lock().unwrap().sends.clone();
     assert_eq!(
         audit[1].recipients, 3,
         "a reply to an outbound message goes to its recipients"
@@ -2589,4 +2640,352 @@ async fn a_reserved_names_taken_suffix_is_retried_with_a_fresh_one() {
         format!("{}@fake-vendor.invalid", own_suffix.as_str()),
         "the retry takes a fresh suffix"
     );
+}
+
+/// Span name → its fields as recorded, for every span opened while it is installed.
+#[derive(Clone, Default)]
+struct SpanCapture(Arc<Mutex<Vec<(String, SpanFields)>>>);
+
+type SpanFields = HashMap<String, String>;
+
+struct FieldText<'a>(&'a mut HashMap<String, String>);
+
+impl tracing::field::Visit for FieldText<'_> {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.insert(field.name().to_owned(), format!("{value:?}"));
+    }
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.0.insert(field.name().to_owned(), value.to_owned());
+    }
+}
+
+impl<S> tracing_subscriber::Layer<S> for SpanCapture
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    fn on_new_span(
+        &self,
+        attributes: &tracing::span::Attributes<'_>,
+        id: &tracing::span::Id,
+        _: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut fields = HashMap::new();
+        attributes.record(&mut FieldText(&mut fields));
+        fields.insert("#id".to_owned(), id.into_u64().to_string());
+        self.0
+            .lock()
+            .unwrap()
+            .push((attributes.metadata().name().to_owned(), fields));
+    }
+
+    fn on_record(
+        &self,
+        id: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        _: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut spans = self.0.lock().unwrap();
+        if let Some((_, fields)) = spans
+            .iter_mut()
+            .rev()
+            .find(|(_, fields)| fields.get("#id") == Some(&id.into_u64().to_string()))
+        {
+            values.record(&mut FieldText(fields));
+        }
+    }
+}
+
+impl SpanCapture {
+    fn named(&self, name: &str) -> Vec<HashMap<String, String>> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(span, _)| span == name)
+            .map(|(_, fields)| fields.clone())
+            .collect()
+    }
+}
+
+#[tokio::test]
+async fn provisioning_and_release_steps_are_spans_with_the_mailbox_and_outcome() {
+    use tracing_subscriber::layer::SubscriberExt;
+    let capture = SpanCapture::default();
+    // Global: a thread-scoped subscriber misses callsites that tests running
+    // in parallel registered first. Other tests' spans land here too, so the
+    // checks below look only at this test's mailbox.
+    tracing::subscriber::set_global_default(tracing_subscriber::registry().with(capture.clone()))
+        .expect("the only test that installs a subscriber");
+    let world = world();
+
+    let ada = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    world.service.pause(&user(ADA), Utc::now()).await.unwrap();
+    world.repository.age(ada.id, Duration::days(31));
+    world.service.sweep(Utc::now()).await.unwrap();
+
+    for name in ["agent_mailbox.advance", "agent_mailbox.tear_down"] {
+        let spans: Vec<_> = capture
+            .named(name)
+            .into_iter()
+            .filter(|fields| fields.get("agent_mailbox.id") == Some(&ada.id.to_string()))
+            .collect();
+        assert!(
+            !spans.is_empty(),
+            "no {name} span among {:?}",
+            capture
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(span, _)| span.clone())
+                .collect::<Vec<_>>()
+        );
+        for fields in spans {
+            assert_eq!(
+                fields.get("agent_mailbox.id"),
+                Some(&ada.id.to_string()),
+                "{name}: {fields:?}"
+            );
+            assert!(
+                fields.contains_key("outcome"),
+                "{name} records no outcome: {fields:?}"
+            );
+        }
+    }
+    assert!(
+        capture
+            .named("agent_mailbox.expire_paused")
+            .iter()
+            .any(|fields| fields.get("agent_mailbox.id") == Some(&ada.id.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn replicas_sweeping_in_the_same_minute_prune_once() {
+    let world = world();
+    let replica = AgentMailboxService::new(
+        world.repository.clone(),
+        world.vendor.clone(),
+        world.cipher.clone(),
+        FakeDirectory(world.members.clone()),
+        VendorMode::Fake,
+        SendLimits::DEFAULT,
+    );
+    let now = Utc::now();
+
+    world.service.sweep(now).await.unwrap();
+    replica.sweep(now).await.unwrap();
+
+    assert_eq!(world.repository.0.lock().unwrap().prune_rounds, 1);
+}
+
+#[tokio::test]
+async fn letters_digits_and_ordinary_name_punctuation_are_a_valid_display_name() {
+    let world = world();
+    for (number, name) in [
+        "José Núñez",
+        "Ada 2",
+        "O'Brien & Co.",
+        "Zoë-Ann (Ops)",
+        "李小龙",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let agent = format!("macro|agent-{number}@agents.macro.invalid");
+        world
+            .members
+            .lock()
+            .unwrap()
+            .insert(agent.clone(), ADA_TEAM);
+        let request = ProvisionRequest {
+            display_name: Some(name.to_owned()),
+            ..request(&agent, 100 + number as u128, &format!("agent{number}"))
+        };
+        let provisioned = world.service.provision(request).await;
+        assert!(provisioned.is_ok(), "{name:?}: {provisioned:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_conflict_from_a_create_still_in_flight_never_makes_a_second_mailbox() {
+    let world = world();
+    world.vendor.0.lock().unwrap().conflict_after_next_create = true;
+
+    let view = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+
+    assert_eq!(view.address.as_deref(), Some("ada@fake-vendor.invalid"));
+    assert_eq!(
+        world.vendor.live_mailbox_count(),
+        1,
+        "no second, suffixed inbox"
+    );
+    world.service.release(&user(ADA), Utc::now()).await.unwrap();
+    assert_eq!(world.vendor.live_mailbox_count(), 0, "nothing leaked");
+}
+
+#[tokio::test]
+async fn a_new_request_recovers_a_mailbox_whose_addresses_were_all_taken() {
+    let world = world();
+    // The requested address and the mailbox's own suffixed one are both taken.
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+
+    let failed = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    // A new request gets a new mailbox, so a new suffix; its plain address is still taken.
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+    let recovered = world
+        .service
+        .provision(request(ADA, 2, "ada"))
+        .await
+        .unwrap();
+
+    assert_eq!(failed.state, MailboxState::Failed);
+    assert_eq!(failed.last_error, Some(ProvisioningFailure::AddressTaken));
+    assert_eq!(recovered.state, MailboxState::Active, "{recovered:?}");
+    assert_ne!(recovered.id, failed.id);
+    assert!(recovered.address.unwrap().starts_with("ada-"));
+}
+
+#[tokio::test]
+async fn a_release_revokes_each_credential_once() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+
+    world.service.release(&user(ADA), Utc::now()).await.unwrap();
+
+    assert_eq!(
+        world.vendor.0.lock().unwrap().revocations,
+        vec![("revoke", "grant-1".to_owned())]
+    );
+}
+
+#[tokio::test]
+async fn a_failed_deferral_does_not_end_the_sweep_round() {
+    let world = world();
+    let ada = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let ben = world
+        .service
+        .provision(request(BEN, 2, "ben"))
+        .await
+        .unwrap();
+    world.service.pause(&user(ADA), Utc::now()).await.unwrap();
+    world.service.pause(&user(BEN), Utc::now()).await.unwrap();
+    world.repository.age(ada.id, Duration::days(32));
+    world.repository.age(ben.id, Duration::days(31));
+    world.vendor.fail_next("delete", ProviderError::Unavailable);
+    world.vendor.fail_next("delete", ProviderError::Unavailable);
+    world.repository.0.lock().unwrap().fail_defer_sweep = 1;
+
+    let round = world.service.sweep(Utc::now()).await;
+
+    let report = round.unwrap();
+    assert_eq!(report.failed, 2, "both steps ran: {report:?}");
+    assert_eq!(
+        world.repository.0.lock().unwrap().prune_rounds,
+        1,
+        "the round still pruned"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_mailbox_whose_create_did_reach_the_provider_is_not_replaced() {
+    let world = world();
+    world.vendor.fail_next("create", ProviderError::Rejected);
+    let failed = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    // The provider made the inbox after all, and the answer was lost.
+    world.vendor.0.lock().unwrap().mailboxes.insert(
+        "inbox-late".to_owned(),
+        VendorMailbox {
+            address: "ada@fake-vendor.invalid".to_owned(),
+            tag: failed.id,
+            deleted: false,
+        },
+    );
+
+    let refused = world.service.provision(request(ADA, 2, "ada")).await;
+
+    assert!(
+        matches!(refused, Err(AgentMailboxError::AlreadyProvisioned)),
+        "{refused:?}"
+    );
+    assert_eq!(world.repository.row(failed.id).state, MailboxState::Failed);
+    assert_eq!(world.vendor.live_mailbox_count(), 1, "no second inbox");
+}
+
+#[tokio::test]
+async fn a_lookalike_of_a_reserved_word_in_the_display_name_is_dropped_too() {
+    let world = world();
+    let view = world
+        .service
+        .provision(ProvisionRequest {
+            // Fullwidth "Macro Support".
+            display_name: Some("\u{FF2D}\u{FF41}\u{FF43}\u{FF52}\u{FF4F} Support".to_owned()),
+            ..request(ADA, 1, "ada")
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(world.repository.row(view.id).display_name, None);
+}
+
+#[tokio::test]
+async fn provisioning_the_provider_keeps_refusing_gives_up_after_a_day_as_failed() {
+    let world = world();
+    world.vendor.fail_next("create", ProviderError::Unavailable);
+    let first = world.service.provision(request(ADA, 1, "ada")).await;
+    let soon = Utc::now() + Duration::hours(1);
+    world.vendor.fail_next("create", ProviderError::Unavailable);
+    world.service.sweep(soon).await.unwrap();
+    let after_an_hour = world.service.status(&user(ADA)).await.unwrap();
+    let later = Utc::now() + Duration::days(2);
+    world.vendor.fail_next("create", ProviderError::Unavailable);
+    world.service.sweep(later).await.unwrap();
+    let after_two_days = world.service.status(&user(ADA)).await.unwrap();
+
+    assert!(
+        matches!(first, Err(AgentMailboxError::Unavailable) | Ok(_)),
+        "{first:?}"
+    );
+    assert_eq!(
+        after_an_hour.state,
+        MailboxState::Provisioning,
+        "still retried"
+    );
+    assert_eq!(after_two_days.state, MailboxState::Failed, "retries end");
+    assert_eq!(
+        after_two_days.last_error,
+        Some(ProvisioningFailure::Unavailable)
+    );
+    assert_eq!(world.vendor.live_mailbox_count(), 0);
 }

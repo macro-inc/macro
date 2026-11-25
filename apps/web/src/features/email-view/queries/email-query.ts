@@ -36,8 +36,6 @@ export type EmailQueryContext = {
   aliasFilter?: { inboxId: string; emailAddress: string };
   facets: FacetSelection;
   facetContext: EmailFacetContext;
-  /** Macro favorite IDs used only by the separate text-search service. */
-  favoriteThreadIds?: readonly string[];
   /** An open saved view replaces the tab's own slice of the mailbox. */
   savedView?: EmailSavedViewScope;
 };

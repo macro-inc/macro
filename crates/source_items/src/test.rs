@@ -909,9 +909,10 @@ async fn savepoints_rolled_back_record_nothing(pool: PgPool) -> Result<(), sqlx:
     assert_exact(&pool).await
 }
 
-/// The migrations leave maintenance off: no trigger on any input, so writes cost what they did,
-/// and reads do not trust the table. Installing turns maintenance on; reads trust the table only
-/// after a backfill that ran with it on. Removing disables the triggers and withdraws that trust,
+/// The enabling migration turns maintenance on, but reads do not trust the table until a backfill.
+/// With maintenance removed, writes cost what they did and reads do not trust the table.
+/// Installing turns maintenance on; reads trust the table only after a backfill that ran with it
+/// on. Removing disables the triggers and withdraws that trust,
 /// and installing again needs another backfill. Install and remove can each run twice.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reads_trust_the_table_only_while_maintained_and_backfilled(
@@ -928,16 +929,16 @@ async fn reads_trust_the_table_only_while_maintained_and_backfilled(
             .fetch_one(conn)
             .await
     };
-    let defined = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM pg_trigger
-           WHERE tgname LIKE 'source_items%'
-             AND tgrelid IN ('entity_access'::regclass, 'document_sub_type'::regclass,
-                 '"Document"'::regclass, '"Chat"'::regclass, '"Project"'::regclass)"#
-    )
-    .fetch_one(&mut *conn)
-    .await?;
-    assert_eq!(defined, 0, "the migrations install no trigger");
-    assert!(!exact(&mut conn).await?);
+    assert_eq!(
+        installed(&mut conn).await?,
+        20,
+        "the enabling migration installs them"
+    );
+    assert!(!exact(&mut conn).await?, "not backfilled yet");
+    sqlx::query!("SELECT source_items_remove_triggers()")
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(installed(&mut conn).await?, 0);
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
     grant(&mut conn, "document", DOC, OWNER, "user").await?;
     assert_eq!(rows(&mut conn, DOC).await?, []);

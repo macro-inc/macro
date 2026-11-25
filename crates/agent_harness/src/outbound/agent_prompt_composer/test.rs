@@ -59,6 +59,7 @@ async fn the_trigger_reaches_the_lexical_service_beside_the_people() {
             markdown: "The popover scrolls the page behind it.".to_owned(),
             status: Some("Todo".to_owned()),
             priority: None,
+            start: None,
             due: None,
             assignees: Vec::new(),
             project: Some(ProjectRef {

@@ -4,6 +4,7 @@
 use super::{fixture, snapshot};
 use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::progress::MailboxProgressRepository;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
@@ -205,6 +206,7 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -382,6 +384,7 @@ async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(d
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -487,7 +490,9 @@ async fn an_invitation_waits_for_its_calendar_parts_then_imports_without_them(db
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: PgPool) {
+async fn sync_claims_but_discovery_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(
+    db: PgPool,
+) {
     let (repo, link) = fixture(&db).await;
     sqlx::query!(
         "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id) VALUES ($1,$2,1,'folder_catalog','mail')",
@@ -508,7 +513,9 @@ async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: Pg
     };
 
     set_reauth(true).await.unwrap();
-    assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_none());
+    // Discovery is the probe that asks for a token again.
+    let probe = repo.claim_catalog(Uuid::now_v7()).await.unwrap().unwrap();
+    repo.release_catalog(&probe, 0).await.unwrap();
     assert!(
         repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
             .await
@@ -589,6 +596,7 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -621,6 +629,7 @@ async fn a_change_during_an_unfinished_claim_is_read_with_a_fresh_count(db: PgPo
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();

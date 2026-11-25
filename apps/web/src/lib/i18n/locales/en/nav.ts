@@ -50,7 +50,7 @@ export default {
   more: 'More',
   moreOptions: 'More options',
   create: 'Create',
-  getMobileApp: 'Get the mobile app',
+  downloads: 'Downloads',
   help: 'Help',
   helpMessage: 'Message support',
   helpCall: 'Book a call',
@@ -85,4 +85,11 @@ export default {
   updateNativePreparingDescription:
     'Saving your work before Macro restarts to install the update.',
   updatePreparingRestart: 'Preparing to restart…',
+  updateDesktopFailedTitle: "Couldn't install the desktop app update",
+  updateNativeFailedDownloadingDescription:
+    'Macro is still on the version you had. The update is downloading again so you can try again.',
+  updateNativeFailedDescription:
+    'Macro is still on the version you had. Restart Macro to try installing the update again.',
+  updateDownloading: 'Downloading…',
+  updateTryAgain: 'Try again',
 };

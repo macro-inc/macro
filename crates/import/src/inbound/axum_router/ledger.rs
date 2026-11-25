@@ -142,7 +142,7 @@ pub struct ImportNotionPageResponse {
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id), err(Debug))]
 pub async fn list_entities_handler<T: ImportStager, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -174,7 +174,7 @@ pub async fn list_entities_handler<T: ImportStager, Auth: MacroAuthorizationServ
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user, body), fields(user_id = %user.authorization.user.macro_user_id, source = body.source.as_ref()), err(Debug))]
+#[tracing::instrument(skip(service, user, body), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id, source = body.source.as_ref()), err(Debug))]
 pub async fn track_entity_handler<T: ImportStager, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -268,7 +268,7 @@ pub async fn track_entity_handler<T: ImportStager, Auth: MacroAuthorizationServi
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id), err(Debug))]
 pub async fn decline_entity_handler<T: ImportStager, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -300,7 +300,7 @@ pub async fn decline_entity_handler<T: ImportStager, Auth: MacroAuthorizationSer
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user, body), fields(user_id = %user.authorization.user.macro_user_id), err(Debug))]
+#[tracing::instrument(skip(service, user, body), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id), err(Debug))]
 pub async fn import_notion_page_handler<T: NotionPageImporter, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,

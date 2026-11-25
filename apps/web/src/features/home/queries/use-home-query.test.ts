@@ -216,30 +216,6 @@ describe('Home data source', () => {
     expect(notifications.fetchNextPage).toHaveBeenCalledOnce();
     expect(activity.fetchNextPage).not.toHaveBeenCalled();
   });
-
-  it('lists Recent without old Home’s saved Status', () => {
-    const recent = makeQuery([email('a', 9)]);
-    const { source, setState } = mount(recent, makeQuery([]));
-    setState({ tab: 'recent', facets: { read: ['read'] } });
-    expect(ids(source)).toEqual(['a']);
-  });
-
-  // The open row stays selected when the viewer's own activity moves it.
-  it('keeps a Recent row’s key as a new touch moves it to a newer section', () => {
-    const recent = makeQuery([email('a', 9), email('b', 8)]);
-    const { source, setState } = mount(recent, makeQuery([]));
-    setState({ tab: 'recent', groupBy: 'date' });
-    const keyOf = (id: string) =>
-      source
-        .items()
-        .find((row) => row.kind === 'entity' && row.entity.id === id)?.id;
-    const before = keyOf('b');
-    expect(before).toBeDefined();
-
-    recent.setEntities([email('b', 10), email('a', 9)]);
-    expect(ids(source)).toEqual(['b', 'a']);
-    expect(keyOf('b')).toBe(before);
-  });
 });
 
 describe('Home work feed', () => {

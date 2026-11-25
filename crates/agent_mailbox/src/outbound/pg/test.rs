@@ -1,7 +1,7 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
-use crate::domain::models::SendKind;
+use crate::domain::models::{SendKind, SweepJob};
 
 const ADA: &str = "macro|ada-1@agents.macro.invalid";
 const TTL: Duration = Duration::minutes(3);
@@ -473,6 +473,30 @@ async fn recipients_count_against_the_mailbox_and_the_team(pool: PgPool) {
     else {
         panic!("expected a new reservation");
     };
+    let lease = token(2);
+    repository
+        .claim(ben.id, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    let created = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-2".to_owned()),
+        address: "ben@example.net".to_owned(),
+    };
+    assert!(
+        repository
+            .record_created(ben.id, lease, &created)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repository
+            .record_grant(ben.id, lease, &grant())
+            .await
+            .unwrap()
+    );
+    assert!(repository.activate(ben.id, lease).await.unwrap());
+    let ben = mailbox(&repository, ben.id).await;
     let limits = SendLimits {
         recipients_per_day: 10,
         team_recipients_per_day: 15,
@@ -573,7 +597,7 @@ async fn a_team_gets_at_most_its_limit_of_live_mailboxes(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn the_audit_records_each_send_without_its_content_and_outlives_the_ledger(pool: PgPool) {
+async fn each_send_is_recorded_without_its_content_and_pruned_after_retention(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool.clone());
     let ada = mailbox(&repository, active_mailbox(&repository).await).await;
     let now = Utc::now();
@@ -607,15 +631,11 @@ async fn the_audit_records_each_send_without_its_content_and_outlives_the_ledger
         .reserve_send(&ada, &attempt(3, 2), ROOMY, now, replayable)
         .await
         .unwrap();
-    repository
-        .prune_sends(now + Duration::seconds(1))
-        .await
-        .unwrap();
 
     let audit = sqlx::query!(
         r#"
         SELECT idempotency_key, team_id, kind, recipient_count, outcome, provider_message_id, attempts
-        FROM agent_mailbox_send_audit
+        FROM agent_mailbox_sends
         WHERE mailbox_id = $1
         ORDER BY idempotency_key
         "#,
@@ -655,7 +675,7 @@ async fn the_audit_records_each_send_without_its_content_and_outlives_the_ledger
         ]
     );
     let pruned = repository
-        .prune_send_audit(now + Duration::seconds(1))
+        .prune_sends(now + Duration::seconds(1))
         .await
         .unwrap();
     assert_eq!(pruned, 3);
@@ -696,7 +716,10 @@ async fn a_cancelled_send_frees_its_slot_and_old_records_are_pruned(pool: PgPool
         .await
         .unwrap();
 
-    assert_eq!(pruned, 3);
+    assert_eq!(
+        pruned, 4,
+        "the refused record stays until its retention ends"
+    );
     assert_eq!(nothing_left, 0);
 }
 
@@ -816,65 +839,6 @@ async fn a_released_mailbox_does_not_block_a_reused_provider_id(pool: PgPool) {
             .await
             .unwrap()
     );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_key_retried_after_its_ledger_row_is_pruned_answers_from_the_audit(pool: PgPool) {
-    let repository = PgAgentMailboxRepository::new(pool);
-    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
-    let now = Utc::now();
-    let replayable = now - Duration::hours(1);
-    let sent = SentMessage {
-        id: ProviderMessageId("sent-1".to_owned()),
-        thread_id: Some("thread-1".to_owned()),
-    };
-    repository
-        .reserve_send(&ada, &attempt(1, 1), ROOMY, now, replayable)
-        .await
-        .unwrap();
-    repository
-        .complete_send(ada.id, Uuid::from_u128(1), &sent)
-        .await
-        .unwrap();
-    repository
-        .reserve_send(&ada, &attempt(2, 1), ROOMY, now, replayable)
-        .await
-        .unwrap();
-    repository
-        .reserve_send(&ada, &attempt(3, 1), ROOMY, now, replayable)
-        .await
-        .unwrap();
-    repository
-        .cancel_send(ada.id, Uuid::from_u128(3))
-        .await
-        .unwrap();
-    repository
-        .prune_sends(now + Duration::seconds(1))
-        .await
-        .unwrap();
-
-    let was_sent = repository
-        .reserve_send(&ada, &attempt(1, 1), ROOMY, now, replayable)
-        .await
-        .unwrap();
-    let was_unknown = repository
-        .reserve_send(&ada, &attempt(2, 1), ROOMY, now, replayable)
-        .await
-        .unwrap();
-    let was_refused = repository
-        .reserve_send(&ada, &attempt(3, 1), ROOMY, now, replayable)
-        .await
-        .unwrap();
-
-    assert_eq!(
-        was_sent,
-        SendReservation::AlreadySent(SentMessage {
-            id: ProviderMessageId("sent-1".to_owned()),
-            thread_id: None,
-        })
-    );
-    assert_eq!(was_unknown, SendReservation::OutcomeUnknown);
-    assert_eq!(was_refused, SendReservation::Proceed { fresh: true });
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1026,11 +990,11 @@ async fn one_replica_claims_each_hourly_orphan_check(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool.clone());
 
     let first = repository
-        .claim_orphan_check(Duration::hours(1))
+        .claim_sweep_job(SweepJob::Orphans, Duration::hours(1))
         .await
         .unwrap();
     let rival = repository
-        .claim_orphan_check(Duration::hours(1))
+        .claim_sweep_job(SweepJob::Orphans, Duration::hours(1))
         .await
         .unwrap();
     sqlx::query!("UPDATE agent_mailbox_sweep_claims SET next_run_at = now() - interval '1 second'")
@@ -1038,7 +1002,7 @@ async fn one_replica_claims_each_hourly_orphan_check(pool: PgPool) {
         .await
         .unwrap();
     let next = repository
-        .claim_orphan_check(Duration::hours(1))
+        .claim_sweep_job(SweepJob::Orphans, Duration::hours(1))
         .await
         .unwrap();
 
@@ -1068,6 +1032,31 @@ async fn a_stored_reserved_name_still_reads_back(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn each_sweep_job_is_claimed_by_one_replica_per_round_independently(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+
+    let prune = repository
+        .claim_sweep_job(SweepJob::Prune, Duration::minutes(1))
+        .await
+        .unwrap();
+    let rival = repository
+        .claim_sweep_job(SweepJob::Prune, Duration::minutes(1))
+        .await
+        .unwrap();
+    let orphans = repository
+        .claim_sweep_job(SweepJob::Orphans, Duration::hours(1))
+        .await
+        .unwrap();
+
+    assert!(prune);
+    assert!(!rival);
+    assert!(
+        orphans,
+        "the prune claim does not take the orphan check's round"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_orphan_check_claim_survives_a_missing_seed_row(pool: PgPool) {
     sqlx::query!("DELETE FROM agent_mailbox_sweep_claims")
         .execute(&pool)
@@ -1076,14 +1065,226 @@ async fn the_orphan_check_claim_survives_a_missing_seed_row(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
 
     let first = repository
-        .claim_orphan_check(Duration::hours(1))
+        .claim_sweep_job(SweepJob::Orphans, Duration::hours(1))
         .await
         .unwrap();
     let rival = repository
-        .claim_orphan_check(Duration::hours(1))
+        .claim_sweep_job(SweepJob::Orphans, Duration::hours(1))
         .await
         .unwrap();
 
     assert!(first);
     assert!(!rival);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_send_reserved_after_a_pause_or_release_does_not_proceed(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let id = active_mailbox(&repository).await;
+    // The caller read the mailbox while it was active...
+    let ada = mailbox(&repository, id).await;
+    let now = Utc::now();
+    // ...and a pause committed before its reservation.
+    assert!(
+        repository
+            .transition(id, &[MailboxState::Active], MailboxState::Paused, now)
+            .await
+            .unwrap()
+    );
+
+    let paused = repository
+        .reserve_send(&ada, &attempt(1, 1), ROOMY, now, now - Duration::hours(1))
+        .await
+        .unwrap();
+    assert!(
+        repository
+            .transition(id, &[MailboxState::Paused], MailboxState::Releasing, now)
+            .await
+            .unwrap()
+    );
+    let released = repository
+        .reserve_send(&ada, &attempt(2, 1), ROOMY, now, now - Duration::hours(1))
+        .await
+        .unwrap();
+
+    assert!(
+        !matches!(paused, SendReservation::Proceed { .. }),
+        "{paused:?}"
+    );
+    assert!(
+        !matches!(released, SendReservation::Proceed { .. }),
+        "{released:?}"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_retry_that_succeeds_after_the_first_attempt_was_refused_still_counts(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
+    let limits = SendLimits {
+        per_hour: 1,
+        ..ROOMY
+    };
+    let now = Utc::now();
+    let replayable = now - Duration::hours(1);
+
+    let fresh = repository
+        .reserve_send(&ada, &attempt(1, 1), limits, now, replayable)
+        .await
+        .unwrap();
+    let retry = repository
+        .reserve_send(&ada, &attempt(1, 1), limits, now, replayable)
+        .await
+        .unwrap();
+    // The first attempt is refused, the concurrent retry goes out.
+    repository
+        .cancel_send(ada.id, Uuid::from_u128(1))
+        .await
+        .unwrap();
+    repository
+        .complete_send(
+            ada.id,
+            Uuid::from_u128(1),
+            &SentMessage {
+                id: ProviderMessageId("sent-1".to_owned()),
+                thread_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    let next = repository
+        .reserve_send(&ada, &attempt(2, 1), limits, now, replayable)
+        .await
+        .unwrap();
+
+    assert_eq!(fresh, SendReservation::Proceed { fresh: true });
+    assert_eq!(retry, SendReservation::Proceed { fresh: false });
+    assert!(
+        matches!(next, SendReservation::LimitReached { .. }),
+        "the sent message holds the hour's only slot: {next:?}"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_mailbox_that_never_reached_the_provider_can_be_replaced(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let failed = new_mailbox(&repository).await;
+    let lease = token(1);
+    repository
+        .claim(failed, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    repository
+        .record_failure(
+            failed,
+            lease,
+            MailboxState::Failed,
+            ProvisioningFailure::AddressTaken,
+        )
+        .await
+        .unwrap();
+    repository.unclaim(failed, lease).await.unwrap();
+
+    assert!(repository.release_failed_unreached(failed).await.unwrap());
+    let replaced = repository
+        .reserve(&request(2), AgentMailboxId::generate(), TEAM, 25)
+        .await
+        .unwrap();
+
+    let Reservation::New(mailbox) = replaced else {
+        panic!("expected a new mailbox, got {replaced:?}");
+    };
+    assert_ne!(mailbox.id, failed);
+    assert_eq!(
+        repository.mailbox(failed).await.unwrap().unwrap().state,
+        MailboxState::Released
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_mailbox_holding_a_provider_inbox_or_a_lease_is_not_replaced(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let failed = new_mailbox(&repository).await;
+    let lease = token(1);
+    repository
+        .claim(failed, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    let created = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-1".to_owned()),
+        address: "ada@example.net".to_owned(),
+    };
+    assert!(
+        repository
+            .record_created(failed, lease, &created)
+            .await
+            .unwrap()
+    );
+    repository
+        .record_failure(
+            failed,
+            lease,
+            MailboxState::Failed,
+            ProvisioningFailure::Rejected,
+        )
+        .await
+        .unwrap();
+    repository.unclaim(failed, lease).await.unwrap();
+    let held = new_lease_holder(&repository).await;
+
+    let released = repository.release_failed_unreached(failed).await.unwrap();
+    let released_held = repository.release_failed_unreached(held).await.unwrap();
+    let refused = repository
+        .reserve(&request(2), AgentMailboxId::generate(), TEAM, 25)
+        .await
+        .unwrap();
+
+    assert!(!released, "it holds a provider inbox");
+    assert!(!released_held, "an attempt holds it");
+
+    assert!(
+        matches!(refused, Reservation::AgentHasMailbox(_)),
+        "{refused:?}"
+    );
+}
+
+/// Another agent's failed mailbox with no provider inbox, whose lease an
+/// attempt still holds.
+async fn new_lease_holder(repository: &PgAgentMailboxRepository) -> AgentMailboxId {
+    let agent = MacroUserIdStr::parse_from_str("macro|held@agents.macro.invalid")
+        .unwrap()
+        .into_owned();
+    let Reservation::New(mailbox) = repository
+        .reserve(
+            &ProvisionRequest {
+                agent,
+                ..request(9)
+            },
+            AgentMailboxId::generate(),
+            TEAM,
+            25,
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected a new reservation");
+    };
+    let lease = token(9);
+    repository
+        .claim(mailbox.id, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    repository
+        .record_failure(
+            mailbox.id,
+            lease,
+            MailboxState::Failed,
+            ProvisioningFailure::Rejected,
+        )
+        .await
+        .unwrap();
+    mailbox.id
 }

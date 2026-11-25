@@ -99,6 +99,26 @@ for (const admin of [false, true]) {
     await expect(
       dialog.getByText('member@example.com', { exact: true })
     ).toBeInViewport();
+    const share = dialog
+      .getByText('Sharing off', { exact: true })
+      .locator('xpath=ancestor::section')
+      .getByRole('button', { name: 'Share my emails with CRM', exact: true });
+    await expect(share).toBeInViewport();
+    // Beside the status on desktop, wrapped right under it on a phone, and
+    // above both blacklists either way.
+    const status = await dialog
+      .getByText('Sharing off', { exact: true })
+      .boundingBox();
+    const shareBox = await share.boundingBox();
+    const teamHeading = await dialog
+      .getByRole('heading', { name: 'Team blacklist', exact: true })
+      .boundingBox();
+    expect(
+      status && shareBox && shareBox.y < status.y + status.height + 16
+    ).toBe(true);
+    expect(
+      shareBox && teamHeading && shareBox.y + shareBox.height < teamHeading.y
+    ).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('privacy-review.png') });
     const teamRemove = dialog.getByRole('button', {
       name: 'Remove team.example.com',
@@ -133,9 +153,7 @@ for (const admin of [false, true]) {
     await page.screenshot({
       path: testInfo.outputPath('privacy-controls.png'),
     });
-    await dialog
-      .getByRole('button', { name: 'Share my emails with CRM', exact: true })
-      .click();
+    await share.click();
     await expect(page.getByTestId('last-change')).toHaveText(
       JSON.stringify({
         action: 'set_consent',
@@ -178,6 +196,54 @@ test('disconnected mailbox cannot opt in while exclusions remain editable', asyn
   await expect(
     page.getByRole('textbox', { name: 'Domain to block for my emails' })
   ).toBeEnabled();
+});
+
+test('disconnected mailbox connects from the dialog by keyboard and stays unshared', async ({
+  page,
+}, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  if (phone) await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto('/?disconnected');
+  const settings = page.getByRole('button', {
+    name: 'Email settings',
+    exact: true,
+  });
+  await settings.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('No email connected')).toBeVisible();
+  const connect = dialog.getByRole('button', {
+    name: 'Connect email',
+    exact: true,
+  });
+  await expect(connect).toBeVisible();
+  const box = await connect.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport && box.x + box.width <= viewport.width).toBe(true);
+  // The dialog opens on its title. The desktop header's Close button comes
+  // next; the phone drawer has no Close button, so the mailbox row is first.
+  await expect(
+    dialog.getByRole('heading', { name: 'Contribute your emails to CRM' })
+  ).toBeFocused();
+  if (!phone) await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(connect).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('mailbox-connections')).toHaveText('1');
+  await settings.click();
+  await expect(dialog.getByText('member@example.com')).toBeVisible();
+  await expect(dialog.getByText('Sharing off')).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Connect email', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByRole('button', {
+      name: 'Share my emails with CRM',
+      exact: true,
+    })
+  ).toBeEnabled();
+  await expect(page.getByTestId('last-change')).toHaveText('');
 });
 
 test('banner opens review using the device input mode', async ({
@@ -251,9 +317,7 @@ test('owner can inspect and remove a private-thread exception', async ({
   await expect(
     dialog.getByText('Private conversation', { exact: true })
   ).toBeVisible();
-  await expect(
-    dialog.getByText(/A teammate’s contributed copy can still be visible/)
-  ).toBeVisible();
+  await expect(dialog.getByText(/Only your copy is hidden/)).toBeVisible();
   expect(
     await dialog.evaluate(
       (element) => element.scrollWidth <= element.clientWidth

@@ -880,6 +880,17 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
+    #[tracing::instrument(err, skip_all)]
+    async fn get_merged_crm_company_ids(
+        &self,
+        company_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        Ok(
+            queries::crm_company_access::get_merged_crm_company_ids(&self.pool, company_ids)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_contact_access(
         &self,
@@ -999,6 +1010,16 @@ impl AccessRepository for PgAccessRepository {
         channel_id: &Uuid,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         queries::channel_users::get_channel_users(&self.pool, channel_id)
+            .await
+            .map_err(AccessError::from)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_current_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        queries::channel_users::read_channel_users(&self.pool, channel_id)
             .await
             .map_err(AccessError::from)
     }

@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "cache-bench"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "cache-bench"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+rootcause = { workspace = true }
+apollo-compiler = { workspace = true }
+predicate-index = { path = "../../predicate_index" }
+serde_json = { workspace = true }
+soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
+uuid = { workspace = true }
+cache-core = { path = "../cache-core" }
+soup-filter-cache-adapter = { path = "../../soup_filter_cache_adapter" }

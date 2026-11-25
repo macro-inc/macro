@@ -386,6 +386,7 @@ AL-905	The "Grant access" button of a permission request in PermissionRequestsVi
 AL-910	opening a thread from its address loads no thread
 AL-911	The touch header's Show sidebar pill (ViewSidebarToggle in ViewNavigationControls.tsx) returns before expanding when the aside is a sheet, so no sheet opens; the desktop's Show navigation is untouched.
 AL-912	The Sent go-to link's handler in GoToHotkeys (sidebar.tsx) returns before navigating, so g then s leaves Email on the tab it was on. The AL-400 test goes to Sent the same way before it leaves for Tasks, so it fails at that step too.
+AL-913	The thread's Space and Shift+Space hotkeys are swallowed without paging: their keyDownHandlers in emailHotkeys.ts return true without calling pageDown or pageUp, so the open thread stays where it opened.
 AX-001	Connect on the Google Workspace row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('GMAIL') in Email.tsx.
 AX-002	Connect on the Outlook row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('OUTLOOK') in Email.tsx.
 AX-003	Enable on the disabled primary inbox row does nothing: the button in DisabledPrimaryRow no longer calls props.onEnable in Email.tsx.
@@ -821,6 +822,10 @@ STC-980	The reply editor in reply-input.tsx keeps its quote-collapsed class afte
 STC-981	The signature paywall's description in PaywallState.tsx reads "Upgrade to Pro." instead of saying it removes the Macro signature.
 STC-982	The composer's notice for a provider-rejected send (SEND_REJECTED) reads "This send needs attention." instead of "Your mail provider rejected this send…" in message-operation.ts.
 STC-983	Main projects the outbox-reserved working copy under its client draft ID while the thread lists the sent reply under a different server ID. After reload and a send-status check, the thread shows one sent reply and the test fails because one reply editor remains open.
+STC-984	The queued-sends panel drops the reason of a send whose draft changed in the mailbox and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-985	The queued-sends panel drops the reason of a send Outlook refused and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-986	The queued-sends panel drops the reason of a send whose draft Outlook no longer lets Macro write and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-987	The queued-sends panel drops the reason of a send whose draft content Outlook refused and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
 STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list fallback)): its rendering is switched off or changed in src/features/email-view/email-view.tsx
 STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-003	The failed list's message "Email couldn’t be loaded." is emptied in EmailList.tsx; its Try again button stays.

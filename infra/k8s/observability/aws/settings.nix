@@ -153,9 +153,10 @@ rec {
     healthPath = "/healthz";
   };
 
-  # The hostnames the cluster takes over at the switch. Their DNS records and
-  # certificate are the Pulumi stack's and don't change. Until then only the
-  # target groups exist; the cluster is tested through `kubectl port-forward`.
+  # The hostnames the cluster serves through the ALB. Grafana and OTLP came
+  # over at the switch; their DNS records and certificate are the Pulumi
+  # stack's and don't change. A host with `own = true` is new here: this layer
+  # makes its DNS record and its certificate on the listener (modules/edge.nix).
   hosts = {
     grafana = {
       hostname = "grafana.macro-internal.com";
@@ -166,6 +167,14 @@ rec {
       hostname = "otlp.macro-internal.com";
       targetGroup = "obs-k8s-otlp";
       priority = 11;
+    };
+    # Argo CD's UI and API, behind Google sign-in (../cluster/README.md
+    # "Argo CD").
+    argocd = {
+      hostname = "argo.macro-internal.com";
+      targetGroup = "obs-k8s-argocd";
+      priority = 12;
+      own = true;
     };
   };
 

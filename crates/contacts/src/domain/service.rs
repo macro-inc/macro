@@ -5,13 +5,15 @@ use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes, DirectoryChange,
 };
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
-use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
+use crate::domain::models::people::{
+    NamedPeopleQuery, PeopleSearchLimit, PeopleSearchQuery, PersonMatch,
+};
 use crate::domain::models::query::ContactLookup;
 use crate::domain::ports::{
     ContactListIngress, ContactListRepository, ContactsBackfillOutboxRepo, ContactsIngress,
     ContactsIngressQueue, ContactsNotifier, ContactsOutboxService, ContactsPageRepository,
     ContactsPageService, ContactsRepository, ContactsService, CorrespondentsService,
-    PeopleSearchRepository, PeopleSearchService,
+    PeopleNamingService, PeopleSearchRepository, PeopleSearchService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -380,6 +382,75 @@ where
         span.record("outcome", "error");
         return Err(rootcause::report!("people search exceeded its limit"));
     }
+    span.record("result_count", people.len() as i64);
+    span.record(
+        "outcome",
+        if people.is_empty() {
+            "no_match"
+        } else {
+            "match"
+        },
+    );
+    Ok(people)
+}
+
+impl<R: PeopleSearchRepository, N: ContactsNotifier> PeopleNamingService
+    for ContactsDomainService<R, N>
+{
+    async fn people_named(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        people_named_with(query, limit, || {
+            self.repository.name_people(viewer, query, limit)
+        })
+        .await
+    }
+}
+
+/// Runs one named-people read through `read`: text that names nobody returns
+/// no people without reading, a read that returns more than `limit` people is
+/// an error, and a person the local ranking's rule would not name by the name
+/// they are shown with is dropped, keeping the read's order.
+#[tracing::instrument(
+    name = "contacts.directory.people_named",
+    skip_all,
+    fields(
+        limit = i64::from(limit.get()),
+        word_count = query.words().len() as i64,
+        result_count = tracing::field::Empty,
+        dropped_count = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+    ),
+    err
+)]
+pub(crate) async fn people_named_with<Read, Fut>(
+    query: &NamedPeopleQuery,
+    limit: PeopleSearchLimit,
+    read: Read,
+) -> Result<Vec<PersonMatch>, Report>
+where
+    Read: FnOnce() -> Fut,
+    Fut: Future<Output = Result<Vec<PersonMatch>, Report>>,
+{
+    let span = tracing::Span::current();
+    if !query.names_anyone() {
+        span.record("result_count", 0_i64);
+        span.record("outcome", "names_nobody");
+        return Ok(Vec::new());
+    }
+    let mut people = read().await.inspect_err(|_| {
+        span.record("outcome", "error");
+    })?;
+    if people.len() > usize::from(limit.get()) {
+        span.record("outcome", "error");
+        return Err(rootcause::report!("named people read exceeded its limit"));
+    }
+    let read_count = people.len();
+    people.retain(|person| query.named_by(&person.contact).is_some());
+    span.record("dropped_count", (read_count - people.len()) as i64);
     span.record("result_count", people.len() as i64);
     span.record(
         "outcome",

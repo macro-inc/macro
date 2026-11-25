@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_mailbox_sends\n                (mailbox_id, idempotency_key, team_id, kind, recipient_count, fingerprint,\n                 outcome, reserved_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $7)\n            ON CONFLICT (mailbox_id, idempotency_key) DO UPDATE\n            SET outcome = 'pending', provider_message_id = NULL, provider_thread_id = NULL,\n                attempts = agent_mailbox_sends.attempts + 1,\n                reserved_at = $7, updated_at = $7\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7a33b07e6b0b9283de5b764947bdf5d96d3a9f04dbc8c3d0f89b197e868037b"
+}

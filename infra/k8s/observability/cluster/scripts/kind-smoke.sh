@@ -41,9 +41,9 @@ done
 # healthy: the load balancer controller can't look up its VPC, the
 # ClusterSecretStore can't authenticate, the applications whose pods need a
 # secret from it wait for it, and Loki, Tempo and Mimir wait for gp3 volumes
-# (EBS CSI) and S3. The edge can't even sync: the controller's webhook, which
+# (EBS CSI) and S3; Argo CD waits for its Google client. The edge can't even sync: the controller's webhook, which
 # admits TargetGroupBindings, isn't running.
-expected_unhealthy="aws-load-balancer-controller external-secrets loki tempo mimir grafana edge alloy-ingest"
+expected_unhealthy="argocd aws-load-balancer-controller external-secrets loki tempo mimir grafana edge alloy-ingest"
 expected_unsynced="edge"
 deadline=$((SECONDS + 1200))
 while :; do

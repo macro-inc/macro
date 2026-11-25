@@ -20,6 +20,8 @@ pub enum ThreadAttachmentKind {
     Image,
     /// Office documents, plain text and CSV.
     Document,
+    /// Any attachment with a MIME type.
+    Any,
 }
 
 impl ThreadAttachmentKind {
@@ -28,6 +30,7 @@ impl ThreadAttachmentKind {
             Self::Pdf => PDF_MIME_PREFIXES,
             Self::Image => IMAGE_MIME_PREFIXES,
             Self::Document => DOCUMENT_MIME_PREFIXES,
+            Self::Any => &[""],
         }
     }
 }

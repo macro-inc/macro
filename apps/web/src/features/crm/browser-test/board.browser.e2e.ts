@@ -126,6 +126,473 @@ test('moves through the card menu on a narrow screen', async ({ page }) => {
   );
 });
 
+test('keeps lanes apart and scrolls to the end in one move with a larger text size', async ({
+  page,
+}) => {
+  // Chrome's "Large" font size setting; iOS Dynamic Type also moves rem.
+  // The override lasts only while this session stays attached.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).fontSize
+    )
+  ).toBe('20px');
+  const edges = await page.locator('[data-kanban-lane]').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { left: box.left, right: box.right };
+    })
+  );
+  expect(edges.length).toBeGreaterThan(1);
+  for (let index = 1; index < edges.length; index++) {
+    expect(edges[index]!.left).toBeGreaterThan(edges[index - 1]!.right);
+  }
+  // Lanes not mounted yet must already count toward the scroll range.
+  await page.locator('[data-kanban-board-viewport]').evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await expect(page.getByRole('region', { name: 'New group' })).toBeInViewport({
+    ratio: 1,
+  });
+  // Back at the start, a smaller text size keeps the board at its start.
+  await page.locator('[data-kanban-board-viewport]').evaluate((element) => {
+    element.scrollLeft = 0;
+  });
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('16px');
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-kanban-board-viewport]')
+        .evaluate((element) => element.scrollLeft)
+    )
+    .toBe(0);
+  await cdp.detach();
+});
+
+test('keeps a card being edited in view when the text size grows', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1800, height: 900 });
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  const card = page.locator(
+    '[data-kanban-card="00000000-0000-0000-0000-000000000011"]'
+  );
+  await expect(card).toBeVisible({ timeout: 30000 });
+  // Stage 2, the fifth lane, is the last one fully in view at 16px.
+  await card.hover();
+  await card.getByRole('button', { name: /^Move / }).click();
+  await page.getByRole('menuitem', { name: 'Stage 2', exact: true }).click();
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000001"]'
+  );
+  await expect(lane.locator('[data-kanban-card]')).toHaveCount(1);
+  await expect(lane).toBeInViewport({ ratio: 1 });
+  await card.getByRole('button', { name: /^Next step:/ }).click();
+  const editor = card.getByRole('textbox', { name: 'Edit Next step' });
+  await editor.fill('Unsaved next step');
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('32px');
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue('Unsaved next step');
+  await expect(editor).toBeInViewport({ ratio: 1 });
+  await cdp.detach();
+});
+
+test('keeps a card being edited when the pane narrows as the text grows', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1800, height: 900 });
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  const card = page.locator(
+    '[data-kanban-card="00000000-0000-0000-0000-000000000011"]'
+  );
+  await expect(card).toBeVisible({ timeout: 30000 });
+  // Stage 2, the fifth lane, is in view at 1800px but not at 1280px.
+  await card.hover();
+  await card.getByRole('button', { name: /^Move / }).click();
+  await page.getByRole('menuitem', { name: 'Stage 2', exact: true }).click();
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000001"]'
+  );
+  await expect(lane.locator('[data-kanban-card]')).toHaveCount(1);
+  await expect(lane).toBeInViewport({ ratio: 1 });
+  await card.getByRole('button', { name: /^Next step:/ }).click();
+  const editor = card.getByRole('textbox', { name: 'Edit Next step' });
+  await editor.fill('Unsaved next step');
+  // Both in one layout, as when a split opens beside the board.
+  await page.evaluate(() => {
+    document.body.style.width = '1280px';
+    document.documentElement.style.fontSize = '32px';
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  await expect
+    .poll(() => viewport.evaluate((element) => element.clientWidth))
+    .toBeLessThanOrEqual(1280);
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue('Unsaved next step');
+  const inside = async () => {
+    const [field, box] = await Promise.all([
+      editor.boundingBox(),
+      viewport.boundingBox(),
+    ]);
+    return field && box
+      ? field.x >= box.x && field.x + field.width <= box.x + box.width
+      : false;
+  };
+  await expect.poll(inside).toBe(true);
+});
+
+test('keeps the end in view when the pane narrows as the text grows', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1800, height: 900 });
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  const end = page.getByRole('region', { name: 'New group' });
+  await expect(end).toBeInViewport({ ratio: 1 });
+  // Both in one layout, as when a split opens beside the board.
+  await page.evaluate(() => {
+    document.body.style.width = '1280px';
+    document.documentElement.style.fontSize = '20px';
+  });
+  await expect
+    .poll(() => viewport.evaluate((element) => element.clientWidth))
+    .toBeLessThanOrEqual(1280);
+  const shortOfEnd = () =>
+    viewport.evaluate((element) =>
+      Math.round(element.scrollWidth - element.scrollLeft - element.clientWidth)
+    );
+  await expect.poll(shortOfEnd).toBeLessThanOrEqual(1);
+  const [column, box] = await Promise.all([
+    end.boundingBox(),
+    viewport.boundingBox(),
+  ]);
+  expect(column && box && column.x + column.width <= box.x + box.width).toBe(
+    true
+  );
+});
+
+test.describe('on a phone', () => {
+  test.use({
+    isMobile: true,
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  });
+
+  test('keeps a focused control in view when the text grows past the screen', async ({
+    page,
+  }) => {
+    expect(await page.evaluate(() => window.innerWidth)).toBe(390);
+    const cdp = await page.context().newCDPSession(page);
+    await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+    await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+      timeout: 30000,
+    });
+    const viewport = page.locator('[data-kanban-board-viewport]');
+    await viewport.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await page.getByRole('button', { name: 'New group', exact: true }).click();
+    const name = page.getByLabel('New group name');
+    await name.fill('Renewals');
+    // Lanes are now wider than the screen.
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe('32px');
+    await expect(name).toBeFocused();
+    await expect(name).toHaveValue('Renewals');
+    // Wider than the screen now, so its start is what must show.
+    const startsInView = async () => {
+      const [field, box] = await Promise.all([
+        name.boundingBox(),
+        viewport.boundingBox(),
+      ]);
+      return field && box ? Math.round(field.x - box.x) : null;
+    };
+    await expect.poll(startsInView).toBeGreaterThanOrEqual(0);
+    await expect.poll(startsInView).toBeLessThan(390 / 2);
+    // A focused control in the first lane stays in view too.
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe('16px');
+    await viewport.evaluate((element) => {
+      element.scrollLeft = 0;
+    });
+    const card = page.locator('[data-kanban-card]').first();
+    const move = card.getByRole('button', { name: /^Move / });
+    await move.focus();
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe('32px');
+    await expect(move).toBeFocused();
+    await expect(move).toBeInViewport({ ratio: 1 });
+    await cdp.detach();
+  });
+});
+
+test('keeps the reading position and unsaved input when the text size changes', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  // Stage 10, the 13th lane.
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000009"]'
+  );
+  await viewport.evaluate((element) => {
+    element.scrollLeft = 16 + 12 * 352;
+  });
+  await expect(lane).toBeInViewport({ ratio: 1 });
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('20px');
+  await expect
+    .poll(async () => {
+      const [lanes, box] = await Promise.all([
+        lane.boundingBox(),
+        viewport.boundingBox(),
+      ]);
+      return lanes && box ? Math.round(lanes.x - box.x) : null;
+    })
+    .toBe(0);
+  // At the end, the end stays in view and an unsaved group name survives.
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('16px');
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await page.getByRole('button', { name: 'New group', exact: true }).click();
+  const name = page.getByLabel('New group name');
+  await name.fill('Renewals');
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('20px');
+  await expect(page.getByRole('region', { name: 'New group' })).toBeInViewport({
+    ratio: 1,
+  });
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('Renewals');
+  await cdp.detach();
+});
+
+test('keeps the reading position when focus is in a lane out of view', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  const move = page
+    .locator('[data-kanban-board-column]')
+    .first()
+    .locator('[data-kanban-card]')
+    .first()
+    .getByRole('button', { name: /^Move / });
+  await move.evaluate((element: HTMLElement) =>
+    element.focus({ preventScroll: true })
+  );
+  // The second lane at the left edge; the first stays mounted out of view.
+  await viewport.evaluate((element) => {
+    element.scrollLeft = 16 + 352;
+  });
+  await expect(move).toBeFocused();
+  await expect(move).not.toBeInViewport();
+  const second = page.locator('[data-kanban-board-column]').nth(1);
+  const leftOf = async () => {
+    const [lane, box] = await Promise.all([
+      second.boundingBox(),
+      viewport.boundingBox(),
+    ]);
+    return lane && box ? Math.round(lane.x - box.x) : null;
+  };
+  expect(await leftOf()).toBe(0);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('32px');
+  await expect.poll(leftOf).toBe(0);
+  await cdp.detach();
+});
+
+test('follows a text size that changes the lane width by less than a pixel', async ({
+  page,
+}) => {
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  const scrollWidth = () => viewport.evaluate((element) => element.scrollWidth);
+  const setRoot = (size: string) =>
+    page.evaluate((value) => {
+      document.documentElement.style.fontSize = value;
+    }, size);
+  const initial = await scrollWidth();
+  // Lanes become 336.42px wide, which rounds to their old 336px.
+  await setRoot('16.02px');
+  await expect.poll(scrollWidth).toBeGreaterThan(initial);
+  // A lane mounted now measures the same width.
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth / 2;
+  });
+  await setRoot('16px');
+  await expect.poll(scrollWidth).toBe(initial);
+});
+
+type ScrollEndWindow = Window & {
+  holdScrollEnds?: boolean;
+  deliverScrollEnds?: () => number;
+  deliveredScrollEnds?: number;
+};
+
+test('keeps lanes mounted when a scroll ends just as the text size changes', async ({
+  page,
+}) => {
+  // The virtualizer reports the end of a scroll 150ms after the last scroll
+  // event, with the offset that event read. Hold those reports, then deliver
+  // them right after the board resizes its lanes and before the browser's
+  // next scroll event, as a slow device can.
+  await page.addInitScript(() => {
+    const target = window as ScrollEndWindow;
+    const held = new Map<number, () => void>();
+    const setTimer = window.setTimeout.bind(window);
+    const clearTimer = window.clearTimeout.bind(window);
+    window.setTimeout = ((handler: TimerHandler, delay?: number) => {
+      if (!target.holdScrollEnds || delay !== 150) {
+        return setTimer(handler, delay);
+      }
+      const id = setTimer(() => {}, 2 ** 31 - 1);
+      if (typeof handler === 'function') held.set(id, () => handler());
+      return id;
+    }) as typeof window.setTimeout;
+    window.clearTimeout = (id) => {
+      if (id !== undefined) held.delete(Number(id));
+      clearTimer(id);
+    };
+    target.deliverScrollEnds = () => {
+      let count = 0;
+      for (const [id, run] of held) {
+        held.delete(id);
+        run();
+        count += 1;
+      }
+      return count;
+    };
+  });
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  await page.evaluate(() => {
+    (window as ScrollEndWindow).holdScrollEnds = true;
+  });
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await page.getByRole('button', { name: 'New group', exact: true }).click();
+  const name = page.getByLabel('New group name');
+  await name.fill('Renewals');
+  // Created after the board's own observers, so it runs after them. It
+  // delivers only when the lane width changes, not on its first report.
+  await page.evaluate(() => {
+    const target = window as ScrollEndWindow;
+    const end = document.querySelector('[data-kanban-board-column="-1"]');
+    if (!end) throw new Error('end column not rendered');
+    let width = end.getBoundingClientRect().width;
+    target.deliveredScrollEnds = 0;
+    new ResizeObserver(() => {
+      const next = end.getBoundingClientRect().width;
+      if (next === width) return;
+      width = next;
+      target.deliveredScrollEnds =
+        (target.deliveredScrollEnds ?? 0) + (target.deliverScrollEnds?.() ?? 0);
+    }).observe(end);
+  });
+  const delivered = () =>
+    page.evaluate(() => (window as ScrollEndWindow).deliveredScrollEnds ?? 0);
+  const setRoot = async (size: number) => {
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: size } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe(`${size}px`);
+  };
+  await setRoot(20);
+  await expect.poll(delivered).toBeGreaterThan(0);
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('Renewals');
+  await page.evaluate(() => {
+    (window as ScrollEndWindow).deliveredScrollEnds = 0;
+  });
+  // Shrinking at the end: the browser clamps the offset itself while the
+  // board re-measures, and a report from before must still not move it.
+  await name.press('Escape');
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000018"]'
+  );
+  const control = lane.getByRole('button').first();
+  // Without scrolling, so the board stays at its end.
+  await control.evaluate((element) =>
+    (element as HTMLElement).focus({ preventScroll: true })
+  );
+  await setRoot(16);
+  await expect.poll(delivered).toBeGreaterThan(0);
+  await expect(control).toBeFocused();
+  await expect(control).toBeInViewport({ ratio: 1 });
+  await cdp.detach();
+});
+
 test.describe('touch scrolling', () => {
   test.use({
     isMobile: true,

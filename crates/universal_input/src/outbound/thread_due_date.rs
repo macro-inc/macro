@@ -1,4 +1,4 @@
-//! Nemotron reads a thread's deadline facts; the domain resolves their dates.
+//! Nemotron reads a thread's deadline and event facts; the domain resolves their dates.
 use super::temporal::require_explicit_fields;
 use crate::domain::InputError;
 use crate::domain::temporal::thread_due_date::{

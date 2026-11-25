@@ -314,29 +314,6 @@ describe('Home document comment row', () => {
     );
   });
 
-  it('names the item alone in Recents, keeping the unread dot', () => {
-    const row = render(() => (
-      <HomeListEntity
-        itemTitle
-        entity={
-          {
-            type: 'document',
-            id: 'doc-1',
-            name: 'Plan',
-            ownerId: 'test-user',
-            fileType: 'md',
-            notifications: () => [commentNotification('unseen')],
-          } as never
-        }
-        occurrenceKey="doc-1"
-      />
-    )).container.querySelector<HTMLElement>('[data-home-item]')!;
-
-    expect(row.textContent).toContain('Recent chat');
-    expect(row.textContent).not.toContain('mentioned you');
-    expect(row.querySelector('[aria-label="Unread"]')).not.toBeNull();
-  });
-
   it('names the agent that replied instead of someone', () => {
     const row = render(() => (
       <HomeListEntity

@@ -8,6 +8,7 @@ import { scheduledActionKeys } from './keys';
 import {
   useCreateScheduleMutation,
   useRunScheduleNowMutation,
+  useSchedulesQuery,
   useSetScheduleEnabledMutation,
 } from './schedules';
 
@@ -15,8 +16,9 @@ const setEnabled = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
 const runNow = vi.hoisted(() => vi.fn());
 const track = vi.hoisted(() => vi.fn());
+const listSchedules = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
-  scheduledActionClient: { setEnabled, createSchedule, runNow },
+  scheduledActionClient: { setEnabled, createSchedule, runNow, listSchedules },
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 vi.mock('@queries/client', async () => {
@@ -77,6 +79,7 @@ beforeEach(() => {
   setEnabled.mockReset();
   createSchedule.mockReset();
   runNow.mockReset();
+  listSchedules.mockReset();
   track.mockReset();
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine, other]);
 });
@@ -87,6 +90,48 @@ afterEach(() => {
   queryClient.clear();
 });
 
+it('keeps passive drawer observers on the shared cache without another stale-data mount fetch', async () => {
+  queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine], {
+    updatedAt: 1,
+  });
+  let visible: ReturnType<typeof useSchedulesQuery> | undefined;
+  function Probe() {
+    visible = useSchedulesQuery(() => true, false);
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  await Promise.resolve();
+  expect(visible?.data).toEqual([routine]);
+  expect(listSchedules).not.toHaveBeenCalled();
+  queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine, other]);
+  await vi.waitFor(() => expect(visible?.data).toEqual([routine, other]));
+});
+
+it('still loads the routine list for a passive observer when no cached data exists', async () => {
+  queryClient.removeQueries({ queryKey: scheduledActionKeys.list.queryKey });
+  listSchedules.mockResolvedValue(ok([routine]));
+  function Probe() {
+    useSchedulesQuery(() => true, false);
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  await vi.waitFor(() => expect(schedules()).toEqual([routine]));
+  expect(listSchedules).toHaveBeenCalledOnce();
+});
 describe('routine activation', () => {
   it('pauses only the target routine while saving, then keeps the saved row', async () => {
     const respond = respondLater();

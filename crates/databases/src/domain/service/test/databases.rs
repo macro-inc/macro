@@ -2,6 +2,81 @@
 //! restore, delete, and the receipts they take.
 
 use super::*;
+use crate::domain::ports::DatabasesProjectService;
+
+#[tokio::test]
+async fn create_database_in_project_checks_owner_identity_and_project_receipt() {
+    let world: Shared = Arc::default();
+    let svc = service(&world);
+    let project = EntityAccessReceipt::<OwnerAccessLevel>::try_new_authenticated_user(
+        user(OWNER),
+        Entity {
+            entity_id: "0190f5a0-0000-7000-8000-000000000001".into(),
+            entity_type: EntityType::Project,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+    let db = svc
+        .create_database_in_project(
+            DatabaseId::new(),
+            CreateDatabase {
+                name: "Imported tasks".into(),
+                owner_id: user(OWNER),
+                acting_bot: None,
+                first_table: Some("Tasks".into()),
+            },
+            project.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        db.project_id.as_deref(),
+        Some("0190f5a0-0000-7000-8000-000000000001")
+    );
+    assert!(
+        svc.list_databases(viewer(STRANGER))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        svc.list_databases(viewer(OWNER)).await.unwrap()[0].tables[0].name,
+        "Tasks"
+    );
+
+    let error = svc
+        .create_database_in_project(
+            DatabaseId::new(),
+            CreateDatabase {
+                name: "Wrong owner".into(),
+                owner_id: user(STRANGER),
+                acting_bot: None,
+                first_table: None,
+            },
+            project,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::Unauthorized));
+    let error = svc
+        .create_database_in_project(
+            DatabaseId::new(),
+            CreateDatabase {
+                name: "Wrong entity".into(),
+                owner_id: user(OWNER),
+                acting_bot: None,
+                first_table: None,
+            },
+            receipt::<OwnerAccessLevel>(db.id, OWNER, AccessLevel::Owner),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::Unauthorized));
+    assert_eq!(world.lock().unwrap().databases.len(), 1);
+}
 
 #[tokio::test]
 async fn create_database_grants_owner_and_starter_table() {
@@ -647,4 +722,87 @@ async fn a_trashed_database_cannot_be_moved() {
         error,
         entity_mutation::EntityMutationErrorCode::NotFound(_)
     ));
+}
+
+#[tokio::test]
+async fn an_import_database_reuses_its_reserved_id_after_a_lost_ledger_write() {
+    let world: Shared = Arc::default();
+    let svc = service(&world);
+    let project = EntityAccessReceipt::<OwnerAccessLevel>::try_new_authenticated_user(
+        user(OWNER),
+        Entity {
+            entity_id: "0190f5a0-0000-7000-8000-000000000001".into(),
+            entity_type: EntityType::Project,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+    let id = DatabaseId::from_uuid(Uuid::from_u128(42));
+    for _ in 0..2 {
+        let database = svc
+            .create_database_in_project(
+                id,
+                CreateDatabase {
+                    name: "Imported tasks".into(),
+                    owner_id: user(OWNER),
+                    acting_bot: None,
+                    first_table: None,
+                },
+                project.clone(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(database.id, id);
+    }
+    assert_eq!(world.lock().unwrap().databases.len(), 1);
+    assert_eq!(world.lock().unwrap().tables.len(), 1);
+    assert!(
+        svc.list_databases(viewer(STRANGER))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn a_reserved_top_level_import_database_replays_without_changing_its_owner() {
+    let world: Shared = Arc::default();
+    let svc = service(&world);
+    let id = DatabaseId::from_uuid(Uuid::from_u128(43));
+    for _ in 0..2 {
+        let database = svc
+            .create_database_with_id(
+                id,
+                CreateDatabase {
+                    name: "Personal source".into(),
+                    owner_id: user(OWNER),
+                    acting_bot: None,
+                    first_table: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(database.id, id);
+        assert_eq!(database.project_id, None);
+    }
+    assert_eq!(
+        world.lock().unwrap().tables[0].id,
+        TableId::from_uuid(Uuid::parse_str("02eef55a-86f7-56dd-a18e-d6efa2ff45d2").unwrap())
+    );
+    let error = svc
+        .create_database_with_id(
+            id,
+            CreateDatabase {
+                name: "Other source".into(),
+                owner_id: user(STRANGER),
+                acting_bot: None,
+                first_table: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::Unauthorized));
+    assert_eq!(world.lock().unwrap().databases.len(), 1);
 }
