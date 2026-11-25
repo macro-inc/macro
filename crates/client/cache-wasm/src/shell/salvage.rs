@@ -428,6 +428,21 @@ impl QueueReport {
         }
     }
 
+    /// Notes the loss this report tells when the side file would not take it
+    /// from [`leave`], so that a worker that dies before it tells leaves it to
+    /// the next one. Anything else the side file holds is what [`leave`] meant
+    /// to replace.
+    pub(super) async fn noted_in(self, sidecar: &Sidecar) -> Self {
+        if self.noted || !self.lost() {
+            return self;
+        }
+        let noted = sidecar
+            .replace(&SalvageFile::loss(self.loss()))
+            .await
+            .is_ok();
+        Self { noted, ..self }
+    }
+
     /// What a later open has to be told of this one.
     fn loss(&self) -> QueueLoss {
         QueueLoss {

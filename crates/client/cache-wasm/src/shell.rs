@@ -1106,6 +1106,9 @@ async fn adopted_engine(
                 let reset = error
                     .physical_reset_reason()
                     .map_or(CacheOpenOutcome::ResetIncompatible, recovery_outcome);
+                // The wipe reads the side file again, and a worker that dies
+                // after it must find there what this open lost.
+                let queue = queue.noted_in(&sidecar).await;
                 let owner = match storage.try_close().map_err(err_js)? {
                     TursoStorageCloseOutcome::Healthy(closed) => closed.preserve(),
                     TursoStorageCloseOutcome::ResetRequired(closed) => closed.preserve_for_wipe(),

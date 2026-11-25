@@ -1,6 +1,6 @@
 use super::schema_change::{labelled, set_worker_schema};
 use super::*;
-use crate::shell::salvage::wipe_keeping_queue;
+use crate::shell::salvage::{QueueOutcome, QueueReport, wipe_keeping_queue};
 use cache_turso::{QueueLoss, SalvageFile};
 use std::cell::Cell;
 
@@ -10,6 +10,15 @@ const UUID: &str = "00000000-0000-4000-8000-000000000011";
 const REFUSE_LOSSES: &str = "const frame = args[0];
     if (frame.byteLength === 22 && frame[12] === 4)
       throw new DOMException('full', 'QuotaExceededError');
+    return original(...args);";
+
+/// [`REFUSE_LOSSES`], for the first loss written after `self.refusedLoss` is
+/// set to false.
+const REFUSE_ONE_LOSS: &str = "const frame = args[0];
+    if (!self.refusedLoss && frame.byteLength === 22 && frame[12] === 4) {
+      self.refusedLoss = true;
+      throw new DOMException('full', 'QuotaExceededError');
+    }
     return original(...args);";
 
 fn side_file(scope: &str) -> String {
@@ -348,6 +357,34 @@ async fn a_loss_the_open_told_before_a_schema_wipe_is_told_once_and_never_as_kep
         assert_kept(&engine, SCOPE).await;
         close_and_destroy(&engine, SCOPE).await;
     }
+    set_worker_schema(None);
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_the_side_file_refused_once_before_a_schema_wipe_outlives_a_worker_that_never_told_it()
+ {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-untold";
+    set_worker_schema(Some(labelled("String")));
+    closed_with_queue(SCOPE).await;
+    let loss = QueueLoss {
+        abandoned: false,
+        dropped: 1,
+    };
+    write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+    set_worker_schema(Some(labelled("[String]")));
+    break_side_files("write", REFUSE_ONE_LOSS).await;
+    run_js("self.refusedLoss = false; return Promise.resolve();", "").await;
+    cache_turso::migration_test_hooks::corrupt_next_adoption();
+    let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
+    restore_side_files().await;
+    assert_eq!(outcome, "reset-corrupt");
+    assert_eq!(queue, serde_json::json!(["partial", 1, 1]));
+    // Its worker dies before it tells the page.
+    resolved(engine.close()).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 1]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
     set_worker_schema(None);
 }
 
