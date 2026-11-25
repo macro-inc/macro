@@ -19,3 +19,28 @@ fn sdk_members_lists_a_namespaces_public_members() {
         "{task:?}"
     );
 }
+
+#[test]
+fn sdk_string_literals_lists_a_string_union_aliases_values() {
+    // The SDK's own `SearchType`, not the generated harness type of that name.
+    assert_eq!(
+        sdk_string_literals("SearchType").unwrap(),
+        vec![
+            "document",
+            "email",
+            "channel",
+            "project",
+            "call",
+            "calendar_event",
+            "agent_session",
+            "chat",
+            "company"
+        ]
+    );
+    assert_eq!(
+        sdk_string_literals("SortDirection").unwrap(),
+        vec!["ascending", "descending"]
+    );
+    assert_eq!(sdk_string_literals("SearchNamespace"), None);
+    assert_eq!(sdk_string_literals("NoSuchType"), None);
+}

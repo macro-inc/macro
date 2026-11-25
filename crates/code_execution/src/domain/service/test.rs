@@ -425,6 +425,40 @@ fn a_missing_sdk_member_lists_what_the_type_has() {
     assert!(!suggested.message.contains("has:"), "{}", suggested.message);
 }
 
+/// A string the SDK's union type doesn't take comes back with the values it
+/// does, since the checker names only the type.
+#[test]
+fn a_string_outside_an_sdk_union_lists_the_values_it_takes() {
+    let failure = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2322 [ERROR]: Type '\"channelMessage\"' is not assignable to type 'SearchType'.\n    const p = await macro.search.page(q, {types: ['channelMessage']});\n                                                  ~~~~~~~~~~~~~~~~\n    at main.ts:5:51".into(),
+    }]);
+    assert!(
+        failure.message.ends_with(
+            "    at main.ts:5:51\n  SearchType is one of: 'document', 'email', 'channel', 'project', 'call', 'calendar_event', 'agent_session', 'chat', 'company'.\n"
+        ),
+        "{}",
+        failure.message
+    );
+    let argument = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2345 [ERROR]: Argument of type '\"up\"' is not assignable to parameter of type 'SortDirection'.\n    at main.ts:2:9".into(),
+    }]);
+    assert!(
+        argument.message.contains(
+            "    at main.ts:2:9\n  SortDirection is one of: 'ascending', 'descending'.\n"
+        ),
+        "{}",
+        argument.message
+    );
+    // A type that isn't a union of strings gets no hint.
+    let object = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2322 [ERROR]: Type 'string' is not assignable to type 'SearchNamespace'.\n    at main.ts:2:9".into(),
+    }]);
+    assert!(!object.message.contains("is one of"), "{}", object.message);
+}
+
 /// A program checked ahead of its run isn't checked again when it runs, and
 /// one that fails its precheck is never run.
 #[tokio::test]
