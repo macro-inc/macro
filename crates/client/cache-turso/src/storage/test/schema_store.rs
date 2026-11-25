@@ -22,7 +22,7 @@ const BOTH_RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation
 /// [`OLD`] with a field of the query root retyped.
 const ROOT_RETYPED: &str = "type Query { thing: Note note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
 /// [`OLD`] under another query root.
-const ROOTS: &str = "schema { query: Root mutation: Mutation } type Root { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
+pub(super) const ROOTS: &str = "schema { query: Root mutation: Mutation } type Root { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
 
 fn schema(sdl: &str) -> Arc<Schema> {
     Schema::from_sdl(sdl).unwrap()
