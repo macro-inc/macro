@@ -38,6 +38,8 @@ bun run lab:smoke -- --lab-run [--provider mock|kimi]
         redirects followed; the page request alone carries the capability;
         only the first main-frame navigation to the target; every WebSocket
         refused; popups counted and closed
+      below that, the browser's network is a dead proxy (loopback too)
+        with WebRTC kept behind it and no DNS prefetch
       gate before_planner: URL, one navigation, no redirect/popup/frame/
         blocked request, and the service attests this session opened it
       read the screenshot of #quiz, visible prompt and labels; gate again

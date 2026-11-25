@@ -30,7 +30,9 @@ import {
 } from './planner.ts';
 import {
   CAPABILITY_HEADER,
+  LAB_HOST,
   LAB_ORIGIN,
+  LAB_PORT,
   LAB_SUBMIT_PATH,
   SESSION_HEADER,
 } from './registry.ts';
@@ -94,6 +96,23 @@ const QUIZ_SELECTOR = '#quiz';
 const PROMPT_SELECTOR = '#prompt';
 const OPTION_SELECTOR = 'button[data-lab-option]';
 const CLICK_TIMEOUT_MS = 5_000;
+/**
+ * Below the request allowlist, the network itself goes nowhere: every
+ * connection but the lab's goes to a dead proxy (nothing listens on the
+ * discard port; loopback is proxied too, so other local ports are out of
+ * reach), WebRTC may not go around the proxy, and there is no DNS
+ * prefetching.
+ */
+export const ISOLATED_NETWORK = {
+  proxy: {
+    server: 'http://127.0.0.1:9',
+    bypass: `<-loopback>,${LAB_HOST}:${LAB_PORT}`,
+  },
+  args: [
+    '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+    '--dns-prefetch-disable',
+  ],
+};
 const AFTER_ACTION_QUIET_MS = 500;
 
 /**
@@ -117,13 +136,25 @@ const forward = async (
   headers: Record<string, string>,
   observed: Observations
 ) => {
-  const response = await route.fetch({ headers, maxRedirects: 0 });
-  if (response.status() >= 300 && response.status() < 400) {
+  // The runner's own fetch, not the browser's (whose network is a dead
+  // proxy): the lab is the only origin that reaches this point.
+  const request = route.request();
+  const response = await fetch(request.url(), {
+    method: request.method(),
+    headers,
+    body: request.postDataBuffer() ?? undefined,
+    redirect: 'manual',
+  });
+  if (response.status >= 300 && response.status < 400) {
     observed.redirects += 1;
     await route.abort('blockedbyclient');
     return;
   }
-  await route.fulfill({ response });
+  await route.fulfill({
+    status: response.status,
+    headers: Object.fromEntries(response.headers),
+    body: Buffer.from(await response.arrayBuffer()),
+  });
 };
 
 type Session = {
@@ -148,6 +179,7 @@ const openSession = async (
     serviceWorkers: 'block',
     acceptDownloads: false,
     viewport: { width: 900, height: 900 },
+    ...ISOLATED_NETWORK,
   });
   const observed = emptyObservations();
   const page = context.pages()[0] ?? (await context.newPage());
