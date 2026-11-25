@@ -1,7 +1,6 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
-  type AgentInbox,
   type CreateTeamAgent,
   type TeamAgent,
   type TeamAgents,
@@ -30,7 +29,6 @@ type CreateTeamAgentArgs = {
   parentSpan?: Span;
 };
 type RemoveTeamAgentArgs = { teamId: string; userId: string };
-type AddAgentInboxArgs = { teamId: string; userId: string };
 
 /**
  * Polls fast while an agent's computer is being set up, the agent is
@@ -45,8 +43,7 @@ export function teamAgentsPollInterval(
     (agent) =>
       agent.status === 'provisioning' ||
       agent.status === 'starting' ||
-      agent.status === 'unhealthy' ||
-      agent.inbox?.state === 'provisioning'
+      agent.status === 'unhealthy'
   );
   if (moving) return PROVISIONING_POLL_MS;
   const live = agents?.some((agent) => agent.status !== 'released');
@@ -179,47 +176,5 @@ export function useRemoveTeamAgentMutation() {
       _error: Error | null,
       vars: RemoveTeamAgentArgs
     ) => invalidateAfterAgentChange(vars.teamId),
-  }));
-}
-
-function storeAgentInbox(teamId: string, userId: string, inbox: AgentInbox) {
-  queryClient.setQueryData<TeamAgents>(
-    teamAgentKeys.list(teamId).queryKey,
-    (current) =>
-      current && {
-        agents: current.agents.map((agent) =>
-          agent.userId === userId ? { ...agent, inbox } : agent
-        ),
-      }
-  );
-}
-
-async function addAgentInbox(vars: AddAgentInboxArgs) {
-  return await Telemetry.span('team-agent.add-inbox', async (span) => {
-    span.setAttr('team.id', vars.teamId);
-    const inbox = await throwOnErr(() =>
-      teamAgentsClient.addInbox(vars.userId)
-    );
-    span.setAttr('inbox.state', inbox.state);
-    return inbox;
-  });
-}
-
-/** Gives an agent its own email inbox, or retries a failed one. */
-export function useAddAgentInboxMutation() {
-  return useMutation(() => ({
-    gcTime: 0,
-    retry: false,
-    mutationFn: addAgentInbox,
-    onSuccess: (inbox: AgentInbox, vars: AddAgentInboxArgs) =>
-      storeAgentInbox(vars.teamId, vars.userId, inbox),
-    onSettled: (
-      _inbox: AgentInbox | undefined,
-      _error: Error | null,
-      vars: AddAgentInboxArgs
-    ) =>
-      queryClient.invalidateQueries({
-        queryKey: teamAgentKeys.list(vars.teamId).queryKey,
-      }),
   }));
 }
