@@ -1,4 +1,10 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+    sync::watch,
+};
 
 use super::*;
 
@@ -33,6 +39,111 @@ async fn a_lease_holds_every_thread_until_it_is_dropped(pool: PgPool) {
     leases.release(granted.lease).await;
     assert!(thread_is_free(&pool, first).await);
     assert!(thread_is_free(&pool, second).await);
+}
+
+/// Waits on the server, up to `lock_timeout`, until no session holds the
+/// thread's lock.
+async fn wait_until_thread_is_free(pool: &PgPool, thread_id: Uuid) {
+    let mut probe = pool.begin().await.unwrap();
+    sqlx::query!("SET LOCAL lock_timeout = '10s'")
+        .execute(&mut *probe)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('email-thread-search:' || $1::uuid::text, 0))",
+        thread_id,
+    )
+    .execute(&mut *probe)
+    .await
+    .unwrap();
+}
+
+/// A lease dropped without its release, as one whose rollback timed out is,
+/// closes its connection, and the server releases its locks with the session.
+#[sqlx::test(migrations = false)]
+async fn a_lease_dropped_unreleased_closes_its_connection_and_frees_its_threads(pool: PgPool) {
+    let leases = leases(&pool);
+    let thread = Uuid::now_v7();
+    let granted = leases
+        .lease(&[thread], LeasePool::Live, EmailWriter::Live)
+        .await
+        .unwrap();
+    assert!(!thread_is_free(&pool, thread).await);
+
+    drop(granted);
+
+    wait_until_thread_is_free(&pool, thread).await;
+}
+
+/// A TCP relay to `upstream` that stops relaying while `frozen` is set, as a
+/// connection that stops answering does, and closes both sides when either
+/// side closes.
+async fn relay(upstream: SocketAddr, frozen: watch::Receiver<bool>) -> SocketAddr {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        loop {
+            let (client, _) = listener.accept().await.unwrap();
+            let server = TcpStream::connect(upstream).await.unwrap();
+            tokio::spawn(relay_connection(client, server, frozen.clone()));
+        }
+    });
+    address
+}
+
+async fn relay_connection(client: TcpStream, server: TcpStream, mut frozen: watch::Receiver<bool>) {
+    let (mut client_read, mut client_write) = client.into_split();
+    let (mut server_read, mut server_write) = server.into_split();
+    let (mut up, mut down) = ([0_u8; 8192], [0_u8; 8192]);
+    loop {
+        let relaying = !*frozen.borrow();
+        tokio::select! {
+            read = client_read.read(&mut up) => {
+                let Ok(read @ 1..) = read else { return };
+                if relaying && server_write.write_all(&up[..read]).await.is_err() {
+                    return;
+                }
+            }
+            read = server_read.read(&mut down), if relaying => {
+                let Ok(read @ 1..) = read else { return };
+                if client_write.write_all(&down[..read]).await.is_err() {
+                    return;
+                }
+            }
+            Ok(()) = frozen.changed() => {}
+        }
+    }
+}
+
+/// A release whose connection stops answering gives up on the rollback and
+/// closes the connection, so the server ends the session and frees the
+/// threads; a rollback left queued would wait on the connection forever.
+#[sqlx::test(migrations = false)]
+async fn a_release_on_a_connection_that_stops_answering_still_frees_its_threads(pool: PgPool) {
+    let options = (*pool.connect_options()).clone();
+    let upstream = tokio::net::lookup_host((options.get_host(), options.get_port()))
+        .await
+        .unwrap()
+        .next()
+        .unwrap();
+    let (freeze, frozen) = watch::channel(false);
+    let relayed = relay(upstream, frozen).await;
+    let mut leases = PgEmailThreadLeases::new(
+        options.host(&relayed.ip().to_string()).port(relayed.port()),
+        2,
+    );
+    leases.release_timeout = Duration::from_millis(200);
+    let thread = Uuid::now_v7();
+    let granted = leases
+        .lease(&[thread], LeasePool::Live, EmailWriter::Live)
+        .await
+        .unwrap();
+    assert!(!thread_is_free(&pool, thread).await);
+
+    freeze.send_replace(true);
+    leases.release(granted.lease).await;
+
+    wait_until_thread_is_free(&pool, thread).await;
 }
 
 #[sqlx::test(migrations = false)]

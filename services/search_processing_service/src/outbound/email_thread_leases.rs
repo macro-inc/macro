@@ -6,8 +6,9 @@ use std::time::Instant;
 use opentelemetry::{KeyValue, metrics::Histogram};
 use rootcause::Report;
 use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
+    PgPool, Postgres, TransactionManager,
+    pool::PoolConnection,
+    postgres::{PgConnectOptions, PgPoolOptions, PgTransactionManager},
 };
 use uuid::Uuid;
 
@@ -44,6 +45,27 @@ const LEASE_WAIT_BOUNDARIES_MS: [f64; 16] = [
     30_000.0, 60_000.0, 150_000.0,
 ];
 
+/// A granted lease: a lock connection inside the transaction that holds the
+/// threads' locks.
+pub struct EmailThreadLease {
+    connection: PoolConnection<Postgres>,
+    open: bool,
+}
+
+impl Drop for EmailThreadLease {
+    fn drop(&mut self) {
+        // A lease dropped before its rollback finished closes its connection
+        // instead of returning it to the pool: closing ends the session, and
+        // with it the transaction and its locks, within sqlx's 5 s close
+        // bound. A rollback left queued on the connection would only be sent
+        // by the pool's return check, which waits on a connection that may
+        // never answer, holding the locks and the pool slot.
+        if self.open {
+            self.connection.close_on_drop();
+        }
+    }
+}
+
 /// Leases email threads with transaction-scoped advisory locks on the
 /// primary. The lock connections are their own pools, so writers waiting for
 /// a lease never hold the connections other writers need to read, and bulk
@@ -52,6 +74,7 @@ pub struct PgEmailThreadLeases {
     live: PgPool,
     bulk: PgPool,
     waits: Histogram<u64>,
+    release_timeout: std::time::Duration,
 }
 
 impl PgEmailThreadLeases {
@@ -78,6 +101,7 @@ impl PgEmailThreadLeases {
                 )
                 .with_boundaries(LEASE_WAIT_BOUNDARIES_MS.to_vec())
                 .build(),
+            release_timeout: RELEASE_TIMEOUT,
         }
     }
 
@@ -98,7 +122,7 @@ fn millis(duration: std::time::Duration) -> u64 {
 }
 
 impl EmailThreadLeases for PgEmailThreadLeases {
-    type Lease = sqlx::Transaction<'static, sqlx::Postgres>;
+    type Lease = EmailThreadLease;
 
     #[tracing::instrument(
         name = "search.email.lease",
@@ -119,11 +143,16 @@ impl EmailThreadLeases for PgEmailThreadLeases {
         writer: EmailWriter,
     ) -> Result<GrantedThreads<Self::Lease>, Report> {
         let started = Instant::now();
-        let mut transaction = match pool {
-            LeasePool::Live => self.live.begin(),
-            LeasePool::Bulk => self.bulk.begin(),
-        }
-        .await?;
+        let mut lease = EmailThreadLease {
+            connection: match pool {
+                LeasePool::Live => self.live.acquire(),
+                LeasePool::Bulk => self.bulk.acquire(),
+            }
+            .await?,
+            open: false,
+        };
+        PgTransactionManager::begin(&mut lease.connection, None).await?;
+        lease.open = true;
         let connection = started.elapsed();
 
         // Each thread's lock in the order of its key, so writers leasing
@@ -146,7 +175,7 @@ impl EmailThreadLeases for PgEmailThreadLeases {
             "#,
             thread_ids,
         )
-        .fetch_one(&mut *transaction)
+        .fetch_one(&mut *lease.connection)
         .await?;
         let lock = locking.elapsed();
 
@@ -156,17 +185,23 @@ impl EmailThreadLeases for PgEmailThreadLeases {
         self.record("connection", pool, writer, millis(connection));
         self.record("lock", pool, writer, millis(lock));
         Ok(GrantedThreads {
-            lease: transaction,
+            lease,
             version: ProjectionVersion::from_grant(granted_at)?,
             waited: LeaseWait { connection, lock },
         })
     }
 
-    async fn release(&self, lease: Self::Lease) {
-        // A rollback that fails, or a connection that stops answering, leaves
-        // the connection to be closed, which releases the locks as well.
-        match tokio::time::timeout(RELEASE_TIMEOUT, lease.rollback()).await {
-            Ok(Ok(())) => {}
+    async fn release(&self, mut lease: Self::Lease) {
+        // A rollback that fails or does not answer in time leaves the lease
+        // open, so dropping it closes the connection, which releases the
+        // locks as well.
+        match tokio::time::timeout(
+            self.release_timeout,
+            PgTransactionManager::rollback(&mut lease.connection),
+        )
+        .await
+        {
+            Ok(Ok(())) => lease.open = false,
             Ok(Err(error)) => {
                 tracing::warn!(error = ?error, "could not release email thread leases");
             }

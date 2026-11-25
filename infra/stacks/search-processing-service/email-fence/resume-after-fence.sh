@@ -3,6 +3,11 @@
 # task count, then autoscaling resumed, then a wait until the tasks run. Safe
 # to run again on its own: a service already running keeps its task count.
 #
+# It first waits until the deployment to the new task definition has
+# completed, still at 0 tasks: the circuit breaker watches only a deployment in
+# progress, and one whose tasks failed would roll back to the last completed
+# deployment, the unversioned one, and start its tasks beside the fenced ones.
+#
 # It refuses while the service still runs a task definition without the fence
 # tag: raising the count then would start old tasks that write without
 # versions, and the stop does not run again on a retried deploy. Rerunning the
@@ -14,6 +19,26 @@
 set -euo pipefail
 : "${CLUSTER:?}" "${SERVICE:?}" "${MIN_TASKS:?}" "${EMAIL_FENCE_TAG:?}" "${EMAIL_FENCE_EPOCH:?}" "${AWS_REGION:?}"
 cluster_name=${CLUSTER##*/}
+
+# A deployment at 0 tasks completes in about a minute and a half (80 s on dev).
+rollout=
+for _ in $(seq 1 60); do
+  rollout=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+    --query "services[0].deployments[?status=='PRIMARY'] | [0].rolloutState" --output text)
+  case "$rollout" in
+    COMPLETED) break ;;
+    FAILED)
+      echo "The ${SERVICE} deployment failed; not starting tasks. Rerun the deploy." >&2
+      exit 1
+      ;;
+  esac
+  sleep 10
+done
+if [ "$rollout" != COMPLETED ]; then
+  echo "The ${SERVICE} deployment is still ${rollout} after 10 minutes; not starting tasks." \
+    "Rerun the deploy." >&2
+  exit 1
+fi
 
 task_definition=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
   --query 'services[0].taskDefinition' --output text)
