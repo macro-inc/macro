@@ -47,7 +47,8 @@ fn fixture(kernel: &str) -> Fixture {
   build) mkdir -p result-image; printf '%s' '{kernel}' > result-image/kernel
          ln -sf kernel result-image/vmlinux
          printf 'rootfs' > result-image/rootfs.ext4; printf 'console=ttyS0' > result-image/boot_args ;;
-  shell) while [ "$1" != -c ]; do shift; done; shift; exec "$@" ;;
+  shell) while [ "$1" != -c ]; do shift; done; shift
+         export PATH="$STUB_BIN:$PATH"; exec "$@" ;;
 esac"#
         ),
     );
@@ -225,7 +226,8 @@ fn a_different_build_of_a_published_version_is_refused() {
         r#"case "$1" in
   build) mkdir -p result-image; printf 'kernel-2' > result-image/vmlinux
          printf 'rootfs' > result-image/rootfs.ext4; printf 'console=ttyS0' > result-image/boot_args ;;
-  shell) while [ "$1" != -c ]; do shift; done; shift; exec "$@" ;;
+  shell) while [ "$1" != -c ]; do shift; done; shift
+         export PATH="$STUB_BIN:$PATH"; exec "$@" ;;
 esac"#,
     );
 
