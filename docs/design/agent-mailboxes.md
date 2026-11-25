@@ -117,6 +117,17 @@ flowchart LR
 A deployment whose provider URL is not the provider's real API reports
 `vendorMode: "fake"` and the notice "fake vendor, not live" on every mailbox.
 
+## In the starter agent
+
+The hosted agent's `mailbox` capability
+(`packages/starter-agent/behavior/capabilities/mailbox`) is how an agent
+teammate uses it: its address, its messages, and drafts. A draft is shown
+to the agent's owner in a DM, and `sendMyEmail` or `replyToMyEmail` sends
+exactly that draft once the owner answers it, quoting their answer as the
+`confirmation`. The capability reaches only `macro.agentMailbox`, never a
+connected inbox, and the agent's `no-email` guard refuses the SDK's mailbox
+sends and routes outside it.
+
 ## Follow-ups
 
 - Waking the agent on new mail (no provider webhook is consumed in v1).
