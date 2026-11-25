@@ -640,6 +640,10 @@ in an installed macOS bundle before release.
 `threadId` (stacks a conversation's alerts), and `sender` (`id`, `name`,
 `avatarUrl`). A sender makes it a communication notification, as on iOS: the
 downloaded avatar replaces the app icon and group conversations show their name.
+macOS names a group only when its message has more than one recipient, so a
+notification with a subtitle (the channel or document it happened in) carries
+two opaque stand-in recipients; without them a signed build titles it with the
+sender alone.
 The new arguments are optional, so older frontends and native builds keep
 working together. macOS honors this only for an app signed with the restricted
 `com.apple.developer.usernotifications.communication` entitlement and
