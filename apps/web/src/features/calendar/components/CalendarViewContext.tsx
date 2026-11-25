@@ -101,14 +101,15 @@ export function createCalendarEventSelection(
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
   };
-  /** Follows a move of the selected occurrence once the page draws its replacement. */
+  /**
+   * Follows a move of the selected occurrence once the page draws its
+   * replacement, and a later move of that replacement before then.
+   */
   const follow = (move: CalendarOccurrenceMove) => {
-    const current = event();
-    if (
-      current?.eventId === move.from.eventId &&
-      current.occurrenceKey === move.from.occurrenceKey
-    )
-      setFollowing(move.to);
+    const startsHere = (ref: CalendarOccurrenceRef | undefined) =>
+      ref?.eventId === move.from.eventId &&
+      ref.occurrenceKey === move.from.occurrenceKey;
+    if (startsHere(event()) || startsHere(following())) setFollowing(move.to);
   };
   /**
    * Moves the selection to what replaced it: a created event's server copy,

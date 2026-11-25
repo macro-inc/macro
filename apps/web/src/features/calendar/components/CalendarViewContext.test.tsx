@@ -570,6 +570,22 @@ describe('details opened on an event that was just moved', () => {
     expect(view().selectedEvent()).toBe(instance);
   });
 
+  it('follow a second move made before the page drew the first', () => {
+    const LATER = '2026-11-28T17:00:00+00:00';
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+    answer();
+
+    announce({
+      from: { eventId: 'event-1', occurrenceKey: TO },
+      to: { eventId: 'event-1', occurrenceKey: LATER },
+    });
+    const later = occurrence(LATER);
+    view().refreshSelectedEventFromPage(page(later), true);
+
+    expect(view().selectedEvent()).toBe(later);
+  });
+
   it('follow only the move of the occurrence they show', () => {
     const { view } = renderContexts();
     const other = occurrence('2026-11-29T15:00:00+00:00');
