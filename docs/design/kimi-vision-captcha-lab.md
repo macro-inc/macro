@@ -100,17 +100,18 @@ Browser Tests job.
 ## Live result
 
 2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, shapes quiz,
-20 attempts in three runs:
+25 attempts in four runs:
 
 | Run | Attempts | Solved | Incorrect | `model_error` | Planner latency | Tokens per call |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1: default reasoning | 5 | 0 | 0 | 5 | 1.6–2.0 s | not recorded (the failed parse dropped usage) |
 | 2: `reasoning_effort: none` | 10 | 10 | 0 | 0 | 0.9–1.9 s | 713–756 |
 | 3: same, after the review fixes to the runner | 5 | 5 | 0 | 0 | 1.0–1.5 s | 713–756 |
+| 4: same, after the per-challenge deadline | 5 | 5 | 0 | 0 | 1.0–1.8 s | 713–735 |
 
 In run 1 Kimi K3 reasoned by default and used up the 64-token cap, so every
 reply had no content: five closed failures, no planner retry and no click.
-With reasoning off, 15 of 15 were solved. Run 1's five JSON records were
+With reasoning off, 20 of 20 were solved. Run 1's five JSON records were
 deleted when run 2 reused their directory. Its console output and one
 record's failure detail (`choices[0].message.content` was null), copied
 verbatim from the session transcript, are kept with the local proof as
