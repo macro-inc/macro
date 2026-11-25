@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use ai_billing::PlanTier;
 use anyhow::{Result, bail};
 use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
@@ -34,9 +35,10 @@ use super::models::{
 };
 use super::ports::{
     CodeUpgrades, DraftHandBacks, NoRoutineCode, OwnerInboxes, RequestSessions, RoutineCode,
-    SavedAction, ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService,
-    StepProblems, SubRoutines, SuggestionOrigins, TaskTargetValidator,
+    RoutinePlans, SavedAction, ScheduledActionExecutor, ScheduledActionRepo,
+    ScheduledActionService, StepProblems, SubRoutines, SuggestionOrigins, TaskTargetValidator,
 };
+use super::routine_limit::RoutineLimit;
 
 mod sub_routines;
 use super::run_stops::RunStops;
@@ -54,6 +56,7 @@ pub struct ScheduledActionServiceImpl<
     Code = NoRoutineCode,
     Upgrades = NoCodeUpgrades,
     Rollout = EventRoutinesOff,
+    Plans = FreePlans,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
@@ -77,6 +80,18 @@ pub struct ScheduledActionServiceImpl<
     inboxes: Option<Arc<dyn OwnerInboxes>>,
     /// Where a stop of a run in progress is sent.
     stops: RunStops,
+    /// Each owner's plan, which limits their active routines.
+    plans: Plans,
+}
+
+/// Composition without plan lookups: every owner gets the Free routine
+/// limit, so a host that forgets to wire plans fails closed.
+pub struct FreePlans;
+
+impl RoutinePlans for FreePlans {
+    async fn plan(&self, _owner: &MacroUserIdStr<'static>) -> Result<PlanTier> {
+        Ok(PlanTier::Free)
+    }
 }
 
 /// What keeps a draft session's check as its answer.
@@ -128,17 +143,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             run_sessions: None,
             inboxes: None,
             stops: RunStops::default(),
+            plans: FreePlans,
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, Plans>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, Plans>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades, Rollout> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades, Rollout, Plans>
+    {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -155,6 +172,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             run_sessions: self.run_sessions,
             inboxes: self.inboxes,
             stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -162,7 +180,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades, Rollout> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades, Rollout, Plans>
+    {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -179,6 +198,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             run_sessions: self.run_sessions,
             inboxes: self.inboxes,
             stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -186,7 +206,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     pub fn with_event_routines<R: EventRoutineRollout>(
         self,
         rollout: R,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, R> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, R, Plans>
+    {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -203,6 +224,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             run_sessions: self.run_sessions,
             inboxes: self.inboxes,
             stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -212,7 +234,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         self,
         code: Arc<C>,
         upgrades: Arc<U>,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U, Rollout> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U, Rollout, Plans> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -229,6 +251,33 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             run_sessions: self.run_sessions,
             inboxes: self.inboxes,
             stops: self.stops,
+            plans: self.plans,
+        }
+    }
+
+    /// Limits each owner's active routines by their plan.
+    pub fn with_routine_plans<P: RoutinePlans>(
+        self,
+        plans: P,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, P>
+    {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            rollout: self.rollout,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
+            code: self.code,
+            upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
+            run_sessions: self.run_sessions,
+            inboxes: self.inboxes,
+            stops: self.stops,
+            plans,
         }
     }
 
@@ -366,6 +415,33 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(())
     }
 
+    /// The limit a write must respect when it leaves `action` active and it
+    /// wasn't before. `None` when the write adds no active routine, so pausing,
+    /// deleting, and editing an active routine never depend on plan lookups.
+    #[tracing::instrument(
+        name = "routine.activation_limit",
+        err,
+        skip_all,
+        fields(plan = tracing::field::Empty, limit = tracing::field::Empty)
+    )]
+    async fn activation_limit(
+        &self,
+        was_active: bool,
+        action: &ScheduledAction,
+    ) -> Result<Option<RoutineLimit>>
+    where
+        Plans: RoutinePlans,
+    {
+        if was_active || !action.is_active() {
+            return Ok(None);
+        }
+        let limit = RoutineLimit::for_plan(self.plans.plan(action.owner_user()?).await?);
+        let span = tracing::Span::current();
+        span.record("plan", tracing::field::display(limit.plan()));
+        span.record("limit", limit.max_active());
+        Ok(Some(limit))
+    }
+
     /// Every create goes through here, so only a person creates a routine
     /// that writes as them, whichever route it comes by.
     #[expect(
@@ -387,6 +463,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Github: GithubInstallationClaims,
         Code: RoutineCode,
         Rollout: EventRoutineRollout,
+        Plans: RoutinePlans,
     {
         if requester == Requester::Program && writes_as_owner(&input.task) {
             return Err(ActionPolicyError::OwnerIdentityNeedsPerson.into());
@@ -423,30 +500,29 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger, now, |_| false)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
-        let created = self
-            .repo
-            .create_action(ScheduledAction {
-                id: None,
-                owner,
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task,
-                enabled: input.enabled,
-                run_visibility: input.run_visibility,
-                created_at: now,
-                updated_at: now,
-                configuration_revision: ConfigurationRevision::INITIAL,
-                event_activated_at,
-                next_run_at,
-                claimed: None,
-                template_id,
-                appearance,
-                suggestion_id,
-                description,
-                sub_routine,
-            })
-            .await?;
+        let action = ScheduledAction {
+            id: None,
+            owner,
+            name: input.name,
+            trigger: input.trigger,
+            kind: input.kind,
+            task,
+            enabled: input.enabled,
+            run_visibility: input.run_visibility,
+            created_at: now,
+            updated_at: now,
+            configuration_revision: ConfigurationRevision::INITIAL,
+            event_activated_at,
+            next_run_at,
+            claimed: None,
+            template_id,
+            appearance,
+            suggestion_id,
+            description,
+            sub_routine,
+        };
+        let activation = self.activation_limit(false, &action).await?;
+        let created = self.repo.create_action(action, activation).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Create(created.clone()))
             .await
@@ -651,6 +727,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Code: RoutineCode,
         Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
+        Plans: RoutinePlans,
     {
         if requester == Requester::Program
             && writes_as_owner(&input.task)
@@ -762,8 +839,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Code: RoutineCode,
         Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
+        Plans: RoutinePlans,
     {
         require_explicit_selection(&action.task, &input.task)?;
+        let was_active = action.is_active();
         input.task = named_steps(&input.task);
         // Clients don't echo the SDK the stored code was checked against.
         if same_task(&action.task, &input.task) {
@@ -846,7 +925,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             link.paused_by_parent = !input.enabled && (with_parent || link.paused_by_parent);
         }
 
-        let updated = self.repo.update_action(action).await?;
+        let activation = self.activation_limit(was_active, &action).await?;
+        let updated = self.repo.update_action(action, activation).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Update(updated.clone()))
             .await
@@ -1070,13 +1150,24 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, Plans> ScheduledActionService
+    for ScheduledActionServiceImpl<
+        Rpo,
+        Exe,
+        Grants,
+        Targets,
+        Github,
+        Code,
+        Upgrades,
+        Rollout,
+        Plans,
+    >
 where
     Github: GithubInstallationClaims,
     Code: RoutineCode,
     Upgrades: CodeUpgrades,
     Rollout: EventRoutineRollout,
+    Plans: RoutinePlans,
     Rpo: ScheduledActionRepo + SubRoutines,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,
@@ -1186,6 +1277,7 @@ where
             Ok(SavedAction::Updated(_)) => "updated",
             Err(error) => match error.downcast_ref::<ActionPolicyError>() {
                 Some(ActionPolicyError::TooManySubRoutines) => "refused_cap",
+                Some(ActionPolicyError::RoutineLimitReached(_)) => "refused_limit",
                 _ => "failed",
             },
         };

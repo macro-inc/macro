@@ -1,12 +1,13 @@
 //! Startup configuration for AI usage settlement and pricing.
 //!
-//! Pricing is four mandatory Doppler values, read once at startup by every
+//! Pricing is five mandatory Doppler values, read once at startup by every
 //! host that composes this crate:
 //!
 //! | Key | Meaning |
 //! | --- | --- |
 //! | `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` | The free plan's hard monthly AI cap, cents at provider cost |
 //! | `AI_USAGE_INCLUDED_ALLOWANCE_CENTS` | In-plan AI per Premium seat per period, cents at provider cost |
+//! | `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS` | In-plan AI per Business seat per period, cents at provider cost |
 //! | `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS` | In-plan AI per Max seat per period, cents at provider cost |
 //! | `AI_USAGE_OVERAGE_MARKUP_PERCENT` | Markup on paid usage past the allowance, a whole percent (0-99) |
 //!
@@ -29,6 +30,9 @@ mod test;
 pub const AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS: &str = "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS";
 /// Doppler key for the Premium (default paid plan) allowance.
 pub const AI_USAGE_INCLUDED_ALLOWANCE_CENTS: &str = "AI_USAGE_INCLUDED_ALLOWANCE_CENTS";
+/// Doppler key for the Business allowance.
+pub const AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS: &str =
+    "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS";
 /// Doppler key for the Max allowance.
 pub const AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS: &str = "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS";
 /// Doppler key for the overage markup.
@@ -41,6 +45,8 @@ pub struct RawPlanAllowances<'a> {
     pub free: &'a str,
     /// `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`.
     pub premium: &'a str,
+    /// `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`.
+    pub business: &'a str,
     /// `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`.
     pub max: &'a str,
 }
@@ -101,6 +107,10 @@ pub fn parse_ai_pricing(
     let allowances = PlanAllowances {
         free: parse_allowance(AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS, allowances.free)?,
         premium: parse_allowance(AI_USAGE_INCLUDED_ALLOWANCE_CENTS, allowances.premium)?,
+        business: parse_allowance(
+            AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS,
+            allowances.business,
+        )?,
         max: parse_allowance(AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS, allowances.max)?,
     };
     let percent = overage_markup_percent

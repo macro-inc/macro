@@ -241,6 +241,31 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(seat_included.unwrap_or(false))
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn get_user_billed_seat(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<crate::domain::model::UserTeamSeat>, TeamError> {
+        let seat = sqlx::query!(
+            r#"
+            SELECT tu.plan AS "plan: SeatPlan", t.enterprise
+            FROM team_user tu
+            JOIN team t ON t.id = tu.team_id
+            WHERE tu.user_id = $1
+              AND (t.enterprise OR (t.paying AND t.subscription_id IS NOT NULL))
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(seat.map(|row| crate::domain::model::UserTeamSeat {
+            plan: row.plan,
+            enterprise: row.enterprise,
+        }))
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn get_stripe_customer_id(
         &self,
