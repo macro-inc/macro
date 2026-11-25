@@ -451,7 +451,16 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`SYSTEM_CALENDAR_SYNC_INTERVAL`), as Google's system calendars do. Sync
   health gives them the same day, so booking does not read them as stale.
   A read-only calendar someone shared keeps two-minute rounds, and so does
-  one subscribed from the web, which Graph lists as shared with no owner. A first import (a calendar never synced, in a scan from
+  one subscribed from the web, which Graph lists as shared with no owner.
+  Discovery marks that one `calendars.web_subscription`
+  (`OutlookCalendar::is_web_subscription`: read-only, not the default, no
+  owner), and logs an `UpsertCalendar` when the mark changes, since calendar
+  caches refetch a calendar only when the log names it.
+  `VisibleCalendar::is_subscription`, which draws the web's subscription icon
+  and the agent's `isSubscription`, reads it for Outlook and the calendar id
+  for Google (`is_google_subscription`: system calendars, and calendars added
+  by URL under `@import.calendar.google.com`, whatever role Google reports).
+  The sync's cadence still follows `system_calendar` only. A first import (a calendar never synced, in a scan from
   scratch) lists this month and next first (`OccurrenceRange::near_window`,
   a `calendarView` snapshot on any calendar, with
   `OutlookCalendarLease::near_window` set), then the whole window in a scan of

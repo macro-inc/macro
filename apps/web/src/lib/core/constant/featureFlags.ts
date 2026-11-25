@@ -490,6 +490,11 @@ export const enableCrmSelectiveEmailContribution = defineFlag({
   env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
 });
 
+// No dev override: the server requires this same remote flag before merging.
+export const enableCrmMerge = defineFlag({
+  key: 'enable-crm-merge',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
@@ -921,6 +926,15 @@ export const enableRoutineSharing = defineFlag({
 export const enableEventRoutines = defineFlag({
   key: 'enable-event-routines',
   env: 'ENABLE_EVENT_ROUTINES',
+});
+
+// The "Email labeled" routine trigger. The server checks the same key per
+// routine owner, on save and before each run, and turns it on in development
+// while PostHog has no such flag; so does this default.
+export const enableEmailLabeledTrigger = defineFlag({
+  key: 'enable-email-labeled-trigger',
+  env: 'ENABLE_EMAIL_LABELED_TRIGGER',
+  default: onInDev,
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,

@@ -7,16 +7,26 @@ import {
   EmailMobileSearchSuggestions,
 } from './email-search';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
   localStorage.clear();
+  // jsdom calls the page unfocused during a blur; a browser does only while
+  // another window or app has the focus.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
   localStorage.setItem(
     'macro:email:recent-searches:v1:user-a',
     JSON.stringify(['budget', 'invoice'])
   );
 });
 
-function renderPage(initialSearch = '') {
+function renderPage(
+  initialSearch = '',
+  options: { hasResults?: boolean } = {}
+) {
   const [search, setSearch] = createSignal(initialSearch);
   const onCancel = vi.fn();
   let input: HTMLInputElement | undefined;
@@ -26,6 +36,9 @@ function renderPage(initialSearch = '') {
       userId: () => 'user-a',
       search,
       setSearch,
+      hasResults: () => options.hasResults ?? true,
+      openedThread: () => undefined,
+      isResult: () => true,
       scopeAvailable: () => true,
     });
     return (
@@ -135,11 +148,13 @@ it('picks a listed view from a hardware keyboard and keeps the keyboard up', () 
   expect(document.activeElement).toBe(field);
 });
 
-it('remembers the search it is left with', () => {
+it('remembers the search it is left with', async () => {
   const { field } = renderPage();
   field.focus();
   fireEvent.input(field, { target: { value: 'quarterly report' } });
   field.blur();
+  // Leaving saves the search a microtask later.
+  await Promise.resolve();
   // The list leaves out the text already typed, so start from an empty field.
   fireEvent.input(field, { target: { value: '' } });
 
@@ -149,6 +164,49 @@ it('remembers the search it is left with', () => {
     'budget',
     'invoice',
   ]);
+});
+
+it('remembers the search on Search, before its results arrive', () => {
+  const { field } = renderPage('', { hasResults: false });
+  field.focus();
+  fireEvent.input(field, { target: { value: 'quarterly report' } });
+  fireEvent.keyDown(field, { key: 'Enter' });
+  expect(document.activeElement).not.toBe(field);
+  fireEvent.input(field, { target: { value: '' } });
+
+  field.focus();
+  expect(screen.getAllByRole('option').map((row) => row.textContent)).toEqual([
+    'quarterly report',
+    'budget',
+    'invoice',
+  ]);
+});
+
+it('opens Search tips from the empty field, where typed text gets its X', () => {
+  // jsdom has neither ResizeObserver nor scrolling; the sheet uses both.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal('scrollTo', vi.fn());
+  const { field } = renderPage();
+  field.focus();
+  expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Search tips' }));
+  expect(screen.getByText('has:attachment')).toBeTruthy();
+  expect(screen.getByText('With attachments')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'All search operators' })
+  ).toBeTruthy();
+
+  fireEvent.input(field, { target: { value: 'budget' } });
+  expect(screen.queryByRole('button', { name: 'Search tips' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy();
 });
 
 it('keeps the keyboard up for the Enter that commits a composition', () => {

@@ -39,6 +39,7 @@ import {
   useEmailSavedViewTitle,
 } from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
+import { EmailSearchTipsButton } from './EmailSearchTips';
 
 /**
  * What the header gives up, in order, when its actions would overflow it:
@@ -63,7 +64,7 @@ export function EmailViewBreadcrumbItem() {
   const {
     shownTab,
     showsInboxTabs,
-    tagViewTitle,
+    filterViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
@@ -72,7 +73,7 @@ export function EmailViewBreadcrumbItem() {
   const inboxSelected = () => !isTouchDevice() && showsInboxTabs();
   const tabTitle = () =>
     savedViewTitle() ??
-    tagViewTitle() ??
+    filterViewTitle() ??
     emailShownViewTitle(inboxSelected() ? 'inbox' : shownTab());
   const appearance = () => {
     const view = savedViews?.view();
@@ -133,7 +134,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     shownTab,
     showsInboxTabs,
     registerSearchField,
-    tagViewTitle,
+    filterViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
@@ -176,7 +177,7 @@ export function EmailHeader(props: EmailHeaderProps) {
   });
   const selectedTabLabel = () =>
     savedViewTitle() ??
-    tagViewTitle() ??
+    filterViewTitle() ??
     emailShownViewTitle(showsInboxTabs() ? 'inbox' : shownTab());
 
   const canSearch = () => canSearchEmailTab(state.tab);
@@ -236,6 +237,9 @@ export function EmailHeader(props: EmailHeaderProps) {
               </h2>
             </Show>
           </div>
+          <Show when={searchOwnsHeader()}>
+            <EmailSearchTipsButton />
+          </Show>
           <Show when={savedViewActive()}>
             <EmailSavedViewMenu />
           </Show>

@@ -1087,6 +1087,18 @@ impl<
     async fn cleanup_created_document(&self, document_id: &str) {
         self.cleanup_document(document_id).await;
     }
+
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn ready_imported_document(
+        &self,
+        document_id: &str,
+        edited_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), DocumentError> {
+        self.repo
+            .ready_imported_document(document_id, edited_at)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
 }
 
 impl<

@@ -46,7 +46,7 @@ pub use mail_projection::{
 pub use message::{Message, MessageRow, ScheduledSend, ScheduledSendStatus, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};
 pub use preview::{
-    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, MAX_PREVIEW_PAGE,
+    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, MAX_PREVIEW_PAGE, PreviewCursorPage,
     PreviewCursorQuery, PreviewView, PreviewViewStandardLabel,
 };
 pub use sender_policy::SenderPolicy;

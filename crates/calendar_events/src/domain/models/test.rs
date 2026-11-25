@@ -480,3 +480,25 @@ fn a_calendar_listing_without_the_availability_setting_counts_it() {
     let read: VisibleCalendar = serde_json::from_value(listed).unwrap();
     assert!(read.contributes_to_availability);
 }
+
+/// The id suffix of a calendar a person creates in Google.
+const GOOGLE_CREATED_CALENDAR_SUFFIX: &str = "@group.calendar.google.com";
+
+#[test]
+fn google_lists_its_system_calendars_and_calendars_added_by_url_as_subscriptions() {
+    for subscription in [
+        format!("en.usa#holiday{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+        format!("addressbook#contacts{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+        format!("8c1f0e4ab52d4b0b9d6fd1e5c3a7b210{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+    ] {
+        assert!(is_google_subscription(&subscription), "{subscription}");
+    }
+    for maintained in [
+        "olivia@example.com".to_string(),
+        "ada@example.com".to_string(),
+        format!("c_1a2b3c4d5e6f{GOOGLE_CREATED_CALENDAR_SUFFIX}"),
+        "AAMkAGI2TG93AAA=".to_string(),
+    ] {
+        assert!(!is_google_subscription(&maintained), "{maintained}");
+    }
+}

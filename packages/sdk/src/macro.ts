@@ -110,6 +110,13 @@ export type {
   CrmEmailRuleSet,
 } from './entities/crm-email-privacy/email-rules';
 export {
+  type CrmCompanyMerge,
+  type CrmCompanyMergeCommit,
+  CrmMergeNamespace,
+  type CrmMergeOutcome,
+  type CrmMergePreview,
+} from './entities/crm-merges/merges';
+export {
   type AddColumnOptions,
   type ApplyOpsOptions,
   type ChangeColumnTypeOptions,

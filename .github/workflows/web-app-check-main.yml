@@ -1540,6 +1540,11 @@ jobs:
           bunx playwright install-deps chromium
           just test-agent-screen-browser
         working-directory: apps/web
+      - name: CAPTCHA Vision Lab Checks
+        run: |-
+          bun install --frozen-lockfile
+          bun run check:gate
+        working-directory: packages/captcha-vision-lab
       - name: Teardown Nix
         if: always()
         uses: ./.github/actions/teardown-nix

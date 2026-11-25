@@ -7,7 +7,8 @@
  */
 
 /**
- * The inboxes (email link ids) whose new mail starts the routine. Absent:
-every inbox the owner reads, their own and those delegated to them.
+ * The inboxes (email link ids) whose new or labeled mail starts the
+routine. Absent: every inbox the owner reads, their own and those
+delegated to them.
  */
 export type EventFilterInboxes = string[] | null;

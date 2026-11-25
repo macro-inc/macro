@@ -50,7 +50,11 @@ test('task search applies status, priority, assignee and creator facets without 
   await expect(filters.getByText('Tasks', { exact: true })).toBeVisible();
   await expect(filters.getByText('In Progress', { exact: true })).toBeVisible();
   await expect(filters.getByText('High', { exact: true })).toBeVisible();
-  await expect(filters.getByText('Julia Jones', { exact: true })).toBeVisible();
+  // The assignee is named by the auth name service, which this fixture
+  // doesn't serve, so the chip may show Julia's address instead.
+  await expect(
+    filters.getByRole('button', { name: 'Change Assignee filter' })
+  ).toContainText(/julia/i);
   await expect(filters.getByText('John Adams', { exact: true })).toBeVisible();
   await expect(
     dialog.getByRole('textbox', { name: 'Search for', exact: true })
@@ -107,6 +111,8 @@ test('manual sender choices override later predictions while the search query co
     .getByRole('button', { name: 'Change From filter', exact: true })
     .click();
   await page.getByRole('option', { name: 'John Adams', exact: true }).click();
+  // The From picker toggles people and stays open until it is closed.
+  await page.keyboard.press('Escape');
   await expect(
     page.getByRole('option', { name: 'John Adams', exact: true })
   ).toHaveCount(0);
@@ -280,4 +286,22 @@ test('keeps Search facet text centered and unclipped inside each segment', async
   await expect(
     filters.getByText('Any priority', { exact: true })
   ).toBeVisible();
+});
+
+test('keeps typing in Search for in place while a sender is unresolved', async ({
+  page,
+}) => {
+  const dialog = await compose(page, 'search messages from Pat about budget');
+  await expect(
+    dialog.getByText('Choose a specific person or channel for Pat').first()
+  ).toBeVisible();
+  const query = dialog.getByRole('textbox', {
+    name: 'Search for',
+    exact: true,
+  });
+  await expect(query).toHaveText('budget');
+  await query.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' plan', { delay: 80 });
+  await expect(query).toHaveText('budget plan');
 });

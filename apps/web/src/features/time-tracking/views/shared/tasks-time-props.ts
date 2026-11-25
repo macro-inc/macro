@@ -1,4 +1,5 @@
 import type { JSX } from 'solid-js';
+import type { EntryPerson } from '../../components/entry-list';
 import type { OpenReportTask } from '../../components/time-breakdown';
 import type {
   PersonLabel,
@@ -31,6 +32,8 @@ export type TasksTimeViewProps = {
   /** The calendar's Show weekends preference. */
   showWeekends: () => boolean;
   person: PersonLabel;
+  /** Who logged an entry, in a day's entries. */
+  entryPerson: EntryPerson;
   task: TaskLabelParts;
   onOpenTask: OpenReportTask;
   pickTask: TaskPicker;

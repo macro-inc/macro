@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE image_upgrade_computer row\n            SET state = $3, old_image = $4, phase_started_at = $5, error = $6, updated_at = $7\n            FROM image_upgrade upgrade\n            WHERE row.upgrade_id = $1 AND row.computer_id = $2\n              AND upgrade.id = row.upgrade_id AND upgrade.leased_by = $8\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "image_upgrade_computer_state",
+            "kind": {
+              "Enum": [
+                "waiting",
+                "replacing",
+                "verifying",
+                "rolling_back",
+                "upgraded",
+                "skipped",
+                "rolled_back",
+                "rollback_failed",
+                "failed"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c8f8357e120920c218d1c745ee7a16a751a72872b1577ff0ae57348b20410d3"
+}

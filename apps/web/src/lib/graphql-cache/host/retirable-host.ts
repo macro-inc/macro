@@ -11,7 +11,7 @@ const retainers = new WeakMap<CacheHost, () => RetainedCacheHost | undefined>();
 export function retainCacheHost(
   host: CacheHost
 ): RetainedCacheHost | undefined {
-  if (host.disabled) return;
+  if (host.disabled && !host.paused) return;
   const retain = retainers.get(host);
   return retain ? retain() : { host, release() {} };
 }
@@ -74,6 +74,9 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     },
     get disabled() {
       return current.disabled;
+    },
+    get paused() {
+      return current.paused;
     },
     currentRevision: () => current.currentRevision(),
     currentStorageGeneration: () => current.currentStorageGeneration(),
@@ -146,6 +149,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       current.onCacheGenerationChanged((...args) => {
         if (current === inner) cb(...args);
       }),
+    onOwnerReady: (cb) =>
+      current.onOwnerReady?.(() => {
+        if (current === inner) cb();
+      }) ?? (() => undefined),
     onMutationSettled: (cb) =>
       current.onMutationSettled((...args) => {
         if (current === inner) cb(...args);

@@ -83,17 +83,50 @@ projections keep their unframed postcard encoding, so a format upgrade never
 re-encodes them.
 
 Only the immediately prior cache format version is migratable
-(`MIGRATABLE_CACHE_FORMAT_VERSIONS`), and only while the storage schema still
-matches. A storage-schema mismatch instead follows physical reset. Opening a
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). A native file at an older storage schema
+version is first upgraded when a chain of steps from its version is registered
+([storage upgrades](#storage-upgrades)), and resets otherwise. Opening a
 migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
-the next open. Native owners then `VACUUM INTO` a fresh file and swap it in, so an
-upgrade also releases the space the dropped records occupied instead of leaving
-free pages in the old file. The browser's physical database name embeds the format
-version, so a browser upgrade starts a new file instead of migrating; the previous
-file is left for any tab still running the older bundle.
+the next open. Native owners then try to `VACUUM INTO` a fresh file and swap it
+in, so an upgrade usually releases the space the dropped records occupied
+instead of leaving free pages in the old file. The browser's physical database
+name embeds the format version, so a browser upgrade starts a new file instead
+of migrating; the previous file is left for any tab still running the older
+bundle.
+
+## Storage upgrades
+
+A native database written at an older `STORAGE_SCHEMA_VERSION` is upgraded in
+place when `cache-turso/src/storage/migration.rs` registers a chain of steps
+from its version to the current one. Each step is frozen SQL that runs in one
+write transaction, which also advances `meta.storage_schema_version`, so a
+stopped upgrade resumes from the last committed step. The last step's
+transaction also runs the frozen-schema checks, so the current version is
+committed only for a file with exactly the tables and indexes a fresh file has;
+a chain that would produce anything else rolls back to the version before its
+last step and resets. Later opens find a fresh file's schema digest and skip
+those checks. The open then runs the queue checks as every reopen does.
+
+Records, queued mutations, optimistic layers and the storage generation stay,
+so an upgrade refetches nothing and loses no queued write; a format migration
+that runs after it (above) still drops the refetchable rows. A file whose
+`meta` names another scope, or a cache format this build cannot carry forward,
+is rejected before any step runs. A version with no chain, a newer version, or
+a failing step resets as before, and so does a file an older build opens after
+a newer one upgraded it. Bumping the version without registering a step fails
+to compile; clearing `STEPS` declares that every older file resets. The
+plugin's `graphql_cache.native.open` span records the version a file came from
+as `graphql_cache.storage.upgraded_from`, and logs an event with it and the
+open's duration inside the init command's `graphql_cache.ipc.receive` span,
+which carries the webview's trace id as `upstream.trace_id`.
+
+Browser database names embed the storage version, so a browser build with a new
+storage version still opens a new database and backfills, leaving the older one
+for any tab still running the older bundle. A browser open never runs a step:
+an older version found under the current name resets, as before steps existed.
 
 ## Network refreshes
 
@@ -307,23 +340,23 @@ including deleted and nonmatching replacements. Empty-query browsing retains its
 indexed recent path and cursors. Leading-wildcard matching still scans the selected
 buckets: this bounds application search memory, not search work or database page
 cache memory. The existing SQL telemetry includes streamed processing and cleanup.
-Storage schema 12 introduces this covering index through an intentionally
-incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-11
-cache, including its records, queued mutations, and optimistic layers. Browsers
-open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
-pending mutations, but the new engine does not replay those queues. Backfill
-restarts against the new storage generation. That index cutover kept the GraphQL
-schema epoch and record format unchanged. Native binaries
-must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
+Storage schema 12 introduced this covering index. Browsers open a fresh
+`s4.v4.t12` database; existing cleanup still keeps older files with pending
+mutations, but the new engine does not replay those queues, and backfill
+restarts against the new storage generation. Natively, the registered 11 to 12
+step builds the index in place (see [storage upgrades](#storage-upgrades)), so a
+schema-11 cache keeps its records and queued writes. That version kept the
+GraphQL schema epoch and record format unchanged. Native binaries must be
+rebuilt to gain the new index; an OTA frontend update alone cannot add it.
 
-The same unpublished schema-12 cutover now includes `records_contacts_cover_idx`,
-a partial covering index on `records(__typename, id, value)` for `GraphqlContact`.
-Ranked reads explicitly seek this index after the text prefilter instead of also
-fetching the record table. They still decode one row at a time and apply membership,
-exclusions, ranking and DM dedup before limiting. Exact schema validation protects
-the predicate/collation; older local schema-12 shapes without it are incompatible,
-not silently upgraded. No additional format/version cutover or contacts store was
-introduced.
+Schema 12 also includes `records_contacts_cover_idx`, a partial covering index
+on `records(__typename, id, value)` for `GraphqlContact`, which the same step
+builds. Ranked reads explicitly seek this index after the text prefilter instead
+of also fetching the record table. They still decode one row at a time and apply
+membership, exclusions, ranking and DM dedup before limiting. Exact schema
+validation protects the predicate/collation; a pre-release local schema-12 shape
+without it is incompatible, since it already records version 12 and no step
+runs. No contacts store was introduced.
 
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
@@ -337,7 +370,7 @@ statement reuse, covering-index scans, and borrowed-row decoding against the sam
 fixture adds a legacy non-covering index for comparison with the production
 covering index. Statement reuse has not shown a material benefit and is not
 enabled in production. See [search performance](search-performance.md) for
-measured costs, memory boundaries, and the schema-12 reset behavior.
+measured costs and memory boundaries.
 
 ### Contact projection and page retention
 

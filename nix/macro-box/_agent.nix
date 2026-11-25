@@ -85,6 +85,8 @@ let
     # For the runtime to run capability scripts and Claude's tools with the
     # credentials directory masked (`bwrap --tmpfs /run/credentials`).
     pkgs.bubblewrap
+    # solveCaptcha's one bounded solver run (Kimi through the harness).
+    pkgs.opencode
   ];
   scriptVariables = ''
     workspace=${workspace}

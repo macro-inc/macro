@@ -2,7 +2,16 @@ import { EntityPropertiesSection } from '@app/features/property/side-panel/prope
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createOpenTracker } from '@core/internal/open-tracker';
-import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  Match,
+  onCleanup,
+  Show,
+  Suspense,
+  Switch,
+  untrack,
+} from 'solid-js';
 import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
@@ -37,6 +46,8 @@ type ContactProps = {
   headerToggle?: boolean;
   onOpenCompany?: (companyId: string) => boolean;
   onOpenPipeline?: (pipelineId: string) => void;
+  /** Shows the contact `contactId` was merged into, under its own id. */
+  onMerged?: (survivorId: string) => void;
 };
 
 export function Contact(props: ContactProps) {
@@ -71,7 +82,23 @@ function ContactContent(props: ContactProps) {
   const contactQuery = useContactQuery(() => props.contactId);
   usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
-  createOpenTracker('contact', () => contact()?.id);
+  // Its sections read by the shown id, which a merged contact no longer has.
+  createEffect(() => {
+    const current = contactQuery.isSuccess ? contactQuery.data : undefined;
+    if (current && current.id.toLowerCase() !== props.contactId.toLowerCase())
+      untrack(() => props.onMerged?.(current.id));
+  });
+  // A merged contact's open is recorded by the page it moves to.
+  createOpenTracker(
+    'contact',
+    () => {
+      const id = contact()?.id;
+      return id?.toLowerCase() === props.contactId.toLowerCase()
+        ? id
+        : undefined;
+    },
+    { ownBlock: true }
+  );
   onCleanup(
     context.registerTaskComposerRecord(() => ({
       type: 'contact',

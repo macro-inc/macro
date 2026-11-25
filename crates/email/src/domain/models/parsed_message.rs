@@ -6,6 +6,8 @@ use super::{contact::ContactInfo, message::Message};
 /// A lightweight label representation for parsed messages.
 #[derive(Debug, Clone)]
 pub struct ParsedLabel {
+    /// Database ID of the label, when known.
+    pub id: Option<Uuid>,
     /// The provider label ID (e.g., "INBOX", "DRAFT").
     pub provider_id: String,
     /// The human-readable label name.
@@ -89,6 +91,7 @@ impl From<&Message> for ParsedMessage {
                 .labels
                 .iter()
                 .map(|label| ParsedLabel {
+                    id: label.id,
                     provider_id: label.provider_label_id.clone(),
                     name: label.name.clone().unwrap_or_default(),
                 })

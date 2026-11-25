@@ -41,4 +41,6 @@ Agent session activity: [correlation and visibility](architecture/agent-activity
 
 Agent screens: [watch and take over an agent teammate's desktop](design/agent-screen.md).
 
+CAPTCHA vision lab: [Kimi vision smoke test on loopback challenge families](design/kimi-vision-captcha-lab.md) (lab only).
+
 CRM: [selective email contribution design](design/crm-selective-email-contribution.md).
