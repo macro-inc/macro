@@ -5,6 +5,8 @@ import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegio
 import type { ComponentMeta } from '@components/app/split-layout/componentRegistry';
 import { PopoverSplitRenderer } from '@components/app/split-layout/components/PopoverSplitRenderer';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
+import { Telemetry } from '@macro-inc/observability';
+import { createWebTracingProvider } from '@macro-inc/observability/web';
 import { ok } from 'neverthrow';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -16,6 +18,7 @@ import { agentScreenContent } from '../core/route';
 import { createScreenInput } from '../primitives/screen-input';
 import { createScreenSession } from '../primitives/screen-session';
 import type { ScreenState } from '../transports/types';
+import { VNC_TRANSPORT } from '../transports/vnc';
 import { AgentScreen } from '../views/agent-screen';
 import { MobileAgentScreen } from '../views/mobile/agent-screen';
 import type { AgentScreenModel } from '../views/shared/agent-screen-model';
@@ -136,13 +139,37 @@ const capabilities: ScreenCapabilities = {
   }),
 };
 
+const realVnc: ScreenCapabilities = {
+  ...capabilities,
+  requestTicket: async () =>
+    ok({
+      socketUrl: `ws://${location.host}/screen-attempt-fixture?ticket=fixture`,
+      expiresAt: '',
+    }),
+  transport: () => VNC_TRANSPORT,
+};
+
+if (scenario === 'telemetry') {
+  const telemetryConfig = {
+    serviceName: 'agent-screen-fixture',
+    environment: 'test',
+    tracesUrl: new URL('/screen-attempt-otlp', location.href).href,
+    enabled: async () => true,
+  };
+  await Telemetry.init({
+    ...telemetryConfig,
+    tracingProvider: (resource, getUserId, sampling) =>
+      createWebTracingProvider(telemetryConfig, resource, getUserId, sampling),
+  });
+}
+
 function Viewer(props: { phone: boolean }) {
   const session = createScreenSession({
     harnessId: 'harness-1',
     canDrive: () => true,
     accessKnown: () => true,
     transport: () => 'vnc',
-    capabilities,
+    capabilities: scenario === 'telemetry' ? realVnc : capabilities,
   });
   const [size, setSize] = createSignal({ width: 0, height: 0 });
   const input = createScreenInput({
@@ -176,9 +203,16 @@ function Viewer(props: { phone: boolean }) {
         : undefined,
   };
   return (
-    <Show when={props.phone} fallback={<AgentScreen model={model} />}>
-      <MobileAgentScreen model={model} />
-    </Show>
+    <>
+      <Show when={scenario === 'telemetry'}>
+        <button type="button" onClick={session.retry}>
+          Restart fixture
+        </button>
+      </Show>
+      <Show when={props.phone} fallback={<AgentScreen model={model} />}>
+        <MobileAgentScreen model={model} />
+      </Show>
+    </>
   );
 }
 

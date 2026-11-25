@@ -21,6 +21,11 @@ import {
   type ScreenStatus,
   whileBooting,
 } from '../core/screen-status';
+import {
+  type ViewerAttempt,
+  viewerAttempt,
+  viewerCloseReason,
+} from '../transports/attempt-telemetry';
 import type {
   ScreenError,
   ScreenErrorCode,
@@ -136,6 +141,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
   // Each connect attempt has its own generation; a late result from an older
   // one is dropped.
   let generation = 0;
+  const journey = crypto.randomUUID();
+  let activeAttempt: ViewerAttempt | undefined;
   let disposed = false;
   /** The mode of the ticket the current connection was opened with. */
   let connectedMode: 'view' | 'drive' | undefined;
@@ -266,6 +273,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
    * until that one is live, so "Showing the last picture" holds.
    */
   const teardown = (keepPicture = false) => {
+    activeAttempt?.finish('canceled');
+    activeAttempt = undefined;
     pendingConnect?.abort();
     pendingConnect = undefined;
     session?.close();
@@ -387,25 +396,28 @@ export function createScreenSession(options: ScreenSessionOptions) {
     connectSpan.setAttr('harness.id', options.harnessId);
     connectSpan.setAttr('screen.transport', transportKind);
     connectSpan.setAttr('screen.mode', mode);
-    connectSpan.setAttr('screen.attempt', attempt);
+    const trace = viewerAttempt(connectSpan, journey, current);
+    activeAttempt = trace;
     if (booting()) connectSpan.setAttr('screen.booting', true);
 
-    const ticket = await options.capabilities.requestTicket(
-      {
-        harnessId: options.harnessId,
-        transport: transportKind,
-        surface: 'desktop',
-        mode,
-      },
-      connectSpan
-    );
-    if (current !== generation || disposed) {
-      connectSpan.end();
-      return;
-    }
+    const ticket = await options.capabilities
+      .requestTicket(
+        {
+          harnessId: options.harnessId,
+          transport: transportKind,
+          surface: 'desktop',
+          mode,
+        },
+        connectSpan
+      )
+      .catch((error: unknown) => {
+        trace.finish('ticket_failed');
+        throw error;
+      });
+    if (current !== generation || disposed) return;
     if (ticket.isErr()) {
       connectSpan.setAttr('screen.ticket_failure', ticket.error);
-      connectSpan.end();
+      trace.finish('ticket_failed');
       endConnectionSpan(`ticket_${ticket.error}`);
       apply(
         afterConnectFailed(ticket.error, attempt, retryContext()),
@@ -414,6 +426,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       return;
     }
 
+    trace.milestone('ticket_issued');
     let connected = false;
     // The server ended this attempt itself (computer off, access revoked):
     // that end is what the viewer shows, not the connect's later rejection.
@@ -516,6 +529,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // Once per connection, whatever its transport reports.
             if (current !== generation || endedByServer) return;
             endedByServer = true;
+            trace.finish(viewerCloseReason(reason));
             record('computer.screen.ended', { reason });
             endConnectionSpan(reason);
             session = undefined;
@@ -547,7 +561,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
             reconnectIfShown();
           },
         },
-        abandon.signal
+        abandon.signal,
+        trace
       );
       if (pendingConnect === abandon) pendingConnect = undefined;
       if (current !== generation || disposed) {
@@ -570,8 +585,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
         resumeDriving();
         finishHandBack();
       });
-    } catch (error) {
-      connectSpan.error(error);
+    } catch {
+      trace.finish('socket_error');
       if (current !== generation || endedByServer) return;
       endConnectionSpan('connect_failed');
       apply(
@@ -579,8 +594,6 @@ export function createScreenSession(options: ScreenSessionOptions) {
         attempt + 1,
         lastError
       );
-    } finally {
-      connectSpan.end();
     }
   }
 
@@ -632,7 +645,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
 
   // Closing or reloading the browser tab never runs `onCleanup`: hand back
   // on the way out too, so the agent needn't wait out the lease.
-  const handBackOnPageHide = () => handBackIfDriving();
+  const handBackOnPageHide = () => {
+    handBackIfDriving();
+    activeAttempt?.finish('canceled');
+  };
   window.addEventListener('pagehide', handBackOnPageHide);
 
   function retry() {

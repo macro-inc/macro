@@ -1,4 +1,5 @@
 import { Telemetry } from '@macro-inc/observability';
+import type { ViewerAttempt } from './attempt-telemetry';
 import {
   parseServerMessage,
   reportVisibility,
@@ -140,10 +141,22 @@ async function connectVnc(
   element: HTMLElement,
   ticket: ScreenTicketGrant,
   handlers: ScreenSessionHandlers,
-  signal: AbortSignal
+  signal: AbortSignal,
+  trace?: ViewerAttempt
 ): Promise<ScreenSession> {
   if (signal.aborted) throw abortError();
-  const socket = new WebSocket(ticket.socketUrl);
+  const socket = new WebSocket(
+    trace?.socketUrl(ticket.socketUrl) ?? ticket.socketUrl
+  );
+  let socketOpened = false;
+  socket.addEventListener(
+    'open',
+    () => {
+      socketOpened = true;
+      trace?.milestone('socket_upgrade');
+    },
+    { once: true }
+  );
   reportVisibility(socket);
   socket.binaryType = 'arraybuffer';
   let endReason: ScreenEndReason | undefined;
@@ -206,6 +219,7 @@ async function connectVnc(
       return;
     }
     if (!(event.data instanceof ArrayBuffer)) return;
+    trace?.received(event.data.byteLength);
 
     if (port) toFrame({ type: 'received', data: event.data }, [event.data]);
     else pending.push(event.data);
@@ -213,7 +227,10 @@ async function connectVnc(
 
   socket.addEventListener('close', () => {
     toFrame({ type: 'close' });
-    if (!closedByViewer) reportEnd(endReason ?? 'connectionLost');
+    if (!closedByViewer) {
+      if (!socketOpened) trace?.finish('socket_error');
+      reportEnd(endReason ?? 'connectionLost');
+    }
     // Before the handshake: the connect ends here too (the end is reported
     // once, above; the session ignores the connect's rejection after it).
     if (!rfbReady) attempt.abort();
@@ -244,7 +261,7 @@ async function connectVnc(
           messages = filter.push(new Uint8Array(message.data));
         } catch (error) {
           // A stream the filter can't frame can't be trusted past this point.
-          Telemetry.error(error, { 'screen.transport': 'vnc' });
+          trace?.finish('parser_error');
           reject(error);
           // `close` forgets readiness: an established session reports its
           // end, one still handshaking has the rejection.
@@ -254,10 +271,17 @@ async function connectVnc(
           return;
         }
         if (socket.readyState !== WebSocket.OPEN) return;
-        for (const bytes of messages) socket.send(bytes);
+        for (const bytes of messages) {
+          socket.send(bytes);
+          trace?.sent(bytes.byteLength);
+        }
       } else if (message.type === 'connected') {
+        trace?.milestone('browser_handshake');
         resolve();
+      } else if (message.type === 'firstFrame') {
+        trace?.milestone('first_frame');
       } else if (message.type === 'disconnected') {
+        if (!message.clean) trace?.finish('parser_error');
         // Before the handshake finished this is a failed connect, reported
         // by the rejection; after it, the socket's close reports the end.
         reject(new Error('RFB handshake failed'));
@@ -285,7 +309,10 @@ async function connectVnc(
   return {
     sendInput(event) {
       if (!rfbReady || socket.readyState !== WebSocket.OPEN) return;
-      for (const message of encodeInput(event)) socket.send(message);
+      for (const message of encodeInput(event)) {
+        socket.send(message);
+        trace?.sent(message.byteLength);
+      }
     },
     takeOver: () => sendControl(socket, { type: 'takeOver' }),
     handBack: (note, leaseId) =>
