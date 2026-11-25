@@ -1,7 +1,7 @@
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js';
 import { analytics } from '../../../app/utils/utilAnalytic';
 import presenterPhoto from '../../../assets/people/tutorial-presenter.jpg';
-import { createSitePalette } from '../../setup/sitePalette';
+import { sitePalette } from '../../setup/sitePalette';
 import {
   TUTORIAL_PRESENTER,
   TUTORIAL_VIDEOS,
@@ -67,7 +67,6 @@ export function TutorialVideoEmbed(props: {
   tutorial: TutorialVideoId;
   backdrop?: boolean;
 }) {
-  const palette = createSitePalette();
   const [started, setStarted] = createSignal(false);
   let video: HTMLVideoElement | undefined;
   let playRecorded = false;
@@ -164,8 +163,8 @@ export function TutorialVideoEmbed(props: {
             <div class="tutorial-video-poster" aria-hidden="true">
               <TutorialWallpaper tutorial={props.tutorial} />
               <PreviewWindow
-                src={tutorialPreviewUrl(props.tutorial, palette() === 'cream')}
-                light={palette() === 'cream'}
+                src={tutorialPreviewUrl(props.tutorial, sitePalette() === 'cream')}
+                light={sitePalette() === 'cream'}
               />
             </div>
           </Show>
