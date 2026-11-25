@@ -120,7 +120,7 @@ let
         let
           set =
             source:
-            "set(${attr "${prefix}${label}"}, String(${source})) where ${source} != nil and ${selected select}";
+            "set(${attr "${prefix}${label}"}, String(${source})) where ${source} != nil and ${source} != \"\" and ${selected select}";
           attributeSources = lib.reverseList (lib.filter isAttribute from);
         in
         lib.optional (!lib.all isAttribute from) (set "name")
@@ -133,7 +133,6 @@ let
           if lib.elem label reserved then fromItem ++ fromResource else fromResource ++ fromItem
         );
     };
-  # Longer than any value a metric reads; some attributes hold whole commands.
 
   # Labels that are the resource's, whatever the span or record says.
   reserved = [
