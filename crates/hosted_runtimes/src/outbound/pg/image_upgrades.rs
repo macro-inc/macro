@@ -313,6 +313,20 @@ impl ImageUpgrades for PgComputerRepo {
         computer: &ComputerUpgrade,
         now: DateTime<Utc>,
     ) -> Result<bool, PgComputerError> {
+        let mut tx = self.pool.begin().await?;
+        if computer.state.holds_computer() {
+            let current = sqlx::query_scalar!(
+                "SELECT host_id FROM hosted_runtime WHERE id = $1 FOR UPDATE",
+                computer.computer_id.as_uuid(),
+            )
+            .fetch_optional(&mut *tx)
+            .await?;
+            if current.is_none()
+                || Self::runtime_update_pending(&mut tx, computer.computer_id, true).await?
+            {
+                return Ok(false);
+            }
+        }
         let updated = sqlx::query!(
             r#"
             UPDATE image_upgrade_computer row
@@ -330,8 +344,19 @@ impl ImageUpgrades for PgComputerRepo {
             now,
             holder,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        if updated.rows_affected() == 1 && computer.state == ComputerUpgradeState::Upgraded {
+            sqlx::query!(
+                r#"UPDATE agent_runtime_update SET cleared_at = $2
+                   WHERE computer_id = $1 AND outcome = 'needs_operator' AND cleared_at IS NULL"#,
+                computer.computer_id.as_uuid(),
+                now,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
         Ok(updated.rows_affected() == 1)
     }
 }

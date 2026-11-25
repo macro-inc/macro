@@ -16,6 +16,7 @@ pub mod operator;
 pub mod overcommit;
 pub mod ports;
 pub mod rollout;
+pub mod runtime_update;
 pub mod service;
 pub mod setup;
 pub mod size;

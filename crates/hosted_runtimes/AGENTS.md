@@ -73,6 +73,13 @@ read it before changing behaviour.
   `image-upgrade` binary (`src/bin/image_upgrade.rs`, feature
   `image-upgrade-cli`), which the Firecracker image rollout workflow runs.
 
+- `src/domain/runtime_update.rs` and `src/domain/operator/runtime_update.rs`:
+  the dev-only single-teammate runtime update, queued by the
+  `agent-runtime-update` CLI. The Postgres lease holds the computer against
+  moves and image upgrades while the host's fixed guest updater runs.
+  Repeated failed settlement probes past the deadline leave a recovery
+  hold that a successful image upgrade clears.
+
 ## Scope
 
 - Owns: computer rows, hosts, outbox, timers, lifecycle, size catalog.
