@@ -194,6 +194,20 @@ describe('connecting on a page', () => {
     }
   );
 
+  it.each([
+    ['app/linear', true],
+    ['server/aHR0cHM6Ly94', false],
+  ])(
+    'links the tab to this one for %s only when Macro chose its page (%s)',
+    (key, keepOpener) => {
+      // Without it the browser refuses to retire a tab on the vendor's
+      // origin; a server added by URL picks its own page, so it gets none.
+      mocks.start.mockReturnValue(new Promise(() => {}));
+      expect(connectConnector({ key })).toBeInstanceOf(Promise);
+      expect(mocks.reservePopup).toHaveBeenCalledWith({ keepOpener });
+    }
+  );
+
   it('stops when the user closes the page without connecting', async () => {
     mocks.reservePopup.mockReturnValue({ closed: true });
     mocks.start.mockResolvedValue(
@@ -290,6 +304,38 @@ describe('polling a page that cannot report back', () => {
     expect(tab.location.href).toContain(
       '/pipedream/mcp/connect/callback?status=error'
     );
+  });
+
+  describe('when the browser refuses to navigate the tab', () => {
+    // A server's tab has no opener, so once it is on another origin the
+    // browser throws instead of navigating it.
+    const refusing = {
+      closed: false,
+      location: {
+        set href(_url: string) {
+          throw new DOMException('not allowed', 'SecurityError');
+        },
+      },
+    };
+    const server = connector('server/aHR0cHM6Ly94');
+
+    beforeEach(() => {
+      mocks.reservePopup.mockReturnValue(refusing);
+    });
+
+    it('still records the connection', async () => {
+      mocks.complete.mockResolvedValueOnce(server);
+      const pending = connectConnector({ key: 'server/aHR0cHM6Ly94' });
+      await vi.runAllTimersAsync();
+      expect(await pending).toBe('connected');
+      expect(mocks.setData).toHaveBeenCalled();
+    });
+
+    it('still ends quietly at the deadline', async () => {
+      const pending = connectConnector({ key: 'server/aHR0cHM6Ly94' });
+      await vi.runAllTimersAsync();
+      expect(await pending).toBe('closed');
+    });
   });
 });
 

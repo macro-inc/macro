@@ -1,11 +1,26 @@
 import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
 
-/** Open a blank tab during the click so later OAuth assign is not blocked. */
-export function reserveOauthPopup(): Window | null {
+type ReserveOauthPopupOptions = {
+  /**
+   * Leave the tab linked to this one, so this one can still navigate or close
+   * it once it shows another origin. Only for pages Macro chose: a linked
+   * page can also navigate this tab.
+   */
+  keepOpener?: boolean;
+};
+
+/**
+ * Open a blank tab during the click so a later OAuth assign is not blocked.
+ * The tab is cut off from this one unless `keepOpener`; a cut-off tab on
+ * another origin can no longer be navigated or closed from here.
+ */
+export function reserveOauthPopup(
+  options: ReserveOauthPopupOptions = {}
+): Window | null {
   if (isTauri()) return null;
   const popup = window.open('about:blank', '_blank');
-  if (popup) popup.opener = null;
+  if (popup && !options.keepOpener) popup.opener = null;
   return popup;
 }
 

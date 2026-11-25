@@ -997,6 +997,11 @@ Connect can close without reporting success (an OAuth provider severs its
 consent popup's opener) even though Pipedream created the account. Every close
 without success, on web and native, asks `POST /connectors/{key}/complete`
 once, which records the account if the flow made one.
+A page-based connect of a catalog app keeps its consent tab's opener
+(`reserveOauthPopup({ keepOpener })`): without it the browser refuses to
+navigate or close the tab once it is on the vendor's origin, so it could never
+be retired. A server added by URL picks its own authorization page, so its tab
+stays cut off.
 Desktop Home and Agents new-conversation and active-session composers show the shared **Run agents
 on this computer** invitation until this installation is paired or the current
 user dismisses it locally. Keep the invitation tied to bundled macrod support,
