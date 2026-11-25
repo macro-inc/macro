@@ -430,8 +430,8 @@ picker, displays, and editing.
 
 The question box opens, with focus in it, only on the page that inserted the
 answer. Collaborators see the unanswered question closed, so their focus stays
-where they were typing; open it from the block to ask. Check with a second
-person typing in another split while the first inserts **Query**.
+where they were typing. Check with a second person typing in another split
+while the first inserts **Query**.
 
 ## Spreadsheets
 

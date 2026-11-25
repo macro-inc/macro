@@ -37,6 +37,8 @@ import { check, type Finding, FindingsError } from './oracles';
 import { Relay } from './relay';
 
 const REPORTS = fileURLToPath(new URL('./reports/', import.meta.url));
+if (PEERS > 7)
+  throw new Error('FUZZ_PEERS is at most 7 here: the watcher is one more');
 const NAMES = 'ABCDEFGH'.slice(0, PEERS + 1).split('');
 const TYPISTS = NAMES.slice(0, -1);
 const WATCHER = NAMES[NAMES.length - 1];
@@ -61,7 +63,11 @@ const PICTURE = Buffer.from(
   'base64'
 );
 
-async function servePictures(page: Page) {
+/** Serves the decorators' media: a picture for images, nothing for videos. */
+async function serveMedia(page: Page) {
+  await page.route(/\/clip-\d+\.mp4/, (route: Route) =>
+    route.fulfill({ status: 404 })
+  );
   await page.route(
     (url) => /\/picture-\d+\.png/.test(decodeURIComponent(url.href)),
     (route: Route) =>
@@ -134,7 +140,7 @@ test('focus stays in another field while collaborators edit every decorator type
         NAMES.length
       );
       try {
-        for (const peer of peers) await servePictures(peer.page);
+        for (const peer of peers) await serveMedia(peer.page);
         const system = new FuzzSystem(peers, relay);
         const model = new FuzzModel(NAMES);
         const watcher = system.peer(WATCHER);
