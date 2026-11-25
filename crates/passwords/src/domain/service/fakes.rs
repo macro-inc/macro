@@ -214,7 +214,7 @@ impl Repository for FakeRepository {
         }
         Ok(())
     }
-    async fn vault_setup_due(&self) -> Result<Vec<TeamId>, Error> {
+    async fn vault_setup_due(&self) -> Result<Vec<DueVaultSetup>, Error> {
         let setups = self.vault_setups.lock().unwrap();
         let closed = self.closed_teams.lock().unwrap();
         Ok(self
@@ -226,7 +226,10 @@ impl Repository for FakeRepository {
                 matches!(setups.get(&team.0), Some((VaultSetupState::SettingUp, _)))
                     && !closed.contains(&team.0)
             })
-            .copied()
+            .map(|team| DueVaultSetup {
+                team: *team,
+                requested_trace_id: Some(format!("trace-{}", team.0)),
+            })
             .collect())
     }
 

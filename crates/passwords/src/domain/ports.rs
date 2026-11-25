@@ -26,13 +26,13 @@ pub trait Repository: Send + Sync {
     async fn has_vault_values(&self, team: TeamId) -> Result<bool, Error>;
     /// The team's automatic vault setup state; `None` before the first request.
     async fn vault_setup(&self, team: TeamId) -> Result<Option<VaultSetupState>, Error>;
-    /// Record a setup request; false when one already exists.
+    /// Record a setup request with the current trace id; false when one already exists.
     async fn request_vault_setup(&self, team: TeamId) -> Result<bool, Error>;
     /// Record a setup outcome. `SettingUp` counts a failed attempt and schedules
     /// the next one with backoff; the other states are final for the worker.
     async fn record_vault_setup(&self, team: TeamId, state: VaultSetupState) -> Result<(), Error>;
     /// A bounded batch of live, unclosed teams whose setup attempt is due.
-    async fn vault_setup_due(&self) -> Result<Vec<TeamId>, Error>;
+    async fn vault_setup_due(&self) -> Result<Vec<DueVaultSetup>, Error>;
 
     /// Durably close a team vault before provider deletion; future human admissions fail.
     async fn close_team(&self, team: TeamId) -> Result<(), Error>;

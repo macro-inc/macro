@@ -178,6 +178,16 @@ fn trace_id() -> String {
         .to_string()
 }
 
+/// The current trace id, or none outside a sampled trace.
+fn requesting_trace_id() -> Option<String> {
+    let context = tracing::Span::current().context();
+    let span = context.span();
+    let span_context = span.span_context();
+    span_context
+        .is_valid()
+        .then(|| span_context.trace_id().to_string())
+}
+
 struct PgItemLock {
     _admission: OwnedSemaphorePermit,
     _transaction: Transaction<'static, Postgres>,
@@ -277,8 +287,9 @@ impl Repository for PgRepository {
     }
     async fn request_vault_setup(&self, team: TeamId) -> Result<bool, Error> {
         let inserted = sqlx::query!(
-            "INSERT INTO password_vault_setup(team_id, state) VALUES($1, 'setting_up') ON CONFLICT(team_id) DO NOTHING",
-            team.0
+            "INSERT INTO password_vault_setup(team_id, state, requested_trace_id) VALUES($1, 'setting_up', $2) ON CONFLICT(team_id) DO NOTHING",
+            team.0,
+            requesting_trace_id()
         )
         .execute(&self.pool)
         .await
@@ -315,9 +326,9 @@ impl Repository for PgRepository {
         .map_err(database_error)?;
         Ok(())
     }
-    async fn vault_setup_due(&self) -> Result<Vec<TeamId>, Error> {
-        let teams = sqlx::query_scalar!(
-            r#"SELECT setup.team_id FROM password_vault_setup setup
+    async fn vault_setup_due(&self) -> Result<Vec<DueVaultSetup>, Error> {
+        let due = sqlx::query!(
+            r#"SELECT setup.team_id, setup.requested_trace_id FROM password_vault_setup setup
                WHERE setup.state='setting_up' AND setup.next_attempt_at<=now()
                  AND EXISTS(SELECT 1 FROM team WHERE team.id=setup.team_id)
                  AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle closed WHERE closed.team_id=setup.team_id)
@@ -326,7 +337,13 @@ impl Repository for PgRepository {
         .fetch_all(&self.pool)
         .await
         .map_err(database_error)?;
-        Ok(teams.into_iter().map(TeamId).collect())
+        Ok(due
+            .into_iter()
+            .map(|row| DueVaultSetup {
+                team: TeamId(row.team_id),
+                requested_trace_id: row.requested_trace_id,
+            })
+            .collect())
     }
 
     async fn close_team(&self, team: TeamId) -> Result<(), Error> {

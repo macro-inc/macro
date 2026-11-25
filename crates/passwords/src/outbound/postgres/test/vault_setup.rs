@@ -25,7 +25,16 @@ async fn setup_rows_record_states_backoff_and_count_as_team_data(pool: PgPool) {
     // A namespace may exist from here on, so team deletion must purge it.
     assert!(repository.has_team_data(team).await.expect("team data"));
     assert!(!repository.has_vault_values(team).await.expect("values"));
-    assert_eq!(repository.vault_setup_due().await.expect("due"), vec![team]);
+    assert_eq!(
+        repository
+            .vault_setup_due()
+            .await
+            .expect("due")
+            .into_iter()
+            .map(|setup| setup.team)
+            .collect::<Vec<_>>(),
+        vec![team]
+    );
 
     // A failed attempt backs off: not due again right away.
     repository
@@ -50,7 +59,16 @@ async fn setup_rows_record_states_backoff_and_count_as_team_data(pool: PgPool) {
     .execute(&repository.pool)
     .await
     .expect("make due");
-    assert_eq!(repository.vault_setup_due().await.expect("due"), vec![team]);
+    assert_eq!(
+        repository
+            .vault_setup_due()
+            .await
+            .expect("due")
+            .into_iter()
+            .map(|setup| setup.team)
+            .collect::<Vec<_>>(),
+        vec![team]
+    );
 
     // A closed team is never due, and a late outcome neither reopens nor
     // recreates its request.
@@ -265,4 +283,36 @@ async fn a_timed_out_first_write_releases_the_lease_before_it_returns(pool: PgPo
         .lock(team, ItemId(Uuid::now_v7()))
         .await
         .expect("the lease is free at once");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_resume_worker_gets_the_trace_of_the_write_that_requested_setup(pool: PgPool) {
+    use opentelemetry::trace::{TraceContextExt, TracerProvider};
+    use tracing::Instrument;
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+    use tracing_subscriber::layer::SubscriberExt;
+    let (team, _) = another_team(&pool).await;
+    let repository = PgRepository::new(pool).expect("repository");
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let _subscriber = tracing::subscriber::set_default(
+        tracing_subscriber::registry()
+            .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("vault-setup-test"))),
+    );
+    let write = tracing::info_span!("passwords.create");
+    let requested = write.context().span().span_context().trace_id().to_string();
+    assert!(
+        repository
+            .request_vault_setup(team)
+            .instrument(write)
+            .await
+            .expect("request")
+    );
+    let due = repository.vault_setup_due().await.expect("due");
+    assert_eq!(
+        due,
+        vec![DueVaultSetup {
+            team,
+            requested_trace_id: Some(requested),
+        }]
+    );
 }

@@ -117,6 +117,9 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   - Drift: a missing namespace for a `ready` row, or for a team with items,
     intents or enrollments (`has_vault_values`; folders don't count), is
     `vault_needs_recovery` and is never recreated. Closed teams are never set up.
+  - The row stores the requesting write's trace id (opaque); the resume span
+    records it as `requested_trace_id`, so a worker-finished setup is findable
+    from the write that asked for it.
   - The row holds no item, body or credential. It counts in `has_team_data`, so
     team deletion purges; purge skips erasure only for an unfinished setup whose
     namespace the provisioner reports absent.

@@ -392,6 +392,15 @@ pub enum VaultSetupState {
     NeedsRecovery,
 }
 
+/// A setup the resume worker should attempt now.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DueVaultSetup {
+    /// The team whose vault is being set up.
+    pub team: TeamId,
+    /// Trace id of the write that requested the setup, if it had one.
+    pub requested_trace_id: Option<String>,
+}
+
 /// A team's vault readiness, as the API reports it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]

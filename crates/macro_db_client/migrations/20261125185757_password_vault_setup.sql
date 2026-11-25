@@ -9,7 +9,10 @@ CREATE TABLE password_vault_setup (
     attempts INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- The trace of the write that requested setup, an opaque id, so a setup the
+    -- resume worker finishes can be found from that write.
+    requested_trace_id TEXT
 );
 -- The resume worker reads only teams still being set up, oldest attempt first.
 CREATE INDEX password_vault_setup_due ON password_vault_setup(next_attempt_at)

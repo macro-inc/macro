@@ -91,16 +91,25 @@ impl PasswordService {
         }
         let due = self.repository.vault_setup_due().await?;
         tracing::Span::current().record("due", due.len());
-        for team in due {
-            if let Err(error) = self.resume_one(team).await {
-                tracing::warn!(team_id = %team.0, error = %error, "passwords vault setup resume failed; retained for retry");
+        for setup in due {
+            if let Err(error) = self
+                .resume_one(setup.team, setup.requested_trace_id.as_deref())
+                .await
+            {
+                tracing::warn!(team_id = %setup.team.0, error = %error, "passwords vault setup resume failed; retained for retry");
             }
         }
         Ok(())
     }
 
-    #[tracing::instrument(skip_all, err, name = "passwords.vault.setup", fields(team_id = %team.0, trigger = "resume", outcome = tracing::field::Empty, created = tracing::field::Empty))]
-    async fn resume_one(&self, team: TeamId) -> Result<(), Error> {
+    /// `requested_trace_id` names the write that requested this setup, so the
+    /// resumed attempt can be found from it.
+    #[tracing::instrument(skip_all, err, name = "passwords.vault.setup", fields(team_id = %team.0, trigger = "resume", requested_trace_id = requested_trace_id, outcome = tracing::field::Empty, created = tracing::field::Empty))]
+    async fn resume_one(
+        &self,
+        team: TeamId,
+        requested_trace_id: Option<&str>,
+    ) -> Result<(), Error> {
         let lock = match self.repository.lock(team, ItemId(Uuid::nil())).await {
             Ok(lock) => lock,
             Err(Error::Busy) => {
