@@ -10,6 +10,7 @@ import {
   createUserQuiet,
   evictIdleChannels,
   loadPrewarmChannelIds,
+  PREWARM_PACE_MS,
   PREWARM_PAGE_SIZE,
   runChannelPrewarmPass,
 } from '../channel-prewarm';
@@ -118,7 +119,7 @@ describe('runChannelPrewarmPass', () => {
 
     await Effect.runPromise(runChannelPrewarmPass(d));
 
-    expect(order).toEqual(['idle', 'load a', 'idle', 'load b']);
+    expect(order).toEqual(['idle', 'load a', 'idle', 'load b', 'idle']);
   });
 
   it('pauses between channels for less than the checkpoint quiet period', async () => {
@@ -189,29 +190,95 @@ describe('runChannelPrewarmPass', () => {
 });
 
 describe('evictIdleChannels', () => {
-  it('asks again while more idle channels remain', async () => {
-    const evict = vi
-      .fn()
-      .mockResolvedValueOnce({
-        kind: 'evicted',
+  // What a pass over channels of a hundred messages does.
+  const evictsOneAtATime = (channels: number) => {
+    let left = channels;
+    return vi.fn(async () => {
+      left -= 1;
+      return {
+        kind: 'evicted' as const,
         changed: [],
-        channelIds: ['a', 'b'],
-        hasMore: true,
-      })
-      .mockResolvedValueOnce({
-        kind: 'evicted',
-        changed: [],
-        channelIds: ['c'],
-        hasMore: false,
-      });
+        channelIds: [`c${left}`],
+        hasMore: left > 0,
+      };
+    });
+  };
 
-    const host = { channelTimelineEvict: evict };
+  it('asks again while more idle channels remain, as many as a device keeps', async () => {
+    const evict = evictsOneAtATime(150);
+
     const evicted = await Effect.runPromise(
-      evictIdleChannels({ host, now: () => 0 })
+      evictIdleChannels({
+        host: { channelTimelineEvict: evict },
+        idle: Effect.void,
+        now: () => 0,
+        paceMs: 0,
+      })
     );
 
-    expect(evicted).toBe(3);
-    expect(evict).toHaveBeenCalledTimes(2);
+    expect(evicted).toBe(150);
+    expect(evict).toHaveBeenCalledTimes(150);
+  });
+
+  it('leaves the rest to the next round after its last pass', async () => {
+    const evict = evictsOneAtATime(100_000);
+
+    const evicted = await Effect.runPromise(
+      evictIdleChannels({
+        host: { channelTimelineEvict: evict },
+        idle: Effect.void,
+        now: () => 0,
+        paceMs: 0,
+      })
+    );
+
+    expect(evicted).toBe(200);
+  });
+
+  it('starts each pass only once the person leaves the app alone', async () => {
+    const evict = evictsOneAtATime(3);
+    const held: (() => void)[] = [];
+    const done = Effect.runPromise(
+      evictIdleChannels({
+        host: { channelTimelineEvict: evict },
+        idle: Effect.callback<void>((resume) => {
+          held.push(() => resume(Effect.void));
+        }),
+        now: () => 0,
+        paceMs: 0,
+      })
+    );
+
+    for (const passes of [0, 1, 2]) {
+      await vi.waitFor(() => expect(held).toHaveLength(passes + 1));
+      expect(evict).toHaveBeenCalledTimes(passes);
+      held[passes]?.();
+    }
+    expect(await done).toBe(3);
+  });
+
+  it('pauses before each pass, so a write that waits goes first', async () => {
+    vi.useFakeTimers();
+    try {
+      const evict = evictsOneAtATime(3);
+      const done = Effect.runPromise(
+        evictIdleChannels({
+          host: { channelTimelineEvict: evict },
+          idle: Effect.void,
+          now: () => 0,
+        })
+      );
+
+      for (const passes of [1, 2, 3]) {
+        await vi.advanceTimersByTimeAsync(PREWARM_PACE_MS - 1);
+        expect(evict).toHaveBeenCalledTimes(passes - 1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(evict).toHaveBeenCalledTimes(passes);
+      }
+      expect(await done).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

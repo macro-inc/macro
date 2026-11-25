@@ -39,7 +39,11 @@ export const PREWARM_QUIET_MS = 3_000;
 const IDLE_TIMEOUT_MS = 5_000;
 /** Channels neither opened nor kept ready for this long leave the device. */
 export const CHANNEL_EVICTION_AGE_MS = 30 * 86_400_000;
-const MAX_EVICTION_PASSES = 10;
+/**
+ * The most passes one round asks for. A pass ends after about 200 messages, at
+ * one channel or a few, so people's own writes get in between.
+ */
+const MAX_EVICTION_PASSES = 200;
 
 const JOINED = { channelIsParticipant: [true] };
 
@@ -226,20 +230,33 @@ export const prewarmChannels = (
 
 /**
  * Removes channels not opened or kept ready for thirty days, with their
- * messages; every tab hears which are gone. Completes with the number of
+ * messages; every tab hears which are gone. Each pass holds the cache engine,
+ * so it starts as the next channel to warm would. Completes with the number of
  * channels removed.
  */
-export const evictIdleChannels = (deps: {
-  host: Pick<CacheHost, 'channelTimelineEvict'>;
-  now?: () => number;
-}): Effect.Effect<number, unknown> =>
+export const evictIdleChannels = (
+  deps: Pick<ChannelPrewarmDeps, 'idle' | 'now' | 'paceMs'> & {
+    host: Pick<CacheHost, 'channelTimelineEvict'>;
+  }
+): Effect.Effect<number, unknown> =>
   Effect.gen(function* () {
     const { host } = deps;
     const span = Telemetry.span('channel.evict_idle');
-    yield* Effect.addFinalizer(() => Effect.sync(() => span.end()));
-    const touchedBeforeMs = (deps.now ?? Date.now)() - CHANNEL_EVICTION_AGE_MS;
     let evicted = 0;
-    for (let pass = 0; pass < MAX_EVICTION_PASSES; pass += 1) {
+    let passes = 0;
+    let more = true;
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        span.setAttr('evict.channels', evicted);
+        span.setAttr('evict.passes', passes);
+        span.setAttr('evict.more', more);
+        span.end();
+      })
+    );
+    const touchedBeforeMs = (deps.now ?? Date.now)() - CHANNEL_EVICTION_AGE_MS;
+    while (more && passes < MAX_EVICTION_PASSES) {
+      yield* Effect.sleep(deps.paceMs ?? PREWARM_PACE_MS);
+      yield* deps.idle;
       const result = yield* Effect.tryPromise({
         try: () =>
           host.channelTimelineEvict({
@@ -248,11 +265,10 @@ export const evictIdleChannels = (deps: {
           }),
         catch: (error) => error,
       });
-      if (result.kind === 'unsupported') break;
-      evicted += result.channelIds.length;
-      if (!result.hasMore) break;
+      passes += 1;
+      more = result.kind !== 'unsupported' && result.hasMore;
+      if (result.kind !== 'unsupported') evicted += result.channelIds.length;
     }
-    span.setAttr('evict.channels', evicted);
     return evicted;
   }).pipe(Effect.scoped);
 
