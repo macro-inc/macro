@@ -11,7 +11,10 @@ import type { CalendarEvent } from './types';
 import { CalendarDesktopPlacement } from './views/composer/CalendarDesktopPlacement';
 import { createStandaloneComposerSetup } from './views/composer/create-standalone-composer-setup';
 import { PhoneSheetComposer } from './views/composer/mobile/PhoneSheetComposer';
-import { StandaloneComposerActions } from './views/composer/StandaloneComposerActions';
+import {
+  StandaloneComposerActions,
+  StandaloneComposerForward,
+} from './views/composer/StandaloneComposerActions';
 
 export interface StandaloneComposerProps {
   event?: CalendarEvent;
@@ -33,6 +36,18 @@ export function CalendarComposerEditor(props: StandaloneComposerProps) {
   const resolveAppLink = useMacroMentionLinkResolver();
   const [attachHotkeys] = useHotkeyDOMScope('event-composer');
   const setup = createStandaloneComposerSetup(props);
+  const footerLeading = () => (
+    <Show when={props.event}>
+      {(event) => (
+        <StandaloneComposerForward
+          event={event()}
+          guestInvitesEnabled={setup.guestInvitesEnabled}
+          forwardEnabled={setup.forwardEnabled}
+          disabled={setup.model.formIsDisabled()}
+        />
+      )}
+    </Show>
+  );
   const extras = () => (
     <>
       <Show when={setup.suggestionsPending()}>
@@ -46,9 +61,8 @@ export function CalendarComposerEditor(props: StandaloneComposerProps) {
         {(event) => (
           <StandaloneComposerActions
             event={event()}
-            guestInvitesEnabled={setup.guestInvitesEnabled}
-            forwardEnabled={setup.forwardEnabled}
             disabled={!setup.model.canSave() || setup.model.options.pending}
+            recurring={setup.model.options.showRecurringEditNotice}
             replacementRequest={setup.replacementRequest}
             onDone={setup.saved}
           />
@@ -69,6 +83,7 @@ export function CalendarComposerEditor(props: StandaloneComposerProps) {
               onClose={props.onClose}
               saveError={setup.saveError()}
               resolveAppLink={resolveAppLink}
+              footerLeading={footerLeading()}
             >
               {extras()}
             </CalendarDesktopPlacement>
@@ -78,6 +93,7 @@ export function CalendarComposerEditor(props: StandaloneComposerProps) {
             initialHeight={props.initialDrawerHeight}
             saveError={setup.saveError()}
             resolveAppLink={resolveAppLink}
+            footerLeading={footerLeading()}
           >
             {extras()}
           </PhoneSheetComposer>

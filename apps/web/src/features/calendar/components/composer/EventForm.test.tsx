@@ -2,7 +2,14 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import 'fake-indexeddb/auto';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { type Accessor, type ComponentProps, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -29,9 +36,12 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
   },
 }));
 
+import { createCalendarComposer } from '../../primitives/create-calendar-composer';
+import { ComposerSubmit } from './actions/ComposerSubmit';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventForm } from './EventForm';
 import type { EventEditorCalendarOption } from './event-form-model';
+import { ComposerRoot } from './parts/ComposerRoot';
 
 class ObserverStub {
   observe() {}
@@ -500,4 +510,138 @@ it('removing Google Meet stays an ordinary save with no notice', async () => {
     expect.objectContaining({ conference: 'none' }),
     undefined
   );
+});
+
+// Exercise the shared submit control used by desktop, agent, and phone hosts.
+function showComposerSave(recurring: boolean, fullWidth = false) {
+  const onSubmit = vi.fn();
+  let model!: ReturnType<typeof createCalendarComposer>;
+  const [pending, setPending] = createSignal(false);
+  render(() => {
+    const controller = createCalendarEventFormController({
+      initialValue: {
+        title: 'Planning',
+        allDay: false,
+        start: '2030-01-01T12:00',
+        end: '2030-01-01T13:00',
+        recurrenceLines: recurring ? ['RRULE:FREQ=WEEKLY'] : [],
+        guests: '',
+        location: '',
+        description: '',
+        conference: 'none',
+        calendarId: WORK_CALENDAR.id,
+      },
+      isEdit: true,
+      calendarOptions: () => [WORK_CALENDAR],
+      guestOptions: () => [],
+    });
+    model = createCalendarComposer({
+      controller,
+      isEdit: true,
+      showRecurringEditNotice: recurring,
+      get pending() {
+        return pending();
+      },
+      initialMetadata: { visibility: 'public' },
+      guestPolicyEditable: true,
+      onSubmit,
+    });
+    return (
+      <ComposerRoot model={model}>
+        <ComposerSubmit fullWidth={fullWidth} />
+      </ComposerRoot>
+    );
+  });
+  const form = document.getElementById(model.ids.form);
+  if (!(form instanceof HTMLFormElement))
+    throw new Error('missing composer form');
+  return { onSubmit, form, model, setPending };
+}
+
+it.each([
+  { phone: false, scope: 'this_event', label: 'This event' },
+  { phone: false, scope: 'all', label: 'All events' },
+  { phone: true, scope: 'this_event', label: 'This event' },
+  { phone: true, scope: 'all', label: 'All events' },
+])(
+  'saves the chosen $scope scope only after selection (phone=$phone)',
+  async ({ phone, scope, label }) => {
+    const user = userEvent.setup();
+    const { onSubmit } = showComposerSave(true, phone);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('menuitem')).toHaveLength(2);
+    await user.click(screen.getByRole('menuitem', { name: label }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][1]).toBe(scope);
+  }
+);
+
+it('opens recurring scope from Enter and uses menu keyboard navigation to save', async () => {
+  const user = userEvent.setup();
+  const { onSubmit } = showComposerSave(true);
+  screen.getByRole('button', { name: 'Save' }).focus();
+  await user.keyboard('{Enter}');
+  expect(onSubmit).not.toHaveBeenCalled();
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('menuitem', { name: 'This event' })
+    )
+  );
+  await user.keyboard('{ArrowDown}{Enter}');
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  expect(onSubmit.mock.calls[0][1]).toBe('all');
+});
+
+it('prompts on recurring form submission and preserves the draft when dismissed', async () => {
+  const user = userEvent.setup();
+  const { onSubmit, form, model } = showComposerSave(true);
+  model.setVisibility('private');
+  fireEvent.submit(form);
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(screen.getByRole('menuitem', { name: 'This event' })).toBeTruthy();
+  await user.keyboard('{Escape}');
+  expect(model.visibility()).toBe('private');
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
+it('preserves occurrence metadata restrictions and blocks a pending scope choice', async () => {
+  const user = userEvent.setup();
+  const { onSubmit, model, setPending } = showComposerSave(true);
+  model.setVisibility('private');
+  model.controller.setGuestPolicy({
+    canModify: true,
+    canInviteOthers: true,
+    canSeeOtherGuests: true,
+  });
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await user.click(screen.getByRole('menuitem', { name: 'This event' }));
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  expect(onSubmit.mock.calls[0][1]).toBe('this_event');
+  expect(onSubmit.mock.calls[0][2]?.visibility).toBeUndefined();
+  expect(onSubmit.mock.calls[0][0].guestPolicy).toBeUndefined();
+  expect(onSubmit.mock.calls[0][0].recurrenceLines).toBeUndefined();
+  expect(model.visibility()).toBe('private');
+  expect(model.controller.guestPolicy().canModify).toBe(true);
+  setPending(true);
+  model.submitWithScope('all');
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  setPending(false);
+  model.submitWithScope('all');
+  expect(onSubmit).toHaveBeenCalledTimes(2);
+  expect(onSubmit.mock.calls[1][1]).toBe('all');
+  expect(onSubmit.mock.calls[1][2]?.visibility).toBe('private');
+  expect(onSubmit.mock.calls[1][0].guestPolicy?.canModify).toBe(true);
+  expect(onSubmit.mock.calls[1][0].recurrenceLines).toEqual([
+    'RRULE:FREQ=WEEKLY',
+  ]);
+});
+
+it('saves a non-recurring edit directly without requesting a scope', async () => {
+  const user = userEvent.setup();
+  const { onSubmit } = showComposerSave(false);
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  expect(onSubmit.mock.calls[0][1]).toBeUndefined();
+  expect(screen.queryByRole('menu')).toBeNull();
 });

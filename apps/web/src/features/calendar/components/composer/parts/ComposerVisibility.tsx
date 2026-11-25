@@ -8,10 +8,7 @@ const VALUES = ['default', 'public', 'private'] as const;
 
 export function ComposerVisibility(props: { size?: 'sm' | 'md' } = {}) {
   const model = useCalendarComposer();
-  const unavailable = () => model.editScope() === 'this_event';
-  const reason = () =>
-    model.options.visibilityReadOnlyReason ??
-    (unavailable() ? t('calendar.visibilityUnavailable') : undefined);
+  const reason = () => model.options.visibilityReadOnlyReason;
   const labels = {
     get default() {
       return t('calendar.visibilityDefault');
@@ -29,7 +26,6 @@ export function ComposerVisibility(props: { size?: 'sm' | 'md' } = {}) {
   };
   const label = () => {
     if (model.options.visibilityReadOnlyReason) return t('calendar.visibility');
-    if (unavailable()) return t('calendar.visibilityUnavailable');
     const value = displayedVisibility();
     return value ? labels[value] : t('calendar.visibility');
   };

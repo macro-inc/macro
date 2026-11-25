@@ -3,7 +3,7 @@ import { SheetGroup } from '@components/app/mobile/SheetGroup';
 import { SheetRow } from '@components/app/mobile/SheetRow';
 import ShieldIcon from '@icon/system/regular/shield-check.svg';
 import { Checkbox } from '@ui';
-import { For, Show } from 'solid-js';
+import { For } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { createComposerGuestPermissions } from '../../../primitives/create-composer-guest-permissions';
 
@@ -43,9 +43,6 @@ export function MobileComposerGuestPermissions() {
           </SheetRow>
         )}
       </For>
-      <Show when={model.guestPolicy.disabledReason}>
-        {(reason) => <p class="px-3 pb-2 text-xs text-ink-muted">{reason()}</p>}
-      </Show>
     </SheetGroup>
   );
 }

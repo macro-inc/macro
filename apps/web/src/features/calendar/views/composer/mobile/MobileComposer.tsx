@@ -22,7 +22,6 @@ import { ComposerDeclineMessage } from '../../../components/composer/parts/Compo
 import { ComposerDescription } from '../../../components/composer/parts/ComposerDescription';
 import { ComposerLocation } from '../../../components/composer/parts/ComposerLocation';
 import { ComposerNotices } from '../../../components/composer/parts/ComposerNotices';
-import { ComposerScope } from '../../../components/composer/parts/ComposerScope';
 import { PhoneComposerMenuRoot } from '../../../components/composer/phone-menu/PhoneComposerMenuRoot';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { usePhoneComposerMenu } from '../../../context/phone-composer-menu-context';
@@ -49,6 +48,7 @@ export interface MobileComposerProps {
   scrollElement: Accessor<HTMLElement | undefined>;
   titleIcon?: JSX.Element;
   saveError?: string;
+  footerLeading?: JSX.Element;
   resolveAppLink?: ComponentProps<typeof ComposerDescription>['resolveAppLink'];
 }
 
@@ -118,7 +118,6 @@ function MobileComposerFields(props: ParentProps<MobileComposerProps>) {
       scrollElement={props.scrollElement}
       keyboardVisible={virtualKeyboardVisible()}
     >
-      <ComposerScope />
       <Show when={props.saveError}>
         {(error) => (
           <p role="alert" class="pb-2 text-sm text-failure">
@@ -126,7 +125,12 @@ function MobileComposerFields(props: ParentProps<MobileComposerProps>) {
           </p>
         )}
       </Show>
-      <ComposerSubmit fullWidth />
+      <div class="flex items-center gap-2">
+        {props.footerLeading}
+        <div class="min-w-0 flex-1">
+          <ComposerSubmit fullWidth />
+        </div>
+      </div>
     </SheetFooter>
   );
   return (

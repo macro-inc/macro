@@ -16,7 +16,11 @@ type DesktopPlacementProps = ParentProps<{
 import type { DesktopComposerProps } from './DesktopComposer';
 
 type CalendarDesktopPlacementProps = ParentProps<
-  DesktopComposerProps & DesktopPlacementProps & { pinned?: boolean }
+  DesktopComposerProps &
+    DesktopPlacementProps & {
+      pinned?: boolean;
+      footerLeading?: JSX.Element;
+    }
 >;
 
 /** Placement changes only the chrome; the mounted field tree retains its owner and inputs. */
@@ -50,7 +54,11 @@ export function CalendarDesktopPlacement(props: CalendarDesktopPlacementProps) {
       >
         {props.children}
       </DesktopComposerFields>
-      <DesktopComposerFooter f3 onCancel={props.onClose} />
+      <DesktopComposerFooter
+        f3
+        onCancel={props.onClose}
+        leading={props.footerLeading}
+      />
     </div>
   );
 }

@@ -206,16 +206,6 @@ export function PhoneWhen(props: {
           <MobileComposerRecurrence />
         </SheetGroup>
       </div>
-      <Show when={model.recurrenceScopeReason()}>
-        {(reason) => (
-          <p
-            id={model.ids.recurrenceReason}
-            class="px-3 text-xs text-ink-muted"
-          >
-            {reason()}
-          </p>
-        )}
-      </Show>
       <ComposerRangeFeedback />
     </>
   );

@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
-import { Dropdown, Tooltip } from '@ui';
+import { Dropdown } from '@ui';
 import { batch, For, on, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { recurrencePresetsFor } from '../../../utils/recurrence';
@@ -10,9 +10,7 @@ import { CustomRecurrenceDialog } from './CustomRecurrenceDialog';
 export function ComposerRecurrence(props: { size?: 'sm' | 'md' } = {}) {
   const model = useCalendarComposer();
   const when = model.when;
-  const reason = model.recurrenceScopeReason;
-  const disabled = () =>
-    model.fieldIsDisabled('recurrence') || Boolean(reason());
+  const disabled = () => model.fieldIsDisabled('recurrence');
   // Permission changes close the dialog and discard its uncommitted draft.
   const [customOpen, setCustomOpen] = createWritableMemo(
     on(disabled, () => false)
@@ -31,26 +29,22 @@ export function ComposerRecurrence(props: { size?: 'sm' | 'md' } = {}) {
           else when.close('repeat');
         }}
       >
-        <Tooltip label={reason() ?? ''} disabled={!reason()}>
-          <Dropdown.Trigger
-            variant="value"
-            finish="flat"
-            size={props.size ?? 'sm'}
-            aria-label={t('calendar.composerRepeats')}
-            aria-readonly={Boolean(reason()) || undefined}
-            aria-describedby={model.recurrenceDescribedBy()}
-            disabled={model.fieldIsDisabled('recurrence')}
-          >
-            <span>{model.controller.selectedRecurrenceOption().label}</span>
-            <CaretDownIcon class="size-3.5" />
-          </Dropdown.Trigger>
-        </Tooltip>
+        <Dropdown.Trigger
+          variant="value"
+          finish="flat"
+          size={props.size ?? 'sm'}
+          aria-label={t('calendar.composerRepeats')}
+          disabled={model.fieldIsDisabled('recurrence')}
+        >
+          <span>{model.controller.selectedRecurrenceOption().label}</span>
+          <CaretDownIcon class="size-3.5" />
+        </Dropdown.Trigger>
         <Dropdown.Content portalScope="local" class="min-w-48">
           <Dropdown.Group>
             <Dropdown.RadioGroup
               value={model.controller.recurrenceChoice()}
               onChange={(value) => {
-                if (!reason()) model.controller.changeRecurrenceChoice(value);
+                if (!disabled()) model.controller.changeRecurrenceChoice(value);
               }}
             >
               <For
@@ -61,7 +55,7 @@ export function ComposerRecurrence(props: { size?: 'sm' | 'md' } = {}) {
                 {(option) => (
                   <Dropdown.RadioItem
                     value={option.value}
-                    disabled={Boolean(reason())}
+                    disabled={disabled()}
                     closeOnSelect
                   >
                     <span class="flex-1">{option.label}</span>

@@ -56,16 +56,6 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
       <ComposerFieldRow icon={<RepeatIcon class="size-4" />}>
         <ComposerRecurrence />
       </ComposerFieldRow>
-      <Show when={model.recurrenceScopeReason()}>
-        {(reason) => (
-          <p
-            id={model.ids.recurrenceReason}
-            class="pl-[30px] text-xs text-ink-muted"
-          >
-            {reason()}
-          </p>
-        )}
-      </Show>
       <Switch>
         <Match when={!model.isOutOfOffice()}>
           <Show when={descriptionInMainFields}>

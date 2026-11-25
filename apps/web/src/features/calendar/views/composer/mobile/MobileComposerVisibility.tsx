@@ -19,8 +19,6 @@ export function MobileComposerVisibility() {
     model.visibility() === 'confidential' ? 'private' : model.visibility();
   const label = () => {
     if (model.options.visibilityReadOnlyReason) return t('calendar.visibility');
-    if (model.editScope() === 'this_event')
-      return t('calendar.visibilityUnavailable');
     return (
       choices().find((choice) => choice.value === selected())?.label ??
       t('calendar.visibility')

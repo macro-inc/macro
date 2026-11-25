@@ -166,9 +166,7 @@ function CustomRepeatPage() {
 export function MobileComposerRecurrence() {
   const model = useCalendarComposer();
   const menus = usePhoneComposerMenu();
-  const disabled = () =>
-    model.fieldIsDisabled('recurrence') ||
-    Boolean(model.recurrenceScopeReason());
+  const disabled = () => model.fieldIsDisabled('recurrence');
   return (
     <>
       <PhoneMenu

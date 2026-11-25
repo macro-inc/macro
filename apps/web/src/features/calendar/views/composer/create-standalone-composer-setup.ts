@@ -1,5 +1,6 @@
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { CalendarUpdateScope } from '@service-email/client';
 import type { StandaloneComposerProps } from '../../CalendarComposerEditor';
 import { useDayDraftRange } from '../../context/day-draft-range-context';
 import {
@@ -104,8 +105,8 @@ export function createStandaloneComposerSetup(props: StandaloneComposerProps) {
   return {
     model,
     saveError: editor.saveError,
-    replacementRequest: () => {
-      const submission = model.submission();
+    replacementRequest: (scope?: CalendarUpdateScope) => {
+      const submission = model.submission(scope);
       if (!submission) return;
       return editor.replacementRequest(
         submission.values,

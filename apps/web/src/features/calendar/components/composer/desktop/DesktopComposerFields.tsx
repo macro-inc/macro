@@ -174,16 +174,6 @@ export function DesktopComposerFields(props: {
             {date()}
           </ComposerFieldRow>
         </Show>
-        <Show when={model.recurrenceScopeReason()}>
-          {(reason) => (
-            <p
-              id={model.ids.recurrenceReason}
-              class="pl-8 text-xs text-ink-muted"
-            >
-              {reason()}
-            </p>
-          )}
-        </Show>
         <Switch>
           <Match when={!model.isOutOfOffice()}>
             <ComposerFieldRow

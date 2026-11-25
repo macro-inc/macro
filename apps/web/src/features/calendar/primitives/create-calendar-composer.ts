@@ -1,4 +1,3 @@
-import { t } from '@app/lib/i18n';
 import type { EventTransparency } from '@service-calendar/generated/schemas/eventTransparency';
 import type { EventVisibility } from '@service-calendar/generated/schemas/eventVisibility';
 import type { CalendarUpdateScope } from '@service-email/client';
@@ -30,7 +29,6 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     form: `calendar-composer-${id}`,
     dateRangeError: `calendar-composer-range-${id}`,
     pastEventWarning: `calendar-composer-past-${id}`,
-    recurrenceReason: `calendar-composer-repeat-${id}`,
   };
   const isEdit = () => options.isEdit ?? false;
   const formIsDisabled = () => options.pending || options.disabled === true;
@@ -38,14 +36,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     options.disabledFields?.[field] === true;
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     formIsDisabled() || fieldIsReadOnly(field);
-  const [editScope, setEditScope] = createSignal<CalendarUpdateScope>('all');
-  const changeEditScope = (scope: CalendarUpdateScope) => {
-    setEditScope(scope);
-    if (scope === 'this_event') {
-      controller.resetGuestPolicy();
-      metadata.resetVisibility();
-    }
-  };
+  const [saveMenuOpen, setSaveMenuOpen] = createSignal(false);
   const detailsLocked = () => options.detailsReadOnlyReason !== undefined;
   const pastEventWarning = () =>
     eventDateValidationError(state()) ||
@@ -61,10 +52,6 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     )
       return ids.dateRangeError;
     return pastEventWarning() ? ids.pastEventWarning : undefined;
-  };
-  const recurrenceScopeReason = () => {
-    if (editScope() !== 'this_event' || detailsLocked()) return undefined;
-    return t('calendar.recurrenceScopeReason');
   };
   const capabilities = () => controller.selectedCalendarOption()?.capabilities;
   const conferenceLocked = () => {
@@ -100,11 +87,8 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     if (timeZoneIsDisabled()) return false;
     return metadata.setTimeZone(zone);
   };
-  // Occurrence readbacks omit visibility overrides, so do not expose a write-only choice.
   const visibilityIsDisabled = () =>
-    metadataIsDisabled() ||
-    editScope() === 'this_event' ||
-    options.visibilityReadOnlyReason !== undefined;
+    metadataIsDisabled() || options.visibilityReadOnlyReason !== undefined;
   const setVisibility = (visibility: EventVisibility) => {
     if (!visibilityIsDisabled()) metadata.setVisibility(visibility);
   };
@@ -200,11 +184,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     },
     onChange: controller.setGuestPolicy,
     get disabled() {
-      return formIsDisabled() || editScope() === 'this_event';
-    },
-    get disabledReason() {
-      if (editScope() !== 'this_event') return undefined;
-      return t('calendar.guestPolicyScopeReason');
+      return formIsDisabled();
     },
   };
 
@@ -216,7 +196,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     })
   );
 
-  const submission = () => {
+  const submission = (requestedScope: CalendarUpdateScope = 'all') => {
     const submission = preparedSubmission();
     if (!submission) return;
     const customRuleInNewZone =
@@ -237,17 +217,41 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
         ),
       };
     }
-    const scope = options.showRecurringEditNotice ? editScope() : undefined;
-    return { values, scope, changes: submission.changes };
+    const scope = options.showRecurringEditNotice ? requestedScope : undefined;
+    const changes = { ...submission.changes };
+    // Scope belongs to this save, not the draft. Keep series-only edits available
+    // for a later retry, but never send them as an occurrence override.
+    if (scope === 'this_event') {
+      delete changes.visibility;
+      values = {
+        ...values,
+        guestPolicy: undefined,
+        recurrenceLines: undefined,
+      };
+    }
+    return { values, scope, changes };
   };
-  const submit = () => {
-    const prepared = submission();
-    if (!prepared || formIsDisabled()) return;
+  const submitWithScope = (scope?: CalendarUpdateScope) => {
+    if (formIsDisabled() || !canSave()) return;
+    if (options.showRecurringEditNotice) {
+      if (!scope) {
+        setSaveMenuOpen(true);
+        return;
+      }
+    }
+    const prepared = submission(scope);
+    if (!prepared) return;
+    setSaveMenuOpen(false);
     if (Object.keys(prepared.changes).length > 0) {
       options.onSubmit(prepared.values, prepared.scope, prepared.changes);
     } else {
       options.onSubmit(prepared.values, prepared.scope);
     }
+  };
+  const submit = () => submitWithScope();
+  const changeSaveMenuOpen = (open: boolean) => {
+    if (open && (formIsDisabled() || !canSave())) return;
+    setSaveMenuOpen(open);
   };
 
   const when = createComposerWhen({
@@ -282,13 +286,10 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     formIsDisabled,
     fieldIsReadOnly,
     fieldIsDisabled,
-    editScope,
-    changeEditScope,
+    saveMenuOpen,
+    changeSaveMenuOpen,
     detailsLocked,
     pastEventWarning,
-    recurrenceScopeReason,
-    recurrenceDescribedBy: () =>
-      recurrenceScopeReason() ? ids.recurrenceReason : undefined,
     capabilities,
     calendarColor: () =>
       controller.selectedCalendarOption()?.color ??
@@ -303,6 +304,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     guestPolicy,
     submission,
     submit,
+    submitWithScope,
   };
 }
 

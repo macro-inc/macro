@@ -4,6 +4,10 @@
 
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import {
+  StandaloneComposerActions,
+  StandaloneComposerForward,
+} from '@app/features/calendar/views/composer/StandaloneComposerActions';
 import type { IUser } from '@core/user/types';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
@@ -18,8 +22,13 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
   failure: vi.fn(),
   alert: vi.fn(),
+  startReplacement: vi.fn(),
 }));
 
+vi.mock('@app/features/calendar/views/event-replacement', () => ({
+  useEventReplacement: () => ({ start: mocks.startReplacement }),
+  EventReplacement: () => null,
+}));
 vi.mock('@core/component/UserIcon', () => ({
   UserIcon: () => document.createElement('span'),
 }));
@@ -200,6 +209,7 @@ beforeEach(() => {
     threadId: 'thread-1',
   });
   Element.prototype.scrollIntoView = vi.fn();
+  vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
 
@@ -659,3 +669,110 @@ describe('forwarding the invitation from event details', () => {
     ).toBeNull();
   });
 });
+
+it('forwards through the labelled composer footer action without editing the guest list', async () => {
+  const user = userEvent.setup();
+  render(() => (
+    <footer>
+      <StandaloneComposerForward
+        event={event({ viewerCan: { ...MAY_INVITE, inviteGuests: false } })}
+        guestInvitesEnabled={() => true}
+        forwardEnabled={() => true}
+        disabled={false}
+      />
+    </footer>
+  ));
+  const forward = screen.getByRole('button', { name: 'Forward invitation' });
+  expect(forward.textContent).toBe('Forward invitation');
+  expect(forward.closest('footer')).not.toBeNull();
+  await user.click(forward);
+  await user.click(
+    screen.getByRole('button', { name: 'Suggest Ada Lovelace' })
+  );
+  await user.click(screen.getByRole('button', { name: 'Forward' }));
+  expect(mocks.forward).toHaveBeenCalledWith(
+    expect.objectContaining({
+      eventId: 'event-1',
+      recipients: [{ email: 'ada@example.com', name: 'Ada Lovelace' }],
+    })
+  );
+  expect(mocks.invite).not.toHaveBeenCalled();
+});
+
+it('keeps the composer footer forwarding action gated by permissions and pending state', () => {
+  const [disabled, setDisabled] = createSignal(true);
+  const [enabled, setEnabled] = createSignal(true);
+  const [current, setCurrent] = createSignal(
+    event({ viewerCan: { ...MAY_INVITE, inviteGuests: false } })
+  );
+  render(() => (
+    <StandaloneComposerForward
+      event={current()}
+      guestInvitesEnabled={() => true}
+      forwardEnabled={enabled}
+      disabled={disabled()}
+    />
+  ));
+  expect(
+    screen.getByRole('button', { name: 'Forward invitation' })
+  ).toHaveProperty('disabled', true);
+  setDisabled(false);
+  expect(
+    screen.getByRole('button', { name: 'Forward invitation' })
+  ).toHaveProperty('disabled', false);
+  setEnabled(false);
+  expect(
+    screen.queryByRole('button', { name: 'Forward invitation' })
+  ).toBeNull();
+  setEnabled(true);
+  setCurrent(
+    event({
+      isCancelled: true,
+      viewerCan: { ...MAY_INVITE, inviteGuests: false },
+    })
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Forward invitation' })
+  ).toBeNull();
+});
+
+it.each([
+  { scope: 'this_event', label: 'This event' },
+  { scope: 'all', label: 'All events' },
+])(
+  'preserves $scope for recurring conference replacement',
+  async ({ scope, label }) => {
+    const user = userEvent.setup();
+    const replacementRequest = vi.fn(() => ({
+      target: { eventId: 'event-1', calendarId: 'calendar-1' },
+      changes: { title: 'Planning' },
+    }));
+    render(() => (
+      <StandaloneComposerActions
+        event={event({
+          calendar: {
+            id: 'calendar-1',
+            provider: 'outlook',
+            color: 'orange',
+            name: 'Work',
+          },
+          conferenceUrl: 'https://example.com/meeting',
+          viewerCan: { ...MAY_INVITE, organize: true },
+        })}
+        recurring
+        disabled={false}
+        replacementRequest={replacementRequest}
+        onDone={vi.fn()}
+      />
+    ));
+    await user.click(
+      screen.getByRole('button', { name: 'Replace without meeting' })
+    );
+    expect(replacementRequest).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('menuitem', { name: label }));
+    expect(replacementRequest).toHaveBeenCalledWith(scope);
+    expect(mocks.startReplacement).toHaveBeenCalledWith(
+      replacementRequest.mock.results[0].value
+    );
+  }
+);
