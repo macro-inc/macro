@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   calls: [] as string[],
   nativeMobile: false,
   user: (): unknown => undefined,
-  succeeded: () => false,
+  succeeded: (): boolean => false,
   onNavigate: () => {},
 }));
 
