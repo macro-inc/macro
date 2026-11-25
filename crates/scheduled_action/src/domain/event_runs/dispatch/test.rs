@@ -652,3 +652,64 @@ async fn without_their_rollout_label_filters_leave_a_receipt_condition_in_place(
         );
     }
 }
+
+#[tokio::test]
+async fn without_their_rollout_label_runs_keep_their_inbox_for_receipt_filters() {
+    const INBOX: &str = "01900000-0000-7000-8000-0000000000a1";
+    const ELSEWHERE: &str = "01900000-0000-7000-8000-0000000000a2";
+    let received = |inbox: &str| -> EventReference {
+        serde_json::from_value(json!({
+            "event_id": generate_uuid_v7(), "event_name": "email.message_received",
+            "entity_id": generate_uuid_v7(), "message_id": generate_uuid_v7(),
+            "labels_gained": [generate_uuid_v7()], "inbox": inbox,
+        }))
+        .unwrap()
+    };
+    let filters = json!([
+        { "events": ["email.message_received"], "inboxes": [INBOX], "condition": "Is this an invoice?" },
+        { "events": ["email.message_received"], "inboxes": [ELSEWHERE] },
+        { "events": ["email.labeled"] },
+    ]);
+    // Into the inbox with a condition: the other inbox's filter adds nothing.
+    let (repo, access, executor, _) = setup();
+    let mut config = configuration();
+    config.filters = serde_json::from_value(filters.clone()).unwrap();
+    let pending = PendingEventRun {
+        action_id: config.action_id,
+        revision: config.revision,
+        event: received(INBOX),
+        admitted_at: Utc::now(),
+        traceparent: None,
+    };
+    repo.0.lock().unwrap().configurations = vec![config.clone()];
+    repo.0.lock().unwrap().pending = vec![pending.clone()];
+    let conditions = Arc::new(Conditions::default());
+    conditions
+        .verdicts
+        .lock()
+        .unwrap()
+        .push_back(Ok(ConditionVerdict::NotMet(probability(0.25))));
+    let service = EventDispatchService::new(repo, access, executor, EmailLabelsOff)
+        .with_conditions(conditions.clone());
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::ConditionNotMet)
+    );
+
+    // Into an inbox no receipt filter picks: only the label filter took it.
+    let (repo, access, executor, _) = setup();
+    let pending = PendingEventRun {
+        action_id: config.action_id,
+        revision: config.revision,
+        event: received("01900000-0000-7000-8000-0000000000a3"),
+        admitted_at: Utc::now(),
+        traceparent: None,
+    };
+    repo.0.lock().unwrap().configurations = vec![config];
+    repo.0.lock().unwrap().pending = vec![pending.clone()];
+    let service = EventDispatchService::new(repo, access, executor, EmailLabelsOff);
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+}

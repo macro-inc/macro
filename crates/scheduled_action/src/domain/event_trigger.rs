@@ -1070,18 +1070,12 @@ impl EventReference {
             EventSource::Github(_) => &[],
         }
     }
-    /// The same event without the labels its thread gained, as a routine
-    /// with no label filters keeps it.
+    /// The same event without the labels its thread gained. It keeps its
+    /// inbox, so filters that pick inboxes still judge it by its own.
     pub fn without_labels(&self) -> Self {
         let mut event = self.clone();
-        if let EventSource::Entity {
-            labels_gained,
-            inbox,
-            ..
-        } = &mut event.source
-        {
+        if let EventSource::Entity { labels_gained, .. } = &mut event.source {
             labels_gained.clear();
-            *inbox = None;
         }
         event
     }
