@@ -12,7 +12,7 @@ cargo build --release --locked -p hosted_runtimes --features runtime-update-cli 
 manifest="$ARTIFACT_DIR/manifest.json"
 digest=$(jq -er --arg version "$SOURCE_SHA" \
   'select(.version == $version) | .digest | select(test("^[a-f0-9]{64}$"))' "$manifest")
-url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 3600 \
+url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 7200 \
   "s3://$bucket/agent-runtime-bundles/$SOURCE_SHA/runtime.tar.zst")
 echo "::add-mask::$url"
 jq -n --arg version "$SOURCE_SHA" --arg digest "$digest" --arg url "$url" \

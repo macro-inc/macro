@@ -256,8 +256,10 @@ impl ComputerMoves for PgComputerRepo {
                 SELECT 1 FROM computer_move
                 WHERE computer_id = $1 AND stage IN ('cutting_over', 'rolling_back')
             ) OR EXISTS (
-                SELECT 1 FROM image_upgrade_computer
-                WHERE computer_id = $1 AND state IN ('replacing', 'verifying', 'rolling_back')
+                SELECT 1 FROM image_upgrade_computer plan
+                JOIN image_upgrade batch ON batch.id = plan.upgrade_id
+                WHERE plan.computer_id = $1 AND batch.finished_at IS NULL
+                  AND plan.state IN ('replacing', 'verifying', 'rolling_back')
             ) OR EXISTS (
                 SELECT 1 FROM agent_runtime_update WHERE computer_id = $1 AND outcome IS NULL
             ) AS "held!"

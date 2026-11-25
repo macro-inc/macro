@@ -27,6 +27,14 @@ if ! runuser -u macro -- git -C /home/macro/agent/workspace diff --cached --quie
   runuser -u macro -- git -C /home/macro/agent/workspace -c user.name=Fixture -c user.email=fixture@example.com commit -qm baseline
 fi
 for file in events done log; do runuser -u macro -- touch "/home/macro/.fixture/$file"; done
+mkdir -p /opt/fixture/hooks
+cat > /opt/fixture/bin/observe-config <<SCRIPT
+#!$bin/bash
+touch /home/macro/.fixture/checkout-config-invoked
+exit 1
+SCRIPT
+chmod +x /opt/fixture/bin/observe-config
+ln -s /opt/fixture/bin/observe-config /opt/fixture/hooks/post-index-change
 cat > /opt/fixture/bin/curl <<CURL
 #!$bin/bash
 set -eu
@@ -38,8 +46,10 @@ chmod +x /opt/fixture/bin/curl
   echo "#!$bin/bash"
   cat <<CONFIG
 set -euo pipefail
-export PATH=/opt/fixture/bin:$bin
+export PATH=/opt/fixture/bin:$(dirname "$(find /nix/store -maxdepth 3 -path "*/bin/python3" -print -quit)"):$bin
 self=\$0
+image_system=/opt/fixture/system
+file_helper=/fixture/agent-runtime-files.py
 workspace=/home/macro/agent/workspace
 last_good=/home/macro/agent/state/last-good
 boot_head=/home/macro/agent/state/boot-head
@@ -92,21 +102,28 @@ After=
 ExecStart=
 ExecStart=/opt/fixture/bin/start-agent run
 ExecStopPost=
-WorkingDirectory=/home/macro
+WorkingDirectory=/
 ProtectHome=no
-ProtectSystem=no
+ProtectSystem=strict
 BindPaths=
+BindPaths=/home/macro/agent /home/macro/.fixture
 BindReadOnlyPaths=
+BindReadOnlyPaths=/home/.macro-agent-runtime
 LoadCredential=
 ReadWritePaths=
+ReadWritePaths=/run/macro-agent-runtime/receipts /home/macro/agent /home/macro/.fixture
 InaccessiblePaths=
+InaccessiblePaths=/home/macro/fixture-private
 Restart=no
-Group=macro
+Group=macro-agent
 UNIT
 cat > /run/systemd/system/macro-agent-runtime-recover.service <<UNIT
 [Service]
 Type=oneshot
 ExecStart=/opt/fixture/bin/update recover
+ExecStopPost=/opt/fixture/bin/update unfence
+Restart=on-failure
+RestartSec=1
 UNIT
 install -d /run/systemd/system/macrod.service.d
 cat > /run/systemd/system/macrod.service.d/fixture.conf <<UNIT
@@ -118,5 +135,10 @@ After=
 ExecStart=
 ExecStart=$bin/sleep infinity
 UNIT
+install -d -o macro -g macro /home/macro/fixture-private
+echo private >/home/macro/fixture-private/data
+install -d /opt/fixture/{first-image,next-image}
+ln -s /opt/fixture/first-image /opt/fixture/system
+/opt/fixture/bin/update boot
 systemctl daemon-reload
 systemctl restart macrod macro-agent

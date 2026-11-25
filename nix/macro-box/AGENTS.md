@@ -41,7 +41,11 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   dependency manifest for service-only compatibility checks. The
   `macro-agent-runtime-update` root helper stages immutable bundles and
   keeps the atomic selection and recovery journal in `/home/.macro-agent-runtime`.
-  The ordered boot unit reconciles interruptions before the agent starts.
+  The ordered boot unit reconciles interruptions before the agent starts
+  and resets the selection when the system image changes. Inspection uses
+  the running agent's mount namespace and a root-owned Git metadata view
+  with isolated configuration. The controller checks the guest journal
+  before accepting a terminal result.
   The launcher preloads Muppet's `host/maintenance.ts` when present in the
   selected runtime. The starter's optional bridge calls into it after
   `markHealthy` and registers detached work. Earlier images and agent repos

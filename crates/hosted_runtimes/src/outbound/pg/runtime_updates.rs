@@ -64,8 +64,10 @@ impl RuntimeUpdates for PgComputerRepo {
                 SELECT 1 FROM computer_move WHERE computer_id = $1
                   AND stage IN ('seeding', 'cutting_over', 'verifying', 'rolling_back')
             ) AND NOT EXISTS (
-                SELECT 1 FROM image_upgrade_computer WHERE computer_id = $1
-                  AND state IN ('replacing', 'verifying', 'rolling_back')
+                SELECT 1 FROM image_upgrade_computer plan
+                JOIN image_upgrade batch ON batch.id = plan.upgrade_id
+                WHERE plan.computer_id = $1 AND batch.finished_at IS NULL
+                  AND plan.state IN ('replacing', 'verifying', 'rolling_back')
             )
             ON CONFLICT (computer_id) WHERE outcome IS NULL DO NOTHING
             RETURNING id
@@ -107,7 +109,7 @@ impl RuntimeUpdates for PgComputerRepo {
         let row = sqlx::query!(
             r#"
             WITH candidate AS (
-                SELECT id FROM agent_runtime_update
+                SELECT id, lease_holder IS NOT NULL AS attempted FROM agent_runtime_update
                 WHERE outcome IS NULL AND lease_until <= now()
                 ORDER BY lease_until, id LIMIT 1 FOR UPDATE SKIP LOCKED
             )
@@ -115,7 +117,7 @@ impl RuntimeUpdates for PgComputerRepo {
             SET lease_holder = $1, lease_until = now() + $2::bigint * interval '1 second'
             FROM candidate WHERE item.id = candidate.id
             RETURNING item.id, item.computer_id, item.version, item.digest,
-                      item.source_url AS "source_url!", item.deadline_at
+                      item.source_url AS "source_url!", item.deadline_at, candidate.attempted AS "attempted!"
             "#,
             holder,
             lease.num_seconds(),
@@ -131,6 +133,7 @@ impl RuntimeUpdates for PgComputerRepo {
                 url: row.source_url,
             },
             deadline: row.deadline_at,
+            attempted: row.attempted,
         }))
     }
 

@@ -355,13 +355,15 @@ let
       pkgs.curl
       pkgs.findutils
       pkgs.git
-      pkgs.gnutar
       pkgs.jq
+      pkgs.python3
       pkgs.util-linux
       pkgs.zstd
     ];
     text = ''
       self=$0
+      image_system=/run/current-system
+      file_helper=${./files/agent-runtime-files.py}
       workspace=${workspace}
       last_good=${lastGood}
       boot_head=${bootHead}
@@ -529,8 +531,11 @@ in
       description = "Recover a failed agent runtime update";
       serviceConfig = {
         Type = "oneshot";
-        TimeoutStartSec = 240;
+        TimeoutStartSec = 330;
+        Restart = "on-failure";
+        RestartSec = 2;
         ExecStart = "${lib.getExe runtimeUpdate} recover";
+        ExecStopPost = "${lib.getExe runtimeUpdate} unfence";
       };
     };
 

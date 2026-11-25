@@ -73,6 +73,8 @@ pub struct RuntimeUpdate {
     pub bundle: RuntimeBundle,
     /// Upper bound on retries.
     pub deadline: DateTime<Utc>,
+    /// Whether a previous lease may already have reached the guest.
+    pub attempted: bool,
 }
 
 /// Runtime update request storage.
@@ -120,4 +122,9 @@ pub trait GuestRuntimeUpdate: Send + Sync {
         computer: ComputerId,
         bundle: &RuntimeBundle,
     ) -> impl Future<Output = Result<RuntimeUpdateOutcome, Self::Err>> + Send;
+    /// Confirm there is no live transaction or recovery in the guest.
+    fn runtime_update_settled(
+        &self,
+        computer: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }

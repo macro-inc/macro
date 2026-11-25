@@ -8,7 +8,7 @@ CREATE TABLE agent_runtime_update (
     version TEXT NOT NULL CHECK (version ~ '^[0-9a-f]{40}$'),
     digest TEXT NOT NULL CHECK (digest ~ '^[0-9a-f]{64}$'),
     source_url TEXT,
-    deadline_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '40 minutes'),
+    deadline_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '65 minutes'),
     lease_until TIMESTAMPTZ NOT NULL DEFAULT now(),
     lease_holder UUID,
     outcome TEXT CHECK (outcome IN ('applied', 'refused', 'rolled_back', 'rollback_failed', 'expired')),

@@ -7,6 +7,7 @@
 
 import { errorMessage } from '../../core/error.ts';
 import { source } from '../../core/event.ts';
+import { hostedMaintenance } from '../../core/maintenance.ts';
 import type { Clock } from '../time/index.ts';
 import {
   instant,
@@ -103,6 +104,17 @@ const changeRun = (
     : { ...table, [name]: { ...entry, run: change(entry.run) } };
 };
 
+/** A normal restart keeps the existing policy for interrupted schedules. */
+const recover = (table: Table): Table =>
+  Object.values(table).some((entry) => entry.run.running === true)
+    ? Object.fromEntries(
+        Object.entries(table).map(([name, entry]) => {
+          const { running: _, ...run } = entry.run;
+          return [name, { ...entry, run }];
+        })
+      )
+    : table;
+
 const start = (table: Table, fire: Fire, now: Temporal.Instant): Table =>
   changeRun(table, fire.name, (run) => ({
     ...run,
@@ -130,6 +142,7 @@ export const scheduler = ({
   clock,
   tz,
   signal,
+  recoverPending = hostedMaintenance()?.recoverSchedules,
 }: {
   readonly store: ScheduleStore;
   readonly clock: Clock;
@@ -137,8 +150,11 @@ export const scheduler = ({
   readonly tz: string;
   /** Ends `fired`, e.g. on shutdown. */
   readonly signal?: AbortSignal;
+  /** A maintenance handoff replays pending occurrences once, then acknowledges them. */
+  readonly recoverPending?: () => Promise<void>;
 }): Schedules => {
   const zone = timeZone(tz);
+  let recovery = recoverPending;
 
   // One read and write at a time, so the loop and changes never lose each other's writes.
   let queue: Promise<unknown> = Promise.resolve();
@@ -188,19 +204,21 @@ export const scheduler = ({
   /** One pass: records what was missed, fires what is due, and says how long to sleep. */
   async function* pass(): AsyncGenerator<Fired, number> {
     try {
-      const table = await read();
-      const pending = Object.entries(table).filter(
-        ([, { run }]) => run.running === true && run.due !== undefined
-      );
-      // A dispatch fenced before its handler ran remains running on disk.
-      // Replay that exact occurrence before calculating any new due times.
-      for (const [name, entry] of pending) {
-        const { due: occurrence } = entry.run;
-        if (occurrence === undefined) continue;
-        yield firing(name, occurrence, entry.schedule);
-        await update((current) => end(current, name, clock.now()));
+      if (recovery !== undefined) {
+        const pending = Object.entries(await read()).filter(
+          ([, { run }]) => run.running === true && run.due !== undefined
+        );
+        for (const [name, entry] of pending) {
+          const { due: occurrence } = entry.run;
+          if (occurrence === undefined) continue;
+          yield firing(name, occurrence, entry.schedule);
+          await update((current) => end(current, name, clock.now()));
+        }
+        await recovery();
+        recovery = undefined;
+        if (pending.length > 0) return 0;
       }
-      if (pending.length > 0) return 0;
+      const table = await update(recover);
 
       const verdict = due(table, clock.now(), zone);
       if (verdict.miss.length > 0)

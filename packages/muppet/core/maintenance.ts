@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 /** The dispatcher fence for a single runtime invocation. */
-export const maintenance = () => {
+export const maintenance = (recoverSchedules?: () => Promise<void>) => {
   let active = 0;
   let eligible = false;
   let token: string | undefined;
@@ -24,6 +24,8 @@ export const maintenance = () => {
   };
 
   return {
+    recoverSchedules,
+    fenced: () => token !== undefined,
     eligible: (replayable: boolean) => {
       eligible = replayable;
       notify();

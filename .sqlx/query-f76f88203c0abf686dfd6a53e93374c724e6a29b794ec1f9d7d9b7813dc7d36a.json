@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_runtime_update (computer_id, version, digest, source_url, id)\n            SELECT $1, $2, $3, $4, $5\n            WHERE NOT EXISTS (\n                SELECT 1 FROM computer_move WHERE computer_id = $1\n                  AND stage IN ('seeding', 'cutting_over', 'verifying', 'rolling_back')\n            ) AND NOT EXISTS (\n                SELECT 1 FROM image_upgrade_computer plan\n                JOIN image_upgrade batch ON batch.id = plan.upgrade_id\n                WHERE plan.computer_id = $1 AND batch.finished_at IS NULL\n                  AND plan.state IN ('replacing', 'verifying', 'rolling_back')\n            )\n            ON CONFLICT (computer_id) WHERE outcome IS NULL DO NOTHING\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f76f88203c0abf686dfd6a53e93374c724e6a29b794ec1f9d7d9b7813dc7d36a"
+}

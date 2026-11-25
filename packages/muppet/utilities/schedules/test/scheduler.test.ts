@@ -60,11 +60,23 @@ describe('scheduler', () => {
       due: '2026-11-09T09:00:00Z',
       data: 'call',
     });
+    const ordinaryStop = new AbortController();
+    const ordinary = scheduler({
+      store: memoryStore(await store.read()),
+      clock: fakeClock('2026-11-10T09:00:00Z'),
+      tz: 'UTC',
+      signal: ordinaryStop.signal,
+    });
+    await ordinary.set('poll', { every: '1m' });
+    expect(await take(ordinary.fired, 1, ordinaryStop)).toEqual([
+      { name: 'poll', due: '2026-11-10T09:00:00Z' },
+    ]);
     const stop = new AbortController();
     const restarted = scheduler({
       store,
       clock: fakeClock('2026-11-10T09:00:00Z'),
       tz: 'UTC',
+      recoverPending: async () => {},
       signal: stop.signal,
     });
     expect(await take(restarted.fired, 1, stop)).toEqual([queued.value]);

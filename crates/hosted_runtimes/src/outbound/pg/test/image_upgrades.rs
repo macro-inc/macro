@@ -235,6 +235,13 @@ async fn runtime_update_and_image_replacement_hold_the_computer_exclusively(pool
             .unwrap()
     );
 
+    let previous = repo
+        .claim_runtime_update(Uuid::now_v7(), Duration::zero())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(previous.id, id);
+    assert!(!previous.attempted);
     let holder = Uuid::now_v7();
     let claimed = repo
         .claim_runtime_update(holder, Duration::minutes(15))
@@ -242,6 +249,7 @@ async fn runtime_update_and_image_replacement_hold_the_computer_exclusively(pool
         .unwrap()
         .unwrap();
     assert_eq!(claimed.id, id);
+    assert!(claimed.attempted);
     assert!(
         repo.claim_runtime_update(Uuid::now_v7(), Duration::minutes(15))
             .await

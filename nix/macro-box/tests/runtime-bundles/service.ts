@@ -3,6 +3,8 @@ import { hostedMaintenance, maintenance } from './node_modules/@macro-inc/muppet
 import { reportRuntimeReady } from '/fixture/runtime-maintenance.ts';
 const root = '/home/macro/.fixture';
 const selection = process.env.MACRO_AGENT_RUNTIME_ID ?? 'image';
+if (await Bun.file('/home/macro/fixture-private/data').exists())
+  throw new Error('agent namespace exposed a private path');
 const invocation = process.env.INVOCATION_ID!;
 const head = process.env.MACRO_AGENT_RUNTIME_REVISION!;
 const log = (text: string) => appendFileSync(`${root}/log`, `${text}\n`);
@@ -33,7 +35,7 @@ async function deliver() {
   }
 }
 watch(events, () => { void deliver(); });
-if (!selection.startsWith('bbbb')) {
+if (!selection.startsWith('bbbb') && !await Bun.file(`${root}/suppress-ready`).exists()) {
   writeFileSync('/home/macro/agent/state/last-good', head);
   if (!oldBehavior) await reportRuntimeReady();
 }

@@ -100,7 +100,7 @@ jobs:
           jq() { tool jq "$@"; }
 
           nix build --print-build-logs --out-link "$work/runtime" .#macro-agent-runtime
-          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+          tar --hard-dereference --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
             -C "$work/runtime" -cf "$work/runtime.tar" bun.lock template.json node_modules
           tool zstd -q -T1 -10 "$work/runtime.tar" -o "$work/runtime.tar.zst"
           digest=$(sha256sum "$work/runtime.tar.zst" | cut -d' ' -f1)
@@ -189,7 +189,7 @@ jobs:
           manifest="$ARTIFACT_DIR/manifest.json"
           digest=$(jq -er --arg version "$SOURCE_SHA" \
             'select(.version == $version) | .digest | select(test("^[a-f0-9]{64}$"))' "$manifest")
-          url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 3600 \
+          url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 7200 \
             "s3://$bucket/agent-runtime-bundles/$SOURCE_SHA/runtime.tar.zst")
           echo "::add-mask::$url"
           jq -n --arg version "$SOURCE_SHA" --arg digest "$digest" --arg url "$url" \

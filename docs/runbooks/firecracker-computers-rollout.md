@@ -176,9 +176,9 @@ is the commit SHA. The immutable manifest records the archive SHA-256, the
 Muppet API level and the package versions. The in-VPC runner submits the
 request to dev Postgres, and the harness controller runs the fixed updater
 on the selected Firecracker guest. Wait for the migration and every dev
-controller replica's deployment before dispatching. An unfinished request holds that computer
-against image upgrades and moves. Fleet reconcile and power effects respect
-the hold.
+controller replica's deployment before dispatching. An unfinished request
+holds that computer against image upgrades and moves. Fleet reconcile and
+power effects consult the hold before starting work.
 
 The guest image must include the updater, and the live behavior must provide
 the Muppet maintenance and readiness contract. The updater refuses an
@@ -192,9 +192,9 @@ keeps its own Bun lock.
 
 The dispatcher continues work already admitted while fencing new wakes. Chat
 replays queued input from its persisted cursor and inbox. A firing left
-pending on disk is replayed for the same scheduled occurrence. As with
-ordinary restart recovery, an interruption near the acknowledgement can
-redeliver an event. A timeout releases the fence on the same process.
+pending in a maintenance handoff replays for the same scheduled occurrence.
+An interruption near the acknowledgement can redeliver that occurrence.
+Ordinary restarts keep the scheduler's existing policy. A timeout releases the fence on the same process.
 Unknown event sources make an invocation ineligible for a drain.
 
 After switching the pointer, the updater restarts `macro-agent.service` and
@@ -202,9 +202,15 @@ waits for a receipt for the new systemd invocation, exact behavior revision
 and requested version/digest. That receipt uses the normal `markHealthy`
 check, which requires an open `macro.events.listen` stream and a successful
 `macro.users.me` round trip. The updater releases queued work after the
-receipt, or restores and checks the prior runtime. It recovers an interrupted
-transaction from the journal, including after a guest reboot. macrod and the
-guest keep running through a normal service update.
+receipt, or restores and checks the prior runtime. These receipts depend on the
+selected behavior cooperating. The agent's UID can forge a receipt for its
+own guest. Recovery releases a stranded fence and retries from the journal,
+including after a guest reboot. The controller confirms the guest journal
+has settled before accepting a terminal result. A lost or interrupted
+response retains its lease for a bounded retry. The overall deadline stops
+new attempts. If the guest still cannot prove settlement, the computer
+remains held for recovery. macrod and the guest keep running through a
+normal service update.
 
 The workflow reports `applied`, `refused`, `rolled_back`,
 `rollback_failed` or `expired`. Use `journalctl -u macro-agent.service -u

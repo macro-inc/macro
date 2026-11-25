@@ -10,7 +10,7 @@ tool() { nix shell --inputs-from . nixpkgs#awscli2 nixpkgs#zstd nixpkgs#jq -c "$
 jq() { tool jq "$@"; }
 
 nix build --print-build-logs --out-link "$work/runtime" .#macro-agent-runtime
-tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+tar --hard-dereference --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
   -C "$work/runtime" -cf "$work/runtime.tar" bun.lock template.json node_modules
 tool zstd -q -T1 -10 "$work/runtime.tar" -o "$work/runtime.tar.zst"
 digest=$(sha256sum "$work/runtime.tar.zst" | cut -d' ' -f1)

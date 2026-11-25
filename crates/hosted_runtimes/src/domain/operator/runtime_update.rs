@@ -5,14 +5,15 @@ use chrono::Duration;
 use super::{ComputerOperator, internal};
 use crate::domain::agent::ComputerAgents;
 use crate::domain::lifecycle::Phase;
+use crate::domain::models::ComputerRecord;
 use crate::domain::moves::ComputerMoves;
 use crate::domain::ports::{ComputerRepo, Fleets, Harnesses, OvercommitRepo, SetupNotices};
 use crate::domain::runtime_update::{GuestRuntimeUpdate, RuntimeUpdateOutcome, RuntimeUpdates};
 use crate::domain::service::{Clock, ComputerError};
 
 /// The guest's systemd operation plus recovery fits inside this bound.
-const ATTEMPT: std::time::Duration = std::time::Duration::from_secs(14 * 60 + 30);
-const LEASE: Duration = Duration::minutes(15);
+const ATTEMPT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+const LEASE: Duration = Duration::minutes(21);
 
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
@@ -42,43 +43,65 @@ where
         else {
             return Ok(());
         };
+        // Count preflight against the attempt so the lease can outlast I/O.
+        let attempt_deadline = tokio::time::Instant::now() + ATTEMPT;
         let remaining = (request.deadline - self.clock.now())
             .to_std()
             .unwrap_or_default();
 
-        let outcome = if remaining < ATTEMPT {
-            RuntimeUpdateOutcome::Expired
-        } else if !request.bundle.valid()
-            || self
+        let Some(record) = self.repo.get(request.computer).await.map_err(internal)? else {
+            // The computer's deletion also deletes the request.
+            return Ok(());
+        };
+        let running = record.healthy().filter(|computer| {
+            matches!(computer.state.phase, Phase::Running) && computer.hibernated_at.is_none()
+        });
+        let eligible = remaining >= ATTEMPT
+            && request.bundle.valid()
+            && self
                 .repo
                 .agent_of(request.computer)
                 .await
                 .map_err(internal)?
-                .is_none()
-        {
-            RuntimeUpdateOutcome::Refused
-        } else if let Some(computer) = self
-            .repo
-            .get(request.computer)
-            .await
-            .map_err(internal)?
-            .and_then(|record| record.healthy().cloned())
-            .filter(|computer| {
-                matches!(computer.state.phase, Phase::Running) && computer.hibernated_at.is_none()
-            })
-        {
+                .is_some();
+        let outcome = if let Some(computer) = running.filter(|_| eligible) {
             let fleet = self.fleet_for(computer.host).await?;
             // A lost connection does not establish the outcome. The lease
             // holds the computer through recovery, then a retry is safe.
-            tokio::time::timeout(
-                ATTEMPT,
+            tokio::time::timeout_at(
+                attempt_deadline,
                 fleet.update_guest_runtime(request.computer, &request.bundle),
             )
             .await
             .map_err(internal)?
             .map_err(internal)?
         } else {
-            RuntimeUpdateOutcome::Refused
+            if request.attempted {
+                // The deadline stops new attempts. Preserve the hold if a
+                // prior attempt might still be recovering in the guest.
+                let host = match record {
+                    ComputerRecord::Healthy(computer) => Some(computer.host),
+                    ComputerRecord::NeedsAttention { host_id, .. } => host_id,
+                }
+                .ok_or_else(|| {
+                    ComputerError::Internal(rootcause::report!(
+                        "cannot verify runtime update settlement without a host"
+                    ))
+                })?;
+                let fleet = self.fleet_for(host).await?;
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    fleet.runtime_update_settled(request.computer),
+                )
+                .await
+                .map_err(internal)?
+                .map_err(internal)?;
+            }
+            if remaining < ATTEMPT {
+                RuntimeUpdateOutcome::Expired
+            } else {
+                RuntimeUpdateOutcome::Refused
+            }
         };
 
         if self
