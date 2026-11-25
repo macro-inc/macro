@@ -4,7 +4,10 @@ import { useEmailUserLabelsQuery } from '@queries/email/labels';
 import { queryReadyGate } from '@queries/gate';
 import { ApiLabelType } from '@service-email/generated/schemas';
 import { type Accessor, createMemo } from 'solid-js';
-import { emailSearchValueBeingTyped } from '../search/create-email-search-suggestions';
+import {
+  emailSearchNameBeingTyped,
+  emailSearchValueBeingTyped,
+} from '../search/create-email-search-suggestions';
 import {
   canMailAddress,
   type EmailSearchLabel,
@@ -54,10 +57,11 @@ export function toEmailSearchLabels(
 
 /**
  * The people and labels Mail's search field offers after an operator that
- * names them (`from:an`, `label:trav`). Each is read only while the field is
- * `active` (open and focused) and such an operator is being typed: people as
- * the composer's recipient picker finds and ranks them, labels as the
- * person's tags and their inboxes' own labels.
+ * names them (`from:an`, `label:trav`), and the people a plain word may name
+ * (`ana`). Each is read only while the field is `active` (open and focused)
+ * and such an operator or word is being typed: people as the composer's
+ * recipient picker finds and ranks them, labels as the person's tags and
+ * their inboxes' own labels.
  */
 export function useEmailSearchValues(
   search: Accessor<string>,
@@ -69,18 +73,22 @@ export function useEmailSearchValues(
   const typing = createMemo(() =>
     active() ? emailSearchValueBeingTyped(search()) : undefined
   );
+  const name = createMemo(() =>
+    active() ? emailSearchNameBeingTyped(search()) : undefined
+  );
   const namesPerson = () => typing()?.kind === 'person';
   const namesLabel = () => typing()?.kind === 'label';
+  const findsPeople = () => namesPerson() || name() !== undefined;
 
   const recipients = useContactRecipientSource({
-    search: () => (namesPerson() ? (typing()?.value ?? '') : ''),
-    enabled: namesPerson,
+    search: () => (namesPerson() ? (typing()?.value ?? '') : (name() ?? '')),
+    enabled: findsPeople,
     selfId: () => undefined,
     senderDomain: () => undefined,
     includeSelf: () => true,
   });
   const people = createMemo((): EmailSearchPerson[] =>
-    namesPerson() ? toEmailSearchPeople(recipients.items()) : []
+    findsPeople() ? toEmailSearchPeople(recipients.items()) : []
   );
 
   const mailboxLabels = useEmailUserLabelsQuery(namesLabel);

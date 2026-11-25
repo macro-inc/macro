@@ -195,7 +195,8 @@ binaries.
 Each native launch also records how the bundle updater chose its bundle, and
 every document in the launch reports it on `native_webview_started`:
 `native_bundle_startup_selection` (`saved_ota`, `completed_download`, or
-`embedded`), `native_bundle_startup_saved_selection` (what the saved selection
+`embedded`; a completed download wins over a saved bundle it is newer than, and
+survives the saved bundle's rejection), `native_bundle_startup_saved_selection` (what the saved selection
 held: `none`, `unreadable`, `embedded`, or `ota`),
 `native_bundle_startup_rejection` (which check a saved OTA bundle failed),
 `native_bundle_startup_read_error` (the I/O error kind, such as `NotFound` or
@@ -639,6 +640,10 @@ in an installed macOS bundle before release.
 `threadId` (stacks a conversation's alerts), and `sender` (`id`, `name`,
 `avatarUrl`). A sender makes it a communication notification, as on iOS: the
 downloaded avatar replaces the app icon and group conversations show their name.
+macOS names a group only when its message has more than one recipient, so a
+notification with a subtitle (the channel or document it happened in) carries
+two opaque stand-in recipients; without them a signed build titles it with the
+sender alone.
 The new arguments are optional, so older frontends and native builds keep
 working together. macOS honors this only for an app signed with the restricted
 `com.apple.developer.usernotifications.communication` entitlement and
@@ -692,7 +697,7 @@ it from the startup config if it no longer exists (`src/desktop/main_window.rs`)
 
 ## Desktop native updates
 
-Release builds for macOS Apple Silicon and Linux AppImage check for native updates
+Release builds for macOS (Apple silicon and Intel) and Linux AppImage check for native updates
 after startup and every six hours. The download streams into
 `native-update/` under the app's local data directory (Application Support on
 macOS, never a purgeable cache): `download.partial` while it arrives,
@@ -708,7 +713,16 @@ file is verified with Tauri's updater signature (the updater's own
 eligible for installation, and read and verified again just before installing;
 bytes that fail are deleted, so the next check downloads afresh. A successful
 install deletes them too. Without an app data directory native updates stay
-disabled. The download uses the updater's timeout and proxy settings. A ready update installs on normal app quit;
+disabled. The download uses the updater's timeout and proxy settings. While
+the app stays open, the six-hourly check keeps running with an update ready, so
+an app left open for days doesn't install the first update it downloaded and
+find the next one on relaunch. A newer release downloads into `native-update/next/`
+while the ready update stays installable, and replaces it, in one rename, only
+once verified; it is then offered as a new update, not as another try at an
+install that failed (`failedInstallVersion` is cleared). A failed download, a feed
+that offers nothing newer, or a release this Mac can't run leaves the ready
+update as it is. The next launch deletes a staged download a quit left
+behind. A ready update installs on normal app quit;
 closing/hiding a window only installs if it actually exits the app. No network
 work is started during quit. Errors retry with backoff.
 
@@ -716,8 +730,41 @@ The ready notification and Settings → Desktop App offer **Restart to update**.
 restart waits for registered canvas/PDF saves and local query persistence, and is
 blocked during calls, uploads and imports. Native installation closes the native
 cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
-user data. Mobile updates remain managed by the app stores. Debug, recording,
+user data.
+
+Before Restart installs, the page checks for the deployed web bundle and waits up to
+10 seconds for it to download (`stageDeployedBundle`, `src/lib/tauri/stage-bundle.ts`;
+span `native.update.stage_bundle` with its outcome), then restarts whatever the
+check found. A new release embeds the bundle from its release commit, which is
+usually older than the deployed one, so without this the first launch would
+download it and offer "Update ready" for a second restart. The download stays
+pending (`pending_bundle_root`), and startup keeps it even when it rejects the
+saved bundle the old app ran, and prefers it over a saved bundle it is newer than;
+it is applied before the first document loads, so the new launch reports
+`native_bundle_startup_selection=completed_download`. A check that no longer
+offers a pending download (a rolled-back deploy) forgets it, so a later launch
+can't start on it. Installs on quit don't stage, since quitting starts no network
+work, and neither does a restart that a call, upload or import blocks. Mobile updates remain managed by the app stores. Debug, recording,
 branch, and `--no-default-features` builds do not auto-install native updates.
+
+When an install fails, **Restart to update** relaunches the version still
+installed; a quit stays quit, because the person asked to quit. The common
+failures (a read-only or translocated bundle, a declined admin prompt, a bad
+archive) leave the old app in place, and the AppImage updater restores its
+backup. On macOS the pinned updater keeps its backup of the old app in a
+temporary directory, so a failure after it moved the old app out can leave no
+app to relaunch; the app then just exits. The next launch reads the
+install record (see [update telemetry](#update-telemetry)), reports
+`install_failed`, and keeps the target version as `failedInstallVersion` in
+the status it gives the webview (`get_native_update_status`, generated as
+`src/lib/tauri/generated/native-update-status.ts` by
+`UPDATE_NATIVE_UPDATE_STATUS_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo.toml --locked -p app --lib native_update_status_wire_types`).
+A failed install keeps the saved download (unless it no longer verified, which
+deletes it), so the launch's first check, offered the same update, reuses it
+without downloading, or resumes or restarts the download otherwise; meanwhile
+the rail's update popover and Settings → Account say the last update couldn't
+be installed, and once it is ready the popover offers **Try again**, which
+restarts to install it.
 
 `../desktop-release.json` is the public release configuration; its checked-in
 defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
@@ -737,7 +784,17 @@ or rebuild an already published tag; publish a higher version for fixes/reverts.
 
 The combined desktop workflow is the only publisher. It exports the final
 relocated/signed macOS app, notarizes and staples it, and archives it as
-`.app.tar.gz`. The Linux AppImage and macOS archive receive updater signatures
+`.app.tar.gz`, once per Mac architecture. The Intel build
+(`Macro-<version>-x86_64-darwin.{dmg,app.tar.gz}`, feed key `darwin-x86_64`)
+is optional: release tags build it only once
+`../desktop-cef/cef-codecs.json` pins its codec CEF, and a failed or skipped
+Intel build still publishes the others, leaving `darwin-x86_64` out of that
+release's feed. Installed Intel apps then report a failed check (the feed has no
+entry for them) and stay on their version until a release includes it; the feed
+has one version for every platform, so an older Intel package can't be carried
+forward. A failed Intel build raises the native-build alert. Rerunning it adds
+`darwin-x86_64` to that version's feed: publication accepts a same-version feed
+that only adds platforms and leaves every listed one unchanged. The Linux AppImage and macOS archive receive updater signatures
 outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 live in Doppler `macos-release/prd`, read using the existing
 `MACOS_RELEASE_DOPPLER_TOKEN` CI secret. Only the corresponding public key is
@@ -753,8 +810,8 @@ Apps released before that check don't read the field.
 Versioned GitHub Release assets are immutable. Publication retries reuse and
 verify any already-published signatures, since newly generated signatures include
 the signing time. The stable manifest is uploaded last to the dedicated
-`desktop-stable` prerelease's `latest.json` asset, after both packages and signatures
-exist. Promotions are serialized and reject older/equal versions; unrelated SDK
+`desktop-stable` prerelease's `latest.json` asset, after every package and signature
+exists. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
@@ -787,9 +844,13 @@ link is never missing for the length of an upload; an installer whose bytes are
 already there is skipped, and reruns of an older tag change nothing. Customers
 use `https://macro.com/download/mac` and `/download/linux`, which the website's
 edge redirects to those assets (`apps/marketing/seo/download-redirects.json`), so
-the hosting can move without changing the links. A new platform (Intel Mac,
-Windows) adds a fixed name in `publish_desktop_download_links.sh` and a redirect
-in that manifest.
+the hosting can move without changing the links. A new platform (Windows) adds a
+fixed name in `publish_desktop_download_links.sh` and a redirect in that
+manifest. The Intel Mac installer becomes `Macro-macos-x86_64.dmg` only from a
+release that built it; one without it leaves the previous copy, which installs
+and then updates itself. Its redirect, `/download/mac-intel`, is added to the
+manifest after the first release that publishes it, and both download pages
+offer Intel only while the manifest has it.
 
 Failed releases post to the Macro Alerts channel. `Alert native build failures`
 posts when any job of `Build Desktop on Tag` fails or times out, or when a tag's

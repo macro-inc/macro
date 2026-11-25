@@ -24,10 +24,9 @@ const faqItems = [
     q: 'Which email accounts can I connect?',
     a: (
       <>
-        Macro supports Gmail and Google Workspace. Connect an account in
-        Settings and keep using Gmail or Superhuman alongside Macro. Macro
-        connects directly to your Gmail account, so you don’t need to stop using
-        another email client. See the{' '}
+        Macro supports Google (Gmail and Google Workspace) and Microsoft
+        (Outlook and Microsoft 365). Connect an account in Settings and keep
+        using Gmail, Outlook, or Superhuman alongside Macro. See the{' '}
         <a href="/email#guide">email setup guide</a>.
       </>
     ),
@@ -37,8 +36,8 @@ const faqItems = [
     a: (
       <>
         Yes. Connect multiple accounts, view them together, or filter to one
-        inbox. When composing, choose which connected address to send from.
-        Account limits depend on your <a href="/pricing">plan</a>.
+        inbox. Choose which connected address to send from right in the
+        composer. Account limits depend on your <a href="/pricing">plan</a>.
       </>
     ),
   },
@@ -60,7 +59,7 @@ const faqItems = [
     q: 'Can my team read an email I share?',
     a: (
       <>
-        Yes. Sharing gives recipients access to the full thread, including new
+        Yes. Sharing gives recipients access to the full thread including new
         replies. It does not let them send replies from your mailbox. See{' '}
         <a href="/channels">sharing email in team chat</a>.
       </>
@@ -72,7 +71,7 @@ const faqItems = [
   },
   {
     q: 'Does Macro get my Google password?',
-    a: 'No. You authorize the connection on Google, and Macro receives access tokens rather than your password.',
+    a: 'No. You authorize the connection on Google and Macro receives access tokens rather than your password.',
   },
   {
     q: 'Is my email used to train AI?',
@@ -109,7 +108,7 @@ export function RouteEmail() {
   setPageSeo({
     title: 'Macro Mail — Brilliantly fast email',
     description:
-      'Macro brings all of your email accounts into one inbox, with unified search. Share emails with internal channels and draft and send emails from the agent.',
+      'Macro brings all of your email accounts into one inbox with unified search. Share emails with internal channels and draft and send emails from the agent.',
     path: '/email',
   });
 
@@ -119,8 +118,8 @@ export function RouteEmail() {
         <ProductBrand product="Email" />
         <h1>Organized and prioritized email.</h1>
         <p class="email-page-hero-description">
-          Macro Mail tags and prioritizes email from all your accounts, with
-          Superhuman shortcuts and frontier intelligence.
+          Mail brings your Google and Microsoft accounts into one inbox with
+          Superhuman shortcuts, AI prioritization, and autotagging.
         </p>
         <div class="email-page-provider-actions">
           <a
@@ -154,55 +153,55 @@ export function RouteEmail() {
       <FeaturePageSection
         id="keyboard-speed"
         title="Navigate with Superhuman speed."
-        description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done, or open splits to draft and search side by side."
+        description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done or open splits to draft and search side by side."
         screen={featureScreens['keyboard-speed']}
       />
       <FeaturePageSection
         id="email-accounts"
         title="All your accounts in one inbox."
-        description="Triage all your email accounts in a single inbox, or one at a time. We backfill everything, so search is split-second across every account."
+        description="Triage all your email accounts in a single inbox or one at a time. We backfill everything so search is split-second across every account."
         screen={featureScreens['email-accounts']}
       />
       <FeaturePageSection
         id="signal-noise"
         title="Signal vs. Noise."
-        description="Signal is your important email. Noise is the newsletters, receipts, and inbound you don’t need to see first. Macro separates them for you, so you can focus on what matters."
+        description="Signal is your important email. Noise is the newsletters, receipts, and inbound you don’t need to see first. Macro separates them for you so you can focus on what matters."
         screen={featureScreens['signal-noise']}
       />
       <FeaturePageSection
         id="email-sharing"
-        title="Share email in Macro Chat, no screenshots."
-        description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
+        title="Share email in Macro Chat without screenshots."
+        description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread including future replies so they’re not asking what happened after your screenshot."
         screen={featureScreens['email-sharing']}
       />
       <FeaturePageSection
         id="agentic-editing"
         title="Draft and send with Macro Agents."
-        description="The agent can search prior interactions with people and build up context before drafting the email. You can iterate with it and then hit send without leaving the agent."
+        description="Macro Agents search past threads, Macro Docs, and Macro Calls before drafting a reply. Iterate in the same window and hit send without switching tabs."
         screen={featureScreens['agentic-editing']}
       />
       <FeaturePageSection
         id="email-to-task"
         title="Turn emails into Macro Tasks."
-        description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source, so the original conversation is one click away, and you can see when it’s resolved."
+        description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source so the original conversation is one click away and you can see when it’s resolved."
         screen={featureScreens['email-to-task']}
       />
       <FeaturePageSection
         id="email-crm"
-        title="Your Macro CRM, one click from any email."
-        description="Open a company or contact record from any email to see every email between your team and that company, without opening a heavyweight CRM. Catch up on the relationship without leaving your inbox."
+        title="Your Macro CRM one click from any email."
+        description="Open any Macro CRM company or contact record right beside an email to see every thread and call your team has had with them."
         screen={featureScreens['email-crm']}
       />
       <FeaturePageSection
         id="auto-tags"
         title="Unified Macro Tags across your workspace."
-        description="Tag incoming email by customer, project, or topic. Use Jev, an extraction model, to set up any tags you want, or frontier AI if you’d like. The same tags work across emails, docs, and tasks."
+        description="Tag incoming mail by customer, project, or urgency with Jev or frontier models. The same Macro Tags organize emails, Macro Docs, and Macro Tasks."
         screen={featureScreens['auto-tags']}
       />
       <FeaturePageSection
         id="email-routines"
         title="Kick off Macro Routines from any email."
-        description="Set up a routine that runs when an email arrives and kicks off work across your workspace. When an important customer email comes in, it can message an internal channel and send you a push notification."
+        description="Trigger Macro Routines whenever an email arrives to notify a Macro Chat channel, create Macro Tasks, or send yourself a push alert for VIP customers."
         screen={featureScreens['email-routines']}
       />
       <FeaturePhoneScreens screens={phoneScreens['email']} product="Mail" />

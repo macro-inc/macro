@@ -404,6 +404,11 @@ try {
     'the restored window'
   );
   console.log('PASS: Calendar header fits 440px to 320px windows');
+  // The offline checks below select Email's views.
+  await browser.$('button[aria-label="Email"]').click();
+  await browser
+    .$('[aria-label="Search email"]')
+    .waitForDisplayed({ timeout: 30_000 });
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   assert(

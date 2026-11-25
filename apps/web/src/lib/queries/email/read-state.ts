@@ -57,7 +57,7 @@ function observeUnreadSettlement(host: CacheHost, uuid: string) {
     finish(result.status === 'superseded' ? undefined : result.status);
   });
   const unsubscribeGeneration = host.onCacheGenerationChanged((change) => {
-    if (change.storage === 'reset') finish(undefined);
+    if (change.queue === 'reset') finish(undefined);
   });
   return { settlement, stop: () => finish(undefined) };
 }

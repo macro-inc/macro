@@ -13,6 +13,7 @@ fn run(trigger: RunTrigger, end: RunEnd) -> FinishedRoutineRun {
         target: RunTarget::Agent,
         end,
         duration: chrono::Duration::milliseconds(1_500),
+        apps_to_connect: Vec::new(),
     }
 }
 

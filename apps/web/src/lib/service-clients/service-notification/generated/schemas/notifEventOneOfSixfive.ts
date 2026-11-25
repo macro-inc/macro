@@ -4,14 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelAccessRequestedMetadata } from './channelAccessRequestedMetadata';
+import type { CalendarEventJoinRequestMetadata } from './calendarEventJoinRequestMetadata';
 import type { NotifEventOneOfSixfiveTag } from './notifEventOneOfSixfiveTag';
 
 /**
- * Someone asked to join a channel the user participates in.
+ * A channel member asked to be added as a guest of an event the
+user shared with the channel.
  */
 export type NotifEventOneOfSixfive = {
-  /** Someone asked to join a channel the user participates in. */
-  content: ChannelAccessRequestedMetadata;
+  /** A channel member asked to be added as a guest of an event the
+user shared with the channel. */
+  content: CalendarEventJoinRequestMetadata;
   tag: NotifEventOneOfSixfiveTag;
 };

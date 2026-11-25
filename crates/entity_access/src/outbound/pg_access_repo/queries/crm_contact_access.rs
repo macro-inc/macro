@@ -7,6 +7,7 @@ use crate::domain::models::{AccessLevel, CrmEntityAccess, TeamRole};
 use crate::outbound::pg_access_repo::queries::crm_company_access::team_role_to_access_level;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Resolve the access level a user has for a CRM contact, together with the
@@ -52,6 +53,25 @@ pub async fn get_crm_contact_access(
             team_role: r.role,
         })
     }))
+}
+
+/// The contact each merged contact's old id names now, for the ids a merge
+/// retired. Grants nothing: the caller still checks access to them.
+#[tracing::instrument(err, skip_all, fields(id_count = contact_ids.len()))]
+pub async fn get_merged_crm_contact_ids(
+    pool: &PgPool,
+    contact_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Uuid>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT retired_id, contact_id FROM crm_contact_aliases WHERE retired_id = ANY($1)",
+        contact_ids,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.retired_id, row.contact_id))
+        .collect())
 }
 
 /// Resolve team-scoped access to a visible CRM contact owned by the team.

@@ -10,6 +10,19 @@
 <tr>
 <td>
 
+`call-kit:allow-audio-output`
+
+</td>
+<td>
+
+Read, select and watch audio output for the active call.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-abort-join`
 
 </td>
@@ -133,6 +146,32 @@ Enables the get_active_call_state command without any pre-configured scope.
 <td>
 
 Denies the get_active_call_state command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-get-audio-output`
+
+</td>
+<td>
+
+Enables the get_audio_output command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-get-audio-output`
+
+</td>
+<td>
+
+Denies the get_audio_output command without any pre-configured scope.
 
 </td>
 </tr>
@@ -348,6 +387,32 @@ Denies the request_microphone_permission command without any pre-configured scop
 <tr>
 <td>
 
+`call-kit:allow-select-audio-output`
+
+</td>
+<td>
+
+Enables the select_audio_output command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-select-audio-output`
+
+</td>
+<td>
+
+Denies the select_audio_output command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-set-call-drawer-channel-title`
 
 </td>
@@ -523,6 +588,32 @@ Enables the switch_camera command without any pre-configured scope.
 <td>
 
 Denies the switch_camera command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-watch-audio-output`
+
+</td>
+<td>
+
+Enables the watch_audio_output command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-watch-audio-output`
+
+</td>
+<td>
+
+Denies the watch_audio_output command without any pre-configured scope.
 
 </td>
 </tr>

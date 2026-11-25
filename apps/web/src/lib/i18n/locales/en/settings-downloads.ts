@@ -6,9 +6,17 @@ export default {
   desktopDownload: 'Download Macro Alpha',
   macosRequirement:
     'Requires macOS 14 (Sonoma) or later on a Mac with Apple silicon.',
+  macosIntelRequirement:
+    'Requires macOS 14 (Sonoma) or later on a Mac with an Intel processor.',
+  macosAnyChipRequirement: 'Requires macOS 14 (Sonoma) or later.',
+  macChipHint: 'Not sure? Apple menu → About This Mac shows your chip.',
   linuxRequirement: 'For 64-bit Linux, as an AppImage.',
   desktopPlatforms: 'Available for macOS and Linux.',
   downloadForMacos: 'Download for macOS',
+  downloadForAppleSilicon: 'Download for Apple silicon',
+  downloadForIntelMac: 'Download for Intel',
+  downloadForMacAppleSilicon: 'Download for Mac (Apple silicon)',
+  downloadForMacIntel: 'Download for Mac (Intel)',
   downloadForLinux: 'Download for Linux',
   mobileTitle: 'Mobile app',
   scanDescription: 'Scan the code to get Macro on your phone.',

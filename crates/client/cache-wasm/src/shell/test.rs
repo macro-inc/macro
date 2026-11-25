@@ -12,6 +12,7 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod hydration_scope;
 mod mail_projection;
 mod people;
+mod queue_salvage;
 
 /// The old way of reading a hydrate's data, which `json_value_from_js` must
 /// match.
@@ -2702,9 +2703,13 @@ async fn move_opfs_pair(from: &str, to: &str) {
 }
 
 async fn queue_one_mutation(engine: &CacheEngine) {
+    queue_mutation(engine, "00000000-0000-4000-8000-000000000011").await;
+}
+
+async fn queue_mutation(engine: &CacheEngine, uuid: &str) {
     resolved(engine.enqueue_optimistic_mutation(
         None,
-        "00000000-0000-4000-8000-000000000011".into(),
+        uuid.into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -2720,7 +2725,7 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_generation(&engine).await,
+        test_generation(engine).await,
     ))
     .await;
 }

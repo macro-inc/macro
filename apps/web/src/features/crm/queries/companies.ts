@@ -1,12 +1,14 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { analytics } from '@app/lib/analytics';
 import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import { forgetMergedCrmRecords } from '@service-storage/crm-record-merge';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
@@ -40,13 +42,30 @@ const COMPANY_STALE_TIME = 60 * 1000;
 function companyQueryOptions(deps: CrmRecordDependencies, companyId: string) {
   return queryOptions({
     queryKey: crmKeys.company(companyId).queryKey,
-    queryFn: () => {
+    queryFn: async () => {
       if (!companyId) {
         throw new Error('company id is required to fetch company');
       }
-      return throwOnErr(() =>
+      const canCache = captureQueryAuthorization();
+      const company = await throwOnErr(() =>
         deps.storage.getCompany({ companyId, includeContacts: false })
       );
+      // A merged company's id answers with the company it was merged into,
+      // which its view then opens under that company's own id.
+      if (company.id.toLowerCase() !== companyId.toLowerCase() && canCache()) {
+        const survivor = crmKeys.company(company.id).queryKey;
+        // An entry already there is as fresh as its own read made it.
+        if (deps.client.getQueryData(survivor) === undefined)
+          deps.client.setQueryData(survivor, company);
+        fireAndForget(
+          forgetMergedCrmRecords({
+            companies: [companyId.toLowerCase()],
+            contacts: [],
+          }),
+          'crm'
+        );
+      }
+      return company;
     },
     staleTime: COMPANY_STALE_TIME,
     enabled: !!companyId && companyId !== NIL_UUID,

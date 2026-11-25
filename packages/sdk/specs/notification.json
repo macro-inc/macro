@@ -2466,6 +2466,27 @@
         "description": "Why a CRM discussion notification was delivered.",
         "enum": ["mention", "reply", "owner"]
       },
+      "CrmEmailSharingChangeReason": {
+        "type": "string",
+        "description": "Why someone's CRM email sharing rules changed without them.",
+        "enum": ["companies_merged"]
+      },
+      "CrmEmailSharingChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for a notice that the recipient's CRM email sharing rules\nchanged because of a teammate's action. It names no company, count or\nperson: the recipient may not be able to see them, and their rules show\nwhat changed.",
+        "required": ["teamId", "reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/CrmEmailSharingChangeReason",
+            "description": "Why they changed."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team whose CRM the rules share mail with."
+          }
+        }
+      },
       "DeviceRequest": {
         "type": "object",
         "description": "Request to register or unregister a device for push notifications.",
@@ -3507,6 +3528,21 @@
           },
           {
             "type": "object",
+            "description": "A teammate's action changed the user's CRM email sharing rules.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CrmEmailSharingChangedMetadata",
+                "description": "A teammate's action changed the user's CRM email sharing rules."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["crm_email_sharing_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A user was invited to a team.",
             "required": ["content", "tag"],
             "properties": {
@@ -4300,6 +4336,13 @@
         "description": "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed.",
         "required": ["routineId", "routineName", "outcome"],
         "properties": {
+          "appsToConnect": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The apps the routine needs connected, by name, when the run failed\nbecause one of them is not. Empty for every other run."
+          },
           "outcome": {
             "$ref": "#/components/schemas/RoutineRunOutcome",
             "description": "How the run ended."

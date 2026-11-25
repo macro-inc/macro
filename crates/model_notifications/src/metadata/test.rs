@@ -1510,6 +1510,7 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
         routine_id: Uuid::nil(),
         routine_name: "Morning brief".to_string(),
         outcome: RoutineRunOutcome::Failed,
+        apps_to_connect: Vec::new(),
     };
     let succeeded = RoutineRunFinishedMetadata {
         outcome: RoutineRunOutcome::Succeeded,
@@ -1532,6 +1533,43 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
     }))
     .unwrap();
     assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
+    assert!(value.get("appsToConnect").is_none());
+}
+
+#[test]
+fn a_routine_run_refused_for_a_disconnected_app_says_which_to_reconnect() {
+    let one = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+        apps_to_connect: vec!["Linear".to_string()],
+    };
+    let several = RoutineRunFinishedMetadata {
+        apps_to_connect: vec!["Linear".into(), "Notion".into(), "Slack".into()],
+        ..one.clone()
+    };
+
+    assert_eq!(one.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        one.format_body(None).unwrap(),
+        "It needs Linear connected to run. Reconnect it."
+    );
+    assert_eq!(
+        several.format_body(None).unwrap(),
+        "It needs Linear, Notion and Slack connected to run. Reconnect them."
+    );
+    assert_eq!(
+        serde_json::to_value(&one).unwrap()["appsToConnect"],
+        serde_json::json!(["Linear"])
+    );
+    // Payloads stored before the field existed still read.
+    let stored: RoutineRunFinishedMetadata = serde_json::from_value(serde_json::json!({
+        "routineId": Uuid::nil(),
+        "routineName": "Morning brief",
+        "outcome": "failed",
+    }))
+    .unwrap();
+    assert!(stored.apps_to_connect.is_empty());
 }
 
 #[test]
@@ -1897,5 +1935,25 @@ fn a_ping_about_a_channel_message_opens_at_the_message() {
             .collapse_key(&channel)
             .into_hashed()
             .into_inner()
+    );
+}
+
+#[test]
+fn a_crm_email_sharing_notice_names_no_company_count_or_person() {
+    let notice = CrmEmailSharingChangedMetadata {
+        team_id: uuid::Uuid::nil(),
+        reason: CrmEmailSharingChangeReason::CompaniesMerged,
+    };
+    assert_eq!(
+        notice.format_title(None).unwrap(),
+        "Your CRM email sharing changed"
+    );
+    assert_eq!(
+        notice.format_body(None).unwrap(),
+        "Companies your sharing rules named were merged, so your rules were updated. Review them in CRM settings."
+    );
+    assert_eq!(
+        serde_json::to_value(&notice).unwrap(),
+        serde_json::json!({"teamId": "00000000-0000-0000-0000-000000000000", "reason": "companies_merged"})
     );
 }

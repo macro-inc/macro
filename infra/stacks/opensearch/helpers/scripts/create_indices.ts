@@ -435,6 +435,14 @@ const CHANNEL_BODY = {
         type: 'text',
         analyzer: 'content_text',
       },
+      // The message's link URLs. The built-in `pattern` analyzer splits a host
+      // into its names (`app.sketchpad.example` -> app, sketchpad, example), which
+      // `content_text` keeps as one token. Being built in, it needs no
+      // analysis settings, so the field is added to a live index in place.
+      links: {
+        type: 'text',
+        analyzer: 'pattern',
+      },
       created_at_seconds: {
         type: 'date',
         format: 'epoch_second',

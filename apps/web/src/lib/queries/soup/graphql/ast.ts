@@ -529,6 +529,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { calendarOnly: mapBoolean(value, 'calendarOnly') };
     case 'Attachment':
       return { attachment: mapEmailAttachment(value) };
+    case 'Label':
+      return { label: mapString(value, 'label') };
     case 'ca':
       return { createdAt: mapDateLiteral(value) };
     case 'ua':

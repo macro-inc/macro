@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_merges (id, team_id, user_id, record_type, request_key, request_fingerprint,\n                                       survivor_id, source_ids, result)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '{}'::jsonb)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a88ab2a932f34a5393e0f151dd0e78868603dc81607c7ecb0e201dbda9d0d3d3"
+}

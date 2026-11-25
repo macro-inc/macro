@@ -16,7 +16,8 @@
 
 use crate::domain::catalog::{ConnectSupport, Overlays};
 use crate::domain::models::{
-    ApiHandle, ConnectorId, ConnectorKey, McpConnections, McpHandle, Resolved, Status, Surfaces,
+    ApiHandle, ConnectorId, ConnectorKey, McpConnections, McpHandle, Resolved, Sought, Status,
+    Surfaces,
 };
 use crate::domain::ports::{GrantState, SourceConnection, SourceKind};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -175,6 +176,19 @@ pub(crate) fn counted_source(
         SourceKind::Native
     } else {
         SourceKind::Pipedream
+    }
+}
+
+/// Whether a connection held by `source` can count for `sought`, whatever the
+/// flag and the overlay table say: the table above, read by column.
+pub(crate) fn can_count(source: SourceKind, sought: Sought<'_>) -> bool {
+    match (source, sought) {
+        (SourceKind::Native, _) => true,
+        (SourceKind::GithubLink, Sought::App(app)) => *app == ConnectorId::github(),
+        (SourceKind::Pipedream | SourceKind::Connect, Sought::App(_)) => true,
+        (SourceKind::GithubLink | SourceKind::Pipedream | SourceKind::Connect, Sought::Servers) => {
+            false
+        }
     }
 }
 

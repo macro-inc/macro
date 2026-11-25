@@ -24,7 +24,7 @@ const callsFaq = [
   },
   {
     q: 'Are calls recorded and transcribed?',
-    a: 'Yes. Participants see a recording and transcription notice. After the call, open its recording, transcript, and summary in Calls.',
+    a: 'Yes. Participants see a recording and transcription notice. Open the recording, transcript, and summary in Calls right after the call.',
   },
   {
     q: 'Can an agent turn a call into next steps?',
@@ -70,30 +70,30 @@ export function RouteCalls() {
           tutorial="calls"
           product="Calls"
           title="Calls that feed into team memory."
-          description="Call from any channel or DM. Give your team and agents context with recordings and transcripts."
+          description="Calls lets you start instant video meetings in any channel or invite external guests with recordings and transcripts."
         />
         <FeaturePageSection
           id="call-default"
           title="Team calls and private meetings."
-          description="Calls in team and public channels share their recording, transcript, and summary with your team by default. Calls in DMs and private channels start private. Standalone meeting links are private to participants. Use the call controls to change sharing during a call. Afterward, the person who started it can change access from Sharing in the call’s side panel."
+          description="Team-channel calls automatically share recordings, transcripts, and summaries with your team; DM and private-channel calls stay private. Adjust sharing mid-call or anytime afterward from the side panel."
           screen={featureScreens['call-default']}
         />
         <FeaturePageSection
           id="call-followup"
           title="Macro Agents get the transcript and summary."
-          description="Every speaker is identified, so the transcript knows who said what. Agents can read the full transcript, plus a summary of why the call matters and how it fits into the bigger picture of your company. Ask one to create tasks or draft a follow-up from what was discussed."
+          description="Every transcript is speaker-identified and paired with a company-level summary. Ask Macro Agents to turn what was decided into Macro Tasks, update Macro CRM, or draft follow-up Macro Mail."
           screen={featureScreens['call-followup']}
         />
         <FeaturePageSection
           id="call-start"
           title="As easy as a Slack huddle."
-          description="Start a call right in a channel or a DM in Macro Chat, or share a link with anyone, like Google Meet. They can join in a browser without installing anything."
+          description="Jump into a huddle from any Macro Chat channel or DM in one click without sending a calendar invite or meeting link."
           screen={featureScreens['call-start']}
         />
         <FeaturePageSection
           id="call-external"
-          title="External calls, shared by link."
-          description="Create a meeting link and send it to anyone outside your team. They can join in their browser without a Macro account or installing anything."
+          title="External calls shared by link."
+          description="Need to meet with a customer or candidate? Send a standalone browser link like Google Meet that works with no Macro account or download."
           screen={featureScreens['call-external']}
         />
         <FeaturePhoneScreens screens={phoneScreens['calls']} product="Calls" />

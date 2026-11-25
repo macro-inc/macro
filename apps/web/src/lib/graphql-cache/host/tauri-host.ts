@@ -461,7 +461,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (event.payload.reset) {
         authorityObserver.reset();
         liveQueries.clear();
-        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+        for (const cb of generationChangeSubscribers)
+          cb({ storage: 'reset', queue: 'reset' });
       }
       for (const cb of cacheChangeSubscribers) {
         if (

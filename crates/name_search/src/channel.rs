@@ -26,6 +26,9 @@ pub struct ChannelNameSearchScope<'a> {
     pub channel_ids: &'a [Uuid],
     /// Only these channel types; empty means every type.
     pub channel_types: &'a [ChannelType],
+    /// Words and phrases no name may hold: a channel whose name, as the
+    /// viewer sees it, matches one as a term would is left out.
+    pub excluded_terms: &'a [String],
 }
 
 /// Searches the names of channels in which the user is an active participant,
@@ -33,14 +36,15 @@ pub struct ChannelNameSearchScope<'a> {
 /// channels the other participants' names. `term` splits on whitespace and
 /// commas; every part must match the stored name or some other participant,
 /// as a case-insensitive substring, or as a whole word when `exact_match` is
-/// set. Results are newest `updated_at` first with the matched name
-/// highlighted.
+/// set, and no word of `scope.excluded_terms` may match either. Results
+/// are newest `updated_at` first with the matched name highlighted.
 #[tracing::instrument(
     skip_all,
     fields(
         user_id = %macro_user_id.as_ref(),
         channel_types = ?scope.channel_types,
         channel_id_count = scope.channel_ids.len(),
+        excluded_term_count = scope.excluded_terms.len(),
         term_len = term.len(),
         exact_match,
         limit,
@@ -73,15 +77,18 @@ pub async fn search_channel_names<'a>(
             Some((updated_at, entity_id))
         }
     };
-    let patterns: Vec<String> = terms
+    let pattern = |part: &str| {
+        if exact_match {
+            format!(r"(^|\W){}($|\W)", escape_regex(part))
+        } else {
+            format!("%{}%", escape_like(part))
+        }
+    };
+    let patterns: Vec<String> = terms.iter().map(|part| pattern(part)).collect();
+    let excluded_patterns: Vec<String> = scope
+        .excluded_terms
         .iter()
-        .map(|part| {
-            if exact_match {
-                format!(r"(^|\W){}($|\W)", escape_regex(part))
-            } else {
-                format!("%{}%", escape_like(part))
-            }
-        })
+        .map(|excluded| pattern(excluded))
         .collect();
     let viewer_user_id = MacroUserIdStr(macro_user_id.clone());
 
@@ -90,6 +97,7 @@ pub async fn search_channel_names<'a>(
         ChannelNameSearch {
             viewer_user_id: viewer_user_id.clone(),
             patterns: &patterns,
+            excluded_patterns: &excluded_patterns,
             regex_patterns: exact_match,
             channel_ids: scope.channel_ids,
             channel_types: scope.channel_types,
