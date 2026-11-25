@@ -223,10 +223,13 @@ export function clipLightDayBars(
     const covering = bars
       .filter((bar) => bar.start <= column && bar.end > column)
       .sort((a, b) => a.lane - b.lane);
-    const limit =
-      covering.length > capacity ? Math.max(0, capacity - 1) : covering.length;
+    const overflowing = covering.length > capacity;
+    const compact = overflowing || covering.some((bar) => bar.lane >= capacity);
+    const limit = overflowing ? Math.max(0, capacity - 1) : covering.length;
     hidden.push(covering.length - limit);
-    covering.slice(0, limit).forEach((bar, lane) => {
+    covering.slice(0, limit).forEach((bar, index) => {
+      // Preserve continuous spans unless overflow or the row limit requires packing.
+      const lane = compact ? index : bar.lane;
       const last = previous.get(bar.item.event.id);
       if (last?.lane === lane && last.end === column) {
         last.end = column + 1;

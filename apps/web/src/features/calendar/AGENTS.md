@@ -61,6 +61,7 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Render phone Month directly with MonthGrid, with no hidden FullCalendar; reuse date/event nodes by index while lightweight slots recycle.
 - Keep decorative projections inert throughout momentum; do not propagate page-position custom properties into their subtrees.
 - Reserve the full two-row all-day envelope in phone Week; use 64px hours only in phone three-day view, leaving Day/Week spacing unchanged.
+- Preserve continuous all-day span lanes unless overflow or the row limit requires compaction.
 - Keep phone Month pills title-only and its day-sheet date noninteractive; use semantic readable text and full-strength calendar colors for event dots.
 - Share one cache startup head start across concurrent ranges; never restart its deadline per reader.
 

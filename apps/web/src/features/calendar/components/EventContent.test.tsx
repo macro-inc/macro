@@ -232,6 +232,61 @@ describe('lightweight calendar event geometry', () => {
     expect(capped.hidden).toEqual([2]);
     expect(capped.overflowTop).toBe(21);
   });
+  it('keeps a continuous all-day span on its packed lane when the preceding lane ends', () => {
+    const days = lightGridDays(
+      new Date(2026, 10, 2),
+      new Date(2026, 10, 4),
+      true
+    );
+    const bars = lightDayBars(
+      lightCalendarEvents([
+        event({
+          id: 'earlier',
+          allDay: true,
+          start: '2026-11-01',
+          end: '2026-11-03',
+        }),
+        event({
+          id: 'continuing',
+          allDay: true,
+          start: '2026-11-02',
+          end: '2026-11-04',
+        }),
+      ]),
+      days
+    );
+    const clipped = clipLightDayBars(bars, 2, 2);
+    expect(
+      clipped.bars
+        .filter((bar) => bar.item.event.id === 'continuing')
+        .map(({ start, end, lane }) => ({ start, end, lane }))
+    ).toEqual([{ start: 0, end: 2, lane: 1 }]);
+    expect(clipped.hidden).toEqual([0, 0]);
+  });
+
+  it('compacts overflow survivors above the more-link row when lower lanes are empty', () => {
+    const days = lightGridDays(
+      new Date(2026, 10, 2),
+      new Date(2026, 10, 3),
+      true
+    );
+    const bars = lightDayBars(
+      lightCalendarEvents(
+        [0, 1, 2].map((id) =>
+          event({
+            id: String(id),
+            allDay: true,
+            start: '2026-11-02',
+            end: '2026-11-03',
+          })
+        )
+      ),
+      days
+    ).map((bar) => ({ ...bar, lane: bar.lane + 1 }));
+    const clipped = clipLightDayBars(bars, 1, 2);
+    expect(clipped.bars.map((bar) => bar.lane)).toEqual([0]);
+    expect(clipped.hidden).toEqual([2]);
+  });
 });
 
 describe('query-free calendar projection updates', () => {
