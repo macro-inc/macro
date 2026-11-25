@@ -1060,6 +1060,11 @@ export type PayloadCondition = {
 export type PayloadScalar = null | boolean | number | string;
 
 /**
+ * The plans a user can be on, cheapest first.
+ */
+export type PlanTier = 'free' | 'premium' | 'business' | 'max';
+
+/**
  * Narrows a task property change filter to one property and, optionally, the
  * values it must gain.
  */
@@ -1347,6 +1352,30 @@ export type RoutineKnobEntityId = string;
  * task.
  */
 export type RoutineKnobEntityType = 'channel' | 'document' | 'project' | 'database' | 'user' | 'task' | 'email_thread' | 'chat' | 'crm_company' | 'crm_contact' | 'initiative';
+
+/**
+ * Stable code clients match on, distinct from AI allowance codes.
+ */
+export type RoutineLimitCode = 'routine_limit_reached';
+
+/**
+ * A write that would activate more routines than the owner's plan allows.
+ */
+export type RoutineLimitErrorBody = {
+    code: RoutineLimitCode;
+    /**
+     * Human-readable explanation.
+     */
+    error: string;
+    /**
+     * How many routines the plan allows to be active at once.
+     */
+    limit: number;
+    /**
+     * The plan the limit comes from.
+     */
+    plan: PlanTier;
+};
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
@@ -2311,6 +2340,10 @@ export type CreateScheduledActionData = {
 export type CreateScheduledActionErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     403: string;
     /**
      * The routine already has the most active sub-routines it can
@@ -2763,6 +2796,10 @@ export type UpdateScheduledActionData = {
 export type UpdateScheduledActionErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     404: string;
     /**
      * Configuration changed or execution is active
@@ -2877,6 +2914,10 @@ export type SetScheduledActionEnabledData = {
 export type SetScheduledActionEnabledErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     404: string;
     /**
      * Configuration changed or execution is active
@@ -3084,6 +3125,10 @@ export type ActivateScheduledActionTemplateData = {
 export type ActivateScheduledActionTemplateErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     403: string;
     /**
      * The routine is not shared

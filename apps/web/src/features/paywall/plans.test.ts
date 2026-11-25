@@ -5,6 +5,7 @@ import {
   isUpgrade,
   PLAN_BY_TIER,
   PLANS,
+  planBenefits,
   planFeatures,
   planPriceAt,
   soldAt,
@@ -67,8 +68,24 @@ describe('plan catalogs', () => {
   it('hides the usage rows without AI usage billing', () => {
     expect(planFeatures(false).map((row) => row.label)).toEqual([
       'AI Agent',
+      'Active routines',
       'Onboarding',
       'Storage',
     ]);
+  });
+
+  it('lists the active routines each plan allows', () => {
+    expect(
+      planFeatures(false).find((row) => row.label === 'Active routines')?.values
+    ).toEqual({
+      free: '10',
+      premium: '1,000',
+      business: '3,000',
+      max: '10,000',
+    });
+    expect(planBenefits('free', false)).toContain('10 active routines');
+    expect(planBenefits('premium', false)).toContain('1,000 active routines');
+    expect(planBenefits('business', false)).toContain('3,000 active routines');
+    expect(planBenefits('max', false)).toContain('10,000 active routines');
   });
 });

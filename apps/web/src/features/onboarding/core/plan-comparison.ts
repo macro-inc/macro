@@ -1,4 +1,4 @@
-import { PLAN_USAGE_LABELS } from '../../paywall/plans';
+import { PLAN_ACTIVE_ROUTINES, PLAN_USAGE_LABELS } from '../../paywall/plans';
 
 /**
  * Feature comparison shown below the unchanged trial offer. `short` and
@@ -64,6 +64,12 @@ export const PLAN_COMPARISON = [
       business: 'All',
       max: 'All',
     },
+  },
+  {
+    feature: 'Active routines',
+    short: 'Routines',
+    values: PLAN_ACTIVE_ROUTINES,
+    shortValues: PLAN_ACTIVE_ROUTINES,
   },
   {
     feature: 'Storage',

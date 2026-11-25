@@ -120,9 +120,7 @@ it('buys Business monthly once Billed monthly is chosen in the billing-cycle dia
   render(() => <Billing />);
   fireEvent.click(screen.getByRole('button', { name: 'Get Business' }));
   fireEvent.click(screen.getByRole('radio', { name: /Billed monthly/ }));
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Continue to checkout' })
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
   expect(mocks.checkout).toHaveBeenCalledWith({
     plan: 'business',
     interval: 'month',

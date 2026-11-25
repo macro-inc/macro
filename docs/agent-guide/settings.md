@@ -725,15 +725,20 @@ phone-width layouts; payment-provider interactions are covered separately.
 `Get Business` and `Get Max` keep standard paid terms and never offer a trial. A
 Pro trial that upgrades to Business or Max is charged today; the card says
 `Charged today. The Pro trial ends.` A paid upgrade stays prorated for the rest
-of the period. Before a first purchase, a `Billed annually` / `Billed monthly`
-tab (annually first) prices the Business ($80/$90) and Max ($200/$220) cards and
-the checkout they start; Pro is $40 monthly either way. After purchase, cards
-price at the subscription's own interval, and an annual subscription offers no
-Pro card. Each paid card names its service (`Self-serve` for Pro,
-`White-glove onboarding` for Business and Max). Prices read `/ month` for solo users and
-`per seat / month` for team accounts, with `, billed annually` on annual prices. Each card puts its button beside the price when wide enough and below
-the price when narrow. Free lists 2 connected email accounts; Pro and Max list
-unlimited connected email accounts. Pro users see Business and Max cards
+of the period. Before a first purchase, Business ($80/mo) and Max ($200/mo)
+cards display the annual rate with the monthly rate noted (`$90 monthly` /
+`$220 monthly`), and clicking `Get Business` or `Get Max` opens a compact
+billing-cycle dialog (centered modal on desktop, bottom drawer on mobile) to
+choose Annual (default) or Monthly before Stripe Checkout; Pro is $40 monthly
+and skips the dialog. After purchase, cards price at the subscription's own
+interval, and an annual subscription offers no Pro card. Each paid card names
+its service (`Self-serve` for Pro, `White-glove onboarding` for Business and
+Max). Prices read `/ month` for solo users and `per seat / month` for team
+accounts, with `, billed annually` on annual prices. Each card puts its button
+beside the price when wide enough and below the price when narrow. Free lists 2
+connected email accounts; Pro and Max list unlimited connected email accounts.
+Each card lists its active routine limit: 10 on Free, 1,000 on Pro, 3,000 on
+Business, and 10,000 on Max. Pro users see Business and Max cards
 (`Upgrade to Business`, `Upgrade to Max`), Business users a Max card, and Max
 users keep their current plan; a card for a cheaper plan reads `Switch to …`. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
