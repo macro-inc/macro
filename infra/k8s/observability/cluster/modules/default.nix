@@ -10,6 +10,7 @@
     # its own NetworkPolicies (see platform/observability-namespace.nix).
     ./grafana.nix
     ./ingest.nix
+    ./derived-metrics
     ./edge.nix
   ];
 }

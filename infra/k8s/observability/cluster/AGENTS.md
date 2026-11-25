@@ -17,6 +17,8 @@ The [README](README.md) has the application list, bootstrap and contract with
 - `modules/grafana.nix`, `modules/edge.nix`, `modules/ingest.nix`: Grafana, the
   two nginx front doors and Alloy ingest, built from the host stack's files
   (README, "Grafana, the edge and ingest").
+- `modules/derived-metrics/`: Datadog's derived metrics, computed here; `MAPPING.md`
+  there is how to translate a Datadog query.
 
 ## Scope
 
@@ -42,6 +44,9 @@ The [README](README.md) has the application list, bootstrap and contract with
   in `env/prod.nix`. Until then only the watchdog heartbeat sends.
 - Start Grafana: set `macro.grafana.database` in `env/prod.nix` from the
   `../aws/` outputs; it runs 0 replicas until then.
+- Add or change a derived metric: `modules/derived-metrics/spans.nix`, then render
+  (also writes `MAPPING.md`). While Datadog still has it, change
+  `infra/stacks/monitoring` with it.
 - Change an edge or query-gateway rule: `modules/edge.nix`.
 
 ## Checks
@@ -77,6 +82,8 @@ The [README](README.md) has the application list, bootstrap and contract with
   there, and its push path is `/api/v1/push`, not Prometheus' `/api/v1/write`.
 - A change to the host's `nixos/grafana.nix`, `nixos/grafana-provisioning/` or
   `nixos/ingest.alloy` changes this render; re-render with it.
+- Derived metrics are delta samples: query them with `sum_over_time`, never `rate` or
+  `increase` (`modules/derived-metrics/MAPPING.md`).
 - Grafana's contact point **Test** button sends even while `notify` is false.
 - Argo CD syncs with server-side apply; ignore a field (`ignoreDifferences`) only
   after seeing it drift on a cluster.

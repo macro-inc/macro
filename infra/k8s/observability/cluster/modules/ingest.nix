@@ -3,6 +3,9 @@
 # swapped in: it checks the bearer token (the secret's `otlp_token`), then
 # sends logs to Loki, traces to Tempo and metrics to Mimir. Two replicas in
 # different zones; the edge reaches them through their Service.
+#
+# It also forwards the spans that metrics are derived from to the
+# `derived-metrics` application (`macro.derivedMetrics.ingestTap`).
 {
   charts,
   config,
@@ -40,6 +43,11 @@ let
       from = ''"http://127.0.0.1:9090/api/v1/write"'';
       to = ''"${endpoints.mimir.push}"'';
     }
+    # The cluster's own: every span also goes to the derived-metrics tap.
+    {
+      from = "traces = [otelcol.exporter.otlp.tempo.input]";
+      to = "traces = [otelcol.exporter.otlp.tempo.input, otelcol.processor.filter.derived.input]";
+    }
   ];
   hostConfig = builtins.readFile ../../../../stacks/observability/nixos/ingest.alloy;
   ingestConfig =
@@ -54,7 +62,7 @@ let
     assert lib.assertMsg (
       !lib.hasInfix "127.0.0.1" result
     ) "ingest.alloy has a loopback address modules/ingest.nix doesn't replace";
-    result;
+    result + "\n" + config.macro.derivedMetrics.ingestTap;
 in
 {
   applications.alloy-ingest = {
