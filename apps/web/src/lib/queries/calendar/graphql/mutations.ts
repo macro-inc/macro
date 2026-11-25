@@ -252,7 +252,7 @@ function trackMove(moved: OccurrenceRecord | undefined) {
   let held = false;
   return {
     enqueued() {
-      if (!ref) return;
+      if (!ref || held) return;
       held = true;
       holdMoving(ref, 1);
     },
