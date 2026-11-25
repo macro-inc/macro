@@ -57,8 +57,9 @@ export class ConnectedAppNamespace {
   /**
    * Find tools across every connected app the execution's agent was given,
    * by keywords matched against tool names and descriptions (e.g. `linear
-   * issue`), best first, at most 20. Apps whose tools could not be read come
-   * back in `unsearched`, not as an error.
+   * issue`), best first, at most 20. Apps whose tools could not be read, or
+   * not within 5 seconds, come back in `unsearched`, not as an error; read
+   * one of those with `app.tools()` if the task needs it.
    *
    * @readonly
    * @openworld

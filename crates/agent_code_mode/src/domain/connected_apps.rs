@@ -92,6 +92,11 @@ pub struct ConnectedToolSearch {
 /// Most tools one search returns.
 pub const MAX_TOOL_MATCHES: usize = 20;
 
+/// How long a search waits for any one app to list its tools. A slow server
+/// (some answer `tools/list` in over 10 s) would otherwise hold up the whole
+/// search; it is reported unsearched, and `app.tools()` still reads it.
+pub const TOOL_LISTING_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Call one tool of a connected app.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -298,8 +303,8 @@ impl ConnectedAppService {
 
     /// Find tools across every app the agent was given by keywords matched
     /// against tool names and descriptions, ranked the way `SearchTools`
-    /// ranks: by how many terms match. An app whose tools cannot be listed
-    /// is reported, not fatal.
+    /// ranks: by how many terms match. An app whose tools cannot be listed,
+    /// or not within [`TOOL_LISTING_DEADLINE`], is reported, not fatal.
     pub async fn search_tools(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -315,7 +320,11 @@ impl ConnectedAppService {
                 key: app.key.clone(),
             };
             let usage = &usage;
-            async move { self.tools.tools(usage, &reference).await }
+            async move {
+                tokio::time::timeout(TOOL_LISTING_DEADLINE, self.tools.tools(usage, &reference))
+                    .await
+                    .map_err(|_| CodeModeError::Unavailable)?
+            }
         }))
         .await;
 
