@@ -123,3 +123,20 @@ pub async fn merge_discussions_in(
     span.record("mentions", merged.mentions.len());
     Ok(merged)
 }
+
+/// How many discussion messages are on `sources`, for a merge's review.
+pub async fn count_discussion_messages_in(
+    conn: &mut PgConnection,
+    parent: MergedParent,
+    sources: &[Uuid],
+) -> Result<i64, sqlx::Error> {
+    let sources: Vec<String> = sources.iter().map(Uuid::to_string).collect();
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM comms_messages
+           WHERE parent_entity_type = $1 AND parent_entity_id = ANY($2) AND deleted_at IS NULL"#,
+        parent.as_str(),
+        &sources,
+    )
+    .fetch_one(conn)
+    .await
+}

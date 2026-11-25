@@ -147,6 +147,44 @@ pub async fn lock_entity_values_in(
         .collect())
 }
 
+/// Read the own values of `entity_ids` without locking them, for a merge's
+/// review.
+pub async fn read_entity_values_in(
+    conn: &mut PgConnection,
+    entity_type: EntityType,
+    entity_ids: &[String],
+) -> Result<Vec<MergeEntityValue>, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"SELECT ep.id, ep.entity_id, ep.property_definition_id, pd.display_name,
+                  pd.user_id IS NOT NULL AS "personal!", ep.values, ep.created_at, ep.updated_at
+           FROM entity_properties ep
+           JOIN property_definitions pd ON pd.id = ep.property_definition_id
+           WHERE ep.entity_type = $1 AND ep.entity_id = ANY($2)
+           ORDER BY ep.id"#,
+        entity_type as EntityType,
+        entity_ids,
+    )
+    .fetch_all(conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| MergeEntityValue {
+            id: row.id,
+            entity_id: row.entity_id,
+            property_definition_id: row.property_definition_id,
+            property_name: row.display_name,
+            scope: if row.personal {
+                ValueScope::Personal
+            } else {
+                ValueScope::Team
+            },
+            values: row.values,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+        .collect())
+}
+
 /// Give `survivor` the values in `moves` (rows of merged records, by id) and
 /// delete every other own value of `sources`. The values must have been read
 /// with [`lock_entity_values_in`] in the same transaction, and the survivor
