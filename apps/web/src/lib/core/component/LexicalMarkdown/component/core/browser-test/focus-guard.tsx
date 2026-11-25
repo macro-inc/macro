@@ -1,5 +1,6 @@
 import '@app/index.css';
 import { titleNavigationPlugin } from '@app/features/block-md/component/title-navigation';
+import { keyNavigationPlugin } from '@app/features/block-md/plugins/keyboardNavigation';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dropdown } from '@ui';
 import {
@@ -32,7 +33,8 @@ type FocusGuardWindow = Window & {
 /**
  * A document editor with the ways the app changes its selection from outside
  * it: a toolbar button, a menu item, a prompt field that closes as it applies,
- * and a title editor above it (the real `titleNavigationPlugin`). Beside them
+ * and a title editor above it (the real `titleNavigationPlugin` and
+ * `keyNavigationPlugin`, which move between the two). Beside them
  * are fields of another pane (an input, a textarea, and another editor),
  * which keep focus while the document changes.
  */
@@ -47,6 +49,7 @@ function Fixture() {
 
   onMount(() => {
     onCleanup(titleNavigationPlugin(body.lexical, () => false)(title.lexical));
+    onCleanup(keyNavigationPlugin(title.lexical, () => false)(body.lexical));
   });
 
   const guardWindow: FocusGuardWindow = window;

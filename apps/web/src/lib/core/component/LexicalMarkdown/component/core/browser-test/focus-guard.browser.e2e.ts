@@ -159,3 +159,23 @@ test('Enter and Tab in the title move the caret into the document', async ({
   await page.keyboard.type('>');
   expect((await paragraphs(body))[0]).toBe('>Intro');
 });
+
+// ArrowLeft takes the same path, but this fixture's editor handles ArrowLeft
+// itself before the navigation plugin sees it (with or without the patch).
+for (const key of ['ArrowUp', 'Backspace']) {
+  test(`${key} at the document's start moves the caret into the title`, async ({
+    page,
+  }) => {
+    const body = await open(page);
+    const title = page.getByRole('textbox', { name: 'Title' });
+    // Tab from the title puts the caret at the document's start, as Lexical
+    // sees it (a click then Home can race Lexical's selectionchange).
+    await title.click();
+    await page.keyboard.press('Tab');
+    await expect(body).toBeFocused();
+    await page.keyboard.press(key);
+    await expect(title).toBeFocused();
+    await page.keyboard.type('!');
+    await expect(title).toHaveText(key === 'ArrowUp' ? '!Title' : 'Title!');
+  });
+}

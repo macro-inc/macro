@@ -28,6 +28,10 @@ export function keyNavigationPlugin(
   titleEditor: LexicalEditor,
   ignoreArrows: Accessor<boolean>
 ) {
+  // The title is a field of its own: an editor writes its caret only where
+  // focus is, so move focus to the title before placing the caret there.
+  const focusTitle = () =>
+    titleEditor.getRootElement()?.focus({ preventScroll: true });
   return (documentEditor: LexicalEditor) => {
     // Press arrow up in the main editor.
     return mergeRegister(
@@ -46,6 +50,7 @@ export function keyNavigationPlugin(
           if (!isRectFlushWith(caret, rect, 'top', 5)) return false;
 
           event?.preventDefault();
+          focusTitle();
           titleEditor.update(() => {
             const root = $getRoot();
             const firstChild = root.getFirstChild();
@@ -78,6 +83,7 @@ export function keyNavigationPlugin(
             return false;
 
           event?.preventDefault();
+          focusTitle();
           titleEditor.update(() => {
             const root = $getRoot();
             const firstChild = root.getFirstChild();
@@ -133,6 +139,7 @@ export function keyNavigationPlugin(
           }
 
           event?.preventDefault();
+          focusTitle();
           titleEditor.update(() => {
             const root = $getRoot();
             const firstChild = root.getFirstChild();
