@@ -1,4 +1,5 @@
 import type { SearchOperatorLookup } from '@app/features/next-soup/core/search-operator-filters';
+import { nameAsTyped } from '@app/features/next-soup/core/search-operators';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
@@ -31,7 +32,8 @@ export function createSearchOperatorLookup(
         const wanted = name.toLowerCase();
         return tags.flatMap((option) => {
           const propertyId = tagSets.get(option.id);
-          return option.label.toLowerCase() === wanted && propertyId
+          return nameAsTyped(option.label).toLowerCase() === wanted &&
+            propertyId
             ? [{ propertyId, optionId: option.id }]
             : [];
         });

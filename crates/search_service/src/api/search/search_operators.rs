@@ -250,10 +250,19 @@ fn priority(value: &str) -> Option<PriorityOption> {
     })
 }
 
+/// Whether `value` can name something: a letter, a digit, or another
+/// non-ASCII character such as an emoji, so `tag:🔥` is a tag while ASCII
+/// punctuation alone (`tag:-`) stays a word.
+fn names_something(value: &str) -> bool {
+    value
+        .chars()
+        .any(|c| c.is_alphanumeric() || !(c.is_ascii() || c.is_whitespace()))
+}
+
 /// The operator `term` names, if it is one with a valid value.
 fn operator(term: &str) -> Option<(Name, Value)> {
     let (name, value) = name_and_value(term).ok()?;
-    if !value.chars().any(char::is_alphanumeric) {
+    if !names_something(value) {
         return None;
     }
     let lowered = value.to_lowercase();
@@ -279,7 +288,7 @@ fn operator(term: &str) -> Option<(Name, Value)> {
         // `in:` without a `#` names a Mail view or label.
         Name::Channel => {
             let channel = value.strip_prefix('#')?;
-            if !channel.chars().any(char::is_alphanumeric) {
+            if !names_something(channel) {
                 return None;
             }
             Value::Name(channel.to_string())

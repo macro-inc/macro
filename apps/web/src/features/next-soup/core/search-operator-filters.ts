@@ -14,7 +14,7 @@ import {
   type SearchIndexId,
 } from './search-filters';
 import {
-  isPhraseQuote,
+  nameAsTyped,
   SEARCH_OPERATOR_TYPES,
   type SearchOperatorBinding,
   type SearchOperatorCallStatus,
@@ -362,8 +362,7 @@ const INDEX_TYPES: Record<SearchIndexId, string> = {
  * A name as the value of a token the field shows: without quotes, which no
  * value can hold, and quoted when it holds whitespace.
  */
-const shownValue = (name: string) =>
-  asValue([...name].filter((char) => !isPhraseQuote(char)).join(''));
+const shownValue = (name: string) => asValue(nameAsTyped(name));
 
 /** Operator text an opener writes, with the ids its bound tokens stand for. */
 export type SearchOperatorText = {
