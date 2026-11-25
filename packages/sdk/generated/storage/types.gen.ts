@@ -14880,8 +14880,7 @@ export type MeetingsResponse = {
 };
 
 /**
- * People under different records share an address; merging would file
- * two people with one address under the same record.
+ * Why a merge can't go ahead until someone changes the records.
  */
 export type MergeBlock = {
     kind: 'same_address_people';
@@ -14889,6 +14888,12 @@ export type MergeBlock = {
      * Every person involved, archived ones too.
      */
     people: Array<SameAddressPerson>;
+} | {
+    kind: 'different_companies';
+    /**
+     * The people who would change company.
+     */
+    people: Array<OtherCompanyPerson>;
 };
 
 /**
@@ -16467,6 +16472,28 @@ export type OptionRename = {
      * The new label.
      */
     to: string;
+};
+
+/**
+ * A person a contact merge would move to another company.
+ */
+export type OtherCompanyPerson = {
+    /**
+     * The company it is filed under.
+     */
+    companyId: string;
+    /**
+     * That company's name, as listings show it.
+     */
+    companyName: string;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
 };
 
 /**

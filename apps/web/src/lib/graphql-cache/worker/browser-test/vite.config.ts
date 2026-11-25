@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import solid from 'vite-plugin-solid';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
@@ -9,6 +10,7 @@ export default defineConfig(({ command }) => ({
   root: directory,
   base: command === 'build' ? '/app/' : '/',
   plugins: [
+    solid(),
     {
       // The directory reader's checkpoint and server modules load the app's
       // sync and analytics code; the list order harness needs neither.
@@ -79,6 +81,7 @@ export default defineConfig(({ command }) => ({
           'parking.html',
           'graphql-soup-rollout.html',
           'cache-recovery.html',
+          'queue-salvage.html',
           'notification-projection.html',
           'mail-projection.html',
           'mail-reconciliation.html',

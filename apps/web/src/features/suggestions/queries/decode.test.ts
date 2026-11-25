@@ -119,6 +119,33 @@ it('keeps the server’s two lists in order, open then done, with its counts', (
   expect(feed.counts).toEqual(counts);
 });
 
+it('reads the topics, and each suggestion’s own', () => {
+  const topic = { key: 'customer:acme', name: 'Acme renewal' };
+  const feed = toFeed({
+    suggestions: [{ ...WIRE, topic }],
+    counts: COUNTS,
+    topics: [
+      {
+        ...topic,
+        reason: {
+          text: 'Renews December 1',
+          source: { entityType: 'email_thread', entityId: 'thread' },
+        },
+        open: 1,
+      },
+      { key: 'event:offsite', name: 'Offsite', reason: null, open: 0 },
+    ],
+  });
+
+  expect(feed.suggestions[0].topic).toEqual(topic);
+  expect(feed.topics).toEqual([
+    { ...topic, reason: 'Renews December 1' },
+    { key: 'event:offsite', name: 'Offsite' },
+  ]);
+  // A server that has no topics yet.
+  expect(toFeed({ suggestions: [], counts: COUNTS }).topics).toEqual([]);
+});
+
 it('reads a feed asked for with a limit, which has no done list', () => {
   const open = { ...WIRE, id: 'open', status: 'open', run: null } as const;
 

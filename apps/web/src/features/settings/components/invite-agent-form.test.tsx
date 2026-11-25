@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { InviteAgentForm } from './invite-agent-form';
 
@@ -81,7 +82,7 @@ it('shows the first letter of the name as the picture, and adds the agent with t
   expect(picture()).toBe('小');
 
   fireEvent.click(
-    screen.getByRole('button', { name: 'Add 小明 · $40.00/month' })
+    screen.getByRole('button', { name: 'Add agent · $40.00/month' })
   );
   expect(onSubmit).toHaveBeenCalledWith(
     {
@@ -129,7 +130,7 @@ it('adds Macronaught when the name is left as it starts', () => {
     />
   ));
   fireEvent.click(
-    screen.getByRole('button', { name: 'Add Macronaught · $40.00/month' })
+    screen.getByRole('button', { name: 'Add agent · $40.00/month' })
   );
   expect(onSubmit).toHaveBeenCalledWith(
     {
@@ -219,7 +220,7 @@ it('marks the name instead of adding when it is cleared', () => {
   const name = screen.getByRole('textbox', { name: 'Name it' });
   fireEvent.input(name, { target: { value: '' } });
   fireEvent.click(
-    screen.getByRole('button', { name: 'Add Agent · $40.00/month' })
+    screen.getByRole('button', { name: 'Add agent · $40.00/month' })
   );
   expect(onSubmit).not.toHaveBeenCalled();
   expect(name.getAttribute('aria-invalid')).toBe('true');
@@ -269,7 +270,7 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
       'Every computer size is sold out right now. Try again later.'
     )
   ).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Add Ada' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
   expect(
     screen.getByText(
       'Every computer size is sold out right now. Try again later.'
@@ -277,4 +278,57 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
   ).toBeTruthy();
   expect(scrolled).toHaveBeenCalled();
   expect(onSubmit).not.toHaveBeenCalled();
+});
+
+it('shows the live price alongside the fixed label when a quote is paid', () => {
+  const noop = () => {};
+  const [amount, setAmount] = createSignal<number>();
+  render(() => (
+    <InviteAgentForm
+      offers={
+        amount() === undefined
+          ? undefined
+          : [
+              {
+                size: 'standard',
+                vcpus: 4,
+                memoryGb: 8,
+                diskGb: 100,
+                soldOut: false,
+                quote: {
+                  size: 'standard',
+                  amount: amount() ?? 0,
+                  currency: 'usd',
+                  interval: 'month',
+                  priceId: 'price_standard',
+                },
+              },
+            ]
+      }
+      offersFailed={false}
+      onRetryOffers={noop}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={noop}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+    />
+  ));
+  const add = screen.getByRole('button', { name: 'Add agent' });
+  const longName = 'Research and knowledge management assistant';
+  const name = screen.getByRole('textbox', { name: 'Name it' });
+  fireEvent.input(name, { target: { value: longName } });
+  expect(add.textContent).toBe('Add agent');
+
+  setAmount(2000);
+  expect(add.textContent).toBe('Add agent · $20.00/month');
+
+  setAmount(3250);
+  expect(add.textContent).toBe('Add agent · $32.50/month');
+
+  setAmount(0);
+  expect(add.textContent).toBe('Add agent');
+  expect(name).toHaveProperty('value', longName);
 });

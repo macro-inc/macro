@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
@@ -16,6 +17,7 @@ import { workerCacheTelemetry } from '../telemetry-relay';
 import { compiledEngineFromPage } from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CacheQueueState,
   type CleanupToPageEnvelope,
   type CoordinatorToEngineEnvelope,
   type EngineFatalCode,
@@ -86,6 +88,7 @@ interface CacheWorkerCoreLike {
   ): Promise<void>;
   drain(): Promise<void>;
   recordCachedQueueDiagnostics?(): void;
+  queueLossTold?(): Promise<void>;
 }
 
 interface DedicatedWorkerScopeLike {
@@ -226,6 +229,21 @@ async function activate(
     activation.databaseAction === 'wipe-before-open'
       ? 'reset-storage-uncertain'
       : 'opened-existing';
+  let initializationQueue: CacheQueueState =
+    activation.databaseAction === 'wipe-before-open' ? 'reset' : 'preserved';
+  let lossToTell = false;
+  // A coordinator sends these only to an engine whose `engine-ready` it took.
+  const coordinatorTookReady = async (): Promise<void> => {
+    if (!lossToTell) return;
+    lossToTell = false;
+    try {
+      await core.queueLossTold?.();
+    } catch (error) {
+      // What keeps the side file open may be gone by the next one.
+      lossToTell = true;
+      throw error;
+    }
+  };
   let draining = false;
   // Keep every admitted handler and graceful drain in one explicit scope.
   // Abrupt owner loss still relies on DedicatedWorker termination; graceful
@@ -326,8 +344,9 @@ async function activate(
     onStorageBusy: () => {
       storageBusy = true;
     },
-    onInitializationOutcome: (outcome) => {
+    onInitializationOutcome: (outcome, queue) => {
       initializationOpenOutcome = outcome;
+      initializationQueue = queue;
     },
     telemetry,
   });
@@ -412,6 +431,10 @@ async function activate(
             fatal('coordinator routed a request after drain began');
             return;
           }
+          fireAndForget(
+            coordinatorTookReady(),
+            'graphql_cache.queue_loss_told'
+          );
           admitRequest(request);
         })
         .with({ kind: 'drain-engine' }, () => {
@@ -450,6 +473,10 @@ async function activate(
           });
         })
         .with({ kind: 'heartbeat' }, ({ heartbeatId }) => {
+          fireAndForget(
+            coordinatorTookReady(),
+            'graphql_cache.queue_loss_told'
+          );
           recordLinearMemory(false);
           core.recordCachedQueueDiagnostics?.();
           post(
@@ -509,8 +536,10 @@ async function activate(
           ? 'wiped-before-open'
           : 'opened-existing',
         openOutcome: initializationOpenOutcome,
+        queue: initializationQueue,
       })
     );
+    lossToTell = initializationQueue === 'reset';
     emitEvent({ kind: 'ready', activation });
     telemetry.record({
       name: 'graphql_cache.db_ready',

@@ -232,4 +232,41 @@ describe('SoupViewContextProvider setup', () => {
       mocks.view = 'home';
     }
   });
+
+  it('waits for a word in Search when every word is one a minus leaves out', () => {
+    mocks.view = 'search';
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let view: ReturnType<typeof useSoupView> | undefined;
+    const Probe = () => {
+      view = useSoupView();
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <SoupViewContextProvider>
+          <Probe />
+        </SoupViewContextProvider>
+      </QueryClientProvider>
+    ));
+
+    try {
+      view?.initialize();
+      view?.provideOperatorLookup(() => NO_SEARCH_OPERATOR_NAMES);
+      // The service refuses minus words alone, and the feed can't leave
+      // anything out by a word.
+      view?.setSearchText('-draft');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('type:doc -draft');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('budget -draft');
+      expect(view?.searchAwaitingInput()).toBe(false);
+      // Mail's search runs on them alone.
+      view?.setSearchText('type:email -draft');
+      expect(view?.searchAwaitingInput()).toBe(false);
+    } finally {
+      mocks.view = 'home';
+    }
+  });
 });

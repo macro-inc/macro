@@ -18,6 +18,7 @@ import {
 } from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CacheQueueState,
   type CacheReadState,
   type CleanupToPageEnvelope,
   type CoordinatorIdentity,
@@ -73,7 +74,8 @@ export interface CacheCoordinatorPageAdapterOptions {
   lockManager?: Pick<LockManager, 'request'>;
   onEngineReplaced?: (
     ownerEpoch: number,
-    openOutcome: EngineOpenOutcome
+    openOutcome: EngineOpenOutcome,
+    queue: CacheQueueState
   ) => void;
   onStartupProgress?: (
     progress: Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
@@ -771,7 +773,8 @@ export class CacheCoordinatorPageAdapter {
         );
         this.options.onEngineReplaced?.(
           message.ownerEpoch,
-          message.openOutcome
+          message.openOutcome,
+          message.queue
         );
         break;
       case 'protocol-error': {

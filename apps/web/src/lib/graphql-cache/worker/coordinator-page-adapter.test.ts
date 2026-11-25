@@ -283,6 +283,7 @@ describe('CacheCoordinatorPageAdapter', () => {
       kind: 'engine-replaced',
       ownerEpoch: 2,
       openOutcome: 'opened-existing',
+      queue: 'preserved',
     });
     port.receive({
       ...version,
@@ -1342,12 +1343,14 @@ describe('CacheCoordinatorPageAdapter', () => {
       kind: 'engine-replaced',
       ownerEpoch: 1,
       openOutcome: 'opened-existing',
+      queue: 'preserved',
     });
     coordinatorPort.receive({
       ...version,
       kind: 'engine-replaced',
       ownerEpoch: 1,
       openOutcome: 'reset-corrupt',
+      queue: 'reset',
     });
     coordinatorPort.receive({
       ...version,
@@ -1358,7 +1361,11 @@ describe('CacheCoordinatorPageAdapter', () => {
     });
     coordinatorPort.receive(election(1));
 
-    expect(replacements).toHaveBeenCalledExactlyOnceWith(1, 'opened-existing');
+    expect(replacements).toHaveBeenCalledExactlyOnceWith(
+      1,
+      'opened-existing',
+      'preserved'
+    );
     expect(dedicatedFactory).toHaveBeenCalledOnce();
     expect(firstWorker.messages).toHaveLength(1);
     expect(firstWorker.messages[0]?.message).toMatchObject({
@@ -1631,6 +1638,7 @@ describe('CacheCoordinatorPageAdapter', () => {
         kind: 'engine-replaced',
         ownerEpoch: 2,
         openOutcome: 'opened-existing',
+        queue: 'preserved',
       });
 
       port.receive(election(3));

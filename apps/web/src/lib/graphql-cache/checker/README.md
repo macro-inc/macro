@@ -17,7 +17,7 @@ its host (`Page` in `world.ts`; keep the two the same).
 | `properties.ts` | What must hold, S1–S6 over the run and L1–L3 after it. |
 | `explore.ts` | Runs one schedule, every schedule within a bound, or a script. |
 | `scenarios.ts` | The scenarios with their bounds, and the scripts. |
-| `known-violations.ts` | What main breaks today, and why. Shrinks to nothing. |
+| `known-violations.ts` | What is known to break, and why. Nothing today. |
 | `handover.checker.test.ts` | Explores, and compares with the known violations. |
 | `handover-plants.checker.test.ts` | Breaks the real code on purpose; the checker must notice. |
 
@@ -76,13 +76,17 @@ longer matches the code it stands for.
 
 ## What it does not cover
 
-The account and generation fences around a session, Safari's and Firefox's own timing, the WASM engine and real OPFS, the native
-host, requests the handover does not depend on, and more tabs, faults or
-delays than the bound. An end of a whole browser process takes the page and its
-build's coordinator (`crash-process`), not other pages of that process. A
-coordinator's name that answers nobody (`lose-coordinator`) does so until every
-page of its build closes, and a name nobody used before always answers. A frozen
-page that keeps the owner lock is let off: L1 and L2 excuse the other pages until
-it thaws or ends, since nothing may take its files from it. Two scripts prove that
-they recover then. A freed lock has its next holder at once, and only the
-news of it can be late; one message at a time is held back.
+The account and generation fences around a session, Safari's and Firefox's own
+timing, the WASM engine and real OPFS, the native host, requests the handover
+does not depend on, and more tabs, faults or delays than the bound. An end of a
+whole browser process takes the page and its build's coordinator
+(`crash-process`), not other pages of that process. A coordinator's name that
+answers nobody (`lose-coordinator`) does so until every page of its build closes,
+and a name nobody used before always answers. A frozen page that keeps the owner
+lock is let off: L1 and L2 excuse the other pages until it thaws or ends, since
+nothing may take its files from it. Two scripts prove that they recover then. A
+database is read whole or not at all when its queue is copied out of it,
+and the copy always can be; the engine's own tests cover the rest
+(`crates/client/cache-wasm/src/shell/test/queue_salvage.rs`). A freed lock has
+its next holder at once, and only the news of it can be late; one message at a
+time is held back.

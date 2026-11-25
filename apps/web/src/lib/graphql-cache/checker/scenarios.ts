@@ -26,6 +26,7 @@ export const EVERY_FAULT: FaultKind[] = [
   'hold-files',
   'open-newer',
   'fail-open',
+  'corrupt-database',
   'require-reset',
   'fail-assets',
   'stall-assets',
@@ -132,6 +133,15 @@ export const SCENARIOS: CheckedScenario[] = [
   },
   {
     scenario: {
+      name: 'one tab, its database cannot be read and its engine dies',
+      pages: [1],
+      faults: ['corrupt-database', 'crash-engine'],
+      horizonMs: 15_000,
+    },
+    bound: { maxFaults: 2, maxDelays: 0, maxRuns: 50_000 },
+  },
+  {
+    scenario: {
       name: 'two tabs, two faults',
       pages: [1, 1],
       faults: EVERY_FAULT,
@@ -152,6 +162,36 @@ const repeat = (times: number, steps: ScriptStep[]): ScriptStep[] =>
   Array.from({ length: times }, () => steps).flat();
 
 export const SCRIPTS: ScriptedScenario[] = [
+  {
+    name: "a database that cannot be read, when its owner's engine dies",
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { kind: 'corrupt-database' },
+      { kind: 'crash-engine', page: 'tab1' },
+      { waitMs: 60_000 },
+    ],
+  },
+  {
+    name: 'a database that cannot be read, when its owner closes',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { kind: 'corrupt-database' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 60_000 },
+    ],
+  },
+  {
+    name: 'an owner signed out as it writes, its database unreadable',
+    pages: [1, 1],
+    script: [
+      { waitMs: 0 },
+      { kind: 'corrupt-database' },
+      { kind: 'expire-session', page: 'tab1' },
+      { waitMs: 60_000 },
+    ],
+  },
   {
     name: 'the owner is hidden, then frozen before its drain ends',
     pages: [1, 1],

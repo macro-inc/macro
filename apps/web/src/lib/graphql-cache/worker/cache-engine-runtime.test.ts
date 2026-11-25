@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { CacheRequest } from '../protocol';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
@@ -551,6 +551,70 @@ describe('cache engine worker runtime', () => {
       databaseActionProof: 'wiped-before-open',
     });
   });
+
+  it.each([
+    ['reset', 'heartbeat', 2],
+    ['reset', 'engine-request', 2],
+    ['preserved', 'heartbeat', 0],
+  ] as const)(
+    'lets go of a lost queue only once the coordinator took it in (%s, %s)',
+    async (queue, proof, attempts) => {
+      const scope = new FakeWorkerScope();
+      const direct = new FakePort();
+      const queueLossTold = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('the side file is busy'))
+        .mockResolvedValue(undefined);
+      const emitted = vi.fn();
+      const held = [{ name: 'owner-lock', mode: 'exclusive' }];
+      vi.stubGlobal('navigator', { locks: { query: async () => ({ held }) } });
+      onTestFinished(() => {
+        vi.unstubAllGlobals();
+      });
+      installCacheEngineWorker({
+        scope,
+        hooks: { onEvent: emitted },
+        createCore: (options) => ({
+          addPort: vi.fn(),
+          handleRequest: async (port, request) => {
+            options.onInitializationOutcome?.('opened-existing', queue);
+            port.postMessage({ id: request.id, ok: true, result: null });
+          },
+          drain: vi.fn(),
+          queueLossTold,
+        }),
+      });
+
+      scope.activate(activation('open-existing'), direct);
+      await vi.waitFor(() =>
+        expect(emitted).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: 'ready' })
+        )
+      );
+
+      // Posting it proves nothing: the coordinator may die before it reads it.
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1);
+      expect(queueLossTold).not.toHaveBeenCalled();
+
+      for (const id of [1, 2, 3]) {
+        const rest =
+          proof === 'heartbeat'
+            ? { heartbeatId: id }
+            : { routeId: id, request: { id, kind: 'current-revision' } };
+        direct.receive({ ...version, kind: proof, ownerEpoch: 7, ...rest });
+        await vi.waitFor(() =>
+          expect(
+            messagesOfKind(
+              direct,
+              proof === 'heartbeat' ? 'heartbeat-ack' : 'engine-response'
+            )
+          ).toHaveLength(id)
+        );
+      }
+
+      expect(queueLossTold).toHaveBeenCalledTimes(attempts);
+    }
+  );
 
   it('throttles runtime linear memory, emits cached queue state, and drains high-water values', async () => {
     const scope = new FakeWorkerScope();
@@ -1157,7 +1221,10 @@ describe('cache engine worker runtime', () => {
         drain: vi.fn(),
         handleRequest: async (port, request) => {
           if (request.kind === 'init') {
-            options.onInitializationOutcome?.('reset-storage-uncertain');
+            options.onInitializationOutcome?.(
+              'reset-storage-uncertain',
+              'reset'
+            );
             port.postMessage({ id: request.id, ok: true, result: null });
           }
         },

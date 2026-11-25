@@ -427,8 +427,11 @@ const api = {
     limit = 1
   ): Promise<void> {
     const host = requireOwner();
+    // Asking a suspended host would wait for the page to come back.
+    const authority =
+      host.authority!.snapshot() ?? (await host.authority!.current());
     await host.writeQuery({
-      generation: (await host.authority!.current()).generation,
+      generation: authority.generation,
       query: query('CacheLifecycleQuery'),
       operationName: 'CacheLifecycleQuery',
       variables: variables(limit),
