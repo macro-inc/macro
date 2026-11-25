@@ -7,7 +7,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { Dropdown } from '@ui';
-import { createSignal, type ParentProps, Show } from 'solid-js';
+import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
 import {
   afterEach,
   beforeAll,
@@ -31,6 +31,16 @@ const userId = 'macro|alice@example.com';
 const TEAM = ['macro|alice@example.com', 'macro|teammate@example.com'];
 const team = vi.hoisted(() => ({ members: [] as string[] }));
 
+// jsdom has no layout, so the virtualized list would render no rows.
+vi.mock('virtua/solid', async () => {
+  const { For } = await import('solid-js');
+  return {
+    Virtualizer: (props: {
+      data: readonly unknown[];
+      children: (item: unknown, index: () => number) => JSX.Element;
+    }) => <For each={props.data}>{props.children}</For>,
+  };
+});
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'alice@example.com',
   useUserId: () => () => 'macro|alice@example.com',
