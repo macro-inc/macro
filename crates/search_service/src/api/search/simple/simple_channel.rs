@@ -15,15 +15,21 @@ pub(in crate::api::search) struct FilterChannelResponse {
 }
 
 /// Performs the viewer-aware name search over the channels the user is in,
-/// narrowed by the filters' `channel_ids` and `channel_types`. Organization
+/// narrowed by the filters' `channel_ids` and `channel_types`, leaving out
+/// the channels whose name holds one of `excluded_terms`. Organization
 /// channels no longer exist (`comms_channels.org_id` is always null), so an
 /// `org_id` filter matches no channel, as it does for the message index.
-#[tracing::instrument(skip(db, filters, term), fields(term_len = term.len()), err)]
+#[tracing::instrument(
+    skip(db, filters, term, excluded_terms),
+    fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
+    err
+)]
 pub(in crate::api::search) async fn search_names<'a>(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
     filters: &ChannelFilters,
     term: String,
+    excluded_terms: &[String],
     exact_match: bool,
     limit: u32,
     cursor: models_search_cursor::SearchCursorOption,
@@ -61,6 +67,7 @@ pub(in crate::api::search) async fn search_names<'a>(
         ChannelNameSearchScope {
             channel_ids: &channel_ids,
             channel_types: &channel_types,
+            excluded_terms,
         },
         term,
         exact_match,

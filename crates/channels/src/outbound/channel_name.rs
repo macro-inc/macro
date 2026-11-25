@@ -108,6 +108,10 @@ pub struct ChannelNameSearch<'a> {
     /// matches its stored name or the display name of some participant other
     /// than the viewer.
     pub patterns: &'a [String],
+    /// Patterns no channel's name may match: a channel is left out when one
+    /// matches its stored name or the display name of some participant other
+    /// than the viewer. Read like `patterns`.
+    pub excluded_patterns: &'a [String],
     /// Patterns are case-insensitive POSIX regexes when set, `ILIKE` patterns
     /// otherwise.
     pub regex_patterns: bool,
@@ -122,9 +126,11 @@ pub struct ChannelNameSearch<'a> {
 }
 
 /// Channels, newest `updated_at` first, whose name as the viewer sees it
-/// matches every pattern of `search`: each pattern must match the stored name
-/// or the display name of some participant other than the viewer, so a
-/// two-term search finds an unnamed group by two of its members. Only the
+/// matches every pattern of `search` and none of its excluded patterns: each
+/// pattern must match the stored name or the display name of some
+/// participant other than the viewer, so a two-term search finds an unnamed
+/// group by two of its members, and one excluded pattern matching either
+/// leaves the channel out. Only the
 /// viewer's active participations are considered, which also scopes the
 /// search to channels the viewer may see.
 #[tracing::instrument(
@@ -172,6 +178,7 @@ pub async fn match_channel_names(
         &system_bot_ids,
         &system_bot_names,
         search.limit,
+        search.excluded_patterns,
     )
     .fetch_all(pool)
     .await?;

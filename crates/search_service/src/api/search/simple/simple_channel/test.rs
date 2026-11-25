@@ -21,6 +21,7 @@ async fn org_filter_matches_no_channel_names() {
         &user_id,
         &filters,
         "macro".to_string(),
+        &[],
         false,
         10,
         SearchCursorOption::NotDone(None),

@@ -65,11 +65,16 @@ fn escape_like(term: &str) -> String {
 }
 
 impl CrmSearchRepository for CrmSearchRepositoryImpl {
-    #[tracing::instrument(skip(self, term), fields(term_len = term.len()), err)]
+    #[tracing::instrument(
+        skip(self, term, excluded_terms),
+        fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
+        err
+    )]
     async fn search_company_names(
         &self,
         team_id: &Uuid,
         term: &str,
+        excluded_terms: &[String],
         company_ids: &[Uuid],
         hidden: Option<bool>,
         include_hidden: bool,
@@ -77,6 +82,10 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         cursor: Option<CrmCompanySearchCursor>,
     ) -> Result<Vec<CrmCompanyNameMatch>, CrmError> {
         let pattern = format!("%{}%", escape_like(term));
+        let excluded_patterns: Vec<String> = excluded_terms
+            .iter()
+            .map(|excluded| format!("%{}%", escape_like(excluded)))
+            .collect();
         let highlight = format!("({})", escape_regex(term));
         let cursor_ts = cursor.map(|c| c.last_updated_at);
         let cursor_id = cursor.map(|c| c.last_id);
@@ -110,6 +119,23 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
                               ON LOWER(dd.domain) = LOWER(d.domain)
                           WHERE d.company_id = c.id
                             AND (d.domain ILIKE $4 OR dd.name ILIKE $4)
+                      )
+                  )
+                  AND (
+                      cardinality($10::text[]) = 0
+                      OR NOT (
+                          COALESCE(c.custom_name ILIKE ANY($10::text[]), false)
+                          OR EXISTS (
+                              SELECT 1
+                              FROM crm_domains d
+                              LEFT JOIN crm_domain_directory dd
+                                  ON LOWER(dd.domain) = LOWER(d.domain)
+                              WHERE d.company_id = c.id
+                                AND (
+                                    d.domain ILIKE ANY($10::text[])
+                                    OR dd.name ILIKE ANY($10::text[])
+                                )
+                          )
                       )
                   )
                   AND ($7::timestamptz IS NULL OR (c.last_interaction, c.id) < ($7, $8))
@@ -147,6 +173,7 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
             cursor_ts,
             cursor_id,
             include_hidden,
+            &excluded_patterns,
         )
         .fetch_all(&self.pool)
         .await
