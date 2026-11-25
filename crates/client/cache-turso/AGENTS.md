@@ -91,7 +91,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
   `MIGRATABLE_CACHE_FORMAT_VERSIONS`: `migrate_previous_format` drops the
   refetchable records and every table derived from them in one transaction,
   recreating the tables as a schema Reset does (`clear_records`), keeps queued mutations and optimistic layers, reads the
-  identity and authority records and the queue's identity metadata in the
+  identity and authority records and every record's identity metadata in the
   previous format and writes them back in this one, marks the stored schema
   unreadable so adoption resets the queued projections, and rewrites the
   namespace. Everything else still resets. The compaction swap after it moves

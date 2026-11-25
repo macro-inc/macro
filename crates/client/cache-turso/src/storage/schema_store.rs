@@ -298,8 +298,9 @@ pub(super) fn adopt(
         )
     });
     match sorted {
-        // The tier rolled back. Dropping every record reads none of them,
-        // and frees the pages they held for what the cache writes next.
+        // The tier rolled back. Dropping every record reads only the first
+        // bytes of each, and frees the pages they held for what the cache
+        // writes next.
         Err(error) if resets_after(error) => driver::write_transaction(connection, || {
             let reset = SchemaChange {
                 tier: Tier::Reset(ResetReason::Failed),
@@ -703,7 +704,7 @@ fn dropped_identity(
     let mut candidates = Vec::new();
     let mut visit = |row: &Row| {
         let (typename, id, prefix) = record_row(row)?;
-        if !identity::holds_no_identity_metadata(prefix) {
+        if prefix.is_some_and(|prefix| !identity::holds_no_identity_metadata(prefix)) {
             candidates.push(record_key(typename, id));
         }
         Ok(())
@@ -732,7 +733,7 @@ fn dropped_identity(
             return Err(invariant());
         };
         let Value::Blob(bytes) = required_value(row, 0)? else {
-            return Err(invariant());
+            continue;
         };
         if let Some(record) = decode_record(bytes)
             .ok()
@@ -753,7 +754,10 @@ fn previous_format_identity(
     let mut kept = Vec::new();
     driver::query_each(connection, RECORD_VALUES, Vec::new(), |row| {
         let (typename, id, bytes) = record_row(row)?;
-        if let Some(record) = decode(bytes).ok().and_then(identity::identity_metadata) {
+        if let Some(record) = bytes
+            .and_then(|bytes| decode(bytes).ok())
+            .and_then(identity::identity_metadata)
+        {
             kept.push((record_key(typename, id), record));
         }
         Ok(())
@@ -761,15 +765,21 @@ fn previous_format_identity(
     Ok(kept)
 }
 
-/// A `(typename, id, bytes)` row's values.
-fn record_row(row: &Row) -> Result<(&str, &str, &[u8]), TursoStorageError> {
+/// A `(typename, id, bytes)` row's values. A value stored as anything but
+/// bytes reads as none, like bytes that do not decode: a record no read
+/// can use, which holds nothing to keep.
+fn record_row(row: &Row) -> Result<(&str, &str, Option<&[u8]>), TursoStorageError> {
     let mut values = row.get_values();
-    let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(Value::Blob(bytes)), None) =
+    let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(value), None) =
         (values.next(), values.next(), values.next(), values.next())
     else {
         return Err(invariant());
     };
-    Ok((typename.as_str(), id.as_str(), bytes.as_slice()))
+    let bytes = match value {
+        Value::Blob(bytes) => Some(bytes.as_slice()),
+        _ => None,
+    };
+    Ok((typename.as_str(), id.as_str(), bytes))
 }
 
 /// The key of the record `typename` and `id` name.
@@ -808,8 +818,9 @@ pub(super) struct KeptIdentity {
     identity: Vec<(RecordKey, Record)>,
 }
 
-/// Reads [`KeptIdentity`] from records `decode` reads. A kept record it
-/// cannot read resets the file, as any read of it would.
+/// Reads [`KeptIdentity`] from records `decode` reads. A kept record, or one
+/// a queued write names, that it cannot read resets the file, as any read of
+/// it would; any other record holds nothing to keep.
 pub(super) fn keep_identity(
     connection: &Db,
     decode: record_batch::RecordDecoder,
@@ -823,6 +834,9 @@ pub(super) fn keep_identity(
             decode(bytes).map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
         kept.push((required_text(&row, 0)?, required_text(&row, 1)?, record));
     }
+    // Only the strict read of what the queue names matters here: the
+    // adoption after the open follows the aliases.
+    queue_aliases(connection, decode)?;
     Ok(KeptIdentity {
         kept,
         identity: previous_format_identity(connection, decode)?,

@@ -740,6 +740,37 @@ fn a_tier_keeps_the_identity_of_every_record_it_drops() {
 }
 
 #[test]
+fn a_record_no_read_can_use_is_dropped_without_failing_the_tier() {
+    block_on(async {
+        for (sdl, change) in [
+            (BOTH_RETYPED, types(&["Note", "Thing"], false)),
+            (ROOTS, Some(Tier::Reset(ResetReason::Roots))),
+        ] {
+            // Bytes no record starts with, and a value stored as text, in a
+            // record no queued write names.
+            for value in [Value::from_blob(vec![9]), text("note")] {
+                let mut storage =
+                    populate(TursoStorage::open_in_memory("schema-unreadable-record").unwrap())
+                        .await;
+                settle_writes_none_queued(&mut storage).await;
+                raw_execute(
+                    &storage,
+                    "UPDATE records SET value = ?1 WHERE __typename = 'Note' AND id = '2'",
+                    vec![value],
+                );
+
+                assert_eq!(
+                    adopt(&storage, sdl, &ProjectionInputs::none()).change,
+                    change
+                );
+                assert_unqueued_identity_kept(&storage, &format!("{change:?}")).await;
+                assert_eq!(count(&storage, "SELECT count(*) FROM mutation_queue"), 2);
+            }
+        }
+    });
+}
+
+#[test]
 fn a_kept_records_shadow_under_its_server_key_is_composed_there() {
     block_on(async {
         let mut storage =
@@ -1733,6 +1764,34 @@ fn a_previous_formats_cache_keeps_its_identity_authority_and_aliases() {
             commands
         );
         storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn a_previous_format_whose_queued_alias_does_not_read_resets() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("schema-previous-format-unreadable.db");
+        let mut storage = populate(database.open("scope").unwrap()).await;
+        settle_a_create(&mut storage).await;
+        mark_previous_format(
+            &storage,
+            &cache_namespace_at(
+                "scope",
+                cache_core::codec::MIGRATABLE_CACHE_FORMAT_VERSIONS[0],
+            ),
+        );
+        // The alias the queued edit names, and only that, does not read.
+        raw_execute(
+            &storage,
+            "UPDATE records SET value = x'09' WHERE __typename = 'Note' AND id = 'local'",
+            vec![],
+        );
+        storage.try_close().unwrap();
+
+        assert_eq!(
+            database.open("scope").unwrap_err().physical_reset_reason(),
+            Some(PhysicalResetReason::Codec)
+        );
     });
 }
 

@@ -3620,8 +3620,8 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 ///
 /// Records and the derived rows they feed are refetchable, so they are dropped
 /// as a reset drops them, table by table, except what a reset keeps: the
-/// identity and authority records and the identity metadata of the records
-/// queued writes name, read in that format and rewritten in this one. Queued mutations and their optimistic layers are kept,
+/// identity and authority records and the identity metadata of every
+/// record, read in that format and rewritten in this one. Queued mutations and their optimistic layers are kept,
 /// which is why this is not a physical reset. The stored schema is made
 /// unreadable, so the adoption after the open resets the cache in place and
 /// takes the projections the previous format composed. The namespace moves to
