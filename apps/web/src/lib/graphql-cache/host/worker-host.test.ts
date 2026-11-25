@@ -382,6 +382,39 @@ describe('createWorkerCacheHost', () => {
     expect(host.isReady?.()).toBe(false);
   });
 
+  it('reports a paused engine as not ready until a later engine opens', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    expect(host.isReady?.()).toBe(true);
+    const adapter = requireAdapter();
+
+    adapter.unavailable('recovery fails', 'recovery-failed');
+    expect(host.paused).toBe(true);
+    // Writes now reject rather than wait: the engine is not open.
+    expect(host.isReady?.()).toBe(false);
+    let opened = false;
+    const ready = host.whenReady?.().then(() => {
+      opened = true;
+    });
+    await Promise.resolve();
+    expect(opened).toBe(false);
+
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2, 'opened-existing', 'preserved');
+    const init = await vi.waitFor(() => {
+      const request = adapter.requests.at(-1);
+      expect(request?.kind).toBe('init');
+      return request;
+    });
+    expect(opened).toBe(false);
+    adapter.respond(init?.id ?? -1, null);
+
+    await ready;
+    expect(host.paused).toBe(false);
+    expect(host.isReady?.()).toBe(true);
+    host.dispose();
+  });
+
   it('notifies generation subscribers only when a live cache change resets storage', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     await host.currentStorageGeneration();

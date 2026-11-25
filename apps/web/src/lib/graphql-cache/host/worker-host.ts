@@ -1596,9 +1596,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           return;
         state = 'ready';
         initialization = undefined;
-        releaseReadyWaiters();
         reconnects = 0;
         endOutage();
+        releaseReadyWaiters();
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
@@ -1779,10 +1779,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   return {
     clientId,
-    isReady: () => state === 'ready',
+    // A paused engine is not open: its writes reject rather than wait.
+    isReady: () => state === 'ready' && outage === undefined,
     whenReady() {
       if (
-        state === 'ready' ||
+        (state === 'ready' && outage === undefined) ||
         state === 'failed' ||
         state === 'disposing' ||
         state === 'disposed'

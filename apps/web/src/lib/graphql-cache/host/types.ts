@@ -150,9 +150,10 @@ export interface CacheHost {
   /** True for the storage-free fallback when browser cache APIs are unsupported,
    * and while `paused`. */
   readonly disabled?: boolean;
-  /** Whether the cache engine is open now. Writes made before it opens wait
-   * for it, so a reader that must see its write land last can check this.
-   * Absent on hosts that are always ready. */
+  /** Whether the cache engine is open now, and not `paused`. Writes made
+   * before it opens wait for it (while paused they are refused), so a reader
+   * that must see its write land last can check this. Absent on hosts that are
+   * always ready. */
   isReady?(): boolean;
   /** Settles once the engine is open, or once this host stops trying (fails
    * or is disposed). Never rejects and never starts initialization. */
