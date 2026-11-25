@@ -159,6 +159,8 @@ export const TOKENS = {
     forward: 'email.forward',
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
+    pageDown: 'email.pageDown',
+    pageUp: 'email.pageUp',
     cancelReply: 'email.cancelReply',
     discardDraft: 'email.discardDraft',
     attach: 'email.attach',

@@ -99,7 +99,7 @@ fn thread_from_normalized_messages(
     }
 }
 
-/// Process and insert message
+/// Process and insert message, returning the user labels its thread gained
 #[tracing::instrument(skip(db, preparation, message, resync), fields(message_provider_id = ?message.provider_id))]
 pub async fn process_and_insert_message<R: InboxSyncImportRepository, P: InboxSyncPreparation>(
     db: &R,
@@ -108,7 +108,7 @@ pub async fn process_and_insert_message<R: InboxSyncImportRepository, P: InboxSy
     thread_db_id: Uuid,
     message: &mut Message,
     resync: Option<&InboxSyncResync>,
-) -> result::Result<(), ProcessingError> {
+) -> result::Result<Vec<Uuid>, ProcessingError> {
     preparation.prepare_message(message).await;
 
     db.insert_message(link_id, thread_db_id, message, resync)

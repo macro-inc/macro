@@ -3,6 +3,7 @@ import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
+import { TaskTimerCount } from '@app/features/time-tracking/task-timer-count';
 import {
   Entity,
   isProjectContainedEntity,
@@ -34,7 +35,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { isDateProperty } from '@property/utils';
-import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { formatStartDueCompact, startDueOf } from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -156,7 +157,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
   };
   const dueDatesText = () => {
     if (!startDateEnabled()) return undefined;
-    return formatStartDue(
+    return formatStartDueCompact(
       startDueOf(startProperty(), propertyMap().get(TASK_DUE_DATE_COLUMN.defId))
     );
   };
@@ -164,15 +165,18 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
     field: 'due',
     enabled: startDateEnabled,
     other: startProperty,
-    saveOther: (property, value) =>
-      saveOne(property, { valueType: 'DATE', value }),
+    saveOther: (property, value) => saveOne(property, value),
   });
 
   const dueDateClass = () => {
+    const due = propertyMap().get(TASK_DUE_DATE_COLUMN.defId);
     const urgency = taskDueDateUrgency(
       getTaskDueDate(props.entity),
       isTaskClosed(props.entity),
-      props.calendar()
+      props.calendar(),
+      startDateEnabled() && due && isDateProperty(due) && due.hasTime
+        ? { now: Date.now() }
+        : undefined
     );
     return cn({
       'text-failure': urgency === 'danger',
@@ -196,6 +200,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       <Switch>
         <Match when={props.compact}>
           <NarrowLayout {...props}>
+            <TaskTimerCount taskId={props.entity.id} compact />
             <div class="w-8 min-w-0">
               <ListPropertyValue
                 entityId={props.entity.id}
@@ -271,6 +276,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                   <span class="min-w-0 truncate">
                     <Entity.Title entity={props.entity} />
                   </span>
+                  <TaskTimerCount taskId={props.entity.id} />
                   <Show when={props.isShared}>
                     <span class="task-shared-badge hidden shrink-0">
                       <SharedBadgeSmall ownerId={props.entity.ownerId} />

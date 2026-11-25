@@ -86,8 +86,9 @@ mod stream_plan;
 use super::super::SqlFragment;
 use super::super::filters::{
     AddressSuperset, ContactScope, build_address_superset, build_contact_scope,
-    build_thread_conjunct_filter, get_sort_timestamp_field, only_address_message_terms,
-    top_level_owners,
+    build_label_superset, build_label_tree_predicate, build_thread_conjunct_filter,
+    build_thread_conjunct_filter_without_labels, get_sort_timestamp_field,
+    only_address_message_terms, top_level_owners,
 };
 use super::{
     QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select_with,
@@ -114,6 +115,10 @@ pub(crate) struct OwnedReadTuning {
     pub(crate) max_round_window: i64,
     /// The most superset rows a round's probe counts: [`MAX_SUPERSET_CAP`].
     pub(crate) max_superset_cap: i64,
+    /// The most threads the inbox stream walks for one request before it
+    /// returns what it found and where to go on. `None` walks to the page's
+    /// last row or the end of the inboxes.
+    pub(crate) walk_budget: Option<i64>,
 }
 
 impl OwnedReadTuning {
@@ -133,7 +138,20 @@ impl OwnedReadTuning {
         superset_per_walked: 50,
         max_round_window: MAX_ROUND_WINDOW,
         max_superset_cap: MAX_SUPERSET_CAP,
+        walk_budget: None,
     };
+
+    /// A label read: a label's superset costs a message lookup per row, so it
+    /// is read only up to [`LABEL_MAX_SUPERSET_CAP`] rows, and past it a
+    /// request walks at most [`LABEL_WALK_BUDGET`] threads. A big label whose
+    /// mail is all old then fills its page over several requests.
+    fn for_labels(self) -> Self {
+        Self {
+            max_superset_cap: self.max_superset_cap.min(LABEL_MAX_SUPERSET_CAP),
+            walk_budget: Some(self.walk_budget.unwrap_or(LABEL_WALK_BUDGET)),
+            ..self
+        }
+    }
 
     /// The most superset rows a round reads the superset for, after the walk
     /// read `walked` threads, the last `last_window` of which held
@@ -184,6 +202,13 @@ const MAX_ROUND_WINDOW: i64 = 16_000;
 /// The most superset rows a round's probe counts, and so the superset stream
 /// reads below the walk. Past it the rounds only walk.
 const MAX_SUPERSET_CAP: i64 = 800_000;
+
+/// The most label rows a label read's probes count, and so the most labeled
+/// messages it looks up for one request.
+const LABEL_MAX_SUPERSET_CAP: i64 = 20_000;
+
+/// The most threads a label read walks for one request.
+const LABEL_WALK_BUDGET: i64 = 10_000;
 
 /// How much each round's window grows over the last, and the least each
 /// probe's cap grows over the last cap the superset outgrew.
@@ -236,6 +261,9 @@ pub(crate) enum OwnedStreams {
     /// The windows came up short, and the superset, within a round's cap,
     /// finished the page below them.
     InboxesThenSuperset,
+    /// The windows walked the request's budget without filling the page,
+    /// which goes on below the last walked thread.
+    WalkBudgetSpent,
 }
 
 /// How [`OwnedRead`] took a page.
@@ -251,6 +279,9 @@ pub(crate) struct OwnedReadStats {
     /// The threads the inbox stream's windows reached. The last window
     /// stops early when it fills the page.
     pub(crate) walked: i64,
+    /// Where a page cut short by the walk budget goes on: the last thread
+    /// the windows read, which may be below the page's last row.
+    pub(crate) continue_below: Option<(DateTime<Utc>, Uuid)>,
 }
 
 impl OwnedReadStats {
@@ -278,8 +309,12 @@ pub(super) struct OwnedRead<'a> {
     /// has domains or partial addresses.
     contact_scope: Option<ContactScope>,
     /// The filter's top-level thread-level terms on `t`, which the streams
-    /// apply as they read.
+    /// apply as they read. A label read leaves its label tree out of them, so
+    /// an inbox window walks the threads it counts.
     thread_terms: SqlFragment,
+    /// A label read's label tree, which each thread an inbox window walked
+    /// must match. The superset streams list only threads that do.
+    walked_match: Option<SqlFragment>,
 }
 
 impl<'a> OwnedRead<'a> {
@@ -304,8 +339,7 @@ impl<'a> OwnedRead<'a> {
             && !uses_view_history(email_filter, &params.sort_method_str)
             && matches!(params.shared, SharedEmailFilter::Exclude)
             && params.project_scope.is_none()
-            && !uses_subject_subscans(view, email_filter)
-            && only_address_message_terms(email_filter);
+            && !uses_subject_subscans(view, email_filter);
         if !covered {
             return Err(Box::new(params));
         }
@@ -316,22 +350,40 @@ impl<'a> OwnedRead<'a> {
             .copied()
             .filter(|inbox| owners.iter().all(|owner| owner == inbox))
             .collect();
-        let Some(superset) = build_address_superset(
-            email_filter,
-            &params.resolved,
-            &params.link_ids,
-            tuning.superset_limit,
-        ) else {
-            return Err(Box::new(params));
+        let addresses = only_address_message_terms(email_filter)
+            .then(|| {
+                build_address_superset(
+                    email_filter,
+                    &params.resolved,
+                    &params.link_ids,
+                    tuning.superset_limit,
+                )
+            })
+            .flatten();
+        let sort_ts_field = get_sort_timestamp_field(view);
+        let (superset, tuning, thread_terms, walked_match) = match addresses {
+            Some(superset) => (
+                superset,
+                tuning,
+                build_thread_conjunct_filter(email_filter, sort_ts_field),
+                None,
+            ),
+            None => match build_label_superset(email_filter, &params.link_ids) {
+                Some(superset) => (
+                    superset,
+                    tuning.for_labels(),
+                    build_thread_conjunct_filter_without_labels(email_filter, sort_ts_field),
+                    Some(build_label_tree_predicate(email_filter, sort_ts_field)),
+                ),
+                None => return Err(Box::new(params)),
+            },
         };
         let contact_scope = build_contact_scope(email_filter, &params.resolved, &params.link_ids);
         Ok(Self {
             view,
             email_filter,
-            thread_terms: build_thread_conjunct_filter(
-                email_filter,
-                get_sort_timestamp_field(view),
-            ),
+            thread_terms,
+            walked_match,
             params,
             tuning,
             inboxes,
@@ -365,6 +417,7 @@ impl<'a> OwnedRead<'a> {
                 probes: 0,
                 probe_cap: None,
                 walked: 0,
+                continue_below: None,
             };
             (stats, Vec::new())
         } else {
@@ -399,6 +452,7 @@ impl<'a> OwnedRead<'a> {
             probes: 1,
             probe_cap: Some(self.tuning.superset_limit),
             walked: 0,
+            continue_below: None,
         };
         if superset_rows <= self.tuning.superset_limit {
             let rows = self
@@ -406,7 +460,8 @@ impl<'a> OwnedRead<'a> {
                 .await?;
             return Ok((stats, rows));
         }
-        let mut window = inbox_window(limit, self.tuning.window_per_row);
+        let mut window = inbox_window(limit, self.tuning.window_per_row)
+            .min(self.tuning.walk_budget.unwrap_or(i64::MAX));
         let mut rows = self
             .page(connection, Stream::Inboxes { window }, None, limit)
             .await?;
@@ -428,6 +483,10 @@ impl<'a> OwnedRead<'a> {
             window = window
                 .saturating_mul(GROWTH)
                 .min(self.tuning.max_round_window);
+            // A label read walks no more than its budget in a request.
+            if let Some(budget) = self.tuning.walk_budget {
+                window = window.min(budget.saturating_sub(stats.walked).max(1));
+            }
             let left = limit - rows.len() as i64;
             // At the last window's rate, the page needs `left × last_window
             // / last_found` more threads; a window that found none never
@@ -462,6 +521,14 @@ impl<'a> OwnedRead<'a> {
                 return Ok((stats.with(OwnedStreams::InboxesThenInboxes), rows));
             };
             below = end;
+            if self
+                .tuning
+                .walk_budget
+                .is_some_and(|budget| stats.walked >= budget)
+            {
+                stats.continue_below = Some((below.effective_ts, below.id));
+                return Ok((stats.with(OwnedStreams::WalkBudgetSpent), rows));
+            }
         }
     }
 
@@ -700,6 +767,9 @@ impl<'a> OwnedRead<'a> {
                 // One ordered, limited index walk per inbox: `link_id =
                 // ANY(…)` can't return index order, so it would read and sort
                 // every thread of every inbox.
+                if self.walked_match.is_some() {
+                    builder.push("\n                    SELECT * FROM (");
+                }
                 builder.push("\n                    SELECT * FROM (");
                 for (index, inbox) in self.inboxes.iter().enumerate() {
                     if index > 0 {
@@ -721,6 +791,21 @@ impl<'a> OwnedRead<'a> {
                     LIMIT "#,
                 );
                 builder.push_bind(window);
+                // A label read tests its labels on each walked thread here,
+                // before the preview pick, which then runs only on matches.
+                // The merged window comes first: filtered per inbox, an older
+                // inbox's labeled thread could fall below the window's last
+                // thread and be listed again by the next window.
+                if let Some(walked_match) = &self.walked_match {
+                    builder.push(
+                        r#"
+                    ) AS t WHERE "#,
+                    );
+                    walked_match
+                        .clone()
+                        .push_into(builder, &self.params.user_id);
+                    builder.push(" ORDER BY effective_ts DESC, id DESC");
+                }
             }
         }
     }

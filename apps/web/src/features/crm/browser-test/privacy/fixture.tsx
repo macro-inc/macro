@@ -19,6 +19,7 @@ import {
   excludedListReads,
   lastChange,
   lastToast,
+  mailboxConnections,
   setStatusUnavailable,
 } from './preview-adapters';
 import { SelectiveSettingsFixture } from './selective-fixture';
@@ -54,6 +55,7 @@ function Fixture() {
       <CrmEmailOptInBanner />
       <output data-testid="excluded-list-reads">{excludedListReads()}</output>
       <output data-testid="toast">{lastToast()}</output>
+      <output data-testid="mailbox-connections">{mailboxConnections()}</output>
       <div class="p-6">
         <Button onClick={() => setOpen(true)}>Email settings</Button>
         <ThreadMenuFixture />

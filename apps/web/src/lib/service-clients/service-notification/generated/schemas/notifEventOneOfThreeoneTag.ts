@@ -10,5 +10,5 @@ export type NotifEventOneOfThreeoneTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfThreeoneTag = {
-  invite_to_team: 'invite_to_team',
+  crm_email_sharing_changed: 'crm_email_sharing_changed',
 } as const;

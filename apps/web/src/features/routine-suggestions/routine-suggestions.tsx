@@ -417,7 +417,10 @@ export function useForYouRoutineSuggestions() {
 }
 
 /** The one row of suggestions above the routines list. */
-function RoutinesSuggestionRow(props: { onOpenDiscover(): void }) {
+function RoutinesSuggestionRow(props: {
+  onOpenDiscover(): void;
+  empty: boolean;
+}) {
   const list = useSuggestionList(
     () => ({ kind: 'routines' }),
     () => {}
@@ -432,6 +435,7 @@ function RoutinesSuggestionRow(props: { onOpenDiscover(): void }) {
           actions={list.actions}
           onOpenDiscover={props.onOpenDiscover}
           onOpenRoutine={list.openRoutine}
+          empty={props.empty}
         />
       )}
     </Show>
@@ -528,12 +532,15 @@ export function useRoutinesDiscover(): Accessor<RoutinesDiscover | undefined> {
       .filter((suggestion) => suggestion.from === 'for_you')
       .map((suggestion) => suggestion.id);
   const discover: RoutinesDiscover = {
-    row: (openDiscover) => (
+    row: (openDiscover, host) => (
       <TraceFlow
         name="routine_suggestions.list"
         attributes={{ 'routine.suggestion.placement': 'routines' }}
       >
-        <RoutinesSuggestionRow onOpenDiscover={openDiscover} />
+        <RoutinesSuggestionRow
+          onOpenDiscover={openDiscover}
+          empty={host.empty}
+        />
       </TraceFlow>
     ),
     page: (search) => (

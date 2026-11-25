@@ -15,7 +15,7 @@ mod test;
 pub const HIGH_MODEL: &str = "anthropic/claude-opus-5-5";
 
 /// The model a prompt that is neither hard nor simple runs on.
-pub const MID_MODEL: &str = "openai/gpt-6.1-sol";
+pub const MID_MODEL: &str = "openai/gpt-6.2-sol";
 
 /// Asked first: a yes runs the turn on [`HIGH_MODEL`].
 const HIGH_QUESTION: &str = "Does this request require higher intelligence?";

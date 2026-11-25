@@ -24,7 +24,6 @@ export function EditToolCall(props: {
         ) : undefined)
       }
       status={props.common.status}
-      muted={props.common.muted}
       hasContent={props.detail.diffs.length > 0}
     >
       <Show when={props.detail.diffs.length > 0}>

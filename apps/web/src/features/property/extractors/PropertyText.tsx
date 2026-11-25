@@ -5,10 +5,11 @@ import { type JSX, Show, useContext } from 'solid-js';
 import { PropertyRootContext } from '../core/context';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '../hooks/usePropertyUserDisplay';
+import { useStartDateEnabled } from '../hooks/useStartDateEnabled';
 import type { Property } from '../types';
 import {
   formatBoolean,
-  formatDate,
+  formatDateValue,
   formatNumber,
   formatPropertyValue,
   formatTimeRange,
@@ -147,7 +148,8 @@ function PropertyTextValue(props: Props & { userId?: string }) {
 }
 
 function PrimitivePropertyText(props: Props) {
-  const text = () => props.text ?? extractText(props.property);
+  const timedDates = useStartDateEnabled();
+  const text = () => props.text ?? extractText(props.property, timedDates());
   const empty = () => !text();
 
   return (
@@ -171,7 +173,7 @@ function UserPropertyText(props: {
   );
 }
 
-function extractText(property: Property): string {
+function extractText(property: Property, timedDates: boolean): string {
   if (!hasValue(property)) return '';
 
   if (isStringProperty(property)) return property.value ?? '';
@@ -180,7 +182,9 @@ function extractText(property: Property): string {
   if (isBooleanProperty(property))
     return property.value === null ? '' : formatBoolean(property.value);
   if (isDateProperty(property))
-    return property.value === null ? '' : formatDate(property.value);
+    return property.value === null
+      ? ''
+      : formatDateValue(property.value, property.hasTime, timedDates);
   if (isDateRangeProperty(property))
     return property.value === null ? '' : formatTimeRange(property.value);
 

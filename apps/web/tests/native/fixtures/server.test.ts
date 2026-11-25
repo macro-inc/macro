@@ -10,6 +10,8 @@ import {
   type ItemPreviewsQuery,
   MailAccountsDocument,
   type MailAccountsQuery,
+  RunningTimerDocument,
+  type RunningTimerQuery,
   SoupBackfillDocument,
   SoupChannelDirectoryBackfillDocument,
   SoupDocument,
@@ -513,6 +515,24 @@ test('matrix fixtures validate against the production backfill selections', asyn
   }
 });
 
+test('the startup running-timer read finds no timer', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: transportQuery(RunningTimerDocument),
+      operationName: 'RunningTimer',
+    }),
+  });
+  const result: ExecutionResult<RunningTimerQuery> = await response.json();
+  expect(result.errors).toBeUndefined();
+  const timeTracking = result.data?.user.timeTracking;
+  expect(timeTracking?.id).toBe(USER_ID);
+  expect(timeTracking?.runningTimer).toBeNull();
+  expect(Number.isNaN(Date.parse(timeTracking?.serverNow ?? ''))).toBe(false);
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
 test('startup notification settings have no overrides', async () => {
   server = startFixtureServer();
   const channels = await fetch(
@@ -525,6 +545,14 @@ test('startup notification settings have no overrides', async () => {
   expect(await channels.json()).toEqual({ channels: [] });
   expect(sections.status).toBe(200);
   expect(await sections.json()).toEqual({ sections: [] });
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
+test('the Mail label read finds no labels', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/email/email/labels`);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ labels: [] });
   expect(server.requests.filter((request) => request.error)).toEqual([]);
 });
 

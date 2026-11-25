@@ -351,6 +351,7 @@ mod outlook {
             attachments: Default::default(),
             provider_id: None,
             base_version: None,
+            base_content: None,
             delete_requested,
             checkpoint: None,
         }

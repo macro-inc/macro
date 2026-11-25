@@ -25,6 +25,7 @@ import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
+  DateApiValue,
   DateProperty,
   Property,
   PropertyApiValues,
@@ -117,7 +118,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.entityType,
     props.includeMetadata ?? false
   );
-  const allProperties = useAllProperties();
+  // The definitions this entity can take: the same list Add property asks for,
+  // so it is already loaded when the picker opens.
+  const allProperties = useAllProperties(
+    () => true,
+    () => props.entityType
+  );
   const [pendingDefinitionIds, setPendingDefinitionIds] = createSignal<
     Set<string>
   >(new Set());
@@ -170,6 +176,11 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     // Pins control the title row only. The panel lists every assigned property.
     const visible = mergedProperties().filter((property) => {
       if (tagDefinitionIds().has(property.propertyDefinitionId)) {
+        return false;
+      }
+      // Time logged is the sum of a task's entries: the Time pill shows and
+      // changes it, never a generic number row.
+      if (property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.TIME_LOGGED) {
         return false;
       }
       if (props.propertyFilter && !props.propertyFilter(property)) {
@@ -381,9 +392,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                   getEmptyLabel={props.getEmptyLabel}
                   property={property()}
                   otherDateEnd={() => otherDateEnd(property())}
-                  saveOtherDateEnd={(end, value) =>
-                    saveOne(end, { valueType: 'DATE', value })
-                  }
+                  saveOtherDateEnd={(end, value) => saveOne(end, value)}
                   canRemoveFromEntity={
                     !defaultPinnedDefinitionIds().has(
                       property().propertyDefinitionId
@@ -623,7 +632,7 @@ function SidePanelPropertyRow(props: {
   otherDateEnd?: () => DateProperty | undefined;
   saveOtherDateEnd?: (
     property: DateProperty,
-    value: Date | null
+    value: DateApiValue
   ) => Promise<unknown>;
 }) {
   const ctx = usePropertiesContext();

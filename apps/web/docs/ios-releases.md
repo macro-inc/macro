@@ -19,7 +19,8 @@ Play as the source of truth — is described in `docs/development/android.md`.)
 
 Web bundles ship to installed apps over the air (see
 `tauri/macro_bundle_updater_plugin`). On iOS they persist in a backup-excluded
-Application Support directory so storage pressure cannot purge them; the
+Application Support directory so storage pressure cannot purge them, and startup
+serves one only when every file its completion record lists is present; the
 updater ignores legacy cache contents (see
 `tauri/src-tauri/README.md#ota-bundle-storage`). Native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that

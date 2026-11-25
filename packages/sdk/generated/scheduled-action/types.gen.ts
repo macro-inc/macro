@@ -733,6 +733,17 @@ export type EventFilter = {
     github?: null | GithubSelector;
     ids?: Array<string> | null;
     /**
+     * The inboxes (email link ids) whose new or labeled mail starts the
+     * routine. Absent: every inbox the owner reads, their own and those
+     * delegated to them.
+     */
+    inboxes?: Array<string> | null;
+    /**
+     * Email labels, one of which the thread must gain: their row ids. Any
+     * label when absent. Only for `email.labeled`.
+     */
+    labels?: Array<string> | null;
+    /**
      * Exact tests on the payload, all of which must pass.
      */
     match?: Array<PayloadCondition> | null;
@@ -748,7 +759,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'email.labeled' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * A finished run, with the routines it created.
@@ -793,6 +804,11 @@ export type ExecutionResult = {
     steps?: Array<{
         [key: string]: unknown;
     }>;
+    /**
+     * The owner stopped the run before it finished. Older records, and
+     * replicas built before it, leave it out.
+     */
+    stopped?: boolean;
     version: number;
 };
 
@@ -1575,6 +1591,19 @@ export type RunInfo = {
 export type RunMode = 'composer' | 'background';
 
 /**
+ * What a background run did, in one line for the person, written by the
+ * run before its last message.
+ */
+export type RunReport = {
+    /**
+     * What it did and what it sent, as the card shows it, such as "12 seats
+     * added · Nothing was sent". One plain line; it names no email address,
+     * phone number or street address.
+     */
+    report: string;
+};
+
+/**
  * What started a run, for its page.
  */
 export type RunStart = {
@@ -2069,6 +2098,11 @@ export type SuggestionReview = {
  * person's, with the full toolset, that never stops to ask.
  */
 export type SuggestionRun = {
+    /**
+     * The one line the run wrote for the person before it ended, saying
+     * what it did and what it sent; none until it writes one.
+     */
+    report?: string | null;
     /**
      * The agent session: open it to see the result.
      */
@@ -2930,6 +2964,35 @@ export type ListScheduledActionHistoryResponses = {
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
 
+export type StopScheduledActionRunData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/stop';
+};
+
+export type StopScheduledActionRunErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type StopScheduledActionRunError = StopScheduledActionRunErrors[keyof StopScheduledActionRunErrors];
+
+export type StopScheduledActionRunResponses = {
+    /**
+     * The stop was sent, or nothing was running
+     */
+    204: void;
+};
+
+export type StopScheduledActionRunResponse = StopScheduledActionRunResponses[keyof StopScheduledActionRunResponses];
+
 export type UnshareScheduledActionTemplateData = {
     body?: never;
     path: {
@@ -3276,6 +3339,38 @@ export type ReviewSuggestionsResponses = {
 
 export type ReviewSuggestionsResponse = ReviewSuggestionsResponses[keyof ReviewSuggestionsResponses];
 
+export type ReportSuggestionRunData = {
+    body: RunReport;
+    path?: never;
+    query?: never;
+    url: '/suggestions/runs/report';
+};
+
+export type ReportSuggestionRunErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestion's background run, still under way, may report
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type ReportSuggestionRunError = ReportSuggestionRunErrors[keyof ReportSuggestionRunErrors];
+
+export type ReportSuggestionRunResponses = {
+    /**
+     * Whether the report was stored, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type ReportSuggestionRunResponse = ReportSuggestionRunResponses[keyof ReportSuggestionRunResponses];
+
 export type RecordSuggestionsSeenData = {
     body?: never;
     path?: never;
@@ -3512,7 +3607,7 @@ export type RestoreSuggestionErrors = {
      */
     404: string;
     /**
-     * Not dismissed in the last five minutes, or a routine suggestion
+     * Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion
      */
     409: string;
     500: string;
@@ -3565,3 +3660,39 @@ export type RetireSuggestionResponses = {
 };
 
 export type RetireSuggestionResponse = RetireSuggestionResponses[keyof RetireSuggestionResponses];
+
+export type StopSuggestionRunData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/stop';
+};
+
+export type StopSuggestionRunErrors = {
+    401: string;
+    /**
+     * A generation session may not stop a run
+     */
+    403: string;
+    /**
+     * No open suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type StopSuggestionRunError = StopSuggestionRunErrors[keyof StopSuggestionRunErrors];
+
+export type StopSuggestionRunResponses = {
+    /**
+     * Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes
+     */
+    204: void;
+};
+
+export type StopSuggestionRunResponse = StopSuggestionRunResponses[keyof StopSuggestionRunResponses];

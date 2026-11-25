@@ -3,6 +3,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { getScopeElement } from '@core/hotkey/utils';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { onCleanup } from 'solid-js';
+import { isDestinationPress, useChosenDestination } from './chosen-destination';
 
 export type UseViewTabHotkeysOptions<TTab extends string> = {
   /**
@@ -59,19 +60,23 @@ function isOnScreen(element: Element | undefined): boolean {
  * after a load or an item opening, unless the user last put the keyboard in
  * another of the split's panes still on screen (`lastPlace`, that pane: a
  * press on plain text in a detail beside the list focuses the split itself).
+ * So does a sidebar destination a pointer press focused (`chosen`): the
+ * press chose what the pane shows, and the browser left focus on it.
  */
 function keyboardIsOnPane(
   target: EventTarget | null | undefined,
   tabs: Element,
   split: Element | null,
-  lastPlace: Element | undefined
+  lastPlace: Element | undefined,
+  chosen: Element | undefined
 ): boolean {
   const pane = tabs.closest(PANE_REGION_SELECTOR) ?? split;
   if (
     !(target instanceof Element) ||
     target === document.body ||
     target === document.documentElement ||
-    target === split
+    target === split ||
+    target === chosen
   )
     return (
       !lastPlace ||
@@ -91,7 +96,9 @@ function keyboardIsOnPane(
  * Tab, Shift+Tab and 1–9 for the tabs in a pane's top bar. They act only
  * while those tabs are on screen and the keyboard is on the pane; anywhere
  * else (a field, an editor, a button, an open item without tabs) Tab is
- * normal focus order. A split can hold several panes with tabs (a list
+ * normal focus order. A destination chosen with the pointer in a view's
+ * sidebar or on the rail leaves the keyboard on the pane, though the
+ * browser may leave focus on it. A split can hold several panes with tabs (a list
  * beside a conversation), so each set registers alongside the others and
  * the first whose pane has the keyboard takes the key.
  */
@@ -103,18 +110,30 @@ export function useViewTabHotkeys<TTab extends string>(
   // pressed, or of the last one focused other than the split itself. The
   // pane rather than the element, so content replaced inside it keeps it.
   let lastPlace: WeakRef<Element> | undefined;
+  // A press that chose a destination leaves no place, and the destination
+  // it left focus on is not one.
+  const chosen = useChosenDestination();
   const remember = (event: Event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
-    if (event.type === 'focusin' && target === getScopeElement(options.scopeId))
+    if (event.type === 'pointerdown') {
+      if (isDestinationPress(event)) {
+        lastPlace = undefined;
+        return;
+      }
+    } else if (
+      target === getScopeElement(options.scopeId) ||
+      target === chosen()
+    )
       return;
     lastPlace = new WeakRef(target.closest(PANE_REGION_SELECTOR) ?? target);
   };
-  document.addEventListener('pointerdown', remember, { capture: true });
-  document.addEventListener('focusin', remember, { capture: true });
+  const listened = ['pointerdown', 'focusin'] as const;
+  for (const type of listened)
+    document.addEventListener(type, remember, { capture: true });
   onCleanup(() => {
-    document.removeEventListener('pointerdown', remember, { capture: true });
-    document.removeEventListener('focusin', remember, { capture: true });
+    for (const type of listened)
+      document.removeEventListener(type, remember, { capture: true });
   });
   const isEnabled = () =>
     (options.enabled?.() ?? true) && isOnScreen(options.tabs());
@@ -127,7 +146,8 @@ export function useViewTabHotkeys<TTab extends string>(
         event.target,
         tabs,
         getScopeElement(options.scopeId),
-        lastPlace?.deref()
+        lastPlace?.deref(),
+        chosen()
       )
     );
   };

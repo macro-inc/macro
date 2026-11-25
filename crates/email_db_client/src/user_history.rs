@@ -93,6 +93,7 @@ pub async fn get_thread_summary_info(
                 ) AS "is_draft!",
                 t.is_read,
                 t.inbox_visible,
+                t.has_received_mail,
                 -- Gmail's IMPORTANT label — a different notion from the
                 -- Importance filter / email_threads.is_signal heuristic.
                 (
@@ -192,6 +193,7 @@ pub async fn get_thread_summary_info(
             pretty_sender,
             is_read: row.is_read,
             inbox_visible: row.inbox_visible,
+            has_received_mail: row.has_received_mail,
             is_draft: row.is_draft,
             is_important: row.is_important,
         };

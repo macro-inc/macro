@@ -61,9 +61,10 @@ export const EMAIL_ATTACHMENT_KINDS = {
   'attachment-document': 'document',
 } as const;
 
-// Built-in tabs refine loaded pages client-side from each thread's attachment
-// mime types, as the legacy mail view did. Saved views add the server's
-// attachment-kind filter (`email-query.ts`), which needs backfilled thread flags.
+// Mail's lists send the selected kinds to the server (`email-query.ts`), which
+// matches its thread flags. The predicate applies the same MIME prefixes to a
+// row's attachments, so it agrees with the flags and only refines lists that
+// do not send them (Focus, Reminders, a CRM record's emails).
 function attachmentOption(
   id: keyof typeof EMAIL_ATTACHMENT_KINDS,
   label: string,

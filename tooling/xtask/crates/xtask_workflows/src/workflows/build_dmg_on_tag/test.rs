@@ -364,13 +364,24 @@ fn missing_build_roots_leave_cache_contents_untouched() {
 
 #[test]
 fn cloudkit_tcp_guard_is_wired_into_both_desktop_workflows() {
+    // The release builds one DMG per Mac architecture; each job notarizes its own.
     let workflows = [
-        super::build_dmg().to_string().expect("DMG workflow YAML"),
-        crate::workflows::build_desktop_on_tag::build_desktop_on_tag()
-            .to_string()
-            .expect("desktop workflow YAML"),
+        (
+            super::build_dmg().to_string().expect("DMG workflow YAML"),
+            1,
+        ),
+        (
+            crate::workflows::build_desktop_on_tag::build_desktop_on_tag()
+                .to_string()
+                .expect("desktop workflow YAML"),
+            2,
+        ),
     ];
-    for yaml in workflows {
+    for (yaml, dmg_jobs) in workflows {
+        assert_eq!(
+            yaml.matches("- name: Notarize and staple DMG").count(),
+            dmg_jobs
+        );
         let prepare = yaml
             .find("- name: Prepare CloudKit TCP fallback")
             .expect("embedded standalone helper step");
@@ -381,15 +392,18 @@ fn cloudkit_tcp_guard_is_wired_into_both_desktop_workflows() {
         assert_eq!(
             yaml.matches("bash \"$RUNNER_TEMP/macro-cloudkit-tcp.sh\"")
                 .count(),
-            1,
+            dmg_jobs,
             "the stapler pair function must invoke the guard"
         );
         assert_eq!(
             yaml.matches("run_stapler_pair ").count(),
-            2,
+            2 * dmg_jobs,
             "both the DMG and updater app must use the guard"
         );
-        assert_eq!(yaml.matches("xcrun notarytool submit").count(), 2);
+        assert_eq!(
+            yaml.matches("xcrun notarytool submit").count(),
+            2 * dmg_jobs
+        );
         let notarize_script = &yaml[notarize..];
         let dmg_submit = notarize_script
             .find("xcrun notarytool submit \"$dmg\"")

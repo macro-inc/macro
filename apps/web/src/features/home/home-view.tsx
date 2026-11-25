@@ -16,10 +16,10 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import { createEffect, Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
 import { HomeList } from './components/HomeList';
-import { type HomeFrame, HomeListLayout } from './components/HomeListLayout';
+import { HomeListLayout } from './components/HomeListLayout';
 import { HomeListSkeleton } from './components/HomeListSkeleton';
 import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { HomeSetupPromotion } from './components/HomeSetupPromotion';
@@ -27,7 +27,7 @@ import { HomeTabs } from './components/HomeTabs';
 import { HomeViewLayout } from './components/HomeViewLayout';
 import { HomeViewProvider, useHomeView } from './home-view-context';
 import { homeTour } from './tour';
-import type { HomeTab, HomeViewStateOptions } from './types';
+import type { HomeViewStateOptions } from './types';
 
 const HomeProjectPreview = lazyNamed(
   () => import('./components/HomeProjectPreview'),
@@ -43,10 +43,6 @@ const CalendarView = lazyNamed(
 export type HomeViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: HomeViewStateOptions;
-  /** The one tab this Home lists: New Home's Recent. */
-  tab?: HomeTab;
-  /** New Home's title and tabs around the list. */
-  frame?: HomeFrame;
 };
 
 function HomeFallback() {
@@ -61,7 +57,6 @@ function HomeFallback() {
 }
 
 function HomeListPane(props: {
-  frame?: HomeFrame;
   hasPreview: boolean;
   onPreviewEntityChange: (
     entity: PreviewSelection | undefined,
@@ -76,7 +71,6 @@ function HomeListPane(props: {
 
   return (
     <HomeListLayout
-      frame={props.frame}
       tabs={
         <DebugSuspense name="HomeView.tabs">
           <HomeTabs />
@@ -102,17 +96,11 @@ function HomeListPane(props: {
   );
 }
 
-function HomeViewRoot(props: { frame?: HomeFrame }) {
+function HomeViewRoot() {
   const inlinePreviewLayout = useInlinePreviewLayout();
   const panel = useSplitPanelOrThrow();
-  const {
-    previewTarget,
-    calendarOpen,
-    openPreview,
-    closePreview,
-    openStartedSession,
-  } = useHomeView();
-  const title = () => props.frame?.title() ?? 'Home';
+  const { previewTarget, calendarOpen, openPreview, closePreview } =
+    useHomeView();
 
   const newChat = closePreview;
   const onPreviewEntityChange = (
@@ -124,8 +112,8 @@ function HomeViewRoot(props: { frame?: HomeFrame }) {
   };
 
   // The touch nav item calls this "Notifications".
-  createEffect(() =>
-    panel.handle.setDisplayName(isTouchDevice() ? 'Notifications' : title())
+  onMount(() =>
+    panel.handle.setDisplayName(isTouchDevice() ? 'Notifications' : 'Home')
   );
 
   return (
@@ -135,11 +123,9 @@ function HomeViewRoot(props: { frame?: HomeFrame }) {
           <SplitPanel.Body>
             <HomeViewLayout
               inlinePreview={inlinePreviewLayout()}
-              listLayout={props.frame?.list}
               list={
                 <DebugSuspense name="HomeView.list-pane">
                   <HomeListPane
-                    frame={props.frame}
                     hasPreview={previewTarget() !== undefined || calendarOpen()}
                     onPreviewEntityChange={onPreviewEntityChange}
                     onNewChat={newChat}
@@ -150,15 +136,7 @@ function HomeViewRoot(props: { frame?: HomeFrame }) {
               <DebugSuspense name="HomeView.outlet" fallback={<HomeFallback />}>
                 <SplitRouter.Outlet
                   fallback={() => (
-                    <Show
-                      when={isTouchDevice()}
-                      fallback={
-                        <HomeChatStart
-                          title={title()}
-                          onStartedSession={openStartedSession}
-                        />
-                      }
-                    >
+                    <Show when={isTouchDevice()} fallback={<HomeChatStart />}>
                       <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-ink-muted">
                         Select a notification to open it here.
                       </div>
@@ -283,8 +261,8 @@ export function HomeDetailRouteView() {
 export function HomeView(props: HomeViewProps) {
   return (
     <DebugSuspense name="HomeView.root">
-      <HomeViewProvider initialState={props.initialState} tab={props.tab}>
-        <HomeViewRoot frame={props.frame} />
+      <HomeViewProvider initialState={props.initialState}>
+        <HomeViewRoot />
       </HomeViewProvider>
     </DebugSuspense>
   );

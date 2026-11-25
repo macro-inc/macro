@@ -13,6 +13,7 @@ function fixture(
   capabilities: DatabaseCapabilities = { editRows: true, editColumns: true }
 ) {
   const [columns, setColumns] = createSignal<DatabaseViewColumn[]>([]);
+  const [version, setVersion] = createSignal(7);
   const rows: DatabaseRowsSource = {
     columns,
     snapshot: () => ({ rows: [], retained: [], version: 7 }),
@@ -49,12 +50,20 @@ function fixture(
           databaseId: 'db',
           name: 'Table',
           columns: columns(),
-          version: 7,
+          version: version(),
         }),
       },
     });
   });
-  return { controller, applyOps, refresh, capabilities, rows, setColumns };
+  return {
+    controller,
+    applyOps,
+    refresh,
+    capabilities,
+    rows,
+    setColumns,
+    setVersion,
+  };
 }
 
 describe('shared database controller', () => {
@@ -154,6 +163,232 @@ describe('shared database controller', () => {
       baseVersions: { table: 7 },
     });
     expect(refresh).not.toHaveBeenCalled();
+  });
+  it('orders every column, including one still being created, at the version its creation left', async () => {
+    const { controller, applyOps, setColumns, setVersion } = fixture();
+    setColumns([
+      {
+        id: 'name',
+        name: 'Name',
+        dataType: 'STRING',
+        writable: true,
+        isMultiSelect: false,
+        options: [],
+      },
+      {
+        id: 'notes',
+        name: 'Notes',
+        dataType: 'STRING',
+        writable: true,
+        isMultiSelect: false,
+        options: [],
+      },
+    ]);
+    let finish!: (result: Awaited<ReturnType<DatabaseApi['applyOps']>>) => void;
+    applyOps.mockReturnValueOnce(
+      new ResultAsync(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      )
+    );
+    const created = controller.schemaEditing()!.createDefaultColumn();
+    const createdId = controller.data.rows.columns()[2].id;
+    const reordered = controller.schemaEditing()!.reorder(['notes', 'name']);
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(1));
+    setVersion(8);
+    finish(ok({ results: [] }));
+    expect((await created).isOk()).toBe(true);
+    expect((await reordered).isOk()).toBe(true);
+    expect(applyOps).toHaveBeenLastCalledWith({
+      ops: [
+        {
+          kind: 'table',
+          table: 'table',
+          change: {
+            kind: 'reorder_columns',
+            order: ['notes', 'name', createdId],
+          },
+        },
+      ],
+      baseVersions: { table: 8 },
+    });
+  });
+  it('waits for a column added while a reorder waits, and orders it too', async () => {
+    const { controller, applyOps, setColumns, setVersion } = fixture();
+    setColumns([
+      {
+        id: 'name',
+        name: 'Name',
+        dataType: 'STRING',
+        writable: true,
+        isMultiSelect: false,
+        options: [],
+      },
+    ]);
+    let finishFirst!: (
+      result: Awaited<ReturnType<DatabaseApi['applyOps']>>
+    ) => void;
+    let finishSecond!: (
+      result: Awaited<ReturnType<DatabaseApi['applyOps']>>
+    ) => void;
+    applyOps
+      .mockReturnValueOnce(
+        new ResultAsync(
+          new Promise((resolve) => {
+            finishFirst = resolve;
+          })
+        )
+      )
+      .mockReturnValueOnce(
+        new ResultAsync(
+          new Promise((resolve) => {
+            finishSecond = resolve;
+          })
+        )
+      );
+    const first = controller.schemaEditing()!.createDefaultColumn();
+    const firstId = controller.data.rows.columns()[1].id;
+    const reordered = controller.schemaEditing()!.reorder([firstId, 'name']);
+    const second = controller.schemaEditing()!.createDefaultColumn();
+    const secondId = controller.data.rows.columns()[2].id;
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(1));
+    setVersion(8);
+    finishFirst(ok({ results: [] }));
+    expect((await first).isOk()).toBe(true);
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(2));
+    expect(applyOps.mock.calls[1][0].ops[0]).toMatchObject({
+      column: secondId,
+      change: { kind: 'create' },
+    });
+    setVersion(9);
+    finishSecond(ok({ results: [] }));
+    expect((await second).isOk()).toBe(true);
+    expect((await reordered).isOk()).toBe(true);
+    expect(applyOps).toHaveBeenLastCalledWith({
+      ops: [
+        {
+          kind: 'table',
+          table: 'table',
+          change: {
+            kind: 'reorder_columns',
+            order: [firstId, 'name', secondId],
+          },
+        },
+      ],
+      baseVersions: { table: 9 },
+    });
+  });
+  it('deletes a column at the version a pending column creation leaves', async () => {
+    const { controller, applyOps, setVersion } = fixture();
+    let finish!: (result: Awaited<ReturnType<DatabaseApi['applyOps']>>) => void;
+    applyOps.mockReturnValueOnce(
+      new ResultAsync(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      )
+    );
+    const created = controller.schemaEditing()!.createDefaultColumn();
+    const removed = controller.schemaEditing()!.remove('notes');
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(1));
+    setVersion(8);
+    finish(ok({ results: [] }));
+    expect((await created).isOk()).toBe(true);
+    expect((await removed).isOk()).toBe(true);
+    expect(applyOps).toHaveBeenLastCalledWith({
+      ops: [
+        {
+          kind: 'column',
+          table: 'table',
+          column: 'notes',
+          change: { kind: 'delete' },
+        },
+      ],
+      baseVersions: { table: 8 },
+    });
+  });
+  it('forgets a deleted column the schema never showed', async () => {
+    const { controller } = fixture();
+    const created = await controller.schemaEditing()!.createDefaultColumn();
+    expect(
+      (await controller.schemaEditing()!.remove(created._unsafeUnwrap())).isOk()
+    ).toBe(true);
+    expect(controller.data.rows.columns()).toEqual([]);
+  });
+  it('puts a replacing formula column in place of every column, including one still being created', async () => {
+    const { controller, applyOps, setColumns, setVersion } = fixture();
+    setColumns([
+      {
+        id: 'name',
+        name: 'Name',
+        dataType: 'STRING',
+        writable: true,
+        isMultiSelect: false,
+        options: [],
+      },
+      {
+        id: 'blank',
+        name: 'Blank',
+        dataType: 'NUMBER',
+        writable: true,
+        isMultiSelect: false,
+        options: [],
+      },
+    ]);
+    let finish!: (result: Awaited<ReturnType<DatabaseApi['applyOps']>>) => void;
+    applyOps.mockReturnValueOnce(
+      new ResultAsync(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      )
+    );
+    const created = controller.schemaEditing()!.createDefaultColumn();
+    const createdId = controller.data.rows.columns()[2].id;
+    const formula = controller.formulaEditing()!.createFormulaColumn({
+      name: 'Total',
+      formula: { kind: 'column', column: 'name' },
+      beside: 'blank',
+      replace: true,
+    });
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(1));
+    setVersion(8);
+    finish(ok({ results: [] }));
+    expect((await created).isOk()).toBe(true);
+    const formulaId = (await formula)._unsafeUnwrap();
+    expect(applyOps).toHaveBeenLastCalledWith({
+      ops: [
+        {
+          kind: 'column',
+          table: 'table',
+          column: 'blank',
+          change: { kind: 'delete' },
+        },
+        {
+          kind: 'column',
+          table: 'table',
+          column: formulaId,
+          change: {
+            kind: 'create',
+            definition: {
+              source: 'derived',
+              name: 'Total',
+              formula: { kind: 'column', column: 'name' },
+            },
+          },
+        },
+        {
+          kind: 'table',
+          table: 'table',
+          change: {
+            kind: 'reorder_columns',
+            order: ['name', formulaId, createdId],
+          },
+        },
+      ],
+      baseVersions: { table: 8 },
+    });
   });
   it('hides unsupported schema actions and rechecks revoked capabilities', async () => {
     const { controller, applyOps, capabilities } = fixture();

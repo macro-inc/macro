@@ -98,6 +98,39 @@ fn every_action_maps_to_stable_columns() {
                 "requester_name": "Sarah Lee",
             })),
         ),
+        (
+            Action::TimeLogged(TimeLog {
+                minutes: 90,
+                entry_date: NaiveDate::from_ymd_opt(2026, 11, 20).expect("valid date"),
+                source: TimeLogSource::Timer,
+            }),
+            "time_logged",
+            Some(json!({ "minutes": 90, "entry_date": "2026-11-20", "source": "timer" })),
+        ),
+        (
+            Action::RecordMerged(RecordMerge {
+                merge_id: Uuid::from_u128(7),
+                merged: vec![MergedRecordName {
+                    id: "00000000-0000-0000-0000-000000000008".into(),
+                    name: Some("Wrenmoor Univ.".into()),
+                }],
+                dropped: vec![DroppedPropertyValue {
+                    property: "00000001-0000-0000-0000-000000000012".into(),
+                    record: "00000000-0000-0000-0000-000000000008".into(),
+                    value: json!({"type": "Number", "value": 5}),
+                }],
+            }),
+            "record_merged",
+            Some(json!({
+                "merge_id": "00000000-0000-0000-0000-000000000007",
+                "merged": [{"id": "00000000-0000-0000-0000-000000000008", "name": "Wrenmoor Univ."}],
+                "dropped": [{
+                    "property": "00000001-0000-0000-0000-000000000012",
+                    "record": "00000000-0000-0000-0000-000000000008",
+                    "value": {"type": "Number", "value": 5},
+                }],
+            })),
+        ),
     ];
 
     for (action, expected_tag, expected_payload) in cases {
