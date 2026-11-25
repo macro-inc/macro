@@ -484,8 +484,8 @@
         outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92" =
-            "sha256-9b4wI8CEnqoaFQJX686x723z0fGYXJ7jLXx3a7NtBF8=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=e5a5706b001c7adfc500a7674be2aaae808d0fb4#e5a5706b001c7adfc500a7674be2aaae808d0fb4" =
+            "sha256-7qYUX7vBs307h6d1aLpwNJ9QabHvi2ybX794UZ2Jb7E=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
             "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
@@ -1047,8 +1047,8 @@
         cargoLock = ../apps/web/tauri/desktop-cef/Cargo.lock;
         overrideVendorGitCheckout = vendorWebauthnGitCheckout;
         outputHashes = webauthnOutputHashes // {
-          "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92" =
-            "sha256-9b4wI8CEnqoaFQJX686x723z0fGYXJ7jLXx3a7NtBF8=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=e5a5706b001c7adfc500a7674be2aaae808d0fb4#e5a5706b001c7adfc500a7674be2aaae808d0fb4" =
+            "sha256-7qYUX7vBs307h6d1aLpwNJ9QabHvi2ybX794UZ2Jb7E=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/tauri?rev=92842818#9284281840e2bb7ed5959403cf16ac3609b5095c" =
