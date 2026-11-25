@@ -74,8 +74,9 @@ the Soup-backed thread list, and saved email views.
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
-- `views/email-labels-section.tsx`: the sidebar's Labels section, from
-  `core/sidebar-labels.ts` (each inbox's tree, eight rows, then `N more`). A
+- `views/email-labels-section.tsx`: the sidebar's Labels section, drawn by
+  `components/EmailSidebarLabels.tsx` from `core/sidebar-labels.ts` (each
+  inbox's tree, eight rows, then `N more`). A
   row calls `openLabel`, which opens All filtered to that label alone;
   `activeLabelIds` and `filterViewTitle` read the labels All is filtered to.
 - `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
