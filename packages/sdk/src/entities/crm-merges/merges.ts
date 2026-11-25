@@ -118,8 +118,9 @@ export class CrmMergeNamespace {
   }
 
   /**
-   * Merge companies into the one that stays, exactly as `previewCompanies`
-   * reviewed them. It can't be undone.
+   * After the user confirms the `previewCompanies` review, merge those
+   * companies into the one that stays, exactly as reviewed. It can't be
+   * undone.
    *
    * @destructive
    * @idempotent
@@ -158,8 +159,9 @@ export class CrmMergeNamespace {
   }
 
   /**
-   * Merge people (contacts) into the one that stays, exactly as
-   * `previewContacts` reviewed them. It can't be undone.
+   * After the user confirms the `previewContacts` review, merge those people
+   * (contacts) into the one that stays, exactly as reviewed. It can't be
+   * undone.
    *
    * @destructive
    * @idempotent
