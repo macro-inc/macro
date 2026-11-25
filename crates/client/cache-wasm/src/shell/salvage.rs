@@ -478,7 +478,8 @@ impl Crossing {
             }
             return leave(sidecar, report).await;
         };
-        if imports >= MAX_ATTEMPTS {
+        let held = || storage.holds_queue(&queue).map_err(storage_error);
+        if imports >= MAX_ATTEMPTS && !held()? {
             report.outcome = QueueOutcome::Abandoned;
             report.dropped += queue.len();
             return leave(sidecar, report).await;

@@ -808,6 +808,22 @@ async fn telling_leaves_a_queue_that_could_not_be_read() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_queue_the_database_holds_is_not_given_up_for_the_deaths_that_followed() {
+    const SCOPE: &str = "cache-wasm-salvage-held-deaths";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut copy = read_side_file(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    resolved(engine.close()).await;
+    copy.extend(SalvageFile::import_attempt().repeat(3));
+    write_side_file(SCOPE, &copy).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn an_import_from_memory_leaves_the_copy_that_could_not_be_read() {
     const SCOPE: &str = "cache-wasm-salvage-import-unread";
     closed_with_queue(SCOPE).await;

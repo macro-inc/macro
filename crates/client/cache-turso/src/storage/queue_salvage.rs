@@ -285,6 +285,13 @@ fn import_marker(connection: &Db) -> Result<Option<ImportMarker>, TursoStorageEr
 }
 
 impl TursoStorage {
+    /// Returns whether this database holds that queue, or did before it settled.
+    pub fn holds_queue(&self, queue: &SalvagedQueue) -> Result<bool, TursoStorageError> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        holds(&connection, queue, import_marker(&connection)?)
+    }
+
     /// Adds a salvaged queue to this database, all of it or nothing, unless
     /// this database already holds it. Run it before anything else writes.
     pub fn import_queue(
@@ -299,19 +306,25 @@ impl TursoStorage {
     }
 }
 
+fn holds(
+    connection: &Db,
+    queue: &SalvagedQueue,
+    marker: Option<ImportMarker>,
+) -> Result<bool, TursoStorageError> {
+    Ok(marker.is_some_and(|marker| marker.id == queue.id)
+        || (queue.source.is_some()
+            && queue.source == metadata_record(connection, STORAGE_GENERATION_META_KEY)?)
+        || queues_any_of(connection, queue)?)
+}
+
 fn import(
     connection: &Db,
     queue: &SalvagedQueue,
     now_ms: i64,
 ) -> Result<QueueImport, TursoStorageError> {
     let marker = import_marker(connection)?;
-    let marked = marker.is_some_and(|marker| marker.id == queue.id);
-    let held = marked
-        || (queue.source.is_some()
-            && queue.source == metadata_record(connection, STORAGE_GENERATION_META_KEY)?)
-        || queues_any_of(connection, queue)?;
-    if held {
-        if !marked {
+    if holds(connection, queue, marker)? {
+        if marker.is_none_or(|marker| marker.id != queue.id) {
             // Still known when every write of it is settled.
             ImportMarker {
                 id: queue.id,
