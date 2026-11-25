@@ -5,6 +5,7 @@
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
+  overflow-anchor: none;
 }
 
 .snap-pager::-webkit-scrollbar {
@@ -15,28 +16,45 @@
   overflow-x: hidden;
 }
 
-/* Wheel navigation is discrete here; vertical-dominant input cannot drift x. */
-.snap-pager-discrete {
-  overflow-x: hidden;
-  scroll-snap-type: none;
-}
-
 .snap-pager-rail {
   position: relative;
-  width: 100%;
+  width: 200100%;
   height: 100%;
+  overflow-anchor: none;
 }
 
+.snap-pager-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.snap-pager-marker,
 .snap-pager-page {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc((var(--snap-page-position) - var(--snap-origin)) * 100%);
-  width: 100%;
+  width: calc(100% / 2001);
   min-width: 0;
+}
+
+.snap-pager-marker {
+  left: calc(var(--snap-marker-position) * 100% / 2001);
   scroll-snap-align: start;
-  /* Do not trap native momentum at each period boundary. */
-  scroll-snap-stop: normal;
+}
+
+.snap-pager-page {
+  contain: layout paint style;
+  left: calc((1000 + var(--snap-page-position) - var(--snap-origin)) * 100% / 2001);
+}
+
+@media (pointer: coarse) {
+  .snap-pager {
+    scroll-snap-type: x mandatory;
+  }
+  .snap-pager-marker {
+    scroll-snap-stop: always;
+  }
 }
 
 .snap-pager-page[aria-hidden='true'] {

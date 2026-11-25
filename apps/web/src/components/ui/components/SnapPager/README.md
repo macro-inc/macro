@@ -1,17 +1,17 @@
 # SnapPager
 
-A stable page ring over a native horizontal scroller.
+Seven persistent calendar slots over a 2,001-position native horizontal snap track.
 
 ```tsx
 import { For } from 'solid-js';
 import { createSnapPager, SnapPager } from '@ui/components/SnapPager/SnapPager';
 
-const pager = createSnapPager({ onSettle: (moved) => navigate(moved) });
+const pager = createSnapPager();
 
 <SnapPager.Root controller={pager}>
   <SnapPager.Viewport>
     <For each={pager.pages()}>
-      {(page) => <SnapPager.Page page={page}>{renderPage(page)}</SnapPager.Page>}
+      {(page) => <SnapPager.Page page={page}>{renderPage(page.position())}</SnapPager.Page>}
     </For>
   </SnapPager.Viewport>
 </SnapPager.Root>
@@ -19,33 +19,29 @@ const pager = createSnapPager({ onSettle: (moved) => navigate(moved) });
 
 ## Contract
 
-Options: `pageCount` (odd, at least three; defaults to five), `discrete`,
-`onScrollStart`, `onNearEdge`, `onWheelNavigate`, `onNavigationCancel`, and `onSettle`.
+Options: `onNavigationCancel` and `onSettle`.
 
-Controller: `pages`, `pageOrder`, `activePage`, `position`, `targetPosition`,
-`origin`, `phase`, `discrete`, `canStep`, `next`, `previous`, `goTo`, `reset`,
-`locked`, `setLocked`, `resize`, and `attachViewport`. Page descriptors expose
-stable `key`, `position`, and relative `offset`.
+Controller: `pages`, `activePage`, `position`, `fractionalPosition`,
+`targetPosition`, `phase`, `nativeScrolling`, `canStep`, `next`, `previous`,
+`goTo`, `reset`, `locked`, `setLocked`, `resize`, and `attachViewport`.
+Page descriptors expose a stable `key` and a changing logical `position`.
+`trackOrigin` places slots on the physical track.
 
-- Native touch scrolling owns momentum until settlement. Native `scrollend`
-  settles promptly; 350ms of observed positional stillness also recovers missing
-  events, including when the browser exposes the API but does not deliver one.
-  A no-event release recovers after 150ms only while its position is unchanged;
-  silent movement during that window starts the same native-momentum watcher.
-- Controlled slides and final alignment take 140ms with the shared Pager ease-out
-  curve. Their frame completion owns settlement; delayed scrollend cannot finish
-  another controlled slide. Reduced motion is immediate.
-- An isolated period command animates. Each command during that animation commits
-  its destination plus the new step immediately; further rapid commands stay instant.
-  Re-arm animation after 300ms without a command. Native wheel bursts still settle together.
-- Discrete desktop mode turns horizontal wheel gestures into one step.
-- `onSettle` reports total movement after recycling, including zero-move cancellation.
-- `onNearEdge` reports the logical position entering view within two slots of an edge,
-  from scroll events or the silent-movement watcher. Use it for data-only lookahead;
-  it does not recycle slots or write scroll offsets during momentum.
-- Lock paging during child drag/resize; unlocking realigns the current page after
-  contact ends. Unlock alignment retains its committed target through zero width
-  and ignores layout clamping until recovery finishes. It resumes on reveal, after
-  contact and momentum end, without cancelling a queued date jump.
-  The cancelled contact cannot restart period navigation; a fresh contact can
-  supersede recovery normally.
+- Native touch and desktop trackpad gestures use the same snap track. Stationary
+  snap markers retain their DOM identity while the seven mounted slots are
+  reassigned on every scroll or frame sample, including during momentum.
+- `fractionalPosition` follows the viewport continuously; `position` rounds to
+  the nearest page. Assign content from `page.position()` without waiting for
+  settlement. `nativeScrolling()` stays true until a native gesture is idle.
+- Buttons and keyboard use `next`, `previous`, or relative `goTo`. The first
+  command scrolls smoothly; rapid commands advance immediately. Commands during
+  native scrolling wait until native motion ends. `targetPosition` includes them.
+- Native motion never writes `scrollLeft`; idle track-boundary recentering,
+  programmatic navigation, resize, and reset own physical offset changes.
+- `onSettle` reports the distance since the last settled position. A
+  fresh contact or rising wheel impulse calls `onNavigationCancel`, including
+  when only the caller has a deferred date request. Settlement callbacks can
+  replace or reset navigation; stale continuations do not run afterward.
+- Locking disables paging. Unlocking realigns after native motion ends.
+- The fixed snap markers add 2,001 lightweight DOM nodes. Browser layout and
+  paint costs and caller-owned calendar retarget costs need separate measurement.

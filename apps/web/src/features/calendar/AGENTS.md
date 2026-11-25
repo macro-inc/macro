@@ -10,11 +10,10 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 | Entry | Responsibility |
 | --- | --- |
 | `context/calendar-navigation-context.tsx` | Host-neutral dates, ranges, and navigation. |
-| `components/CalendarPagerContext.tsx` | FullCalendar page handles, retained data, and deferred rendering. |
-| `../../components/ui/components/SnapPager/SnapPager.tsx` | Native horizontal paging and discrete desktop commands. |
+| `components/CalendarPagerContext.tsx` | Live page/date mapping, FullCalendar slot retargeting, and bounded preloads. |
+| `../../components/ui/components/SnapPager/SnapPager.tsx` | Native virtual track, continuous recycling, and period commands. |
 | `components/CalendarViewContext.tsx` | Selection, source visibility, and preferences. |
 | `core/page-range.ts` | Exact date windows shared by grid rendering and adjacent preloads. |
-| `primitives/create-calendar-page-mounts.ts` | First-paint-first mounting of the bounded page ring. |
 | `hooks/use-calendar-occurrence-data.ts` | Account/range reads and event projection. |
 | `components/composer/parts/ComposerRoot.tsx` | Composer context and shared parts. |
 | `primitives/create-calendar-composer.ts` | Form permissions, metadata, and shared When model. |
@@ -47,11 +46,11 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Stage People and custom recurrence changes until Done; discard staged changes on Back or permission loss.
 - Keep unsaved Day-grid resizing bound to the mounted draft, not persisted-event mutations.
 - Keep standalone composer hotkey scopes attached to their host so app shortcuts still run from text fields.
-- Preserve native momentum until scrollend or observed stillness; complete controlled 140ms slides without relying on native events.
-- Complete an active controlled slide on each new period press, commit the extra step immediately, and rearm animation after 300ms without presses.
+- Keep native momentum on the virtual track; sample the live viewport without writing scrollLeft during movement.
+- Finish the previous target and advance immediately on rapid period presses; use native smooth scrolling for a single press.
 - Navigate from known locator dates before loading occurrences, refine Agenda to the resolved occurrence day, and keep skeletons/errors inside the destination page.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
-- Prepare all five stable slots before swiping, retarget recycled grids synchronously at settlement, and prefetch two ranges past each edge plus near-edge lookahead; freeze phone axis measurements during paging.
+- Reassign seven stable slots during scrolling, keep the header on the viewport centre, and prefetch only three ranges ahead of the pool; never gate assignment on data.
 - Reserve the full two-row all-day envelope in phone Week; use 64px hours only in phone three-day view, leaving Day/Week spacing unchanged.
 - Keep phone Month pills title-only and its day-sheet date noninteractive; use semantic readable text and full-strength calendar colors for event dots.
 - Share one cache startup head start across concurrent ranges; never restart its deadline per reader.

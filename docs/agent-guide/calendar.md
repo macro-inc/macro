@@ -32,14 +32,12 @@ calendar account metadata and other conferencing providers keep their original U
   The drawer lists views, account calendars, booking links, and Settings.
 - Account/calendar checkboxes control visibility, not availability. Swatches
   change local colors. Settings and Busy calendars use separate pages.
-- Desktop horizontal trackpad gestures move one period per gesture; vertical
-  scrolling does not change periods. Period slides use the shared ease-out curve
-  over 140ms on desktop and phone. Another button or keyboard period press completes
-  the active slide and immediately moves one more period; further rapid presses are
-  instant. After 300ms without presses, a single press animates again.
-- Phone swipes settle before recycling pages. Slow drags must pass halfway;
-  clear flicks can commit sooner. Plain taps must not leave paging stuck.
-  Event drag/resize locks horizontal paging.
+- Desktop trackpads and phone swipes use the same native horizontal scroll track.
+  Seven stable slots recycle during movement, and the month/year heading follows
+  the page under the viewport centre each frame. Phone snap stops are one page.
+- The first button or keyboard period command scrolls smoothly; rapid presses finish
+  the preceding target and advance immediately. After 300ms without presses, a
+  single press animates again. Event drag/resize locks horizontal paging.
 - Resizing preserves the period and last visible hour. One fixed phone time column
   sits beside the pager; hour labels retain their geometry during horizontal motion.
   The current-time marker starts at the boundary between that column and the days.
@@ -205,20 +203,19 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
-Opening a grid view paints the visible period first, then prepares all five stable
-slots after the first paint or before an earlier swipe. Every settlement immediately
-retargets recycled grids, so consecutive swipes cannot cancel their preparation.
-Nine exact data ranges stay warm: the five mounted periods and two beyond each end.
-A near-edge signal from native scroll position extends the leading data window
-before settlement, up to thirteen observers after reversing direction; obsolete observers detach without
-cancelling a range still used by a grid. Forward and reverse settlement recenter
-the ring without prepending DOM or writing scrollLeft during momentum. Pending
+Grid views mount seven stable slots on a wide virtual track. Slots leaving the
+three-page buffer are assigned new dates during scrolling, without changing
+scrollLeft. No finite-ring edge or settlement-only mount queue gates a swipe.
+Ten exact data ranges stay warm: seven mounted periods and three ahead of the pool.
+The pool already retains three periods behind the viewport for a reversal. Reversing direction swaps the lookahead; obsolete observers
+release reads unless another consumer needs them. Only idle movement near the
+virtual track's distant boundary recentres its coordinates. Pending
 event reads leave the grid and its loading state navigable. On the iOS and Android
 apps, recently seen periods and the calendar
 list remain on the device for a week; fresh reads replace those restored results.
 
-Period selection updates its label and route immediately. Every committed step retargets
-its mounted grids immediately, independently of occurrence readiness. Calendar grids
+Period headings follow the live viewport position. Each recycled slot retargets
+its grid immediately, independently of occurrence readiness. Calendar grids
 stay mounted and undimmed while occurrences load. An uncached range never shows events
 from the previous range. The existing representative event skeletons appear immediately,
 without synthetic FullCalendar events. Week/Day use sparse blocks with varied start times

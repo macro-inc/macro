@@ -8,7 +8,6 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSnapPager } from '@ui/components/SnapPager/SnapPager';
 import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -20,7 +19,6 @@ import {
   useCalendarPager,
 } from '../calendar/components/CalendarPagerContext';
 import { calendarPageRange } from '../calendar/core/page-range';
-import { createCalendarPageMounts } from '../calendar/primitives/create-calendar-page-mounts';
 import { type CalendarEvent, DEFAULT_CALENDAR_SOURCE } from '../calendar/types';
 import { MonthDaySheet } from './components/month/MonthDaySheet';
 import { MonthGrid } from './components/month/MonthGrid';
@@ -611,81 +609,15 @@ describe('bounded calendar preload window', () => {
     expect(range.start).toEqual(new Date(2026, 1, 1));
     expect(range.end).toEqual(new Date(2026, 2, 8));
   });
-  it('prepares the ring before an immediate swipe without waiting for events', async () => {
-    vi.useFakeTimers();
-    const pager = createSnapPager();
-    const viewport = document.createElement('div');
-    Object.defineProperty(viewport, 'clientWidth', { value: 100 });
-    const detach = pager.attachViewport(viewport);
-    let mounted!: ReturnType<typeof createCalendarPageMounts>;
-    render(() => {
-      mounted = createCalendarPageMounts(pager);
-      return null;
-    });
-    expect(mounted()).toEqual([2]);
-    viewport.dispatchEvent(new Event('touchstart'));
-    expect([...mounted()].sort()).toEqual([0, 1, 2, 3, 4]);
-    await vi.advanceTimersByTimeAsync(120);
-    expect([...mounted()].sort()).toEqual([0, 1, 2, 3, 4]);
-    detach();
-  });
-
-  it.each(['reset', 'lock'] as const)(
-    'rearms the near-edge sentinel after %s',
-    async (action) => {
-      vi.useFakeTimers();
-      const nearEdge = vi.fn();
-      const pager = createSnapPager({ onNearEdge: nearEdge });
-      const viewport = document.createElement('div');
-      Object.defineProperty(viewport, 'clientWidth', { value: 100 });
-      const detach = pager.attachViewport(viewport);
-      viewport.scrollLeft = 210;
-      viewport.dispatchEvent(new Event('scroll'));
-      expect(nearEdge).toHaveBeenCalledExactlyOnceWith(1);
-      if (action === 'reset') pager.reset();
-      else {
-        pager.setLocked(true);
-        pager.setLocked(false);
-        await vi.advanceTimersByTimeAsync(160);
-      }
-      viewport.scrollLeft = 210;
-      viewport.dispatchEvent(new Event('scroll'));
-      expect(nearEdge).toHaveBeenCalledTimes(2);
-      expect(nearEdge).toHaveBeenLastCalledWith(1);
-      detach();
-    }
-  );
-
   it.each([-1, 1])(
-    'notices silent native movement before settlement in direction %s',
-    async (direction) => {
-      vi.useFakeTimers();
-      const nearEdge = vi.fn();
-      const pager = createSnapPager({ onNearEdge: nearEdge });
-      const viewport = document.createElement('div');
-      Object.defineProperty(viewport, 'clientWidth', { value: 100 });
-      const detach = pager.attachViewport(viewport);
-      viewport.dispatchEvent(new Event('touchstart'));
-      viewport.scrollLeft = 200 + direction * 10;
-      window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-      await vi.advanceTimersByTimeAsync(20);
-      expect(nearEdge).toHaveBeenCalledExactlyOnceWith(direction);
-      expect(viewport.scrollLeft).toBe(200 + direction * 10);
-      expect(pager.position()).toBe(0);
-      detach();
-    }
-  );
-  it.each([-1, 1])(
-    'requests and mounts consecutive pages before visibility in direction %s',
+    'keeps three data-only ranges ahead across thirty moving pages (%s)',
     async (direction) => {
       vi.useFakeTimers();
       const viewport = document.createElement('div');
       Object.defineProperty(viewport, 'clientWidth', { value: 100 });
       let pager!: ReturnType<typeof useCalendarPager>;
-      let mounted!: ReturnType<typeof createCalendarPageMounts>;
       function Pages() {
         pager = useCalendarPager();
-        mounted = createCalendarPageMounts(pager.pager);
         return <CalendarPagePreloads />;
       }
       render(() => (
@@ -701,62 +633,22 @@ describe('bounded calendar preload window', () => {
         </CalendarPagerContextProvider>
       ));
       const detach = pager.pager.attachViewport(viewport);
-      await vi.advanceTimersByTimeAsync(20);
-      for (let step = 0; step < 8; step++) {
-        const target = new Date(2026, 10, 15 + direction * (step + 1));
-        const destination = pager.pager
-          .pages()
-          .find((page) => page.offset() === direction);
-        expect(destination).toBeDefined();
-        expect(mounted()).toContain(destination!.key);
-        expect(mocks.requestedRanges).toContain(target.toISOString());
-        const nodes = pager.pager.pages();
-        viewport.dispatchEvent(new Event('touchstart'));
-        viewport.scrollLeft = 200 + direction * 10;
-        viewport.dispatchEvent(new Event('scroll'));
-        // The sentinel prepares beyond the forward ring edge during motion.
-        const ahead = new Date(2026, 10, 15 + direction * (step + 5));
-        expect(mocks.requestedRanges).toContain(ahead.toISOString());
-        const attempts = mocks.requestedRanges.filter(
-          (start) => start === ahead.toISOString()
-        ).length;
-        viewport.scrollLeft = 200 - direction * 10;
-        viewport.dispatchEvent(new Event('scroll'));
-        viewport.scrollLeft = 200 + direction * 10;
-        viewport.dispatchEvent(new Event('scroll'));
-        expect(
-          mocks.requestedRanges.filter((start) => start === ahead.toISOString())
-        ).toHaveLength(attempts);
-        if (step === 0) {
-          viewport.scrollLeft = 200;
+      const base = viewport.scrollLeft;
+      try {
+        for (let step = 1; step <= 30; step++) {
+          viewport.scrollLeft = base + direction * step * 100;
           viewport.dispatchEvent(new Event('scroll'));
-          window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-          viewport.dispatchEvent(new Event('scrollend'));
-          await vi.advanceTimersByTimeAsync(48);
-          viewport.dispatchEvent(new Event('touchstart'));
-          viewport.scrollLeft = 200 + direction * 10;
-          viewport.dispatchEvent(new Event('scroll'));
-          expect(
-            mocks.requestedRanges.filter(
-              (start) => start === ahead.toISOString()
-            )
-          ).toHaveLength(attempts);
+          await vi.advanceTimersByTimeAsync(16);
+          const ahead = new Date(2026, 10, 15 + direction * (step + 6));
+          expect(mocks.liveRanges.has(ahead.toISOString())).toBe(true);
+          expect(mocks.liveRanges.size).toBeLessThanOrEqual(10);
+          expect(pager.pager.pages()).toHaveLength(7);
         }
-        viewport.scrollLeft = 200 + direction * 100;
-        viewport.dispatchEvent(new Event('scroll'));
-        window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-        viewport.dispatchEvent(new Event('scrollend'));
-        await vi.advanceTimersByTimeAsync(48);
-        expect(pager.pager.position()).toBe(direction * (step + 1));
-        expect(viewport.scrollLeft).toBe(200);
-        expect(pager.pager.pages()).toBe(nodes);
+        const old = new Date(2026, 10, 15 - direction * 5);
+        expect(mocks.liveRanges.has(old.toISOString())).toBe(false);
+      } finally {
+        detach();
       }
-      expect(mocks.liveRanges.size).toBeLessThanOrEqual(13);
-      const abandoned = new Date(2026, 10, 15 - direction * 4);
-      expect(mocks.liveRanges.has(abandoned.toISOString())).toBe(false);
-      pager.changeView('timeGridWeek');
-      expect(pager.preloadPositions()).toHaveLength(9);
-      detach();
     }
   );
 
@@ -811,73 +703,6 @@ describe('bounded calendar preload window', () => {
   );
 });
 
-describe('hidden viewport unlock recovery', () => {
-  it.each(['hidden', 'held', 'queued', 'queued-multi', 'mid-slide', 'reduced'])(
-    'resumes the committed page without losing navigation (%s)',
-    async (mode) => {
-      vi.useFakeTimers();
-      vi.stubGlobal('matchMedia', () => ({ matches: mode === 'reduced' }));
-      let width = 100;
-      const viewport = document.createElement('div');
-      Object.defineProperty(viewport, 'clientWidth', { get: () => width });
-      const pager = createSnapPager();
-      const detach = pager.attachViewport(viewport);
-      try {
-        await vi.advanceTimersByTimeAsync(20);
-        viewport.scrollLeft = 270;
-        const queued = mode === 'queued' || mode === 'queued-multi';
-        const held = mode === 'held' || queued;
-        if (held) viewport.dispatchEvent(new Event('touchstart'));
-        pager.setLocked(true);
-        if (mode !== 'mid-slide') width = 0;
-        pager.setLocked(false);
-        if (queued) pager.goTo(5);
-        if (mode === 'mid-slide') {
-          await vi.advanceTimersByTimeAsync(32);
-          width = 0;
-        }
-        viewport.scrollLeft = 0;
-        pager.resize();
-        if (mode !== 'hidden' && mode !== 'reduced') {
-          viewport.dispatchEvent(new Event('scroll'));
-          viewport.dispatchEvent(new Event('scrollend'));
-        }
-        if (mode === 'held')
-          window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-        await vi.advanceTimersByTimeAsync(500);
-        expect(pager.position()).toBe(0);
-        expect(viewport.scrollLeft).toBe(0);
-        width = 100;
-        if (mode !== 'hidden' && mode !== 'reduced') {
-          viewport.dispatchEvent(new Event('scroll'));
-          viewport.dispatchEvent(new Event('scrollend'));
-        }
-        pager.resize();
-        if (queued) {
-          if (mode === 'queued-multi')
-            viewport.dispatchEvent(new Event('touchstart'));
-          expect(viewport.scrollLeft).toBe(0);
-          window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-        }
-        await vi.advanceTimersByTimeAsync(800);
-        const position = queued ? 5 : 0;
-        expect(pager.position()).toBe(position);
-        expect(pager.phase()).toBe('idle');
-        expect(viewport.scrollLeft).toBe(200);
-        expect(viewport.style.scrollSnapType).toBe('');
-        viewport.dispatchEvent(new Event('touchstart'));
-        viewport.scrollLeft = 270;
-        viewport.dispatchEvent(new Event('scroll'));
-        window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-        viewport.dispatchEvent(new Event('scrollend'));
-        await vi.advanceTimersByTimeAsync(200);
-        expect(pager.position()).toBe(position + 1);
-      } finally {
-        detach();
-      }
-    }
-  );
-});
 describe('the URL of details that followed a moved event', () => {
   const FROM = '2026-11-28T15:00:00+00:00';
 

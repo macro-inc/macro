@@ -8,7 +8,6 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { CALENDAR_GRID_FULL_HEADER_WIDTH } from '@app/features/calendar/primitives/create-calendar-composer-pinning';
-import { createCalendarPageMounts } from '@app/features/calendar/primitives/create-calendar-page-mounts';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { t } from '@app/lib/i18n';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
@@ -83,7 +82,6 @@ function CalendarPages() {
   const calendarPager = useCalendarPager();
   const fixedTimeAxis = () =>
     isMobile() && calendarPager.periodView() !== 'dayGridMonth';
-  const mountedPages = createCalendarPageMounts(calendarPager.pager);
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const viewportSize = createElementSize(viewport);
@@ -151,12 +149,10 @@ function CalendarPages() {
           <For each={calendarPager.pager.pages()}>
             {(page) => (
               <SnapPager.Page page={page}>
-                <Show when={mountedPages().includes(page.key)}>
-                  <CalendarPeriodPage
-                    id={page.key}
-                    useNarrowDayHeaders={useNarrowDayHeaders()}
-                  />
-                </Show>
+                <CalendarPeriodPage
+                  id={page.key}
+                  useNarrowDayHeaders={useNarrowDayHeaders()}
+                />
               </SnapPager.Page>
             )}
           </For>

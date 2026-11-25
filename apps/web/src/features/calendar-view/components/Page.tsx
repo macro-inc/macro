@@ -46,7 +46,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
+import type { DateSelectArg } from '@fullcalendar/core';
 import type { DateClickArg } from '@fullcalendar/interaction';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
@@ -57,10 +57,7 @@ import {
   isGuestEditRefused,
   useUpdateCalendarEventMutation,
 } from '@queries/calendar/mutations';
-import {
-  type CalendarOccurrenceQueryRange,
-  createCalendarOccurrenceQueryRange,
-} from '@queries/calendar/occurrences';
+import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -79,7 +76,6 @@ import {
   calendarFocusTargetId,
   useCalendarFocus,
 } from '../calendar-focus-target';
-import { phoneMonthRange } from '../core/phone-month-layout';
 import { PhoneMonthBars } from '../views/mobile/month-bars';
 import { CalendarLoadingSkeleton } from './CalendarLoadingSkeleton';
 
@@ -236,7 +232,27 @@ export function Page(props: {
       ? calendarsQuery.data?.find((calendar) => calendar.isWritable)
       : undefined
   );
-  const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
+  const range = createMemo(
+    () => {
+      const planned = pager.pageRange(props.id);
+      const clipped =
+        isMobile() && pager.periodView() === 'dayGridMonth'
+          ? clipCalendarDisplayRange(planned.start, planned.end)
+          : undefined;
+      return createCalendarOccurrenceQueryRange(
+        clipped?.start ?? planned.start,
+        clipped?.end ?? planned.end
+      );
+    },
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous.start === next.start &&
+        previous.end === next.end &&
+        previous.startDate === next.startDate &&
+        previous.endDate === next.endDate,
+    }
+  );
   const [selectionColor, setSelectionColor] = createSignal<string>();
   const [dayDraft, setDayDraft] = createSignal<DayDraftRangeBinding>();
   let requestDayDraftClose: (() => void) | undefined;
@@ -250,7 +266,7 @@ export function Page(props: {
     !isMobile() && props.useNarrowDayHeaders;
   // Let the checkbox update before remapping occurrences and redrawing the grid.
   // Each page has its own deferred update, so the scheduler can yield between
-  // the three FullCalendar instances.
+  // the mounted FullCalendar instances.
   const renderedHiddenSourceIds = createDeferred(calendarView.hiddenSourceIds);
   const isRenderedSourceVisible = (sourceId: string) =>
     !renderedHiddenSourceIds().has(sourceId);
@@ -269,12 +285,10 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  // Hold the rendered projection during horizontal momentum. Cached responses
-  // can finish, but they must not redraw FullCalendar beneath the gesture.
-  const visibleEvents = createMemo<CalendarEvent[]>((current) => {
-    if (current && pager.pager.phase() !== 'idle') return current;
-    return mergeCalendarOverlays(data.visibleEvents(), teamOoo.events());
-  });
+  // A slot can change dates during momentum; only its current range owns rows.
+  const visibleEvents = createMemo(() =>
+    mergeCalendarOverlays(data.visibleEvents(), teamOoo.events())
+  );
   const eventsById = createMemo(
     () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
@@ -366,33 +380,6 @@ export function Page(props: {
     });
   };
 
-  const handleDatesSet = ({ end, start, view }: DatesSetArg) => {
-    // The phone Bars face is Sunday-first regardless of the desktop week preference.
-    const phoneMonth = isMobile() && view.type === 'dayGridMonth';
-    const monthRange = phoneMonth
-      ? phoneMonthRange(view.currentStart)
-      : undefined;
-    const requestedStart = monthRange?.start ?? start;
-    const requestedEnd = monthRange?.end ?? end;
-    const clipped = phoneMonth
-      ? clipCalendarDisplayRange(requestedStart, requestedEnd)
-      : undefined;
-    const nextRange = createCalendarOccurrenceQueryRange(
-      clipped?.start ?? requestedStart,
-      clipped?.end ?? requestedEnd
-    );
-    const currentRange = range();
-    if (
-      currentRange?.start === nextRange.start &&
-      currentRange.end === nextRange.end &&
-      currentRange.startDate === nextRange.startDate &&
-      currentRange.endDate === nextRange.endDate
-    ) {
-      return;
-    }
-    setRange(nextRange);
-  };
-
   const handleEventTimeChange = (
     change: CalendarEventTimeChange,
     event: CalendarEvent | undefined
@@ -476,7 +463,6 @@ export function Page(props: {
           },
         }}
         eventTimeChangePending={updateEventTime.isPending}
-        onDatesSet={handleDatesSet}
         onEventTimeChange={handleEventTimeChange}
         onEventInteractionChange={(active) => {
           if (!active || isActive()) pager.setPagingLocked(active);

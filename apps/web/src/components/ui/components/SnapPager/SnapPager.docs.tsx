@@ -7,8 +7,8 @@ import { createSnapPager, SnapPager } from './SnapPager';
 function PeriodDemo() {
   const pager = createSnapPager();
   return (
-    <div class="w-full max-w-md">
-      <div class="mb-2 flex gap-2">
+    <div class="flex w-full max-w-md flex-col gap-2">
+      <div class="flex gap-2">
         <Button variant="secondary" size="sm" onClick={() => pager.previous()}>
           Previous
         </Button>
@@ -25,7 +25,7 @@ function PeriodDemo() {
             {(page) => (
               <SnapPager.Page page={page}>
                 <div class="flex h-full items-center justify-center text-ink">
-                  Period {pager.position() + page.offset()}
+                  Period {page.position()}
                 </div>
               </SnapPager.Page>
             )}
@@ -40,14 +40,14 @@ function PeriodDemo() {
 export default defineDoc({
   name: 'SnapPager',
   category: 'Layout',
-  description: 'Native scroll-snap paging over a stable ring of pages.',
+  description: 'Native scroll-snap paging over seven reusable slots.',
   status: 'stable',
   exports: ['SnapPager', 'createSnapPager'],
   import: "import { SnapPager, createSnapPager } from './SnapPager';",
   propTypes: ['SnapPagerOptions', 'SnapPagerController'],
   guidelines: {
-    do: ['Keep page keys stable and load data after settlement.'],
-    dont: ['Recycle pages during a native gesture.'],
+    do: ['Render each slot from its live page position.'],
+    dont: ['Wait for settlement to update page content.'],
   },
   demos: [
     {

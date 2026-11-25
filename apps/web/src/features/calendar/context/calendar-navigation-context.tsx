@@ -9,9 +9,9 @@ export interface CalendarDateRange {
 /** Navigation capabilities supplied by the calendar workspace, independent of its grid. */
 export interface CalendarNavigationContext {
   periodView: Accessor<CalendarPeriodView>;
-  /** Date committed by the rendered view. */
+  /** Date displayed at the viewport centre, including native scrolling. */
   activeDate: Accessor<Date | undefined>;
-  /** Current navigation target, including an unfinished transition. */
+  /** Current displayed or explicitly requested navigation date. */
   navigationDate: Accessor<Date | undefined>;
   /** All displayed days, including adjacent-month cells. */
   displayRange: Accessor<CalendarDateRange | undefined>;

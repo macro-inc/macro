@@ -3,6 +3,7 @@ import {
   batch,
   createContext,
   createSignal,
+  For,
   type JSX,
   onCleanup,
   onMount,
@@ -12,720 +13,482 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import './snap-pager.css';
-import { settleTarget } from './settle-target';
 
-// A missing scrollend must not strand the ring; require observed stillness.
-const SNAP_SETTLE_DELAY_MS = 350;
-// A quiet gap rearms a single animated control step on every device.
-const SNAP_RAPID_PRESS_MS = 300;
-const SNAP_WHEEL_BURST_MS = 180;
-const SNAP_NO_SCROLL_RECOVERY_MS = 150;
-// Match the shared Pager's ease-out curve, with a short explicit duration.
-const SNAP_ANIMATION_MS = 140;
-const snapEase = (progress: number) => {
-  // Invert the Bezier x-coordinate before evaluating y: (0.22, 1, 0.36, 1).
-  let low = 0;
-  let high = 1;
-  for (let step = 0; step < 16; step++) {
-    const t = (low + high) / 2;
-    const x =
-      3 * (1 - t) ** 2 * t * 0.22 + 3 * (1 - t) * t ** 2 * 0.36 + t ** 3;
-    if (x < progress) low = t;
-    else high = t;
-  }
-  return 1 - (1 - (low + high) / 2) ** 3;
-};
+const TRACK_MIDDLE = 1000;
+const TRACK_PAGES = TRACK_MIDDLE * 2 + 1;
+const SLOT_COUNT = 7;
+const INITIAL_POSITIONS = [0, -1, 1, -2, 2, -3, 3];
+const QUIET_MS = 350;
+const RAPID_MS = 300;
+const NO_SCROLL_MS = 150;
+// These stationary snap areas never change identity when a calendar slot moves.
+const snapMarkers = Array.from({ length: TRACK_PAGES }, (_, index) => index);
 
-type SnapPagerPhase = 'idle' | 'scrolling' | 'settling';
+type SnapPagerPhase = 'idle' | 'scrolling';
 interface PagerState {
-  origin: number;
   position: number;
+  fractionalPosition: number;
   phase: SnapPagerPhase;
   locked: boolean;
+  nativeScrolling: boolean;
+  trackOrigin: number;
 }
 
 export interface SnapPage {
-  /** Stable identity for a mounted page. */
+  /** Stable mounted identity; its logical position changes during scrolling. */
   key: number;
-  /** Its absolute slot; only a recycled page changes slots. */
   position: Accessor<number>;
-  /** Its offset from the active page. */
-  offset: Accessor<number>;
 }
 
 export type SnapPagerOptions = {
-  /** Odd ring size, at least three. Defaults to five. */
-  pageCount?: number;
-  /** Called after the ring rotates; receives the number of pages traversed. */
   onSettle?: (moved: number) => void;
-  /** A later gesture superseded a pending programmatic request. */
   onNavigationCancel?: () => void;
-  /** Pause caller-owned render work before native scrolling begins. */
-  onScrollStart?: () => void;
-  /** Data-only lookahead when a visible page is within two slots of an edge. */
-  onNearEdge?: (position: number) => void;
-  /** Discrete desktop navigation; other hosts keep native touch scrolling. */
-  discrete?: Accessor<boolean>;
-  /** Update host navigation metadata before a discrete wheel jump. */
-  onWheelNavigate?: (direction: number) => void;
 };
 
 export type SnapPagerController = {
   pages: Accessor<readonly SnapPage[]>;
-  pageOrder: Accessor<readonly number[]>;
   activePage: Accessor<number>;
-  /** Total logical displacement since reset. */
   position: Accessor<number>;
-  /** Accumulated command destination, including a pending native gesture request. */
+  fractionalPosition: Accessor<number>;
   targetPosition: () => number;
   phase: Accessor<SnapPagerPhase>;
-  /** Period controls can finish an active slide and immediately step again. */
+  nativeScrolling: Accessor<boolean>;
   canStep: () => boolean;
-  attachViewport: (element: HTMLDivElement) => () => void;
   next: () => void;
   previous: () => void;
-  /** Relative to the committed position; pending commands accumulate. */
   goTo: (offset: number) => void;
   reset: () => void;
-  setLocked: (locked: boolean) => void;
+  setLocked: (value: boolean) => void;
   locked: Accessor<boolean>;
-  discrete: Accessor<boolean>;
   resize: () => void;
-  /** Origin shared by all pages; page-specific slots remain stable. */
-  origin: Accessor<number>;
+  attachViewport: (element: HTMLDivElement) => () => void;
+  /** Logical origin of the physical track, used to position the seven slots. */
+  trackOrigin: Accessor<number>;
 };
 
-/** Creates an endless native scroll-snap ring without replacing page nodes. */
+/** Seven persistent pages on a native, 2,001-position snap track. */
 export function createSnapPager(
   options: SnapPagerOptions = {}
 ): SnapPagerController {
-  const count = options.pageCount ?? 5;
-  let wheelLastAt: number | undefined;
-  let programmaticAnimating = false;
-  if (!Number.isInteger(count) || count < 3 || count % 2 === 0) {
-    throw new RangeError('SnapPager pageCount must be odd and at least three');
-  }
-
-  const middle = Math.floor(count / 2);
-  const [order, setOrder] = createSignal<readonly number[]>(
-    Array.from({ length: count }, (_, index) => index)
-  );
   const [state, setState] = createStore<PagerState>({
-    origin: 0,
     position: 0,
+    fractionalPosition: 0,
     phase: 'idle',
     locked: false,
+    nativeScrolling: false,
+    trackOrigin: 0,
   });
-  const origin = () => state.origin;
   const position = () => state.position;
+  const fractionalPosition = () => state.fractionalPosition;
   const phase = () => state.phase;
   const locked = () => state.locked;
-  const setOrigin = (value: number | ((previous: number) => number)) =>
-    setState('origin', value);
-  const setPosition = (value: number | ((previous: number) => number)) =>
-    setState('position', value);
+  const nativeScrolling = () => state.nativeScrolling;
+  const trackOrigin = () => state.trackOrigin;
+  const setPosition = (value: number) => setState('position', value);
+  const setFractionalPosition = (value: number) =>
+    setState('fractionalPosition', value);
   const setPhase = (value: SnapPagerPhase) => setState('phase', value);
-  const setLocked = (value: boolean) => setState('locked', value);
-  const slots = Array.from({ length: count }, (_, index) =>
-    createSignal(index)
-  );
+  const setLockedSignal = (value: boolean) => setState('locked', value);
+  const setNativeScrolling = (value: boolean) =>
+    setState('nativeScrolling', value);
+  const setTrackOrigin = (value: number) => setState('trackOrigin', value);
+  const slots = INITIAL_POSITIONS.map((position) => createSignal(position));
   const pages: readonly SnapPage[] = slots.map(([slot], key) => ({
     key,
     position: slot,
-    offset: () => slot() - origin() - middle,
   }));
-  let pending = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let viewport: HTMLDivElement | undefined;
+  let width = 0;
   let frame: number | undefined;
-  let animationFrame: number | undefined;
-  let nativeFrame: number | undefined;
   let noScrollTimer: ReturnType<typeof setTimeout> | undefined;
-  let recoveredWithoutScroll = false;
-  let attached: HTMLDivElement | undefined;
-  let measuredWidth = 0;
+  let lastMoveAt = 0;
+  let lastLeft = 0;
+  let lastCommandAt: number | undefined;
+  let commandTarget: number | undefined;
+  let queuedTarget: number | undefined;
+  let reportedPosition = 0;
   let touchHeld = false;
   let pointerHeld = false;
-  let nativeScroll = false;
-  let queuedJump: number | undefined;
-  let queuedAtScrollLeft: number | undefined;
-  let lastCommandAt: number | undefined;
-  let rapidNavigation = false;
-  let unreportedMovement = 0;
-  let alignmentTarget: number | undefined;
-  // Unlock targets the committed page, not a hidden viewport's clamped offset.
-  let unlockAlignmentPending = false;
-  let releaseVelocity = 0;
-  let scrollObserved = false;
-  let sample = { left: 0, at: 0, velocity: 0 };
-  let lastNearEdgePosition: number | undefined;
-  const reportNearEdge = () => {
-    if (!attached?.clientWidth || !options.onNearEdge) return;
-    const distance = attached.scrollLeft / attached.clientWidth - middle;
-    // Prepare the page entering the viewport, not only the page past halfway.
-    const offset = Math.sign(distance) * Math.ceil(Math.abs(distance));
-    if (offset === 0 || middle - Math.abs(offset) > 2) return;
-    const visible = position() + Math.max(-middle, Math.min(middle, offset));
-    if (visible === lastNearEdgePosition) return;
-    lastNearEdgePosition = visible;
-    options.onNearEdge(visible);
-  };
-  const beginNativeScroll = () => {
-    clearNoScrollTimer();
-    if (locked()) return;
-    recoveredWithoutScroll = false;
-    if (nativeScroll && alignmentTarget === undefined) return;
-    setPhase('scrolling');
-    cancelNavigation();
-    nativeScroll = true;
-    sample = { left: attached?.scrollLeft ?? 0, at: Date.now(), velocity: 0 };
-    if (attached) attached.style.scrollSnapType = 'none';
-    options.onScrollStart?.();
-  };
-  const captureRelease = () => {
-    releaseVelocity = Date.now() - sample.at <= 80 ? sample.velocity : 0;
-  };
-  const reportSettle = () => {
-    const moved = unreportedMovement;
-    unreportedMovement = 0;
-    lastNearEdgePosition = undefined;
-    options.onSettle?.(moved);
-  };
-  const cancelNavigation = (preserveGesture = false) => {
-    const hadNavigation = pending !== 0 || queuedJump !== undefined;
-    const gesture = {
-      nativeScroll,
-      releaseVelocity,
-      scrollObserved,
-      sample,
-    };
-    clearMotion();
-    if (preserveGesture)
-      ({ nativeScroll, releaseVelocity, scrollObserved, sample } = gesture);
-    if (hadNavigation) options.onNavigationCancel?.();
-  };
-  const gestureHeld = () => touchHeld || pointerHeld;
+  let needsAlignment = false;
+  let initialScroll = false;
+  let resizePending = false;
+  let lockedPosition = 0;
+  let lastWheelMagnitude = 0;
+  let navigationVersion = 0;
 
-  const clearNativeWatch = () => {
-    if (nativeFrame !== undefined) cancelAnimationFrame(nativeFrame);
-    nativeFrame = undefined;
+  const held = () => touchHeld || pointerHeld;
+  const targetPosition = () => queuedTarget ?? commandTarget ?? position();
+  const activePage = () =>
+    pages.find((page) => page.position() === position())?.key ?? 0;
+
+  const cancelRequests = () => {
+    navigationVersion++;
+    commandTarget = undefined;
+    queuedTarget = undefined;
+    options.onNavigationCancel?.();
   };
-  const watchNativeEnd = (quietMs = SNAP_SETTLE_DELAY_MS) => {
-    clearNativeWatch();
-    const element = attached;
-    if (!element || gestureHeld() || locked() || programmaticAnimating) return;
-    let left = element.scrollLeft;
-    let stillSince = Date.now();
-    // WebKit can move the compositor without dispatching scroll/scrollend.
-    // Sample actual position, and never write or recycle until it stays still.
-    const observe = () => {
-      nativeFrame = undefined;
-      if (
-        attached !== element ||
-        gestureHeld() ||
-        locked() ||
-        programmaticAnimating
-      )
-        return;
-      reportNearEdge();
-      if (element.scrollLeft !== left) {
-        left = element.scrollLeft;
-        stillSince = Date.now();
-        quietMs = SNAP_SETTLE_DELAY_MS;
-      }
-      if (Date.now() - stillSince >= quietMs) {
-        settle();
-        return;
-      }
-      nativeFrame = requestAnimationFrame(observe);
-    };
-    nativeFrame = requestAnimationFrame(observe);
-  };
-  const scheduleSettle = () => {
-    clearTimer();
-    if (nativeScroll || (scrollObserved && !rapidNavigation)) {
-      watchNativeEnd();
-      return;
-    }
-    timer = setTimeout(
-      settle,
-      rapidNavigation ? SNAP_RAPID_PRESS_MS : SNAP_SETTLE_DELAY_MS
+
+  const assign = (center: number) => {
+    // Reuse only slots outside the new window; a large jump reassigns all seven.
+    const needed = Array.from(
+      { length: SLOT_COUNT },
+      (_, index) => center + index - 3
     );
+    const missing = needed.filter(
+      (value) => !slots.some(([slot]) => slot() === value)
+    );
+    const available = slots.filter(([slot]) => !needed.includes(slot()));
+    batch(() => {
+      available.forEach(([, setSlot], index) => setSlot(missing[index]));
+      setPosition(center);
+    });
   };
-  const finishGesture = () => {
-    captureRelease();
-    if (scrollObserved || (attached && attached.scrollLeft !== sample.left)) {
-      scrollObserved = true;
-      scheduleSettle();
-      return;
-    }
-    clearTimer();
-    clearNoScrollTimer();
-    const element = attached;
-    if (!element) return;
+
+  const sample = () => {
+    const element = viewport;
+    if (!element?.clientWidth || locked()) return;
     const left = element.scrollLeft;
-    // No-op gestures need not emit scrollend. Recover only after a bounded
-    // interval with no scroll event and no position change; late scrolling
-    // takes native ownership back before any further command can run.
-    noScrollTimer = setTimeout(() => {
-      noScrollTimer = undefined;
-      if (attached !== element || gestureHeld() || scrollObserved) return;
-      if (element.scrollLeft !== left) {
-        // The compositor moved without a scroll event. Keep native ownership
-        // and observe its actual position until momentum stops.
-        watchNativeEnd();
-        return;
-      }
-      nativeScroll = false;
-      rapidNavigation = false;
-      recoveredWithoutScroll = true;
-      settle();
-    }, SNAP_NO_SCROLL_RECOVERY_MS);
-  };
-  // These passive lifecycle listeners never drive scrolling. They only prevent
-  // a fallback timer from recycling pages beneath a finger that stopped moving.
-  const touchStart = () => {
-    // Additional fingers belong to the held gesture, not a new navigation.
-    if (touchHeld) return;
-    touchHeld = true;
-    beginNativeScroll();
-    clearTimer();
-  };
-  const touchEnd = (event: TouchEvent) => {
-    if (!touchHeld || event.touches.length > 0) return;
-    touchHeld = false;
-    finishGesture();
-  };
-  const pointerStart = (event: PointerEvent) => {
-    if (event.pointerType === 'touch' || options.discrete?.()) return;
-    pointerHeld = true;
-    beginNativeScroll();
-    clearTimer();
-  };
-  const pointerEnd = (event: PointerEvent) => {
-    if (!pointerHeld || event.pointerType === 'touch') return;
-    pointerHeld = false;
-    finishGesture();
-  };
-  const onWheel = (event: WheelEvent) => {
-    if (options.discrete?.()) {
-      const horizontal = Math.abs(event.deltaX);
-      if (event.ctrlKey || horizontal <= Math.abs(event.deltaY)) return;
-      const now = Date.now();
-      const inBurst =
-        wheelLastAt !== undefined && now - wheelLastAt < SNAP_WHEEL_BURST_MS;
-      if (horizontal < 4 && !inBurst) return;
-      event.preventDefault();
-      if (locked()) return;
-      wheelLastAt = now;
-      if (!inBurst) {
-        const target =
-          (queuedJump ?? position() + pending) + Math.sign(event.deltaX);
-        clearTimer();
-        clearNoScrollTimer();
-        options.onScrollStart?.();
-        options.onWheelNavigate?.(Math.sign(event.deltaX));
-        alignmentTarget = undefined;
-        lastCommandAt = now;
-        rapidNavigation = true;
-        performJump(target, true);
-      } else {
-        lastCommandAt = now;
-        scheduleSettle();
+    if (element.clientWidth !== width || needsAlignment) {
+      if (left !== lastLeft) {
+        lastLeft = left;
+        lastMoveAt = Date.now();
       }
       return;
     }
-    if (locked() || (event.deltaX === 0 && !event.shiftKey)) return;
-    // Phone and other hosts retain native momentum until scrollend.
-    beginNativeScroll();
-    scheduleSettle();
-  };
-  const performJump = (target: number, deferReport = false) => {
-    const moved = target - position();
-    const command = {
-      lastCommandAt,
-      wheelLastAt,
-      rapidNavigation,
-      recoveredWithoutScroll,
-    };
-    clearMotion();
-    ({ lastCommandAt, wheelLastAt, rapidNavigation, recoveredWithoutScroll } =
-      command);
-    rotate(moved);
-    if (attached) jump(attached, middle * attached.clientWidth);
-    setPhase(deferReport ? 'scrolling' : 'idle');
-    if (deferReport) scheduleSettle();
-    else reportSettle();
-  };
-
-  const clearTimer = () => {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
-  };
-
-  const clearNoScrollTimer = () => {
-    if (noScrollTimer !== undefined) clearTimeout(noScrollTimer);
-    noScrollTimer = undefined;
+    const fractional =
+      trackOrigin() + left / element.clientWidth - TRACK_MIDDLE;
+    const center = Math.round(fractional);
+    batch(() => {
+      assign(center);
+      setFractionalPosition(fractional);
+    });
+    if (left !== lastLeft) {
+      lastLeft = left;
+      lastMoveAt = Date.now();
+    }
   };
 
   const clearFrame = () => {
     if (frame !== undefined) cancelAnimationFrame(frame);
     frame = undefined;
   };
-
-  const cancelAnimation = () => {
-    if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
-    animationFrame = undefined;
-    programmaticAnimating = false;
+  const clearNoScroll = () => {
+    if (noScrollTimer !== undefined) clearTimeout(noScrollTimer);
+    noScrollTimer = undefined;
+  };
+  const report = () => {
+    const moved = position() - reportedPosition;
+    reportedPosition = position();
+    options.onSettle?.(moved);
+  };
+  const recenter = () => {
+    const element = viewport;
+    if (!element?.clientWidth || nativeScrolling() || held() || locked())
+      return;
+    const relative = position() - trackOrigin();
+    if (Math.abs(relative) < 900) return;
+    // Only idle track boundaries move the physical origin. Markers stay fixed.
+    setTrackOrigin(position());
+    element.scrollLeft = TRACK_MIDDLE * element.clientWidth;
+    lastLeft = element.scrollLeft;
   };
 
-  const animateTo = (element: HTMLDivElement, target: number) => {
-    cancelAnimation();
-    clearNativeWatch();
-    if (!element.clientWidth) return;
-    const start = element.scrollLeft;
+  const writeTarget = (target: number, smooth: boolean) => {
+    const element = viewport;
+    if (!element?.clientWidth) return;
+    const left = (TRACK_MIDDLE + target - trackOrigin()) * element.clientWidth;
     const reduced = window.matchMedia?.(
       '(prefers-reduced-motion: reduce)'
     ).matches;
-    element.style.scrollSnapType = 'none';
-    if (reduced || Math.abs(target - start) < 1) {
-      element.scrollLeft = target;
-      settle();
-      return;
+    if (smooth && !reduced && typeof element.scrollTo === 'function') {
+      element.scrollTo({ left, behavior: 'smooth' });
+    } else {
+      element.scrollLeft = left;
+      sample();
     }
-    const startedAt = Date.now();
-    programmaticAnimating = true;
-    const advance = () => {
-      if (!element.clientWidth) {
-        animationFrame = undefined;
-        programmaticAnimating = false;
-        return;
-      }
-      const progress = Math.min(
-        1,
-        (Date.now() - startedAt) / SNAP_ANIMATION_MS
-      );
-      element.scrollLeft = start + (target - start) * snapEase(progress);
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(advance);
-        return;
-      }
-      animationFrame = undefined;
-      element.scrollLeft = target;
-      programmaticAnimating = false;
-      // Own animation completion; Safari need not emit scrollend for these writes.
-      settle();
-    };
-    animationFrame = requestAnimationFrame(advance);
-  };
-  // Full teardown is shared; gesture cancellation and aggregate jumps retain only
-  // their explicitly captured state, never a stale destination or alignment.
-  const clearMotion = () => {
-    clearTimer();
-    clearNativeWatch();
-    clearNoScrollTimer();
-    clearFrame();
-    cancelAnimation();
-    recoveredWithoutScroll = false;
-    pending = 0;
-    queuedJump = undefined;
-    queuedAtScrollLeft = undefined;
-    lastCommandAt = undefined;
-    wheelLastAt = undefined;
-    rapidNavigation = false;
-    nativeScroll = false;
-    alignmentTarget = undefined;
-    releaseVelocity = 0;
-    unlockAlignmentPending = false;
-    scrollObserved = false;
-    lastNearEdgePosition = undefined;
-    sample = { left: 0, at: 0, velocity: 0 };
+    lastMoveAt = Date.now();
+    startFrame();
   };
 
-  const jump = (element: HTMLDivElement, left: number) => {
-    element.style.scrollSnapType = 'none';
-    element.scrollLeft = left;
-    clearFrame();
-    frame = requestAnimationFrame(() => {
-      frame = undefined;
-      if (!locked() && !nativeScroll && !gestureHeld())
-        element.style.scrollSnapType = '';
-    });
-  };
-
-  const rotate = (moved: number) => {
-    if (moved === 0) return;
-    // Move only the slots that cross an edge. Shift the shared origin to keep
-    // every other page node in place when the viewport returns to the middle.
-    const steps = Math.abs(moved) % count;
-    const direction = Math.sign(moved);
-    batch(() => {
-      for (let index = 0; index < steps; index++) {
-        const current = order();
-        const recycled = direction > 0 ? current[0] : current[count - 1];
-        const [, setSlot] = slots[recycled];
-        setSlot((slot) => slot + direction * count);
-        setOrder(
-          direction > 0
-            ? [...current.slice(1), recycled]
-            : [recycled, ...current.slice(0, -1)]
-        );
-      }
-      setOrigin((value) => value + direction * steps);
-      setPosition((value) => value + moved);
-    });
-    unreportedMovement += moved;
-  };
-
-  const navigate = () => {
-    const element = attached;
-    if (locked()) return;
-    if (pending === 0) {
-      if (element && phase() === 'scrolling') {
-        animateTo(element, middle * element.clientWidth);
-      }
-      return;
+  const finish = () => {
+    if (held() || !viewport?.clientWidth) return;
+    if (resizePending) {
+      width = viewport.clientWidth;
+      resizePending = false;
+      viewport.scrollLeft =
+        (TRACK_MIDDLE + fractionalPosition() - trackOrigin()) * width;
+      lastLeft = viewport.scrollLeft;
     }
-    if (element && !element.clientWidth) return;
-    if (!element) {
-      const moved = pending;
-      pending = 0;
-      rotate(moved);
+    if (needsAlignment && !locked()) {
+      needsAlignment = false;
+      writeTarget(lockedPosition, false);
+    } else if (!needsAlignment) sample();
+    setNativeScrolling(false);
+    if (queuedTarget !== undefined) {
+      // External settlement can reset the pager or replace navigation. Consume
+      // the old request before the callback and reject its stale continuation.
+      const target = queuedTarget;
+      const version = navigationVersion;
+      queuedTarget = undefined;
       setPhase('idle');
-      reportSettle();
+      report();
+      if (version !== navigationVersion) return;
+      commandTarget = target;
+      setPhase('scrolling');
+      writeTarget(target, true);
       return;
     }
-    const delta = Math.max(-middle, Math.min(middle, pending));
-    setPhase('scrolling');
-    animateTo(element, (middle + delta) * element.clientWidth);
-  };
-
-  const settle = () => {
-    clearTimer();
-    const element = attached;
-    if (!element || locked() || gestureHeld() || !element.clientWidth) return;
-    if (programmaticAnimating) return;
-    // Wheel momentum reports its aggregate only after input stops. Ignore
-    // synthetic scrollend events from each wheel-driven re-centre.
-    if (rapidNavigation && lastCommandAt !== undefined) {
-      const remaining = SNAP_RAPID_PRESS_MS - (Date.now() - lastCommandAt);
-      if (remaining > 0) {
-        timer = setTimeout(settle, remaining);
-        return;
+    if (commandTarget !== undefined) {
+      if (Math.abs(fractionalPosition() - commandTarget) > 0.01 && !locked()) {
+        writeTarget(commandTarget, false);
       }
+      commandTarget = undefined;
     }
-    rapidNavigation = false;
-    const hadMovement = phase() !== 'idle' || pending !== 0;
-    const moved =
-      alignmentTarget ??
-      settleTarget({
-        distance: element.scrollLeft - middle * element.clientWidth,
-        width: element.clientWidth,
-        releaseVelocity,
-        maxPages: middle,
-      });
-    // Native momentum has ended. Align smoothly first, then recycle on the
-    // alignment's scrollend. Never round and jump a partially visible page.
-    const targetLeft = (middle + moved) * element.clientWidth;
-    if (Math.abs(element.scrollLeft - targetLeft) > 1) {
-      alignmentTarget = moved;
-      setPhase('settling');
-      animateTo(element, targetLeft);
-      return;
-    }
-    alignmentTarget = undefined;
-    unlockAlignmentPending = false;
-    releaseVelocity = 0;
-    nativeScroll = false;
-    if (moved === 0) {
-      pending = 0;
-      setPhase('idle');
-      element.style.scrollSnapType = '';
-      if (queuedJump !== undefined) performJump(queuedJump);
-      else if (hadMovement || unreportedMovement !== 0) reportSettle();
-      return;
-    }
-    setPhase('settling');
-    rotate(moved);
-    if (pending !== 0) pending -= moved;
-    jump(element, middle * element.clientWidth);
     setPhase('idle');
-    if (queuedJump !== undefined) performJump(queuedJump);
-    else if (pending !== 0) navigate();
-    else reportSettle();
+    lastWheelMagnitude = 0;
+    report();
+    recenter();
   };
 
-  const realignAfterResize = (width: number) => {
-    if (!attached || !width || gestureHeld()) return false;
-    if (unlockAlignmentPending) {
-      if (nativeScroll) watchNativeEnd();
-      else animateTo(attached, middle * width);
-      return true;
-    }
-    if (nativeScroll) return false;
-    if (pending !== 0) {
-      // Keep the logical destination even if the old smooth scroll ends late.
-      alignmentTarget = Math.max(-middle, Math.min(middle, pending));
-      navigate();
-      return true;
-    }
-    if (phase() !== 'idle' && !locked()) return false;
-    jump(attached, middle * width);
-    return true;
+  const startFrame = () => {
+    if (frame !== undefined || !viewport) return;
+    const tick = () => {
+      frame = undefined;
+      if (!viewport) return;
+      if (
+        viewport.scrollLeft !== lastLeft &&
+        commandTarget === undefined &&
+        !needsAlignment &&
+        !locked()
+      )
+        beginNative();
+      sample();
+      if (held()) {
+        startFrame();
+      } else if (Date.now() - lastMoveAt >= QUIET_MS) {
+        finish();
+      } else {
+        startFrame();
+      }
+    };
+    frame = requestAnimationFrame(tick);
   };
-  const recoverResize = () => {
-    if (!attached) return false;
-    const width = attached.clientWidth;
-    if (!measuredWidth) {
-      measuredWidth = width;
-      return unlockAlignmentPending && width > 0
-        ? realignAfterResize(width)
-        : false;
-    }
-    if (width === measuredWidth) return false;
-    measuredWidth = width;
-    // A resize can emit scroll before ResizeObserver measures the new width.
-    // Re-center a committed page before treating that scroll as a gesture.
-    return realignAfterResize(width);
+
+  const beginNative = () => {
+    if (locked() || nativeScrolling()) return;
+    if (commandTarget !== undefined || queuedTarget !== undefined)
+      cancelRequests();
+    setNativeScrolling(true);
+    setPhase('scrolling');
+    lastMoveAt = Date.now();
+    startFrame();
   };
   const onScroll = () => {
-    clearNoScrollTimer();
-    if (recoverResize()) return;
-    if (locked()) return;
-    if (programmaticAnimating) return;
-    if (
-      recoveredWithoutScroll &&
-      attached &&
-      attached.scrollLeft !== middle * attached.clientWidth
-    ) {
-      recoveredWithoutScroll = false;
-      beginNativeScroll();
+    if (!viewport?.clientWidth) return;
+    if (initialScroll) {
+      initialScroll = false;
+      if (viewport.scrollLeft === lastLeft) return;
     }
+    // A scroll event can arrive before the wheel event (or without one).
     if (
+      viewport.scrollLeft !== lastLeft &&
       phase() === 'idle' &&
-      attached &&
-      attached.scrollLeft === middle * attached.clientWidth
+      !needsAlignment &&
+      !locked()
     )
-      return;
-    if (phase() === 'idle' && pending === 0) beginNativeScroll();
-    reportNearEdge();
-    scrollObserved = true;
-    if (nativeScroll && gestureHeld() && !unlockAlignmentPending) {
-      const now = Date.now();
-      const left = attached?.scrollLeft ?? 0;
-      const elapsed = now - sample.at;
-      sample = {
-        left,
-        at: now,
-        velocity: elapsed > 0 ? (left - sample.left) / elapsed : 0,
-      };
-    }
-    if (
-      gestureHeld() &&
-      !unlockAlignmentPending &&
-      queuedJump !== undefined &&
-      attached?.scrollLeft !== queuedAtScrollLeft
-    )
-      cancelNavigation(true);
-    setPhase('scrolling');
-    clearTimer();
-    scheduleSettle();
+      beginNative();
+    sample();
+    if (phase() !== 'idle') startFrame();
+  };
+  const onWheel = (event: WheelEvent) => {
+    if (locked() || event.ctrlKey) return;
+    const magnitude = Math.abs(
+      event.deltaX || (event.shiftKey ? event.deltaY : 0)
+    );
+    if (magnitude === 0) return;
+    // A fresh rising impulse supersedes a queued command, not its decaying tail.
+    if (magnitude > lastWheelMagnitude * 1.5) cancelRequests();
+    lastWheelMagnitude = magnitude;
+    beginNative();
+    lastMoveAt = Date.now();
+    startFrame();
   };
   const onScrollEnd = () => {
-    if (programmaticAnimating) return;
-    clearNoScrollTimer();
-    clearNativeWatch();
-    if (recoverResize()) return;
-    // A completion delivered during a later held touch can belong to an old slide.
-    // Release must observe this gesture's own stop instead of trusting that event.
-    if (gestureHeld()) return;
-    if (nativeScroll) {
-      // A queued completion can predate this gesture. Confirm two still frames;
-      // any continuing movement returns to the full native quiet interval.
-      watchNativeEnd(32);
-    } else settle();
+    // An old scrollend is not proof that a new wheel's momentum has ended.
+    if (!held() && phase() !== 'idle') startFrame();
+  };
+  const touchStart = () => {
+    if (!touchHeld) cancelRequests();
+    touchHeld = true;
+    clearNoScroll();
+    startFrame();
+  };
+  const touchEnd = (event: TouchEvent) => {
+    if (event.touches.length) return;
+    touchHeld = false;
+    release();
+  };
+  const pointerStart = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') return;
+    if (!pointerHeld) cancelRequests();
+    pointerHeld = true;
+    clearNoScroll();
+    startFrame();
+  };
+  const pointerEnd = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') return;
+    pointerHeld = false;
+    release();
+  };
+  const release = () => {
+    if (held() || !nativeScrolling()) return;
+    // A stationary contact has no scrollend; recover without changing scrollLeft.
+    if (Math.abs((viewport?.scrollLeft ?? lastLeft) - lastLeft) < 1) {
+      clearNoScroll();
+      noScrollTimer = setTimeout(() => {
+        noScrollTimer = undefined;
+        if (viewport && !held() && Date.now() - lastMoveAt >= NO_SCROLL_MS) {
+          finish();
+        }
+      }, NO_SCROLL_MS);
+    }
+    startFrame();
   };
 
-  const canStep = () =>
-    !locked() &&
-    (!options.discrete?.() ||
-      (!nativeScroll && !gestureHeld() && alignmentTarget === undefined));
   const command = (offset: number) => {
     if (locked() || !Number.isInteger(offset) || offset === 0) return;
+    navigationVersion++;
+    const target = targetPosition() + offset;
+    if (nativeScrolling() || held()) {
+      queuedTarget = target;
+      return;
+    }
     const now = Date.now();
     const rapid =
-      lastCommandAt !== undefined && now - lastCommandAt < SNAP_RAPID_PRESS_MS;
+      commandTarget !== undefined ||
+      (lastCommandAt !== undefined && now - lastCommandAt < RAPID_MS);
     lastCommandAt = now;
-    const target = (queuedJump ?? position() + pending) + offset;
-    // Never re-centre a native gesture under the user's finger or momentum.
-    // Programmatic slides, in contrast, can be retargeted immediately.
-    if (gestureHeld() || nativeScroll) {
-      queuedJump = target;
-      queuedAtScrollLeft = attached?.scrollLeft;
-      return;
+    commandTarget = target;
+    setPhase('scrolling');
+    if (!viewport) {
+      assign(target);
+      setFractionalPosition(target);
+      commandTarget = undefined;
+      setPhase('idle');
+      report();
+    } else if (viewport.clientWidth) {
+      writeTarget(target, !rapid);
+      if (rapid) finish();
     }
-    const animating =
-      options.discrete?.() && phase() !== 'idle' && pending !== 0;
-    pending = target - position();
-    unlockAlignmentPending = false;
-    alignmentTarget = undefined;
-    if (
-      rapid ||
-      programmaticAnimating ||
-      animating ||
-      Math.abs(pending) > middle
-    ) {
-      // Commit each control target now so recycled grids and their skeletons
-      // follow every press. Only native wheel bursts defer their settle report.
-      rapidNavigation = false;
-      performJump(target);
-      return;
-    }
-    rapidNavigation = false;
-    navigate();
   };
+
   const detach = (element: HTMLDivElement) => {
-    element.classList.remove('snap-pager-discrete');
-    programmaticAnimating = false;
     element.removeEventListener('scroll', onScroll);
     element.removeEventListener('scrollend', onScrollEnd);
-    element.removeEventListener('touchstart', touchStart, true);
     element.removeEventListener('wheel', onWheel);
+    element.removeEventListener('touchstart', touchStart, true);
     element.removeEventListener('pointerdown', pointerStart, true);
-    if (attached !== element) return;
+    if (viewport !== element) return;
     window.removeEventListener('touchend', touchEnd, true);
     window.removeEventListener('touchcancel', touchEnd, true);
     window.removeEventListener('pointerup', pointerEnd, true);
     window.removeEventListener('pointercancel', pointerEnd, true);
+    clearFrame();
+    navigationVersion++;
+    clearNoScroll();
+    viewport = undefined;
     touchHeld = false;
     pointerHeld = false;
-    clearMotion();
-    element.style.scrollSnapType = '';
-    if (attached === element) {
-      attached = undefined;
-      setPhase('idle');
+    commandTarget = undefined;
+    queuedTarget = undefined;
+    setNativeScrolling(false);
+    setPhase('idle');
+  };
+
+  const resize = () => {
+    if (!viewport) return;
+    const nextWidth = viewport.clientWidth;
+    if (nextWidth === width && !resizePending) return;
+    resizePending = true;
+    if (!nextWidth) return;
+    if (nativeScrolling() || held() || needsAlignment) {
+      startFrame();
+      return;
     }
+    const preserved = commandTarget ?? fractionalPosition();
+    width = nextWidth;
+    resizePending = false;
+    viewport.scrollLeft = (TRACK_MIDDLE + preserved - trackOrigin()) * width;
+    lastLeft = viewport.scrollLeft;
+    sample();
+    if (commandTarget !== undefined) writeTarget(commandTarget, false);
   };
 
   return {
     pages: () => pages,
-    pageOrder: order,
-    activePage: () => order()[middle],
+    activePage,
     position,
-    targetPosition: () => queuedJump ?? position() + pending,
+    fractionalPosition,
+    targetPosition,
+    trackOrigin,
     phase,
-    canStep,
-    origin,
+    nativeScrolling,
     locked,
-    discrete: () => options.discrete?.() ?? false,
+    canStep: () => !locked(),
+    next: () => command(1),
+    previous: () => command(-1),
+    goTo: command,
+    reset() {
+      navigationVersion++;
+      clearFrame();
+      clearNoScroll();
+      if (commandTarget !== undefined || queuedTarget !== undefined) {
+        options.onNavigationCancel?.();
+      }
+      commandTarget = undefined;
+      queuedTarget = undefined;
+      lastCommandAt = undefined;
+      reportedPosition = 0;
+      needsAlignment = false;
+      batch(() => {
+        slots.forEach(([, setSlot], index) =>
+          setSlot(INITIAL_POSITIONS[index])
+        );
+        setTrackOrigin(0);
+        setPosition(0);
+        setFractionalPosition(0);
+        setNativeScrolling(false);
+        setPhase('idle');
+      });
+      if (viewport?.clientWidth) {
+        viewport.scrollLeft = TRACK_MIDDLE * viewport.clientWidth;
+        lastLeft = viewport.scrollLeft;
+      }
+    },
+    setLocked(value) {
+      if (value === locked()) return;
+      if (value) cancelRequests();
+      setLockedSignal(value);
+      if (value) {
+        lockedPosition = position();
+        needsAlignment = true;
+      } else if (nativeScrolling() || held()) {
+        startFrame();
+      } else if (viewport?.clientWidth) {
+        needsAlignment = false;
+        commandTarget = lockedPosition;
+        writeTarget(lockedPosition, false);
+        finish();
+      }
+    },
+    resize,
     attachViewport(element) {
-      if (attached) detach(attached);
-      attached = element;
-      measuredWidth = element.clientWidth;
-      element.addEventListener('wheel', onWheel, { passive: false });
+      if (viewport) detach(viewport);
+      viewport = element;
+      width = element.clientWidth;
       element.addEventListener('scroll', onScroll);
       element.addEventListener('scrollend', onScrollEnd);
-      // Nested controls and sheets can consume release events. Capture both
-      // ends so the ring never keeps a stale held-contact flag after dismissal.
+      element.addEventListener('wheel', onWheel, { passive: true });
       element.addEventListener('touchstart', touchStart, {
         passive: true,
         capture: true,
@@ -734,71 +497,17 @@ export function createSnapPager(
         passive: true,
         capture: true,
       });
-      window.addEventListener('touchend', touchEnd, {
-        passive: true,
-        capture: true,
-      });
-      window.addEventListener('touchcancel', touchEnd, {
-        passive: true,
-        capture: true,
-      });
-      window.addEventListener('pointerup', pointerEnd, {
-        passive: true,
-        capture: true,
-      });
-      window.addEventListener('pointercancel', pointerEnd, {
-        passive: true,
-        capture: true,
-      });
-      jump(element, middle * element.clientWidth);
-      return () => detach(element);
-    },
-    next: () => {
-      if (canStep()) command(1);
-    },
-    previous: () => {
-      if (canStep()) command(-1);
-    },
-    goTo: command,
-    reset() {
-      clearMotion();
-      unreportedMovement = 0;
-      batch(() => {
-        slots.forEach(([, setSlot], index) => setSlot(index));
-        setOrigin(0);
-        setOrder(Array.from({ length: count }, (_, index) => index));
-        setPosition(0);
-        setPhase('idle');
-      });
-      if (attached) jump(attached, middle * attached.clientWidth);
-    },
-    setLocked(value) {
-      if (value === locked()) return;
-      if (value) cancelNavigation();
-      else clearMotion();
-      setLocked(value);
-      if (attached) {
-        if (value) {
-          // Cancel native smooth scrolling without committing a partial gesture.
-          const left = attached.scrollLeft;
-          attached.style.scrollSnapType = 'none';
-          attached.scrollLeft = left;
-        } else {
-          // The lock cancelled the request, not committed the partial viewport.
-          unlockAlignmentPending = true;
-          alignmentTarget = 0;
-          setPhase('scrolling');
-          nativeScroll = gestureHeld();
-          if (!gestureHeld())
-            animateTo(attached, middle * attached.clientWidth);
-        }
+      window.addEventListener('touchend', touchEnd, true);
+      window.addEventListener('touchcancel', touchEnd, true);
+      window.addEventListener('pointerup', pointerEnd, true);
+      window.addEventListener('pointercancel', pointerEnd, true);
+      if (width) {
+        initialScroll = true;
+        element.scrollLeft =
+          (TRACK_MIDDLE + fractionalPosition() - trackOrigin()) * width;
+        lastLeft = element.scrollLeft;
       }
-      if (value) setPhase('idle');
-    },
-    resize() {
-      if (!attached) return;
-      measuredWidth = attached.clientWidth;
-      realignAfterResize(measuredWidth);
+      return () => detach(element);
     },
   };
 }
@@ -838,7 +547,6 @@ export function SnapPagerViewport(props: SnapPagerViewportProps) {
     const observer = new ResizeObserver(() => {
       if (element.clientWidth === width) return;
       width = element.clientWidth;
-      // A locked resize keeps the same page; an active fling settles naturally.
       controller.resize();
     });
     observer.observe(element);
@@ -855,13 +563,22 @@ export function SnapPagerViewport(props: SnapPagerViewportProps) {
       classList={{
         ...local.classList,
         'snap-pager-locked': controller.locked(),
-        'snap-pager-discrete': controller.discrete(),
       }}
     >
       <div
         class="snap-pager-rail"
-        style={{ '--snap-origin': controller.origin() }}
+        style={{ '--snap-origin': controller.trackOrigin() }}
       >
+        <div class="snap-pager-markers" aria-hidden="true">
+          <For each={snapMarkers}>
+            {(index) => (
+              <div
+                class="snap-pager-marker"
+                style={{ '--snap-marker-position': index }}
+              />
+            )}
+          </For>
+        </div>
         {local.children}
       </div>
     </div>
