@@ -1,9 +1,9 @@
 # CAPTCHA vision lab
 
-A smoke test of Kimi vision on a CAPTCHA-like fixture we own: a fresh,
-randomized, server-scored shapes quiz ("Pick the option where the red
-triangle is above the blue circle") served on loopback, answered from a
-screenshot, scored by the server. Design and threat model:
+A smoke test of Kimi vision on CAPTCHA-like fixtures we own: fresh,
+randomized, server-scored challenges in five families (relation, count,
+order, transcription, rotation) served on loopback, answered from a
+screenshot with a bounded, family-specific response, scored by the server. Design and threat model:
 [`docs/design/kimi-vision-captcha-lab.md`](../../docs/design/kimi-vision-captcha-lab.md).
 
 ## Not included
@@ -12,7 +12,7 @@ General CAPTCHA solving, third-party or vendor challenges, generic
 computer-use actions, coordinate actions, token harvesting or injection, a
 production fallback from CapSolver to the lab, MCP or agent exposure, and
 stealth or evasion. The lab answers only its own quiz, only at
-`http://127.0.0.1:47831/lab/shapes-quiz`.
+`http://127.0.0.1:47831/lab/quiz`.
 
 ## Runbook
 
@@ -29,7 +29,7 @@ Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
 bun run check
-# … 48 pass, 0 fail
+# … 97 pass, 0 fail
 ```
 
 Mock smoke run. The mock always answers `--mock-choice`, so about one in four
@@ -41,7 +41,10 @@ bun run lab:smoke -- --lab-run --challenges 3
 # incorrect  planner_calls=1  actions=1  planner_ms=0  tokens=-  lab-records/<run>.json
 ```
 
-Without `--lab-run` it refuses and starts nothing.
+Without `--lab-run` it refuses and starts nothing. `--family` picks a family
+(`relation` by default) or `all`; `--challenges` is per family. For a choice
+the mock answers `--mock-choice` (or the first label), for an order the
+labels as shown, for text `00000`.
 
 Kimi adapter against the loopback stand-in (no provider call). In one
 terminal:
@@ -68,7 +71,7 @@ doppler run -p shared_ai -c lcl --only-secrets FIREWORK_API_KEY -- \
 # solved  planner_calls=1  actions=1  planner_ms=1019  tokens=734  lab-records/<run>.json
 ```
 
-`--challenges` is capped at 5 per run. Results so far (20 live attempts:
+`--challenges` is capped at 10 per family per run. Results so far (20 live attempts:
 5 `model_error` with Kimi's default reasoning, then 15 of 15 solved with it
 off) are in the design doc.
 
