@@ -4161,6 +4161,14 @@ export type BotChannelAccessAction = 'grant' | 'revoke';
  */
 export type ParticipantAction = 'add' | 'remove';
 /**
+ * The kind of record merged.
+ */
+export type ToolMergeRecordType = 'company';
+/**
+ * What happens to teammates' email sharing that names a merged record.
+ */
+export type ToolSharingRules = 'keep' | 'stop';
+/**
  * The kind of entity to move.
  */
 export type MoveableEntityType = 'document' | 'email' | 'project' | 'chat';
@@ -13459,6 +13467,46 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
+ * Merge duplicate CRM companies into the one that stays, exactly as a PreviewMerge review showed: people, domains, pipeline entries, references, discussions, favorites and lists move to it and the merged companies are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the company that stays. Refused with merge_preview_stale when anything changed since the review: preview again.
+ */
+export interface MergeRecords {
+  recordType: ToolMergeRecordType;
+  /**
+   * The company that stays, as reviewed.
+   */
+  survivorId: string;
+  /**
+   * The companies merged into it, as reviewed.
+   */
+  sourceIds: string[];
+  /**
+   * The revision PreviewMerge returned.
+   */
+  revision: string;
+  /**
+   * A new UUID for this merge. Reuse it only to retry the same call: a retry returns the first result.
+   */
+  requestKey: string;
+  sharingRules?: ToolSharingRules & string;
+}
+/**
+ * A committed merge.
+ */
+export interface MergeRecordsResponse {
+  /**
+   * The merge.
+   */
+  mergeId: string;
+  /**
+   * The record that stays.
+   */
+  survivorId: string;
+  /**
+   * The records merged into it; their ids open the record that stays.
+   */
+  mergedIds: string[];
+}
+/**
  * Move a document, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving a project requires owning it.
  */
 export interface MoveToProject {
@@ -13590,6 +13638,36 @@ export interface OpenDirectMessageResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * Review merging duplicate CRM companies into the one that stays, without changing anything. Returns what moves (people, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged company, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging.
+ */
+export interface PreviewMerge {
+  recordType: ToolMergeRecordType;
+  /**
+   * The company that stays; its name, domains and values win.
+   */
+  survivorId: string;
+  /**
+   * The companies merged into it and deleted, at most ten.
+   */
+  sourceIds: string[];
+}
+/**
+ * A merge's review, as an agent reads it.
+ */
+export interface PreviewMergeResponse {
+  /**
+   * Pass to MergeRecords to merge as reviewed.
+   */
+  revision: string;
+  /**
+   * The review: the record that stays and the ones merged into it, what
+   * moves, differing values, email sync, sharing and blocks.
+   */
+  review: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data, CREATE/ALTER/DROP to edit schema. One statement per call.
