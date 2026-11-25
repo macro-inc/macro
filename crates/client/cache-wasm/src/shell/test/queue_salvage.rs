@@ -286,6 +286,71 @@ async fn a_cache_that_cannot_take_the_schema_keeps_its_queue_under_the_schema_it
     close_and_destroy(&engine, SCOPE).await;
 }
 
+/// The page reads both reports off the export, which `open_cache_inner` does
+/// not cover.
+#[wasm_bindgen_test(async)]
+async fn the_exported_open_carries_the_schema_change_and_the_queue_of_a_schema_wipe() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-export";
+    set_worker_schema(Some(labelled("String")));
+    closed_with_queue(SCOPE).await;
+    set_worker_schema(Some(labelled("[String]")));
+    cache_turso::migration_test_hooks::corrupt_next_adoption();
+    let opened = open_cache_with_outcome(SCOPE.into(), None, None, None)
+        .await
+        .expect("open");
+    let field = |name: &str| js_sys::Reflect::get(&opened, &JsValue::from_str(name)).expect(name);
+    let read =
+        |name: &str| serde_wasm_bindgen::from_value::<serde_json::Value>(field(name)).expect(name);
+    assert_eq!(read("outcome"), "reset-corrupt");
+    let queue = read("queue");
+    assert_eq!(
+        (
+            queue["outcome"].as_str(),
+            queue["kept"].as_u64(),
+            queue["dropped"].as_u64()
+        ),
+        (Some("kept"), Some(1), Some(0))
+    );
+    assert_eq!(read("schemaChange")["change"], "types");
+    let engine = field("engine");
+    let close = js_sys::Function::from(
+        js_sys::Reflect::get(&engine, &JsValue::from_str("close")).expect("close"),
+    );
+    resolved(js_sys::Promise::from(close.call0(&engine).expect("close"))).await;
+    set_worker_schema(None);
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_the_open_told_before_a_schema_wipe_is_told_once_and_never_as_kept() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-loss";
+    // Noted in the side file, the later open reads it back; refused there,
+    // only the earlier open knows of it.
+    for refused in [false, true] {
+        set_worker_schema(Some(labelled("String")));
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 1,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        set_worker_schema(Some(labelled("[String]")));
+        if refused {
+            break_side_files("write", REFUSE_LOSSES).await;
+        }
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+        let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
+        if refused {
+            restore_side_files().await;
+        }
+        assert_eq!(outcome, "reset-corrupt", "{refused}");
+        assert_eq!(queue, serde_json::json!(["partial", 1, 1]), "{refused}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+    set_worker_schema(None);
+}
+
 #[wasm_bindgen_test(async)]
 async fn a_reset_tier_keeps_the_queue_in_its_own_database() {
     const SCOPE: &str = "cache-wasm-salvage-reset-tier";

@@ -55,6 +55,9 @@ pub(super) struct QueueReport {
     pub(super) kept: u64,
     /// Mutations known to be lost.
     pub(super) dropped: u64,
+    /// Whether the side file notes this report's loss, which the next open
+    /// reads back and tells again.
+    pub(super) noted: bool,
     pub(super) times: CrossingTimes,
 }
 
@@ -391,6 +394,7 @@ fn report_of(found: &QueueRead) -> QueueReport {
         },
         kept: 0,
         dropped: found.dropped,
+        noted: false,
         times: CrossingTimes::default(),
     }
 }
@@ -402,15 +406,24 @@ impl QueueReport {
     }
 
     /// What an open told, then a wipe of the database it opened and the open
-    /// that followed: what the later one kept, and every loss.
+    /// that followed: what the later one kept, and every loss, each once.
     pub(super) fn then(self, later: Self) -> Self {
+        // The later open read back what the side file notes, and counted it.
+        let (earlier, dropped) = match self.noted {
+            true => (QueueOutcome::None, 0),
+            false => (self.outcome, self.dropped),
+        };
+        let lost = !matches!(earlier, QueueOutcome::None | QueueOutcome::Kept) || dropped > 0;
         Self {
             outcome: match later.outcome {
-                QueueOutcome::None => self.outcome,
+                QueueOutcome::None => earlier,
+                // What the earlier open lost is not among what the later kept.
+                QueueOutcome::Kept if lost => QueueOutcome::Partial,
                 outcome => outcome,
             },
             kept: later.kept,
-            dropped: self.dropped + later.dropped,
+            dropped: dropped + later.dropped,
+            noted: later.noted && !lost,
             times: self.times.then(later.times),
         }
     }
@@ -453,6 +466,7 @@ impl Crossing {
                 },
                 kept: 0,
                 dropped: self.report.dropped + later.report.dropped,
+                noted: false,
                 times: self.report.times.then(later.report.times),
             },
         }
@@ -545,7 +559,10 @@ async fn leave(sidecar: &Sidecar, report: QueueReport) -> Result<QueueReport, Js
     if report.lost() {
         let left = sidecar.replace(&SalvageFile::loss(report.loss())).await;
         if left.is_ok() {
-            return Ok(report);
+            return Ok(QueueReport {
+                noted: true,
+                ..report
+            });
         }
         unless_busy(left)?;
     }
