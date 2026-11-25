@@ -323,8 +323,14 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const [searchField, setSearchField] = createSignal<EmailSearchField>();
   const registerSearchField = (field: EmailSearchField) => {
     setSearchField(field);
+    // Release after the teardown that unmounts the field. Written during it,
+    // the signal makes the view's memos stale while their owner is still
+    // being cleaned; a cleanup that reads one re-runs that owner and disposes
+    // it twice, which fails the navigation that unmounted the field.
     onCleanup(() =>
-      setSearchField((current) => (current === field ? undefined : current))
+      queueMicrotask(() =>
+        setSearchField((current) => (current === field ? undefined : current))
+      )
     );
   };
 
