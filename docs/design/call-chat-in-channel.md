@@ -169,7 +169,7 @@ creates the root first.
   list, while notifications, interaction tracking, agents, routines, webhooks and search documents
   never see it,
 - is left out of `get_channel_message_count`, so the first real message still sends
-  first-message invites,
+  its first-message notifications,
 - rejects edit, delete and reactions in `MessageService`, for every caller including bots and
   agent tools. Channels have no thread delete or thread patch.
 
@@ -322,7 +322,7 @@ that reads `discussion` has reached people.
   posts are rejected on `channel_thread`; timeline entries for each status, with one query per page.
 - `crates/channels`: channel members connected to the call get all three effects like followers,
   connected guests outside the channel get none, and normal thread rules apply to everyone else; the caller is not a follower for starting the call; a call root does not suppress
-  first-message invites; normal channel mentions during a call still notify.
+  first-message notifications; normal channel mentions during a call still notify.
 - `crates/agent_trigger`, `crates/scheduled_action`: a root triggers nothing, and a reply triggers
   normally.
 - `apps/web`: the reply table through real interactions; no path posts top-level from the panel; popup
