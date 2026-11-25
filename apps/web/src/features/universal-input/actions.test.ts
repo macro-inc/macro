@@ -62,7 +62,9 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
 }));
 vi.mock('@property/tags', () => ({ useLocalDocTags: vi.fn() }));
 vi.mock('@queries/properties/definitions', () => ({}));
-vi.mock('@queries/properties/tags', () => ({}));
+vi.mock('@queries/properties/tags', () => ({
+  useTagsQuery: () => ({ isSuccess: false }),
+}));
 vi.mock('@queries/properties/entity', () => ({
   fetchEntityProperties: vi.fn(),
 }));
@@ -350,12 +352,7 @@ describe('destination adapters', () => {
     expect(mocks.replace).toHaveBeenCalledWith({
       next: expect.objectContaining({
         params: expect.objectContaining({
-          initialFilters: expect.objectContaining({
-            include: expect.objectContaining({
-              emailLinkId: ['inbox'],
-              emailImportance: false,
-            }),
-          }),
+          initialQuery: 'type:email inbox:me@example.com in:noise budget',
         }),
       }),
     });
@@ -371,7 +368,7 @@ describe('destination adapters', () => {
       )
     ).rejects.toThrow();
   });
-  it('opens global search with resolved sender and DM filters rather than dropping them', async () => {
+  it('opens global search with resolved sender and channel operators rather than dropping them', async () => {
     const searchFilters = JSON.stringify({
       type: 'channels',
       channels: { in: ['julia-dm'], from: ['John'] },
@@ -384,13 +381,8 @@ describe('destination adapters', () => {
       next: expect.objectContaining({
         id: 'search',
         params: expect.objectContaining({
-          initialQuery: 'budget',
-          initialFilters: expect.objectContaining({
-            include: expect.objectContaining({
-              channelSenderId: ['macro|john@example.com'],
-              channelId: ['julia-dm'],
-            }),
-          }),
+          initialQuery:
+            'type:channel in:#"Julia direct message" from:john@example.com budget',
         }),
       }),
     });

@@ -26,6 +26,13 @@ const CATEGORY_TO_INDEX: Partial<
   chats: 'agent',
 };
 
+/** The Search view type a Cmd+K category searches, if it has one. */
+export function categorySearchIndex(
+  category: EntitySearchCategory | 'commands'
+): SearchIndexId | undefined {
+  return CATEGORY_TO_INDEX[category];
+}
+
 export function getCategorySearchFilters(
   category: EntitySearchCategory | 'commands'
 ): CategorySearchFilters | undefined {

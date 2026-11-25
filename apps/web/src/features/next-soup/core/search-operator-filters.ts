@@ -306,7 +306,8 @@ const anyOf = (name: string, values: (string | undefined)[]) => {
 /**
  * The operators that ask for what `state` filters, to write into the Search
  * field in place of picked filters, so the field shows the whole search. An
- * id with no name to write is left out.
+ * id with no name to write is written as it is: it names nothing, so the
+ * search narrows rather than dropping the condition.
  */
 export function searchFiltersOperatorText(
   state: SearchFiltersState,
@@ -315,7 +316,7 @@ export function searchFiltersOperatorText(
   const person = (id: string) => {
     if (names.userId && id.toLowerCase() === names.userId.toLowerCase())
       return 'me';
-    return id.startsWith('macro|') ? id.slice('macro|'.length) : undefined;
+    return id.startsWith('macro|') ? id.slice('macro|'.length) : id;
   };
   const scope = state.type === 'calls' ? state.calls : state.channels;
   const parts = [
@@ -337,20 +338,23 @@ export function searchFiltersOperatorText(
       ? [
           ...anyOf(
             'in',
-            scope.in.map((id) => {
-              const name = names.channel(id);
-              return name ? `#${asValue(name)}` : undefined;
-            })
+            scope.in.map((id) => `#${asValue(names.channel(id) ?? id)}`)
           ),
           ...anyOf('from', scope.from.map(person)),
         ]
       : []),
-    ...anyOf('inbox', (state.email.inboxIds ?? []).map(names.inbox)),
+    ...anyOf(
+      'inbox',
+      (state.email.inboxIds ?? []).map((id) => names.inbox(id) ?? id)
+    ),
+    // Importance is Mail's Signal and Noise.
+    ...(state.type === 'email' && state.email.importance !== undefined
+      ? [state.email.importance ? 'in:signal' : 'in:noise']
+      : []),
   ];
-  const tags = state.tags.map((tag) => {
-    const label = names.tag(tag.value);
-    return label ? asValue(label) : undefined;
-  });
+  const tags = state.tags.map((tag) =>
+    asValue(names.tag(tag.value) ?? tag.value)
+  );
   if (state.tagMode === 'all') {
     for (const tag of tags) if (tag) parts.push(`tag:${tag}`);
   } else {
