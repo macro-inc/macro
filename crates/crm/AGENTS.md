@@ -150,8 +150,11 @@ tools/HTTP/GraphQL surfaces over them.
   pipeline tools, a contact's company, record associations and `/crm/previews`.
   The company extractor and `company_receipt` mint the receipt for the company
   the id names now, so act on the receipt's id, never on the path or argument.
-  Previews stay keyed by the requested id and name the other in `mergedInto`.
-  Soup and search filters match company ids as given.
+  A contact merged away does the same through `crm_contact_aliases`: the
+  `/crm/contacts/{contact_id}` routes (the contact extractor), pipeline entries,
+  record associations, `/crm/previews`, and a contact's discussion and
+  properties. Previews stay keyed by the requested id and name the other in
+  `mergedInto`. Soup and search filters match company and contact ids as given.
 
 - Company lists with at most 500 explicit IDs and policy target reads probe the
   primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team

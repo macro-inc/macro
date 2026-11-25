@@ -856,6 +856,7 @@ export * from './crmContactDetailResponseAllOf';
 export * from './crmContactDetailResponseAllOfCompany';
 export * from './crmContactPreview';
 export * from './crmContactPreviewEmail';
+export * from './crmContactPreviewMergedInto';
 export * from './crmContactPreviewName';
 export * from './crmContactResponse';
 export * from './crmContactResponseCompanyId';

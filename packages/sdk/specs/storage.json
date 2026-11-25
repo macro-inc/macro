@@ -41675,7 +41675,12 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "The contact."
+            "description": "The requested contact id."
+          },
+          "mergedInto": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The contact the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a contact that was not merged."
           },
           "name": {
             "type": ["string", "null"],
