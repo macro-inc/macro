@@ -26,7 +26,12 @@ export function createRecentModelSelections(userId: string | undefined) {
         return modelIds(JSON.parse(lastObserved ?? '[]'));
       },
       write: (value) => {
-        if (userId) storage.write(userId, JSON.stringify(value));
+        if (!userId) return;
+        const stored = JSON.stringify(value);
+        storage.write(userId, stored);
+        // The safe storage adapter swallows write failures. Only a confirmed
+        // write advances the observed payload, including writes from refresh.
+        if (storage.read(userId) === stored) lastObserved = stored;
       },
     },
   });
@@ -36,11 +41,7 @@ export function createRecentModelSelections(userId: string | undefined) {
       const stored = storage.read(userId);
       // Failed writes leave storage unchanged; do not replay stale history
       // over selections made in this mounted selector.
-      if (stored === lastObserved) return;
-      if (stored === null) {
-        lastObserved = stored;
-        return;
-      }
+      if (stored === null || stored === lastObserved) return;
       const restored = modelIds(JSON.parse(stored));
       lastObserved = stored;
       setIds((previous) => modelIds([...restored, ...previous]));

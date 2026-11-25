@@ -87,4 +87,25 @@ describe('recent model selections', () => {
       dispose();
     });
   });
+
+  it('preserves a newer choice when a merge write succeeds but the next write fails', () => {
+    const key = 'agent-model-recent-v1:user-a';
+    localStorage.setItem(key, JSON.stringify(['a', 'b', 'c', 'd', 'e']));
+    createRoot((dispose) => {
+      const recent = createRecentModelSelections('user-a');
+      localStorage.setItem(key, JSON.stringify(['external']));
+      const write = Storage.prototype.setItem;
+      vi.spyOn(Storage.prototype, 'setItem')
+        .mockImplementationOnce(function (this: Storage, key, value) {
+          write.call(this, key, value);
+        })
+        .mockImplementation(() => {
+          throw new Error('Storage unavailable');
+        });
+      recent.remember('latest');
+      recent.refresh();
+      expect(recent.ids()).toEqual(['latest', 'external', 'a', 'b', 'c']);
+      dispose();
+    });
+  });
 });
