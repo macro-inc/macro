@@ -306,9 +306,12 @@ impl<Transport: NotionTransport> NotionRestClient<Transport> {
             .map_err(|error| NotionError::Decode(format!("{}: {error}", read.endpoint())))
     }
 
+    // `err` records the content-free `Display` as an ERROR event, which marks
+    // the exported span as failed.
     #[tracing::instrument(
         name = "notion.request",
         skip_all,
+        err,
         fields(
             endpoint = <&'static str>::from(read.endpoint()),
             method = %read.method(),

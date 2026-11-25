@@ -52,8 +52,9 @@ maps a data source onto Macro database columns and cells
 - Each request is one `notion.request` span with typed fields only:
   `endpoint` (`NotionEndpoint`), `method`, `attempts`, the final `status`,
   `outcome` (`RequestOutcome`), and on failure `error_class` and
-  `transport_class`; a final failure also logs one `warn!` with the same
-  fields. Never record a request's path, query, body, or Notion's response.
+  `transport_class`. A final failure is recorded through `err`, an ERROR
+  event with the content-free `Display` that marks the exported span as
+  failed, and one `warn!` with those fields except `method`. Never record a request's path, query, body, or Notion's response.
   `NotionError`'s `Display` and `Debug` show only its class, status and
   transport class, so `?error` stays safe. Planning stage spans
   (`notion.plan.*`) carry a typed `stage` (`PlanStage`).

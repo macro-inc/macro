@@ -23,6 +23,9 @@ const NOTION_WORDS: &str = "Quarterly secrets page";
 
 type Fields = HashMap<&'static str, String>;
 
+/// An ERROR event's fields and the span it was recorded in.
+type ErrorEvent = (Option<&'static str>, Fields);
+
 #[derive(Default)]
 struct Visitor(Fields);
 
@@ -40,6 +43,9 @@ impl Visit for Visitor {
 struct Captured {
     spans: Arc<Mutex<Vec<(&'static str, Fields)>>>,
     events: Arc<Mutex<Vec<Fields>>>,
+    /// ERROR events, which mark their span as failed on export, with the
+    /// span they were recorded in.
+    errors: Arc<Mutex<Vec<ErrorEvent>>>,
 }
 
 impl Captured {
@@ -50,6 +56,10 @@ impl Captured {
             .filter(|(name, _)| *name == "notion.request")
             .map(|(_, fields)| fields.clone())
             .collect()
+    }
+
+    fn errors(&self) -> Vec<ErrorEvent> {
+        self.errors.lock().unwrap().clone()
     }
 
     fn failures(&self) -> Vec<Fields> {
@@ -107,10 +117,21 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
             values.record(fields);
         }
     }
-    fn on_event(&self, event: &tracing::Event<'_>, _: Context<'_, S>) {
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         let mut fields = Visitor::default();
         event.record(&mut fields);
-        sink(|captured| captured.events.lock().unwrap().push(fields.0));
+        let error = *event.metadata().level() == tracing::Level::ERROR;
+        let span = ctx.event_span(event).map(|span| span.name());
+        sink(|captured| {
+            if error {
+                captured
+                    .errors
+                    .lock()
+                    .unwrap()
+                    .push((span, fields.0.clone()));
+            }
+            captured.events.lock().unwrap().push(fields.0);
+        });
     }
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
         if let Some(span) = ctx.span(&id) {
@@ -192,6 +213,7 @@ async fn a_bad_gateway_then_success_records_the_endpoint_attempts_and_final_stat
         ])]
     );
     assert_eq!(captured.failures(), Vec::<Fields>::new());
+    assert_eq!(captured.errors(), vec![]);
 }
 
 #[tokio::test(start_paused = true)]
@@ -225,6 +247,14 @@ async fn a_request_that_times_out_every_attempt_records_the_transport_class() {
             ("error_class", "transport"),
             ("transport_class", "timeout"),
         ])]
+    );
+    // A final failure marks the request span as failed.
+    assert_eq!(
+        captured.errors(),
+        vec![(
+            Some("notion.request"),
+            fields(&[("error", "Notion request did not complete (timeout)")])
+        )]
     );
 }
 
@@ -288,6 +318,13 @@ async fn an_unauthorized_answer_is_final_after_one_attempt() {
             ("outcome", "not_retryable"),
             ("error_class", "upstream"),
         ])]
+    );
+    assert_eq!(
+        captured.errors(),
+        vec![(
+            Some("notion.request"),
+            fields(&[("error", "Notion could not complete the request (HTTP 401)")])
+        )]
     );
 }
 
