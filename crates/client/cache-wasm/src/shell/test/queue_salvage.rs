@@ -12,11 +12,10 @@ const REFUSE_LOSSES: &str = "const frame = args[0];
       throw new DOMException('full', 'QuotaExceededError');
     return original(...args);";
 
-/// [`REFUSE_LOSSES`], for the first loss written after `self.refusedLoss` is
-/// set to false.
-const REFUSE_ONE_LOSS: &str = "const frame = args[0];
-    if (!self.refusedLoss && frame.byteLength === 22 && frame[12] === 4) {
-      self.refusedLoss = true;
+/// [`REFUSE_LOSSES`], for the next `self.lossesToRefuse` losses written.
+const REFUSE_EARLY_LOSSES: &str = "const frame = args[0];
+    if (self.lossesToRefuse > 0 && frame.byteLength === 22 && frame[12] === 4) {
+      self.lossesToRefuse -= 1;
       throw new DOMException('full', 'QuotaExceededError');
     }
     return original(...args);";
@@ -361,31 +360,40 @@ async fn a_loss_the_open_told_before_a_schema_wipe_is_told_once_and_never_as_kep
 }
 
 #[wasm_bindgen_test(async)]
-async fn a_loss_the_side_file_refused_once_before_a_schema_wipe_outlives_a_worker_that_never_told_it()
- {
+async fn a_loss_the_side_file_refused_before_a_schema_wipe_outlives_a_worker_that_never_told_it() {
     const SCOPE: &str = "cache-wasm-salvage-adoption-untold";
-    set_worker_schema(Some(labelled("String")));
-    closed_with_queue(SCOPE).await;
-    let loss = QueueLoss {
-        abandoned: false,
-        dropped: 1,
-    };
-    write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
-    set_worker_schema(Some(labelled("[String]")));
-    break_side_files("write", REFUSE_ONE_LOSS).await;
-    run_js("self.refusedLoss = false; return Promise.resolve();", "").await;
-    cache_turso::migration_test_hooks::corrupt_next_adoption();
-    let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
-    restore_side_files().await;
-    assert_eq!(outcome, "reset-corrupt");
-    assert_eq!(queue, serde_json::json!(["partial", 1, 1]));
-    // Its worker dies before it tells the page.
-    resolved(engine.close()).await;
-    let (engine, _, queue) = open(SCOPE, false).await;
-    assert_eq!(queue, serde_json::json!(["unreadable", 0, 1]));
-    assert_kept(&engine, SCOPE).await;
-    close_and_destroy(&engine, SCOPE).await;
-    set_worker_schema(None);
+    // Refused once, the note is written again before the wipe and keeps its
+    // count; refused twice, the import after the wipe notes that writes were
+    // lost, as any loss whose count the side file could not keep.
+    for (refusals, later) in [(1, 1), (2, 0)] {
+        set_worker_schema(Some(labelled("String")));
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 1,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        set_worker_schema(Some(labelled("[String]")));
+        break_side_files("write", REFUSE_EARLY_LOSSES).await;
+        let refuse = format!("self.lossesToRefuse = {refusals}; return Promise.resolve();");
+        run_js(&refuse, "").await;
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+        let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
+        restore_side_files().await;
+        assert_eq!(outcome, "reset-corrupt", "{refusals}");
+        assert_eq!(queue, serde_json::json!(["partial", 1, 1]), "{refusals}");
+        // Its worker dies before it tells the page.
+        resolved(engine.close()).await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["unreadable", 0, later]),
+            "{refusals}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+        set_worker_schema(None);
+    }
 }
 
 #[wasm_bindgen_test]

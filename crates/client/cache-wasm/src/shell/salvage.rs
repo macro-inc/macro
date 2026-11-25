@@ -406,7 +406,10 @@ impl QueueReport {
     }
 
     /// What an open told, then a wipe of the database it opened and the open
-    /// that followed: what the later one kept, and every loss, each once.
+    /// that followed: what the later one kept, and every loss, each once. A
+    /// count is what is known: one a side file could not give back is lost
+    /// with it, as on any open that cannot read the side file, and the
+    /// outcome still says writes were lost.
     pub(super) fn then(self, later: Self) -> Self {
         // The later open read back what the side file notes and counted it,
         // or could not read it and counted what it found.
@@ -468,6 +471,17 @@ impl Crossing {
     /// This crossing, to a database whose other half was gone.
     pub(super) fn torn(self) -> Self {
         Self { torn: true, ..self }
+    }
+
+    /// This crossing, after an open whose loss the side file did not note:
+    /// the import notes that writes were lost, once the wipe may have made
+    /// room, so a worker that dies before it tells leaves the loss to the
+    /// next. The count stays with the earlier report.
+    pub(super) fn after(mut self, earlier: &QueueReport) -> Self {
+        if earlier.lost() && !earlier.noted {
+            self.report.lose();
+        }
+        self
     }
 
     /// What this wipe and a later one found.

@@ -1115,7 +1115,7 @@ async fn adopted_engine(
                 }
                 .map_err(err_js)?;
                 let (owner, crossing) = wipe_keeping_queue(scope, owner).await?;
-                let reopened = open_storage(scope, owner, crossing).await?;
+                let reopened = open_storage(scope, owner, crossing.after(&queue)).await?;
                 let storage = reopened.storage;
                 match storage.adopt_schema(&incoming, &inputs, Unrecorded::Guess) {
                     Ok(adoption) => (
