@@ -12,6 +12,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   createUniqueId,
   For,
   Match,
@@ -131,8 +132,6 @@ export function ForYouView(props: {
   /** The key of the topic asked for, shown alone in place of the list. */
   topicKey?: string;
   onSelectTopic(key: string): void;
-  /** The topic asked for groups nothing (any more): the list is shown. */
-  onTopicGone(): void;
   routines: RoutinesSource;
   parts: SuggestionItemParts;
   refresh: Refresh;
@@ -140,19 +139,27 @@ export function ForYouView(props: {
   onRetry(): void;
 }) {
   const view = () => props.feed.view(props.list);
+  // One shown that stops grouping rows leaves the list shown until it is chosen
+  // again: rows that bring it back don't take the page over. One never shown
+  // is shown once the feed has it, since a cached feed may be from before it.
+  const [lostTopicKey, setLostTopicKey] = createSignal<string>();
   const topic = () =>
-    props.feed.topics().find((other) => other.key === props.topicKey);
+    props.topicKey === lostTopicKey()
+      ? undefined
+      : props.feed.topics().find((other) => other.key === props.topicKey);
   const shownTopicKey = createMemo(() => topic()?.key);
-  // One that stops grouping rows leaves the list shown, and isn't asked for any
-  // more: rows that bring it back later don't take the page over. One never
-  // shown stays asked for, since a cached feed may be from before the topic.
+  createEffect(
+    on(
+      () => props.topicKey,
+      () => setLostTopicKey(undefined),
+      { defer: true }
+    )
+  );
   createEffect(
     on(shownTopicKey, (key, before) => {
       const kind = view().kind;
       const known = kind === 'rows' || kind === 'empty';
-      if (known && !key && before && props.topicKey === before) {
-        props.onTopicGone();
-      }
+      if (known && !key && before === props.topicKey) setLostTopicKey(before);
     })
   );
   const groups = () => props.feed.groups(props.list, topic());
@@ -380,6 +387,7 @@ export function ForYouView(props: {
   };
   const selectTopic = (key: string) => {
     if (key === topic()?.key) scroller?.scrollTo({ top: 0 });
+    setLostTopicKey(undefined);
     props.onSelectTopic(key);
   };
 

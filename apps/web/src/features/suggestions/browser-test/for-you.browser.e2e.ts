@@ -200,21 +200,23 @@ test('a link to a topic that groups nothing shows Today', async ({ page }) => {
   await expect(rows(page)).toHaveCount(9);
 });
 
-test('a topic that stops grouping rows gives way to Today for good', async ({
+test('a topic that stops grouping rows gives way to Today until it is chosen again', async ({
   page,
 }) => {
   await page.goto('/?scenario=topics&topic=event:offsite');
   await expect(title(page)).toHaveText('Spring offsite');
   await page.getByRole('button', { name: 'Lose topic' }).click();
   await expect(title(page)).toHaveText('Today');
-  await expect(page).toHaveURL(/\?scenario=topics$/);
 
   // Rows that bring it back are grouped, and don't take the page over.
   await page.getByRole('button', { name: 'Read feed' }).click();
-  await expect(
-    page.locator('[data-for-you-topic="event:offsite"]')
-  ).toBeVisible();
+  const offsite = page.locator('[data-for-you-topic="event:offsite"]');
+  await expect(offsite).toBeVisible();
   await expect(title(page)).toHaveText('Today');
+
+  // Choosing it again shows it.
+  await offsite.click();
+  await expect(title(page)).toHaveText('Spring offsite');
 });
 
 test('a topic missing from a cached feed is still asked for once it is read again', async ({

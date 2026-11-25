@@ -404,11 +404,6 @@ function Fixture() {
               onSelectList={(next) => go({ list: next })}
               topicKey={new URLSearchParams(search()).get('topic') ?? undefined}
               onSelectTopic={(topic) => go({ topic })}
-              onTopicGone={() => {
-                const url = at({});
-                history.replaceState(null, '', url);
-                setSearch(url.search);
-              }}
               routines={routines}
               parts={PARTS}
               refresh={refresh}

@@ -35,7 +35,8 @@ function ForYouPage() {
   return (
     <ForYouView
       feed={feed}
-      list={search.view ?? 'today'}
+      // A topic is of Today's rows, whatever list its link names.
+      list={search.topic ? 'today' : (search.view ?? 'today')}
       onSelectList={(list) =>
         setSearch(
           {
@@ -52,9 +53,6 @@ function ForYouPage() {
           { view: undefined, topic, suggestion: undefined },
           { history: 'replace' }
         )
-      }
-      onTopicGone={() =>
-        setSearch({ view: undefined, topic: undefined }, { history: 'replace' })
       }
       routines={routines}
       parts={SUGGESTION_ITEM_PARTS}
