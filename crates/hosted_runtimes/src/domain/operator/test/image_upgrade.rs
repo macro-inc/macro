@@ -644,3 +644,127 @@ async fn staging_that_never_finishes_fails_at_the_deadline() {
     assert_eq!(upgrade_state(&operator), (UpgradeState::Failed, true));
     assert_eq!(operator.fleet.home.logged("replace"), 0);
 }
+
+fn set_row(
+    operator: &Operator,
+    id: ComputerId,
+    change: impl FnOnce(&mut crate::domain::image_upgrade::ComputerUpgrade),
+) {
+    let mut upgrades = operator.repo.image_upgrades.lock().unwrap();
+    let row = upgrades[0]
+        .computers
+        .iter_mut()
+        .find(|row| row.computer_id == id)
+        .unwrap();
+    change(row);
+}
+
+#[tokio::test]
+async fn a_replacement_resumed_after_the_boot_counts_macrod_from_when_it_was_asked() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    // The pass that asked died after the host booted the new disk and
+    // macrod connected, before it saved Verifying.
+    set_row(&operator, id, |row| {
+        row.state = ComputerUpgradeState::Replacing;
+        row.phase_started_at = Some(now() - Duration::minutes(2));
+        row.reconnected_at = Some(now() - Duration::minutes(1));
+    });
+
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Verifying);
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Upgraded);
+}
+
+#[tokio::test]
+async fn a_fresh_replacement_does_not_count_a_connection_from_before_its_boot() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    set_row(&operator, id, |row| {
+        row.reconnected_at = Some(now() - Duration::seconds(1));
+    });
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Verifying);
+    // The earlier connection never counts.
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Verifying);
+}
+
+#[tokio::test]
+async fn at_the_deadline_a_computer_that_reconnected_is_upgraded_not_abandoned() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    operator
+        .repo
+        .apply(id, Event::MacrodConnected, now())
+        .await
+        .unwrap();
+    operator.repo.image_upgrades.lock().unwrap()[0]
+        .upgrade
+        .idle_deadline_at = now() - crate::domain::image_upgrade::UPGRADE_GRACE;
+
+    operator.advance_image_upgrade().await.unwrap();
+
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Upgraded);
+    assert_eq!(image_of(&operator, id), NEW_IMAGE);
+    assert_eq!(upgrade_state(&operator), (UpgradeState::Done, true));
+}
+
+#[tokio::test]
+async fn a_rollback_cut_short_before_its_host_call_is_sent_again() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    // Saved RollingBack, then the pass died: the host still runs the new disk.
+    set_row(&operator, id, |row| {
+        row.state = ComputerUpgradeState::RollingBack;
+        row.phase_started_at = Some(now());
+    });
+
+    operator.advance_image_upgrade().await.unwrap();
+
+    assert_eq!(
+        operator
+            .fleet
+            .home
+            .logged(&format!("replace {id} {BASE_IMAGE}")),
+        1
+    );
+    assert_eq!(
+        operator.fleet.home.state_of_disk(id).image.as_str(),
+        BASE_IMAGE
+    );
+    // Once there, it is not sent again.
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(
+        operator
+            .fleet
+            .home
+            .logged(&format!("replace {id} {BASE_IMAGE}")),
+        1
+    );
+}

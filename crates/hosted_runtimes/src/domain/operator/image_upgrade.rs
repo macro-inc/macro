@@ -32,6 +32,15 @@ enum NotNow {
     Skip(String),
 }
 
+/// Whether a replacement is being asked again after a pass died during it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Resumed {
+    /// First asked in this pass.
+    No,
+    /// Asked by a pass that died.
+    Yes,
+}
+
 /// Another replica holds the upgrade now; this pass stops.
 fn lease_lost() -> ComputerError {
     ComputerError::Internal(rootcause::report!(
@@ -85,6 +94,11 @@ where
         async {
             let before = upgrade.clone();
             if now >= upgrade.deadline_at() {
+                // What has already reconnected (or timed out) settles first;
+                // only what is still undecided is abandoned.
+                if matches!(upgrade.state, UpgradeState::Rolling | UpgradeState::Paused) {
+                    self.settle_under_way(&mut upgrade, &mut computers).await?;
+                }
                 self.stop_at_deadline(&mut upgrade, &mut computers).await?;
             } else {
                 match upgrade.state {
@@ -252,6 +266,18 @@ where
         upgrade: &mut ImageUpgrade,
         computers: &mut [ComputerUpgrade],
     ) -> Result<(), ComputerError> {
+        self.settle_under_way(upgrade, computers).await?;
+        self.start_next(upgrade, computers).await
+    }
+
+    /// Move every computer under way on: a replacement cut short is asked
+    /// again, a reconnect finishes it, a timeout rolls it back, and a
+    /// rollback not yet in place on its host is sent again.
+    async fn settle_under_way(
+        &self,
+        upgrade: &mut ImageUpgrade,
+        computers: &mut [ComputerUpgrade],
+    ) -> Result<(), ComputerError> {
         let now = self.clock.now();
         for computer in computers.iter_mut() {
             match computer.state {
@@ -265,7 +291,8 @@ where
                         self.save_computer(computer).await?;
                         continue;
                     };
-                    self.replace(upgrade, computer, &old_image).await?;
+                    self.replace(upgrade, computer, &old_image, Resumed::Yes)
+                        .await?;
                 }
                 ComputerUpgradeState::Verifying => {
                     if computer.reconnected() {
@@ -282,6 +309,15 @@ where
                     }
                 }
                 ComputerUpgradeState::RollingBack => {
+                    if !computer.reconnected()
+                        && !computer.timed_out(upgrade.reconnect_timeout, now)
+                    {
+                        // A rollback cut short (a dead pass, a lost lease, a
+                        // call that timed out) is sent again until its host
+                        // has the computer running on its old disk.
+                        self.ensure_rolled_back(computer).await?;
+                        continue;
+                    }
                     if computer.reconnected() {
                         if let Some(old_image) = &computer.old_image {
                             self.repo
@@ -309,6 +345,16 @@ where
                 | ComputerUpgradeState::Failed => {}
             }
         }
+        Ok(())
+    }
+
+    /// Start the next waiting computer, unless the upgrade paused.
+    async fn start_next(
+        &self,
+        upgrade: &mut ImageUpgrade,
+        computers: &mut [ComputerUpgrade],
+    ) -> Result<(), ComputerError> {
+        let now = self.clock.now();
         // A failure above pauses the upgrade before another computer starts.
         upgrade.state = settled_state(upgrade, computers);
         let batch = next_batch(upgrade, computers);
@@ -326,7 +372,8 @@ where
                     computer.phase_started_at = Some(self.clock.now());
                     computer.error = None;
                     self.save_computer(computer).await?;
-                    self.replace(upgrade, computer, &current.image).await?;
+                    self.replace(upgrade, computer, &current.image, Resumed::No)
+                        .await?;
                     tracing::info!(upgrade_id = %upgrade.id, computer_id = %computer.computer_id, state = computer.state.as_ref(), "image upgrade started a computer");
                     // One replacement per pass: each can take a shutdown and
                     // a boot.
@@ -403,6 +450,7 @@ where
         upgrade: &ImageUpgrade,
         computer: &mut ComputerUpgrade,
         old_image: &GuestImage,
+        resumed: Resumed,
     ) -> Result<(), ComputerError> {
         let Some(current) = self.upgradable(computer.computer_id).await? else {
             computer.state = ComputerUpgradeState::RollbackFailed;
@@ -455,8 +503,13 @@ where
         };
         if disk.image == computer.new_image && disk.running {
             computer.state = ComputerUpgradeState::Verifying;
-            // Only a connection after the boot counts.
-            computer.phase_started_at = Some(self.clock.now());
+            match resumed {
+                // Only a connection after the boot counts.
+                Resumed::No => computer.phase_started_at = Some(self.clock.now()),
+                // The boot may have come (and macrod with it) before the
+                // pass that asked died: count from when it asked.
+                Resumed::Yes => {}
+            }
             return self.save_computer(computer).await;
         }
         if disk.image == computer.new_image {
@@ -492,22 +545,42 @@ where
         computer.phase_started_at = Some(self.clock.now());
         computer.error = Some(reason);
         self.save_computer(computer).await?;
-        let rolled_back = async {
-            let Some(old_image) = computer.old_image.clone() else {
-                return Err("its previous image is not recorded".to_owned());
-            };
-            let Some(current) = self
-                .upgradable(computer.computer_id)
-                .await
-                .map_err(|error| error.to_string())?
-            else {
-                return Err("the computer is gone or needs an operator".to_owned());
-            };
-            let fleet = self
-                .fleet_for(current.host)
-                .await
-                .map_err(|error| error.to_string())?;
-            self.renew_lease().await.map_err(|error| error.to_string())?;
+        self.ensure_rolled_back(computer).await
+    }
+
+    /// Unless its host has the computer running on its old disk, send the
+    /// rollback (back to the old disk, then start). Once sent, macrod counts
+    /// from the host's answer; a failed send is tried again next pass until
+    /// the reconnect timeout.
+    async fn ensure_rolled_back(
+        &self,
+        computer: &mut ComputerUpgrade,
+    ) -> Result<(), ComputerError> {
+        let Some(old_image) = computer.old_image.clone() else {
+            computer.state = ComputerUpgradeState::RollbackFailed;
+            computer.error = Some(format!(
+                "{}; its previous image is not recorded",
+                computer.error.as_deref().unwrap_or_default()
+            ));
+            tracing::error!(computer_id = %computer.computer_id, reason = "image upgrade rollback has no previous image", "computer needs an operator");
+            return self.save_computer(computer).await;
+        };
+        let Some(current) = self.upgradable(computer.computer_id).await? else {
+            computer.state = ComputerUpgradeState::RollbackFailed;
+            computer.error = Some("the computer is gone or needs an operator".to_owned());
+            return self.save_computer(computer).await;
+        };
+        let fleet = self.fleet_for(current.host).await?;
+        self.renew_lease().await?;
+        match fleet.system_disk(computer.computer_id).await {
+            Ok(disk) if disk.image == old_image && disk.running => return Ok(()),
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(computer_id = %computer.computer_id, error = ?error, "could not read the computer's system disk during a rollback");
+                return Ok(());
+            }
+        }
+        let sent = async {
             fleet
                 .replace_system_disk(computer.computer_id, &old_image)
                 .await
@@ -521,21 +594,17 @@ where
         }
         .instrument(tracing::info_span!("computer.image_upgrade.roll_back", computer_id = %computer.computer_id))
         .await;
-        match rolled_back {
+        match sent {
             Ok(()) => {
                 // Only a connection after the boot on the old disk counts.
                 computer.phase_started_at = Some(self.clock.now());
+                self.save_computer(computer).await
             }
             Err(error) => {
-                computer.state = ComputerUpgradeState::RollbackFailed;
-                computer.error = Some(format!(
-                    "{}; the rollback failed: {error}",
-                    computer.error.as_deref().unwrap_or_default()
-                ));
-                tracing::error!(computer_id = %computer.computer_id, reason = "image upgrade rollback failed", "computer needs an operator");
+                tracing::warn!(computer_id = %computer.computer_id, error, "sending a rollback failed; trying again next pass");
+                Ok(())
             }
         }
-        self.save_computer(computer).await
     }
 
     /// The computer, if it exists and is healthy.

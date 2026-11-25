@@ -619,6 +619,12 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
         self.observe(record).await?;
         tracing::Span::current().record("state", record.state.as_ref());
         let operation = Operation::power(action, record.state);
+        // An explicit power action decides the run state: a replacement
+        // that stopped the computer no longer owes it a boot.
+        if record.boot_after_system_disk {
+            record.boot_after_system_disk = false;
+            self.save(record).await?;
+        }
 
         let result = async {
             let steps = plan(record.state, action)?;

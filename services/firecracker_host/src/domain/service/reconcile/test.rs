@@ -476,3 +476,29 @@ async fn killed_after_the_shutdown_a_repeated_replacement_clones_and_boots_it() 
     assert_eq!(computer.image, new_image);
     assert_eq!(files_left(&host), [0, 1]);
 }
+
+#[tokio::test]
+async fn a_person_stopping_a_computer_cancels_the_boot_a_replacement_owed() {
+    // A replacement stopped it and died before booting it again.
+    let store = FakeStore::default();
+    let mut owed = record(PowerState::Stopped, None);
+    owed.boot_after_system_disk = true;
+    saved(&store, &owed).await;
+    let host =
+        super::super::test::host_with_disks(store, disks_with(&[0]), FakeMachines::default(), 1)
+            .await;
+
+    host.service
+        .power(computer_id(), Action::Stop)
+        .await
+        .unwrap();
+    let computer = host
+        .service
+        .replace_system_disk(computer_id(), owed.image.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(computer.state, PowerState::Stopped);
+    assert!(host.machines.launches.lock().unwrap().is_empty());
+    assert!(!host.store.0.lock().unwrap()[&computer_id()].boot_after_system_disk);
+}
