@@ -14,7 +14,7 @@ html:not([data-palette='cream']) .palette-light-only,
 html[data-palette='cream'] .palette-dark-only { display: none !important; }
 
 html[data-palette='cream'] {
-  --marketing-mention: oklch(.52 .14 250deg);
+  --marketing-mention: oklch(.5 .14 250deg);
   /* Override every surface level: the frozen dark palette defines each one. */
   --color-surface-0: #f5f1e8;
   --color-surface-1: #faf8f3;
