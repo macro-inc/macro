@@ -15,6 +15,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
+import DuplicateIcon from '@icon/system/regular/copy.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
@@ -132,7 +133,20 @@ function DatabaseTitleMenu(
   ];
   const ops = (): FileOperation[] =>
     rows().map((row): FileOperation => {
-      if (row === 'duplicate') return { op: 'copy' };
+      if (row === 'duplicate') {
+        const actions = props.header.entityActions(props.detail);
+
+        // The header's own copy, which makes one at a time.
+        return {
+          id: row,
+          label: t('entityActions.duplicate'),
+          icon: DuplicateIcon,
+          group: 'file',
+          action: () => {
+            if (!actions.duplicating) actions.onDuplicate();
+          },
+        };
+      }
       if (row === 'move-to-folder') return { op: 'moveToProject' };
       if (row === 'delete') return { op: 'delete' };
 

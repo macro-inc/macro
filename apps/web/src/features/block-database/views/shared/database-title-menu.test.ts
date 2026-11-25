@@ -14,7 +14,7 @@ describe('databaseTitleMenuRows', () => {
     ]);
   });
 
-  it('leaves a viewer the rows that change nothing', () => {
+  it('leaves a viewer without the rows that edit the database', () => {
     expect(databaseTitleMenuRows({ canEdit: false, hasTable: true })).toEqual([
       'duplicate',
       'move-to-folder',

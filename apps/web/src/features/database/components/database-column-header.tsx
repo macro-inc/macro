@@ -357,7 +357,10 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
     },
   };
   const menuClosed = (event: Event) => {
-    if (columnRename.target()) event.preventDefault();
+    // A rename field or a confirmation the action opened keeps focus: the
+    // closing menu would otherwise take it back to its button.
+    if (columnRename.target() || deleteOpen() || converting())
+      event.preventDefault();
     openRequestedOptions(event);
   };
 

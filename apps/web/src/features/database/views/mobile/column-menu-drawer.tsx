@@ -6,7 +6,15 @@ import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import DatabaseIcon from '@icon/system/regular/database.svg';
 import FunctionIcon from '@icon/system/regular/function.svg';
-import { createEffect, createSignal, For, type JSX, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 import {
   type ColumnTypeMenuProps,
   castDescription,
@@ -38,16 +46,11 @@ export function ColumnMenuDrawer(props: ColumnMenuProps) {
       { defer: true }
     )
   );
-  const groups = () =>
-    ['edit', 'view', 'delete']
-      .map((group) => ({
-        group,
-        actions: props.actions.filter((action) => action.group === group),
-      }))
-      .filter(
-        ({ group, actions }) =>
-          actions.length > 0 || (group === 'edit' && props.types)
-      );
+  const actionsIn = (group: string) =>
+    props.actions.filter((action) => action.group === group);
+  const shown = (group: string) =>
+    actionsIn(group).length > 0 || (group === 'edit' && !!props.types);
+  const typeLabelId = createUniqueId();
 
   return (
     <MobileDrawer
@@ -70,14 +73,21 @@ export function ColumnMenuDrawer(props: ColumnMenuProps) {
             <Show
               when={page() === 'types' && props.types}
               fallback={
-                <For each={groups()}>
-                  {({ group, actions }, index) => (
-                    <>
-                      <Show when={index() > 0}>
-                        <div class="mt-3" />
-                      </Show>
-                      <MobileDrawer.Section class="flex shrink-0 flex-col">
-                        <For each={actions}>
+                <For each={['edit', 'view', 'delete']}>
+                  {(group) => (
+                    <Show when={shown(group)}>
+                      <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col last:mb-0">
+                        <Show
+                          when={
+                            group === 'delete' &&
+                            props.column.protections?.includes('delete')
+                          }
+                        >
+                          <MobileDrawer.Item type="button" disabled>
+                            This column cannot be deleted
+                          </MobileDrawer.Item>
+                        </Show>
+                        <For each={actionsIn(group)}>
                           {(action) => (
                             <MobileDrawer.Item
                               type="button"
@@ -105,14 +115,13 @@ export function ColumnMenuDrawer(props: ColumnMenuProps) {
                           {(types) => (
                             <ChangeTypeRow
                               types={types()}
-                              open={props.open}
                               pending={props.pending}
                               onOpen={() => setPage('types')}
                             />
                           )}
                         </Show>
                       </MobileDrawer.Section>
-                    </>
+                    </Show>
                   )}
                 </For>
               }
@@ -120,6 +129,7 @@ export function ColumnMenuDrawer(props: ColumnMenuProps) {
               {(types) => (
                 <ColumnTypePage
                   types={types()}
+                  labelId={typeLabelId}
                   onBack={() => setPage('actions')}
                   onKeep={() => props.onOpenChange(false)}
                 />
@@ -135,12 +145,11 @@ export function ColumnMenuDrawer(props: ColumnMenuProps) {
 /** The row that opens the types, naming the column's current one. */
 function ChangeTypeRow(props: {
   types: ColumnTypeMenuProps;
-  open: boolean;
   pending: boolean;
   onOpen: () => void;
 }) {
-  // Read the dry run while the sheet is open, so the list is ready.
-  const choices = createColumnTypeChoices(props.types, () => props.open);
+  // The row names the type without the dry run, which starts with the list.
+  const choices = createColumnTypeChoices(props.types, () => false);
 
   return (
     <MobileDrawer.Item
@@ -171,6 +180,7 @@ function ChangeTypeRow(props: {
 /** Every type the column can change to, with the current one checked. */
 function ColumnTypePage(props: {
   types: ColumnTypeMenuProps;
+  labelId: string;
   onBack: () => void;
   /** The column's own type was chosen: nothing changes. */
   onKeep: () => void;
@@ -199,9 +209,7 @@ function ColumnTypePage(props: {
         <ArrowLeftIcon class="size-4" />
         {t('common.back')}
       </MobileDrawer.Item>
-      <MobileDrawer.Label id="column-type-label">
-        Change type
-      </MobileDrawer.Label>
+      <MobileDrawer.Label id={props.labelId}>Change type</MobileDrawer.Label>
       <Show
         when={!choices.checking()}
         fallback={
@@ -211,7 +219,7 @@ function ColumnTypePage(props: {
         }
       >
         <MobileDrawer.Section
-          aria-labelledby="column-type-label"
+          aria-labelledby={props.labelId}
           class="flex shrink-0 flex-col"
         >
           <For each={choices.types()}>
