@@ -210,14 +210,18 @@ native `/onboarding` redirects to `/`.
 `https://www.macro.com/app/signup?app_challenge=…&app_handoff=…` (the
 development build uses `dev.macro.com`, which the app claims as its own link,
 so start the browser leg of a dev test from a browser). The app keeps the
-verifier of that challenge. The browser tab runs the normal sign-up and
+verifier of that challenge. The browser first ends any session it holds
+(only `/signup` takes a challenge, and the parameters leave the URL), so
+the account the app receives is the one signed in there; if it can't, the
+tab signs up without handing back. The browser tab then runs the normal sign-up and
 onboarding, plan step included; where it would enter the web app (onboarding
 finished, or an account that already existed), it shows `Your workspace is
 ready.` with `Open Macro`, a `macro:///login?token=…&app_handoff=…` link to a
 one-time code bound to the challenge (`POST /session`). `/login` redeems it
 with the verifier (`POST /session/login`) and enters the app. `Use a different
-account` signs the browser out first. The code is minted ahead, again every
-four minutes, and a second after each tap, so tapping again works. The
+account` signs the browser out in place and returns to sign-up. The code is
+minted ahead, again every four minutes, and a second after each tap, so
+tapping again works; a hidden tab mints only once it is shown again. The
 browser tab remembers the app in sessionStorage for a day; other tabs sign up
 normally.
 

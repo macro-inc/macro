@@ -51,7 +51,9 @@ opener plugin, and the browser returns with
 `macro:///login?token=<code>&app_handoff=<id>`, which the deep-link bridge
 routes to `/login`. The code is bound to a PKCE `S256` challenge whose verifier
 only the app holds (`localStorage`, `macro:app-signups`), so another app that
-claims `macro://` cannot use it. Production opens `www.macro.com`: the app's
+claims `macro://` cannot use it; the browser ends any session it held before
+sign-up, so a link another app opens never hands over an existing session.
+Production opens `www.macro.com`: the app's
 associated domains claim `macro.com/app/*`, so a `macro.com` page the app opens
 itself could come back to the app. Automatic reloads are held from opening the
 browser until a code is redeemed (at most 30 minutes): the return reaches only
