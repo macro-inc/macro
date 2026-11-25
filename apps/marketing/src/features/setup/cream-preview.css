@@ -105,6 +105,10 @@ html[data-palette='cream'] .homepage-screen {
   --screen-action-ink-muted: var(--color-ink-muted);
   --screen-action-icon: var(--color-ink-muted);
 }
+/* Clip the frame as one group. `overflow` clips each layer on its own, so
+   along the rounded corners the wallpaper shows as a hairline around a window
+   that runs off the edge. A dark window hides it; a light one does not. */
+html[data-palette='cream'] .homepage-screen { clip-path: border-box; }
 
 /* ---- Wall of love ----------------------------------------------------- */
 html[data-palette='cream'] .wall-of-love {
