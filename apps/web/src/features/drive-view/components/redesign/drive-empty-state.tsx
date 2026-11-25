@@ -106,7 +106,7 @@ export function DriveRedesignEmptyState(props: {
     <Switch>
       <Match when={props.reason === 'error'}>
         <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-ink-muted">
-          <span>{t('drive.trashLoadFailed')}</span>
+          <span>{t('drive.loadFailed')}</span>
           <Button variant="secondary" size="sm" onClick={props.onRetry}>
             {t('drive.tryAgain')}
           </Button>

@@ -238,6 +238,7 @@ export default {
   emptyFilterDescription: 'Try clearing or broadening your active filters.',
   loadingTrash: 'Loading Trash…',
   loadingMore: 'Loading more…',
+  loadFailed: 'Drive items couldn’t be loaded.',
   trashLoadFailed: 'Trash couldn’t be loaded.',
   tryAgain: 'Try again',
   loadMore: 'Load more',

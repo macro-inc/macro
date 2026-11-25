@@ -986,13 +986,15 @@ async fn search_unified_sources(
                 .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
         }
     }
+    let has_searchable_chats = should_include_chats
+        && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty());
     let searches_names = matches!(search_on, SearchOn::Name | SearchOn::NameContent);
     tracing::Span::current().record(
         "search.entity_types",
         searched_entity_types(
             &unified_search_args.search_indices,
             &[
-                ("chats", should_include_chats && searches_names),
+                ("chats", has_searchable_chats && searches_names),
                 ("channels", should_include_channels && searches_names),
                 ("crm_companies", should_include_crm && searches_names),
             ],
@@ -1003,7 +1005,7 @@ async fn search_unified_sources(
     // search_names handles Done cursors internally by returning early
     let (chat_results, channel_results, content_results, crm_results) = tokio::join!(
         async {
-            if should_include_chats {
+            if has_searchable_chats {
                 match search_on {
                     SearchOn::Name | SearchOn::NameContent => {
                         simple_chat::search_names(

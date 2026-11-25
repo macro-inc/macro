@@ -56,7 +56,7 @@ import { folderAncestors } from '../../core/folder-tree';
 import {
   type DriveDisplayRow,
   useDriveDisplayItems,
-} from './use-drive-display-items';
+} from '../shared/use-drive-display-items';
 
 function GridCardMenu(props: {
   row: DriveDisplayRow;
@@ -799,7 +799,7 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
                     try {
                       await source.refresh();
                     } catch {
-                      toast.failure(t('drive.trashLoadFailed'));
+                      toast.failure(t('drive.loadFailed'));
                     }
                   })(),
                   'drive-grid-retry'

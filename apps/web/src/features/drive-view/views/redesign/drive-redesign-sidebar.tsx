@@ -44,7 +44,7 @@ import { buildFolderTree, filterFolderTree } from '../../core/folder-tree';
 import type { DriveTab } from '../../core/types';
 import { DriveLocationMenu } from '../../drive-location-menu';
 import { DriveRedesignCreateMenu } from '../../drive-redesign-create-menu';
-import { folderToProjectEntity } from './use-drive-display-items';
+import { folderToProjectEntity } from '../shared/use-drive-display-items';
 
 const DATABASE_SCROLL_THRESHOLD = 10;
 
@@ -411,7 +411,7 @@ export function DriveRedesignSidebarContent(props: {
                 when={!sidebar.foldersError()}
                 fallback={
                   <div class="flex flex-col items-start gap-1.5 p-3 text-xs text-ink-muted">
-                    <span>{t('drive.trashLoadFailed')}</span>
+                    <span>{t('drive.loadFailed')}</span>
                     <Button
                       variant="ghost"
                       size="xs"

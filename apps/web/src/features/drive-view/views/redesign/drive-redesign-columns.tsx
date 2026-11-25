@@ -34,7 +34,7 @@ import {
   splitOwnedAndSharedFolders,
   topLevelFolders,
 } from '../../core/drive-items';
-import { folderToProjectEntity } from './use-drive-display-items';
+import { folderToProjectEntity } from '../shared/use-drive-display-items';
 
 function MillerColumnPane(props: {
   folderId: string | null;

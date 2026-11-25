@@ -66,7 +66,7 @@ import type { DriveSort } from '../../core/types';
 import {
   type DriveDisplayRow,
   useDriveDisplayItems,
-} from './use-drive-display-items';
+} from '../shared/use-drive-display-items';
 
 const MAX_INLINE_EXPAND_DEPTH = 3;
 
@@ -1110,7 +1110,7 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
                     try {
                       await source.refresh();
                     } catch {
-                      toast.failure(t('drive.trashLoadFailed'));
+                      toast.failure(t('drive.loadFailed'));
                     }
                   })(),
                   'drive-list-retry'

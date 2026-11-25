@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { cn } from '@ui';
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 import { renameSelectionRange } from '../../core/drive-items';
 
 export type InlineNameInputProps = {
@@ -23,16 +23,49 @@ export function InlineNameInput(props: InlineNameInputProps) {
   const [value, setValue] = createSignal(props.initialValue);
   let inputRef: HTMLInputElement | undefined;
   let settled = false;
+  let readyForBlur = false;
+  let mountRaf: number | undefined;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  onMount(() => {
+  const focusAndSelect = () => {
     const el = inputRef;
-    if (!el) return;
+    if (!el || settled) return;
     el.focus();
     const { start, end } = renameSelectionRange(
       props.initialValue,
       props.isFolder
     );
     el.setSelectionRange(start, end);
+  };
+
+  onMount(() => {
+    focusAndSelect();
+    // Guard against Kobalte Dropdown/ContextMenu focus-restoration firing right
+    // after onSelect closes the menu and stealing focus back to the trigger.
+    mountRaf = requestAnimationFrame(() => {
+      if (settled) return;
+      if (
+        document.activeElement !== inputRef &&
+        value() === props.initialValue
+      ) {
+        focusAndSelect();
+      }
+      settleTimer = setTimeout(() => {
+        if (settled) return;
+        if (
+          document.activeElement !== inputRef &&
+          value() === props.initialValue
+        ) {
+          focusAndSelect();
+        }
+        readyForBlur = true;
+      }, 60);
+    });
+  });
+
+  onCleanup(() => {
+    if (mountRaf !== undefined) cancelAnimationFrame(mountRaf);
+    if (settleTimer !== undefined) clearTimeout(settleTimer);
   });
 
   const commit = () => {
@@ -82,7 +115,13 @@ export function InlineNameInput(props: InlineNameInputProps) {
           cancel();
         }
       }}
-      onBlur={() => commit()}
+      onBlur={() => {
+        if (!readyForBlur) {
+          focusAndSelect();
+          return;
+        }
+        commit();
+      }}
     />
   );
 }

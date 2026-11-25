@@ -40,7 +40,7 @@ import { DriveFilterMenu } from '../drive-filter-menu';
 import {
   folderToProjectEntity,
   useDriveDisplayItems,
-} from './use-drive-display-items';
+} from '../shared/use-drive-display-items';
 
 export function DriveRedesignHeader(props: {
   onStartInlineFolder: () => void;
@@ -451,9 +451,12 @@ export function DriveRedesignHeader(props: {
 
       <Show when={display.isSearching() ? activeFolder() : undefined}>
         {(folder) => (
-          <div class="flex shrink-0 items-center justify-between gap-2 border-b border-edge-muted bg-panel/60 px-4 py-1.5 text-xs text-ink-muted">
+          <div class="flex shrink-0 items-center gap-2 border-b border-edge-muted bg-panel/60 px-4 py-1.5 text-xs text-ink-muted">
             <span class="truncate">
               {t('drive.searchingInFolder', { name: folder().name })}
+            </span>
+            <span aria-hidden="true" class="text-ink-subtle">
+              ·
             </span>
             <Button
               variant="ghost"
