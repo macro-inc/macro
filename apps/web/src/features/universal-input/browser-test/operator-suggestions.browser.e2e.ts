@@ -74,6 +74,8 @@ test('keeps the rows clickable inside the Cmd+K dialog', async ({ page }) => {
     name: 'Search for',
     exact: true,
   });
+  // The draft's filters take the words; the field empties once they do.
+  await expect(query).toHaveText('');
   await query.click();
   await page.keyboard.type('type:');
   const row = page.getByRole('option', { name: 'type:task' });

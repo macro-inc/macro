@@ -125,10 +125,26 @@ export async function fetchContactReferencePage(
     },
   };
 }
-/** Named people across the directory: the fixture's directory is the rows it
- * registered, which the cache already searches, so the server names nobody. */
-export async function fetchContactNamedPeople() {
-  return { user: { id: VIEWER, contactsNamedBy: [] } };
+/** Named people across the directory, matched as the server matches them:
+ * the whole name, address or id, or the first name. */
+export async function fetchContactNamedPeople(
+  args: { search: string; limit?: number },
+  signal: AbortSignal
+) {
+  signal.throwIfAborted();
+  const query = normalizeNameText(args.search);
+  const named = people.filter(
+    (user) =>
+      [user.id, user.email, user.name].some(
+        (label) => normalizeNameText(label) === query
+      ) || normalizeNameText(user.name).split(' ')[0] === query
+  );
+  return {
+    user: {
+      id: VIEWER,
+      contactsNamedBy: named.slice(0, args.limit ?? 50).map(contact),
+    },
+  };
 }
 /** The server fallback page; this fixture's contacts are all local. */
 export async function fetchContactDirectoryPage(
