@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { CacheRequest } from '../protocol';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
@@ -524,10 +524,14 @@ describe('cache engine worker runtime', () => {
       const direct = new FakePort();
       const told: string[] = [];
       const emitted = vi.fn();
+      const held = [{ name: 'owner-lock', mode: 'exclusive' }];
+      vi.stubGlobal('navigator', { locks: { query: async () => ({ held }) } });
+      onTestFinished(() => {
+        vi.unstubAllGlobals();
+      });
       installCacheEngineWorker({
         scope,
         hooks: { onEvent: emitted },
-        ownerLockIsHeld: async () => true,
         createCore: (options) => ({
           addPort: vi.fn(),
           handleRequest: async (port, request) => {
