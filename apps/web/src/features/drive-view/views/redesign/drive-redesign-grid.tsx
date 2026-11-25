@@ -813,32 +813,45 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
             <DriveContentSkeleton mode="grid" />
           </Match>
           <Match when={visualRows().length === 0 && !isCreatingInlineHere()}>
-            <DriveRedesignEmptyState
-              reason={emptyReason()}
-              isInFolder={Boolean(state.projectId())}
-              onCreateDocument={() => host.createNewItem('md')}
-              onCreateFolder={props.onStartInlineFolder}
-              onClearFilters={state.clearFilters}
-              onClearSearch={() => state.setSearch('')}
-              onSearchAllDrive={() => {
-                const query = state.value().search;
-                state.selectTab('owned');
-                state.setSearch(query);
-              }}
-              onBackToDrive={() => state.selectTab('owned')}
-              onRetry={() =>
-                fireAndForget(
-                  (async () => {
-                    try {
-                      await source.refresh();
-                    } catch {
-                      toast.failure(t('drive.loadFailed'));
-                    }
-                  })(),
-                  'drive-grid-retry'
-                )
-              }
-            />
+            <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+              <DriveRedesignEmptyState
+                reason={emptyReason()}
+                isInFolder={Boolean(state.projectId())}
+                onCreateDocument={() => host.createNewItem('md')}
+                onCreateFolder={props.onStartInlineFolder}
+                onClearFilters={state.clearFilters}
+                onClearSearch={() => state.setSearch('')}
+                onSearchAllDrive={() => {
+                  const query = state.value().search;
+                  state.selectTab('owned');
+                  state.setSearch(query);
+                }}
+                onBackToDrive={() => state.selectTab('owned')}
+                onRetry={() =>
+                  fireAndForget(
+                    (async () => {
+                      try {
+                        await source.refresh();
+                      } catch {
+                        toast.failure(t('drive.loadFailed'));
+                      }
+                    })(),
+                    'drive-grid-retry'
+                  )
+                }
+              />
+              <Show when={source.hasMore() && !source.isLoadingMore()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    fireAndForget(source.loadMore(), 'drive-grid-empty-more')
+                  }
+                >
+                  {t('drive.loadMore')}
+                </Button>
+              </Show>
+            </div>
           </Match>
           <Match when={true}>
             <div

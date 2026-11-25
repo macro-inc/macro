@@ -219,6 +219,32 @@ describe('drive-undo manager', () => {
       expect(undoMove).not.toHaveBeenCalled();
       expect(undoRename).not.toHaveBeenCalled();
 
+      // Consecutive Cmd+Z undos on A -> B -> C undo C -> B, then B -> A cleanly.
+      const seq1 = manager.recordMove({
+        items: [
+          {
+            entity: { id: 'd9', type: 'document', name: 'Spec.md' },
+            previousProjectId: 'folder-a',
+          },
+        ],
+        destinationFolderId: 'folder-b',
+        destinationName: 'B',
+      });
+      manager.recordMove({
+        items: [
+          {
+            entity: { id: 'd9', type: 'document', name: 'Spec.md' },
+            previousProjectId: 'folder-b',
+          },
+        ],
+        destinationFolderId: 'folder-c',
+        destinationName: 'C',
+      });
+      expect(seq1).toBeTruthy();
+      expect((await manager.undoLatest()).status).toBe('undone');
+      expect((await manager.undoLatest()).status).toBe('undone');
+      expect(undoMove).toHaveBeenCalledTimes(2);
+
       dispose();
     });
   });

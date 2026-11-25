@@ -77,17 +77,24 @@ export function createDriveUndoManager(
 ): DriveUndoManager {
   const [stack, setStack] = createSignal<DriveUndoAction[]>([]);
   const [isUndoing, setIsUndoing] = createSignal(false);
-  // Tracks the latest recorded move/rename action id per entity so an older
-  // out-of-order toast Undo never overwrites a newer change even when the
-  // entity is not visible in the current list page.
-  const latestMoveByEntity = new Map<string, string>();
-  const latestRenameByEntity = new Map<string, string>();
+
+  const hasNewerActionForEntity = (
+    laterActions: readonly DriveUndoAction[],
+    kind: 'move' | 'rename',
+    entityId: string
+  ): boolean =>
+    laterActions.some((entry) => {
+      if (entry.kind !== kind) return false;
+      if (entry.kind === 'rename') return entry.entity.id === entityId;
+      return entry.items.some((item) => item.entity.id === entityId);
+    });
 
   const executeMoveUndo = async (
-    action: Extract<DriveUndoAction, { kind: 'move' }>
+    action: Extract<DriveUndoAction, { kind: 'move' }>,
+    laterActions: readonly DriveUndoAction[]
   ): Promise<DriveUndoResult> => {
     const eligibleItems = action.items.filter(
-      (item) => latestMoveByEntity.get(item.entity.id) === action.id
+      (item) => !hasNewerActionForEntity(laterActions, 'move', item.entity.id)
     );
     if (eligibleItems.length === 0) {
       return { status: 'skipped', action };
@@ -101,26 +108,10 @@ export function createDriveUndoManager(
         setStack((current) => pushUndoAction(current, action));
         return { status: 'failed', action };
       }
-      for (const item of eligibleItems) {
-        if (latestMoveByEntity.get(item.entity.id) === action.id) {
-          latestMoveByEntity.delete(item.entity.id);
-        }
-      }
       return { status: 'undone', action };
     }
     if (outcome.skipped && outcome.failedItems.length === 0) {
       return { status: 'skipped', action };
-    }
-    const failedIds = new Set(
-      outcome.failedItems.map((item) => item.entity.id)
-    );
-    for (const item of eligibleItems) {
-      if (
-        !failedIds.has(item.entity.id) &&
-        latestMoveByEntity.get(item.entity.id) === action.id
-      ) {
-        latestMoveByEntity.delete(item.entity.id);
-      }
     }
     if (outcome.failedItems.length > 0) {
       const retryAction: DriveUndoAction = {
@@ -156,9 +147,10 @@ export function createDriveUndoManager(
   };
 
   const executeRenameUndo = async (
-    action: Extract<DriveUndoAction, { kind: 'rename' }>
+    action: Extract<DriveUndoAction, { kind: 'rename' }>,
+    laterActions: readonly DriveUndoAction[]
   ): Promise<DriveUndoResult> => {
-    if (latestRenameByEntity.get(action.entity.id) !== action.id) {
+    if (hasNewerActionForEntity(laterActions, 'rename', action.entity.id)) {
       return { status: 'skipped', action };
     }
     const outcome = await executors.undoRename(
@@ -173,20 +165,20 @@ export function createDriveUndoManager(
       setStack((current) => pushUndoAction(current, action));
       return { status: 'failed', action };
     }
-    if (latestRenameByEntity.get(action.entity.id) === action.id) {
-      latestRenameByEntity.delete(action.entity.id);
-    }
     return { status: 'undone', action };
   };
 
   const executeUndo = async (
-    action: DriveUndoAction
+    action: DriveUndoAction,
+    laterActions: readonly DriveUndoAction[]
   ): Promise<DriveUndoResult> => {
     setIsUndoing(true);
     try {
-      if (action.kind === 'move') return await executeMoveUndo(action);
+      if (action.kind === 'move') {
+        return await executeMoveUndo(action, laterActions);
+      }
       if (action.kind === 'trash') return await executeTrashUndo(action);
-      return await executeRenameUndo(action);
+      return await executeRenameUndo(action, laterActions);
     } catch {
       setStack((current) => pushUndoAction(current, action));
       return { status: 'failed', action };
@@ -203,9 +195,6 @@ export function createDriveUndoManager(
 
     recordMove: ({ items, destinationFolderId, destinationName }) => {
       const id = createUndoId();
-      for (const item of items) {
-        latestMoveByEntity.set(item.entity.id, id);
-      }
       setStack((current) =>
         pushUndoAction(current, {
           id,
@@ -228,7 +217,6 @@ export function createDriveUndoManager(
 
     recordRename: ({ entity, previousName, nextName }) => {
       const id = createUndoId();
-      latestRenameByEntity.set(entity.id, id);
       setStack((current) =>
         pushUndoAction(current, {
           id,
@@ -246,20 +234,21 @@ export function createDriveUndoManager(
       const { action, rest } = popLatestUndoAction(stack());
       if (!action) return { status: 'empty' };
       setStack(rest);
-      return executeUndo(action);
+      return executeUndo(action, []);
     },
 
     undoById: async (id) => {
       if (isUndoing()) return { status: 'busy' };
-      const { action, rest } = takeUndoActionById(stack(), id);
+      const current = stack();
+      const index = current.findIndex((entry) => entry.id === id);
+      const { action, rest } = takeUndoActionById(current, id);
       if (!action) return { status: 'empty' };
+      const laterActions = index >= 0 ? current.slice(index + 1) : [];
       setStack(rest);
-      return executeUndo(action);
+      return executeUndo(action, laterActions);
     },
 
     clear: () => {
-      latestMoveByEntity.clear();
-      latestRenameByEntity.clear();
       setStack([]);
     },
   };

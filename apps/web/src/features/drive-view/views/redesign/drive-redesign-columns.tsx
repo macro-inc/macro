@@ -429,12 +429,12 @@ export function DriveRedesignColumns() {
     setSelectedEntities([]);
   });
 
-  const locationKey = () => {
+  const locationKey = createMemo(() => {
     const loc = state.value().location;
     return loc.kind === 'folder'
       ? `folder:${loc.id ?? 'root'}`
       : `tab:${loc.tab}`;
-  };
+  });
 
   // Clear previewed file only when navigating to a different location key.
   createEffect(
@@ -673,6 +673,7 @@ export function DriveRedesignColumns() {
                     onClick={() => {
                       const target = file();
                       setSelectedFileId(undefined);
+                      setInspectedEntity(undefined);
                       fireAndForget(
                         host.trashEntitiesWithUndo([target]),
                         'drive-columns-trash'

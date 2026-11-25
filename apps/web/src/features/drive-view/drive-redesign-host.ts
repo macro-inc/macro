@@ -377,82 +377,48 @@ export function createDriveRedesignHost(options: {
   ): Promise<boolean> => {
     if (entities.length === 0) return false;
     const mutable = [...entities];
-    const graphqlTargets: {
-      entity: EntityData;
-      ref: EntityRefInput;
-      undoItem?: MoveUndoItem;
-    }[] = [];
-    const fallbackTargets: {
-      entity: EntityData;
-      undoItem?: MoveUndoItem;
-    }[] = [];
-
-    for (const entity of mutable) {
-      const undoType = toUndoableType(entity.type);
-      const previousProjectId = getEntityProjectId(entity) || null;
-      const undoItem: MoveUndoItem | undefined =
-        undoType && previousProjectId !== destinationFolderId
-          ? {
-              entity: { id: entity.id, type: undoType, name: entity.name },
-              previousProjectId,
-            }
-          : undefined;
-      const ref = undoType
-        ? toGraphqlMoveRef({ id: entity.id, type: undoType })
-        : undefined;
-      if (ref) {
-        graphqlTargets.push({ entity, ref, undoItem });
-      } else {
-        fallbackTargets.push({ entity, undoItem });
-      }
-    }
-
     const succeededUndoItems: MoveUndoItem[] = [];
     let movedCount = 0;
     let failedCount = 0;
     let movedAnyFolder = false;
 
-    if (graphqlTargets.length > 0) {
-      const outcomes = await Promise.allSettled(
-        graphqlTargets.map(({ ref }) => moveEntity(ref, destinationFolderId))
-      );
-      outcomes.forEach((outcome, index) => {
-        if (outcome.status === 'fulfilled') {
-          const target = graphqlTargets[index];
-          movedCount += 1;
-          if (target.entity.type === 'project') movedAnyFolder = true;
-          if (target.undoItem) succeededUndoItems.push(target.undoItem);
-        } else {
-          failedCount += 1;
-        }
-      });
-    }
-
-    if (fallbackTargets.length > 0) {
-      const fallbackEntities = fallbackTargets.map((target) => target.entity);
-      try {
+    // Execute per item through Macro's shared move/remove mutations so every
+    // entity type (documents, folders, chats, emails, databases, forms) keeps
+    // full GraphQL + REST Soup cache invalidation AND preserves per-item Undo
+    // even when a mixed batch partially fails.
+    const outcomes = await Promise.allSettled(
+      mutable.map(async (entity) => {
         if (destinationFolderId === null) {
           await removeFromProject.mutateAsync({
-            entities: fallbackEntities.map((entity) => ({
-              ...entity,
-              name: entity.name || entity.id,
-            })),
+            entities: [{ ...entity, name: entity.name || entity.id }],
           });
         } else {
-          await moveEntities(fallbackEntities, {
+          await moveEntities([entity], {
             id: destinationFolderId,
             name: destinationName,
           });
         }
-        movedCount += fallbackTargets.length;
-        for (const target of fallbackTargets) {
-          if (target.entity.type === 'project') movedAnyFolder = true;
-          if (target.undoItem) succeededUndoItems.push(target.undoItem);
-        }
-      } catch {
-        failedCount += fallbackTargets.length;
+        return entity;
+      })
+    );
+
+    outcomes.forEach((outcome, index) => {
+      if (outcome.status !== 'fulfilled') {
+        failedCount += 1;
+        return;
       }
-    }
+      const entity = mutable[index];
+      movedCount += 1;
+      if (entity.type === 'project') movedAnyFolder = true;
+      const undoType = toUndoableType(entity.type);
+      const previousProjectId = getEntityProjectId(entity) || null;
+      if (undoType && previousProjectId !== destinationFolderId) {
+        succeededUndoItems.push({
+          entity: { id: entity.id, type: undoType, name: entity.name },
+          previousProjectId,
+        });
+      }
+    });
 
     if (movedCount > 0) {
       await refreshDriveQueries(movedAnyFolder);

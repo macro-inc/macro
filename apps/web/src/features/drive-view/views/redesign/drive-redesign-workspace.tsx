@@ -62,6 +62,9 @@ export function DriveRedesignWorkspace(props: { tour?: JSX.Element }) {
   };
 
   const startInlineFolder = () => {
+    if (isTrash() || isStarred()) {
+      state.selectTab('owned');
+    }
     const mode = effectiveViewMode();
     const surface =
       mode === 'grid' ? 'grid' : mode === 'columns' ? 'columns' : 'list';
