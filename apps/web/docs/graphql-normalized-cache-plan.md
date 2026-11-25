@@ -676,8 +676,14 @@ flushes it before it removes the database. The next open queues the copy again
 before it serves its first request, in one transaction that also records that this
 copy was taken, and then removes the side file. An engine may die between any two of
 these steps: the next one finds the old database, the copy, or both, and a copy
-already taken is never queued twice. A wipe whose copy could not be written notes
-that in the side file, so an older copy there is never called whole. Records, the
+already taken is never queued twice. A wipe that takes writes the side file does not hold
+(unreadable, given up, or no room for the copy) notes that and their number in the
+side file first, in room the read before it reserved, so the open that follows tells
+it even when this engine dies. A copy the old database had taken already, as far as
+that database can still say, is forgotten; one that may have been taken, because
+the database lost what it says or one of its two files, is queued but called
+`partial`. A side file that cannot be read three times over is given up as
+`unreadable` rather than queued behind newer writes later. Records, the
 projections and index facts the server's answers gave them, and everything else
 refetchable are not carried; only the pending writes' own projections are. The copy
 is given up after three engines die reading the old database, three die taking the

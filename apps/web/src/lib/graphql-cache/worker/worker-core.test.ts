@@ -3364,6 +3364,48 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it.each([
+    ['unreadable', 'error', 'integrity'],
+    ['abandoned', 'success', 'none'],
+    ['partial', 'success', 'none'],
+  ])(
+    'records a %s queue as read with %s',
+    async (queue, outcome, errorCode) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheForRecoveryWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome: 'reset-storage-uncertain',
+          queue: { outcome: queue, kept: 0, dropped: 1, readMs: 40, wipeMs: 5 },
+        }),
+      });
+      const core = new CacheWorkerCore({
+        recoveryOpen: true,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+      expect(
+        observations
+          .filter(({ name }) =>
+            [
+              'graphql_cache.queue_read',
+              'graphql_cache.recovery_wipe',
+            ].includes(String(name))
+          )
+          .map(({ name, ...step }) => [name, step.outcome, step.errorCode])
+      ).toEqual([
+        ['graphql_cache.queue_read', outcome, errorCode],
+        ['graphql_cache.recovery_wipe', 'success', 'none'],
+      ]);
+    }
+  );
+
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({

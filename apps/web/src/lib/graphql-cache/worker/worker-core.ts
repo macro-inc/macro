@@ -1648,11 +1648,13 @@ export class CacheWorkerCore {
     ] as const;
     for (const [name, durationMs] of steps) {
       if (durationMs === undefined) continue;
+      const failed =
+        name === 'graphql_cache.queue_read' && queue?.outcome === 'unreadable';
       this.telemetry.record({
         name,
         operationCategory: 'initialization',
-        outcome: 'success',
-        errorCode: 'none',
+        outcome: failed ? 'error' : 'success',
+        errorCode: failed ? 'integrity' : 'none',
         openOutcome,
         ...(queue ? { queueOutcome: queue.outcome } : {}),
         durationMs,

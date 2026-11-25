@@ -116,9 +116,11 @@ class Engine {
           this.waiting.get(response.id)?.(response)
         )
         .with({ kind: 'loaded' }, { kind: 'closed' }, () => undefined)
-        .exhaustive((unknown) => {
-          throw new Error(`unknown engine event: ${JSON.stringify(unknown)}`);
-        });
+        .exhaustive((unknown) =>
+          opening.resolve(
+            new Error(`unknown engine event: ${JSON.stringify(unknown)}`)
+          )
+        );
     this.send({ kind: 'open', scope, recovery });
   }
 
