@@ -36,3 +36,25 @@ export class CacheRequestTimeoutError extends Error {
     this.name = 'CacheRequestTimeoutError';
   }
 }
+
+/** What the native engine says when it refuses a background write. */
+const NATIVE_WRITE_SUPERSEDED =
+  'graphql cache write superseded by a committed mutation';
+
+/**
+ * A mutation that committed after this background write was sent changed one
+ * of its records, so the response may predate it. Nothing was written; fetch
+ * the query again.
+ */
+export class CacheWriteSupersededError extends Error {
+  constructor() {
+    super('cache write superseded by a committed mutation');
+    this.name = 'CacheWriteSupersededError';
+  }
+}
+
+export function isNativeWriteSuperseded(error: unknown): boolean {
+  return String(error instanceof Error ? error.message : error).includes(
+    NATIVE_WRITE_SUPERSEDED
+  );
+}

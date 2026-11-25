@@ -38,6 +38,7 @@ mod access;
 pub use access::EngineTiming;
 use access::{AccessGuard, EngineAccess};
 mod authority;
+mod commits;
 mod idle;
 pub use authority::AuthorityTransitionWire;
 
@@ -406,6 +407,7 @@ struct EngineState {
     engine: Engine<TursoStorage>,
     ops: OpInterner,
     selections: RecordSelectionCache,
+    commits: commits::CommitLog,
 }
 
 /// Cheaply-clonable handle to the shared engine. Foreground methods serialize
@@ -426,6 +428,8 @@ pub struct EngineHandle {
     abandons: Arc<abandon::Abandons>,
     // Per-command: this read's registration, when it came with a request id.
     abandon: Option<Arc<abandon::Registration>>,
+    // Commits that background writes check against, shared by cloned handles.
+    commits: Arc<commits::Commits>,
 }
 
 #[cfg(test)]
@@ -508,6 +512,7 @@ impl EngineHandle {
             engine,
             ops: OpInterner::default(),
             selections: RecordSelectionCache::default(),
+            commits: commits::CommitLog::default(),
         }));
         idle::install(&inner);
         EngineHandle {
@@ -515,6 +520,7 @@ impl EngineHandle {
             authority_listener: None,
             abandons: Arc::default(),
             abandon: None,
+            commits: Arc::default(),
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner,
         }
@@ -750,8 +756,35 @@ impl EngineHandle {
     }
 
     /// Normalizes and stores a network response.
-    #[tracing::instrument(name = "graphql_cache.native.write", skip_all, err)]
     pub async fn write(&self, request: WriteRequest) -> Result<WriteResultWire, String> {
+        self.write_as(request, false).await
+    }
+
+    /// Stores a query response nobody waits for. It is refused with
+    /// [`commits::SUPERSEDED`] when a mutation committed after it arrived
+    /// changed one of its records: it may predate that mutation.
+    pub async fn write_in_background(
+        &self,
+        request: WriteRequest,
+    ) -> Result<WriteResultWire, String> {
+        self.write_as(request, true).await
+    }
+
+    #[tracing::instrument(
+        name = "graphql_cache.native.write",
+        skip_all,
+        fields(
+            graphql_cache.write.background = background,
+            graphql_cache.write.superseded = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn write_as(
+        &self,
+        request: WriteRequest,
+        background: bool,
+    ) -> Result<WriteResultWire, String> {
+        let arrival = background.then(|| self.commits.arrive());
         let WriteRequest {
             origin_op_id,
             registration,
@@ -762,7 +795,12 @@ impl EngineHandle {
             identity,
         } = request;
         let mut state = self.snapshot_write().await?;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let registration = registration.map(|registration| {
             let op_id = ops.intern(&registration.op_id);
@@ -786,6 +824,16 @@ impl EngineHandle {
         // response that fails it takes the path that normalizes twice, which
         // reports its error where it always has.
         let normalized = engine.normalize_network(registration, input).ok();
+        if let Some(arrival) = &arrival {
+            let superseded = arrival.overtaken(
+                commits,
+                normalized.as_ref().map(NormalizedResponse::updates),
+            );
+            tracing::Span::current().record("graphql_cache.write.superseded", superseded);
+            if superseded {
+                return Err(commits::SUPERSEDED.to_owned());
+            }
+        }
         let projections = soup::write_projections(
             engine,
             &query,
@@ -1200,7 +1248,12 @@ impl EngineHandle {
         };
         let mut state = self.inner.write().await;
         self.resume_retirement(&mut state).await?;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         let admitted = engine
             .snapshot_is_current(self.generation)
             .await
@@ -1236,6 +1289,35 @@ impl EngineHandle {
             .await
             .map_err(|e| e.to_string())?;
 
+        match &result {
+            CommitOptimisticWriteResult::Committed(written)
+            | CommitOptimisticWriteResult::CommittedSuperseded(
+                cache_core::engine::SupersededMutationResult {
+                    write_result: written,
+                    ..
+                },
+            ) => self.commits.settle(commits, || {
+                // What it stored, and the records its response holds even
+                // where the stored value did not change: an older response
+                // must not land on those either.
+                let mut stored = written.changed.clone();
+                if let Ok(response) = engine.normalize_network(
+                    None,
+                    NetworkWrite {
+                        query: &query,
+                        operation_name: operation_name.as_deref(),
+                        variables: &variables,
+                        data: &data,
+                        identity: None,
+                    },
+                ) {
+                    stored.extend(response.updates().keys().cloned());
+                }
+                stored
+            }),
+            // A failed commit drops its layer and changes no stored record.
+            CommitOptimisticWriteResult::Failed(_) => {}
+        }
         let mut wire = match result {
             CommitOptimisticWriteResult::Failed(result) => {
                 CommitOptimisticWriteResultWire::Failed {
