@@ -9,6 +9,7 @@ import { SearchOperatorSuggestions } from '@app/features/next-soup/soup-view/fil
 import { createSearchOperatorValues } from '@app/features/next-soup/soup-view/filters-bar/search-operator-values';
 import { t } from '@app/lib/i18n';
 import { PillTabs } from '@components/app/mobile/PillTabs';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { type Accessor, createMemo, createUniqueId, For, Show } from 'solid-js';
 import {
   SEARCH_DATE_SPANS,
@@ -149,6 +150,7 @@ export function MobileSearchSuggestionRows(props: {
   const keepKeyboard = (event: Event) => event.preventDefault();
   return (
     <div
+      ref={followContentInsetBottom}
       data-keep-keyboard
       class="h-full overflow-y-auto overscroll-none px-3 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
     >

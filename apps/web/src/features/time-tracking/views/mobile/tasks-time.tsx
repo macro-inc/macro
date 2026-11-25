@@ -3,6 +3,7 @@ import { activeElement } from '@app/signal/focus';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isEditableInput } from '@core/util/isEditableInput';
@@ -102,7 +103,10 @@ function MyWeekMobile(props: TasksTimeViewProps): JSX.Element {
   const [picking, setPicking] = createSignal(false);
   const [logging, setLogging] = createSignal<PickedTask>();
   return (
-    <div class="flex size-full min-h-0 flex-col overflow-y-auto pb-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+5rem)]">
+    <div
+      ref={followContentInsetBottom}
+      class="flex size-full min-h-0 flex-col overflow-y-auto pb-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+5rem)]"
+    >
       <WeekTop
         title={t('timeTracking.myWeek')}
         week={week}
@@ -212,7 +216,10 @@ function TeamWeekMobile(props: TasksTimeViewProps): JSX.Element {
     showWeekends: props.showWeekends,
   });
   return (
-    <div class="flex size-full min-h-0 flex-col overflow-y-auto pb-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+1rem)]">
+    <div
+      ref={followContentInsetBottom}
+      class="flex size-full min-h-0 flex-col overflow-y-auto pb-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+1rem)]"
+    >
       <WeekTop
         title={t('timeTracking.team')}
         week={week}

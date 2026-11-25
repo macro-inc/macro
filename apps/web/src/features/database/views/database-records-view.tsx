@@ -1,3 +1,4 @@
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { until } from '@solid-primitives/promise';
 import { Button } from '@ui/components/Button';
@@ -446,7 +447,9 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     <>
       {/* Rendered once: the toolbar's own props keep it current, and a rerun would close its open popovers. */}
       {untrack(() => props.renderToolbar?.(actions))}
+      {/* `contentClass` can read the bottom chrome's inset (the database block on phones). */}
       <div
+        ref={followContentInsetBottom}
         class={cn(
           'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
           props.contentClass
