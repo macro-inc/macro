@@ -208,6 +208,7 @@ Docked touch sidebars above the layout breakpoint use 1.57421875 times the base 
 and bounds (403px initially), and preserve that width while space permits.
 Desktop and narrow overlays keep base sizing. Normalize manually resized touch
 widths before saving so switching layouts or devices does not compound scaling.
-A docked touch sidebar is the view's list, as on a phone, so it has no title or
-collapse toggle: `ViewSidebar.Header` renders only the top safe area there.
+A docked touch sidebar is the view's list, as on a phone, so its own
+`ViewSidebar.Header` renders only the top safe area there; a titled shell's
+title row (above) names it and holds its collapse control instead.
 Sheets and overlays keep their header.
