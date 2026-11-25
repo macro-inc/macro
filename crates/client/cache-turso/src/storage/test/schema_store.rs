@@ -12,11 +12,11 @@ use cache_core::schema_change::{ProjectionInputs, ResetReason, Tier, is_retired}
 use cache_core::value::ROOT_QUERY;
 use predicate_index::OptimisticProjectionMutation;
 
-const OLD: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
+pub(super) const OLD: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
 /// [`OLD`] with a field added to `Thing`.
-const ADDED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String extra: Int } type Note { id: ID! value: String }";
+pub(super) const ADDED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String extra: Int } type Note { id: ID! value: String }";
 /// [`OLD`] with `Thing.value` retyped.
-const RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: Int } type Note { id: ID! value: String }";
+pub(super) const RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: Int } type Note { id: ID! value: String }";
 /// [`OLD`] with `Thing.value` and `Note.value` retyped.
 const BOTH_RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: Int } type Note { id: ID! value: Int }";
 /// [`OLD`] with a field of the query root retyped.
@@ -28,20 +28,24 @@ fn schema(sdl: &str) -> Arc<Schema> {
     Schema::from_sdl(sdl).unwrap()
 }
 
-fn adopt(storage: &TursoStorage, sdl: &str, inputs: &ProjectionInputs) -> SchemaAdoption {
+pub(super) fn adopt(
+    storage: &TursoStorage,
+    sdl: &str,
+    inputs: &ProjectionInputs,
+) -> SchemaAdoption {
     storage
         .adopt_schema(&schema(sdl), inputs, Unrecorded::Guess)
         .unwrap()
 }
 
-fn types(names: &[&str], every_document: bool) -> Option<Tier> {
+pub(super) fn types(names: &[&str], every_document: bool) -> Option<Tier> {
     Some(Tier::Types {
         changed: names.iter().map(|name| (*name).to_owned()).collect(),
         every_document,
     })
 }
 
-fn pending(
+pub(super) fn pending(
     label: &str,
     query: &str,
     data: serde_json::Value,
@@ -162,7 +166,7 @@ fn rows_but_schema(storage: &TursoStorage) -> Vec<String> {
     lines
 }
 
-async fn sources(storage: &mut TursoStorage) -> Vec<OptimisticSource> {
+pub(super) async fn sources(storage: &mut TursoStorage) -> Vec<OptimisticSource> {
     storage
         .load_mutation_queue()
         .await

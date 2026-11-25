@@ -3379,6 +3379,66 @@ describe('CacheWorkerCore', () => {
     }
   );
 
+  it.each([
+    // A Reset tier keeps the queue in its own database.
+    ['opened-existing', 'reset', undefined],
+    // A file that could not take the schema is wiped keeping its queue.
+    ['reset-corrupt', 'types', 'kept'],
+  ] as const)(
+    'after %s whose schema change was %s, the queue crossing %s, reports both and keeps the queue',
+    async (outcome, change, crossing) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome,
+          schemaChange: {
+            change,
+            ...(change === 'reset' ? { resetReason: 'unreadable' } : {}),
+            changedTypes: change === 'types' ? 1 : 0,
+            droppedRecords: 40,
+            incompleteDocuments: 0,
+            retiredOverlays: 1,
+            adoptMs: 12.5,
+          },
+          ...(crossing === undefined
+            ? {}
+            : { queue: { outcome: crossing, kept: 1, dropped: 0 } }),
+        }),
+      });
+      const onInitializationOutcome = vi.fn();
+      const core = new CacheWorkerCore({
+        onInitializationOutcome,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(onInitializationOutcome).toHaveBeenCalledExactlyOnceWith(
+        outcome,
+        'preserved'
+      );
+      expect(
+        observations.filter(({ name }) => name === 'graphql_cache.schema_init')
+      ).toEqual([
+        expect.objectContaining({
+          openOutcome: outcome,
+          schemaChange: change,
+          schemaRetiredOverlays: 1,
+          ...(change === 'reset' ? { schemaResetReason: 'unreadable' } : {}),
+          ...(crossing === undefined
+            ? {}
+            : { queueOutcome: crossing, queueKept: 1, queueDropped: 0 }),
+        }),
+      ]);
+    }
+  );
+
   it('times each step of a queue that crosses', async () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({

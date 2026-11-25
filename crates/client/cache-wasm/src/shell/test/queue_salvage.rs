@@ -1,3 +1,4 @@
+use super::schema_change::{labelled, set_worker_schema};
 use super::*;
 use crate::shell::salvage::wipe_keeping_queue;
 use cache_turso::{QueueLoss, SalvageFile};
@@ -176,11 +177,20 @@ async fn wipe_open_and_die(scope: &str) {
 }
 
 async fn open(scope: &str, recovery: bool) -> (CacheEngine, &'static str, serde_json::Value) {
-    let (engine, outcome, queue, _) = open_cache_inner(scope.into(), None, recovery, None, false)
-        .await
-        .expect("open");
+    let (engine, outcome, queue, _) = open_with_change(scope, recovery).await;
+    (engine, outcome, queue)
+}
+
+async fn open_with_change(
+    scope: &str,
+    recovery: bool,
+) -> (CacheEngine, &'static str, serde_json::Value, JsSchemaChange) {
+    let (engine, outcome, queue, change) =
+        open_cache_inner(scope.into(), None, recovery, None, false)
+            .await
+            .expect("open");
     let queue = serde_json::json!([queue.outcome.as_str(), queue.kept, queue.dropped]);
-    (engine, outcome.as_str(), queue)
+    (engine, outcome.as_str(), queue, change)
 }
 
 async fn depth(engine: &CacheEngine) -> String {
@@ -232,6 +242,66 @@ async fn a_recovery_open_keeps_the_queue_and_wipes_the_rest() {
         .await,
     );
     assert_eq!(read["kind"], "miss");
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_cache_that_cannot_take_the_schema_keeps_its_queue_under_the_schema_it_was_queued_under()
+{
+    const SCOPE: &str = "cache-wasm-salvage-adoption";
+    const IN_PLACE: &str = "cache-wasm-salvage-adoption-in-place";
+    set_worker_schema(Some(labelled("String")));
+    closed_with_queue(IN_PLACE).await;
+    closed_with_queue(SCOPE).await;
+    set_worker_schema(Some(labelled("[String]")));
+    let (engine, outcome, queue, in_place) = open_with_change(IN_PLACE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(in_place.change, "types");
+    close_and_destroy(&engine, IN_PLACE).await;
+
+    // The file fails the adoption as a corrupt one does: it is wiped as a
+    // recovery wipe is, and the next one adopts the schema as it would have.
+    cache_turso::migration_test_hooks::corrupt_next_adoption();
+    let (engine, outcome, queue, moved) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "reset-corrupt");
+    assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+    assert_eq!(
+        (moved.change, moved.changed_types, moved.retired_overlays),
+        (
+            in_place.change,
+            in_place.changed_types,
+            in_place.retired_overlays
+        )
+    );
+    assert_kept(&engine, SCOPE).await;
+    resolved(engine.close()).await;
+
+    let (engine, outcome, queue, again) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(again.change, "unchanged");
+    set_worker_schema(None);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_reset_tier_keeps_the_queue_in_its_own_database() {
+    const SCOPE: &str = "cache-wasm-salvage-reset-tier";
+    closed_with_queue(SCOPE).await;
+    change(
+        SCOPE,
+        "UPDATE cache_schema SET hash = 'other', incoming_hash = 'other', artifact = x'00'",
+    )
+    .await;
+    let (engine, outcome, queue, adopted) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(adopted.change, "reset");
+    assert_eq!(adopted.reset_reason, Some("unreadable"));
+    assert_eq!(adopted.retired_overlays, 1);
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
     assert_kept(&engine, SCOPE).await;
     close_and_destroy(&engine, SCOPE).await;
 }
