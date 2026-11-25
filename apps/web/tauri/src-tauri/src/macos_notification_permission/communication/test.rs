@@ -1,5 +1,4 @@
 use super::*;
-use objc2_intents::INSpeakable;
 
 #[test]
 fn a_channel_message_is_a_group_conversation_named_for_its_channel() {
@@ -17,14 +16,11 @@ fn a_channel_message_is_a_group_conversation_named_for_its_channel() {
         // Fewer than two recipients makes macOS drop the channel name.
         let recipients = intent.recipients().expect("a group has recipients");
         assert_eq!(recipients.count(), 2);
-        assert_eq!(
-            intent
-                .speakableGroupName()
-                .expect("a group is named")
-                .spokenPhrase()
-                .to_string(),
-            "design"
-        );
+        let group_name = intent.speakableGroupName().expect("a group is named");
+        // objc2 binds `spokenPhrase` only through the INSpeakable protocol
+        // feature, which the app does not otherwise need.
+        let spoken: Retained<NSString> = objc2::msg_send![&*group_name, spokenPhrase];
+        assert_eq!(spoken.to_string(), "design");
         assert_eq!(
             intent
                 .conversationIdentifier()

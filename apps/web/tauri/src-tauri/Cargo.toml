@@ -154,7 +154,6 @@ objc2-intents = { version = "0.3", default-features = false, features = [
   "INPersonHandle",
   "INSendMessageAttachment",
   "INSendMessageIntent",
-  "INSpeakable",
   "INSpeakableString",
 ] }
 objc2-user-notifications = { version = "0.3", default-features = false, features = [
