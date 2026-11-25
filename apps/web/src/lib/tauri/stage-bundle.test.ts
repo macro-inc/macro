@@ -3,6 +3,7 @@ import type { BundleUpdateStatus } from './TauriProvider';
 
 const native = vi.hoisted(() => ({
   status: undefined as ((status: BundleUpdateStatus) => void) | undefined,
+  registration: undefined as Promise<void> | undefined,
   unlisten: vi.fn(async () => {}),
   invoke: vi.fn(async (_command: string) => {}),
   attrs: {} as Record<string, unknown>,
@@ -31,6 +32,7 @@ vi.mock('@tauri-apps/api/event', () => ({
       handler: (event: { payload: BundleUpdateStatus }) => void
     ) => {
       native.status = (payload) => handler({ payload });
+      await native.registration;
       return native.unlisten;
     }
   ),
@@ -40,6 +42,7 @@ import { stageDeployedBundle } from './stage-bundle';
 
 afterEach(() => {
   native.status = undefined;
+  native.registration = undefined;
   native.attrs = {};
   vi.clearAllMocks();
   vi.useRealTimers();
@@ -97,4 +100,21 @@ it('restarts at once when the check cannot start', async () => {
   native.invoke.mockRejectedValueOnce('Failed to send start signal');
 
   expect(await stageDeployedBundle()).toBe('failed');
+});
+
+it('ends at the deadline while the listener registration hangs', async () => {
+  vi.useFakeTimers();
+  let register: () => void = () => {};
+  native.registration = new Promise((resolve) => {
+    register = resolve;
+  });
+  const staging = stageDeployedBundle(10_000);
+
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(await staging).toBe('timed_out');
+
+  // A registration that answers late cleans up and starts no check.
+  register();
+  await vi.waitFor(() => expect(native.unlisten).toHaveBeenCalledOnce());
+  expect(native.invoke).not.toHaveBeenCalled();
 });

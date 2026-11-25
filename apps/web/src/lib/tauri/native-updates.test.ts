@@ -172,3 +172,22 @@ it('neither stages nor restarts while a call or upload blocks the restart', asyn
   expect(native.toastFailure).toHaveBeenCalledOnce();
   dispose();
 });
+
+it('does not restart when a call starts while the bundle downloads', async () => {
+  native.calls.push('ready');
+  native.stage.mockImplementationOnce(async () => {
+    native.held = true;
+    return 'staged';
+  });
+  const { updates, dispose } = createRoot((dispose) => ({
+    updates: createNativeUpdates(async () => {}),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(updates.status().status).toBe('Ready'));
+
+  await updates.restart();
+
+  expect(native.calls).not.toContain('restart_native_update');
+  expect(native.toastFailure).toHaveBeenCalledOnce();
+  dispose();
+});

@@ -99,6 +99,9 @@ export function createNativeUpdates(flush: () => Promise<void>) {
         }),
       ]);
       await staging;
+      // A call, upload or import may have started while the bundle downloaded.
+      if (hasAutomaticReloadHolds())
+        throw new Error('Finish your current work before restarting Macro.');
       await invoke('restart_native_update');
     } catch (error) {
       setPreparing(false);

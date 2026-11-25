@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { match } from 'ts-pattern';
 import type { BundleUpdateStatus } from './TauriProvider';
 
@@ -60,31 +60,66 @@ export function stageDeployedBundle(
   });
 }
 
+/**
+ * Settles at the first status that ends the check, or at the deadline, even
+ * while the listener registration or the check command is still unanswered.
+ */
 async function checkForBundle(timeoutMs: number): Promise<StageOutcome> {
+  let settled = false;
   let finish: (outcome: StageOutcome) => void = () => {};
   const finished = new Promise<StageOutcome>((resolve) => {
-    finish = resolve;
+    finish = (outcome) => {
+      settled = true;
+      resolve(outcome);
+    };
   });
   const timer = setTimeout(() => finish('timed_out'), timeoutMs);
-  let stop: (() => void) | undefined;
+  fireAndForget(
+    startCheck(finished, finish, () => settled),
+    'native-updates'
+  );
 
-  // Listen before starting the check, so its last status can't be missed.
+  const outcome = await finished;
+  clearTimeout(timer);
+  return outcome;
+}
+
+/**
+ * Listens before starting the check, so its last status can't be missed. A
+ * registration that answers after staging ended starts nothing.
+ */
+async function startCheck(
+  finished: Promise<StageOutcome>,
+  finish: (outcome: StageOutcome) => void,
+  settled: () => boolean
+): Promise<void> {
+  let unlisten: UnlistenFn;
   try {
-    const unlisten = await listen<BundleUpdateStatus>(
+    unlisten = await listen<BundleUpdateStatus>(
       'bundle-update-status',
       (event) => {
         const outcome = stageOutcome(event.payload);
         if (outcome) finish(outcome);
       }
     );
-    stop = () => fireAndForget(unlisten(), 'native-updates');
+  } catch {
+    finish('failed');
+    return;
+  }
+  fireAndForget(unlistenWhenDone(finished, unlisten), 'native-updates');
+  if (settled()) return;
+
+  try {
     await invoke('check_for_update');
   } catch {
     finish('failed');
   }
+}
 
-  const outcome = await finished;
-  clearTimeout(timer);
-  stop?.();
-  return outcome;
+async function unlistenWhenDone(
+  finished: Promise<StageOutcome>,
+  unlisten: UnlistenFn
+): Promise<void> {
+  await finished;
+  await unlisten();
 }
