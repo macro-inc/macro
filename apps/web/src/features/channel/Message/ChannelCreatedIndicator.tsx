@@ -1,8 +1,8 @@
 import { useChannel } from '@core/context/channels';
-import { formatDate } from '@core/util/date';
 import ChannelIcon from '@icon/system/regular/hash-straight.svg';
 import { Avatar } from '@ui';
 import { Show } from 'solid-js';
+import { MessageTime } from '../components/MessageTime';
 
 type ChannelCreatedIndicatorProps = {
   channelId: string;
@@ -41,9 +41,7 @@ export function ChannelCreatedIndicator(props: ChannelCreatedIndicatorProps) {
               <span class="text-sm text-ink">
                 Channel <span class="font-semibold">{c().name}</span> created
               </span>
-              <span class="text-xs text-ink-extra-muted">
-                {formatDate(c().createdAt, { showTime: true })}
-              </span>
+              <MessageTime at={c().createdAt} />
             </div>
           </div>
         </div>
