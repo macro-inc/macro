@@ -1634,8 +1634,9 @@ pub struct VisibleCalendar {
     pub is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.
     pub is_writable: bool,
-    /// Whether this is one of Google's shared system calendars (holidays,
-    /// birthdays) the account subscribes to rather than one a person maintains.
+    /// Whether the account subscribes to this calendar rather than a person
+    /// maintaining it: Google's system calendars (holidays, birthdays), and
+    /// calendars added by URL in Google or subscribed from the web in Outlook.
     pub is_subscription: bool,
     /// Whether this calendar counts toward the requester's busy time: their
     /// setting in Settings → Calendar, on by default for every calendar.
@@ -1805,11 +1806,28 @@ pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::ho
 /// successful poll, so only a persistent failure earns a settings-row badge.
 pub const CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD: i32 = 3;
 
+/// The id suffix of Google's shared system calendars (holidays, birthdays).
+pub const GOOGLE_SYSTEM_CALENDAR_SUFFIX: &str = "@group.v.calendar.google.com";
+
+/// The id suffix Google mints for a calendar added by URL.
+pub const GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX: &str = "@import.calendar.google.com";
+
 /// Whether a provider calendar is one of Google's shared system calendars
 /// (`en.usa#holiday@group.v.calendar.google.com` and friends) rather than a
 /// calendar a person maintains.
 pub fn is_system_calendar(provider_calendar_id: &str) -> bool {
-    provider_calendar_id.ends_with("@group.v.calendar.google.com")
+    provider_calendar_id.ends_with(GOOGLE_SYSTEM_CALENDAR_SUFFIX)
+}
+
+/// Whether a provider calendar is one Google lists as a subscription rather
+/// than a calendar a person maintains: one of its system calendars, or a
+/// calendar added by URL (Other calendars → From URL), whose id Google mints
+/// under `@import.calendar.google.com`. Google documents neither suffix; they
+/// are what its calendar list returns. A calendar added by URL is a
+/// subscription whatever access role Google reports for it.
+pub fn is_google_subscription(provider_calendar_id: &str) -> bool {
+    is_system_calendar(provider_calendar_id)
+        || provider_calendar_id.ends_with(GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX)
 }
 
 /// Deployment configuration enabling Google push notification channels.
