@@ -434,6 +434,54 @@ describe('createTauriCacheHost', () => {
     ).toHaveLength(1);
   });
 
+  it('defers client teardown until init settles and drops queued reads and watches after dispose', async () => {
+    let resolveInit: (() => void) | undefined;
+    invokeMock.mockImplementation((command: string) => {
+      if (command === 'graphql_cache_init_with_schema') {
+        return new Promise<void>((resolve) => {
+          resolveInit = resolve;
+        });
+      }
+      if (command === 'graphql_cache_current_authority') {
+        return Promise.resolve({
+          generation: '00000000-0000-4000-8000-000000000001',
+          kind: 'bound',
+          identity: 'scope-1',
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await vi.waitFor(() => expect(resolveInit).toBeDefined());
+
+    const queuedRead = host.readQuery({ opKey: 11, query: '{ x }' });
+    const queuedWatch = host.watchQuery?.({ opKey: 12, query: '{ x }' });
+
+    // Dispose before native initialization resolves.
+    host.dispose();
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) => command === 'graphql_cache_teardown_client'
+      )
+    ).toBe(false);
+
+    resolveInit?.();
+    await expect(queuedRead).resolves.toEqual({ kind: 'miss' });
+    await expect(queuedWatch).resolves.toEqual({ kind: 'unsupported' });
+    await vi.waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('graphql_cache_teardown_client', {
+        clientId: host.clientId,
+      })
+    );
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) =>
+          command === 'graphql_cache_read' || command === 'graphql_cache_watch'
+      )
+    ).toBe(false);
+  });
+
   it('reports asynchronous native initialization failures', async () => {
     const failed = Promise.withResolvers<Error>();
     const onInitializationError = vi.fn(failed.resolve);

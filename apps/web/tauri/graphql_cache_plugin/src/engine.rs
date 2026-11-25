@@ -336,15 +336,27 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
     }
 }
 
+/// Bound on remembered torn-down client prefixes so retired-client tracking
+/// stays O(1) even in long-lived native sessions with many reloads.
+const MAX_RETIRED_CLIENTS: usize = 64;
+
 /// Interns host-side string operation ids to engine `u64` ids.
 #[derive(Default)]
 struct OpInterner {
     by_name: HashMap<String, OpId>,
     by_id: HashMap<OpId, String>,
+    retired_clients: std::collections::VecDeque<String>,
     next: OpId,
 }
 
 impl OpInterner {
+    fn is_retired(&self, op_name: &str) -> bool {
+        let Some((client_id, _)) = op_name.split_once(':') else {
+            return false;
+        };
+        self.retired_clients.iter().any(|id| id == client_id)
+    }
+
     fn intern(&mut self, name: &str) -> OpId {
         if let Some(id) = self.by_name.get(name) {
             return *id;
@@ -356,6 +368,14 @@ impl OpInterner {
         id
     }
 
+    /// Interns `name` unless its client prefix was already torn down.
+    fn intern_active(&mut self, name: &str) -> Option<OpId> {
+        if self.is_retired(name) {
+            return None;
+        }
+        Some(self.intern(name))
+    }
+
     fn remove(&mut self, name: &str) -> Option<OpId> {
         let id = self.by_name.remove(name)?;
         self.by_id.remove(&id);
@@ -363,6 +383,12 @@ impl OpInterner {
     }
 
     fn remove_client(&mut self, client_id: &str) -> Vec<OpId> {
+        if !self.retired_clients.iter().any(|id| id == client_id) {
+            if self.retired_clients.len() >= MAX_RETIRED_CLIENTS {
+                self.retired_clients.pop_front();
+            }
+            self.retired_clients.push_back(client_id.to_owned());
+        }
         let prefix = format!("{client_id}:");
         let matched: Vec<(String, OpId)> = self
             .by_name
@@ -617,7 +643,7 @@ impl EngineHandle {
     ) -> Result<ReadResultWire, String> {
         let mut state = self.ready_op_read(op_id.as_deref()).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let op = op_id.map(|name| ops.intern(&name));
+        let op = op_id.and_then(|name| ops.intern_active(&name));
         engine
             .read_query_with_entity_resolvers(
                 op,
@@ -651,7 +677,11 @@ impl EngineHandle {
             .map_err(|error| error.to_string())?;
         let mut state = self.ready_op_read(Some(&op_id)).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let op = ops.intern(&op_id);
+        let Some(op) = ops.intern_active(&op_id) else {
+            return Ok(cache_core::engine::watch_query::QueryUpdate::Miss {
+                revision: engine.current_revision().to_string(),
+            });
+        };
         engine
             .watch_query(
                 op,
@@ -791,10 +821,10 @@ impl EngineHandle {
         } = request;
         let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let origin = origin_op_id.map(|name| ops.intern(&name));
-        let registration = registration.map(|registration| {
-            let op_id = ops.intern(&registration.op_id);
-            (op_id, registration.entity_resolvers)
+        let origin = origin_op_id.and_then(|name| ops.intern_active(&name));
+        let registration = registration.and_then(|registration| {
+            let op_id = ops.intern_active(&registration.op_id)?;
+            Some((op_id, registration.entity_resolvers))
         });
         let input = NetworkWrite {
             query: &query,
@@ -1065,7 +1095,7 @@ impl EngineHandle {
         let mut state = self.inner.write().await;
         self.resume_retirement(&mut state).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let origin = origin_op_id.map(|name| ops.intern(&name));
+        let origin = origin_op_id.and_then(|name| ops.intern_active(&name));
         let client_metadata = soup_filter_cache_adapter::permissions::legacy_draft_metadata(
             client_metadata,
             &data,

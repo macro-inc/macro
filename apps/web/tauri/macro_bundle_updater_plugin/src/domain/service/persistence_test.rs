@@ -131,11 +131,26 @@ async fn legacy_absolute_pending_bundle_root_relocates_after_ios_container_move(
     let startup = service.load_bundle_root(&new_container, 202).await;
 
     assert_eq!(startup.selection, StartupSelection::CompletedDownload);
+    // Pending marker must remain durable (rewritten to relative form) if the
+    // app restarts before apply_update runs.
     assert_eq!(
-        service.apply_update(&new_container).await.unwrap(),
+        fs.read_to_string(&new_container.join(PENDING_BUNDLE_ROOT_FILE))
+            .await
+            .unwrap(),
+        "2"
+    );
+
+    let (mut restarted, _rx2) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
+    let second_startup = restarted.load_bundle_root(&new_container, 202).await;
+    assert_eq!(
+        second_startup.selection,
+        StartupSelection::CompletedDownload
+    );
+    assert_eq!(
+        restarted.apply_update(&new_container).await.unwrap(),
         ApplyUpdateResult::ReloadNeeded
     );
-    assert_eq!(service.bundle_root_path(), Some(new_bundle.as_path()));
+    assert_eq!(restarted.bundle_root_path(), Some(new_bundle.as_path()));
 }
 
 #[tokio::test]

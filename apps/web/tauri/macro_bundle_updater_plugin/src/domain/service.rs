@@ -903,15 +903,24 @@ impl<Fs: FsRepo> Service<Fs> {
             return false;
         };
         if self
-            .restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
+            .restore_completed_bundle_dir(
+                cache_dir,
+                native_build,
+                bundle_dir,
+                relocated_fallback.is_none(),
+            )
             .await
         {
             return true;
         }
         if let Some(relocated) = relocated_fallback {
-            return self
-                .restore_completed_bundle_dir(cache_dir, native_build, relocated)
-                .await;
+            if self
+                .restore_completed_bundle_dir(cache_dir, native_build, relocated.clone(), true)
+                .await
+            {
+                let _ = persist_pending_bundle(&self.fs_repo, cache_dir, &relocated).await;
+                return true;
+            }
         }
         false
     }
@@ -953,7 +962,7 @@ impl<Fs: FsRepo> Service<Fs> {
             return false;
         };
 
-        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
+        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir, true)
             .await
     }
 
@@ -962,11 +971,14 @@ impl<Fs: FsRepo> Service<Fs> {
         cache_dir: &Path,
         native_build: u64,
         bundle_dir: PathBuf,
+        clear_on_failure: bool,
     ) -> bool {
         let Some(manifest) =
             BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
         else {
-            let _ = self.clear_pending_bundle(cache_dir).await;
+            if clear_on_failure {
+                let _ = self.clear_pending_bundle(cache_dir).await;
+            }
             return false;
         };
 
@@ -977,7 +989,9 @@ impl<Fs: FsRepo> Service<Fs> {
             && manifest.min_native_build <= native_build
             && self.fs_repo.read_to_string(&entrypoint).await.is_ok();
         if !usable {
-            let _ = self.clear_pending_bundle(cache_dir).await;
+            if clear_on_failure {
+                let _ = self.clear_pending_bundle(cache_dir).await;
+            }
             return false;
         }
 

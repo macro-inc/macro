@@ -550,13 +550,28 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
+  let readySettled = false;
+  let initSucceeded = false;
   let clientTornDown = false;
-  function teardownClient() {
-    if (clientTornDown) return;
-    clientTornDown = true;
+  function sendClientTeardown() {
     // Best effort: older native binaries lack this command and reject it.
     fireAndForget(
       invoke<void>(TEARDOWN_CLIENT_COMMAND, { clientId }).catch(
+        () => undefined
+      ),
+      'graphql-cache-host'
+    );
+  }
+  function teardownClient() {
+    if (clientTornDown) return;
+    clientTornDown = true;
+    if (readySettled) {
+      if (initSucceeded) sendClientTeardown();
+      return;
+    }
+    fireAndForget(
+      ready.then(
+        () => sendClientTeardown(),
         () => undefined
       ),
       'graphql-cache-host'
@@ -570,7 +585,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     (async () => {
       try {
         await ready;
+        readySettled = true;
+        initSucceeded = true;
       } catch (error) {
+        readySettled = true;
         options.onInitializationError?.(
           error instanceof Error ? error : new Error(String(error))
         );
@@ -762,6 +780,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async readQuery(args: CacheReadArgs): Promise<ReadResult> {
       await ready;
+      if (clientTornDown) return { kind: 'miss' };
       const wireArgs = {
         opId: args.opKey === undefined ? undefined : opId(args.opKey),
         query: args.query,
@@ -786,7 +805,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async watchQuery(args) {
       await ready;
-      if (watchUnavailable) return { kind: 'unsupported' };
+      if (clientTornDown || watchUnavailable) return { kind: 'unsupported' };
       try {
         return await request(WATCH_COMMAND, {
           opId: opId(args.opKey),
@@ -955,9 +974,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       await ready;
       return await context.run(() =>
         request<WriteResult>('graphql_cache_write', {
-          originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+          originOpId:
+            clientTornDown || args.opKey === undefined
+              ? undefined
+              : opId(args.opKey),
           registration:
-            args.registerDependencies && args.opKey !== undefined
+            !clientTornDown &&
+            args.registerDependencies &&
+            args.opKey !== undefined
               ? {
                   opId: opId(args.opKey),
                   entityResolvers: args.entityResolvers,
