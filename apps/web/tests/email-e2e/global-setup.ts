@@ -3,8 +3,8 @@
 // local stack.
 
 import { spawn } from 'node:child_process';
-import { rmSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { readFileSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import type { FullConfig } from '@playwright/test';
@@ -17,6 +17,18 @@ import { checkSignUpCounter } from './harness/sign-up-limit';
 import { currentRun, runPaths, runReports } from './ledger/paths';
 
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
+
+function requireLocalBundle(): void {
+  const dist =
+    process.env.EMAIL_E2E_DIST ??
+    fileURLToPath(new URL('../../dist', import.meta.url));
+  const index = readFileSync(join(dist, 'index.html'), 'utf8');
+  if (!/<meta name="macro-gateway-origin" content="\/"\s*\/?\s*>/.test(index)) {
+    throw new Error(
+      'Email browser tests require a local-only, same-origin bundle. Run just build-email-e2e in apps/web.'
+    );
+  }
+}
 
 /** The databases a Redis hands out to stacks, with its default of 16. */
 const REDIS_DATABASES = 15;
@@ -35,6 +47,8 @@ export default async function globalSetup(
     for (const report of runReports(currentRun()))
       rmSync(report, { force: true });
   }
+
+  requireLocalBundle();
 
   // The local stack is already running, and so is a named stack server.
   const local = localStackAddresses();

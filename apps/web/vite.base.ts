@@ -657,10 +657,39 @@ const HTML_ENTRIES = {
   canvasRender: resolve(__dirname, 'canvas-render.html'),
 };
 
+/** Lets local browser tests inspect the resolved gateway before loading the app. */
+function markLocalBundleIndex(): Plugin {
+  return {
+    name: 'local-bundle-gateway',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html, { filename }) {
+        if (filename !== HTML_ENTRIES.app) return html;
+        return {
+          html: html.replace(/<link\b[^>]*\bhref="%GATEWAY_ORIGIN%"[^>]*>/, ''),
+          tags: [
+            {
+              tag: 'meta',
+              attrs: { name: 'macro-gateway-origin', content: '/' },
+              injectTo: 'head',
+            },
+          ],
+        };
+      },
+    },
+  };
+}
+
 export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
     const NO_MINIFY = process.env.NO_MINIFY === 'true';
+    const sameOriginLocalBundle =
+      ENV_MODE === 'development' &&
+      process.env.VITE_LOCAL_SERVERS === 'ALL' &&
+      process.env.VITE_LOCAL_BACKEND_ORIGIN === 'same-origin' &&
+      process.env.VITE_LOCAL_ONLY === 'true';
 
     return {
       base: command === 'serve' ? '/' : '/app',
@@ -673,6 +702,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         },
       },
       plugins: [
+        sameOriginLocalBundle && markLocalBundleIndex(),
         devHttps(),
         devCompression(),
         devExternalSourcemaps(),

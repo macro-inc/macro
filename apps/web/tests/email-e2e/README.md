@@ -19,6 +19,10 @@ just email-e2e-browser reply           # arguments go to Playwright
 just apps/web/test-email-e2e-browser   # only the run, when everything is built
 ```
 
+Before Chromium starts, the harness checks the bundle's same-origin gateway
+marker. Rebuild with `just build-email-e2e` from `apps/web`, or rebuild the local
+stack's bundle for the full-stack tier, if it rejects the bundle.
+
 It needs what `just email-e2e` needs (`crates/email_e2e/AGENTS.md`: Postgres,
 Redis, an ElasticMQ and a Kafka broker in `EMAIL_E2E_*`), the repository's
 `bun install`, and Chromium (`bunx playwright install chromium`, or
