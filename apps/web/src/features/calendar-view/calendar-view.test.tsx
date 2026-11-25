@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { readFileSync } from 'node:fs';
 import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -179,6 +180,39 @@ describe('marking an event read when Calendar lands on it', () => {
       { type: 'calendar_event', id: 'next-event' }
     );
   });
+});
+
+it('matches the phone width compensation against the grid hierarchy', () => {
+  const dom = document.implementation.createHTMLDocument();
+  dom.documentElement.dataset.touchDevice = 'true';
+  // Page wraps CalendarGridHost, which supplies the inner .calendar-view.
+  dom.body.innerHTML =
+    '<div class="calendar-view-content"><div class="phone-time-page"><div class="calendar-view"><div class="fc"></div></div></div></div>';
+  const page = dom.querySelector('.phone-time-page');
+  if (!page) throw new Error('Phone page missing');
+  const style = document.createElement('style');
+  style.textContent = readFileSync(
+    'src/features/calendar/calendar-phone-grid.css',
+    'utf8'
+  );
+  document.head.append(style);
+  try {
+    let compensation: CSSStyleRule | undefined;
+    for (const media of style.sheet?.cssRules ?? []) {
+      if (!(media instanceof CSSMediaRule)) continue;
+      for (const rule of media.cssRules) {
+        if (
+          rule instanceof CSSStyleRule &&
+          rule.selectorText.includes('.phone-time-page')
+        )
+          compensation = rule;
+      }
+    }
+    if (!compensation) throw new Error('Phone width compensation missing');
+    expect(page.matches(compensation.selectorText)).toBe(true);
+  } finally {
+    style.remove();
+  }
 });
 
 describe('stationary phone time axis', () => {

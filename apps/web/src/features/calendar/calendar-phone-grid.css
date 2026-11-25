@@ -10,7 +10,7 @@
 
   /* The pager moves only day columns. Keep FullCalendar's measured label cells
      just outside its viewport so one fixed gutter can mirror their geometry. */
-  html[data-touch-device="true"] .calendar-view .phone-time-page {
+  html[data-touch-device="true"] .calendar-view-content .phone-time-page {
     width: calc(100% + var(--calendar-phone-axis-width));
     margin-left: calc(-1 * var(--calendar-phone-axis-width));
   }
