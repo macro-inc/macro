@@ -714,6 +714,16 @@ export const enableChatSidebarSections = defineFlag({
   default: onInDev,
 });
 
+// First-principles Chat sidebar redesign: Focus triage, Support Desk, smart DM
+// windowing, deduplicated Personal vs. Team layers, personal section hiding,
+// and Jev semantic triage. On in local preview stacks; deployed environments
+// defer to PostHog. Override with VITE_ENABLE_CHANNEL_SIDEBAR_REDESIGN.
+export const enableChannelSidebarRedesign = defineFlag({
+  key: 'enable-channel-sidebar-redesign',
+  env: 'ENABLE_CHANNEL_SIDEBAR_REDESIGN',
+  default: LOCAL_ONLY || undefined,
+});
+
 // Channel and Chat section Notification Settings (All messages, Messages
 // involving me, Nothing, Custom) beside Mute, in place of Only @mentions. On in
 // development; deployed environments defer to PostHog. Override with

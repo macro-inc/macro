@@ -62,6 +62,41 @@ export function useChannelLabelsQuery(
   );
 }
 
+/**
+ * Channel sections query for the redesigned sidebar: always speaks the additive
+ * `/channel-sections` contract without requiring the separate legacy tag flag.
+ */
+export function useChannelSectionsQuery(
+  scope?: ChannelLabelScopeSelection,
+  enabled: Accessor<boolean> = () => true
+) {
+  const userId = useUserId();
+  return useQuery(() =>
+    channelLabelsQueryOptions(enabled(), scope, userId(), true)
+  );
+}
+
+/** Smart name-rule preview for the redesigned sidebar's `/channel-sections` flow. */
+export function useChannelSectionPreviewQuery(
+  pattern: Accessor<string>,
+  scope?: ChannelLabelScopeSelection | Accessor<ChannelLabelScopeSelection>,
+  enabled: Accessor<boolean> = () => true
+) {
+  const userId = useUserId();
+  const debouncedPattern = debouncedDependent(pattern, 150);
+  return useQuery(() => {
+    const contains = debouncedPattern().trim();
+    const selectedScope = typeof scope === 'function' ? scope() : scope;
+    return smartTagPreviewQueryOptions(
+      contains,
+      enabled() && contains.length > 0,
+      selectedScope,
+      userId(),
+      true
+    );
+  });
+}
+
 /** Non-suspending view of labels, undefined until successfully loaded. */
 export function useChannelLabelsData(
   scope?: ChannelLabelScopeSelection
