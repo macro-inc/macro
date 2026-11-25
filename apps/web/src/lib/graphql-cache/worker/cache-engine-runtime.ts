@@ -233,11 +233,16 @@ async function activate(
     activation.databaseAction === 'wipe-before-open' ? 'reset' : 'preserved';
   let lossToTell = false;
   // A coordinator sends these only to an engine whose `engine-ready` it took.
-  const coordinatorTookReady = (): void => {
+  const coordinatorTookReady = async (): Promise<void> => {
     if (!lossToTell) return;
     lossToTell = false;
-    if (core.queueLossTold)
-      fireAndForget(core.queueLossTold(), 'graphql_cache.queue_loss_told');
+    try {
+      await core.queueLossTold?.();
+    } catch (error) {
+      // What keeps the side file open may be gone by the next one.
+      lossToTell = true;
+      throw error;
+    }
   };
   let draining = false;
   // Keep every admitted handler and graceful drain in one explicit scope.
@@ -424,7 +429,10 @@ async function activate(
             fatal('coordinator routed a request after drain began');
             return;
           }
-          coordinatorTookReady();
+          fireAndForget(
+            coordinatorTookReady(),
+            'graphql_cache.queue_loss_told'
+          );
           admitRequest(request);
         })
         .with({ kind: 'drain-engine' }, () => {
@@ -461,7 +469,10 @@ async function activate(
           });
         })
         .with({ kind: 'heartbeat' }, ({ heartbeatId }) => {
-          coordinatorTookReady();
+          fireAndForget(
+            coordinatorTookReady(),
+            'graphql_cache.queue_loss_told'
+          );
           recordLinearMemory(false);
           core.recordCachedQueueDiagnostics?.();
           post(

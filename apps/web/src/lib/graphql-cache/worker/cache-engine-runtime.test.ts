@@ -515,15 +515,18 @@ describe('cache engine worker runtime', () => {
   });
 
   it.each([
-    ['reset', 'heartbeat', ['told after 1 engine-ready']],
-    ['reset', 'engine-request', ['told after 1 engine-ready']],
-    ['preserved', 'heartbeat', []],
+    ['reset', 'heartbeat', 2],
+    ['reset', 'engine-request', 2],
+    ['preserved', 'heartbeat', 0],
   ] as const)(
     'lets go of a lost queue only once the coordinator took it in (%s, %s)',
-    async (queue, proof, expected) => {
+    async (queue, proof, attempts) => {
       const scope = new FakeWorkerScope();
       const direct = new FakePort();
-      const told: string[] = [];
+      const queueLossTold = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('the side file is busy'))
+        .mockResolvedValue(undefined);
       const emitted = vi.fn();
       const held = [{ name: 'owner-lock', mode: 'exclusive' }];
       vi.stubGlobal('navigator', { locks: { query: async () => ({ held }) } });
@@ -540,10 +543,7 @@ describe('cache engine worker runtime', () => {
             port.postMessage({ id: request.id, ok: true, result: null });
           },
           drain: vi.fn(),
-          queueLossTold: async () => {
-            const ready = messagesOfKind(direct, 'engine-ready');
-            told.push(`told after ${ready.length} engine-ready`);
-          },
+          queueLossTold,
         }),
       });
 
@@ -554,10 +554,11 @@ describe('cache engine worker runtime', () => {
         )
       );
 
-      expect(told).toEqual([]);
-
       // Posting it proves nothing: the coordinator may die before it reads it.
-      for (const id of [1, 2]) {
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1);
+      expect(queueLossTold).not.toHaveBeenCalled();
+
+      for (const id of [1, 2, 3]) {
         const rest =
           proof === 'heartbeat'
             ? { heartbeatId: id }
@@ -573,7 +574,7 @@ describe('cache engine worker runtime', () => {
         );
       }
 
-      expect(told).toEqual(expected);
+      expect(queueLossTold).toHaveBeenCalledTimes(attempts);
     }
   );
 
