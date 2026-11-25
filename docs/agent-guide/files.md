@@ -372,7 +372,10 @@ header exposes **Download** on desktop, phone, and tablet. The file menu uses
 the same action. Video routes also expose it in their header; channel videos
 expose it over the player on hover or keyboard focus (always visible on touch)
 and in the expanded viewer. Linked video cards also offer Download in their
-preview header without opening the file.
+preview header without opening the file. An email attachment chip's download
+segment saves the attachment under its original name through the same action,
+without filing a Drive copy, in the browser and in the desktop, iOS and
+Android apps.
 
 - Click Download once. The control shows preparation progress when the server
   provides a length, disables repeat clicks, and offers Cancel. Browser users

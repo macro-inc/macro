@@ -2033,9 +2033,13 @@ instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
 Channel videos, linked video previews, and Drive video/image/code/canvas/unknown previews share
 `createFileDownload` and `FileDownloadButton`. Keep menu and visible controls
-bound to the same controller. Call recording menus and the list-row Download
-(`makeDownloadAction`) use the same controller; the list action runs it under
-its own root, because choosing a context-menu item disposes the menu's owner.
+bound to the same controller. Call recording menus, the list-row Download
+(`makeDownloadAction`) and email attachment chips use the same controller;
+the last two run it through `startFileDownload`, under a root of its own,
+because choosing a context-menu item disposes the menu's owner. An email
+attachment's signed URL is on the attachments CloudFront host, which the
+native HTTP scope does not list, so `emailAttachmentDownloadSource` reads it
+with `webviewFetch`; the bucket's CORS rules answer the app origins.
 Download hands off directly to browser downloads
 or the native save picker. Show channel Download on hover or keyboard focus,
 always on touch, without a footer. Keep system Share inside the touch Download
@@ -2052,7 +2056,7 @@ Keep the expanded video first in the dialog's tab order so initial Space presses
 control native playback; restore focus to its opener on close.
 
 The backend-free browser regression downloads real fixture bytes from channel
-cards, the expanded viewer, and the shared Drive/standalone header on desktop,
+cards, the expanded viewer, an email attachment chip, and the shared Drive/standalone header on desktop,
 phone, and tablet, and checks Space playback on opening and reopening the viewer:
 `bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
