@@ -1491,8 +1491,21 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
-- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
-  bump its checkpoint version when changing the hydration input contract.
+- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill.
+- Soup backfill checkpoints are keyed by each lane's contract
+  (`queries/soup/backfill-contract.ts`): changing a lane's operation, input or
+  pass flags restarts that lane alone, and a tab runs a lane only while holding
+  its locks (`soupBackfillLaneLocks`), leaving a lane another tab holds until
+  its other lanes are done. The app runs lanes only in the tab that leads
+  backfill, and leading takes the browser's Locks API too; a direct
+  `runSoupBackfill` call without it runs the lane unlocked. Bump the lane's
+  `contractVersion` when it must refetch for a reason those do not show (a
+  projection that needs fields the cache lacks, a page size that must reach
+  scans in flight); bump
+  `BACKFILL_VERSION` only for a runner change every lane shares. Never edit
+  `V19_CONTRACTS`. Read and write a lane's checkpoint through
+  `queries/soup/backfill-checkpoint.ts` with the lane itself, never a
+  checkpoint id: the channel directory reads `CHANNEL_DIRECTORY_LANE`.
 - Refresh the channel list's bounded unread and mention edges when opening a
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to
