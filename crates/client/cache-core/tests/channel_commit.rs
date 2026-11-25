@@ -1,17 +1,19 @@
 //! What a channel write may store, and what one transaction leaves.
 
 use cache_core::channel_timeline::{
-    ChannelCommitStatus, ChannelEviction, ChannelTimelineCommit, TIMELINE_HEAD, TIMELINE_START,
-    TOMBSTONE_REPLAY,
+    ChannelCommitStatus, ChannelEviction, ChannelTimelineCommit, MESSAGE_TYPENAME, TIMELINE_HEAD,
+    TIMELINE_START, TOMBSTONE_REPLAY,
 };
 use cache_core::engine::channel_changes::{ChannelChange, ChannelChangeKind};
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite, ReadResult,
+    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite,
 };
 use cache_core::identity::IdentityBinding;
 use cache_core::meta::{BUNDLED_SCHEMA_SDL, Schema, bundled_schema};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
-use cache_core::store::InMemoryStorage;
+use cache_core::record_selection::RecordSelection;
+use cache_core::store::{InMemoryStorage, Storage};
+use cache_core::value::EntityKey;
 use pollster::block_on;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -422,25 +424,17 @@ fn eviction_finds_a_channel_only_previews_were_stored_of() {
     });
 }
 
-async fn read_page(engine: &mut TestEngine) -> Option<Value> {
-    let variables = json!({"input": {"channelId": "c1"}});
-    let read = engine
-        .read_query(
-            None,
-            &timeline_query(),
-            None,
-            variables.as_object().unwrap(),
-        )
-        .await
-        .unwrap();
-    match read {
-        ReadResult::Hit { mut data } => Some(data["user"]["channelTimeline"]["entries"].take()),
-        ReadResult::Miss => None,
-    }
+async fn read_root(engine: &mut TestEngine, id: &str) -> Value {
+    let fragment = format!(
+        "fragment Root on {MESSAGE_TYPENAME} {{ __typename id thread {{ __typename preview {{ __typename id }} }} }}"
+    );
+    let selection = RecordSelection::parse(&bundled_schema(), &fragment, "Root").unwrap();
+    let read = engine.read_records_by_keys(&selection, &[key(id)]).await;
+    read.unwrap().value.remove(0).record
 }
 
-fn preview_ids(entries: &Value) -> Vec<&str> {
-    entries[0]["thread"]["preview"]
+fn preview_ids(root: &Value) -> Vec<&str> {
+    root["thread"]["preview"]
         .as_array()
         .into_iter()
         .flatten()
@@ -462,8 +456,8 @@ fn a_thread_preview_omits_replies_that_are_not_held() {
         let removal = removing(changes("c1", "10", "11"), &["r1"]);
         engine.channel_timeline_commit(&removal).await.unwrap();
         engine.delete_keys(&[key("r2")]).await.unwrap();
-        let entries = read_page(&mut engine).await.expect("the page is readable");
-        assert_eq!(preview_ids(&entries), ["r3"]);
+        let root = read_root(&mut engine, "m1").await;
+        assert_eq!(preview_ids(&root), ["r3"]);
     });
 }
 
@@ -477,8 +471,8 @@ fn a_thread_preview_omits_a_reply_the_write_refused() {
         apply(&mut engine, "12", &[], &removal).await;
         apply(&mut engine, "11", &[listed], &page("c1", "11", Vec::new())).await;
         assert_eq!(content(&mut engine, "r1").await, None);
-        let entries = read_page(&mut engine).await.expect("the page is readable");
-        assert_eq!(preview_ids(&entries), Vec::<&str>::new());
+        let root = read_root(&mut engine, "m3").await;
+        assert_eq!(preview_ids(&root), Vec::<&str>::new());
     });
 }
 
@@ -940,5 +934,55 @@ fn every_transaction_that_changes_a_channel_names_it_once() {
             .await
             .unwrap();
         assert_eq!(heard(), named(ChannelChangeKind::Evicted));
+    });
+}
+
+#[test]
+fn the_viewer_keeps_no_channel_read() {
+    let m1 = || json!({"__typename": MESSAGE_TYPENAME, "id": "m1"});
+    let reads = [
+        (
+            "channelTimeline(input: {channelId: \"c1\"}) { __typename entries { __typename ... on GraphqlChannelMessage { id } } }",
+            json!({"channelTimeline": {"__typename": "GraphqlChannelTimelinePage", "entries": [m1()]}}),
+        ),
+        (
+            "channelThread(input: {channelId: \"c1\", rootId: \"m1\"}) { __typename root { __typename id } }",
+            json!({"channelThread": {"__typename": "GraphqlChannelThreadPage", "root": m1()}}),
+        ),
+        (
+            "channelMessage(channelId: \"c1\", messageId: \"m1\") { __typename message { __typename id } }",
+            json!({"channelMessage": {"__typename": "GraphqlChannelMessageRead", "message": m1()}}),
+        ),
+        (
+            "channelChanges(input: {channelId: \"c1\", after: \"1\"}) { __typename messages { __typename id } }",
+            json!({"channelChanges": {"__typename": "GraphqlChannelChanges", "messages": [m1()]}}),
+        ),
+    ];
+    block_on(async {
+        for (read, mut user) in reads {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            user["__typename"] = "GraphqlUser".into();
+            user["id"] = "u1".into();
+            let input = NetworkWrite {
+                query: &format!("{{ user {{ __typename id {read} }} }}"),
+                operation_name: None,
+                variables: &serde_json::Map::new(),
+                data: &json!({ "user": user }),
+                identity: None,
+                channel: None,
+            };
+            engine
+                .write_query_with_registration(None, None, input)
+                .await
+                .unwrap();
+            let keys = [EntityKey("GraphqlUser:u1".into()), key("m1")];
+            let mut held = engine.storage().get_batch(&keys).await.unwrap();
+            let [viewer, message] = [held.remove(0), held.remove(0)].map(Option::unwrap);
+            assert_eq!(
+                viewer.fields.keys().collect::<Vec<_>>(),
+                ["__typename", "id"]
+            );
+            assert!(message.fields.contains_key("id"), "{read}");
+        }
     });
 }

@@ -122,6 +122,11 @@ an entry a queued write changes is kept until the write settles, and eviction
 leaves its channel alone.
 `onChannelChanged` names the channels each transaction changed, in every tab.
 
+No write keeps the viewer's `channelTimeline`, `channelThread`, `channelMessage`
+and `channelChanges` fields, so a channel document read again goes to the network;
+its messages are read by key, in the order the index answers. An eviction pass
+stops before the channel that takes it past 200 entries and answers `hasMore`.
+
 ## Storage upgrades
 
 A native database written at an older `STORAGE_SCHEMA_VERSION` is upgraded in

@@ -682,3 +682,39 @@ fn an_invalid_eviction_never_opens_a_transaction() {
         assert_eq!(scalar(&storage, SYNC_COUNT), 0);
     });
 }
+
+#[test]
+fn an_eviction_pass_stops_before_the_channel_that_makes_it_long() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-eviction-size").unwrap();
+        let held = [("c1", 150), ("c2", 50), ("c3", 1), ("c4", 300)];
+        for (touched_at_ms, (channel, total)) in (1..).zip(held) {
+            let entries = (0..total)
+                .map(|n| message(channel, &format!("{channel}-{n}"), &format!("{n:03}"), None))
+                .collect::<Vec<_>>();
+            let channel = ChannelWrite {
+                sync: vec![sync(channel, 7, touched_at_ms)],
+                ..rows(&entries, 7)
+            };
+            write(&mut storage, &entries, &channel).await;
+        }
+        let eviction = ChannelEviction {
+            touched_before_ms: 10,
+            max_channels: 10,
+        };
+        for (gone, records, has_more) in [
+            (&["c1", "c2"][..], 200, true),
+            (&["c3"], 1, true),
+            (&["c4"], 300, false),
+        ] {
+            let pass = storage
+                .channel_timeline_evict(&eviction, &BTreeSet::new())
+                .await
+                .unwrap();
+            assert_eq!(pass.channel_ids, gone);
+            assert_eq!(pass.deleted_keys.len(), records);
+            assert_eq!(pass.has_more, has_more);
+        }
+        assert_eq!(scalar(&storage, ROW_COUNT), 0);
+    });
+}

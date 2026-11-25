@@ -282,6 +282,38 @@ fn eviction_removes_the_channels_touched_longest_ago() {
     });
 }
 
+#[test]
+fn an_eviction_pass_stops_before_the_channel_that_makes_it_long() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let held = [("c1", 150), ("c2", 50), ("c3", 1), ("c4", 300)];
+        for (touched_at_ms, (channel, total)) in (1..).zip(held) {
+            let entries = (0..total)
+                .map(|n| message(channel, &format!("{channel}-{n}"), &format!("{n:03}"), None))
+                .collect::<Vec<_>>();
+            let commit = ChannelTimelineCommit {
+                touched_at_ms: Some(touched_at_ms),
+                ..page(channel, "7", Vec::new())
+            };
+            write_page(&mut engine, channel, "7", &entries, Some(&commit))
+                .await
+                .unwrap();
+        }
+        let eviction = ChannelEviction {
+            touched_before_ms: 10,
+            max_channels: 10,
+        };
+        for (gone, has_more) in [(&["c1", "c2"][..], true), (&["c3"], true), (&["c4"], false)] {
+            let pass = engine.channel_timeline_evict(&eviction).await.unwrap();
+            assert_eq!(
+                (pass.channel_ids, pass.has_more),
+                (gone.iter().map(|id| (*id).to_owned()).collect(), has_more)
+            );
+        }
+        assert_eq!(engine.channel_timeline_stats().await.unwrap().entries, 0);
+    });
+}
+
 async fn queue_delete(engine: &mut Engine<InMemoryStorage>, message_key: &EntityKey<'static>) {
     let uuid = uuid::Uuid::now_v7().to_string();
     enqueue(engine, message_key, &uuid).await;

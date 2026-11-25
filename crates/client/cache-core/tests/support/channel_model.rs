@@ -530,9 +530,14 @@ impl<S: ChannelTimelineStorage> World<S> {
                     self.check_window(&list, &Anchor::After(at.clone()), held)
                         .await?;
                 }
-                for id in self.device.shown(&list).await {
-                    self.check_gone(&id, held, "a stored answer")?;
-                }
+            }
+            let sent = self.server.messages.values();
+            let sent: Vec<_> = sent
+                .filter(|m| m.channel == channel)
+                .map(|m| m.id.clone())
+                .collect();
+            for id in self.device.shown(&sent).await {
+                self.check_gone(&id, held, "a message or its preview")?;
             }
             let gone: Vec<_> = self
                 .server

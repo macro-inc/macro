@@ -254,16 +254,18 @@ impl ChannelTimelineStorage for InMemoryStorage {
             .map(|sync| (sync.touched_at_ms, sync.channel_id.clone()))
             .collect::<Vec<_>>();
         stale.sort();
-        let has_more = stale.len() > usize::from(eviction.max_channels);
-        stale.truncate(usize::from(eviction.max_channels));
-        let channel_ids = stale
-            .into_iter()
-            .map(|(_, channel_id)| channel_id)
-            .collect::<Vec<_>>();
-        let deleted = channel_ids
-            .iter()
-            .flat_map(|channel_id| self.channel.entries(channel_id, ChannelEntries::All))
-            .collect::<BTreeSet<_>>();
+        let mut channel_ids = Vec::new();
+        let mut deleted = BTreeSet::new();
+        let mut has_more = false;
+        for (_, channel_id) in stale {
+            let entries = self.channel.entries(&channel_id, ChannelEntries::All);
+            if !eviction.takes(channel_ids.len(), deleted.len(), entries.len()) {
+                has_more = true;
+                break;
+            }
+            deleted.extend(entries);
+            channel_ids.push(channel_id);
+        }
         let deleted_keys = deleted
             .iter()
             .filter(|key| self.records.contains_key(*key))

@@ -6,12 +6,11 @@ use cache_core::channel_timeline::{
     ChannelCoverage, ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest,
     ChannelTimelineStorage, ChannelWatermark, MESSAGE_TYPENAME, TimelineSpan,
 };
-use cache_core::engine::{
-    BeginOptimisticWrite, Engine, InitialClaimOutcome, NetworkWrite, ReadResult,
-};
+use cache_core::engine::{BeginOptimisticWrite, Engine, InitialClaimOutcome, NetworkWrite};
 use cache_core::identity::IdentityBinding;
 use cache_core::meta::{BUNDLED_SCHEMA_SDL, Schema, bundled_schema};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
+use cache_core::record_selection::RecordSelection;
 use cache_core::value::{CacheValue, EntityKey};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashSet};
@@ -37,6 +36,14 @@ static PAGE: LazyLock<String> = LazyLock::new(|| {
          __typename seq entries {{ __typename ... on GraphqlChannelMessage {{ {FIELDS} thread {{ __typename \
          deletedAt replyCount preview {{ {FIELDS} }} }} }} }} }} }} }}"
     )
+});
+
+static SHOWN: LazyLock<RecordSelection> = LazyLock::new(|| {
+    let fragment = format!(
+        "fragment Shown on {MESSAGE_TYPENAME} {{ {FIELDS} thread {{ __typename deletedAt replyCount \
+         preview {{ {FIELDS} }} }} }}"
+    );
+    RecordSelection::parse(&SCHEMA, &fragment, "Shown").unwrap()
 });
 
 const MESSAGE: &str = "query Message($c: ID!, $m: ID!) { user { __typename id \
@@ -385,16 +392,13 @@ impl<S: ChannelTimelineStorage> Device<S> {
         }
     }
 
-    /// Every message the stored page of `list` still shows, previews included.
-    pub async fn shown(&mut self, list: &List) -> HashSet<String> {
-        let read = self
-            .engine
-            .read_query(None, &PAGE, None, &page_variables(list))
-            .await
-            .unwrap();
+    /// Every message the records of `ids` still show, previews included.
+    pub async fn shown(&mut self, ids: &[String]) -> HashSet<String> {
+        let keys: Vec<_> = ids.iter().map(|id| key(id)).collect();
+        let read = self.engine.read_records_by_keys(&SHOWN, &keys).await;
         let mut shown = HashSet::new();
-        if let ReadResult::Hit { data } = read {
-            collect_ids(&data["user"]["channelTimeline"]["entries"], &mut shown);
+        for selected in read.unwrap().value {
+            collect_ids(&selected.record, &mut shown);
         }
         shown
     }
