@@ -20,6 +20,7 @@ mod channel_links;
 mod email_operators;
 mod fixtures;
 mod oracle;
+mod tag_groups;
 
 use std::collections::HashSet;
 

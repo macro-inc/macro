@@ -9,6 +9,7 @@ import {
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
+  searchOperatorTagAst,
   withSearchOperatorQuery,
 } from '../core/search-operator-filters';
 import {
@@ -61,8 +62,11 @@ export function createEmbeddedSearchSource(options: {
     const body = compileToAst(ALL);
     return operators
       ? bothTargetAsts(
-          body,
-          compileToAst(queryStateFrom(searchOperatorQuery(operators)))
+          bothTargetAsts(
+            body,
+            compileToAst(queryStateFrom(searchOperatorQuery(operators)))
+          ),
+          searchOperatorTagAst(operators)
         )
       : body;
   });

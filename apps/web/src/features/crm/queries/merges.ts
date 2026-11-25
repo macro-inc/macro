@@ -14,14 +14,18 @@ import {
 import type { MergeBlock as WireMergeBlock } from '@service-storage/generated/schemas/mergeBlock';
 import type { QueryClient } from '@tanstack/solid-query';
 import { match } from 'ts-pattern';
-import type { MergeBlock, MergeCommands, MergeRefusal } from '../core/merge';
+import type {
+  MergeBlock,
+  MergeCommands,
+  MergeRecordType,
+  MergeRefusal,
+} from '../core/merge';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 
 /**
- * The review's block as the dialog reads it: same-address people with their
- * people, any other kind by name alone, which the dialog shows as a generic
- * refusal.
+ * The review's block as the dialog reads it, with the people it names. A
+ * kind this build doesn't know reads as `unknown`, a generic refusal.
  */
 function mergeBlock(
   block: WireMergeBlock | null | undefined
@@ -29,8 +33,8 @@ function mergeBlock(
   if (!block) return null;
   return match(block)
     .with({ kind: 'same_address_people' }, (known) => known)
-    .with({ kind: 'different_companies' }, ({ kind }) => ({ kind }))
-    .exhaustive(() => ({ kind: 'unknown' }));
+    .with({ kind: 'different_companies' }, (known) => known)
+    .exhaustive((): MergeBlock => ({ kind: 'unknown' }));
 }
 
 function refusalOf(errors: ResultError<string>[]): MergeRefusal {
@@ -92,17 +96,19 @@ export async function refreshAfterMerge(
   await refreshActiveGraphqlSoupQueries();
 }
 
-/** Review and commit company merges through `POST /crm/merges`. */
+/** Review and commit merges of `recordType` through `POST /crm/merges`. */
 export function createMergeCommands(
-  deps: CrmRecordDependencies
+  deps: CrmRecordDependencies,
+  recordType: MergeRecordType
 ): MergeCommands {
   return {
     review({ survivorId, sourceIds }) {
       return Telemetry.span('crm.merge.review', async (span) => {
+        span.setAttr('crm.merge.record_type', recordType);
         span.setAttr('crm.record_id', survivorId);
         span.setAttr('crm.merge.source_count', sourceIds.length);
         const result = await deps.storage.previewCrmMerge({
-          recordType: 'company',
+          recordType,
           survivorId,
           sourceIds,
         });
@@ -121,11 +127,12 @@ export function createMergeCommands(
     },
     commit(input) {
       return Telemetry.span('crm.merge.commit', async (span) => {
+        span.setAttr('crm.merge.record_type', recordType);
         span.setAttr('crm.record_id', input.survivorId);
         span.setAttr('crm.merge.source_count', input.sourceIds.length);
         span.setAttr('crm.merge.sharing_rules', input.sharingRules);
         const result = await span.span('crm.merge.commit.save', async () =>
-          deps.storage.commitCrmMerge({ recordType: 'company', ...input })
+          deps.storage.commitCrmMerge({ recordType, ...input })
         );
         if (result.isErr()) {
           const refusal = refusalOf(result.error);
@@ -135,8 +142,8 @@ export function createMergeCommands(
         span.setAttr('crm.merge.id', result.value.mergeId);
         await span.span('crm.merge.commit.refresh', () =>
           refreshAfterMerge(deps.client, {
-            companies: result.value.mergedIds,
-            contacts: [],
+            companies: recordType === 'company' ? result.value.mergedIds : [],
+            contacts: recordType === 'contact' ? result.value.mergedIds : [],
           })
         );
         return {

@@ -9,6 +9,7 @@ import {
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
+  searchOperatorTagAst,
   searchTagOperator,
   withSearchOperatorQuery,
 } from '@app/features/next-soup/core/search-operator-filters';
@@ -28,6 +29,7 @@ import {
 } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/';
 import {
+  bothTargetAsts,
   compileToAst,
   NIL_UUID,
   type QueryState,
@@ -918,7 +920,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           searchOperatorQuery(operators)
         )
       : queryFilters.state;
-    return compileToAst(applyViewFilters(state));
+    const body = compileToAst(applyViewFilters(state));
+    return operators
+      ? bothTargetAsts(body, searchOperatorTagAst(operators))
+      : body;
   });
   // Server-side filters change the result set without touching the client
   // predicates or sort, so they release held row positions too.
