@@ -185,7 +185,7 @@ fn merge_error(error: MergeError) -> ToolCallError {
             people.len()
         ),
         MergeError::Conflict(MergeBlock::DifferentCompanies { people }) => format!(
-            "merge_conflict: {} people are filed under another company with a work address; merge their companies first",
+            "merge_conflict: {} people are filed under another company than the contact that stays, with a work address or none; merge the companies first, or keep a contact filed under their company",
             people.len()
         ),
         MergeError::AlreadyMerged {

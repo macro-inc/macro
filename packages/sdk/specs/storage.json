@@ -55700,7 +55700,7 @@
           },
           {
             "type": "object",
-            "description": "People merged away are filed under another company than the contact\nthat stays and hold a work address, so they can't change company, as\na contact edit couldn't move them: merge the companies first.",
+            "description": "People merged away are filed under another company than the contact\nthat stays and hold a work address, or no address, so they can't\nchange company, as a contact edit couldn't move them: merge the\ncompanies first, or keep a contact filed under their company.",
             "required": ["people", "kind"],
             "properties": {
               "kind": {

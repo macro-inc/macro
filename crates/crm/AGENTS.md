@@ -169,8 +169,9 @@ tools/HTTP/GraphQL surfaces over them.
   the merged contacts are deleted), adds the others' addresses after its own
   and each mailbox source once, and spans their interaction dates. Someone
   under another company with a work address (or no address) blocks it
-  (`different_companies`), as a contact edit couldn't move them; sharing
-  rules naming a merged contact become rules for its addresses. CRM lists
+  (`different_companies`), as a contact edit couldn't move them. Sharing
+  rules naming a merged contact become rules for its addresses with keep,
+  and lose that contact with stop; their other selectors stay. CRM lists
   hold companies only, so contact merges leave them alone.
 - A company merged away keeps answering to its old id through
   `crm_company_aliases`: the `/crm/companies/{company_id}` routes, the company and

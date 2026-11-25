@@ -1608,6 +1608,15 @@ async fn a_contact_merge_moves_addresses_mailboxes_and_everything_naming_the_mer
     let unfiled = world
         .contact(None, None, &["p.lee@mail.example.com"], 1)
         .await;
+    // The later contact by id holds the oldest address, so the review lists
+    // the addresses joining by date, as the merge places them, not by contact.
+    sqlx::query(
+        "UPDATE crm_contact_emails SET created_at = now() - interval '1 day' WHERE contact_id = $1",
+    )
+    .bind(unfiled)
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let link_both = insert_email_link(&pool, OWNER, "owner@acme.example.com")
         .await
@@ -1724,14 +1733,16 @@ async fn a_contact_merge_moves_addresses_mailboxes_and_everything_naming_the_mer
         "a contact without a name is named by its address"
     );
     assert_eq!(
-        preview.identifiers[..2],
-        ["pat@acme.example.com", "shared@acme.example.com"].map(String::from),
-        "the survivor's own addresses come first, its primary first"
-    );
-    assert_eq!(
-        preview.identifiers.len(),
-        5,
-        "a shared address is listed once"
+        preview.identifiers,
+        [
+            "pat@acme.example.com",
+            "shared@acme.example.com",
+            "p.lee@mail.example.com",
+            "pat.lee@acme.example.com",
+            "pat@home.example.com",
+        ]
+        .map(String::from),
+        "its own addresses first, its primary first, then the others' by date, a shared one once"
     );
     assert_eq!(preview.moves.contacts, 0, "people are the records merged");
     assert_eq!(preview.moves.pipeline_entries, 1);
@@ -1752,9 +1763,39 @@ async fn a_contact_merge_moves_addresses_mailboxes_and_everything_naming_the_mer
     assert_eq!((sharing.teammates, sharing.keep_fits), (1, true));
     assert!(preview.blocked.is_none());
 
+    let sources_before: Vec<(Uuid, Uuid, Uuid)> = sqlx::query_as(
+        "SELECT id, contact_id, link_id FROM crm_contact_sources WHERE contact_id = ANY($1)",
+    )
+    .bind(vec![merged, unfiled])
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let (first_before, last_before): (
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+    ) = sqlx::query_as(
+        "SELECT first_interaction, last_interaction FROM crm_contacts WHERE id = $1",
+    )
+    .bind(stays)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
     let outcome = world.merge(&merge, SharingRulesChoice::Keep).await.unwrap();
     assert_eq!(outcome.record_type, MergeRecordType::Contact);
     assert_eq!(outcome.survivor_id, stays);
+    let saved_order: Vec<String> = sqlx::query_scalar(
+        "SELECT e.email FROM crm_contact_emails e JOIN crm_contacts c ON c.id = e.contact_id
+         WHERE e.contact_id = $1 ORDER BY e.email = c.email DESC, e.created_at, e.email",
+    )
+    .bind(stays)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        saved_order, preview.identifiers,
+        "the review lists the addresses as the merge saves them"
+    );
 
     let left: i64 = sqlx::query_scalar("SELECT count(*) FROM crm_contacts WHERE id = ANY($1)")
         .bind(vec![merged, unfiled])
@@ -1894,13 +1935,84 @@ async fn a_contact_merge_moves_addresses_mailboxes_and_everything_naming_the_mer
         ],
         "keeping shares the merged contact's addresses, never the survivor"
     );
-    let logged: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM crm_merge_changes WHERE merge_id = $1")
-            .bind(outcome.merge_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-    assert!(logged > 10, "every changed row is in the merge log");
+    // The log keeps every changed row by its key, with its value before.
+    let log: Vec<(String, String, Value, Value)> = sqlx::query_as(
+        "SELECT owner, table_name, row_key, previous FROM crm_merge_changes WHERE merge_id = $1",
+    )
+    .bind(outcome.merge_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let logged = |table: &str, key: Value| -> Vec<Value> {
+        log.iter()
+            .filter(|(owner, logged_table, row_key, _)| {
+                owner == "crm" && logged_table == table && *row_key == key
+            })
+            .map(|(_, _, _, previous)| previous.clone())
+            .collect()
+    };
+    for (address, from) in [
+        ("p.lee@mail.example.com", unfiled),
+        ("pat.lee@acme.example.com", merged),
+        ("pat@home.example.com", merged),
+    ] {
+        let previous = logged(
+            "crm_contact_emails",
+            json!({ "contact_id": stays, "email": address }),
+        );
+        assert_eq!(previous.len(), 1, "{address} is logged as moved once");
+        assert_eq!(
+            previous[0]["contact_id"],
+            json!(from),
+            "{address} came from its contact"
+        );
+    }
+    assert_eq!(
+        logged(
+            "crm_contact_emails",
+            json!({ "contact_id": merged, "email": "shared@acme.example.com" })
+        )
+        .len(),
+        1,
+        "the address the survivor already held is logged as it was"
+    );
+    assert_eq!(sources_before.len(), 3);
+    for (id, contact, link) in &sources_before {
+        let previous = logged("crm_contact_sources", json!({ "id": id }));
+        assert_eq!(previous.len(), 1, "mailbox source {link} is logged once");
+        assert_eq!(previous[0]["contact_id"], json!(contact));
+    }
+    let survivor_before = logged("crm_contacts", json!({ "id": stays }));
+    assert_eq!(survivor_before.len(), 1);
+    assert_eq!(survivor_before[0]["first_interaction"], json!(first_before));
+    assert_eq!(survivor_before[0]["last_interaction"], json!(last_before));
+    assert_eq!(survivor_before[0]["manually_created"], json!(false));
+    for (contact, primary) in [
+        (merged, json!("pat.lee@acme.example.com")),
+        (unfiled, json!("p.lee@mail.example.com")),
+    ] {
+        let deleted = logged("crm_contacts", json!({ "id": contact }));
+        assert_eq!(deleted.len(), 1, "a merged contact is logged as deleted");
+        assert_eq!(deleted[0]["email"], primary);
+    }
+    for retired in [merged, unfiled] {
+        assert_eq!(
+            logged("crm_contact_aliases", json!({ "retired_id": retired })).len(),
+            1
+        );
+    }
+    for (owner, table) in [
+        ("properties", "entity_properties"),
+        ("properties", "dropped_value"),
+        ("databases", "entity_properties"),
+        ("messages", "comms_messages"),
+        ("favorites", "favorite"),
+    ] {
+        assert!(
+            log.iter().any(|(o, t, _, _)| o == owner && t == table),
+            "{owner}.{table} is logged"
+        );
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -33,6 +34,8 @@ pub(crate) struct MergeContact {
     pub(crate) syncs: bool,
     /// Every address it holds, lowercased: the primary first, then oldest.
     pub(crate) addresses: Vec<String>,
+    /// The same addresses with when each was added, oldest first.
+    pub(crate) added: Vec<(DateTime<Utc>, String)>,
 }
 
 /// What a contact merge's review is built from.
@@ -52,17 +55,26 @@ impl ContactMergeState {
             .collect()
     }
 
-    /// The addresses the contact that stays has after the merge, its own
-    /// first.
+    /// The addresses the contact that stays has after the merge, in the
+    /// order `fold_contacts` places them: its own first, then each address it
+    /// lacks once, from the first merged contact by id holding it, ordered by
+    /// when that contact added it, then by its bytes.
     pub(crate) fn addresses_after(&self) -> Vec<String> {
-        let mut addresses: Vec<String> = Vec::new();
-        for contact in std::iter::once(&self.survivor).chain(&self.sources) {
-            for address in &contact.addresses {
-                if !addresses.contains(address) {
-                    addresses.push(address.clone());
+        let mut sources: Vec<&MergeContact> = self.sources.iter().collect();
+        sources.sort_by_key(|contact| contact.id);
+        let mut joining: Vec<(DateTime<Utc>, &str)> = Vec::new();
+        for contact in sources {
+            for (added, address) in &contact.added {
+                if !self.survivor.addresses.contains(address)
+                    && !joining.iter().any(|(_, joined)| joined == address)
+                {
+                    joining.push((*added, address));
                 }
             }
         }
+        joining.sort_unstable();
+        let mut addresses = self.survivor.addresses.clone();
+        addresses.extend(joining.into_iter().map(|(_, address)| address.to_owned()));
         addresses
     }
 
@@ -196,7 +208,7 @@ impl CompaniesRepositoryImpl {
         }
 
         let addresses = sqlx::query!(
-            r#"SELECT e.contact_id, LOWER(e.email) AS "email!"
+            r#"SELECT e.contact_id, LOWER(e.email) AS "email!", e.created_at
                FROM crm_contact_emails e
                WHERE e.contact_id = ANY($1)
                ORDER BY e.contact_id, e.created_at, LOWER(e.email)"#,
@@ -205,12 +217,12 @@ impl CompaniesRepositoryImpl {
         .fetch_all(&mut *conn)
         .await
         .map_err(db)?;
-        let mut by_contact: HashMap<Uuid, Vec<String>> = HashMap::new();
+        let mut by_contact: HashMap<Uuid, Vec<(DateTime<Utc>, String)>> = HashMap::new();
         for row in addresses {
             by_contact
                 .entry(row.contact_id)
                 .or_default()
-                .push(row.email);
+                .push((row.created_at, row.email));
         }
         let contact = |id: Uuid| -> Result<MergeContact, MergeError> {
             let row = rows
@@ -218,7 +230,8 @@ impl CompaniesRepositoryImpl {
                 .find(|row| row.id == id)
                 .ok_or(MergeError::RecordUnavailable)?;
             let primary = row.email.as_deref().map(str::to_lowercase);
-            let mut held = by_contact.get(&id).cloned().unwrap_or_default();
+            let added = by_contact.get(&id).cloned().unwrap_or_default();
+            let mut held: Vec<String> = added.iter().map(|(_, address)| address.clone()).collect();
             if let Some(primary) = &primary {
                 held.retain(|address| address != primary);
                 held.insert(0, primary.clone());
@@ -236,6 +249,7 @@ impl CompaniesRepositoryImpl {
                     .map(|company| (company, row.company_name.clone())),
                 syncs: row.syncs,
                 addresses: held,
+                added,
             })
         };
 
@@ -281,7 +295,7 @@ impl CompaniesRepositoryImpl {
                    ORDER BY LOWER(e.email), e.contact_id
                ), placed AS (
                    SELECT contact_id, email, created_at,
-                          row_number() OVER (ORDER BY created_at, email) AS place
+                          row_number() OVER (ORDER BY created_at, email COLLATE "C") AS place
                    FROM moving
                ), after AS (
                    SELECT GREATEST(clock_timestamp(), MAX(created_at)) AS at

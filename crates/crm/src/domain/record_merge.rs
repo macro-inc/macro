@@ -277,8 +277,9 @@ pub enum MergeBlock {
         people: Vec<SameAddressPerson>,
     },
     /// People merged away are filed under another company than the contact
-    /// that stays and hold a work address, so they can't change company, as
-    /// a contact edit couldn't move them: merge the companies first.
+    /// that stays and hold a work address, or no address, so they can't
+    /// change company, as a contact edit couldn't move them: merge the
+    /// companies first, or keep a contact filed under their company.
     DifferentCompanies {
         /// The people who would change company.
         people: Vec<OtherCompanyPerson>,

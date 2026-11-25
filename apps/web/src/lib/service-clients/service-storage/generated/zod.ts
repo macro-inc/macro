@@ -11100,7 +11100,7 @@ export const previewCrmMergeResponse = zod
                   .describe('The people who would change company.'),
               })
               .describe(
-                "People merged away are filed under another company than the contact\nthat stays and hold a work address, so they can't change company, as\na contact edit couldn't move them: merge the companies first."
+                "People merged away are filed under another company than the contact\nthat stays and hold a work address, or no address, so they can't\nchange company, as a contact edit couldn't move them: merge the\ncompanies first, or keep a contact filed under their company."
               ),
           ])
           .describe(
