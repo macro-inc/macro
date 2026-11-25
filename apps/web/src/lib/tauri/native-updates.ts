@@ -11,6 +11,7 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { Snapshot, Status } from './generated/native-update-status';
 import { createNativeUpdatePreparation } from './native-update-preparation';
+import { stageDeployedBundle } from './stage-bundle';
 
 /**
  * The host's `Snapshot`. Binaries from before failed installs were reported
@@ -77,6 +78,12 @@ export function createNativeUpdates(flush: () => Promise<void>) {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       setPreparing(true);
+      // Fetch the deployed web bundle while saves finish, so the new version
+      // starts on it instead of asking for another restart. Work that blocks
+      // the restart would only leave a download behind.
+      const staging = hasAutomaticReloadHolds()
+        ? undefined
+        : stageDeployedBundle();
       await Promise.race([
         preparation.prepare(),
         new Promise<never>((_, reject) => {
@@ -91,6 +98,10 @@ export function createNativeUpdates(flush: () => Promise<void>) {
           );
         }),
       ]);
+      await staging;
+      // A call, upload or import may have started while the bundle downloaded.
+      if (hasAutomaticReloadHolds())
+        throw new Error('Finish your current work before restarting Macro.');
       await invoke('restart_native_update');
     } catch (error) {
       setPreparing(false);

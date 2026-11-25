@@ -472,7 +472,11 @@ there instead.
 On desktop release builds, **Desktop App → Updates → Desktop app update** shows native update
 progress, with **Restart to update** once an update is ready. While preparing to restart, the popover can't be dismissed and its
 action is disabled. Restart waits for pending canvas/PDF saves and
-local persistence; active calls, uploads, and imports must finish first. A ready
+local persistence; active calls, uploads, and imports must finish first. It also
+waits up to 10 seconds for the deployed web bundle to download, so the new
+version can open on it instead of asking for another restart; if the download
+takes longer or a check is already queued, it restarts without it and the new
+version may still offer **Update ready**. A ready
 update also installs on normal app quit. Closing a window only triggers
 installation if it exits the app. Browser, mobile, and development builds do not
 show this native updater row.

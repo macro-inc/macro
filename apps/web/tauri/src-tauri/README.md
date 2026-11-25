@@ -195,7 +195,8 @@ binaries.
 Each native launch also records how the bundle updater chose its bundle, and
 every document in the launch reports it on `native_webview_started`:
 `native_bundle_startup_selection` (`saved_ota`, `completed_download`, or
-`embedded`), `native_bundle_startup_saved_selection` (what the saved selection
+`embedded`; a completed download wins over a saved bundle it is newer than, and
+survives the saved bundle's rejection), `native_bundle_startup_saved_selection` (what the saved selection
 held: `none`, `unreadable`, `embedded`, or `ota`),
 `native_bundle_startup_rejection` (which check a saved OTA bundle failed),
 `native_bundle_startup_read_error` (the I/O error kind, such as `NotFound` or
@@ -725,7 +726,21 @@ The ready notification and Settings → Desktop App offer **Restart to update**.
 restart waits for registered canvas/PDF saves and local query persistence, and is
 blocked during calls, uploads and imports. Native installation closes the native
 cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
-user data. Mobile updates remain managed by the app stores. Debug, recording,
+user data.
+
+Before Restart installs, the page checks for the deployed web bundle and waits up to
+10 seconds for it to download (`stageDeployedBundle`, `src/lib/tauri/stage-bundle.ts`;
+span `native.update.stage_bundle` with its outcome), then restarts whatever the
+check found. A new release embeds the bundle from its release commit, which is
+usually older than the deployed one, so without this the first launch would
+download it and offer "Update ready" for a second restart. The download stays
+pending (`pending_bundle_root`), and startup keeps it even when it rejects the
+saved bundle the old app ran, and prefers it over a saved bundle it is newer than;
+it is applied before the first document loads, so the new launch reports
+`native_bundle_startup_selection=completed_download`. A check that no longer
+offers a pending download (a rolled-back deploy) forgets it, so a later launch
+can't start on it. Installs on quit don't stage, since quitting starts no network
+work, and neither does a restart that a call, upload or import blocks. Mobile updates remain managed by the app stores. Debug, recording,
 branch, and `--no-default-features` builds do not auto-install native updates.
 
 When an install fails, **Restart to update** relaunches the version still
