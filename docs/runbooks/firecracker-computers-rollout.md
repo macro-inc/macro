@@ -212,15 +212,30 @@ has settled before accepting a terminal result. A lost or interrupted
 response retains its lease for a bounded retry. The overall deadline stops
 new attempts. After three failed settlement probes past the deadline, the
 controller records `needs_operator` and logs a warning. The computer stays
-held against moves, power actions, reconcile and new runtime updates. A
-successful image upgrade clears the hold and boots the image runtime.
-Use a different approved image for recovery. The normal eligibility checks
-require a running, idle guest and connected macrod. If the guest is
-unavailable, use the existing manual host recovery procedure. Confirm the
-agent has reported ready before retrying a runtime update.
-Service updates leave macrod and the guest running. Cached bundles are
-pruned at boot when the agent cgroup is empty, since a child can survive a
-service restart with the old runtime.
+held against moves, power actions, reconcile and new runtime updates. Team
+release is refused while a runtime update is pending or needs operator
+recovery. Automatic hold clearance requires a successful upgrade to a
+different approved image on a running, idle guest with macrod connected.
+
+If the guest is ineligible for an image upgrade, use manual host recovery.
+After the guest's root helper `macro-agent-runtime-update status` reports
+settlement and the agent is ready, clear the exact hold in dev Postgres.
+Set the `computer_id` and `request_id` psql variables to the affected UUIDs
+and confirm the statement returns one row.
+
+```sql
+UPDATE agent_runtime_update
+SET cleared_at = now()
+WHERE id = :'request_id'::uuid
+  AND computer_id = :'computer_id'::uuid
+  AND outcome = 'needs_operator'
+  AND cleared_at IS NULL
+RETURNING id, computer_id, cleared_at;
+```
+
+Service updates leave macrod and the guest running. Cached bundles
+accumulate between reboots. Automatic pruning runs only at boot when the
+agent cgroup is empty, since a child can survive a service restart.
 
 If `agent.env` changes during the candidate restart or readiness wait, the
 path unit's restart helper can time out after 20 seconds waiting for the
