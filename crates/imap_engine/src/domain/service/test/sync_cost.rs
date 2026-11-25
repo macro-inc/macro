@@ -1,7 +1,19 @@
 use super::*;
 use std::collections::VecDeque;
 
-pub(crate) struct SnapshotTransport(pub(crate) std::sync::Mutex<VecDeque<Vec<RemoteFolder>>>);
+pub(crate) struct SnapshotTransport {
+    snapshots: std::sync::Mutex<VecDeque<Vec<RemoteFolder>>>,
+    no_sent_folder: bool,
+}
+
+impl SnapshotTransport {
+    pub(crate) fn new(snapshots: Vec<Vec<RemoteFolder>>) -> Self {
+        Self {
+            snapshots: std::sync::Mutex::new(snapshots.into()),
+            no_sent_folder: false,
+        }
+    }
+}
 #[async_trait::async_trait]
 impl MailTransport for SnapshotTransport {
     async fn maintenance(&self) {}
@@ -17,7 +29,7 @@ impl MailTransport for SnapshotTransport {
         _: &AccountState,
     ) -> Result<Vec<RemoteFolder>, Error> {
         Ok(self
-            .0
+            .snapshots
             .lock()
             .unwrap()
             .pop_front()
@@ -77,8 +89,18 @@ impl MailTransport for SnapshotTransport {
     ) -> Result<TransportSubmission, Error> {
         Err(Error::Invalid)
     }
-    async fn save_sent(&self, _: &Credentials, _: &str, _: &[u8], _: bool) -> Result<bool, Error> {
-        Err(Error::Invalid)
+    async fn save_sent(
+        &self,
+        _: &Credentials,
+        _: &str,
+        _: &[u8],
+        _: bool,
+    ) -> Result<SentCopy, Error> {
+        if self.no_sent_folder {
+            Ok(SentCopy::NoSentFolder)
+        } else {
+            Err(Error::Invalid)
+        }
     }
 }
 
@@ -122,6 +144,10 @@ pub(super) struct Fixture {
     pub(super) binding: Binding,
 }
 pub(super) fn fixture(snapshots: Vec<Vec<RemoteFolder>>) -> Fixture {
+    fixture_with_transport(SnapshotTransport::new(snapshots))
+}
+
+fn fixture_with_transport(transport: SnapshotTransport) -> Fixture {
     let repository = Arc::new(MemoryRepository {
         fingerprint_calls: Default::default(),
         fingerprint_failure: Default::default(),
@@ -143,7 +169,7 @@ pub(super) fn fixture(snapshots: Vec<Vec<RemoteFolder>>) -> Fixture {
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
-        Arc::new(SnapshotTransport(std::sync::Mutex::new(snapshots.into()))),
+        Arc::new(transport),
         tokio_util::task::TaskTracker::new(),
         tokio_util::sync::CancellationToken::new(),
     )
@@ -183,6 +209,31 @@ async fn an_unreadable_sent_copy_does_not_fail_sync_or_hide_its_changes() {
     assert_eq!(pending.submission, Some(SubmissionOutcome::Accepted));
     assert!(pending.sent_copy_pending);
     assert_eq!(f.notifier.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_mailbox_without_a_sent_folder_retires_the_frozen_submission() {
+    let f = fixture_with_transport(SnapshotTransport {
+        no_sent_folder: true,
+        ..SnapshotTransport::new(vec![inbox(1, 2), inbox(1, 2)])
+    });
+    let id = accepted_pending_copy(&f, Uuid::from_u128(1), false).await;
+
+    f.engine.execute(f.binding, Operation::Sync).await.unwrap();
+    let revision = f.repository.revision.load(Ordering::Acquire);
+    {
+        let state = f.repository.state.lock().unwrap();
+        let draft = &state.drafts[&id];
+        assert_eq!(draft.submission, Some(SubmissionOutcome::Accepted));
+        assert!(!draft.sent_copy_pending);
+        assert!(draft.frozen_content.is_none());
+        assert_eq!(
+            draft.input.content,
+            serde_json::json!({"message_id": "synthetic-copy@example.net"})
+        );
+    }
+    f.engine.execute(f.binding, Operation::Sync).await.unwrap();
+    assert_eq!(f.repository.revision.load(Ordering::Acquire), revision);
 }
 
 #[tokio::test]

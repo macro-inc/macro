@@ -1,4 +1,3 @@
--- Add migration script here
 SET LOCAL lock_timeout = '5s';
 
 -- Keep work identity and a closed failure class for operators without retaining

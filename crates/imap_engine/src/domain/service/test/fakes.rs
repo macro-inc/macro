@@ -34,7 +34,7 @@ impl MemoryRepository {
             checkpoint: Default::default(),
             revision: self.revision.load(Ordering::Acquire),
             folder_preferences_revision: 0,
-            fences_folder_preferences: false,
+            loaded_for_sync: false,
             lease_id,
         }
     }
@@ -497,7 +497,7 @@ impl MailTransport for UncertainTransport {
         message_id: &str,
         _: &[u8],
         allow_append: bool,
-    ) -> Result<bool, Error> {
+    ) -> Result<SentCopy, Error> {
         if allow_append {
             assert!(
                 self.repository
@@ -511,7 +511,11 @@ impl MailTransport for UncertainTransport {
             self.submissions.fetch_add(1, Ordering::AcqRel);
             Err(Error::ConnectionUnavailable)
         } else {
-            Ok(self.sent_found.lock().unwrap().contains(message_id))
+            Ok(if self.sent_found.lock().unwrap().contains(message_id) {
+                SentCopy::Copied
+            } else {
+                SentCopy::NotFound
+            })
         }
     }
 }

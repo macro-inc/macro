@@ -139,7 +139,7 @@ impl PgRepository {
             })?,
             revision: r.revision,
             folder_preferences_revision: r.folder_preferences_revision,
-            fences_folder_preferences: false,
+            loaded_for_sync: false,
             lease_id: Some(lease),
         };
         Ok((tx, account))

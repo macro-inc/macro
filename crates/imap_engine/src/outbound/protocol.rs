@@ -520,7 +520,7 @@ impl MailTransport for ProtocolTransport {
         message_id: &str,
         mime: &[u8],
         allow_append: bool,
-    ) -> Result<bool, Error> {
+    ) -> Result<SentCopy, Error> {
         timeout(
             IO_TIMEOUT,
             self.save_sent_inner(c, message_id, mime, allow_append),

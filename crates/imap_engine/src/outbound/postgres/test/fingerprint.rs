@@ -4,7 +4,7 @@ use crate::domain::service::test::{
     sync_cost::{SnapshotTransport, inbox},
 };
 use crate::domain::service::{Engine, VerificationScopeKey};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[sqlx::test(migrations = false)]
 async fn moved_message_uses_persisted_fingerprint_without_a_json_copy(pool: PgPool) {
@@ -37,7 +37,7 @@ async fn moved_message_uses_persisted_fingerprint_without_a_json_copy(pool: PgPo
         VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
-        Arc::new(SnapshotTransport(Mutex::new(vec![initial, moved].into()))),
+        Arc::new(SnapshotTransport::new(vec![initial, moved])),
         tokio_util::task::TaskTracker::new(),
         tokio_util::sync::CancellationToken::new(),
     );
@@ -155,13 +155,10 @@ async fn mixed_utf8_location_keys_match_rust_order_through_the_indexed_lookup(po
         VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
-        Arc::new(SnapshotTransport(Mutex::new(
-            vec![
-                crate::domain::service::test::sync_cost::fingerprint_copies_in_mixed_folders(),
-                moved,
-            ]
-            .into(),
-        ))),
+        Arc::new(SnapshotTransport::new(vec![
+            crate::domain::service::test::sync_cost::fingerprint_copies_in_mixed_folders(),
+            moved,
+        ])),
         tokio_util::task::TaskTracker::new(),
         tokio_util::sync::CancellationToken::new(),
     );
@@ -256,11 +253,11 @@ async fn fingerprint_lookup_and_sync_never_cross_links_with_the_same_digest(pool
     let repository = Arc::new(PgRepository::new(pool));
     let engine_a = fingerprint_engine(
         repository.clone(),
-        Arc::new(SnapshotTransport(Mutex::new(vec![initial, moved].into()))),
+        Arc::new(SnapshotTransport::new(vec![initial, moved])),
     );
     let engine_b = fingerprint_engine(
         repository.clone(),
-        Arc::new(SnapshotTransport(Mutex::new(vec![foreign].into()))),
+        Arc::new(SnapshotTransport::new(vec![foreign])),
     );
     engine_a.execute(a, Operation::Sync).await.unwrap();
     engine_b.execute(b, Operation::Sync).await.unwrap();
@@ -304,7 +301,7 @@ async fn fingerprint_lookup_preserves_identity_when_uidvalidity_reuses_a_uid(poo
     let repository = Arc::new(PgRepository::new(pool));
     let engine = fingerprint_engine(
         repository.clone(),
-        Arc::new(SnapshotTransport(Mutex::new(vec![initial, reset].into()))),
+        Arc::new(SnapshotTransport::new(vec![initial, reset])),
     );
     engine.execute(binding, Operation::Sync).await.unwrap();
     let before = repository.acquire(binding).await.unwrap();
@@ -344,7 +341,7 @@ async fn fingerprint_lookup_resolves_a_move_without_copyuid_placeholder(pool: Pg
     destination.uid_next = Some(10);
     moved.push(destination);
     let transport = Arc::new(MoveWithoutCopyUidTransport {
-        snapshots: SnapshotTransport(Mutex::new(vec![initial, moved].into())),
+        snapshots: SnapshotTransport::new(vec![initial, moved]),
         current,
         applied: std::sync::atomic::AtomicBool::new(false),
     });
@@ -416,16 +413,10 @@ impl MailTransport for MoveWithoutCopyUidTransport {
 
     async fn snapshot(
         &self,
-        _: &Credentials,
-        _: &AccountState,
+        credentials: &Credentials,
+        state: &AccountState,
     ) -> Result<Vec<RemoteFolder>, Error> {
-        Ok(self
-            .snapshots
-            .0
-            .lock()
-            .unwrap()
-            .pop_front()
-            .expect("scripted snapshot"))
+        self.snapshots.snapshot(credentials, state).await
     }
     async fn disconnect(&self, _: Binding) -> Result<(), Error> {
         Ok(())
@@ -488,7 +479,13 @@ impl MailTransport for MoveWithoutCopyUidTransport {
     ) -> Result<TransportSubmission, Error> {
         Err(Error::Invalid)
     }
-    async fn save_sent(&self, _: &Credentials, _: &str, _: &[u8], _: bool) -> Result<bool, Error> {
+    async fn save_sent(
+        &self,
+        _: &Credentials,
+        _: &str,
+        _: &[u8],
+        _: bool,
+    ) -> Result<SentCopy, Error> {
         Err(Error::Invalid)
     }
 }

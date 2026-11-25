@@ -424,7 +424,7 @@ async fn idle_start_and_sent_recovery_do_not_wait_behind_body_reads() {
     )
     .await;
     assert!(
-        matches!(sent, Ok(Ok(false))),
+        matches!(sent, Ok(Ok(SentCopy::NoSentFolder))),
         "Sent lookup must run independently of body-read permits"
     );
     let idle_transport = transport.clone();

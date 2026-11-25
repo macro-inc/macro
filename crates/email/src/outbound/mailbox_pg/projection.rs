@@ -4,6 +4,17 @@ use crate::domain::mailbox::projection::*;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashSet;
 
+pub(super) struct LockedProjectionClaim {
+    pub(super) claim: ProjectionClaim,
+    wake: Option<ProjectionWake>,
+}
+
+struct ProjectionWake {
+    link_id: Uuid,
+    entity: String,
+    id: Uuid,
+}
+
 impl MailboxProjectionRepository for PgMailboxSync {
     async fn renew_projection(&self, lease: &ProjectionLease) -> Result<(), MailboxError> {
         let updated = sqlx::query!(r#"
@@ -36,9 +47,18 @@ impl MailboxProjectionRepository for PgMailboxSync {
             tx.commit().await.map_err(db_error)?;
             return Ok(ProjectionClaim::Idle);
         }
-        let result = self.claim_locked_projection(&mut tx, lease_id, &ids).await;
+        let result = self
+            .claim_locked_projection(&mut tx, lease_id, &ids)
+            .await?;
         tx.commit().await.map_err(db_error)?;
-        result
+        if let Some(wake) = result.wake {
+            // A concurrent claim may already hold the successor's window lock.
+            // Wait after committing the quarantine, so it can finish deferring
+            // the successor without either transaction waiting on the other.
+            self.wake_projection_after_commit(wake.link_id, &wake.entity, wake.id)
+                .await;
+        }
+        Ok(result.claim)
     }
 
     async fn projection_context(
@@ -128,17 +148,8 @@ impl MailboxProjectionRepository for PgMailboxSync {
             // A producer can insert a successor after the first wake snapshot
             // but before commit. A fresh transaction waits for any claim on it
             // and clears that claim's deferral. A crash here needs the backstop.
-            if let Err(error) = self
-                .wake_projection_after_commit(lease.mailbox.link_id, &entity, lease.id)
-                .await
-            {
-                tracing::warn!(
-                    projection.post_commit_wake = "failed",
-                    link_id = %lease.mailbox.link_id,
-                    ?error,
-                    "projection successor wake retained for backstop"
-                );
-            }
+            self.wake_projection_after_commit(lease.mailbox.link_id, &entity, lease.id)
+                .await;
         }
         Ok(())
     }
@@ -185,10 +196,24 @@ impl PgMailboxSync {
         Ok(())
     }
 
+    async fn wake_projection_after_commit(&self, link: Uuid, entity: &str, exclude: Uuid) {
+        if let Err(error) = self
+            .try_wake_projection_after_commit(link, entity, exclude)
+            .await
+        {
+            tracing::warn!(
+                projection.post_commit_wake = "failed",
+                link_id = %link,
+                ?error,
+                "projection successor wake retained for backstop"
+            );
+        }
+    }
+
     #[tracing::instrument(skip_all,name="email.projection.wake_after_commit",fields(
         projection.link_id=tracing::field::Empty,
     ),err)]
-    async fn wake_projection_after_commit(
+    async fn try_wake_projection_after_commit(
         &self,
         link: Uuid,
         entity: &str,
@@ -227,7 +252,7 @@ impl PgMailboxSync {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         lease_id: Uuid,
         ids: &[Uuid],
-    ) -> Result<ProjectionClaim, MailboxError> {
+    ) -> Result<LockedProjectionClaim, MailboxError> {
         // The expression index serves both the due range and its order; the
         // legacy available_at-only index cannot provide this ordering.
         // New events use FIFO per entity. Legacy UUIDv7 ids have no defined
@@ -267,7 +292,8 @@ impl PgMailboxSync {
             ), deferred AS (
                 UPDATE email_projection_outbox o
                 SET parked_at = CASE WHEN inactive.id IS NOT NULL THEN clock_timestamp() ELSE o.parked_at END,
-                    blocked_until = CASE WHEN d.first_id <> d.id THEN now() + interval '1 hour' * (1 + random())
+                    blocked_until = CASE WHEN d.first_id <> d.id
+                        THEN now() + interval '2 minutes' + interval '1 minute' * random()
                         WHEN d.lease_until > now() THEN d.lease_until
                         ELSE now() + interval '1 second' END
                 FROM ordered d JOIN links l ON l.id = d.link_id
@@ -276,7 +302,7 @@ impl PgMailboxSync {
                     AND (NOT l.is_sync_active OR d.lease_until > now() OR d.first_id <> d.id)
                 RETURNING o.id
             ), candidate AS (
-                SELECT d.id
+                SELECT d.id, d.entity
                 FROM ordered d JOIN links l ON l.id = d.link_id
                 WHERE l.is_sync_active
                     AND (d.lease_until IS NULL OR d.lease_until <= now())
@@ -313,13 +339,15 @@ impl PgMailboxSync {
                 o.attempts,
                 o.unfinished_claims,
                 l.sync_generation,
-                l.grant_generation
+                l.grant_generation,
+                c.entity
             )
             SELECT
                 claimed.id AS "id?", claimed.link_id AS "link_id?",
                 claimed.generation AS "generation?", claimed.payload AS "payload?",
                 claimed.attempts AS "attempts?", claimed.unfinished_claims AS "unfinished_claims?",
                 claimed.sync_generation AS "sync_generation?", claimed.grant_generation AS "grant_generation?",
+                claimed.entity AS "entity?",
                 (SELECT count(*) FROM deferred) AS "deferred!"
             FROM (VALUES (1)) anchor(value)
             LEFT JOIN claimed ON true
@@ -331,10 +359,13 @@ impl PgMailboxSync {
         .await
         .map_err(db_error)?;
         if row.id.is_none() {
-            return Ok(if row.deferred > 0 {
-                ProjectionClaim::Progress
-            } else {
-                ProjectionClaim::Idle
+            return Ok(LockedProjectionClaim {
+                claim: if row.deferred > 0 {
+                    ProjectionClaim::Progress
+                } else {
+                    ProjectionClaim::Idle
+                },
+                wake: None,
             });
         }
         let (
@@ -376,22 +407,32 @@ impl PgMailboxSync {
                 span.record("projection.outcome", "quarantined");
                 span.record("projection.quarantine", reason.as_ref());
                 tracing::warn!(projection_id = %id, %link_id, reason = reason.as_ref(), "Malformed mailbox projection quarantined");
-                return Ok(ProjectionClaim::Progress);
+                return Ok(LockedProjectionClaim {
+                    claim: ProjectionClaim::Progress,
+                    wake: row.entity.map(|entity| ProjectionWake {
+                        link_id,
+                        entity,
+                        id,
+                    }),
+                });
             }
         };
-        Ok(ProjectionClaim::Acquired(Box::new(ProjectionLease {
-            id,
-            lease_id,
-            mailbox: MailboxKey {
-                link_id,
-                sync_generation,
-                grant_generation,
-            },
-            event,
-            from_current_generation: generation == sync_generation,
-            attempts,
-            unfinished_claims,
-        })))
+        Ok(LockedProjectionClaim {
+            claim: ProjectionClaim::Acquired(Box::new(ProjectionLease {
+                id,
+                lease_id,
+                mailbox: MailboxKey {
+                    link_id,
+                    sync_generation,
+                    grant_generation,
+                },
+                event,
+                from_current_generation: generation == sync_generation,
+                attempts,
+                unfinished_claims,
+            })),
+            wake: None,
+        })
     }
 
     async fn projected_message(

@@ -253,7 +253,7 @@ async fn projection_eligibility_uses_a_fresh_snapshot_after_locking_its_window(d
         .await
         .unwrap();
     claim.commit().await.unwrap();
-    let ProjectionClaim::Acquired(successor) = result else {
+    let ProjectionClaim::Acquired(successor) = result.claim else {
         panic!("the fresh statement must see the completed head and claim its successor")
     };
     assert_eq!(successor.id, next);
@@ -286,7 +286,8 @@ async fn a_projection_finish_waiting_on_the_window_wakes_after_its_deferral(db: 
     assert!(matches!(
         repo.claim_locked_projection(&mut claim, Uuid::now_v7(), &ids)
             .await
-            .unwrap(),
+            .unwrap()
+            .claim,
         ProjectionClaim::Progress
     ));
     claim.commit().await.unwrap();
@@ -314,7 +315,7 @@ async fn a_projection_finish_waiting_on_the_window_wakes_after_its_deferral(db: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn projection_backstop_deadlines_are_jittered_without_shortening_them(db: PgPool) {
+async fn projection_backstop_deadlines_are_jittered_within_the_recheck_window(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let head = Uuid::now_v7();
     sqlx::query!(
@@ -325,23 +326,33 @@ async fn projection_backstop_deadlines_are_jittered_without_shortening_them(db: 
         "INSERT INTO email_projection_outbox (id,link_id,generation,payload) SELECT gen_random_uuid(),$1,1,'{\"kind\":\"link_changed\"}' FROM generate_series(1,64)",
         link
     ).execute(&db).await.unwrap();
+    let before_claim = sqlx::query_scalar!(r#"SELECT now() AS "before_claim!""#)
+        .fetch_one(&db)
+        .await
+        .unwrap();
     assert!(matches!(
         repo.claim_projection(Uuid::now_v7()).await.unwrap(),
         ProjectionClaim::Progress
     ));
     let deadlines = sqlx::query!(
         r#"SELECT count(DISTINCT blocked_until) AS "deadlines!",
-            bool_and(blocked_until>=now()+interval '59 minutes' AND blocked_until<=now()+interval '2 hours') AS "bounded!"
+            bool_and(blocked_until >= $3::timestamptz + interval '2 minutes'
+                AND blocked_until <= now() + interval '3 minutes') AS "bounded!"
         FROM email_projection_outbox WHERE link_id=$1 AND id<>$2"#,
-        link,head
-    ).fetch_one(&db).await.unwrap();
+        link,
+        head,
+        before_claim
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert!(
         deadlines.deadlines > 1,
         "the backstop must not create one synchronized burst"
     );
     assert!(
         deadlines.bounded,
-        "jitter must retain a long but bounded rollout backstop"
+        "jitter must keep every deadline inside the two- to three-minute window"
     );
 }
 

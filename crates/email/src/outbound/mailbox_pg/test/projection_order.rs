@@ -39,6 +39,80 @@ async fn projection_discards_a_payload_without_an_entity_and_claims_the_next_not
     assert_eq!(lease.id, notice);
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn quarantining_a_keyed_head_wakes_its_same_thread_successor(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let (_, successor) = malformed_projection_and_successor(&db, link).await;
+    assert!(matches!(
+        repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+        ProjectionClaim::Progress
+    ));
+    let ProjectionClaim::Acquired(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the same-thread successor must be claimable as soon as its head is quarantined");
+    };
+    assert_eq!(lease.id, successor);
+}
+
+async fn malformed_projection_and_successor(db: &PgPool, link: Uuid) -> (Uuid, Uuid) {
+    let malformed = Uuid::now_v7();
+    let successor = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_projection_outbox (id,link_id,generation,payload,available_at)
+           VALUES ($1,$3,1,'{"kind":"message","thread_id":"00000000-0000-0000-0000-000000000010"}',now()-interval '1 second'),
+                  ($2,$3,1,'{"kind":"organization","thread_id":"00000000-0000-0000-0000-000000000010"}',now())"#,
+        malformed, successor, link
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    (malformed, successor)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn quarantined_projection_successor_has_a_bounded_lost_wake_backstop(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let (malformed, successor) = malformed_projection_and_successor(&db, link).await;
+    let mut tx = repo.begin_claim().await.unwrap();
+    let window = repo.lock_projection_window(&mut tx).await.unwrap();
+    let outcome = repo
+        .claim_locked_projection(&mut tx, Uuid::now_v7(), &window)
+        .await
+        .unwrap();
+    assert!(matches!(outcome.claim, ProjectionClaim::Progress));
+    // A failed replica committed the quarantine but never ran the wake.
+    tx.commit().await.unwrap();
+    let reason = sqlx::query_scalar!(
+        "SELECT reason FROM email_mailbox_work_quarantine WHERE work='projection' AND work_id=$1",
+        malformed,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(reason, "decode");
+    let deadline_is_bounded = sqlx::query_scalar!(
+        r#"SELECT COALESCE(blocked_until > now() AND blocked_until <= now() + interval '3 minutes', false) AS "bounded!"
+           FROM email_projection_outbox WHERE id=$1"#,
+        successor,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(deadline_is_bounded);
+    sqlx::query!(
+        "UPDATE email_projection_outbox SET blocked_until=now() WHERE id=$1",
+        successor,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let ProjectionClaim::Acquired(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the backstop must wake the successor after expiry");
+    };
+    assert_eq!(lease.id, successor);
+}
+
 /// 64 parked projection rows on `link`, behind a trigger that sleeps 0.4 s
 /// on any unpark UPDATE over 10 rows and counts each attempt by size.
 async fn slow_projection_unpark(db: &PgPool, link: Uuid) {

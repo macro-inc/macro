@@ -91,11 +91,12 @@ async fn real_tls_missing_sent_folder_cannot_prove_delivery() {
         imap: login.clone(),
         smtp: login,
     };
-    assert!(
-        !transport
+    assert_eq!(
+        transport
             .save_sent(&credentials, "unconfirmed@example.com", &[], false)
             .await
-            .unwrap()
+            .unwrap(),
+        SentCopy::NoSentFolder,
     );
     drop(transport);
     tokio::time::timeout(Duration::from_secs(3), peer)
@@ -106,7 +107,7 @@ async fn real_tls_missing_sent_folder_cannot_prove_delivery() {
 
 #[tokio::test]
 #[ignore = "requires the owned Dovecot lab and explicit IMAP_TEST_ENDPOINT_MAP"]
-async fn real_sent_reconciliation_requires_one_exact_message_id_and_never_appends() {
+async fn real_sent_reconciliation_requires_an_exact_message_id_and_never_appends() {
     let addresses = serde_json::from_str(
         &macro_env_var::read_env("IMAP_TEST_ENDPOINT_MAP").expect("explicit local lab endpoints"),
     )
@@ -155,11 +156,12 @@ async fn real_sent_reconciliation_requires_one_exact_message_id_and_never_append
         .await
         .unwrap();
     transport.return_command(&credentials, session).await;
-    assert!(
-        !transport
+    assert_eq!(
+        transport
             .save_sent(&credentials, &id, &[], false)
             .await
-            .unwrap()
+            .unwrap(),
+        SentCopy::NotFound,
     );
 
     let mut session = transport.command_session(&credentials).await.unwrap();
@@ -169,17 +171,19 @@ async fn real_sent_reconciliation_requires_one_exact_message_id_and_never_append
         .await
         .unwrap();
     transport.return_command(&credentials, session).await;
-    assert!(
+    assert_eq!(
         transport
             .save_sent(&credentials, &id, &[], false)
             .await
-            .unwrap()
+            .unwrap(),
+        SentCopy::Copied,
     );
-    assert!(
+    assert_eq!(
         transport
             .save_sent(&credentials, &id, &[], false)
             .await
-            .unwrap()
+            .unwrap(),
+        SentCopy::Copied,
     );
     let mut session = transport.command_session(&credentials).await.unwrap();
     session.select("Sent").await.unwrap();
@@ -191,6 +195,9 @@ async fn real_sent_reconciliation_requires_one_exact_message_id_and_never_append
     transport.return_command(&credentials, session).await;
     assert_eq!(
         transport.save_sent(&credentials, &id, &[], false).await,
-        Err(Error::ConnectionUnavailable),
+        Ok(SentCopy::Copied),
     );
+    let mut session = transport.command_session(&credentials).await.unwrap();
+    session.select("Sent").await.unwrap();
+    assert_eq!(session.uid_search("ALL").await.unwrap().len(), 3);
 }

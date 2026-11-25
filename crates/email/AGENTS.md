@@ -848,7 +848,9 @@ tools — hexagonal, heavily feature-gated.
   outage or a busy mailbox never abandons a message.
 - Keep projection claims provider-neutral and order unfinished predecessors
   within each entity or link-level event kind. Preserve real retry deadlines and
-  the second successor wake after commit. See the [projection claim protocol](../../docs/architecture/email-backend.md#imap-integration)
+  wake the successor after a quarantine commit. Keep the jittered two- to
+  three-minute successor deferral as the backstop for a missed wake.
+  See the [projection claim protocol](../../docs/architecture/email-backend.md#imap-integration)
   and the [query rehearsal](../../docs/runbooks/email-provider-routing.md#projection-and-sync-claim-rehearsal).
 - A projection event that keeps failing is given up as a message read is:
   `MailboxProjectionService::project_leased` decides with `message_retry`

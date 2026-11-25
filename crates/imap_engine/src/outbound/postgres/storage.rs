@@ -339,6 +339,9 @@ impl PgRepository {
         match selection {
             StateSelection::Health => return Ok(()),
             StateSelection::Sync => {
+                // Sync only needs a draft's Message-ID and delivery metadata.
+                // The row hash also covers this projection, so unchanged drafts
+                // never enter save_entries' write set.
                 append_entries(
                     &mut rows,
                     sqlx::query_as!(
@@ -352,7 +355,11 @@ impl PgRepository {
                             sequence,
                             received_at,
                             fingerprint,
-                            document,
+                            CASE WHEN kind = 'draft' THEN
+                                jsonb_set(document, '{input,content}', jsonb_build_object(
+                                    'message_id', document #> '{input,content,message_id}'
+                                ))
+                            ELSE document END AS "document!",
                             body
                         FROM
                             imap_state_entries
@@ -816,6 +823,8 @@ impl PgRepository {
                 data,
             ).execute(&mut *tx).await.map_err(db_error)?;
         }
+        // A sync may update post-send flags on projected drafts. Preserve
+        // the stored content until a confirmed, settled send can retire it.
         for chunk in changed.chunks(500) {
             let data = serde_json::to_value(chunk).map_err(|_| Error::Invalid)?;
             sqlx::query!(
@@ -858,11 +867,17 @@ impl PgRepository {
                                 EXCLUDED.sequence,
                                 received_at = EXCLUDED.received_at,
                                 fingerprint = EXCLUDED.fingerprint,
-                                document = EXCLUDED.document,
+                                document = CASE WHEN $3 AND EXCLUDED.kind = 'draft'
+                                        AND (EXCLUDED.document->>'submission' IS DISTINCT FROM 'accepted'
+                                            OR EXCLUDED.document->>'sent_copy_pending' = 'true')
+                                    THEN jsonb_set(EXCLUDED.document, '{input,content}',
+                                        imap_state_entries.document #> '{input,content}')
+                                    ELSE EXCLUDED.document END,
                                 body = EXCLUDED.body
                 "#,
                 a.binding.link_id,
                 data,
+                a.loaded_for_sync,
             )
             .execute(&mut *tx)
             .await
@@ -921,7 +936,7 @@ impl PgRepository {
             health,
             COMMAND_LEASE_BUDGET.as_secs_f64(),
             a.folder_preferences_revision,
-            a.fences_folder_preferences,
+            a.loaded_for_sync,
         )
         .fetch_optional(&mut **tx)
         .await

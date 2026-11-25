@@ -43,8 +43,10 @@ accepts bearer access to a remote mail server.
 - Every sent draft id retains a readable fallback until the remote Sent copy
   is associated with it. Commit `sent_copy_attempted` before an APPEND-capable call;
   later reconciliation searches without another APPEND after an uncertain result.
-  Keep frozen submission content separate from Sync metadata. Retire it once
-  the Sent copy is confirmed, retaining the Message-ID for correlation.
+  Load draft Message-IDs and delivery flags during Sync, with full content
+  reserved for point reads. Retire frozen submission content after a confirmed
+  send's Sent copy is found, copied, or has no Sent folder, retaining the
+  Message-ID for correlation.
 - Resolve, block private addresses, pin the numeric socket, then validate the
   original TLS hostname. Local endpoint maps are composition-only and forbidden
   outside the local environment.

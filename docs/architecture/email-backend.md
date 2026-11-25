@@ -73,9 +73,10 @@ different producers within a millisecond. Keep local blocking in
 per link and wake one successor for their entity
 in their transaction and again after commit to catch a concurrent insert. The
 post-commit wake is best effort: its failure is logged while the committed
-finish stays successful. Wakes write only when clearing a deferral. The
-one-to-two-hour jittered backstop covers an interruption between those
-transactions and old binaries. A maintenance-only claim polls for more work immediately.
+finish stays successful. A keyed quarantine wakes its successor after the
+quarantine commits. Wakes write only when clearing a deferral. New successor
+deferrals use a two- to three-minute jittered backstop if a wake is missed.
+A maintenance-only claim polls for more work immediately.
 Inactive work parks outside the due index. Catalog, folder/live streams and
 reconciliation use bounded 64-row due windows followed by a fresh-snapshot claim;
 independent folders and messages have no per-mailbox FIFO floor. Exact indexed

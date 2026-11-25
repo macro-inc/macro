@@ -492,7 +492,7 @@ impl Repository for PgRepository {
         // Claim and hydrate in one transaction. A loading timeout rolls back
         // the uncommitted lease instead of stranding it for five minutes.
         let (mut tx, mut account) = self.begin_acquisition(b).await?;
-        account.fences_folder_preferences = matches!(selection, StateSelection::Sync);
+        account.loaded_for_sync = matches!(selection, StateSelection::Sync);
         self.hydrate(&mut tx, &mut account, selection).await?;
         tx.commit().await.map_err(acquisition::load_error)?;
         acquisition::record_outcome(acquisition::AcquireOutcome::Acquired);

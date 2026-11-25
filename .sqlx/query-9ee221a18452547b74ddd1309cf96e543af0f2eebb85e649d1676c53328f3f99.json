@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                        SELECT\n                            kind,\n                            key,\n                            folder_id,\n                            message_id,\n                            sequence,\n                            received_at,\n                            fingerprint,\n                            document,\n                            body\n                        FROM\n                            imap_state_entries\n                        WHERE\n                            link_id = $1\n                            AND kind = ANY ($2)\n                        ",
+  "query": "\n                        SELECT\n                            kind,\n                            key,\n                            folder_id,\n                            message_id,\n                            sequence,\n                            received_at,\n                            fingerprint,\n                            CASE WHEN kind = 'draft' THEN\n                                jsonb_set(document, '{input,content}', jsonb_build_object(\n                                    'message_id', document #> '{input,content,message_id}'\n                                ))\n                            ELSE document END AS \"document!\",\n                            body\n                        FROM\n                            imap_state_entries\n                        WHERE\n                            link_id = $1\n                            AND kind = ANY ($2)\n                        ",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,7 @@
       },
       {
         "ordinal": 7,
-        "name": "document",
+        "name": "document!",
         "type_info": "Jsonb"
       },
       {
@@ -63,9 +63,9 @@
       true,
       true,
       true,
-      false,
+      null,
       true
     ]
   },
-  "hash": "ac5ccd18308357f089d08e0f839579cedeb9d0f825af6e7d328ccbd472d29e10"
+  "hash": "9ee221a18452547b74ddd1309cf96e543af0f2eebb85e649d1676c53328f3f99"
 }

@@ -30,6 +30,7 @@ impl Engine {
             .transport
             .save_sent(credentials, message_id, &mime, false)
             .await?
+            == SentCopy::Copied
         {
             accept_submission(a, id, &mime, false)?;
             self.repository.save(a).await?;
@@ -115,14 +116,14 @@ impl Engine {
                 .save_sent(&credentials, message_id, &mime, allow_append)
                 .await
             {
-                Ok(true) => {
+                Ok(SentCopy::Copied | SentCopy::NoSentFolder) => {
                     if let Some(draft) = a.state.drafts.get_mut(&id) {
                         draft.sent_copy_pending = false;
                         retain_sent_identity(draft);
                     }
                     self.repository.save(a).await?;
                 }
-                Ok(false) => {}
+                Ok(SentCopy::NotFound) => {}
                 Err(error) => tracing::warn!(?error, "IMAP sent copy remains pending"),
             }
         }

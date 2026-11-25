@@ -834,6 +834,18 @@ async fn sync_loads_draft_metadata_and_retires_only_the_confirmed_frozen_submiss
             },
         );
     }
+    let mut unsent = draft_account.state.drafts["m:one"].clone();
+    unsent.draft.id = "m:unsent".into();
+    unsent.draft.is_draft = true;
+    unsent.submission = None;
+    unsent.frozen_content = None;
+    unsent.sent_copy_pending = false;
+    unsent.input.content = serde_json::json!({
+        "message_id": "unsent@example.net",
+        "body_html": "body".repeat(64 * 1024),
+    });
+    let unsent_content = unsent.input.content.clone();
+    draft_account.state.drafts.insert("m:unsent".into(), unsent);
     let raw_mime = base64::Engine::encode(
         &base64::engine::general_purpose::STANDARD,
         vec![b'x'; 256 * 1024],
@@ -868,7 +880,18 @@ async fn sync_loads_draft_metadata_and_retires_only_the_confirmed_frozen_submiss
         .acquire_scoped(binding, StateSelection::Sync)
         .await
         .unwrap();
-    assert_eq!(sync.state.drafts.len(), 2);
+    assert_eq!(sync.state.drafts.len(), 3);
+    assert!(
+        sync.state.drafts["m:unsent"]
+            .input
+            .content
+            .get("body_html")
+            .is_none()
+    );
+    assert_eq!(
+        sync.state.drafts["m:unsent"].input.content,
+        serde_json::json!({"message_id": "unsent@example.net"}),
+    );
     assert!(sync.state.messages["m:one"].mime_base64.is_empty());
     assert!(sync.state.messages["m:one"].source_complete);
     assert!(
@@ -886,6 +909,12 @@ async fn sync_loads_draft_metadata_and_retires_only_the_confirmed_frozen_submiss
         .get_mut("m:one")
         .unwrap()
         .sent_copy_pending = false;
+    // A metadata-only write must not replace the stored draft content.
+    sync.state
+        .drafts
+        .get_mut("m:unsent")
+        .unwrap()
+        .answered_pending = true;
     let sent = sync.state.messages.get_mut("m:one").unwrap();
     sent.source_complete = false;
     sent.mime_base64 = "aGVhZGVy".into();
@@ -905,6 +934,21 @@ async fn sync_loads_draft_metadata_and_retires_only_the_confirmed_frozen_submiss
         Some(bytes)
     );
     repository.release(&sync).await.unwrap();
+    let unsent = repository
+        .read_scoped(
+            binding,
+            StateSelection::Draft {
+                id: "m:unsent".into(),
+                reply_to: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        unsent.state.drafts["m:unsent"].input.content,
+        unsent_content
+    );
+    assert!(unsent.state.drafts["m:unsent"].answered_pending);
     let source_count = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM imap_state_entries
            WHERE link_id = $1 AND kind = 'sent_source'"#,

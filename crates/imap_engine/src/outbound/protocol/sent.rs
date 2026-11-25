@@ -9,7 +9,7 @@ impl ProtocolTransport {
         message_id: &str,
         mime: &[u8],
         allow_append: bool,
-    ) -> Result<bool, Error> {
+    ) -> Result<SentCopy, Error> {
         if message_id.len() > 998 || message_id.chars().any(char::is_control) {
             return Err(Error::Invalid);
         }
@@ -25,104 +25,105 @@ impl ProtocolTransport {
         for (folder, _) in &mut catalog {
             folder.role = preferences.role(folder);
         }
-        let mut copied = false;
-        if let Some((_, path)) = catalog
+        let Some((_, path)) = catalog
             .into_iter()
             .find(|(f, _)| f.role == FolderRole::Sent)
-        {
-            let selected = session
+        else {
+            return Ok(SentCopy::NoSentFolder);
+        };
+        let selected = session
+            .limit_response(ResponseLimit::Metadata)
+            .select(&path)
+            .await
+            .map_err(|e| imap_error(e, false))?;
+        let query = format!("HEADER Message-ID {}", quoted(message_id)?);
+        let candidates = session
+            .limit_response(ResponseLimit::Metadata)
+            .uid_search(query)
+            .await
+            .map_err(|e| imap_error(e, false))?;
+        if candidates.len() > 200 {
+            return Err(Error::Throttled);
+        }
+        let mut found = std::collections::BTreeSet::new();
+        if !candidates.is_empty() {
+            let set = candidates
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            let headers = session
                 .limit_response(ResponseLimit::Metadata)
-                .select(&path)
+                .uid_fetch(set, "(UID BODY.PEEK[HEADER])")
+                .await
+                .map_err(|e| imap_error(e, false))?
+                .take(201)
+                .try_collect::<Vec<_>>()
                 .await
                 .map_err(|e| imap_error(e, false))?;
-            let query = format!("HEADER Message-ID {}", quoted(message_id)?);
-            let candidates = session
-                .limit_response(ResponseLimit::Metadata)
-                .uid_search(query)
-                .await
-                .map_err(|e| imap_error(e, false))?;
-            if candidates.len() > 200 {
+            if headers.len() > 200 {
                 return Err(Error::Throttled);
             }
-            let mut found = std::collections::BTreeSet::new();
-            if !candidates.is_empty() {
-                let set = candidates
-                    .iter()
-                    .map(u32::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let headers = session
-                    .limit_response(ResponseLimit::Metadata)
-                    .uid_fetch(set, "(UID BODY.PEEK[HEADER])")
-                    .await
-                    .map_err(|e| imap_error(e, false))?
-                    .take(201)
-                    .try_collect::<Vec<_>>()
-                    .await
-                    .map_err(|e| imap_error(e, false))?;
-                if headers.len() > 200 {
-                    return Err(Error::Throttled);
-                }
-                for item in headers {
-                    if item
-                        .header()
-                        .is_some_and(|header| exact_message_id(header, message_id))
-                        && let Some(uid) = item.uid
-                    {
-                        found.insert(uid);
-                    }
-                }
-            }
-            if found.is_empty() {
-                // Some interoperable servers do not index Message-ID for HEADER SEARCH.
-                // Inspect a bounded recent UID window before risking another APPEND.
-                let start = selected.uid_next.unwrap_or(1).saturating_sub(200).max(1);
-                let recent = session
-                    .limit_response(ResponseLimit::Metadata)
-                    .uid_fetch(format!("{start}:*"), "(UID BODY.PEEK[HEADER])")
-                    .await
-                    .map_err(|e| imap_error(e, false))?
-                    .take(201)
-                    .try_collect::<Vec<_>>()
-                    .await
-                    .map_err(|e| imap_error(e, false))?;
-                if recent.len() > 200 {
-                    return Err(Error::Throttled);
-                }
-                for item in recent {
-                    let Some(header) = item.header() else {
-                        continue;
-                    };
-                    if exact_message_id(header, message_id)
-                        && let Some(uid) = item.uid
-                    {
-                        found.insert(uid);
-                    }
-                }
-            }
-            if found.len() > 1 {
-                tracing::warn!(copies = found.len(), "Multiple exact Sent copies found");
-            }
-            copied = !found.is_empty();
-            if !copied && allow_append {
-                let server_saves_copy = session
-                    .limit_response(ResponseLimit::Metadata)
-                    .capabilities()
-                    .await
-                    .map_err(|e| imap_error(e, false))?
-                    .has_str("X-GM-EXT-1");
-                if !server_saves_copy {
-                    session
-                        .limit_response(ResponseLimit::Metadata)
-                        .append(&path, Some("(\\Seen)"), None, mime)
-                        .await
-                        .map_err(|e| imap_error(e, false))?;
-                    copied = true;
+            for item in headers {
+                if item
+                    .header()
+                    .is_some_and(|header| exact_message_id(header, message_id))
+                    && let Some(uid) = item.uid
+                {
+                    found.insert(uid);
                 }
             }
         }
-        drop(session);
-        Ok(copied)
+        if found.is_empty() {
+            // Some interoperable servers do not index Message-ID for HEADER SEARCH.
+            // Inspect a bounded recent UID window before risking another APPEND.
+            let start = selected.uid_next.unwrap_or(1).saturating_sub(200).max(1);
+            let recent = session
+                .limit_response(ResponseLimit::Metadata)
+                .uid_fetch(format!("{start}:*"), "(UID BODY.PEEK[HEADER])")
+                .await
+                .map_err(|e| imap_error(e, false))?
+                .take(201)
+                .try_collect::<Vec<_>>()
+                .await
+                .map_err(|e| imap_error(e, false))?;
+            if recent.len() > 200 {
+                return Err(Error::Throttled);
+            }
+            for item in recent {
+                let Some(header) = item.header() else {
+                    continue;
+                };
+                if exact_message_id(header, message_id)
+                    && let Some(uid) = item.uid
+                {
+                    found.insert(uid);
+                }
+            }
+        }
+        if found.len() > 1 {
+            tracing::warn!(copies = found.len(), "Multiple exact Sent copies found");
+        }
+        if !found.is_empty() {
+            return Ok(SentCopy::Copied);
+        }
+        if allow_append {
+            let server_saves_copy = session
+                .limit_response(ResponseLimit::Metadata)
+                .capabilities()
+                .await
+                .map_err(|e| imap_error(e, false))?
+                .has_str("X-GM-EXT-1");
+            if !server_saves_copy {
+                session
+                    .limit_response(ResponseLimit::Metadata)
+                    .append(&path, Some("(\\Seen)"), None, mime)
+                    .await
+                    .map_err(|e| imap_error(e, false))?;
+                return Ok(SentCopy::Copied);
+            }
+        }
+        Ok(SentCopy::NotFound)
     }
 }
 

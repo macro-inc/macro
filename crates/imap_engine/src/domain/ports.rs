@@ -24,6 +24,17 @@ impl ApplyError {
     }
 }
 
+/// What IMAP established about the exact Sent copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SentCopy {
+    /// One exact copy was found or the server acknowledged APPEND.
+    Copied,
+    /// The folder exists and no exact copy was found.
+    NotFound,
+    /// The account has no configured or detected Sent folder.
+    NoSentFolder,
+}
+
 /// A scoped snapshot, optionally carrying a fenced command lease. The service never exposes ciphertext.
 pub struct Account {
     /// Exact access binding.
@@ -40,8 +51,8 @@ pub struct Account {
     pub revision: i64,
     /// Folder preference revision observed when this snapshot was loaded.
     pub folder_preferences_revision: i64,
-    /// The snapshot publishes folder state and must use the observed preferences.
-    pub fences_folder_preferences: bool,
+    /// The snapshot holds draft metadata and publishes folder state under the observed preferences.
+    pub loaded_for_sync: bool,
     /// Distributed write lease; None is a read-only snapshot.
     pub lease_id: Option<Uuid>,
 }
@@ -411,15 +422,14 @@ pub trait MailTransport: Send + Sync {
         pre_body_deadline: tokio::time::Instant,
     ) -> Result<TransportSubmission, Error>;
     /// Reconcile Sent by Message-ID; only the durably admitted first attempt may APPEND.
-    /// False preserves pending reconciliation and the readable fallback without another APPEND.
-    /// With `allow_append = false`, true requires one exact Message-ID in an existing Sent folder.
+    /// With `allow_append = false`, `Copied` requires an exact Message-ID in an existing Sent folder.
     async fn save_sent(
         &self,
         credentials: &Credentials,
         message_id: &str,
         mime: &[u8],
         allow_append: bool,
-    ) -> Result<bool, Error>;
+    ) -> Result<SentCopy, Error>;
 }
 
 /// Link-scoped wakeup publication after a committed journal or credential health change.

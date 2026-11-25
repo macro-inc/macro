@@ -31,9 +31,10 @@ async fn unchanged_ten_thousand_message_sync_preserves_the_committed_revision(po
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
-        Arc::new(SnapshotTransport(std::sync::Mutex::new(
-            vec![inbox(10_000, 10_001), inbox(10_000, 10_001)].into(),
-        ))),
+        Arc::new(SnapshotTransport::new(vec![
+            inbox(10_000, 10_001),
+            inbox(10_000, 10_001),
+        ])),
         tokio_util::task::TaskTracker::new(),
         tokio_util::sync::CancellationToken::new(),
     )

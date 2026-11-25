@@ -61,7 +61,7 @@ impl PgRepository {
             checkpoint: Default::default(),
             revision: row.revision,
             folder_preferences_revision: row.folder_preferences_revision,
-            fences_folder_preferences: false,
+            loaded_for_sync: false,
             lease_id: None,
         })
     }
