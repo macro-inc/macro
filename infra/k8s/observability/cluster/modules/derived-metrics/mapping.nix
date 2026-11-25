@@ -19,7 +19,12 @@ let
   row =
     m:
     "| ${code m.name} | ${code m.metric} | ${m.kind} | ${
-      if m.value == "duration" then "seconds, not nanoseconds" else ""
+      if m.value != "duration" then
+        ""
+      else if lib.hasPrefix "ml_obs." m.name then
+        "seconds"
+      else
+        "seconds, not nanoseconds"
     } | ${labels m} |";
 in
 ''
@@ -37,7 +42,7 @@ in
     Mimir doesn't). A span or record without the tag has no such label (Datadog:
     `N/A`).
   - Durations (`@duration`) are in seconds and end in `_seconds`; a Datadog
-    threshold on one is in nanoseconds. Fields that were already in milliseconds
+    threshold on one is in nanoseconds (`ml_obs.*`: seconds). Fields that were already in milliseconds
     or bytes stay so.
   - ${
     lib.concatMapStringsSep ", " code spans.openTags
@@ -73,6 +78,15 @@ in
   does, its metrics have no `deployment_environment="prod"`.
 
   ## From spans
+
+  - `ml_obs.*` are Datadog's LLM Observability metrics for model calls (its
+    `span_kind:llm`), by any service; its `ml_app` is `service`. Agents, tools and
+    workflows are the `macro.agent.*` metrics. The model is the one that answered,
+    or else the one asked for. AI editing marks each of its steps as a model call,
+    so those last until the step's tools are done and have no model.
+  - For `ml_obs.span.llm.total.cost` (in nanodollars, estimated from spans) there is
+    `macro.ai.usage.cost_usd`: in dollars, of the usage the services price and log.
+  - `macro.genai.chat.time_to_first_chunk_ms` isn't in Datadog.
 
   ${table spans.metrics}
   ## From logs

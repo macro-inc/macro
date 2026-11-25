@@ -992,6 +992,13 @@ A composer renders paragraphs with the spacing its sent message renders with,
 so a draft reads as what it will send; drop only the draft's first and last
 margins, which the compact single-row layout measures.
 
+AI composers register their whole surface with
+`lib/core/component/AI/primitives/create-composer-item-drop.ts` for app-item
+drags. Item drops add mention context without moving the source; native file
+uploads remain separate. `components/app/item-drag-sensor.ts` owns item-drag
+termination, including cancellation and errors; do not restore the default
+mouseup-only sensor.
+
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
 - Keep shared database card rendering in `features/database`; CRM supplies
@@ -1032,6 +1039,9 @@ not to account-wide paired machine count; a user can pair several computers.
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
+- Reuse `components/timezone-select/` for searchable time-zone fields; retain an
+  unlisted current zone, scope nested popups locally, and close on permission loss.
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 

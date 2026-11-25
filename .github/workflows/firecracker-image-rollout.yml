@@ -117,14 +117,17 @@ jobs:
       - validate
     name: Build and publish the image
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=firecracker-image
+    outputs:
+      cli_sha256: ${{ steps.build-cli.outputs.sha256 }}
     env:
       FILES_DIR: target/firecracker-image
+      CLI_DIR: target/firecracker-image-cli
     timeout-minutes: 120
     steps:
-      - name: Checkout the image's commit
+      - name: Checkout the workflow's commit
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: 'false'
         env:
           GIT_HTTP_LOW_SPEED_LIMIT: '10000'
@@ -141,6 +144,89 @@ jobs:
           nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
+        with:
+          shell: agent-daemon
+      - name: Configure Namespace remote sccache
+        if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+            # Register credential values as masked BEFORE exporting: GitHub only
+            # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+            # ~24h Namespace workspace token (registry + cache write) — printed
+            # verbatim in every subsequent step's env dump. Masking is selective by
+            # key name: masking non-secrets like the endpoint URL or key prefix
+            # would redact those strings everywhere in the logs.
+            while IFS= read -r line; do
+              k="${line%%=*}"
+              v="${line#*=}"
+              [ -n "$v" ] && [ "$k" != "$line" ] || continue
+              case "$k" in
+                *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+              esac
+            done < "$env_file"
+            cat "$env_file" >> "$GITHUB_ENV"
+            # The server checks the WebDAV backend before it reports ready, and the
+            # client's default 10s wait can run out. This limit has no env var.
+            sccache_conf="$RUNNER_TEMP/sccache.toml"
+            echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+            echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+            # Force the next compiler invocation to start a server with the new remote
+            # backend even if a setup hook happened to launch one already.
+            sccache --stop-server >/dev/null 2>&1 || true
+          else
+            echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+          fi
+      - id: build-cli
+        name: Build the rollout CLI
+        run: |
+          set -euo pipefail
+          export SQLX_OFFLINE=true
+
+          # A static binary works on the migrator without the build runner's libraries.
+          target=x86_64-unknown-linux-musl
+          # The billing dependency uses OpenSSL. Take the musl headers and archives
+          # from the same locked Nix input as the build tools.
+          openssl_dev=$(nix build --inputs-from . --no-link --print-out-paths 'nixpkgs#pkgsStatic.openssl^dev')
+          openssl_out=$(nix build --inputs-from . --no-link --print-out-paths 'nixpkgs#pkgsStatic.openssl^out')
+          export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR="$openssl_dev/include"
+          export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR="$openssl_out/lib"
+          export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_STATIC=1
+          cargo zigbuild --release --locked --target "$target" -p hosted_runtimes \
+            --features image-upgrade-cli --bin image-upgrade
+
+          binary="${CARGO_TARGET_DIR:-target}/$target/release/image-upgrade"
+          headers=$(readelf -lW "$binary")
+          if grep -qE '^[[:space:]]*INTERP[[:space:]]' <<<"$headers"; then
+            echo '::error::the rollout CLI depends on shared libraries'
+            exit 1
+          fi
+          "$binary" --help
+          mkdir -p "$CLI_DIR"
+          install -m 0755 "$binary" "$CLI_DIR/image-upgrade"
+          digest=$(sha256sum "$CLI_DIR/image-upgrade" | cut -d ' ' -f1)
+          printf 'sha256=%s\n' "$digest" >>"$GITHUB_OUTPUT"
+        shell: bash
+      - name: Upload firecracker-image-cli artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: target/firecracker-image-cli
+          name: firecracker-image-cli
+          if-no-files-found: error
+          retention-days: '30'
+      - name: Checkout the image's commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: 'false'
+          clean: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Build, hash and publish the image
         run: |
           # Build the image at the checked-out commit, record each file's SHA-256 and
@@ -279,23 +365,20 @@ jobs:
     runs-on: db-migrator
     env:
       FILES_DIR: target/firecracker-image
-      SQLX_OFFLINE: 'true'
+      CLI_DIR: target/firecracker-image-cli
     timeout-minutes: 360
     steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          clean: 'false'
-          persist-credentials: 'false'
-        env:
-          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Download Build Artifacts
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           pattern: firecracker-image-files
           path: target/firecracker-image
           merge-multiple: 'true'
+      - name: Download Rollout CLI
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: firecracker-image-cli
+          path: target/firecracker-image-cli
       - name: Record the upgrade and wait for it
         run: |
           # On the in-VPC migrator runner: presign the image's files for the hosts,
@@ -309,6 +392,12 @@ jobs:
           }
 
           [ "$ENVIRONMENT" = "dev" ] || fail "environment must be dev"
+          bin="$CLI_DIR/image-upgrade"
+          [[ ${CLI_SHA256:-} =~ ^[0-9a-f]{64}$ ]] || fail "the rollout CLI checksum is missing or invalid"
+          printf '%s  %s\n' "$CLI_SHA256" "$bin" | sha256sum --check --strict - \
+            || fail "the rollout CLI checksum could not be verified"
+          # Artifact downloads discard executable permissions.
+          chmod +x "$bin"
           command -v jq >/dev/null || fail "jq is missing on this runner"
 
           [[ "${NIX_CACHE_URL:-}" =~ ^s3://([a-z0-9.-]+)\?(.*&)?region=([a-z0-9-]+) ]] \
@@ -354,10 +443,8 @@ jobs:
           echo "::add-mask::$database_url"
           printf '%s' "$database_url" >"$secrets/database.url"
 
-          cargo build --release --locked -p hosted_runtimes --features image-upgrade-cli --bin image-upgrade
-          bin=target/release/image-upgrade
-
-          upgrade_id=$("$bin" start --environment dev --database-url-file "$secrets/database.url" \
+          upgrade_id=$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+            "$bin" start --environment dev --database-url-file "$secrets/database.url" \
             --manifest "$secrets/manifest.json" --computers "$COMPUTERS" --batch-size "$BATCH_SIZE" \
             --idle-wait-minutes "$IDLE_WAIT_MINUTES" --reconnect-timeout-minutes "$RECONNECT_TIMEOUT_MINUTES" \
             --created-by "$RUN_URL")
@@ -369,10 +456,12 @@ jobs:
           timeout=$((IDLE_WAIT_MINUTES + 60 + count * (RECONNECT_TIMEOUT_MINUTES + 5)))
           # Under the job's 360 minutes, so the cleanup above runs.
           if [ "$timeout" -gt 300 ]; then timeout=300; fi
-          "$bin" wait --environment dev --database-url-file "$secrets/database.url" \
+          env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+            "$bin" wait --environment dev --database-url-file "$secrets/database.url" \
             --upgrade-id "$upgrade_id" --timeout-minutes "$timeout" | tee -a "$GITHUB_STEP_SUMMARY"
         shell: bash
         env:
+          CLI_SHA256: ${{ needs.build.outputs.cli_sha256 }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ENVIRONMENT: ${{ inputs.environment }}
           IMAGE_VERSION: ${{ inputs.image_version }}

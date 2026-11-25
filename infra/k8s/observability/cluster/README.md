@@ -249,13 +249,15 @@ its trace ID, over the headless Service's DNS. Each replica:
   every served request of 1 s or more, and a tenth of the rest; from any
   environment, every `perf` and Outlook trace; from dev, CI and local stacks,
   everything, up to the caps below (low for each local service, since one
-  failing in a loop sends as much as the rest of dev). An unnamed environment is sampled like prod. A span that arrives
-  later follows a kept trace; one of a dropped trace is judged again, so a late
-  error is still kept (that part of the trace only);
-- caps each service within each group of policies, in spans a second. A trace
-  is charged to the service of its root span, or to every named service in it
-  when the root never arrives. A service over its cap loses traces while the others
-  keep theirs. Services named in `policies.nix` have their own; the rest share
+  failing in a loop sends as much as the rest of dev). An unnamed environment
+  is sampled like prod. A span that arrives later follows a kept trace; one of
+  a dropped trace is judged again, so a late error is still kept (that part of
+  the trace only);
+- caps each service within each group of policies, in sustained spans a second
+  (a burst of at least 20,000 per replica passes first). A trace is charged to
+  the service of its root span, or, when the root never arrives, to every named
+  service in it, from a separate cap of half the size. A service over its cap
+  loses traces while the others keep theirs. Services named in `policies.nix` have their own; the rest share
   `other`. Perf and Outlook traces have one cap each, shared by all. The caps
   bound what is stored, not what is held: spans of every service wait in the
   same memory, so a flood far above the sized load can push others out early.
@@ -271,7 +273,7 @@ span metrics for rates and errors. An exemplar can point at a trace that was
 dropped.
 
 A load test of 38,000 spans a second (synthetic, about 1 KB each, on x86) took
-0.7 cores of ingest and 1.0 of sampler over three replicas, each holding 80,000
+0.7 cores of ingest and 1.5 of sampler over three replicas, each holding 80,000
 traces in 1.8 GiB, with nothing refused or pushed out.
 
 Watch `otelcol_processor_tail_sampling_*` and `otelcol_exporter_*_failed_*`

@@ -7,6 +7,11 @@ import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import {
+  createDraggable,
+  DragDropProvider,
+  useDragDropContext,
+} from '@thisbeyond/solid-dnd';
+import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
@@ -71,8 +76,12 @@ vi.mock(
   () => ({
     buildConfig: () => {
       editor.lexical = createEditor({ nodes: [QuoteNode] });
+      let built = false;
       const builder = {
-        buildHandle: () => ({ lexical: editor.lexical }),
+        buildHandle: () => {
+          built = true;
+          return { lexical: editor.lexical };
+        },
         namespace: () => builder,
         withAppLinkResolver: () => builder,
         withMentions: (options: {
@@ -112,7 +121,13 @@ vi.mock(
           focus: vi.fn(),
           getMarkdown: () => editor.readMarkdown(),
         },
-        lexical: editor.lexical,
+        get lexical() {
+          if (!built)
+            throw new Error(
+              'editor.lexical accessed before <MarkdownShell> mounted'
+            );
+          return editor.lexical;
+        },
       };
       return builder;
     },
@@ -254,6 +269,58 @@ function type(text: string) {
 }
 
 describe('Chat session input', () => {
+  it.each([false, true])(
+    'registers only the visible composer surface for item drops (phoneLayout=%s)',
+    (phoneLayout) => {
+      let context!: NonNullable<ReturnType<typeof useDragDropContext>>;
+      const [blockedReason, setBlockedReason] = createSignal<string>();
+      function Harness() {
+        context = useDragDropContext()!;
+        const source = createDraggable('document-source', {
+          type: 'document',
+          id: 'document',
+          name: 'Context',
+          ownerId: 'owner',
+          fileType: 'md',
+          dragType: 'entity',
+          operation: () => 'move',
+        });
+        return (
+          <>
+            <div ref={source.ref} />
+            <ChatComposer
+              phoneLayout={phoneLayout}
+              draft=""
+              onDraftChange={vi.fn()}
+              onSend={vi.fn()}
+              blockedReason={blockedReason()}
+              selector={null}
+            />
+          </>
+        );
+      }
+      const view = render(() => (
+        <DragDropProvider
+          collisionDetector={(_source, targets) => targets[0] ?? null}
+        >
+          <Harness />
+        </DragDropProvider>
+      ));
+      const surface = view.container.querySelector('[data-agent-composer]');
+      const targets = Object.values(context[0].droppables);
+      expect(targets).toHaveLength(1);
+      expect(targets[0].node).toBe(surface);
+
+      context[1].dragStart('document-source');
+      expect(targets[0].data.isDropTargetDisabled()).toBe(false);
+      expect(surface?.classList.contains('outline-accent')).toBe(true);
+      setBlockedReason('Unavailable');
+      expect(targets[0].data.isDropTargetDisabled()).toBe(true);
+      expect(surface?.classList.contains('outline-accent')).toBe(false);
+      context[1].dragEnd();
+    }
+  );
+
   it.each([false, true])(
     'shows the complete static hint immediately and keeps it unchanged (session=%s)',
     (session) => {
