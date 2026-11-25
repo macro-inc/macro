@@ -97,6 +97,8 @@ struct EntityAccessCall {
 pub(crate) struct FakeEntityAccessService {
     result: PermissionResult,
     calls: Arc<Mutex<Vec<EntityAccessCall>>>,
+    /// A company merged away, and the company it was merged into.
+    merged: Option<(Uuid, Uuid)>,
 }
 
 impl FakeEntityAccessService {
@@ -104,7 +106,13 @@ impl FakeEntityAccessService {
         Self {
             result: PermissionResult::Allowed(EntityPermission::AccessLevel { access_level }),
             calls: Arc::new(Mutex::new(Vec::new())),
+            merged: None,
         }
+    }
+
+    pub(crate) fn with_merged_company(mut self, retired_id: Uuid, survivor_id: Uuid) -> Self {
+        self.merged = Some((retired_id, survivor_id));
+        self
     }
 
     fn calls(&self) -> Vec<EntityAccessCall> {
@@ -200,6 +208,13 @@ impl EntityAccessService for FakeEntityAccessService {
                 Ok((permission, uuid(TEAM_ID), team_role))
             }
         }
+    }
+
+    async fn merged_crm_company_ids(
+        &self,
+        _company_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        Ok(self.merged.into_iter().collect())
     }
 
     async fn get_users_by_entity(
@@ -754,6 +769,24 @@ async fn valid_company_and_contact_receipts_contain_the_entity_and_owning_team()
             },
         ]
     );
+}
+
+#[tokio::test]
+async fn the_receipt_for_a_merged_company_is_for_the_company_it_was_merged_into() {
+    let retired_id = Uuid::now_v7();
+    let access = FakeEntityAccessService::with_access_level(AccessLevel::Edit)
+        .with_merged_company(retired_id, uuid(COMPANY_ID));
+    let (router, access, _crm) = test_router(access);
+
+    let (status, body) = send(
+        &router,
+        bearer_request(&format!("/companies/{retired_id}"), VALID_TOKEN),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["entity_id"], COMPANY_ID);
+    assert_eq!(access.calls()[0].entity_id, COMPANY_ID);
 }
 
 #[tokio::test]

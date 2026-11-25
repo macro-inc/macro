@@ -11615,6 +11615,7 @@ dependencies = [
  "lazy-regex",
  "macro_user_id",
  "models_databases",
+ "nom 8.0.0",
  "rand 0.9.4",
  "rootcause",
  "serde",
@@ -11622,6 +11623,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "urlencoding",
  "uuid",
  "workspace-hack",
 ]

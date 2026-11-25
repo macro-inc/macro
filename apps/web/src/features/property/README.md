@@ -152,6 +152,20 @@ typed. All four use `editor/guarded-highlight.ts`. The dialog mounts a fresh
 editor for each property and set of items, so one reopened on another while
 open never carries over a highlight the person moved to.
 
+## Select option names
+
+A select's value is option IDs. The GraphQL read of an item's properties
+carries only those IDs; Status and Priority get their options where they are
+mapped (`soupPropertyToProperty`), and the REST read carries every select's
+options. For the rest, `useEntityPropertiesQuery` adds each custom select's
+options from the list of every definition the viewer can see
+(`withDefinitionOptions`), and holds its answer until that list first loads,
+so the side panel, Record details, title pills and their cards never show an
+option ID. Item actions and hotkeys keep that list loaded, so it has usually
+answered before an item's properties do and the hold costs nothing; keep the
+read on that unfiltered key, since a per-type list is one more request after
+the properties answer. A failed list read shows the values as they are.
+
 ## Adding a property
 
 Picking a property, or creating one, adds it to the item empty and opens its

@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use email_api_client::domain::models::EmailApiError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sha2::{Digest, Sha256};
@@ -100,7 +101,7 @@ async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: Pg
         .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
         .await
         .unwrap();
-    repo.commit_page(&stream, &super::super::test::page())
+    repo.commit_page(&stream, &super::super::test::page(), POLL_INTERVALS)
         .await
         .unwrap();
     assert!(
@@ -650,6 +651,7 @@ async fn a_folder_page_listing_a_notified_message_reads_it_as_its_own(db: PgPool
             position: StreamPosition::Checkpoint(StreamToken::new("checkpoint-2".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
