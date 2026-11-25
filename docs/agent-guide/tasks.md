@@ -565,8 +565,11 @@ change. Editing them in place would need each task's permission, which the
 server checks one task at a time, on reports of up to thousands of tasks.
 They come from the summary's task (`TimeSummaryTaskFields`), the cached task
 document the Tasks list also reads, so a status or priority changed
-elsewhere shows on an open report. A task put on the sheet with Add task
-shows them once it has time logged.
+elsewhere shows on an open report. A task put on the sheet with Add task is
+not in the summary until it has time, so its row reads that one task in the
+same shape (`ReportTask`, through the same cached document) and shows them at
+once, their place held while a task the cache lacks is read; when its first
+time is logged the summary takes over and the row stays as it was.
 
 ## Import from Linear
 
