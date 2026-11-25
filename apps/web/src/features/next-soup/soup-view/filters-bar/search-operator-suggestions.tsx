@@ -36,13 +36,20 @@ export function SearchOperatorSuggestions(props: {
   active: number;
   listId: string;
   onPick: (index: number) => void;
+  /** In the page's flow, as the phone lists them, not as a menu. */
+  inline?: boolean;
 }) {
   return (
     <div
       id={props.listId}
       role="listbox"
       aria-label={t('searchOperators.suggestions')}
-      class="menu-surface flex w-full min-w-64 max-w-md flex-col rounded-xl p-1"
+      class={cn(
+        'flex flex-col',
+        props.inline
+          ? 'w-full'
+          : 'menu-surface w-full min-w-64 max-w-md rounded-xl p-1'
+      )}
     >
       <For each={props.rows}>
         {(row, index) => (
