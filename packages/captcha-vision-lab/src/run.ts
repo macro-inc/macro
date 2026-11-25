@@ -112,13 +112,29 @@ const QUIZ_SELECTOR = '#quiz';
 const PROMPT_SELECTOR = '#prompt';
 const SUBMIT_TIMEOUT_MS = 10_000;
 /**
- * Below the request allowlist, the network itself goes nowhere: every
- * connection but the lab's goes to a dead proxy (nothing listens on the
- * discard port; loopback is proxied too, so other local ports are out of
- * reach), WebRTC may not go around the proxy, and there is no DNS
- * prefetching.
+ * The only environment variables the browser gets. Everything else stays
+ * out: a dev shell's LD_LIBRARY_PATH or GIO module paths would load
+ * libraries Playwright's Chromium can't use, and proxy or credential
+ * variables have no business in the lab browser.
  */
-export const ISOLATED_NETWORK = {
+const BROWSER_ENVIRONMENT = [
+  'HOME',
+  'PATH',
+  'TMPDIR',
+  'LANG',
+  'TZ',
+  'FONTCONFIG_FILE',
+  'FONTCONFIG_PATH',
+];
+
+/**
+ * How the lab browser is launched. Below the request allowlist, the network
+ * itself goes nowhere: every connection but the lab's goes to a dead proxy
+ * (nothing listens on the discard port; loopback is proxied too, so other
+ * local ports are out of reach), WebRTC may not go around the proxy, and
+ * there is no DNS prefetching. The environment is an allowlist.
+ */
+export const isolatedBrowser = () => ({
   proxy: {
     server: 'http://127.0.0.1:9',
     bypass: `<-loopback>,${LAB_HOST}:${LAB_PORT}`,
@@ -127,7 +143,13 @@ export const ISOLATED_NETWORK = {
     '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
     '--dns-prefetch-disable',
   ],
-};
+  env: Object.fromEntries(
+    BROWSER_ENVIRONMENT.flatMap((name) => {
+      const value = process.env[name];
+      return value === undefined ? [] : [[name, value]];
+    })
+  ),
+});
 const AFTER_ACTION_QUIET_MS = 500;
 
 /**
@@ -149,11 +171,10 @@ type LabResponse = {
 };
 
 /**
- * One request straight to the lab origin over `node:http`. Not `fetch`:
- * Bun's fetch sends even loopback requests through HTTP_PROXY, and this one
- * carries the capability. `node:http` neither uses a proxy nor follows
- * redirects nor decodes the body, so the headers it returns
- * (content-encoding included) describe the bytes as they are.
+ * One request to the lab origin over `node:http`. The CLI rejects proxy
+ * variables before startup because this request may carry the capability.
+ * `node:http` preserves the response bytes and headers and leaves redirects
+ * for the caller to reject.
  */
 const labRequest = (
   url: string,
@@ -258,7 +279,7 @@ const openSession = async (
     serviceWorkers: 'block',
     acceptDownloads: false,
     viewport: { width: 900, height: 900 },
-    ...ISOLATED_NETWORK,
+    ...isolatedBrowser(),
   });
   const observed = emptyObservations();
   const page = context.pages()[0] ?? (await context.newPage());

@@ -16,13 +16,40 @@ stealth or evasion. The lab answers only its own quiz, only at
 
 ## Runbook
 
-Run from this directory. On NixOS, set `LAB_CHROMIUM_PATH` to a Nix-built
-Chromium or Chrome: Playwright's downloaded headless shell can't load there
-(it lacks `libgbm`). For example:
+From this directory, use the repository dev shell in each lab terminal so
+installation and execution both use the same Bun as CI.
 
 ```sh
-export LAB_CHROMIUM_PATH=$(readlink -f $(which chromium || which google-chrome-stable))
+nix develop ../..
 bun install --frozen-lockfile
+```
+
+The CLI exits before starting the lab, Chromium, or the planner when
+`HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is present in any letter case,
+including empty values. Unset the proxy variables before running the lab.
+`NO_PROXY` exceptions do not override the startup check.
+
+```sh
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+```
+
+Clear the dev shell's library overrides before running the lab with
+Playwright's downloaded Chromium.
+
+```sh
+unset BASH_ENV LD_LIBRARY_PATH
+```
+
+On NixOS, point `LAB_CHROMIUM_PATH` at a Nix-built Chromium or Chrome.
+
+```sh
+export LAB_CHROMIUM_PATH="$(command -v chromium || command -v google-chrome-stable)"
+```
+
+On Ubuntu, install Chromium from the locked Playwright package.
+
+```sh
+./node_modules/.bin/playwright install --with-deps chromium
 ```
 
 Tests (mock planner and loopback stand-in only; no provider call):

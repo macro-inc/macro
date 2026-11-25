@@ -45,8 +45,12 @@ challenge's one attempt.
 
 ## Flow
 
+Use the repository dev shell's Bun as described in the
+[lab runbook](../../packages/captcha-vision-lab/README.md#runbook).
+
 ```text
 bun run lab:smoke -- --lab-run [--family <name>|all] [--provider mock|kimi]
+  └ refuse startup if HTTP_PROXY, HTTPS_PROXY or ALL_PROXY is present in any case
   └ lab service starts on 127.0.0.1:47831 (fresh HMAC secret)
   └ per challenge:
       issue(family, sessionNonce) → runId, challengeId, one-time capability
@@ -74,6 +78,10 @@ bun run lab:smoke -- --lab-run [--family <name>|all] [--provider mock|kimi]
 
 ## Trust boundaries
 
+- **CLI startup** (`src/cli.ts`). Refuses proxy-configured runs before
+  creating a lab or planner or starting Chromium. Some Bun versions apply
+  proxy variables to loopback HTTP, which could expose a capability header.
+  A `NO_PROXY` exception leaves the refusal in effect.
 - **Lab service** (`src/server.ts`). Generates the quiz from `crypto`
   randomness, renders options as metadata-free PNGs at opaque URLs, keeps
   which option is right in memory. Serves only the registered origin. The
@@ -115,10 +123,12 @@ asset; WebSocket; delayed popup; expiry between planner and action), each
 asserting zero planner calls, zero actions and zero submissions, a popup or
 foreign request set off by the click voiding the scored attempt, a failed
 click recording no markup, and the Kimi adapter against the stand-in
-(request shape, malformed output → closed failure). Every family also has
-its own tests: seeds, scoring, leakage, wrong-kind submissions, the runner
-end to end, out-of-bounds responses, and gate rejections with zero planner
-calls and actions. CI runs them in the Browser Tests job.
+(request shape, malformed output → closed failure). The CLI proxy test
+asserts refusal with zero requests to the lab or the counting proxy. Every
+family also has its own tests: seeds, scoring, leakage, wrong-kind
+submissions, the runner end to end, out-of-bounds responses, and gate
+rejections with zero planner calls and actions. CI runs them in the Browser
+Tests job.
 
 ## Live results
 

@@ -1543,8 +1543,8 @@ jobs:
       - name: CAPTCHA Vision Lab Tests
         run: |-
           bun install --frozen-lockfile
-          bunx playwright install --with-deps chromium
-          env -u LD_LIBRARY_PATH bun run check
+          ./node_modules/.bin/playwright install --with-deps chromium
+          env -u LD_LIBRARY_PATH -u BASH_ENV bun run check
         working-directory: packages/captcha-vision-lab
       - name: Teardown Nix
         if: always()

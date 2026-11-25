@@ -44,6 +44,14 @@ if (!values['lab-run']) {
   fail('refusing to run: pass --lab-run to run the CAPTCHA vision lab');
 }
 
+// Bun may apply an operator proxy to node:http even for loopback requests.
+const proxyVariables = Object.keys(process.env).filter((name) =>
+  /^(?:https?|all)_proxy$/i.test(name)
+);
+if (proxyVariables.length > 0) {
+  fail(`refusing to run: unset proxy variables (${proxyVariables.join(', ')})`);
+}
+
 const challenges = Number(values.challenges);
 if (
   !Number.isInteger(challenges) ||
