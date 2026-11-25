@@ -1,6 +1,6 @@
 import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { recordExternalWrite } from '@graphql-cache/exchange/external-writes';
-import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { captureCacheWriteSession } from '@graphql-cache/session-writes';
 import { Telemetry } from '@macro-inc/observability';
 import { getGraphqlSoupCacheHost } from './graphql-soup';
@@ -11,32 +11,45 @@ export type MergedCrmRecords = {
   contacts: readonly string[];
 };
 
+// A merged id never comes back, so each cache drops its record once; a
+// preview naming it again would only refetch the queries the drop fences.
+const DROPPED = new WeakMap<CacheHost, Set<string>>();
+
 /**
  * Drops the cached records of companies and contacts merged into another.
  * The server no longer answers for a merged record's id, so its last cached
- * copy would keep naming its chips and rows; without it they read the REST
- * preview, which names the record that stays.
+ * copy would keep naming company chips and listing the record in cached rows;
+ * without it they read what the server answers now, the record that stays.
+ * A removal carries no fetched content, so the cache host fences it with the
+ * generation it has observed. On a page load that is not yet the owner's,
+ * and the owner would refuse the removal as stale, so the owner is asked
+ * first.
  */
 export async function forgetMergedCrmRecords(
   merged: MergedCrmRecords
 ): Promise<void> {
+  const host = getGraphqlSoupCacheHost();
+  if (!host || host.disabled) return;
+  const dropped = DROPPED.get(host) ?? new Set<string>();
   const keys = [
     ...merged.companies.map((id) => `GraphqlSoupCrmCompany:${id}`),
     ...merged.contacts.map((id) => `GraphqlSoupCrmContact:${id}`),
-  ];
+  ].filter((key) => !dropped.has(key));
   if (keys.length === 0) return;
   const typenames = [
-    ...(merged.companies.length > 0 ? ['GraphqlSoupCrmCompany'] : []),
-    ...(merged.contacts.length > 0 ? ['GraphqlSoupCrmContact'] : []),
+    ...new Set(keys.map((key) => key.slice(0, key.indexOf(':')))),
   ];
   const canCache = captureQueryAuthorization();
   const session = captureCacheWriteSession();
-  const host = getGraphqlSoupCacheHost();
-  const generation =
-    host?.authority?.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
+  try {
+    // Outside the session's write, so a sign-out never waits for the owner.
+    await host.authority?.current();
+  } catch (error) {
+    Telemetry.error(error);
+    return;
+  }
   await session.run(async () => {
     if (
-      !host ||
       host.disabled ||
       !canCache() ||
       !session.isCurrent() ||
@@ -45,7 +58,9 @@ export async function forgetMergedCrmRecords(
       return;
     recordExternalWrite(host, typenames);
     try {
-      await host.deleteRecords(keys, generation);
+      await host.deleteRecords(keys);
+      for (const key of keys) dropped.add(key);
+      DROPPED.set(host, dropped);
     } catch (error) {
       Telemetry.error(error);
     }
