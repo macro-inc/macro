@@ -66,6 +66,15 @@ describe('searchOperatorCompletions', () => {
       'from:ana@example.com',
       'assignee:ana@example.com',
     ]);
+    // An accent typed as a combining mark is the same name.
+    const jose = {
+      ...VALUES,
+      people: [{ email: 'jose@example.com', name: 'José Ruiz' }],
+    };
+    for (const typed of ['José', 'Jose\u0301'])
+      expect(
+        searchOperatorCompletions(typed, jose).map((row) => row.insert)
+      ).toEqual(['from:jose@example.com', 'assignee:jose@example.com']);
     // Too short to look up, finished, or inside a phrase: no rows.
     expect(inserts('an')).toEqual([]);
     expect(inserts('tasks ')).toEqual([]);

@@ -96,7 +96,7 @@ export function searchTokenAtEnd(text: string): string | undefined {
 export function searchNameBeingTyped(text: string): string | undefined {
   const token = searchTokenAtEnd(text);
   if (!token || token.length < MIN_NAME_LETTERS) return undefined;
-  return /^\p{L}[\p{L}'’.-]*$/u.test(token) ? token : undefined;
+  return /^\p{L}[\p{L}\p{M}'’.-]*$/u.test(token) ? token : undefined;
 }
 
 /** `value` as a token's value: quoted when it holds whitespace. */

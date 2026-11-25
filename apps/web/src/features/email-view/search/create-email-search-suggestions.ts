@@ -83,7 +83,7 @@ const MIN_NAME_LETTERS = 3;
 export function emailSearchNameBeingTyped(text: string): string | undefined {
   const token = typedToken(text)?.token;
   if (!token || token.length < MIN_NAME_LETTERS) return undefined;
-  return /^\p{L}[\p{L}'’.-]*$/u.test(token) ? token : undefined;
+  return /^\p{L}[\p{L}\p{M}'’.-]*$/u.test(token) ? token : undefined;
 }
 
 /** What a row names, which stays the same as rows load around it. */
