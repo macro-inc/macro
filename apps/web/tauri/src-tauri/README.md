@@ -43,6 +43,21 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## Browser sign-up handoff
+
+New accounts on iOS and Android are made in the system browser, not in an
+authentication sheet: `Create new account` opens the web sign-up with the
+opener plugin, and the browser returns with
+`macro:///login?token=<code>&app_handoff=<id>`, which the deep-link bridge
+routes to `/login`. The code is bound to a PKCE `S256` challenge whose verifier
+only the app holds (`localStorage`, `macro:app-signups`), so another app that
+claims `macro://` cannot use it. Production opens `www.macro.com`: the app's
+associated domains claim `macro.com/app/*`, so a `macro.com` page the app opens
+itself could come back to the app. Automatic reloads are held from opening the
+browser until a code is redeemed (at most 30 minutes): the return reaches only
+the page open when it arrives. No native code is involved; the opener plugin,
+the `macro` scheme and the bridge all ship in released builds.
+
 ## Native HTTP connections
 
 Service requests from the native apps go through the HTTP plugin

@@ -1189,6 +1189,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   SSO redirect, and as soon as a native sign-in redeems its session code; the
   cookies are HttpOnly or in the native jar, and a load without the hint never
   checks identity, so the user sees sign-in again over a valid session.
+- The native apps make new accounts in the system browser: the web sign-up
+  remembers the app's challenge (`app_challenge`, per tab) and ends on Open
+  Macro, a `macro:///login` link to a code bound to it; `/login` redeems it
+  with the app's verifier. Keep that ending ahead of entering the web app and
+  of the phone-browser screen. See
+  [browser sign-up handoff](tauri/src-tauri/README.md#browser-sign-up-handoff).
 - Hold automatic reloads (`holdAutomaticReload`) across anything a reload would
   lose. `createNativeAuthSession` holds them for the sheet: its result reaches
   only the JavaScript that opened it, and leaving the app for a sign-in code
