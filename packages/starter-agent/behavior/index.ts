@@ -82,7 +82,7 @@ export const assistant = (
   const tools = toolsContext(base);
   const browser = browserContext(base);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
-  const mailbox = mailboxContext(base);
+  const mailbox = mailboxContext(base, chat.decorations.chat);
   const built = behavior()
     .decorate(base)
     .decorate({ agent })

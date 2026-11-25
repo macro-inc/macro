@@ -211,7 +211,7 @@ test(
           state: 'active',
           notice: 'fake vendor, not live',
         },
-        page: { messages: [{ id: 'in-1', subject: 'Lunch?' }] },
+        page: { messages: [{ id: 'in-1', untrusted: { subject: 'Lunch?' } }] },
         unapproved: expect.stringContaining('no draft'),
       },
     });
