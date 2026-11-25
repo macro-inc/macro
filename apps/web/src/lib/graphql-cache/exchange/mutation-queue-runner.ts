@@ -57,6 +57,7 @@ import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
+  CommitOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   MutationClaim,
   MutationLease,
@@ -1243,15 +1244,22 @@ export function createMutationQueueRunner(
             ? op.context.cacheSessionGeneration
             : UNKNOWN_CACHE_GENERATION;
         const commitStartedAt = Date.now();
-        const committed = await host.commitOptimisticWrite(
-          attempt.transactionId,
-          claim,
-          {
-            ...deps.cacheDocument(op),
-            data: result.data,
-            generation: snapshotGeneration,
-          }
-        );
+        let committed: CommitOptimisticWriteResult;
+        try {
+          committed = await host.commitOptimisticWrite(
+            attempt.transactionId,
+            claim,
+            {
+              ...deps.cacheDocument(op),
+              data: result.data,
+              generation: snapshotGeneration,
+            }
+          );
+        } catch (error) {
+          // A commit that failed after a long wait still says how long.
+          details = { ...details, commitMs: Date.now() - commitStartedAt };
+          throw error;
+        }
         const commitTiming = {
           commitMs: Date.now() - commitStartedAt,
           commitEngine: committed.engine,

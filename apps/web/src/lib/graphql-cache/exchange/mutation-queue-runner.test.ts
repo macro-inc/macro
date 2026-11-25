@@ -397,6 +397,27 @@ it("ends a live attempt once, as committed, with the commit's engine timing", as
   ]);
 });
 
+it('records how long a commit that failed took', async () => {
+  const { telemetry, attempts } = recordingTelemetry();
+  const onCacheError = vi.fn();
+  const { runner, forwarded, commit } = fixture({
+    mutationQueueTelemetry: telemetry,
+    onCacheError,
+  });
+  commit.mockRejectedValueOnce(new Error('native commit lost'));
+  await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(attempts[0]?.finished).toEqual([
+    [
+      'ack-lost',
+      { commitMs: expect.any(Number), retryDelayMs: expect.any(Number) },
+    ],
+  ]);
+});
+
 it('sends a queued request inside its attempt span', async () => {
   const { telemetry, run } = recordingTelemetry();
   const { runner, forwarded } = fixture({ mutationQueueTelemetry: telemetry });

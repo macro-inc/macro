@@ -4,8 +4,11 @@
 //! ```sh
 //! CACHE_BENCH_DATA=<dataset dir> nix develop .#tauri-linux --command cargo test --release \
 //!   --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin --lib -- --ignored \
-//!   --nocapture native_contention_bench
+//!   --nocapture --exact engine::test::contention::native_contention_bench
 //! ```
+//!
+//! Run it alone: it installs its own runtime as Tauri's, which can be set
+//! only once per process.
 //!
 //! Two phases of `CACHE_BENCH_PHASE_SECS` (20) each: `quiet`, where only the
 //! person acts (a rename's enqueue and commit, list and search reads), then
@@ -14,8 +17,10 @@
 //! Soup pages written as refetched responses. Every command runs on a task of
 //! its own, as Tauri runs one, on a runtime of `CACHE_BENCH_WORKERS` (8)
 //! workers. For each command it records the time from spawn to answer, its
-//! longest single poll, and each engine guard's wait and hold
-//! (`access::probe`); two probes measure the runtime itself: how late a 1 ms
+//! longest single poll, and the wait and hold of each engine guard it took
+//! (`access::probe`); a hydrate superseded while it still waited took none,
+//! so hydrate waits count only those that got the engine, and `superseded`
+//! counts the rest. Two probes measure the runtime itself: how late a 1 ms
 //! sleep wakes, and how long a spawned task waits for its first poll.
 use super::bench::{Op, mail_args, open, ops, search, stamped};
 use super::*;
