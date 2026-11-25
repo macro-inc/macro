@@ -9,6 +9,7 @@ import { Checkbox, ToggleSwitch } from '@ui';
 import { Index, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { CalendarColorPicker } from './calendar-color-picker';
+import { SubscriptionMark } from './SourceControls';
 
 export interface ConnectedCalendarAccount {
   id: string;
@@ -193,6 +194,9 @@ export function ConnectedCalendars(props: {
                           <Checkbox.Control />
                           <Checkbox.Label class="min-w-0 text-sm text-ink-muted">
                             <span class="break-words">{calendar().name}</span>
+                            <Show when={calendar().isSubscription}>
+                              <SubscriptionMark class="ml-1.5 inline-flex align-middle" />
+                            </Show>
                             <Show when={calendar().isPrimary}>
                               {' '}
                               <span class="ml-1 text-xs text-ink-extra-muted">
