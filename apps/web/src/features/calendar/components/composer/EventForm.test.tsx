@@ -548,6 +548,8 @@ function showComposerSave(recurring: boolean, fullWidth = false) {
     });
     return (
       <ComposerRoot model={model}>
+        <input aria-label="Composer title" name="title" />
+        <input aria-label="Composer location" name="location" />
         <ComposerSubmit fullWidth={fullWidth} />
       </ComposerRoot>
     );
@@ -591,6 +593,22 @@ it('opens recurring scope from Enter and uses menu keyboard navigation to save',
   await user.keyboard('{ArrowDown}{Enter}');
   expect(onSubmit).toHaveBeenCalledTimes(1);
   expect(onSubmit.mock.calls[0][1]).toBe('all');
+});
+
+it('opens recurring scope from native Enter in a form field', async () => {
+  const user = userEvent.setup();
+  const { onSubmit } = showComposerSave(true);
+  screen.getByRole('textbox', { name: 'Composer title' }).focus();
+  await user.keyboard('{Enter}');
+  expect(onSubmit).not.toHaveBeenCalled();
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('menuitem', { name: 'Apply to this event' })
+    )
+  );
+  await user.keyboard('{Enter}');
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  expect(onSubmit.mock.calls[0][1]).toBe('this_event');
 });
 
 it('prompts on recurring form submission and preserves the draft when dismissed', async () => {

@@ -56,7 +56,8 @@ export function ComposerSubmit(
         placement="top-end"
       >
         <Dropdown.Trigger
-          type="button"
+          type="submit"
+          form={model.ids.form}
           variant="primary"
           size={size()}
           fullWidth={props.fullWidth}
