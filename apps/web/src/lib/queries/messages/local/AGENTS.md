@@ -99,7 +99,7 @@ asked for in its channel (`takeTurn`), under the sign-in it was asked for under.
 | --- | --- | --- |
 | Never reached the queue, which was there (`NOT_QUEUED`) | fails as not sent, draft restored | fails |
 | Its sign-in ended before its turn, or no sign-in said who it is | `CACHE_RETIRED` | `CACHE_RETIRED` |
-| The host retired, or its storage was reset, with the write in the queue | `DELIVERY_UNKNOWN` | `CACHE_RETIRED`, `CACHE_RESET` |
+| The host retired, or its queue was reset, with the write in the queue | `DELIVERY_UNKNOWN` | `CACHE_RETIRED`, `CACHE_RESET` |
 | The enqueue's acknowledgement was lost | still queued: its settlement; settled: device copy, then the server's (`ChannelMessage`), else `DELIVERY_UNKNOWN` | still queued: its settlement; settled: applied if the device shows it, else `NOT_APPLIED` |
 | The answer was lost | the server's copy (`ChannelMessage`), else `DELIVERY_UNKNOWN` | fails |
 | The server answered, the device could not store it | the server's copy | the server's copy; never rejects |

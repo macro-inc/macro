@@ -76,6 +76,9 @@ export function fakeClient(
 export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   const listeners = new Set<(settlement: MutationSettlement) => void>();
   const resets = new Set<(change: CacheGenerationChange) => void>();
+  const changed = (change: CacheGenerationChange) => {
+    for (const listener of [...resets]) listener(change);
+  };
   const device = fakeHost([], { records });
   // Transactions the queue still holds, as `inspectMutations` lists them: a
   // bare id is the last write handed over, an entry names its own mutation.
@@ -129,12 +132,14 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
     queue,
     /** The engine comes back with its storage kept, as after Back. */
     restore() {
-      for (const listener of [...resets])
-        listener({ storage: 'preserved' } as CacheGenerationChange);
+      changed({ storage: 'preserved', queue: 'preserved' });
     },
     reset() {
-      for (const listener of [...resets])
-        listener({ storage: 'reset' } as CacheGenerationChange);
+      changed({ storage: 'reset', queue: 'reset' });
+    },
+    /** The engine's storage is wiped and its queue kept, as in recovery. */
+    wipe() {
+      changed({ storage: 'reset', queue: 'preserved' });
     },
     settle(settlement: MutationSettlement) {
       for (const listener of [...listeners]) listener(settlement);

@@ -637,6 +637,37 @@ describe('createChannelWrites', () => {
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
   });
 
+  it('keeps a held edit waiting when storage is wiped under a kept queue it cannot read yet', async () => {
+    vi.useFakeTimers();
+    try {
+      const { writes, queued, queue, wipe, settle } = setup(() => ({
+        disposition: { kind: 'queued', transactionId: '4' },
+      }));
+      queued.push('4');
+      const editing = writes.edit(edited(graphqlMessage(7).id));
+      const outcome = (async () => {
+        try {
+          return { value: await editing };
+        } catch (error) {
+          return { error };
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(0);
+      queue.failures = 1;
+      wipe();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+      settle({ transactionId: '4', status: 'committed' });
+      expect(await outcome).not.toHaveProperty('error');
+      expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('calls a held send unknown when the device cache is reset and its queue cannot be read', async () => {
     // The device's copy can be the queue's own optimistic record.
     const row = graphqlMessage(7);

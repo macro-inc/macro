@@ -406,13 +406,14 @@ const ROOT_READ_BUDGET_MS = 500;
  *
  * A page the browser suspended (the back/forward cache) hears no settlement
  * while away, and another tab can deliver its write meanwhile. A host that
- * comes back cannot tell what changed while it was frozen and may report a
- * reset with its storage intact. So after any generation change, heard
+ * comes back cannot tell what changed while it was frozen and may report its
+ * queue reset with it intact. So after any generation change, heard
  * before or during the wait, the queue is asked: a write it still holds keeps
  * waiting, and one that left it unheard ends as `missed`, whose outcome the
  * caller reads from the device and then the server. A queue that cannot
  * answer is asked again, backing off, since its settlement may already have
- * gone by; after a reset it loses the write instead (`CACHE_RESET`).
+ * gone by; after a queue reset it loses the write instead (`CACHE_RESET`).
+ * Storage wiped under a kept queue keeps the write in it.
  */
 function watchSettlements(
   host: ChannelWriteHost,
@@ -426,7 +427,7 @@ function watchSettlements(
   const missed = Deferred.makeUnsafe<'missed'>();
   let waiting: string | undefined;
   // A generation change heard before the wait had a transaction to check.
-  let unchecked: CacheGenerationChange['storage'] | undefined;
+  let unchecked: CacheGenerationChange['queue'] | undefined;
   let recheck: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   const lost = () =>
@@ -435,19 +436,18 @@ function watchSettlements(
       Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
     );
   /**
-   * After the engine comes back, with its storage kept or (as a host that
-   * was suspended conservatively reports) reset, asks the queue: a write it
-   * still holds keeps waiting, and one that left it unheard is `missed`.
-   * Without an answer, a reset loses the write and a kept store is asked
-   * again later.
+   * After the engine comes back, with its queue kept or (as a host that was
+   * suspended conservatively reports) reset, asks the queue: a write it still
+   * holds keeps waiting, and one that left it unheard is `missed`. Without an
+   * answer, a reset queue loses the write and a kept one is asked again later.
    */
   const checkQueued = async (
-    storage: CacheGenerationChange['storage'],
+    queueChange: CacheGenerationChange['queue'],
     retryMs = QUEUE_RECHECK_MS
   ) => {
     const transactionId = waiting;
     if (!transactionId) {
-      if (storage === 'reset' || !unchecked) unchecked = storage;
+      if (queueChange === 'reset' || !unchecked) unchecked = queueChange;
       return;
     }
     let queue: Awaited<
@@ -457,7 +457,7 @@ function watchSettlements(
       if (!host.inspectMutations) throw new Error('queue cannot be listed');
       queue = await host.inspectMutations();
     } catch (error) {
-      if (storage === 'reset') {
+      if (queueChange === 'reset') {
         lost();
         return;
       }
@@ -469,7 +469,10 @@ function watchSettlements(
       recheck = setTimeout(
         () =>
           fireAndForget(
-            checkQueued(storage, Math.min(retryMs * 2, QUEUE_RECHECK_MAX_MS)),
+            checkQueued(
+              queueChange,
+              Math.min(retryMs * 2, QUEUE_RECHECK_MAX_MS)
+            ),
             'channel-writes'
           ),
         retryMs
@@ -508,7 +511,7 @@ function watchSettlements(
     );
   });
   const stopReset = host.onCacheGenerationChanged((change) => {
-    fireAndForget(checkQueued(change.storage), 'channel-writes');
+    fireAndForget(checkQueued(change.queue), 'channel-writes');
   });
   const settledOrReset = (transactionId: string) =>
     Effect.raceAllFirst([
