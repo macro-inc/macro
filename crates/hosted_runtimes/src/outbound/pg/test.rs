@@ -761,6 +761,7 @@ async fn deleting_the_buyer_keeps_computers_and_reservations(pool: PgPool) {
 mod enrollment;
 
 mod capacity;
+mod image_upgrades;
 mod moves;
 mod waiting;
 

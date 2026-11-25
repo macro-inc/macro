@@ -166,7 +166,9 @@ it.each([
             },
           },
         ],
-      }
+      },
+      // The request and cache writes join the `entity.*` span's trace.
+      { macroTraceParent: expect.anything() }
     );
     expect(mocks.refresh).toHaveBeenCalledOnce();
   }

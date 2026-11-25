@@ -53,6 +53,7 @@ pub fn pending(configuration: &EventActionConfiguration) -> PendingEventRun {
         revision: configuration.revision,
         event: incoming().normalize().unwrap(),
         admitted_at: Utc::now(),
+        traceparent: None,
     }
 }
 
@@ -246,6 +247,7 @@ impl EventRunRepository for Repo {
             revision,
             event: event.clone(),
             admitted_at: Utc::now(),
+            traceparent: None,
         };
         if state.pending.iter().any(|p| p.key() == pending.key())
             || state
@@ -503,9 +505,27 @@ pub struct Rollout(pub Option<bool>);
 
 pub const ROLLED_OUT: Rollout = Rollout(Some(true));
 
+/// Event routines rolled out, `email.labeled` not yet.
+#[derive(Clone, Copy)]
+pub struct EmailLabelsOff;
+
+impl crate::domain::event_rollout::EventRoutineRollout for EmailLabelsOff {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        Ok(true)
+    }
+
+    async fn email_labels_enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        Ok(false)
+    }
+}
+
 impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
     async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
         self.0
             .ok_or_else(|| rootcause::report!("flags unavailable"))
+    }
+
+    async fn email_labels_enabled_for(&self, user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        self.enabled_for(user).await
     }
 }

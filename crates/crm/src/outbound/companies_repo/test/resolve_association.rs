@@ -1,3 +1,4 @@
+use super::helpers::{insert_company_alias, insert_contact_alias};
 use crate::domain::{
     association::{CrmAssociation, CrmRecordAssociation},
     companies_repo::CompaniesRepository,
@@ -54,6 +55,39 @@ async fn company_covers_every_contact_the_viewer_may_see(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures("fixtures/contact_listing.sql")
 )]
+async fn an_old_id_resolves_to_the_company_it_was_merged_into(pool: PgPool) {
+    let (into_visible, into_foreign) = (Uuid::now_v7(), Uuid::now_v7());
+    insert_company_alias(&pool, into_visible, id(101)).await;
+    insert_company_alias(&pool, into_foreign, id(103)).await;
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let viewer = || CrmContactListScope::Viewer(VIEWER);
+    let team = || CrmContactListScope::Team {
+        team_id: id(11),
+        include_hidden: true,
+    };
+
+    for (old_id, company) in [(into_visible, id(101)), (into_foreign, id(103))] {
+        let (old_id, company) = (
+            CrmAssociation::Company(old_id),
+            CrmAssociation::Company(company),
+        );
+        assert_eq!(
+            resolve(&repo, viewer(), old_id).await,
+            resolve(&repo, viewer(), company).await,
+        );
+        assert_eq!(
+            resolve(&repo, team(), old_id).await,
+            resolve(&repo, team(), company).await,
+        );
+    }
+    let resolved = resolve(&repo, viewer(), CrmAssociation::Company(into_visible)).await;
+    assert_eq!(resolved.unwrap().company_ids, [id(101)]);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
 async fn invisible_records_do_not_resolve(pool: PgPool) {
     let repo = CompaniesRepositoryImpl::new(pool);
     let viewer = || CrmContactListScope::Viewer(VIEWER);
@@ -95,6 +129,57 @@ async fn contact_covers_only_itself(pool: PgPool) {
         )
         .await,
         Some(CrmRecordAssociation::contact(id(1006)))
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn an_old_id_resolves_to_the_contact_it_was_merged_into(pool: PgPool) {
+    let (into_visible, into_foreign, into_hidden) =
+        (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    insert_contact_alias(&pool, into_visible, id(1002)).await;
+    insert_contact_alias(&pool, into_foreign, id(1003)).await;
+    insert_contact_alias(&pool, into_hidden, id(1007)).await;
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let viewer = || CrmContactListScope::Viewer(VIEWER);
+    let team = |include_hidden| CrmContactListScope::Team {
+        team_id: id(12),
+        include_hidden,
+    };
+
+    for (old_id, contact) in [
+        (into_visible, id(1002)),
+        (into_foreign, id(1003)),
+        (into_hidden, id(1007)),
+    ] {
+        let (old_id, contact) = (
+            CrmAssociation::Contact(old_id),
+            CrmAssociation::Contact(contact),
+        );
+        assert_eq!(
+            resolve(&repo, viewer(), old_id).await,
+            resolve(&repo, viewer(), contact).await,
+        );
+        for include_hidden in [false, true] {
+            assert_eq!(
+                resolve(&repo, team(include_hidden), old_id).await,
+                resolve(&repo, team(include_hidden), contact).await,
+            );
+        }
+    }
+    assert_eq!(
+        resolve(&repo, viewer(), CrmAssociation::Contact(into_visible)).await,
+        Some(CrmRecordAssociation::contact(id(1002)))
+    );
+    assert_eq!(
+        resolve(&repo, team(true), CrmAssociation::Contact(into_hidden)).await,
+        Some(CrmRecordAssociation::contact(id(1007)))
+    );
+    assert_eq!(
+        resolve(&repo, viewer(), CrmAssociation::Contact(into_foreign)).await,
+        None
     );
 }
 

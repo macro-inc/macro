@@ -37,7 +37,7 @@ pub(super) struct Relief {
     wake_queues: std::sync::Mutex<HashMap<HostId, (u32, Arc<tokio::sync::Semaphore>)>>,
     /// Signalled when a harness's macrod connects, for dispatches waiting on a wake.
     connections: std::sync::Mutex<HashMap<HarnessId, Arc<tokio::sync::Notify>>>,
-    in_use: Arc<dyn ComputersInUse>,
+    pub(super) in_use: Arc<dyn ComputersInUse>,
     /// The minute of each host's last kept usage reading.
     usage_minutes: std::sync::Mutex<HashMap<HostId, DateTime<Utc>>>,
     /// When usage readings were last pruned.

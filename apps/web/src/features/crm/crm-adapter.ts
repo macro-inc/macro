@@ -1,3 +1,4 @@
+import { propertyValueLabel } from '@app/features/activity/queries/property-value';
 import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
@@ -16,6 +17,7 @@ import { idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazy } from '@core/util/lazy';
 import type { EntityData } from '@entity';
+import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { usePrimaryEmailLinkId } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
@@ -94,6 +96,7 @@ import { createEmailPolicySource } from './queries/email-policy';
 import { createEmailPrivacySource } from './queries/email-privacy';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
+import { createMergeCommands } from './queries/merges';
 import { createPipelineTransfer } from './queries/pipeline-transfer';
 import { createPipelinesSource } from './queries/pipelines';
 import {
@@ -109,13 +112,21 @@ import {
   useResetCrmStagesMutation,
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
-import { useQuickAccessCrmContactsQuery } from './record-adapter';
+import {
+  useCrmContactSearch,
+  useQuickAccessCrmContactsQuery,
+} from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
 import { crmTaskComposerContext } from './task-composer';
 
 // Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
 const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
+}));
+
+// Loaded on demand, like the Tasks tab: the activity views pull in soup.
+const CrmRecordActivity = lazy(async () => ({
+  default: (await import('./record-activity-adapter')).CrmRecordActivity,
 }));
 
 const CrmActivityTasks = lazy(async () => ({
@@ -350,7 +361,17 @@ export function createAppCrmContext(): CrmContext {
         useRecordReferencesQuery(useSoupAstItemsQuery, scope)
       ),
     RecordTasks: CrmRecordTasks,
+    RecordActivity: CrmRecordActivity,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
+    createMergeCommands: (recordType) => createMergeCommands(deps, recordType),
+    createPropertyValueLabel: () => {
+      const definitions = useAllProperties();
+      return (propertyId, value) =>
+        propertyValueLabel(
+          value,
+          definitions().find((definition) => definition.id === propertyId)
+        );
+    },
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({
         ...deps,
@@ -363,6 +384,7 @@ export function createAppCrmContext(): CrmContext {
       fetchCrmExportCompanies(deps.storage, ...args),
     createCompanySuggestions: useQuickAccessCrmCompaniesQuery,
     createContactSuggestions: useQuickAccessCrmContactsQuery,
+    createContactSearch: useCrmContactSearch,
     hydrateCompany(company) {
       if (company.properties) return company;
       const cached = getSoupEntityById(company.id);

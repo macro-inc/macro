@@ -2,9 +2,11 @@ import type { UnifiedNotification } from '@notifications/types';
 import type { NotifEvent } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
+  admitUnread,
   channelStacks,
   keepUnchangedStacks,
-  stacksByThread,
+  NO_LISTED_NOTIFICATIONS,
+  notificationsToMarkDone,
 } from './channel-stacks';
 
 function notification(
@@ -136,23 +138,6 @@ describe('channelStacks', () => {
   });
 });
 
-describe('stacksByThread', () => {
-  it('puts top-level checks on their message and reply checks under their thread', () => {
-    const index = stacksByThread(
-      channelStacks([
-        reply('teo', 31, 'teo', 'm-root'),
-        mention('jonah', 34, 'jonah'),
-      ])
-    );
-
-    expect(index.get('m-root')?.root).toEqual([]);
-    expect(index.get('m-root')?.replies.get('m-teo')?.[0]?.kind).toBe('thread');
-    expect(index.get('m-jonah')?.root.map((stack) => stack.kind)).toEqual([
-      'mention',
-    ]);
-  });
-});
-
 describe('keepUnchangedStacks', () => {
   it('keeps an unchanged stack and replaces a changed one', () => {
     const before = channelStacks([
@@ -175,5 +160,148 @@ describe('keepUnchangedStacks', () => {
     expect(thread(after)).toBe(thread(before));
     expect(messages(after)).not.toBe(messages(before));
     expect(messages(after)?.notifications).toHaveLength(2);
+  });
+});
+
+const unseen = (record: UnifiedNotification): UnifiedNotification => ({
+  ...record,
+  state: 'unseen',
+});
+const ids = (records: readonly UnifiedNotification[]) =>
+  records.map((record) => record.id);
+
+// Reads from this moment on count as unread at open.
+const OPENED_AT = Date.UTC(2026, 10, 18, 12, 0);
+const readAt = (record: UnifiedNotification, at: number) => ({
+  ...record,
+  viewed_at: new Date(at).toISOString(),
+});
+
+const serverReadAt = (record: UnifiedNotification) =>
+  record.viewed_at ?? undefined;
+
+describe('admitUnread', () => {
+  it('lists nothing until the server answers, then everything unread since opening', () => {
+    const notDone = [
+      unseen(send('a', 1, 'ana')),
+      send('read-long-ago', 2, 'ana'),
+      // Read by the Home row that opened the channel.
+      readAt(send('read-opening', 3, 'leo'), OPENED_AT + 2_000),
+    ];
+    const fromCache = admitUnread(
+      NO_LISTED_NOTIFICATIONS,
+      notDone,
+      false,
+      OPENED_AT,
+      serverReadAt
+    );
+    const settled = admitUnread(
+      fromCache,
+      notDone,
+      true,
+      OPENED_AT,
+      serverReadAt
+    );
+
+    expect(fromCache).toBe(NO_LISTED_NOTIFICATIONS);
+    expect(ids(settled.notifications)).toEqual(['a', 'read-opening']);
+    expect(settled.closed).toBe(true);
+  });
+
+  it('times a read made on this page by its own clock', () => {
+    // The server's clock runs a minute behind this device's.
+    const read = readAt(send('a', 1, 'ana'), OPENED_AT - 60_000);
+    const localReadAt = () => new Date(OPENED_AT + 1_000).toISOString();
+
+    expect(
+      admitUnread(
+        NO_LISTED_NOTIFICATIONS,
+        [read],
+        true,
+        OPENED_AT,
+        serverReadAt
+      ).notifications
+    ).toHaveLength(0);
+    expect(
+      admitUnread(NO_LISTED_NOTIFICATIONS, [read], true, OPENED_AT, localReadAt)
+        .notifications
+    ).toHaveLength(1);
+  });
+
+  it('keeps a listed notification once it is read', () => {
+    const listed = admitUnread(
+      NO_LISTED_NOTIFICATIONS,
+      [unseen(send('a', 1, 'ana'))],
+      true,
+      OPENED_AT,
+      serverReadAt
+    );
+
+    expect(admitUnread(listed, [], true, OPENED_AT, serverReadAt)).toBe(listed);
+  });
+
+  it('adds only replies and mentions that arrive after it settles', () => {
+    const listed = admitUnread(
+      NO_LISTED_NOTIFICATIONS,
+      [unseen(send('a', 1, 'ana'))],
+      true,
+      OPENED_AT,
+      serverReadAt
+    );
+    const later = admitUnread(
+      listed,
+      [
+        unseen(send('a', 1, 'ana')),
+        unseen(send('new-message', 5, 'leo')),
+        unseen(reply('new-reply', 6, 'leo', 'm-a')),
+        // Read as it arrived, on screen.
+        readAt(mention('new-mention', 7, 'mara'), OPENED_AT + 60_000),
+      ],
+      true,
+      OPENED_AT,
+      serverReadAt
+    );
+
+    expect(ids(later.notifications)).toEqual(['a', 'new-reply', 'new-mention']);
+  });
+});
+
+describe('notificationsToMarkDone', () => {
+  it('marks the listed stack with the rest of its inbox stack, and nothing else', () => {
+    const listed = channelStacks([unseen(reply('b', 2, 'leo', 'm-root'))]);
+    const notDone = channelStacks([
+      reply('older', 1, 'ana', 'm-root'),
+      unseen(reply('b', 2, 'leo', 'm-root')),
+      reply('other-thread', 3, 'mara', 'm-other'),
+      send('message', 4, 'mara'),
+    ]);
+
+    expect(ids(notificationsToMarkDone(listed, notDone)).sort()).toEqual([
+      'b',
+      'older',
+    ]);
+  });
+
+  it('marks the thread a listed root mention is stacked into', () => {
+    const listed = channelStacks([unseen(mention('root', 2, 'leo'))]);
+    const notDone = channelStacks([
+      unseen(mention('root', 2, 'leo')),
+      reply('seen-reply', 3, 'ana', 'm-root'),
+    ]);
+
+    expect(listed[0]?.key).not.toBe(notDone[0]?.key);
+    expect(ids(notificationsToMarkDone(listed, notDone)).sort()).toEqual([
+      'root',
+      'seen-reply',
+    ]);
+  });
+
+  it('leaves out what is already done', () => {
+    const listed = channelStacks([
+      { ...reply('b', 2, 'leo', 'm-root'), state: 'done' },
+      unseen(reply('c', 3, 'leo', 'm-root')),
+    ]);
+
+    expect(ids(notificationsToMarkDone(listed, []))).toEqual(['c']);
   });
 });

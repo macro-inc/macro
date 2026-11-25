@@ -7,6 +7,7 @@ import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
+import { rememberMetaClick } from '@app/lib/analytics/metaClickIds';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { rememberMobileEmailAttribution } from '@app/lib/analytics/signupAttribution';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
@@ -67,6 +68,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   // Before any await: the desktop link's ad parameters have to be stored
   // before signup navigates away to the identity provider.
   rememberMobileEmailAttribution();
+  rememberMetaClick();
 
   await prefetchUserInfo();
 

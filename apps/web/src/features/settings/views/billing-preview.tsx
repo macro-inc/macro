@@ -1,6 +1,11 @@
 import { PaywallDialog } from '@app/features/paywall/components/paywall-dialog';
 import { PaywallView } from '@app/features/paywall/components/paywall-view';
-import { PLAN_BY_TIER, type PlanTier } from '@app/features/paywall/plans';
+import {
+  type PaidPlanTier,
+  PLAN_BY_TIER,
+  type PlanTier,
+} from '@app/features/paywall/plans';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BillingSettingsView } from '../components/billing-settings-view';
@@ -61,6 +66,8 @@ export function BillingPreview(props: {
   const [paywallOpen, setPaywallOpen] = createSignal(false);
   const [account, setAccount] = createSignal<Account>('solo');
   const [plan, setPlan] = createSignal<PlanTier>('free');
+  const [billingInterval, setBillingInterval] =
+    createSignal<BillingInterval>('month');
   const [summaryStatus, setSummaryStatus] =
     createSignal<SummaryStatus>('loaded');
   const [hasPaid, setHasPaid] = createSignal(false);
@@ -69,6 +76,11 @@ export function BillingPreview(props: {
   const [aiUsage, setAiUsage] = createSignal(false);
   const [pending, setPending] = createSignal(false);
   const [action, setAction] = createSignal('');
+  const effectiveInterval = (): BillingInterval | undefined => {
+    if (plan() === 'free') return undefined;
+    if (plan() === 'premium') return 'month';
+    return billingInterval();
+  };
   const state = () =>
     getBillingState({
       hasPaid: hasPaid() || (summaryStatus() === 'loaded' && plan() !== 'free'),
@@ -79,7 +91,7 @@ export function BillingPreview(props: {
           : account() === 'team-owner'
             ? 'owner'
             : 'member',
-      teamPlans: ['premium', 'premium', 'max'],
+      teamPlans: ['premium', 'business', 'max'],
       summary:
         summaryStatus() === 'loaded'
           ? { tier: plan(), canManageBilling: account() !== 'team-member' }
@@ -87,10 +99,12 @@ export function BillingPreview(props: {
       aiUsageEnabled: aiUsage(),
       pending: pending(),
       trialEligible: trialEligible(),
+      interval: effectiveInterval(),
     });
   const reset = () => {
     setAccount('solo');
     setPlan('free');
+    setBillingInterval('month');
     setSummaryStatus('loaded');
     setHasPaid(false);
     setTrialEligible(true);
@@ -151,16 +165,33 @@ export function BillingPreview(props: {
         <PreviewSelect
           label="Plan"
           value={plan()}
-          options={(['free', 'premium', 'max'] as const).map((tier) => ({
-            value: tier,
-            label: PLAN_BY_TIER[tier].name,
-          }))}
+          options={(['free', 'premium', 'business', 'max'] as const).map(
+            (tier) => ({
+              value: tier,
+              label: PLAN_BY_TIER[tier].name,
+            })
+          )}
           onChange={(value) => {
             setPlan(value);
             setHasPaid(value !== 'free');
+            if (value === 'premium') setBillingInterval('month');
             setAction('');
           }}
         />
+        <Show when={plan() === 'business' || plan() === 'max'}>
+          <PreviewSelect
+            label="Subscription interval"
+            value={billingInterval()}
+            options={[
+              { value: 'year', label: 'Annual' },
+              { value: 'month', label: 'Monthly' },
+            ]}
+            onChange={(value) => {
+              setBillingInterval(value);
+              setAction('');
+            }}
+          />
+        </Show>
       </div>
       <details>
         <summary class="text-sm text-ink-muted">
@@ -215,9 +246,9 @@ export function BillingPreview(props: {
     </section>
   );
 
-  const selectPlan = (tier: 'premium' | 'max') =>
+  const selectPlan = (tier: PaidPlanTier, interval: BillingInterval) =>
     setAction(
-      `Preview only · ${state().tier === 'free' ? 'Checkout' : 'Change plan'}: ${PLAN_BY_TIER[tier].name}${state().tier === 'free' && tier === 'premium' && trialEligible() ? ' · 30-day trial' : ''} · no billing changes made`
+      `Preview only · ${state().tier === 'free' ? 'Checkout' : 'Change plan'}: ${PLAN_BY_TIER[tier].name} (${interval === 'year' ? 'annual' : 'monthly'})${state().tier === 'free' && tier === 'premium' && trialEligible() ? ' · 30-day trial' : ''} · no billing changes made`
     );
   const manage = () =>
     setAction('Preview only · Manage subscription · no billing changes made');

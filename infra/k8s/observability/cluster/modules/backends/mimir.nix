@@ -87,6 +87,12 @@ let
       # own cap), and the node Alloy adds the cluster's own node, kubelet and
       # cAdvisor series.
       max_global_series_per_user = 300000;
+      # So that one metric whose label turns out to be free text can't take
+      # them all. The largest has about 3k; the cap is a generator's own.
+      max_global_series_per_metric = 20000;
+      # OTLP delta counts and histograms are stored as they come instead of
+      # refused; queries sum them with sum_over_time. Experimental in Mimir.
+      otel_native_delta_ingestion = true;
       # Mimir's 10k samples/s would cut off senders catching up after an
       # outage; the host takes about 900/s.
       ingestion_rate = 50000;

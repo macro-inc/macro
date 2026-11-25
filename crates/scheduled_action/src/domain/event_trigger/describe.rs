@@ -197,6 +197,7 @@ fn event_label(event: EventName, filter: &EventFilter) -> &'static str {
             Some(_) => "Property changed",
         },
         EventName::EmailMessageReceived => "New email received",
+        EventName::EmailLabeled => "Email labeled",
         EventName::ChannelCreated => "Channel created",
         EventName::ChannelMessagePosted => "Message sent in channel",
         EventName::ChannelMentioned => "@ mentioned in channel",

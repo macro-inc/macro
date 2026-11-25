@@ -31,6 +31,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `edge` | `observability` | nginx, the only target of the ALB: Grafana and Argo CD by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
 | `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass. |
 | `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send to Loki, Tempo and Mimir. |
+| `derived-metrics` | `observability` | Two Alloys that compute the metrics Datadog derives from spans and write them to Mimir ("Derived metrics"). |
 
 Charts are pinned in `charts/<repo>/<chart>/default.nix` (version and hash).
 
@@ -40,8 +41,8 @@ Run from this directory.
 
 | Command | What it does |
 | --- | --- |
-| `nix run .#render` | Renders the modules into `manifests/prod/`. Commit the result with the change. |
-| `nix run .#check` | Fails when `manifests/prod/` differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
+| `nix run .#render` | Renders the modules into `manifests/prod/` and the derived metrics' `MAPPING.md`. Commit the result with the change. |
+| `nix run .#check` | Fails when either differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
 | `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `loki`, `tempo` and `mimir` (gp3 volumes and S3), and `grafana`, `edge` and `alloy-ingest` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
 | `nix run .#bootstrap -- --context <ctx>` | The one-time bootstrap below. |
@@ -189,6 +190,33 @@ Their pods reach the backends at the URLs in `modules/backends/endpoints.nix`;
 label writers `observability.macro.com/telemetry-write: "true"` and readers
 `observability.macro.com/telemetry-read: "true"` (`clientLabels` there).
 
+## Derived metrics
+
+Datadog computes metrics from spans, which its monitors and dashboards read.
+`modules/derived-metrics/` computes the same ones here:
+
+```
+alloy-ingest ── tap: spans some metric reads, before sampling ──▶ derived-metrics ── OTLP, delta ──▶ Mimir
+```
+
+- `spans.nix` defines them, with Datadog's meaning; `alloy.nix` turns the
+  definitions into the tap and the application's Alloy configuration.
+- [`modules/derived-metrics/MAPPING.md`](modules/derived-metrics/MAPPING.md)
+  (generated) says what each Datadog metric and tag is called in Mimir and how
+  to translate a query. Read it before porting a monitor.
+- Not Tempo's metrics generator: it sees only the traces the sampler keeps and
+  can measure nothing but a span's duration.
+- The tap never holds ingest up: its queue holds 4 MiB at most and it drops what
+  `derived-metrics` can't take for a minute. It forwards only the attributes the
+  metrics read, without events, so no prompt or response text.
+- Every 30 s each replica writes one delta sample per series that had spans,
+  stored as it comes (`otel_native_delta_ingestion` in Mimir, experimental): no
+  counter resets, no first increment lost, a series that fires once a day counts.
+  A distribution is one native histogram series.
+- Cardinality: each replica writes its own series, so a metric has at most twice
+  its label combinations. `tool` is the widest label. Mimir caps any one metric at
+  20k series (`max_global_series_per_metric`).
+
 ## Grafana, the edge and ingest
 
 ```
@@ -217,7 +245,9 @@ notification route, so rules evaluate and show state here but nothing reaches
 GoAlert, SNS or anyone. The one exception is the watchdog: an always-firing
 rule that pings a GoAlert heartbeat monitor every two minutes, so GoAlert pages if
 this Grafana, its alerting or its path to GoAlert stops. The switch sets
-`notify = true`. Muting covers notification policies only: a contact point's
+`notify = true`. The cluster's own rules are the "Observability cluster"
+group in `modules/grafana.nix` (today: Tempo compaction stalled), routed to
+GoAlert notify. Muting covers notification policies only: a contact point's
 **Test** button in the UI sends for real even while muted; don't press it
 before the switch.
 

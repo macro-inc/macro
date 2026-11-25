@@ -21,6 +21,7 @@ async fn test_search_chat_names_empty_term(pool: Pool<Postgres>) -> anyhow::Resu
         &user_id,
         &[],
         "".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -54,6 +55,7 @@ async fn test_search_chat_names_ids_only_with_empty_ids(
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         true,
         &[],
         false,
@@ -92,6 +94,7 @@ async fn test_search_chat_names_ids_only_mode(pool: Pool<Postgres>) -> anyhow::R
         &user_id,
         &chat_ids,
         "project".to_string(),
+        &[],
         true,
         &[],
         false,
@@ -143,6 +146,7 @@ async fn test_search_chat_names_normal_mode_owned_chats(
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -173,6 +177,35 @@ async fn test_search_chat_names_normal_mode_owned_chats(
         "<macro_em>Project</macro_em> Review Chat"
     );
 
+    // A left-out word drops the chats whose name holds it. `_` is a literal
+    // character, not LIKE's any-character wildcard, or it would leave out
+    // every chat.
+    let left_out = search_chat_names(
+        &pool,
+        &user_id,
+        &[],
+        "project".to_string(),
+        &["REVIEW".to_string(), "_".to_string()],
+        false,
+        &[],
+        false,
+        10,
+        None,
+    )
+    .await?;
+    let ids: Vec<String> = left_out
+        .items
+        .iter()
+        .map(|item| item.entity_id.to_string())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "66666666-6666-6666-6666-666666666666",
+            "11111111-1111-1111-1111-111111111111"
+        ]
+    );
+
     Ok(())
 }
 
@@ -191,6 +224,7 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         &user_id,
         &[],
         "PROJECT".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -207,6 +241,7 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -223,6 +258,7 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         &user_id,
         &[],
         "PrOjEcT".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -253,6 +289,7 @@ async fn test_search_chat_names_with_shared_chats(pool: Pool<Postgres>) -> anyho
         &user_id,
         &shared_chat_ids,
         "project".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -294,6 +331,7 @@ async fn test_search_chat_names_pagination_limit(pool: Pool<Postgres>) -> anyhow
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -335,6 +373,7 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -358,6 +397,7 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -415,6 +455,7 @@ async fn test_search_chat_names_no_results(pool: Pool<Postgres>) -> anyhow::Resu
         &user_id,
         &[],
         "nonexistent".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -444,6 +485,7 @@ async fn test_search_chat_names_partial_match(pool: Pool<Postgres>) -> anyhow::R
         &user_id,
         &[],
         "meet".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -489,6 +531,7 @@ async fn test_search_chat_names_user_isolation(pool: Pool<Postgres>) -> anyhow::
         &user_id,
         &[],
         "User2".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -518,6 +561,7 @@ async fn test_search_chat_names_excludes_soft_deleted(pool: Pool<Postgres>) -> a
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -562,6 +606,7 @@ async fn test_search_chat_names_rejects_thread_cursor(pool: Pool<Postgres>) -> a
         &user_id,
         &[],
         "test".to_string(),
+        &[],
         false,
         &[],
         false,
@@ -594,6 +639,7 @@ async fn test_search_chat_names_tag_filter(pool: Pool<Postgres>) -> anyhow::Resu
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &tagged,
         false,
@@ -615,6 +661,7 @@ async fn test_search_chat_names_tag_filter(pool: Pool<Postgres>) -> anyhow::Resu
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &unheld,
         false,
@@ -652,6 +699,7 @@ async fn test_search_chat_names_tag_filter_ids_only(pool: Pool<Postgres>) -> any
         &user_id,
         &chat_ids,
         "project".to_string(),
+        &[],
         true,
         &tagged,
         false,
@@ -689,6 +737,7 @@ async fn test_search_chat_names_tag_filter_match_all(pool: Pool<Postgres>) -> an
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &across_rows,
         true,
@@ -714,6 +763,7 @@ async fn test_search_chat_names_tag_filter_match_all(pool: Pool<Postgres>) -> an
         &user_id,
         &[],
         "project".to_string(),
+        &[],
         false,
         &with_unheld,
         true,
@@ -777,6 +827,7 @@ async fn the_search_span_leaves_out_the_term() {
         &user_id,
         &[],
         "severance offer".to_string(),
+        &[],
         false,
         &[],
         false,

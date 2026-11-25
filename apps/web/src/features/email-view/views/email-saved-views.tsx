@@ -21,6 +21,7 @@ import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import {
   Button,
   ButtonGroup,
+  type ChipComboboxOption,
   type DialogHandle,
   Dropdown,
   type ManagedDialogProps,
@@ -28,6 +29,7 @@ import {
 } from '@ui';
 import {
   type Accessor,
+  createMemo,
   createSignal,
   getOwner,
   type JSX,
@@ -76,6 +78,7 @@ import {
   materializeEmailSavedView,
   readEmailSavedView,
 } from '../filters/email-saved-view';
+import { useLabelFilterGroup } from '../filters/use-label-filter-group';
 import { useEmailParticipantSuggestions } from '../queries/use-email-participant-suggestions';
 import { useEmailSavedViewUnread } from '../queries/use-email-saved-view-unread';
 
@@ -155,6 +158,16 @@ type BuilderProps = ManagedDialogProps & {
 function EmailSavedViewDialog(props: BuilderProps) {
   const suggestions = useEmailParticipantSuggestions();
   const tags = useTagOptionSummaries();
+  const labelGroup = useLabelFilterGroup();
+  const labels = createMemo(() =>
+    (labelGroup()?.options ?? []).map(
+      (option): ChipComboboxOption => ({
+        value: option.id,
+        label: option.label,
+        icon: option.icon,
+      })
+    )
+  );
   const analytics = useAnalytics();
   const [filters, setFilters] = createSignal(props.initial);
   const config = () => configOf(filters());
@@ -168,6 +181,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       inboxes={props.inboxes}
       suggestions={suggestions}
       tags={tags()}
+      labels={labels()}
     />
   );
   const shared = {

@@ -74,3 +74,21 @@ async fn a_refusal_is_recorded_with_the_request_that_made_it() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn work_is_a_programs_inside_as_program_or_with_a_correlation() {
+    assert!(!by_program());
+    assert!(as_program(async { by_program() }).await);
+    assert!(scope(Some(Uuid::now_v7()), async { by_program() }).await);
+    let routine = Uuid::now_v7();
+    let kept = scope_attribution(
+        Attribution {
+            routine_id: Some(routine),
+            ..Attribution::default()
+        },
+        as_program(async { (by_program(), current_routine()) }),
+    )
+    .await;
+    assert_eq!(kept, (true, Some(routine)));
+    assert!(!by_program());
+}

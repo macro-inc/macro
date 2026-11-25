@@ -13,6 +13,8 @@ export type RoutineRow = {
   createdAt: string;
   /** What starts it, e.g. "New email received" or "Weekdays at 9:00 AM". */
   when: string;
+  /** All trigger descriptions, for search and hover details. */
+  whenDetails?: string;
   /** What kind of thing starts it, for the icon beside `when`. */
   whenKind?: TriggerKind;
   /** What it does in a line, e.g. "Invoice, Newsletter · 4 actions". */

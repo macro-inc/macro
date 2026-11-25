@@ -132,6 +132,29 @@ fn test_build_bool_query_join_shape_sub_type_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+fn excluded_sub_types_leave_those_documents_out() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .excluded_sub_types(vec!["task".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let must_not = json["bool"]["must_not"].as_array().expect("must_not array");
+    assert!(
+        must_not.contains(&serde_json::json!({"terms": {"sub_type": ["task"]}})),
+        "tasks should be left out on the parent: {must_not:?}"
+    );
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        !filter
+            .iter()
+            .any(|f| f.get("terms").and_then(|t| t.get("sub_type")).is_some()),
+        "documents without a sub type must stay: {filter:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string(), "bar".to_string()])
         .match_type("partial")
@@ -865,4 +888,34 @@ async fn a_content_prefix_matches_words_past_the_first_256_that_share_it() {
         .await
         .unwrap();
     result.unwrap();
+}
+
+#[test]
+fn a_left_out_term_drops_documents_it_matches_by_the_modes_fields() -> anyhow::Result<()> {
+    let built = |mode: DocumentSearchMode| -> anyhow::Result<serde_json::Value> {
+        let builder = DocumentQueryBuilder::new(vec!["budget".to_string()])
+            .match_type("partial")
+            .user_id("alice")
+            .mode(mode)
+            .excluded_terms(vec!["draft".to_string()]);
+        Ok(builder.build_bool_query()?.build().to_json())
+    };
+    let by_name = serde_json::json!({"match_bool_prefix": {"document_name": {"query": "draft"}}});
+    let by_chunk = serde_json::json!({"has_child": {
+        "type": "chunk",
+        "query": {"match_bool_prefix": {"content": {"query": "draft"}}},
+    }});
+
+    let content = built(DocumentSearchMode::Content)?;
+    assert_eq!(content["bool"]["must_not"], serde_json::json!([by_chunk]));
+
+    let name = built(DocumentSearchMode::Name)?;
+    assert_eq!(name["bool"]["must_not"], serde_json::json!([by_name]));
+
+    let either = built(DocumentSearchMode::NameContent)?;
+    assert_eq!(
+        either["bool"]["must_not"],
+        serde_json::json!([by_name, by_chunk])
+    );
+    Ok(())
 }

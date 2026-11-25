@@ -42,6 +42,8 @@ export type MutationQueueOwner = {
    * cannot be known: this page's own owners, and owners that held no lock.
    */
   departed: (owner: string) => Promise<void> | undefined;
+  /** Lets the live owner go for good, as its page does when it closes. */
+  dispose: () => void;
 };
 
 /** Where `pagehide` and `pageshow` arrive; the window in the app. */
@@ -75,6 +77,7 @@ export function createMutationQueueOwner(
   /** Lets the current lock go, or gives it back as soon as it is granted. */
   let letGo: (() => void) | undefined;
   const departures = new Map<string, Promise<void>>();
+  const listening = new AbortController();
 
   function hold(lockManager: LockManager): void {
     const name = `${ownLivePrefix}${incarnation}`;
@@ -99,15 +102,22 @@ export function createMutationQueueOwner(
     );
   }
 
+  function letGoOfLive(): void {
+    letGo?.();
+    letGo = undefined;
+  }
+
   if (locks) {
     hold(locks);
-    page?.addEventListener('pagehide', () => {
-      letGo?.();
-      letGo = undefined;
-    });
-    page?.addEventListener('pageshow', (event) => {
-      if (restoredFromCache(event) && !letGo) hold(locks);
-    });
+    const { signal } = listening;
+    page?.addEventListener('pagehide', letGoOfLive, { signal });
+    page?.addEventListener(
+      'pageshow',
+      (event) => {
+        if (restoredFromCache(event) && !letGo) hold(locks);
+      },
+      { signal }
+    );
   }
 
   async function watch(lockManager: LockManager, owner: string): Promise<void> {
@@ -137,6 +147,10 @@ export function createMutationQueueOwner(
         departures.set(owner, departure);
       }
       return departure;
+    },
+    dispose() {
+      listening.abort();
+      letGoOfLive();
     },
   };
 }

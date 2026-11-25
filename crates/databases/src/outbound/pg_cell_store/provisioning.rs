@@ -16,6 +16,15 @@ where
 {
     type Transaction = Transaction<'static, Postgres>;
 
+    #[tracing::instrument(skip_all, err, fields(writes = writes.writes.len()))]
+    async fn apply_storage_writes_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        writes: &Writes,
+    ) -> Result<WritesOutcome, Self::Error> {
+        self.apply_within(transaction, writes).await
+    }
+
     #[tracing::instrument(skip_all, err)]
     async fn create_storage_in(
         &self,

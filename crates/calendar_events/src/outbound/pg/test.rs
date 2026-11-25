@@ -8,9 +8,10 @@ mod team_refresh;
 mod team_sharing;
 mod team_sync_coverage;
 use crate::domain::models::{
-    GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
-    GoogleWatchChannel, OccurrenceException, OccurrenceListing, ProviderEventSource,
-    REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+    GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX, GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES,
+    GOOGLE_SYSTEM_CALENDAR_SUFFIX, GoogleCalendarSyncSnapshot, GoogleWatchChannel,
+    OccurrenceException, OccurrenceListing, ProviderEventSource, REMINDER_METHOD_EMAIL,
+    REMINDER_METHOD_POPUP,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
 use crate::domain::service::{CalendarService, GoogleCalendarBackfillFailureService};
@@ -7889,4 +7890,137 @@ async fn mention_previews_say_how_the_viewer_holds_the_meeting(pool: PgPool) {
         Some(CalendarMentionViewerCopy::Snapshot)
     );
     assert_eq!(held_as(member_id).await, None);
+}
+
+/// Google's system calendars and the calendars a person added by URL list as
+/// subscriptions, whatever role Google reports for them; the person's own
+/// calendars and the ones colleagues share with them do not.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn google_calendars_added_by_url_are_subscriptions(pool: PgPool) {
+    let owner_id = "macro|calendar-subscriptions@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _) = grant_and_provider_ids(&repo, link_id).await;
+    for (provider_calendar_id, name, access_role) in [
+        ("ada@example.com".to_string(), "Ada", "reader"),
+        ("c_team".to_string(), "Team", "owner"),
+        (
+            format!("en.usa#holiday{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+            "Holidays in United States",
+            "reader",
+        ),
+        (
+            format!("1f0e4ab52d4b0b9d{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+            "Sports schedule",
+            "reader",
+        ),
+        (
+            format!("8c1f0e4ab52d4b0b{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+            "Added by URL, listed as owner",
+            "owner",
+        ),
+    ] {
+        repo.upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id,
+                name: name.to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some(access_role.to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let mut marked = repo
+        .list_visible_calendars(owner_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|calendar| {
+            (
+                calendar.name,
+                calendar.is_subscription,
+                calendar.is_writable,
+            )
+        })
+        .collect::<Vec<_>>();
+    marked.sort();
+    assert_eq!(
+        marked,
+        [
+            ("Ada".to_string(), false, false),
+            ("Added by URL, listed as owner".to_string(), true, true),
+            ("Holidays in United States".to_string(), true, false),
+            ("Primary".to_string(), false, true),
+            ("Sports schedule".to_string(), true, false),
+            ("Team".to_string(), false, true),
+        ]
+    );
+}
+
+/// The migration that logs every visible Google calendar added by URL, so
+/// caches that hold one refetch it as a subscription.
+const LOG_GOOGLE_CALENDARS_ADDED_BY_URL: &str = include_str!(
+    "../../../../macro_db_client/migrations/20261124224228_log_google_calendars_added_by_url.sql"
+);
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_by_url_backfill_logs_each_visible_google_calendar_added_by_url(pool: PgPool) {
+    let owner_id = "macro|calendar-by-url-backfill@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _) = grant_and_provider_ids(&repo, link_id).await;
+    let mut ids = Vec::new();
+    for provider_calendar_id in [
+        format!("1f0e4ab52d4b0b9d{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+        format!("8c1f0e4ab52d4b0b{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+        format!("en.usa#holiday{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+        "ada@example.com".to_string(),
+    ] {
+        ids.push(
+            repo.upsert_calendar_fixture(
+                account_id,
+                ProviderCalendar {
+                    name: provider_calendar_id.clone(),
+                    provider_calendar_id,
+                    description: None,
+                    time_zone: Some("UTC".to_string()),
+                    color: None,
+                    access_role: Some("reader".to_string()),
+                    is_primary: false,
+                    is_selected: true,
+                    default_reminders: Vec::new(),
+                },
+            )
+            .await
+            .unwrap(),
+        );
+    }
+    sqlx::query!(
+        "UPDATE calendars SET is_deleted = true WHERE id = $1",
+        ids[1]
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let before = changes::counter(&pool, link_id).await;
+
+    sqlx::raw_sql(LOG_GOOGLE_CALENDARS_ADDED_BY_URL)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        changes::ops_after(&pool, link_id, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(ids[0])],
+        "only the visible calendar added by URL logs; a removed one, a system \
+        calendar and a colleague's calendar do not"
+    );
 }

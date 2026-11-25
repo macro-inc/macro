@@ -25,7 +25,6 @@ import {
 } from '@app/features/calendar/views/event-replacement';
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Spinner } from '@ui';
 import {
@@ -93,7 +92,6 @@ function EventComposerContent(
 ) {
   const panel = useSplitPanelOrThrow();
   const macroCallsEnabled = props.macroCallsEnabled;
-  const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const close = () => panel.handle.close();
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   const invitationForwardEnabled = useCalendarInvitationForwardFlag();
@@ -166,7 +164,7 @@ function EventComposerContent(
   }
 
   return (
-    <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
+    <div class="flex h-full min-h-0 flex-col p-4 text-ink">
       <PanelEventForm
         controller={controller}
         status={

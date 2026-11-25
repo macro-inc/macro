@@ -49,6 +49,20 @@ type Normalized<V> = null extends V
     ? NonNullable<V> | undefined
     : V;
 
+/** Each handle's lazy detail, for {@link forgetCachedDetail}. */
+const CACHED_DETAILS = new WeakMap<object, Lazy<unknown>>();
+
+/**
+ * Drop the cached detail of handles a write outside them changed (a merge the
+ * namespace commits), as {@link MacroEntity.mutate} does for a handle's own
+ * writes, so their next reads refetch.
+ */
+export function forgetCachedDetail(
+  entities: readonly MacroEntity<unknown>[],
+): void {
+  for (const entity of entities) CACHED_DETAILS.get(entity)?.clear();
+}
+
 /**
  * Base for entity handles: a free-to-construct `(client, id)` pair whose
  * detail record loads lazily on first field access and is dropped after any
@@ -64,6 +78,7 @@ export abstract class MacroEntity<Detail> {
     seed?: Detail,
   ) {
     this.detail = new Lazy(() => this.fetch(), seed);
+    CACHED_DETAILS.set(this, this.detail);
   }
 
   /**

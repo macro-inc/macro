@@ -40,6 +40,7 @@ const EXACT_ATTRIBUTES: &[&str] = &[
     "mail-all-message",
     "mail-draft-message",
     "mail-sent-message",
+    "mail-label-id",
 ];
 const SORT_ATTRIBUTES: &[&str] = &["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"];
 /// The fields of a thread update that decide which facts a patch rewrites.
@@ -131,6 +132,25 @@ fn uuid_fact(attribute: &str, value: &str) -> Option<ExactFact> {
         value: ExactValue::new(uuid::Uuid::parse_str(value).ok()?.as_bytes()).ok()?,
     })
 }
+/// The ids of the labels a thread carries, as its reader may see them: the
+/// server sends only the labels of inboxes the reader owns or manages, plus
+/// Gmail's system labels. A thread read without its labels has none here:
+/// every document that writes a whole thread row selects them (the shared
+/// `SoupItemPreviewFields`, which the thread page and draft saves spread too).
+fn label_ids(record: &Record) -> Option<Vec<uuid::Uuid>> {
+    let Some(CacheValue::List(labels)) = record.fields.get("labels") else {
+        return Some(Vec::new());
+    };
+    labels
+        .iter()
+        .map(|value| match value {
+            CacheValue::Ref(key) => {
+                uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlSoupEmailLabel:")?).ok()
+            }
+            _ => None,
+        })
+        .collect()
+}
 fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
     match record.fields.get(field)? {
         CacheValue::Null => Some(None),
@@ -195,6 +215,9 @@ fn project_with_facts(
         if let Some(id) = id {
             facts.push(uuid_fact(attribute, &id.to_string())?);
         }
+    }
+    for label in label_ids(record)? {
+        facts.push(uuid_fact("mail-label-id", &label.to_string())?);
     }
     let updated = timestamp(record, "updatedAt")??;
     let all = cache_facts.latest_non_spam_message_ts().unwrap_or(updated);
@@ -426,9 +449,10 @@ pub async fn projection_updates_for_response<S: DurableRead>(
         .iter()
         .filter(|(key, record)| {
             key.as_ref().starts_with(&prefix)
-                && FIELDS
-                    .iter()
-                    .any(|field| record.fields.contains_key(*field))
+                && (record.fields.contains_key("labels")
+                    || FIELDS
+                        .iter()
+                        .any(|field| record.fields.contains_key(*field)))
         })
         .map(|(key, record)| (key.clone(), record.clone()))
         .collect::<Vec<_>>();
@@ -456,6 +480,9 @@ pub async fn projection_updates_for_response<S: DurableRead>(
                 .iter()
                 .all(|field| update.fields.contains_key(*field));
             let changed = ChangedFields::of(&update);
+            // Not one of FIELDS: a response need not select a thread's labels
+            // to be a full row, and a stored row keeps the labels it has.
+            let labels_changed = update.fields.contains_key("labels");
             let mut merged = base.unwrap_or_default();
             merged.merge(update);
             let incomplete = || ProjectionMutation::MarkIncomplete {
@@ -506,6 +533,7 @@ pub async fn projection_updates_for_response<S: DurableRead>(
                 "mail-inbox" => changed.contains("inboxVisible"),
                 "mail-signal" => changed.contains("isSignal"),
                 "mail-has-message" => changed.contains("mailAllPreview"),
+                "mail-label-id" => labels_changed,
                 "mail-all-ts" => {
                     changed.contains("cacheProjection") || changed.contains("updatedAt")
                 }

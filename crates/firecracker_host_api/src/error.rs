@@ -38,6 +38,9 @@ pub enum ErrorCode {
     InvalidState,
     /// The guest did not answer on vsock in time; retry.
     GuestUnreachable,
+    /// The image exists on this host with other contents than asked for;
+    /// image versions are immutable.
+    ImageConflict,
     /// Anything else on the host; retry.
     Internal,
 }
@@ -46,7 +49,10 @@ impl ErrorCode {
     /// Whether repeating the same request cannot succeed.
     pub fn is_permanent(self) -> bool {
         match self {
-            Self::GenerationMismatch | Self::InvalidRequest | Self::ImageMissing => true,
+            Self::GenerationMismatch
+            | Self::InvalidRequest
+            | Self::ImageMissing
+            | Self::ImageConflict => true,
             Self::NotFound
             | Self::GoldenNotReady
             | Self::NoNetworkSlot

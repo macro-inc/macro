@@ -8,6 +8,18 @@ export function normalizeNameText(value: string): string {
     .toLowerCase();
 }
 
+/**
+ * Lowercase without accents, and with one apostrophe, so `jose` finds José
+ * and a phone's `o’neil` finds O'Neil.
+ */
+export function foldName(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replaceAll('’', "'")
+    .toLowerCase();
+}
+
 const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
 
 /** Whether every query term starts a word of the text, as the native people

@@ -10604,6 +10604,164 @@
         }
       }
     },
+    "/crm/merges": {
+      "post": {
+        "tags": ["crm::inbound::record_merge"],
+        "summary": "Merge records into the one that stays, as reviewed. It can't be undone.\nThe records merged away are deleted; their ids keep opening the record\nthat stays. Refused with `merge_preview_stale` when anything the review\nshowed has changed.",
+        "operationId": "commit_crm_merge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/merges/preview": {
+      "post": {
+        "tags": ["crm::inbound::record_merge"],
+        "summary": "Review a merge: what moves to the record that stays, the values that\ndiffer, what happens to email sync and teammates' sharing, and anything\nthat blocks it. Read-only. Admins and owners only, while merging is\nenabled for them.",
+        "operationId": "preview_crm_merge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/pipelines": {
       "get": {
         "tags": ["crm::inbound::pipelines"],
@@ -33347,21 +33505,6 @@
           },
           {
             "type": "object",
-            "description": "A prompt named other users who can open the session.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["agent_session.mentioned"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/SessionMentionedMetadata",
-                "description": "A prompt named other users who can open the session."
-              }
-            }
-          },
-          {
-            "type": "object",
             "description": "The session's live actor is gone.",
             "required": ["metadata", "event_type"],
             "properties": {
@@ -41526,7 +41669,12 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "The company."
+            "description": "The requested company id."
+          },
+          "mergedInto": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The company the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a company that was not merged."
           },
           "name": {
             "type": ["string", "null"],
@@ -41670,7 +41818,12 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "The contact."
+            "description": "The requested contact id."
+          },
+          "mergedInto": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The contact the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a contact that was not merged."
           },
           "name": {
             "type": ["string", "null"],
@@ -43815,6 +43968,22 @@
           "share_permission_updated": {
             "type": "boolean",
             "description": "Whether share permissions were updated."
+          }
+        }
+      },
+      "DroppedValue": {
+        "type": "object",
+        "description": "One value a merge drops.",
+        "required": ["recordId", "value"],
+        "properties": {
+          "recordId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The record merged away that held it."
+          },
+          "value": {
+            "type": "object",
+            "description": "The value."
           }
         }
       },
@@ -47331,7 +47500,8 @@
           "all_mail_enabled",
           "withdrawn",
           "mailbox_revoked",
-          "live_targets_changed"
+          "live_targets_changed",
+          "records_merged"
         ]
       },
       "EmailPolicyChange": {
@@ -47840,9 +48010,21 @@
           "personal_domains",
           "team_domain_warnings",
           "personal_domain_warnings",
+          "archived_team_domains",
           "can_remove_team_domains"
         ],
         "properties": {
+          "archived_team_domains": {
+            "type": "object",
+            "description": "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored. Empty for\nmembers, who can't see archived companies.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "can_remove_team_domains": {
             "type": "boolean",
             "description": "Whether the caller can remove a team exclusion."
@@ -50109,6 +50291,33 @@
               "$ref": "#/components/schemas/Favorite"
             },
             "description": "The requesting user's favorites, in manual order."
+          }
+        }
+      },
+      "FieldConflict": {
+        "type": "object",
+        "description": "A team-visible field whose values differ. The value of the record that\nstays is kept; the others are dropped and kept in the merge log.",
+        "required": ["propertyId", "propertyName", "kept", "dropped"],
+        "properties": {
+          "dropped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DroppedValue"
+            },
+            "description": "The values dropped, with the record each came from."
+          },
+          "kept": {
+            "type": "object",
+            "description": "The value kept."
+          },
+          "propertyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The property definition."
+          },
+          "propertyName": {
+            "type": "string",
+            "description": "The property's name."
           }
         }
       },
@@ -55454,10 +55663,362 @@
           }
         }
       },
+      "MergeBlock": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "People under different records share an address; merging would file\ntwo people with one address under the same record.",
+            "required": ["people", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["same_address_people"]
+              },
+              "people": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SameAddressPerson"
+                },
+                "description": "Every person involved, archived ones too."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "People merged away are filed under another company than the contact\nthat stays and hold a work address, or no address, so they can't\nchange company, as a contact edit couldn't move them: merge the\ncompanies first, or keep a contact filed under their company.",
+            "required": ["people", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["different_companies"]
+              },
+              "people": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OtherCompanyPerson"
+                },
+                "description": "The people who would change company."
+              }
+            }
+          }
+        ],
+        "description": "Why a merge can't go ahead until someone changes the records."
+      },
+      "MergeCommitRequest": {
+        "type": "object",
+        "description": "A reviewed merge to commit.",
+        "required": [
+          "recordType",
+          "survivorId",
+          "sourceIds",
+          "revision",
+          "requestKey"
+        ],
+        "properties": {
+          "recordType": {
+            "$ref": "#/components/schemas/MergeRecordType",
+            "description": "The kind of record merged."
+          },
+          "requestKey": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A new key per merge, reused only to retry the same one: a retry\nreturns the first result."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The revision of the review being confirmed."
+          },
+          "sharingRules": {
+            "$ref": "#/components/schemas/SharingRulesChoice",
+            "description": "What happens to teammates' email sharing that names a record merged\naway; keeps sharing it when left out."
+          },
+          "sourceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The records merged into it.",
+            "maxItems": 10,
+            "minItems": 1
+          },
+          "survivorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The record that stays."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MergeEmailSync": {
+        "type": "object",
+        "description": "What email sync does after the merge. The record that stays keeps its\nsetting; domains whose sync was off stay out of sync.",
+        "required": ["survivorSyncs", "keptOut"],
+        "properties": {
+          "keptOut": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Domains joining it whose mail stays out of sync."
+          },
+          "survivorSyncs": {
+            "type": "boolean",
+            "description": "Whether the record that stays syncs mail."
+          }
+        }
+      },
+      "MergeErrorResponse": {
+        "type": "object",
+        "description": "Why a merge was refused.",
+        "required": ["code", "message"],
+        "properties": {
+          "blocked": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MergeBlock",
+                "description": "For `merge_conflict`, what blocks the merge."
+              }
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "A stable code: `merge_permission_required`, `merge_unavailable`,\n`record_unavailable`, `record_hidden`, `record_already_merged`,\n`merge_preview_stale`, `merge_request_reused`, `merge_conflict`,\n`merge_sharing_rules_too_large`, `invalid_request`."
+          },
+          "currentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "For `record_already_merged`, the record it opens now."
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened, for people."
+          },
+          "recordId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The record a `record_hidden` or `record_already_merged` refusal is about."
+          }
+        }
+      },
       "MergeMode": {
         "type": "string",
         "description": "How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes).",
         "enum": ["union", "combine", "fragment", "intersect", "subtract"]
+      },
+      "MergeMoves": {
+        "type": "object",
+        "description": "What moves to the record that stays.",
+        "required": [
+          "contacts",
+          "pipelineEntries",
+          "references",
+          "discussionMessages"
+        ],
+        "properties": {
+          "contacts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "People filed under the records merged away.",
+            "minimum": 0
+          },
+          "discussionMessages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Discussion messages on them.",
+            "minimum": 0
+          },
+          "pipelineEntries": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Pipeline entries tracking the records merged away.",
+            "minimum": 0
+          },
+          "references": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks, notes, emails, calls, events and rows that reference them.",
+            "minimum": 0
+          }
+        }
+      },
+      "MergeOutcome": {
+        "type": "object",
+        "description": "A committed merge.",
+        "required": [
+          "mergeId",
+          "recordType",
+          "survivorId",
+          "mergedIds",
+          "committedAt"
+        ],
+        "properties": {
+          "committedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the merge committed."
+          },
+          "mergeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The merge's id in the merge log."
+          },
+          "mergedIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The records merged into it; their ids now open the record that stays."
+          },
+          "recordType": {
+            "$ref": "#/components/schemas/MergeRecordType",
+            "description": "The kind of record merged."
+          },
+          "survivorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The record that stays."
+          }
+        }
+      },
+      "MergePreview": {
+        "type": "object",
+        "description": "The review an admin confirms before merging.",
+        "required": [
+          "revision",
+          "recordType",
+          "survivor",
+          "sources",
+          "identifiers",
+          "moves",
+          "sharedPipelines",
+          "conflicts",
+          "emailSync"
+        ],
+        "properties": {
+          "blocked": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MergeBlock",
+                "description": "Set when the merge can't go ahead."
+              }
+            ]
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldConflict"
+            },
+            "description": "Team-visible values that differ."
+          },
+          "emailSync": {
+            "$ref": "#/components/schemas/MergeEmailSync",
+            "description": "What email sync does."
+          },
+          "identifiers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The domains (or addresses) the record that stays has after the merge,\nits own first."
+          },
+          "moves": {
+            "$ref": "#/components/schemas/MergeMoves",
+            "description": "What moves."
+          },
+          "recordType": {
+            "$ref": "#/components/schemas/MergeRecordType",
+            "description": "The kind of record merged."
+          },
+          "revision": {
+            "type": "string",
+            "description": "Changes whenever anything shown here changes; the commit must name it."
+          },
+          "sharedPipelines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharedPipeline"
+            },
+            "description": "Pipelines where the record that stays will have several entries."
+          },
+          "sharingRules": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SharingRulesPreview",
+                "description": "Teammates' sharing rules naming a record merged away."
+              }
+            ]
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MergedRecord"
+            },
+            "description": "The records merged into it."
+          },
+          "survivor": {
+            "$ref": "#/components/schemas/MergedRecord",
+            "description": "The record that stays."
+          }
+        }
+      },
+      "MergePreviewRequest": {
+        "type": "object",
+        "description": "The records a merge names.",
+        "required": ["recordType", "survivorId", "sourceIds"],
+        "properties": {
+          "recordType": {
+            "$ref": "#/components/schemas/MergeRecordType",
+            "description": "The kind of record merged."
+          },
+          "sourceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The records merged into it, at most ten.",
+            "maxItems": 10,
+            "minItems": 1
+          },
+          "survivorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The record that stays."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MergeRecordType": {
+        "type": "string",
+        "description": "The kind of record a merge combines.",
+        "enum": ["company", "contact"]
+      },
+      "MergedRecord": {
+        "type": "object",
+        "description": "A record as the review names it.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Record id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, as listings show it."
+          }
+        }
       },
       "Message": {
         "type": "object",
@@ -57597,6 +58158,31 @@
           }
         },
         "additionalProperties": false
+      },
+      "OtherCompanyPerson": {
+        "type": "object",
+        "description": "A person a contact merge would move to another company.",
+        "required": ["contactId", "companyId", "companyName"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The company it is filed under."
+          },
+          "companyName": {
+            "type": "string",
+            "description": "That company's name, as listings show it."
+          },
+          "contactId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Contact id."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Contact name, when it has one."
+          }
+        }
       },
       "PairingDetails": {
         "type": "object",
@@ -62567,6 +63153,35 @@
           }
         }
       },
+      "SameAddressPerson": {
+        "type": "object",
+        "description": "A person blocking the merge: they share an address with someone filed\nunder another of the records.",
+        "required": ["address", "contactId", "recordId", "archived"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "The address both hold."
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "Whether the contact is archived."
+          },
+          "contactId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Contact id."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Contact name, when it has one."
+          },
+          "recordId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The record it is filed under."
+          }
+        }
+      },
       "SaveBomPart": {
         "type": "object",
         "required": ["sha", "path"],
@@ -62956,44 +63571,6 @@
           "source": {
             "$ref": "#/components/schemas/SessionSource",
             "description": "Who started the session. Events from before it was recorded say\nnothing and read as a person."
-          }
-        }
-      },
-      "SessionMentionedMetadata": {
-        "type": "object",
-        "description": "A prompt named other users who can open the session. Published when the\nprompt is accepted, not when it is answered: \"come look at this\" should\nnot wait for the turn.",
-        "required": ["identity", "action_id", "mentioned"],
-        "properties": {
-          "action_id": {
-            "$ref": "#/components/schemas/AgentActionId",
-            "description": "The action carrying the prompt."
-          },
-          "identity": {
-            "$ref": "#/components/schemas/SessionIdentity",
-            "description": "The session."
-          },
-          "mentioned": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MacroUserIdStr"
-            },
-            "description": "The users named, already narrowed to those who can open the session\nand never including the author."
-          },
-          "mentioned_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MacroUserIdStr",
-                "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
-              }
-            ]
-          },
-          "origin_message_id": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The channel or document message the prompt was posted as, when it\narrived from a thread rather than the session view. That message\nalready notified the users it named when it was posted."
           }
         }
       },
@@ -63555,6 +64132,50 @@
           "ownerId": {
             "type": "string",
             "description": "Macro user who added the chat and shared it."
+          }
+        }
+      },
+      "SharedPipeline": {
+        "type": "object",
+        "description": "A pipeline in which the record that stays will have more than one entry.\nEntries are distinct deals, so they stay separate.",
+        "required": ["pipelineId", "name", "entriesAfter"],
+        "properties": {
+          "entriesAfter": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Entries the record that stays has in it after the merge.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "Pipeline name."
+          },
+          "pipelineId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Pipeline id."
+          }
+        }
+      },
+      "SharingRulesChoice": {
+        "type": "string",
+        "description": "What happens to a teammate's email-sharing rule that names a record merged\naway. A rule is never pointed at the record that stays, which would share\nmore than its owner chose.",
+        "enum": ["keep", "stop"]
+      },
+      "SharingRulesPreview": {
+        "type": "object",
+        "description": "Teammates whose email-sharing rules name a record merged away. Whose rules\nthey are is not shown.",
+        "required": ["teammates", "keepFits"],
+        "properties": {
+          "keepFits": {
+            "type": "boolean",
+            "description": "Whether every changed rule set still fits the rule limits when kept."
+          },
+          "teammates": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many teammates' rules change.",
+            "minimum": 0
           }
         }
       },

@@ -10,6 +10,7 @@
 //! Every operator becomes an [`EmailFilters`] field, so the same typed text
 //! searches the same way from every caller of the search service.
 
+use super::terms::left_out;
 use chrono::{DateTime, Days, Months, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use item_filters::{
@@ -123,7 +124,7 @@ enum Operator {
 }
 
 /// `name:value`, with a name of letters and underscores and any value.
-fn name_and_value(term: &str) -> IResult<&str, &str> {
+pub(in crate::api::search) fn name_and_value(term: &str) -> IResult<&str, &str> {
     let (value, (name, _)) = (
         take_while1(|c: char| c.is_ascii_alphabetic() || c == '_'),
         char(':'),
@@ -380,20 +381,18 @@ impl Conditions {
 }
 
 /// Reads the email operators out of `terms`. A minus before a plain word or
-/// phrase goes to [`EmailQuery::excluded_words`]. A minus alone stays a term,
-/// which [`super::terms::drop_wordless_terms`] has already removed, and so
-/// does a term that starts with two (`--force`).
+/// phrase ([`left_out`]) goes to [`EmailQuery::excluded_words`]. A minus
+/// alone stays a term, which [`super::terms::drop_wordless_terms`] has
+/// already removed, and so does a term that starts with two (`--force`).
 pub(in crate::api::search) fn read_email_operators(
     terms: Vec<String>,
     clock: QueryClock,
 ) -> EmailQuery {
     let mut conditions = Conditions::default();
     for term in terms {
-        let (exclude, body) = match term.strip_prefix('-') {
-            Some(body) if !body.starts_with('-') && body.chars().any(char::is_alphanumeric) => {
-                (true, body)
-            }
-            _ => (false, term.as_str()),
+        let (exclude, body) = match left_out(&term) {
+            Some(body) => (true, body),
+            None => (false, term.as_str()),
         };
 
         if let Some(operator) = operator(body)

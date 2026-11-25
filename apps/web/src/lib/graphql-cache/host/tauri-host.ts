@@ -461,7 +461,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (event.payload.reset) {
         authorityObserver.reset();
         liveQueries.clear();
-        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+        for (const cb of generationChangeSubscribers)
+          cb({ storage: 'reset', queue: 'reset' });
       }
       for (const cb of cacheChangeSubscribers) {
         if (
@@ -1167,12 +1168,15 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       keys: string[],
       authorityGeneration?: string
     ): Promise<AffectedOperationsResult> {
+      const context = Telemetry.captureContext();
       authorityGeneration ??=
         authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
-      const result = await request<AffectedOperationsResult>(
-        'graphql_cache_delete_records',
-        { keys, generation: authorityGeneration }
+      const result = await context.run(() =>
+        request<AffectedOperationsResult>('graphql_cache_delete_records', {
+          keys,
+          generation: authorityGeneration,
+        })
       );
       return { ...result, revision: parseCacheRevision(result.revision) };
     },

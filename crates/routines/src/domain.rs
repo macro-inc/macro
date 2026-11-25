@@ -98,6 +98,10 @@ pub enum RoutineTrigger {
         /// usually omit it.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         ids: Option<Vec<Uuid>>,
+        /// Only for `email.labeled`, alone in its trigger: label ids from
+        /// ListLabels, one of which the thread must gain. Omit for any label.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        labels: Option<Vec<Uuid>>,
         /// Optional yes/no question the triggering content must answer with
         /// yes, e.g. "Is this email from a customer?". Runs where the answer
         /// is no are skipped before any step runs.
@@ -112,6 +116,11 @@ pub enum RoutineEvent {
     /// New mail arrives in the owner's inbox (not spam, trash, drafts or imports).
     #[serde(rename = "email.message_received")]
     EmailMessageReceived,
+    /// A thread in the owner's inbox gains a Gmail label or Outlook category
+    /// someone made, as mail arrives with it or later. Labels a routine or an
+    /// agent adds never trigger it.
+    #[serde(rename = "email.labeled")]
+    EmailLabeled,
     /// A task the owner can access is created.
     #[serde(rename = "task.created")]
     TaskCreated,
@@ -381,6 +390,7 @@ impl RoutineConfiguration {
                 RoutineTrigger::Event {
                     events,
                     ids,
+                    labels,
                     condition,
                 } => {
                     ensure!(
@@ -390,6 +400,9 @@ impl RoutineConfiguration {
                     let mut filter = serde_json::json!({ "events": events });
                     if let Some(ids) = ids {
                         filter["ids"] = serde_json::json!(ids);
+                    }
+                    if let Some(labels) = labels {
+                        filter["labels"] = serde_json::json!(labels);
                     }
                     if let Some(condition) = condition.as_deref().map(str::trim)
                         && !condition.is_empty()
@@ -462,7 +475,7 @@ fn saved_filter(filter: &Value) -> Result<RoutineTrigger, NotEditableHere> {
     };
     if let Some(key) = fields
         .keys()
-        .find(|key| !matches!(key.as_str(), "events" | "ids" | "condition"))
+        .find(|key| !matches!(key.as_str(), "events" | "ids" | "labels" | "condition"))
     {
         return Err(NotEditableHere(match key.as_str() {
             "github" | "match" => {
@@ -480,9 +493,17 @@ fn saved_filter(filter: &Value) -> Result<RoutineTrigger, NotEditableHere> {
                 .map_err(|_| NotEditableHere("Its trigger's items can't be read here.".into()))?,
         ),
     };
+    let labels = match fields.get("labels") {
+        None | Some(Value::Null) => None,
+        Some(labels) => Some(
+            serde_json::from_value(labels.clone())
+                .map_err(|_| NotEditableHere("Its trigger's labels can't be read here.".into()))?,
+        ),
+    };
     Ok(RoutineTrigger::Event {
         events,
         ids,
+        labels,
         condition: fields
             .get("condition")
             .and_then(Value::as_str)

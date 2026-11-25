@@ -17,6 +17,7 @@ function ready(core: CoordinatorCore, tabId: string, ownerEpoch: number) {
     ownerLockHeld: true,
     databaseActionProof: 'opened-existing',
     openOutcome: 'opened-existing',
+    queue: 'preserved',
   });
 }
 
@@ -65,9 +66,14 @@ describe('visibility ownership', () => {
     ready(core, 'a', 1);
     expect(core.registerTab('b', true)).toEqual([]);
     expect(core.setTabVisibility('b', false)).toEqual([]);
-    expect(core.setTabVisibility('a', false)).toEqual([
+    expect(core.drainHiddenOwner(1)).toEqual([]);
+    expect(core.setTabVisibility('a', false)).toEqual([]);
+    expect(core.ownerHidden).toBe(true);
+    expect(core.drainHiddenOwner(2)).toEqual([]);
+    expect(core.drainHiddenOwner(1)).toEqual([
       { kind: 'drain-owner', tabId: 'a', ownerEpoch: 1, handoff: true },
     ]);
+    expect(core.ownerHidden).toBe(false);
     expect(core.state).toEqual({ kind: 'draining', tabId: 'a', ownerEpoch: 1 });
     expect(core.setTabVisibility('a', true)).toEqual([]);
   });
@@ -77,7 +83,8 @@ describe('visibility ownership', () => {
     core.registerTab('a', true);
     ready(core, 'a', 1);
     core.registerTab('b', true);
-    expect(core.setTabVisibility('a', false)).toEqual([
+    expect(core.setTabVisibility('a', false)).toEqual([]);
+    expect(core.drainHiddenOwner(1)).toEqual([
       { kind: 'drain-owner', tabId: 'a', ownerEpoch: 1, handoff: true },
     ]);
     expect(core.registerTab('c', true)).toEqual([]);
@@ -90,7 +97,12 @@ describe('visibility ownership', () => {
     const drained = core.engineDrained('a', 1);
     expect(drained).toEqual([
       { kind: 'close-engine-route', tabId: 'a', ownerEpoch: 1 },
-      { kind: 'release-owner', tabId: 'a', ownerEpoch: 1 },
+      {
+        kind: 'release-owner',
+        tabId: 'a',
+        ownerEpoch: 1,
+        reason: 'visibility handoff drained',
+      },
       {
         kind: 'elect-owner',
         tabId: 'b',
@@ -118,12 +130,27 @@ describe('visibility ownership', () => {
     expect(core.state).toEqual({ kind: 'active', tabId: 'b', ownerEpoch: 2 });
   });
 
+  it('keeps serving for a hidden owner until told to drain it', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('a', true);
+    ready(core, 'a', 1);
+    core.setTabVisibility('a', false);
+    expect(core.registerTab('b', true)).toEqual([]);
+    expect(
+      core.request('b', { id: 1, kind: 'current-revision' })
+    ).toMatchObject([{ kind: 'route-request', ownerEpoch: 1 }]);
+    core.setTabVisibility('a', true);
+    expect(core.drainHiddenOwner(1)).toEqual([]);
+    expect(core.state).toEqual({ kind: 'active', tabId: 'a', ownerEpoch: 1 });
+  });
+
   it('chooses from the latest surviving visibility instead of pinning a departed candidate', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('a', true);
     ready(core, 'a', 1);
     core.registerTab('b', true);
     core.setTabVisibility('a', false);
+    core.drainHiddenOwner(1);
     core.registerTab('c', true);
     core.tabLost('b');
     core.setTabVisibility('b', true);
@@ -160,6 +187,7 @@ describe('visibility ownership', () => {
     ready(core, 'a', 1);
     core.registerTab('b', true);
     core.setTabVisibility('a', false);
+    core.drainHiddenOwner(1);
     expect(core.beginGracefulDeparture('a', 1)).toEqual([]);
     expect(core.engineDrained('a', 1)).toContainEqual({
       kind: 'retire-tab',
