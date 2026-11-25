@@ -2,8 +2,8 @@
  * The mailbox as the agent meets it: in the catalog every wake lists, in the
  * docs it reads, and from a script run the way the agent runs one, in a
  * process of its own reaching a fake Macro through the relay. "Your email"
- * reaches only the agent's own mailbox, and nothing is sent without an
- * approved draft.
+ * reaches only the agent's own mailbox, and a send goes out once under the
+ * key its purpose makes.
  */
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
@@ -35,6 +35,7 @@ const settingsSource = (root: string): string =>
 const coldCheckMs = 120_000;
 
 const seen: { method: string; path: string }[] = [];
+const sendBodies: unknown[] = [];
 let macro: ReturnType<typeof Bun.serve>;
 let relay: Relay;
 let workspace: string;
@@ -44,9 +45,19 @@ beforeAll(async () => {
   macro = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request) => {
+    fetch: async (request) => {
       const path = new URL(request.url).pathname;
       seen.push({ method: request.method, path });
+      if (
+        request.method === 'POST' &&
+        path.endsWith('/agent-mailbox/messages')
+      ) {
+        sendBodies.push(await request.json());
+        return Response.json(
+          { id: 'sent-1', threadId: 't-new' },
+          { status: 201 }
+        );
+      }
       if (path.endsWith('/agent-mailbox/messages'))
         return Response.json({
           messages: [
@@ -136,13 +147,13 @@ test(
     expect(described.code).toBe(0);
     expect(described.stdout).toContain('"Your email"');
     expect(described.stdout).toContain('Never use macro.email');
-    expect(described.stdout).toContain('approvalMessageId');
+    expect(described.stdout).toContain('purpose');
   },
   coldCheckMs
 );
 
 test(
-  "a script reaches only the agent's own mailbox, and can't send without an approved draft",
+  "a script reaches only the agent's own mailbox, and sends from it once per purpose",
   async () => {
     const run = inSubprocess({
       timeoutMs: coldCheckMs,
@@ -194,11 +205,12 @@ test(
         `import { listMyEmail, myEmailAddress, sendMyEmail } from ${JSON.stringify(capability)};`,
         '',
         'export async function main({ context }: Script) {',
-        "  const unapproved = await sendMyEmail(context, { draftId: '00000000-0000-4000-8000-000000000001', approvalMessageId: 'm-1' }).then(() => 'sent', (error: unknown) => String(error));",
+        "  const email = { to: ['person@example.org'], subject: 'Friday', text: 'Friday works.', purpose: 'task t-1: confirm Friday' };",
         '  return {',
         '    mine: await myEmailAddress(context),',
         '    page: await listMyEmail(context, { limit: 5 }),',
-        '    unapproved,',
+        '    sent: await sendMyEmail(context, email),',
+        '    again: await sendMyEmail(context, email),',
         '  };',
         '}',
       ].join('\n')
@@ -212,14 +224,27 @@ test(
           notice: 'fake vendor, not live',
         },
         page: { messages: [{ id: 'in-1', untrusted: { subject: 'Lunch?' } }] },
-        unapproved: expect.stringContaining('no draft'),
+        sent: { id: 'sent-1', threadId: 't-new' },
+        again: { id: 'sent-1', threadId: 't-new' },
       },
     });
-    // Only the agent's own mailbox was read, and nothing was sent.
+    // Only the agent's own mailbox was reached, and both sends carried one
+    // key, which the server sends once.
     expect(seen).toEqual([
       { method: 'GET', path: '/email/email/agent-mailbox' },
       { method: 'GET', path: '/email/email/agent-mailbox/messages' },
+      { method: 'POST', path: '/email/email/agent-mailbox/messages' },
+      { method: 'POST', path: '/email/email/agent-mailbox/messages' },
     ]);
+    const [first, second] = sendBodies;
+    expect(first).toMatchObject({
+      to: ['person@example.org'],
+      subject: 'Friday',
+      textBody: 'Friday works.',
+      idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
+    expect(second).toEqual(first);
+    expect(first).not.toHaveProperty('confirmation');
   },
   coldCheckMs + 10_000
 );

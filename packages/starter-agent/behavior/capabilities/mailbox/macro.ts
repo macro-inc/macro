@@ -3,8 +3,7 @@
  * be run against a fake. `sdkMailbox` is the thin adapter over Macro's SDK,
  * and it reaches only `macro.agentMailbox`: the mailbox Macro provisioned for
  * this agent account. Nothing here can name another mailbox or reach the
- * connected inboxes of `macro.email`. Only the mailbox area's service
- * (`service.ts`) holds one: it is never put on the context a script gets.
+ * connected inboxes of `macro.email`.
  */
 import { AgentMailMessage, type Macro } from '@macro-inc/sdk';
 import type { Trace } from '../../agent/claude.ts';
@@ -56,11 +55,11 @@ export type MailPage = {
 
 export type Sent = { readonly id: string; readonly threadId?: string };
 
-/** What a send carries beyond the message: the owner's approval, quoted, and a key that sends it once. */
-export type Approved = {
-  readonly approval: string;
-  readonly key: string;
-};
+/**
+ * What the send is for, by stable ids (a task, a message, a turn): it makes
+ * the send's idempotency key, so a retry or a re-run sends it once.
+ */
+export type Purpose = { readonly purpose: string };
 
 export type Mailbox = {
   /** The agent's own mailbox, or undefined when it has none. */
@@ -76,11 +75,11 @@ export type Mailbox = {
       readonly cc: readonly string[];
       readonly subject: string;
       readonly text: string;
-    } & Approved
+    } & Purpose
   ) => Promise<Sent>;
   readonly reply: (
     messageId: string,
-    message: { readonly text: string } & Approved
+    message: { readonly text: string } & Purpose
   ) => Promise<Sent>;
 };
 
@@ -143,29 +142,29 @@ export const sdkMailbox = ({
       },
     };
   },
-  send: ({ to, cc, subject, text, approval, key }) =>
+  send: ({ to, cc, subject, text, purpose }) =>
     trace('mailbox.send', async (span) => {
       span.set('mailbox.kind', 'new');
       span.set('mailbox.recipients', to.length + cc.length);
-      const sent = await (await macro()).agentMailbox.send({
+      const mailbox = (await macro()).agentMailbox;
+      const sent = await mailbox.send({
         to: [...to],
         cc: [...cc],
         subject,
         textBody: text,
-        userConfirmation: approval,
-        idempotencyKey: key,
+        idempotencyKey: mailbox.sendKey(purpose),
       });
       return sentFrom(sent);
     }),
-  reply: (messageId, { text, approval, key }) =>
+  reply: (messageId, { text, purpose }) =>
     trace('mailbox.reply', async (span) => {
       span.set('mailbox.kind', 'reply');
-      const message = AgentMailMessage.byId((await macro())._client, messageId);
+      const macroClient = await macro();
+      const message = AgentMailMessage.byId(macroClient._client, messageId);
       return sentFrom(
         await message.reply({
           textBody: text,
-          userConfirmation: approval,
-          idempotencyKey: key,
+          idempotencyKey: macroClient.agentMailbox.sendKey(purpose),
         })
       );
     }),

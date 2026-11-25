@@ -4,19 +4,13 @@ import type { Guard, ToolCall } from '../guard.ts';
  * Denies any tool call that would send email: Gmail compose and send,
  * AgentMail sends, mail programs, mailto links, the send tools of mail MCP
  * servers, and the agent's own mailbox reached around its capability (the
- * SDK's mailbox, its routes, the capability's port and its drafts). Reading
- * connected mail stays allowed. The one way out is the mailbox capability:
- * sendMyEmail and replyToMyEmail, which send a draft only after the owner
- * approved it.
- *
- * It matches text, so it catches the plain ways and mistakes, not code
- * written to hide what it calls (a name built from pieces, a decoded
- * string). The capability's approval check runs in the agent's own code
- * too; the server, today, requires only a non-empty confirmation and its
- * send caps.
+ * SDK's mailbox, its routes, the capability's port). Reading connected mail
+ * stays allowed. The one way out is the mailbox capability: sendMyEmail and
+ * replyToMyEmail, from the agent's own address. It matches text, so it
+ * catches the plain ways and mistakes, not code written to hide a call.
  */
 export const noEmailReason =
-  "You don't send email, except from your own address with sendMyEmail or replyToMyEmail, after your owner approves the draft. If only an email would move this, tell your owner.";
+  "You don't send email, except from your own address with sendMyEmail or replyToMyEmail. If only an email from someone else would move this, tell your owner.";
 
 const sends: readonly RegExp[] = [
   // Gmail's compose URL.
@@ -33,29 +27,19 @@ const sends: readonly RegExp[] = [
   // The send credential is the capability's alone.
   /\bMAIL_(REFRESH_TOKEN|CLIENT_SECRET|CLIENT_ID)\b/,
   // The agent's own mailbox, around the mailbox capability: the SDK's
-  // namespace, its message handles and types, its raw client calls, and its
-  // routes; the capability's port, and the drafts it checks sends against.
+  // namespace, its message handles and types, its raw client calls, its
+  // routes, and the capability's port.
   /\bagentMailbox\b/,
   /\bAgentMail[A-Z]\w*/,
   /\b(get|list|read|send|reply)AgentMailbox\w*/,
   // The routes: under the email service, never a directory that happens to
   // be named so.
   /\/email\/agent-mailbox\b|\bagent-mailbox\/messages\b/i,
-  /\bsdkMailbox\b|\bdraftStore\b/,
-  /capabilities\/mailbox\/(macro|drafts|service)(\.ts)?\b/,
-  /\/mailbox\/drafts\b/,
-  // The mailbox area's state, however its path is built or reached.
-  // (Tool input is checked as JSON, where a double quote is escaped.)
-  /\.run\(\s*\\?['"`]mailbox\\?['"`]\s*\)/,
-  /\brun\/mailbox\b/,
+  /\bsdkMailbox\b/,
 ];
-
-/** Tools that only read files: naming the mailbox's code there sends nothing. */
-const readers: ReadonlySet<string> = new Set(['Read', 'Glob', 'Grep']);
 
 /** Why this call is refused, or undefined if it doesn't send email. */
 export const sendsEmail = ({ tool, input }: ToolCall): string | undefined => {
-  if (readers.has(tool)) return undefined;
   if (/mail/i.test(tool) && /(send|reply|forward|draft_send)/i.test(tool))
     return noEmailReason;
   const text = JSON.stringify(input ?? {});

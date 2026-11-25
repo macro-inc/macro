@@ -152,31 +152,13 @@ A deployment whose provider URL is not the provider's real API reports
 
 The hosted agent's `mailbox` capability
 (`packages/starter-agent/behavior/capabilities/mailbox`) is how an agent
-teammate uses it: its address, its messages, and drafts.
-
-- A draft is shown to the agent's owner in a DM: recipients, subject, the
-  body quoted line by line (so it can't pose as a header line), and a last
-  line with the draft's id and a SHA-256 fingerprint of its content. A body
-  may not carry such a line. Drafts are kept in the agent's run state for a
-  day; a sent one keeps only what went out.
-- `sendMyEmail` or `replyToMyEmail` sends only when the given message is
-  the current owner's latest reply in that DM's thread and says "send", and
-  the thread's root is the agent's own, never edited message whose text is
-  exactly the draft as it renders now, less than a day old. The owner's
-  reply is the `confirmation`, and the send's idempotency key is derived
-  from it.
-- A reply to the mailbox's own sent message is refused (it would go to that
-  message's recipients); a reply to inbound mail goes where the provider
-  sends replies, which may honor a `Reply-To` the draft doesn't show.
-- The capability reaches only `macro.agentMailbox`, never a connected
-  inbox, and a script gets its operations, not the port. The agent's
-  `no-email` guard refuses the plain ways around it (the SDK's mailbox,
-  its routes, the port, the drafts), by matching text.
-
-All of this runs in the agent's own code, which the agent can change and
-which a script can sidestep. The server checks only that `confirmation` is
-non-empty, plus the send caps above: it does not yet know that the owner
-approved a send.
+teammate uses it: its address, its messages (what a sender claims kept under
+`untrusted`), and `sendMyEmail` / `replyToMyEmail`, which send at once. Each
+send names its `purpose` by stable ids, which makes its idempotency key
+(`sendKey`), so a retry or a re-run sends it once. The capability reaches
+only `macro.agentMailbox`, never a connected inbox, and the agent's
+`no-email` guard refuses the SDK's mailbox and its routes outside it, by
+matching text.
 
 ## Follow-ups
 

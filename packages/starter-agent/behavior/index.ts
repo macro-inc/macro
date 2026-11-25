@@ -85,7 +85,7 @@ export const assistant = (
   const browser = browserContext(base);
   const captcha = captchaContext(base, browser.decorations.browser);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
-  const mailbox = mailboxContext(base, chat.decorations.chat);
+  const mailbox = mailboxContext(base);
   const built = behavior()
     .decorate(base)
     .decorate({ agent })
