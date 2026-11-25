@@ -198,6 +198,8 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   useRouteParams: () => ({}),
   useMatches: () => () => [],
   createSearchParams: () => [{ tab: 'important' }],
+  usePane: () => () => 'mail-pane',
+  useSplitRouter: () => ({ entry: () => undefined }),
 }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -248,6 +250,9 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('./persistence', () => ({ createEmailViewPersistence: () => ({}) }));
 vi.mock('./queries/use-email-query', () => ({
   useEmailDataSource: () => ({ items: () => [] }),
+}));
+vi.mock('./queries/use-email-search-values', () => ({
+  useEmailSearchValues: () => ({ people: () => [], labels: () => [] }),
 }));
 vi.mock('./email-route', () => ({
   emailTabSearch: { namespace: 'mail' },
@@ -581,6 +586,22 @@ describe('leaving Mail', () => {
       </Show>
     ));
     expect(screen.getByRole('banner')).toBeTruthy();
+
+    expect(() => setOnMail(false)).not.toThrow();
+    expect(screen.getByText('Elsewhere')).toBeTruthy();
+  });
+
+  it('leaves for another page with the search field open', () => {
+    const [onMail, setOnMail] = createSignal(true);
+    render(() => (
+      <Show when={onMail()} fallback={<p>Elsewhere</p>}>
+        <EmailViewProvider initialState={{}}>
+          <Mail />
+        </EmailViewProvider>
+      </Show>
+    ));
+    openSearch();
+    expect(searchField()).toBeTruthy();
 
     expect(() => setOnMail(false)).not.toThrow();
     expect(screen.getByText('Elsewhere')).toBeTruthy();

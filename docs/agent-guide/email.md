@@ -2022,7 +2022,11 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   a comma, or leaving the field), Match from (From/To/Cc/Bcc toggle buttons, at
   least one on), Subject contains, Tags (a chip picker over the same team and
   personal tags as Filters, shown when any exist; a tag the viewer can no
-  longer see reads Unavailable tag and stays), and an **Advanced settings** toggle that
+  longer see reads Unavailable tag and stays), Labels (a chip picker over the
+  labels people made, by whole name as Filters' Labels group lists them, with
+  each inbox's avatar when labels span several, shown when any exist; a label
+  the viewer can no longer see reads Unavailable label and stays), and an
+  **Advanced settings** toggle that
   reveals Importance, Read status, Done, Latest activity, Inboxes (with two or more
   linked), and **Has** (Starred, Calendar invite, PDFs, Images, Documents); it starts
   open when the view already sets one of them. Values within one

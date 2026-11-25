@@ -57,12 +57,15 @@ where
 pub enum ToolMergeRecordType {
     /// CRM companies.
     Company,
+    /// CRM contacts (people).
+    Contact,
 }
 
 impl From<ToolMergeRecordType> for MergeRecordType {
     fn from(record_type: ToolMergeRecordType) -> Self {
         match record_type {
             ToolMergeRecordType::Company => MergeRecordType::Company,
+            ToolMergeRecordType::Contact => MergeRecordType::Contact,
         }
     }
 }
@@ -92,17 +95,21 @@ impl From<ToolSharingRules> for SharingRulesChoice {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "PreviewMerge",
-    description = "Review merging duplicate CRM companies into the one that stays, without changing anything. Returns what moves (people, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged company, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging."
+    description = "Review merging duplicate CRM companies, or duplicate people (contacts), into the one that stays, without changing anything. Returns what moves (people, addresses, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged record, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging."
 )]
 pub struct PreviewMerge {
     /// The kind of record.
-    #[schemars(description = "The kind of record: company.")]
+    #[schemars(description = "The kind of record: company or contact.")]
     pub record_type: ToolMergeRecordType,
     /// The record that stays.
-    #[schemars(description = "The company that stays; its name, domains and values win.")]
+    #[schemars(
+        description = "The record that stays: its name and values win, and a company keeps its domains, a contact its company and primary address."
+    )]
     pub survivor_id: Uuid,
     /// The records merged into it.
-    #[schemars(description = "The companies merged into it and deleted, at most ten.")]
+    #[schemars(
+        description = "The records of the same kind merged into it and deleted, at most ten."
+    )]
     pub source_ids: Vec<Uuid>,
 }
 
@@ -126,17 +133,17 @@ pub struct PreviewMergeResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "MergeRecords",
-    description = "Merge duplicate CRM companies into the one that stays, exactly as a PreviewMerge review showed: people, domains, pipeline entries, references, discussions, favorites and lists move to it and the merged companies are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the company that stays. Refused with merge_preview_stale when anything changed since the review: preview again."
+    description = "Merge duplicate CRM companies, or duplicate people (contacts), into the one that stays, exactly as a PreviewMerge review showed: for companies, people, domains and lists move to it; for contacts, addresses and mailbox sources; for both, pipeline entries, references, discussions and favorites. The merged records are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the record that stays. Refused with merge_preview_stale when anything changed since the review: preview again."
 )]
 pub struct MergeRecords {
     /// The kind of record.
-    #[schemars(description = "The kind of record: company.")]
+    #[schemars(description = "The kind of record: company or contact, as reviewed.")]
     pub record_type: ToolMergeRecordType,
     /// The record that stays.
-    #[schemars(description = "The company that stays, as reviewed.")]
+    #[schemars(description = "The record that stays, as reviewed.")]
     pub survivor_id: Uuid,
     /// The records merged into it.
-    #[schemars(description = "The companies merged into it, as reviewed.")]
+    #[schemars(description = "The records merged into it, as reviewed.")]
     pub source_ids: Vec<Uuid>,
     /// The review's revision.
     #[schemars(description = "The revision PreviewMerge returned.")]
@@ -146,9 +153,9 @@ pub struct MergeRecords {
         description = "A new UUID for this merge. Reuse it only to retry the same call: a retry returns the first result."
     )]
     pub request_key: Uuid,
-    /// Teammates' sharing that names a merged company.
+    /// Teammates' sharing that names a merged record.
     #[schemars(
-        description = "keep (default): teammates keep sharing exactly the same mail. stop: they stop sharing mail from the merged companies."
+        description = "keep (default): teammates keep sharing exactly the same mail. stop: they stop sharing mail from the merged records."
     )]
     #[serde(default)]
     pub sharing_rules: ToolSharingRules,
@@ -175,6 +182,10 @@ fn merge_error(error: MergeError) -> ToolCallError {
     let description = match &error {
         MergeError::Conflict(MergeBlock::SameAddressPeople { people }) => format!(
             "merge_conflict: {} people under different companies share an address; change one before merging",
+            people.len()
+        ),
+        MergeError::Conflict(MergeBlock::DifferentCompanies { people }) => format!(
+            "merge_conflict: {} people are filed under another company than the contact that stays, with a work address or none; merge the companies first, or keep a contact filed under their company",
             people.len()
         ),
         MergeError::AlreadyMerged {

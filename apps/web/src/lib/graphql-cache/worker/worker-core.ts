@@ -43,7 +43,10 @@ import {
   isStorageTransactionRequest,
   operationCategoryForRequest,
 } from '../telemetry';
-import { cacheDatabaseIdentity } from './coordinator-protocol';
+import {
+  type CacheQueueState,
+  cacheDatabaseIdentity,
+} from './coordinator-protocol';
 import {
   CacheSyncDriver,
   type SyncAppliedWire,
@@ -55,6 +58,7 @@ import {
   type CacheEngineHydrationResult,
   type CacheOpenOutcome,
   type CacheOpenResult,
+  type CacheQueueCrossing,
   type CacheWalCheckpoint,
   loadCacheWasm,
 } from './wasm-module';
@@ -71,6 +75,16 @@ const isStorageBusy = (error: unknown): boolean =>
   error !== null &&
   'cacheStorageBusy' in error &&
   error.cacheStorageBusy === true;
+
+/** An older WASM artifact carries no queue across a reset. */
+const queueAfterOpen = (
+  outcome: CacheOpenOutcome,
+  queue: CacheQueueCrossing | undefined
+): CacheQueueState => {
+  const crossing = queue?.outcome ?? 'none';
+  const untouched = outcome === 'opened-existing' && crossing === 'none';
+  return crossing === 'kept' || untouched ? 'preserved' : 'reset';
+};
 
 type PortLike = {
   postMessage(msg: unknown): void;
@@ -113,7 +127,10 @@ export interface CacheWorkerCoreOptions {
    * open. The failed request's response carries only the message. */
   onStorageBusy?: () => void;
   /** Reports the bounded open outcome to the coordinator transport. */
-  onInitializationOutcome?: (outcome: CacheOpenOutcome) => void;
+  onInitializationOutcome?: (
+    outcome: CacheOpenOutcome,
+    queue: CacheQueueState
+  ) => void;
   /**
    * Runs once WASM holds the database owner lock and before it touches OPFS;
    * opening proceeds when the returned promise resolves.
@@ -501,6 +518,11 @@ export class CacheWorkerCore {
       this.reportResetRequired(error);
       throw error;
     }
+  }
+
+  /** Lets go of the lost writes the open reported, which pages now know of. */
+  async queueLossTold(): Promise<void> {
+    await this.engine?.queueLossTold?.();
   }
 
   /**
@@ -1722,6 +1744,7 @@ export class CacheWorkerCore {
         : undefined;
       try {
         let openOutcome: CacheOpenOutcome;
+        let queue: CacheQueueCrossing | undefined;
         if (awaitStorageGrant && onOwnerLockBusy) {
           const open = this.options.recoveryOpen
             ? wasm.openCacheForRecoveryWithOutcome
@@ -1746,6 +1769,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          queue = opened.queue;
         } else if (this.options.recoveryOpen) {
           if (wasm.openCacheForRecoveryWithOutcome) {
             const opened = await wasm.openCacheForRecoveryWithOutcome(
@@ -1755,6 +1779,7 @@ export class CacheWorkerCore {
             );
             this.engine = opened.engine;
             openOutcome = opened.outcome;
+            queue = opened.queue;
           } else {
             this.engine = await wasm.openCacheForRecovery(scope, hotCapacity);
             openOutcome = 'reset-storage-uncertain';
@@ -1767,6 +1792,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          queue = opened.queue;
         } else {
           this.engine = await wasm.openCache(scope, hotCapacity);
           openOutcome = 'opened-existing';
@@ -1775,15 +1801,26 @@ export class CacheWorkerCore {
           // A stale artifact opened storage without asking the coordinator.
           throw new Error('cache WASM does not support the owner-lock grant');
         }
-        this.options.onInitializationOutcome?.(openOutcome);
+        this.options.onInitializationOutcome?.(
+          openOutcome,
+          queueAfterOpen(openOutcome, queue)
+        );
         this.telemetry.record({
           name: 'graphql_cache.schema_init',
           operationCategory: 'initialization',
           outcome: 'success',
           errorCode: 'none',
           openOutcome,
+          ...(queue && queue.outcome !== 'none'
+            ? {
+                queueOutcome: queue.outcome,
+                queueKept: queue.kept,
+                queueDropped: queue.dropped,
+              }
+            : {}),
           durationMs: this.now() - schemaStartedAt,
         });
+        this.recordQueueCrossing(openOutcome, queue);
         await this.refreshQueueDiagnostics(true);
       } catch (error) {
         this.telemetry.record({
@@ -1797,6 +1834,32 @@ export class CacheWorkerCore {
       }
     })();
     await this.initPromise;
+  }
+
+  /** One record per step of a wipe that carries the queue. */
+  private recordQueueCrossing(
+    openOutcome: CacheOpenOutcome,
+    queue: CacheQueueCrossing | undefined
+  ): void {
+    const steps = [
+      ['graphql_cache.queue_read', queue?.readMs],
+      ['graphql_cache.recovery_wipe', queue?.wipeMs],
+      ['graphql_cache.queue_import', queue?.importMs],
+    ] as const;
+    for (const [name, durationMs] of steps) {
+      if (durationMs === undefined) continue;
+      const failed =
+        name === 'graphql_cache.queue_read' && queue?.outcome === 'unreadable';
+      this.telemetry.record({
+        name,
+        operationCategory: 'initialization',
+        outcome: failed ? 'error' : 'success',
+        errorCode: failed ? 'integrity' : 'none',
+        openOutcome,
+        ...(queue ? { queueOutcome: queue.outcome } : {}),
+        durationMs,
+      });
+    }
   }
 
   private async openWhenOwnerLockIsFree(

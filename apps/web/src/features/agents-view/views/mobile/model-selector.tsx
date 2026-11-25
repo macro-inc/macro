@@ -1,377 +1,168 @@
 import { t } from '@app/lib/i18n';
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
-import ArrowLeft from '@icon/system/regular/arrow-left.svg';
-import CaretRight from '@icon/system/regular/caret-right.svg';
-import Check from '@icon/system/regular/check.svg';
-import Gauge from '@icon/system/regular/gauge.svg';
-import Lightning from '@icon/system/regular/lightning.svg';
-import Search from '@icon/system/regular/magnifying-glass.svg';
-import Plus from '@icon/system/regular/plus.svg';
-import Squares from '@icon/system/regular/squares-four.svg';
-import { Key } from '@solid-primitives/keyed';
+import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
-import { AgentIcon } from '../../components/AgentGlyph';
+import { createSignal, onCleanup, Show, untrack } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
-import { agentPickerGroups } from '../../core/agent-picker-groups';
-import {
-  hasSelectorOptions,
-  modelSelection,
-  selectorOptions,
-  speedChoices,
-  speedTier,
-} from '../../core/model-selection';
-import { MACRO_PERSONA_ID } from '../../core/roster';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
-import { ModelSpeedMarker } from '../shared/model-speed-marker';
+import { ModelSelectionList } from '../shared/model-selection-list';
+import { ModelSelectorCard } from '../shared/model-selector-card';
 import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 
 export function MobileModelSelector() {
   const state = useUnifiedModelSelector();
-  const {
-    open,
-    query,
-    page,
-    setQuery,
-    setPage,
-    changeOpen: setDrawerOpen,
-    back,
-  } = createModelSelectorNavigation(state.onOpenChange);
-  let searchInput: HTMLInputElement | undefined;
-  const changeOpen = (next: boolean) => {
-    setDrawerOpen(next);
-    if (next) setTimeout(() => searchInput?.focus(), 0);
-  };
-  const catalog = createMemo(() => state.suggestedModels);
-  const agents = createMemo(() => state.agents);
-  const selected = createMemo(() =>
-    modelSelection(catalog(), agents() ?? [], query())
+  let trigger: HTMLButtonElement | undefined;
+  const [sheetPresent, setSheetPresent] = createSignal(false);
+  const nav = createModelSelectorNavigation(
+    (open) => {
+      if (open) {
+        if (untrack(nav.page) !== 'card') setSheetPresent(true);
+        state.onFocusScopeChange?.(true);
+      }
+      state.onOpenChange?.(open);
+    },
+    () => trigger,
+    () => state.model
   );
-  const models = () =>
-    page() === 'model'
-      ? state.models
-      : page() === 'all'
-        ? selected().allModels
-        : selected().suggested;
-  const modelGroups = createMemo(() =>
-    page() === 'all'
-      ? selected().allProviders
-      : [
-          {
-            label: t(
-              page() === 'model'
-                ? 'agentControls.model'
-                : 'agentControls.suggested'
-            ),
-            options: models(),
-          },
-        ].filter((group) => group.options.length > 0)
-  );
-  const speeds = () => speedChoices(state.speeds ?? []);
-  const chooseModel = (id: string) => {
-    (page() === 'model'
-      ? state.onModel
-      : (state.onSuggestedModel ?? state.onModel))(id);
-    changeOpen(false);
-  };
-  const options = () =>
-    selectorOptions({
-      modelCount: state.models.length,
-      customAgent: state.agent?.id !== MACRO_PERSONA_ID,
-      effortCount: state.effort?.options.length ?? 0,
-      speedValues: state.speeds ?? [],
+  let disposed = false;
+  const releaseFocusScope = () =>
+    queueMicrotask(() => {
+      if (!disposed && !nav.open()) state.onFocusScopeChange?.(false);
     });
+  onCleanup(() => {
+    disposed = true;
+    state.onFocusScopeChange?.(false);
+  });
+  const sheetOpen = () => nav.open() && nav.page() !== 'card';
+  const openSheet = (page: 'list' | 'agentModels') => {
+    setSheetPresent(true);
+    nav.setPage(page);
+  };
+  createCloseOnNavigation({
+    open: nav.open,
+    close: () => nav.changeOpen(false),
+  });
+  let card: HTMLDivElement | undefined;
+  let sheet: HTMLDivElement | undefined;
   return (
-    <MobileDrawer
-      side="bottom"
-      open={open()}
-      onOpenChange={changeOpen}
-      restoreFocus={Boolean(state.onCloseAutoFocus)}
-      onFinalFocus={state.onCloseAutoFocus}
+    <Popover.Root
+      open={nav.open() && !sheetPresent()}
+      onOpenChange={(open) => {
+        if (!open && sheetPresent()) return;
+        nav.changeOpen(open);
+      }}
+      placement="top-end"
+      gutter={6}
     >
-      <MobileDrawer.Trigger
+      <Popover.Trigger
+        ref={trigger}
         as={Button}
         variant="ghost"
-        size="sm"
+        size="md"
         disabled={state.disabled}
         aria-label={t('agentControls.modelSelector')}
         class="min-w-0 max-w-full"
         onPointerDown={(event: PointerEvent) => event.preventDefault()}
         onMouseDown={(event: MouseEvent) => event.preventDefault()}
       >
-        <UnifiedModelTriggerContent mobile />
-      </MobileDrawer.Trigger>
-      <MobileDrawer.Portal>
-        <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label={t('agentControls.modelSelector')}>
-          <MobileDrawer.Handle />
-          <Show when={page() !== 'list'}>
-            <div class="relative flex h-12 items-center px-3">
-              <Button
-                variant="ghost"
-                size="icon-md"
-                aria-label={t('agentControls.back')}
-                onClick={back}
-              >
-                <ArrowLeft class="size-5" />
-              </Button>
-              <h2 class="absolute inset-x-14 text-center font-semibold pointer-events-none">
-                {page() === 'speed'
-                  ? t('agentControls.speed')
-                  : page() === 'effort'
-                    ? t('agentControls.reasoningEffort')
-                    : page() === 'model'
-                      ? t('agentControls.model')
-                      : t('agentControls.allModels')}
-              </h2>
-            </div>
-          </Show>
-          <Show when={page() === 'list' || page() === 'all'}>
-            <div class="mx-3 mb-3 flex h-11 shrink-0 items-center gap-2.5 rounded-full bg-ink/3 px-3.5">
-              <Search class="size-[18px] text-ink-subtle" />
-              <input
-                ref={searchInput}
-                aria-label={
-                  page() !== 'all' && state.agents?.length
-                    ? t('agentControls.searchAgentsModels')
-                    : t('agentControls.searchModels')
-                }
-                placeholder={
-                  page() !== 'all' && state.agents?.length
-                    ? t('agentControls.searchAgentsModels')
-                    : t('agentControls.searchModels')
-                }
-                value={query()}
-                onInput={(event) => setQuery(event.currentTarget.value)}
-                class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-subtle"
-              />
-            </div>
-          </Show>
-          <MobileDrawer.ScrollBody class="gap-4">
-            <Show
-              when={page() === 'list' || page() === 'all' || page() === 'model'}
-            >
-              <Key each={modelGroups()} by="label">
-                {(group) => (
-                  <div>
-                    <MobileDrawer.Label>{group().label}</MobileDrawer.Label>
-                    <MobileDrawer.Section>
-                      <Key each={group().options} by="id">
-                        {(option) => (
-                          <MobileDrawer.Item
-                            disabled={
-                              state.disabled ||
-                              (page() !== 'model' && state.suggestedDisabled)
-                            }
-                            onClick={() => chooseModel(option().id)}
-                          >
-                            <ModelIcon model={option().id} />
-                            <span class="min-w-0 flex-1 truncate">
-                              {option().label}
-                            </span>
-                            <ModelSpeedMarker model={option().id} />
-                            <Show
-                              when={
-                                (page() === 'model' ||
-                                  state.suggestedSelected !== false) &&
-                                state.model === option().id
-                              }
-                            >
-                              <Check class="size-4 text-accent" />
-                            </Show>
-                          </MobileDrawer.Item>
-                        )}
-                      </Key>
-                      <Show
-                        when={
-                          page() === 'list' &&
-                          !query().trim() &&
-                          selected().allModels.length > 0
-                        }
-                      >
-                        <MobileDrawer.Item
-                          onClick={() => {
-                            setQuery('');
-                            setPage('all');
-                            searchInput?.focus();
-                          }}
-                        >
-                          <Squares class="size-[18px]" />
-                          <span class="flex-1">
-                            {t('agentControls.allModels')}
-                          </span>
-                          <CaretRight class="size-4" />
-                        </MobileDrawer.Item>
-                      </Show>
-                    </MobileDrawer.Section>
-                  </div>
-                )}
-              </Key>
-              <Show when={page() === 'all' && models().length === 0}>
-                <p role="status" class="px-3 py-2.5 text-ink-subtle">
-                  {t('agentControls.noMatches')}
-                </p>
-              </Show>
-              <Show when={page() === 'list'}>
-                <For each={agentPickerGroups(selected().agents)}>
-                  {(group) => (
-                    <div>
-                      <MobileDrawer.Label>{group.label}</MobileDrawer.Label>
-                      <MobileDrawer.Section>
-                        <For each={group.agents}>
-                          {(agent) => (
-                            <MobileDrawer.Item
-                              disabled={Boolean(
-                                agent.unavailableReason && !agent.connectLabel
-                              )}
-                              onClick={() => {
-                                if (agent.unavailableReason)
-                                  state.onConnect?.(agent);
-                                else state.onAgent?.(agent);
-                                changeOpen(false);
-                              }}
-                            >
-                              <span class="flex size-[22px] shrink-0 items-center justify-center rounded-md bg-ink/5">
-                                <AgentIcon agent={agent} class="size-[18px]" />
-                              </span>
-                              <span class="min-w-0 flex-1 truncate">
-                                {agent.name}
-                              </span>
-                              <span class="text-sm text-ink-subtle">
-                                {agent.runtime.label}
-                              </span>
-                              <Show when={state.agent?.id === agent.id}>
-                                <Check class="size-4 text-accent" />
-                              </Show>
-                            </MobileDrawer.Item>
-                          )}
-                        </For>
-                      </MobileDrawer.Section>
-                    </div>
-                  )}
-                </For>
-                <Show when={state.onCreate}>
-                  <MobileDrawer.Item
-                    onClick={() => {
-                      changeOpen(false);
-                      state.onCreate?.();
-                    }}
-                  >
-                    <Plus class="size-[18px]" />
-                    {t('agentControls.createAgent')}
-                  </MobileDrawer.Item>
-                </Show>
-              </Show>
-            </Show>
-            <Show when={page() === 'effort'}>
-              <MobileDrawer.Section>
-                <For each={state.effort?.options}>
-                  {(choice) => (
-                    <MobileDrawer.Item
-                      disabled={state.effortDisabled}
-                      onClick={() => {
-                        if (state.effort && !state.effortDisabled)
-                          state.onEffort({
-                            configId: state.effort.id,
-                            value: choice.value,
-                            name: choice.name,
-                          });
-                        back();
-                      }}
-                    >
-                      <span class="flex-1">{choice.name}</span>
-                      <Show
-                        when={
-                          choice.value ===
-                          (state.effortValue ?? state.effort?.currentValue)
-                        }
-                      >
-                        <Check class="size-4 text-accent" />
-                      </Show>
-                    </MobileDrawer.Item>
-                  )}
-                </For>
-              </MobileDrawer.Section>
-            </Show>
-            <Show when={page() === 'speed'}>
-              <MobileDrawer.Section>
-                <For each={speeds()}>
-                  {(choice) => (
-                    <MobileDrawer.Item
-                      onClick={() => {
-                        state.onSpeed(choice.value);
-                        back();
-                      }}
-                    >
-                      <span>{t(`agentControls.tier${choice.tier}`)}</span>
-                      <Show when={choice.tier !== 'standard'}>
-                        <span class="flex-1 text-sm text-ink-subtle">
-                          {choice.tier === 'fast'
-                            ? t('agentControls.usageFast')
-                            : t('agentControls.usageUltrafast')}
-                        </span>
-                      </Show>
-                      <Show when={choice.tier === 'standard'}>
-                        <span class="flex-1" />
-                      </Show>
-                      <Show when={choice.value === state.speedValue}>
-                        <Check class="size-4 text-accent" />
-                      </Show>
-                    </MobileDrawer.Item>
-                  )}
-                </For>
-              </MobileDrawer.Section>
-            </Show>
-          </MobileDrawer.ScrollBody>
-          <Show
-            when={
-              page() === 'list' && !query() && hasSelectorOptions(options())
-            }
+        <UnifiedModelTriggerContent />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Show when={nav.open() && !sheetPresent()}>
+          <div
+            data-model-selector-overlay
+            onClick={() => nav.changeOpen(false)}
+            class="portal-scope fixed inset-0 z-modal"
+            style={{ 'background-color': 'var(--color-overlay)' }}
+            aria-hidden="true"
+          />
+        </Show>
+        <Show when={!sheetPresent()}>
+          <Popover.Content
+            ref={card}
+            class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] p-0 outline-none"
+            style={{
+              // Keep the custom cast shadow without replacing the shared rim.
+              '--glass-shadow': 'var(--shadow-menu)',
+            }}
+            onCloseAutoFocus={(event) => {
+              if (disposed || sheetPresent() || nav.open())
+                event.preventDefault();
+              else {
+                state.onCloseAutoFocus?.(event);
+                releaseFocusScope();
+              }
+            }}
           >
-            <MobileDrawer.Section class="mx-3 mb-3 shrink-0">
-              <Show when={options().model}>
-                <MobileDrawer.Item onClick={() => setPage('model')}>
-                  <ModelIcon model={state.model} />
-                  <span class="flex-1">{t('agentControls.model')}</span>
-                  <CaretRight class="size-4" />
-                </MobileDrawer.Item>
-              </Show>
-              <Show when={options().effort}>
-                <MobileDrawer.Item
-                  disabled={state.effortDisabled}
-                  onClick={() => setPage('effort')}
-                >
-                  <Gauge class="size-[18px]" />
-                  <span class="flex-1">
-                    {t('agentControls.reasoningEffort')}
-                  </span>
-                  <span class="text-ink-subtle">
-                    {
-                      state.effort?.options.find(
-                        (option) =>
-                          option.value ===
-                          (state.effortValue ?? state.effort?.currentValue)
-                      )?.name
-                    }
-                  </span>
-                  <CaretRight class="size-4" />
-                </MobileDrawer.Item>
-              </Show>
-              <Show when={options().speed}>
-                <MobileDrawer.Item onClick={() => setPage('speed')}>
-                  <Lightning class="size-[18px]" />
-                  <span class="flex-1">{t('agentControls.speed')}</span>
-                  <span class="text-ink-subtle">
-                    {t(`agentControls.tier${speedTier(state.speedValue)}`)}
-                  </span>
-                  <CaretRight class="size-4" />
-                </MobileDrawer.Item>
-              </Show>
-            </MobileDrawer.Section>
-          </Show>
-        </MobileDrawer.Content>
-      </MobileDrawer.Portal>
-    </MobileDrawer>
+            <Popover.Title class="sr-only">
+              {t('agentControls.modelSelector')}
+            </Popover.Title>
+            <ModelSelectorCard
+              mobile
+              onSelect={() => openSheet('list')}
+              onModels={() => openSheet('agentModels')}
+            />
+          </Popover.Content>
+        </Show>
+      </Popover.Portal>
+      <MobileDrawer
+        restoreFocus
+        onEscapeKeyDown={(event) => {
+          event.preventDefault();
+          nav.escape();
+        }}
+        open={sheetOpen()}
+        onOpenChange={(open) => {
+          if (!open && sheetOpen()) nav.changeOpen(false);
+        }}
+        onInitialFocus={(event) => {
+          event.preventDefault();
+          if (!sheet?.contains(document.activeElement))
+            sheet?.focus({ preventScroll: true });
+        }}
+        onFinalFocus={(event) => {
+          event.preventDefault();
+          // Corvu retains its focus trap for the exit transition. Mount the
+          // returning card only after that trap has retired.
+          setSheetPresent(false);
+          if (nav.open()) {
+            queueMicrotask(() => {
+              if (nav.open() && card?.isConnected)
+                card.querySelector<HTMLButtonElement>('button')?.focus({
+                  preventScroll: true,
+                });
+            });
+          } else if (state.onCloseAutoFocus) state.onCloseAutoFocus(event);
+          else if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+          releaseFocusScope();
+        }}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay
+            style={{ 'background-color': 'var(--color-overlay)' }}
+          />
+          <MobileDrawer.Content
+            ref={sheet}
+            targetHeight={90}
+            tabIndex={-1}
+            maxHeight={90}
+            opaque
+            class="rounded-[44px]"
+            aria-label={t('agentControls.modelSelector')}
+          >
+            <MobileDrawer.Handle class="pt-3 pb-4" />
+            <MobileDrawer.ScrollBody class="gap-0 p-0">
+              <ModelSelectionList
+                navigation={nav}
+                mobile
+                onPick={() => nav.changeOpen(false)}
+                onBack={nav.back}
+              />
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Popover.Root>
   );
 }

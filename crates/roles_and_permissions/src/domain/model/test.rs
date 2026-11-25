@@ -9,6 +9,7 @@ fn paid_subscription_roles_include_legacy_and_pricing_tiers() {
         RoleId::SubHaiku,
         RoleId::SubSonnet,
         RoleId::SubOpus,
+        RoleId::SubBusiness,
         RoleId::SubMax,
     ] {
         assert!(
@@ -31,6 +32,15 @@ fn non_subscription_roles_do_not_grant_paid_access() {
             "{role} should not grant paid access"
         );
     }
+}
+
+#[test]
+fn business_role_roundtrips_through_its_string_id() {
+    assert_eq!(RoleId::SubBusiness.to_string(), "sub_business");
+    assert_eq!(
+        "sub_business".parse::<RoleId>().unwrap(),
+        RoleId::SubBusiness
+    );
 }
 
 #[test]

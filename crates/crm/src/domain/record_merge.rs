@@ -252,6 +252,20 @@ pub struct SameAddressPerson {
     pub archived: bool,
 }
 
+/// A person a contact merge would move to another company.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OtherCompanyPerson {
+    /// Contact id.
+    pub contact_id: Uuid,
+    /// Contact name, when it has one.
+    pub name: Option<String>,
+    /// The company it is filed under.
+    pub company_id: Uuid,
+    /// That company's name, as listings show it.
+    pub company_name: String,
+}
+
 /// Why a merge can't go ahead until someone changes the records.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -261,6 +275,14 @@ pub enum MergeBlock {
     SameAddressPeople {
         /// Every person involved, archived ones too.
         people: Vec<SameAddressPerson>,
+    },
+    /// People merged away are filed under another company than the contact
+    /// that stays and hold a work address, or no address, so they can't
+    /// change company, as a contact edit couldn't move them: merge the
+    /// companies first, or keep a contact filed under their company.
+    DifferentCompanies {
+        /// The people who would change company.
+        people: Vec<OtherCompanyPerson>,
     },
 }
 

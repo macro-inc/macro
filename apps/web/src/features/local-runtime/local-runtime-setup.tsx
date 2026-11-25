@@ -17,8 +17,8 @@ export function LocalRuntimeSetup(props: {
   autoStart?: boolean;
   onClose?: () => void;
 }) {
-  const capabilities = useSetupCapabilities();
   const userId = useUserId();
+  const capabilities = useSetupCapabilities(userId);
   const layout = useSplitLayout();
 
   const openSession = (agent: ReadyAgent) => {

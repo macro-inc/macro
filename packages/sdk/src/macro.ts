@@ -112,6 +112,8 @@ export type {
 export {
   type CrmCompanyMerge,
   type CrmCompanyMergeCommit,
+  type CrmContactMerge,
+  type CrmContactMergeCommit,
   CrmMergeNamespace,
   type CrmMergeOutcome,
   type CrmMergePreview,
@@ -645,6 +647,10 @@ export {
 export type {
   SuggestionInput,
   SuggestionsReview,
+  SuggestionTopic,
+  SuggestionTopicInput,
+  SuggestionTopicReason,
+  SuggestionTopicReasonInput,
 } from './entities/suggestions/namespace';
 export {
   Suggestion,

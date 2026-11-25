@@ -9,8 +9,9 @@ import {
   createEntryPersistenceStorage,
   type EntryPersistenceHandle,
 } from '@components/app/split-layout/entry-persistence';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { z } from 'zod';
 import {
   DEFAULT_EMAIL_FOCUS_SORT,
@@ -99,6 +100,27 @@ export const DEFAULT_EMAIL_LIST_STATE: EmailListStateSnapshot = {
   scrollOffset: DEFAULT_EMAIL_LIST_ENTRY_STATE.scrollOffset,
 };
 
+// An open view's filters come back from its definition, so the entry keeps
+// the tab it was opened from, as local state does.
+function selectEmailEntryState(state: EmailViewState): EmailEntryState {
+  const scope = state.beforeSavedView ?? state;
+  return {
+    version: 1,
+    tab: scope.tab,
+    search: state.search,
+    aliasFilter: scope.aliasFilter,
+    facets: state.beforeSavedView ? {} : normalizeFacetSelection(state.facets),
+    ...(state.beforeSavedView || !state.conditions
+      ? {}
+      : { conditions: state.conditions }),
+  };
+}
+
+function selectInboxIdsEntryState(state: EmailViewState): string[] | undefined {
+  const { inboxIds } = state.beforeSavedView ?? state;
+  return inboxIds === undefined ? undefined : [...inboxIds];
+}
+
 function createEmailEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
@@ -110,10 +132,16 @@ function createEmailEntryStorage(options: {
       if (!options.restore) return undefined;
 
       const restored = emailEntryStateSchema.parse(stored);
+      // The inbox key is recorded with this one and restores after it, but
+      // records every inbox as nothing: start from every inbox, so the copy
+      // another tab saved doesn't pick the inbox.
       return {
         ...current,
         tab: restored.tab,
         search: restored.search,
+        inboxIds: restored.aliasFilter
+          ? [restored.aliasFilter.inboxId]
+          : undefined,
         aliasFilter: restored.aliasFilter,
         ...restoreEmailTabFilters(
           restored.tab,
@@ -122,23 +150,7 @@ function createEmailEntryStorage(options: {
         ),
       };
     },
-    // An open view's filters come back from its definition, so the entry
-    // keeps the tab it was opened from, as local state does.
-    select: (state): EmailEntryState => {
-      const scope = state.beforeSavedView ?? state;
-      return {
-        version: 1,
-        tab: scope.tab,
-        search: state.search,
-        aliasFilter: scope.aliasFilter,
-        facets: state.beforeSavedView
-          ? {}
-          : normalizeFacetSelection(state.facets),
-        ...(state.beforeSavedView || !state.conditions
-          ? {}
-          : { conditions: state.conditions }),
-      };
-    },
+    select: selectEmailEntryState,
   });
 }
 
@@ -262,10 +274,7 @@ function createInboxIdsEntryStorage(options: {
             : undefined,
       };
     },
-    select: (state): string[] | undefined => {
-      const { inboxIds } = state.beforeSavedView ?? state;
-      return inboxIds === undefined ? undefined : [...inboxIds];
-    },
+    select: selectInboxIdsEntryState,
   });
 }
 
@@ -292,8 +301,51 @@ export function createEmailListEntryStorage(
   });
 }
 
+/**
+ * A view can mount again without leaving its split entry: when a newer build
+ * takes the local cache over, an older tab drops its queries and every route
+ * view mounts once sign-in is back. The split manager writes an entry only
+ * before a navigation leaves it, so record the entry the view mounts in, each
+ * entry it moves to while mounted (a thread, another tab), and every change to
+ * what the entry keeps. The view then comes back on this tab's own state, not
+ * the user-level copy another tab saved last.
+ */
+function createEntryRecorder(options: {
+  handle: Pick<SplitHandle, 'captureEntryState'>;
+  entryId: Accessor<string | undefined>;
+}): PersistenceStorage<EmailViewState> {
+  let recorded: string | undefined;
+  const serialize = (state: EmailViewState) =>
+    JSON.stringify([
+      selectEmailEntryState(state),
+      selectInboxIdsEntryState(state),
+    ]);
+
+  return {
+    restore: () => undefined,
+    initialize: (state) => {
+      recorded = serialize(state);
+      // The entry lives in the split manager, outside Solid. Record each new
+      // one, not the in-place rewrites of the same entry (search params, a
+      // replace that keeps it). The first run comes after setup, once the
+      // entry captors are registered.
+      const entryId = createMemo(options.entryId);
+      createEffect(on(entryId, () => options.handle.captureEntryState()));
+    },
+    write: (state) => {
+      const serialized = serialize(state);
+      if (serialized === recorded) return;
+
+      recorded = serialized;
+      options.handle.captureEntryState();
+    },
+  };
+}
+
 export type CreateEmailViewPersistenceOptions = {
-  handle: EntryPersistenceHandle;
+  handle: EntryPersistenceHandle & Pick<SplitHandle, 'captureEntryState'>;
+  /** The pane's current router entry, which a push or Back replaces. */
+  entryId: Accessor<string | undefined>;
   userId: Accessor<string | undefined>;
   restoreEntryState?: boolean;
   restoreLocalState?: boolean;
@@ -323,6 +375,7 @@ export function createEmailViewPersistence(
       }),
       createEmailEntryStorage({ handle: options.handle, restore }),
       createInboxIdsEntryStorage({ handle: options.handle, restore }),
+      createEntryRecorder(options),
     ],
   };
 }

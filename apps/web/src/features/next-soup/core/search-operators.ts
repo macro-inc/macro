@@ -549,9 +549,22 @@ export type SearchQueryParts = {
   serviceText: string;
   /**
    * The words names are matched with, or empty when an operator narrows the
-   * search past what a name match can be checked against.
+   * search past what a name match can be checked against. Words a minus
+   * leaves out are not among them; they are `leftOutWords`.
    */
   nameText: string;
+  /**
+   * The words and phrases a minus leaves out (`draft` for `-draft`): a
+   * result whose name holds one is left out (`leavesOutName`), as the
+   * service leaves it out.
+   */
+  leftOutWords: string[];
+  /**
+   * Every word left is one a minus leaves out (`-draft`), which the service
+   * searches for only in email alone: the search waits for a word to look
+   * for, as it does while an operator is still being typed.
+   */
+  waitsForWord: boolean;
   read: SearchOperators;
   /** The operators holding a bound token, which the request carries by id. */
   bound: SearchOperators;
@@ -653,6 +666,26 @@ function readQuery(text: string, bindings: readonly SearchOperatorBinding[]) {
   return finished.length === all.length ? first : read(finished);
 }
 
+/**
+ * Whether `term` is a word a minus leaves out, as the service reads it: one
+ * minus before a word or quoted phrase (`-draft`), not inside a word
+ * (`e-mail`) or doubled (`--force`).
+ */
+const leavesOut = (term: string) =>
+  term.startsWith('-') && !term.startsWith('--') && hasWord(term.slice(1));
+
+/**
+ * Whether `name` holds one of `leftOutWords`, ignoring case, as the
+ * service's name searches match a word a minus leaves out.
+ */
+export function leavesOutName(
+  name: string,
+  leftOutWords: readonly string[]
+): boolean {
+  const lowered = name.toLowerCase();
+  return leftOutWords.some((word) => lowered.includes(word.toLowerCase()));
+}
+
 /** Reads a Search query, as typed in its field, with the opener's bindings. */
 export function searchQueryParts(
   text: string,
@@ -685,6 +718,10 @@ export function searchQueryParts(
     ? read.terms.filter((term) => !readsAsEmailSearchOperator(term))
     : read.terms;
   const onlyTypes = read.groups.every((group) => group.name === 'type');
+  const indexes = searchOperatorIndexes(read);
+  const searchesEmailAlone =
+    (searchesEmail && words.length < read.terms.length) ||
+    (indexes.length === 1 && indexes[0] === 'email');
   return {
     serviceText:
       read.terms.length > 0
@@ -694,7 +731,12 @@ export function searchQueryParts(
             .join(' ')
         : '',
     nameText:
-      onlyTypes && words.length === read.terms.length ? words.join(' ') : '',
+      onlyTypes && words.length === read.terms.length
+        ? words.filter((word) => !leavesOut(word)).join(' ')
+        : '',
+    leftOutWords: words.filter(leavesOut).map((word) => word.slice(1)),
+    waitsForWord:
+      words.length > 0 && words.every(leavesOut) && !searchesEmailAlone,
     read,
     bound: {
       terms: [],

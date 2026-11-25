@@ -6,7 +6,8 @@
 use super::*;
 use crate::value::CacheValue;
 
-const AUTHORITY_KEY: &str = "__meta:authority";
+/// Stored access policy the cache was filled under.
+pub const AUTHORITY_META_KEY: &str = "__meta:authority";
 const AUTHORITY_FIELD: &str = "state";
 #[cfg(test)]
 const RETIREMENT_PAGE_SIZE: usize = 500;
@@ -54,7 +55,7 @@ impl CacheAuthority {
             "generation": self.generation, "policy": self.policy, "ready": self.ready,
         });
         (
-            EntityKey(AUTHORITY_KEY.into()),
+            EntityKey(AUTHORITY_META_KEY.into()),
             Record {
                 fields: [(AUTHORITY_FIELD.into(), CacheValue::opaque(&value))].into(),
             },
@@ -121,7 +122,7 @@ impl<S: Storage> Engine<S> {
         }
         let rows = self
             .storage
-            .get_batch(&[EntityKey(AUTHORITY_KEY.into())])
+            .get_batch(&[EntityKey(AUTHORITY_META_KEY.into())])
             .await
             .map_err(EngineError::Storage)?;
         let authority = match rows.into_iter().next().flatten() {

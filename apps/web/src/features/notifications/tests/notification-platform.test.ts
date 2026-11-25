@@ -475,6 +475,44 @@ describe('platform notification sender and conversation', () => {
     expect(resolveUserAvatar).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['channel_mention', 'public', 'Ada <design>', 'design'],
+    ['channel_mention', 'directMessage', 'Ada', undefined],
+    ['channel_message_reply', 'private', 'Ada <design>', 'design'],
+    ['channel_message_reply', 'directMessage', 'Ada', undefined],
+  ] as const)(
+    'names the channel of a %s in a %s channel, and only the sender in a direct message',
+    async (tag, channelType, title, conversationName) => {
+      const result = await toPlatformNotificationData(
+        baseNotification({
+          entity_id: 'channel-1',
+          sender_id: 'macro|ada@example.com',
+          notification_event_type: tag,
+          notification_metadata: {
+            tag,
+            content: {
+              threadId: 'thread-1',
+              messageId: 'message-1',
+              messageContent: 'Ship it',
+              channelType,
+              channelName: 'design',
+            },
+          },
+        } as Partial<UnifiedNotification>),
+        async () => 'Ada',
+        async () => undefined,
+        async () => undefined
+      );
+
+      expect(result).toMatchObject({
+        title,
+        options: { body: 'Ship it' },
+        sender: { id: 'macro|ada@example.com', name: 'Ada' },
+        conversation: { id: 'channel-1', name: conversationName },
+      });
+    }
+  );
+
   function reaction(
     channelType: 'public' | 'directMessage',
     messageContent = 'Ship it\n\non Friday'

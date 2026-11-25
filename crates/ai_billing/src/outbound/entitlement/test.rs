@@ -33,7 +33,82 @@ async fn only_a_paying_team_bills_its_members_seats(pool: PgPool) {
         MacroUserIdStr::try_from("macro|canceled-member@example.com".to_string()).unwrap();
     assert_eq!(
         entitlements.entitlement(&canceled_member).await.unwrap(),
-        Entitlement::personal(canceled_member, PlanTier::Free)
+        Entitlement::personal(canceled_member.clone(), PlanTier::Free)
+    );
+
+    // Lightweight single-user plan lookup agrees with full entitlement without
+    // scanning the team's full roster.
+    assert_eq!(
+        entitlements.user_plan(&paid_member).await.unwrap(),
+        UserPlan {
+            tier: PlanTier::Premium,
+            unlimited: false,
+        }
+    );
+    assert_eq!(
+        entitlements.user_plan(&canceled_member).await.unwrap(),
+        UserPlan {
+            tier: PlanTier::Free,
+            unlimited: false,
+        }
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("entitlement_teams"))
+)]
+async fn user_plan_distinguishes_business_max_enterprise_and_personal_tiers(pool: PgPool) {
+    let entitlements = RolesTeamsEntitlementSource::new(
+        UserRolesAndPermissionsServiceImpl::new(MacroDB::new(pool.clone())),
+        TeamRepositoryImpl::new(pool.clone()),
+    );
+    let paid_member =
+        MacroUserIdStr::try_from("macro|paid-member@example.com".to_string()).unwrap();
+    sqlx::query!(
+        "UPDATE team_user SET plan = 'business' WHERE user_id = $1",
+        paid_member.as_ref()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        entitlements.user_plan(&paid_member).await.unwrap(),
+        UserPlan {
+            tier: PlanTier::Business,
+            unlimited: false,
+        }
+    );
+
+    sqlx::query!(
+        "UPDATE team SET enterprise = TRUE WHERE id = '11111111-1111-1111-1111-111111111111'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        entitlements.user_plan(&paid_member).await.unwrap(),
+        UserPlan {
+            tier: PlanTier::Business,
+            unlimited: true,
+        }
+    );
+
+    let canceled_member =
+        MacroUserIdStr::try_from("macro|canceled-member@example.com".to_string()).unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "RolesOnUsers" ("userId", "roleId") VALUES ($1, 'sub_business')"#,
+        canceled_member.as_ref()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        entitlements.user_plan(&canceled_member).await.unwrap(),
+        UserPlan {
+            tier: PlanTier::Business,
+            unlimited: false,
+        }
     );
 }
 

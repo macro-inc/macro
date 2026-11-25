@@ -392,12 +392,13 @@ export function createAppOnboardingContext(): OnboardingContext {
         },
       };
     },
-    startCheckout: (tier, terms) =>
+    startCheckout: (tier, terms, interval) =>
       checkout.mutateAsync(
         onboardingCheckoutRequest(
           `${window.location.origin}${ROUTER_BASE_CONCAT}onboarding`,
           tier,
-          terms
+          terms,
+          interval
         )
       ),
     completeOnboarding: async ({ skipped }) => {

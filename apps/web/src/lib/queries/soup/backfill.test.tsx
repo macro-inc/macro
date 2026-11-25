@@ -1324,7 +1324,8 @@ describe('runSoupBackfills', () => {
       if (storage === 'reset') {
         mockCacheHost.currentStorageGeneration.mockResolvedValue('storage-2');
       }
-      for (const callback of cacheGenerationCallbacks) callback({ storage });
+      for (const callback of cacheGenerationCallbacks)
+        callback({ storage, queue: storage });
 
       await vi.waitFor(() => expect(fetchInputs).toHaveLength(2));
       expect(fetchSignals[0]?.aborted).toBe(true);
@@ -1421,7 +1422,8 @@ describe('runSoupBackfills', () => {
         if (storage === 'reset') {
           mockCacheHost.currentStorageGeneration.mockResolvedValue('storage-2');
         }
-        for (const callback of cacheGenerationCallbacks) callback({ storage });
+        for (const callback of cacheGenerationCallbacks)
+          callback({ storage, queue: storage });
         await vi.waitFor(() =>
           expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
         );

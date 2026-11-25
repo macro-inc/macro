@@ -3,7 +3,10 @@ use std::borrow::Cow;
 use crate::Result;
 use crate::error::OpensearchClientError;
 use crate::search::query::QueryKey;
-use crate::search::query::{TermCombine, generate_terms_must_query};
+use crate::search::query::{
+    CreateQueryParams, TermCombine, create_query, generate_terms_must_query,
+    generate_terms_must_query_for_fields,
+};
 use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
@@ -132,6 +135,9 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub ids: Vec<String>,
     /// How multi-term content queries combine.
     pub term_combine: TermCombine,
+    /// Words and phrases a minus left out of the query: every item that
+    /// would match one of them as a term is left out.
+    pub excluded_terms: Vec<String>,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -147,8 +153,14 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             ids_only: false,
             ids: Vec::new(),
             term_combine: TermCombine::default(),
+            excluded_terms: Vec::new(),
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    pub fn excluded_terms(mut self, excluded_terms: Vec<String>) -> Self {
+        self.excluded_terms = excluded_terms;
+        self
     }
 
     pub fn term_combine(mut self, term_combine: TermCombine) -> Self {
@@ -290,6 +302,36 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         )];
 
         Ok(must_array)
+    }
+
+    /// One query per excluded term, matching it against `field` as a search
+    /// term matches there.
+    pub(crate) fn excluded_field_queries<'a>(&self, field: &str) -> Result<Vec<QueryType<'a>>> {
+        let query_key = QueryKey::from_match_type(&self.match_type)?;
+        let queries = self.excluded_terms.iter().map(|term| {
+            create_query(CreateQueryParams {
+                query_key,
+                field,
+                term,
+            })
+        });
+        Ok(queries.collect())
+    }
+
+    /// One query per excluded term, matching it against the content fields
+    /// and links as a search term matches there.
+    pub(crate) fn excluded_content_queries<'a>(&'a self) -> Result<Vec<QueryType<'a>>> {
+        let query_key = QueryKey::from_match_type(&self.match_type)?;
+        let queries = self.excluded_terms.iter().map(|term| {
+            generate_terms_must_query_for_fields(
+                query_key,
+                T::CONTENT_FIELDS,
+                T::LINK_FIELD,
+                vec![term.as_str()],
+                self.term_combine,
+            )
+        });
+        Ok(queries.collect())
     }
 
     /// Builds a query targeting the title field (TITLE_KEY)

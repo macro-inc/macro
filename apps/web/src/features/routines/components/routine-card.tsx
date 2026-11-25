@@ -103,19 +103,26 @@ function RoutineByline(props: {
                 />
               )}
             </Show>
-            <span class="min-w-0 truncate">
-              {props.row.when}
-              {' · '}
-              <Show
-                when={props.row.lastRun}
-                fallback={t('routinesList.notRunYet')}
+            <span class="flex min-w-0 items-center gap-1.5">
+              <Tooltip
+                label={props.row.whenDetails ?? props.row.when}
+                class="min-w-0"
               >
-                {(run) => lastRunText(run())}
-              </Show>
+                <span class="block min-w-0 truncate">{props.row.when}</span>
+              </Tooltip>
+              <span class="shrink-0">
+                <Show
+                  when={props.row.lastRun}
+                  fallback={t('routinesList.notRunYet')}
+                >
+                  {(run) => lastRunText(run())}
+                </Show>
+              </span>
               {/* What its runs created opens from its own page. */}
               <Show when={props.row.children.length > 0}>
-                {' · '}
-                {t('subRoutines.count', { count: props.row.children.length })}
+                <span class="shrink-0">
+                  {t('subRoutines.count', { count: props.row.children.length })}
+                </span>
               </Show>
             </span>
           </>
@@ -152,10 +159,14 @@ function RoutineByline(props: {
           </Show>
         </Match>
         <Match when={!props.row.enabled}>
-          <span class="min-w-0 truncate">
-            {props.row.when}
-            {' · '}
-            {t('routinesList.off')}
+          <span class="flex min-w-0 items-center gap-1.5">
+            <Tooltip
+              label={props.row.whenDetails ?? props.row.when}
+              class="min-w-0"
+            >
+              <span class="block min-w-0 truncate">{props.row.when}</span>
+            </Tooltip>
+            <span class="shrink-0">{t('routinesList.off')}</span>
           </span>
         </Match>
         <Match when={failed()}>

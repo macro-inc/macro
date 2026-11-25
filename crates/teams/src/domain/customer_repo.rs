@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use crate::domain::model::{
     ComputerPurchaseCredit, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
     ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo, ProratedCharge, ScheduledSeatPlan,
-    SeatPlan, SubscriptionItemView, SubscriptionTerms,
+    SeatDowngrade, SeatPlan, SubscriptionItemView, SubscriptionTerms,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
@@ -99,15 +99,15 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         &self,
         subscription: &stripe::SubscriptionId,
         user: &MacroUserIdStr<'_>,
-        plan: Option<SeatPlan>,
+        downgrade: Option<SeatDowngrade>,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
     /// Cancel any pending downgrade and replace the personal price atomically with
     /// respect to other provider mutations, invoicing proration immediately.
     ///
     /// When `end_trial` is set, end an in-progress trial and start the new plan's
-    /// billing cycle now. A Max upgrade sets this while the subscription is still
-    /// trialing so the trial cannot move onto the Max price.
+    /// billing cycle now. An upgrade above Premium sets this while the subscription is still
+    /// trialing so the trial cannot move onto a pricier plan.
     fn upgrade_personal_plan(
         &self,
         subscription: &stripe::SubscriptionId,

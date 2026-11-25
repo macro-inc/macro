@@ -742,8 +742,8 @@ export const enableChatSidebarSectionResize = defineFlag({
   env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
 });
 
-// Desktop channel gutter: a Mark done check beside each notification stack,
-// and a bell toggle opening a list of the channel's not-done or unread stacks.
+// Desktop channel gutter: a bell toggle opening a list of what was unread when
+// the channel opened, each entry held until it is marked done.
 // On in development; deployed environments defer to PostHog (Macro staff
 // first).
 export const enableChannelNotificationGutter = defineFlag({

@@ -300,7 +300,7 @@ describe('InviteToTeamDialog agent teammates', () => {
   }
   const addButton = () =>
     screen.getByRole('button', {
-      name: /^(Add|Try again|Retry)/,
+      name: /^Add agent(?: ·|$)/,
     }) as HTMLButtonElement;
 
   it('adds an agent by name and size, waits until it is online, and lands in its DM', async () => {
@@ -327,11 +327,11 @@ describe('InviteToTeamDialog agent teammates', () => {
     fireEvent.input(field, { target: { value: 'Ada' } });
     expect(field.getAttribute('aria-invalid')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
-    expect(addButton().textContent).toContain('Add Ada');
-    expect(addButton().textContent).toContain('$80');
+    expect(addButton().textContent).toBe('Add agent · $80.00/month');
 
     fireEvent.click(addButton());
-    expect(screen.getByRole('button', { name: /Adding Ada/ })).toBeTruthy();
+    expect(addButton().textContent).toBe('Add agent');
+    expect(addButton().getAttribute('aria-busy')).toBe('true');
 
     await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(mocks.openDm).toHaveBeenCalledWith(ada.userId);
@@ -394,7 +394,7 @@ describe('InviteToTeamDialog agent teammates', () => {
     mocks.fetchAgents.mockResolvedValue({
       agents: [{ ...ada, status: 'running' }],
     });
-    expect(addButton().textContent).toContain('Try again');
+    expect(addButton().textContent).toBe('Add agent · $40.00/month');
     fireEvent.click(addButton());
     await vi.waitFor(() => expect(mocks.openDm).toHaveBeenCalled());
     const [declined, again] = mocks.createAgent.mock.calls.map(
@@ -441,12 +441,14 @@ describe('InviteToTeamDialog agent teammates', () => {
         "Ada didn't start on its computer"
       )
     );
+    expect(addButton().textContent).toBe('Add agent');
     fireEvent.click(addButton());
     await vi.waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain(
         'The charge was undone'
       )
     );
+    expect(addButton().textContent).toBe('Add agent · $40.00/month');
     expect(mocks.retryComputer).toHaveBeenCalledWith('computer-1');
     expect(mocks.createAgent).toHaveBeenCalledTimes(1);
   });

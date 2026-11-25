@@ -159,7 +159,10 @@ export function RoutineListRow(props: {
             </Show>
           </span>
         </EntitySlot>
-        <Cell label={props.row.when} class="@max-[760px]/routines:hidden">
+        <Cell
+          label={props.row.whenDetails ?? props.row.when}
+          class="@max-[760px]/routines:hidden"
+        >
           <span class="truncate">{props.row.when}</span>
         </Cell>
         <Cell label={doesLabel()} class="@max-[760px]/routines:hidden">

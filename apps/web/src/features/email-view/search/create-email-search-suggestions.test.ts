@@ -349,6 +349,8 @@ it('matches the people found by name without accents or apostrophe spelling', ()
 it('reads a plain word of three letters or more as a name being typed', () => {
   expect(emailSearchNameBeingTyped('budget ana')).toBe('ana');
   expect(emailSearchNameBeingTyped("o'neil")).toBe("o'neil");
+  // An accent typed as a combining mark is still a name.
+  expect(emailSearchNameBeingTyped('Jose\u0301')).toBe('Jose\u0301');
   expect(emailSearchNameBeingTyped('o’neil')).toBe('o’neil');
   for (const text of ['an', 'ana ', 'from:ana', '-ana', '"ana', 'q3x']) {
     expect(emailSearchNameBeingTyped(text)).toBeUndefined();
