@@ -19,6 +19,7 @@ vi.mock('@app/observability/flow', () => ({ usePending: () => {} }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     connectMailbox: state.connectMailbox,
+    createNavigation: () => ({ openWithSplit: vi.fn() }),
     createEmailPolicy: () => ({
       scope: () => 'team-1',
       query: {

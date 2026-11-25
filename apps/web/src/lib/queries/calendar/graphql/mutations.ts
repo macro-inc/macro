@@ -118,6 +118,10 @@ const pendingCreates = new Set<string>();
 const answeringCreates = new Set<string>();
 /** The server id each confirmed create replaced its local id with. */
 const landedCreates = new Map<string, string>();
+/** Confirmed creates whose server id the cache has not been able to tell. */
+const unreadCreates = new Set<string>();
+/** Reads where a confirmed create landed, from each tracked host. */
+const createReaders = new Set<(localId: string) => Promise<void>>();
 /**
  * The occurrence each of the latest creates' answers carried for the one
  * drawn locally, by local id: open details move to it before the calendar's
@@ -296,12 +300,25 @@ export function onCalendarEventCreated(
   return () => landedListeners.delete(listener);
 }
 
+function forgetCreate(localId: string) {
+  pendingCreates.delete(localId);
+  unreadCreates.delete(localId);
+}
+
+/** Asks every tracked host where a confirmed create landed, once more. */
+function readUnread(localId: string) {
+  if (!unreadCreates.has(localId)) return;
+  for (const read of createReaders) {
+    fireAndForget(read(localId), 'calendar-create-settlement');
+  }
+}
+
 function landCreate(
   localId: string,
   serverId: string | undefined,
   answered?: OccurrenceRecord
 ) {
-  pendingCreates.delete(localId);
+  forgetCreate(localId);
   if (!serverId || serverId === localId) return;
   landedCreates.set(localId, serverId);
   if (answered) {
@@ -321,6 +338,8 @@ function landCreate(
  */
 function withServerEventId<T extends { eventId: string }>(args: T): T {
   if (pendingCreates.has(args.eventId)) {
+    // The cache may have been too busy to tell where it landed.
+    readUnread(args.eventId);
     throw new CalendarMutationError(
       'This event is still being created. Try again once it syncs.',
       'not_found',
@@ -342,8 +361,8 @@ async function settledEventId(
 ): Promise<string | undefined> {
   const selected = await readRecordsByKeys(host, eventIdentitySelection, [
     eventKey(localId),
-  ]).catch(() => undefined);
-  const identity = selected?.records[0];
+  ]);
+  const identity = selected.records[0];
   if (
     !identity?.record.id ||
     identity.identity?.pending !== false ||
@@ -353,27 +372,57 @@ async function settledEventId(
   return identity.record.id;
 }
 
-/** Records where queued creates land once the queue settles them. */
+/**
+ * Records where queued creates land once the queue settles them. A cache can
+ * tell of a settlement while it cannot be read, as when it is paused, so a
+ * create whose server id was not told stays pending until a host serves.
+ */
 export function trackCalendarCreateSettlements(
-  host: Pick<CacheHost, 'onMutationSettled' | 'readRecordsByKeys'>
+  host: Pick<
+    CacheHost,
+    'onMutationSettled' | 'onOwnerReady' | 'readRecordsByKeys'
+  >
 ): () => void {
-  return host.onMutationSettled((settlement) => {
+  let stopped = false;
+
+  createReaders.add(landConfirmed);
+  async function landConfirmed(localId: string): Promise<void> {
+    let serverId: string | undefined;
+    try {
+      serverId = await settledEventId(host, localId);
+    } catch {
+      return;
+    }
+    if (stopped || !pendingCreates.has(localId)) return;
+    // A create still waiting on its own answer lands from that answer.
+    if (serverId || !answeringCreates.has(localId))
+      landCreate(localId, serverId);
+  }
+
+  function landUnread(): void {
+    for (const localId of unreadCreates) {
+      fireAndForget(landConfirmed(localId), 'calendar-create-settlement');
+    }
+  }
+
+  landUnread();
+  const stopReady = host.onOwnerReady?.(landUnread);
+  const stopSettled = host.onMutationSettled((settlement) => {
     const localId = settlement.mutationUuid;
     if (!localId || !pendingCreates.has(localId)) return;
     if (settlement.status !== 'committed') {
-      pendingCreates.delete(localId);
+      forgetCreate(localId);
       return;
     }
-    fireAndForget(
-      (async () => {
-        const serverId = await settledEventId(host, localId);
-        // A create still waiting on its own answer lands from that answer.
-        if (serverId || !answeringCreates.has(localId))
-          landCreate(localId, serverId);
-      })(),
-      'calendar-create-settlement'
-    );
+    unreadCreates.add(localId);
+    fireAndForget(landConfirmed(localId), 'calendar-create-settlement');
   });
+  return () => {
+    stopped = true;
+    createReaders.delete(landConfirmed);
+    stopReady?.();
+    stopSettled();
+  };
 }
 
 async function cachedEvent(
@@ -876,6 +925,8 @@ export async function executeGraphqlCreate(
     );
   } finally {
     answeringCreates.delete(clientId);
+    // It settled while its call was out, and the call answered nothing more.
+    readUnread(clientId);
   }
 }
 
@@ -1076,7 +1127,7 @@ async function createThroughQueue(
   try {
     outcome = await settleCreate(result);
   } catch (error) {
-    pendingCreates.delete(clientId);
+    forgetCreate(clientId);
     throw error;
   }
   if (outcome.kind === 'queued') {
@@ -1086,7 +1137,19 @@ async function createThroughQueue(
     // Settlement preserves the local-to-server alias even when its response
     // content is retired. Navigation and later edits must use that server ID.
     const cache = host ?? getGraphqlSoupCacheHost();
-    const serverId = cache ? await settledEventId(cache, clientId) : undefined;
+    // It lands once a host that serves tells its server id.
+    const unread = () => {
+      if (pendingCreates.has(clientId)) unreadCreates.add(clientId);
+      return { outcome };
+    };
+    // A paused cache has no host to ask.
+    if (!cache) return unread();
+    let serverId: string | undefined;
+    try {
+      serverId = await settledEventId(cache, clientId);
+    } catch {
+      return unread();
+    }
     landCreate(clientId, serverId);
     // Creation succeeded. The caller closes and refreshes without offering
     // a duplicate create or navigating to an unconfirmed local identifier.

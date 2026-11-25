@@ -195,6 +195,8 @@ export interface SoupViewContextValues {
   initialize: (options?: SoupViewInitializeOptions) => void;
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
+  /** Search has nothing to search for yet, such as an operator half typed. */
+  searchAwaitingInput: Accessor<boolean>;
   setSearchText: (value: string) => void;
   /** What openers' tokens in the Search query stand for, by id. */
   searchBindings: Accessor<SearchOperatorBinding[]>;
@@ -881,8 +883,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     if (!parts || parts.read.operators === 0 || !lookup) return undefined;
     return searchOperatorFilters(parts.read, lookup());
   });
+  // The feed can't check channel senders or call speakers, the only senders
+  // `from:` names here, so a sender alone waits for a word rather than
+  // listing every channel.
   const listsOperators = () =>
-    searchParts()?.serviceText === '' && operatorFilters() !== undefined;
+    searchParts()?.serviceText === '' &&
+    operatorFilters() !== undefined &&
+    !searchParts()?.read.groups.some((group) => group.name === 'from');
   // Bound tokens are left out of the service's text and go with the request
   // as filters by id, which it joins with the operators it reads.
   const boundFilters = createMemo(() => {
@@ -1783,6 +1790,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     items,
     rows: soup.rows,
     searchText: search.searchText,
+    searchAwaitingInput,
     setSearchText: search.setSearchText,
     searchBindings,
     setSearchBindings,

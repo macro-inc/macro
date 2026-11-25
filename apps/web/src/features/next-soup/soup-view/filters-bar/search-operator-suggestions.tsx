@@ -48,7 +48,7 @@ export function SearchOperatorSuggestions(props: {
         'flex flex-col',
         props.inline
           ? 'w-full'
-          : 'menu-surface absolute top-full left-0 z-item-options-menu mt-1 w-full min-w-64 max-w-md rounded-xl p-1'
+          : 'menu-surface w-full min-w-64 max-w-md rounded-xl p-1'
       )}
     >
       <For each={props.rows}>

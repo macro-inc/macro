@@ -10,5 +10,5 @@ export type NotifEventOneOfSevenoneTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSevenoneTag = {
-  agent_sign_in_expiry: 'agent_sign_in_expiry',
+  routine_run_finished: 'routine_run_finished',
 } as const;

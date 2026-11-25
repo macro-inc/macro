@@ -33,11 +33,25 @@ function fixtureDomains(guarded: string, usual: string) {
     return ['regional-sales-office.north-america.example.com', usual];
   return [usual];
 }
+// archived-domain lists an archived company's domain, named as such only to
+// admins like the server does; stale-archived lists it as a plain row, as a
+// list read before the company was archived would.
+const archivedDomain = 'archived.example.com';
+const archivedCompanyId = '00000000-0000-4000-8000-000000000060';
+const listsArchivedDomain =
+  params.has('archived-domain') || params.has('stale-archived');
 const [state, setState] = createSignal<EmailPrivacy>({
   enabled: params.has('contributing'),
   mailboxEmail: params.has('disconnected') ? null : 'member@example.com',
   mailboxLinkId: params.has('disconnected') ? null : mailboxId,
-  teamDomains: fixtureDomains('example.com', 'team.example.com'),
+  teamDomains: [
+    ...(listsArchivedDomain ? [archivedDomain] : []),
+    ...fixtureDomains('example.com', 'team.example.com'),
+  ],
+  archivedTeamDomains:
+    params.has('archived-domain') && params.has('admin')
+      ? { [archivedDomain]: archivedCompanyId }
+      : {},
   personalDomains: fixtureDomains('gmail.com', 'personal.example.com'),
   teamDomainWarnings: params.has('mailbox-guard')
     ? { 'example.com': 'company' }
@@ -182,6 +196,7 @@ function response() {
     personal_domains: value.personalDomains,
     team_domain_warnings: value.teamDomainWarnings ?? {},
     personal_domain_warnings: value.personalDomainWarnings ?? {},
+    archived_team_domains: value.archivedTeamDomains ?? {},
     can_remove_team_domains: value.canRemoveTeamDomains,
   };
 }
@@ -229,6 +244,15 @@ export const crmEmailPrivacyClient = {
     });
   },
   update: async (change: EmailPrivacyChange) => {
+    if (
+      listsArchivedDomain &&
+      change.action === 'remove_domain' &&
+      change.scope === 'team' &&
+      change.domain === archivedDomain
+    ) {
+      setLastChange(JSON.stringify(change));
+      return err([{ code: 'CONFLICT' as const, message: 'Resource conflict' }]);
+    }
     if (params.has('mailbox-guard') && change.action === 'add_domain') {
       const domain = change.domain.toLowerCase();
       if (domain === 'example.com' || domain === 'gmail.com') {

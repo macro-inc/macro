@@ -11,6 +11,10 @@ import {
 } from '../../queries/channel/notification-refresh';
 import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
+  revalidateMailAttachmentLists,
+  revalidateMailAttachmentListsForSoupUpdates,
+} from '../../queries/soup/graphql/mail-list-revalidation';
+import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
   NotificationUpdatesDocument,
@@ -306,6 +310,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
   let generation = 0;
   let signaledFailure = false;
+  let connections = 0;
   let stopWatchingForReattach: (() => void) | undefined;
 
   // graphql-ws retries transient failures itself and gives up only on ones a
@@ -387,6 +392,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 revalidateCallListsForSoupUpdates(patches),
                 'graphql-soup-subscriptions'
               );
+              fireAndForget(
+                revalidateMailAttachmentListsForSoupUpdates(patches),
+                'graphql-soup-subscriptions'
+              );
               channelHandler.onSoupUpdates(patches);
             }
             if (
@@ -428,6 +437,12 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       signaledFailure = false;
       activity?.reconnect();
       channels?.reconnect();
+      connections += 1;
+      if (connections > 1)
+        fireAndForget(
+          revalidateMailAttachmentLists(),
+          'graphql-soup-subscriptions'
+        );
     },
     dispose() {
       if (options.suspendOnPagehide) {

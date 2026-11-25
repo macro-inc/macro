@@ -58,7 +58,9 @@ function domainWarningText(reason: MailboxDomainConflict | undefined) {
 function DomainBlocklist(props: {
   source: PrivacySource;
   scope: EmailBlockScope;
+  onOpenCompany?: () => void;
 }) {
+  const navigation = useCrmContext().createNavigation();
   const [input, setInput] = createStore<{ domain: string; error?: string }>({
     domain: '',
   });
@@ -76,6 +78,53 @@ function DomainBlocklist(props: {
       ? settings()?.teamDomainWarnings
       : settings()?.personalDomainWarnings;
   const busy = () => props.source.update.isPending;
+  const archivedCompany = (domain: string) =>
+    props.scope === 'team'
+      ? settings()?.archivedTeamDomains?.[domain]
+      : undefined;
+  const openCompany = (id: string) => {
+    props.onOpenCompany?.();
+    navigation.openWithSplit({ type: 'company', id }, { activate: true });
+  };
+  const rowDescription = (domain: string) =>
+    archivedCompany(domain)
+      ? t('crm.privacyArchivedCompanyDomain')
+      : domainWarningText(warnings()?.[domain]);
+  // An archived company's domain can't be removed until the company is
+  // restored, so admins get the company instead. No action returns undefined:
+  // SettingsRow renders its control column for any truthy child.
+  const rowAction = (domain: string) => {
+    if (!canRemove()) return undefined;
+    const company = archivedCompany(domain);
+    if (company)
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={t('crm.privacyOpenArchivedCompanyLabel', { domain })}
+          onClick={() => openCompany(company)}
+        >
+          {t('crm.privacyOpenArchivedCompany')}
+        </Button>
+      );
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={busy()}
+        aria-label={t('crm.privacyRemoveDomain', { domain })}
+        onClick={() =>
+          props.source.update.mutate({
+            action: 'remove_domain',
+            scope: props.scope,
+            domain,
+          })
+        }
+      >
+        {t('crm.privacyRemove')}
+      </Button>
+    );
+  };
   const add = (event: SubmitEvent) => {
     event.preventDefault();
     const domain = input.domain.trim();
@@ -120,30 +169,12 @@ function DomainBlocklist(props: {
           {(item) => (
             <SettingsRow
               label={<span class="wrap-anywhere">{item}</span>}
-              description={domainWarningText(warnings()?.[item])}
+              description={rowDescription(item)}
               // A long domain wraps beside Remove instead of pushing it onto
               // its own line in the phone settings sheet.
               class="flex-nowrap"
             >
-              {/* A conditional child, not <Show>: SettingsRow renders its
-                  control column for any truthy child, and Show is one. */}
-              {canRemove() ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy()}
-                  aria-label={t('crm.privacyRemoveDomain', { domain: item })}
-                  onClick={() =>
-                    props.source.update.mutate({
-                      action: 'remove_domain',
-                      scope: props.scope,
-                      domain: item,
-                    })
-                  }
-                >
-                  {t('crm.privacyRemove')}
-                </Button>
-              ) : undefined}
+              {rowAction(item)}
             </SettingsRow>
           )}
         </For>
@@ -316,6 +347,7 @@ function LegacyEmailPrivacySettings(props: {
   onOptIn?: () => void;
   onConnectEmail?: () => void;
   onOpenThread?: () => void;
+  onOpenCompany?: () => void;
   source: PrivacySource;
   policyUnavailable?: boolean;
 }) {
@@ -394,7 +426,11 @@ function LegacyEmailPrivacySettings(props: {
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
-      <DomainBlocklist source={source} scope="team" />
+      <DomainBlocklist
+        source={source}
+        scope="team"
+        onOpenCompany={props.onOpenCompany}
+      />
       <DomainBlocklist source={source} scope="personal" />
       <Show when={threadExclusions().enabled}>
         <ThreadExclusions source={source} onOpenThread={props.onOpenThread} />
@@ -408,6 +444,8 @@ type PrivacySettingsProps = {
   /** Called before the add-inbox flow opens, so a host dialog can step aside. */
   onConnectEmail?: () => void;
   onOpenThread?: () => void;
+  /** Called before an archived company opens, so a host dialog can step aside. */
+  onOpenCompany?: () => void;
   renderOverview?: (content: JSX.Element) => JSX.Element;
 };
 
@@ -612,7 +650,11 @@ function SelectiveEmailPrivacy(
         </p>
       </Show>
       <Show when={!props.source.query.isPending && props.source.query.data}>
-        <DomainBlocklist source={props.source} scope="team" />
+        <DomainBlocklist
+          source={props.source}
+          scope="team"
+          onOpenCompany={props.onOpenCompany}
+        />
         <DomainBlocklist source={props.source} scope="personal" />
       </Show>
       <Show when={exclusions().enabled}>
@@ -763,6 +805,7 @@ export function CrmEmailPrivacyDialog(props: {
               onOptIn={() => props.onOpenChange(false)}
               onConnectEmail={() => props.onOpenChange(false)}
               onOpenThread={() => props.onOpenChange(false)}
+              onOpenCompany={() => props.onOpenChange(false)}
             />
           </SettingsSections>
         </Panel.Body>

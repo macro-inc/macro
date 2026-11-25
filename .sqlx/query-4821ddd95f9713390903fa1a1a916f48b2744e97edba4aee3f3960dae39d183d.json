@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.retired_id, a.company_id\n                   FROM crm_company_aliases a\n                   JOIN crm_companies c ON c.id = a.company_id\n                   WHERE a.retired_id = ANY($1) AND c.team_id = $2\n                   ORDER BY a.retired_id LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "retired_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4821ddd95f9713390903fa1a1a916f48b2744e97edba4aee3f3960dae39d183d"
+}

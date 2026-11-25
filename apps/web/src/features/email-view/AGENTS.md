@@ -124,6 +124,14 @@ the Soup-backed thread list, and saved email views.
   the typed text (narrowing a search, suggestions) parses that instead.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
+- `buildEmailQuery` sends the Attachments kinds to the server for the Inbox and
+  All mail tabs (Archived, Calendar, Favorites and Shared included) and saved
+  views, so pages come back full. Sent, Drafts, Spam and Trash, whose pages the
+  attachment flags are not indexed for, and the Focus, Reminders and CRM email
+  lists only refine the rows they loaded with the facet's own predicate, which
+  applies the same MIME prefixes as the flags. A list with that clause is server
+  membership, so it refetches when a pushed thread carries attachments and
+  after the Soup socket reconnects (`mail-list-revalidation.ts`).
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - The data source keeps the previous rows while a search loads only when
