@@ -35,6 +35,8 @@ vi.mock('@core/block', () => ({
     return Object.assign(signal, { get: signal[0], set: signal[1] });
   },
   useIsNestedBlock: () => nested,
+  defineBlock: <T,>(definition: T) => definition,
+  LoadErrors: {},
 }));
 const analytics = vi.hoisted(() => ({ track: vi.fn(), pageView: vi.fn() }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -69,6 +71,8 @@ vi.mock('@app/features/access-requests/access-requests', () => ({
   },
 }));
 
+import { definition as companyDefinition } from '@block-company/definition';
+import { definition as contactDefinition } from '@block-contact/definition';
 import {
   blockErrorSignal,
   blockLoadRetrySignal,
@@ -687,6 +691,28 @@ it('reports an open for a block without open history that asks for it', async ()
     })
   );
   expect(analytics.pageView).not.toHaveBeenCalled();
+  expect(trackBlockOpened).not.toHaveBeenCalled();
+});
+
+it('leaves the open of a company or contact to its view, which knows the id it answers for', async () => {
+  nested = false;
+  // The id can name a record merged into another, which has no history row.
+  for (const definition of [contactDefinition, companyDefinition]) {
+    render(() => (
+      <BlockLoader
+        id="merged-record"
+        source={{ type: 'dss', id: 'merged-record' }}
+        definition={{ ...definition, component: () => null }}
+      />
+    ));
+    await vi.waitFor(() =>
+      expect(analytics.track).toHaveBeenCalledWith('open_entity', {
+        entityType: definition.name,
+        entityId: 'merged-record',
+      })
+    );
+    cleanup();
+  }
   expect(trackBlockOpened).not.toHaveBeenCalled();
 });
 

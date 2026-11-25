@@ -10,6 +10,10 @@ export const definition = defineBlock({
       .CompanyBlockAdapter,
   })),
   liveTrackingEnabled: false,
+  // The id a block opens with can name a company merged into another, so the
+  // company view records the open under the id its read answers with.
+  openTrackingEnabled: false,
+  openAnalyticsEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
       return ok({ id: source.id });
