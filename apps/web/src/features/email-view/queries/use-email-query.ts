@@ -907,6 +907,7 @@ export function useEmailDataSource(
       const requestScope = scope();
       setRefreshing(true);
       emptyPages.resetError();
+      emptyListPages.resetError();
       try {
         if (search.isSearching() && searchesFavorites())
           await favorites.refetch();

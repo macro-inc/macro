@@ -482,6 +482,10 @@ impl<'a> OwnedRead<'a> {
             window = window
                 .saturating_mul(GROWTH)
                 .min(self.tuning.max_round_window);
+            // A label read walks no more than its budget in a request.
+            if let Some(budget) = self.tuning.walk_budget {
+                window = window.min(budget.saturating_sub(stats.walked).max(1));
+            }
             let left = limit - rows.len() as i64;
             // At the last window's rate, the page needs `left × last_window
             // / last_found` more threads; a window that found none never
@@ -762,6 +766,9 @@ impl<'a> OwnedRead<'a> {
                 // One ordered, limited index walk per inbox: `link_id =
                 // ANY(…)` can't return index order, so it would read and sort
                 // every thread of every inbox.
+                if self.walked_match.is_some() {
+                    builder.push("\n                    SELECT * FROM (");
+                }
                 builder.push("\n                    SELECT * FROM (");
                 for (index, inbox) in self.inboxes.iter().enumerate() {
                     if index > 0 {
@@ -776,25 +783,28 @@ impl<'a> OwnedRead<'a> {
                     builder.push_bind(window);
                     builder.push(")");
                 }
-                // A label read tests its labels on each walked thread here,
-                // before the preview pick, which then runs only on matches.
-                match &self.walked_match {
-                    Some(walked_match) => {
-                        builder.push("\n                    ) AS t WHERE ");
-                        walked_match
-                            .clone()
-                            .push_into(builder, &self.params.user_id);
-                    }
-                    None => {
-                        builder.push("\n                    ) AS inbox_threads");
-                    }
-                }
                 builder.push(
                     r#"
+                    ) AS inbox_threads
                     ORDER BY effective_ts DESC, id DESC
                     LIMIT "#,
                 );
                 builder.push_bind(window);
+                // A label read tests its labels on each walked thread here,
+                // before the preview pick, which then runs only on matches.
+                // The merged window comes first: filtered per inbox, an older
+                // inbox's labeled thread could fall below the window's last
+                // thread and be listed again by the next window.
+                if let Some(walked_match) = &self.walked_match {
+                    builder.push(
+                        r#"
+                    ) AS t WHERE "#,
+                    );
+                    walked_match
+                        .clone()
+                        .push_into(builder, &self.params.user_id);
+                    builder.push(" ORDER BY effective_ts DESC, id DESC");
+                }
             }
         }
     }
