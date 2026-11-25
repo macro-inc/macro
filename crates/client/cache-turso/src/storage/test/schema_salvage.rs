@@ -182,6 +182,34 @@ fn a_queue_imported_into_a_cache_of_another_schema_resets_it_and_keeps_every_wri
 }
 
 #[test]
+fn a_copy_whose_every_write_the_cache_already_queues_leaves_its_schema_alone() {
+    block_on(async {
+        let write = rename();
+        let older = queuing(Some(OLD), vec![write.clone()]).await;
+        // The write, queued again under another ID by a build of another schema.
+        let mut newer = queuing(Some(ADDED), vec![edit(), write]).await;
+        let imported = newer.import_queue(&salvaged(&older, None), 0).unwrap();
+        assert_eq!(imported.kept, 0);
+        let adoption = adopt(&newer, ADDED, &ProjectionInputs::none());
+        assert_eq!(adoption.change, None);
+        assert_eq!(adoption.retired_overlays, 0);
+        assert!(!sources(&mut newer).await.iter().any(is_retired));
+    });
+}
+
+#[test]
+fn a_queue_imported_into_a_cache_that_held_records_under_no_schema_resets_it() {
+    block_on(async {
+        let queue = salvaged(&queuing(Some(OLD), vec![rename(), edit()]).await, None);
+        let mut next = queuing(None, Vec::new()).await;
+        assert_eq!(next.import_queue(&queue, 0).unwrap().kept, 2);
+        let adoption = adopt(&next, OLD, &ProjectionInputs::none());
+        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
+        assert_eq!(requests(&mut next).await.len(), 2);
+    });
+}
+
+#[test]
 fn a_queue_from_a_cache_whose_schema_cannot_be_read_resets_the_next_one() {
     block_on(async {
         for damage in [

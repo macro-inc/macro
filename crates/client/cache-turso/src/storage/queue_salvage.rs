@@ -351,6 +351,7 @@ fn import(
             ..QueueImport::default()
         });
     }
+    let held_nothing = schema_store::is_empty(connection)?;
     let highest = sequence(connection)?;
     let queue = if highest == 0 {
         queue.clone()
@@ -386,7 +387,10 @@ fn import(
             ],
         )?;
     }
-    schema_store::import(connection, queue.schema.as_ref())?;
+    // Writes it already queues are under its own schema.
+    if imported.kept > 0 {
+        schema_store::import(connection, queue.schema.as_ref(), held_nothing)?;
+    }
     ImportMarker {
         id: queue.id,
         rounds: queue.rounds,

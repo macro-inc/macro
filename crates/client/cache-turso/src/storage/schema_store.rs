@@ -320,7 +320,7 @@ fn resets_after(error: TursoStorageError) -> bool {
 
 /// Whether the cache holds no record and no queued write: nothing a schema
 /// shaped.
-fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
+pub(super) fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
     Ok(
         driver::query(connection, ANY_RECORD, Vec::new())?.is_empty()
             && driver::query(connection, ANY_QUEUED, Vec::new())?.is_empty(),
@@ -1030,16 +1030,19 @@ pub(super) fn salvaged(connection: &Db) -> Option<StoredRow> {
 /// Gives a database the stored schema `carried` of the one whose queue it is
 /// importing, inside the import's transaction, so that the adoption after the
 /// open judges the queue's overlays by the schema they were made under, as it
-/// would have in that database. One that stores another schema already is
-/// made unreadable instead: no one schema describes both, so the adoption
-/// resets it, keeping every queued write and none of their overlays.
+/// would have in that database. One that stores another schema already, or
+/// `held_nothing` false and no schema, is made unreadable instead: no one
+/// schema describes both, so the adoption resets it, keeping every queued
+/// write and none of their overlays. `held_nothing` is whether it held no
+/// records or queue before this import.
 pub(super) fn import(
     connection: &Db,
     carried: Option<&StoredRow>,
+    held_nothing: bool,
 ) -> Result<(), TursoStorageError> {
     match (load(connection)?, carried) {
         (None, None) => Ok(()),
-        (None, Some(carried)) => require_changed(
+        (None, Some(carried)) if held_nothing => require_changed(
             driver::execute(
                 connection,
                 UPSERT,
@@ -1052,7 +1055,7 @@ pub(super) fn import(
             1,
         ),
         (Some(own), Some(carried)) if own.hash == carried.hash => Ok(()),
-        (Some(_), _) => mark_unreadable(connection),
+        _ => mark_unreadable(connection),
     }
 }
 
