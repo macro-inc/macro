@@ -52,6 +52,7 @@ import {
   FEATURE_PAGES,
   featureHrefForGuide,
 } from '../../marketing/core/navigation';
+import { ThemeToggle } from '../../marketing/components/ThemeToggle';
 import { createPageSearch } from '../core/page-search';
 
 const extraFeaturePaths = new Set([
@@ -195,6 +196,15 @@ export function DocumentationNavigation(props: { currentPath: string }) {
   const compact = createMediaQuery(
     '(min-width: 768px) and (max-width: 1439px)'
   );
+  const desktop = createMediaQuery('(min-width: 768px)');
+  // The desktop sidebar shares its row with the theme toggle, so the hint
+  // shortens as the sidebar narrows.
+  const searchPlaceholder = () => {
+    const shortcut = isMac ? '⌘F' : 'Ctrl+F';
+    if (compact()) return 'Search';
+    if (desktop()) return `Search ${shortcut}`;
+    return `Search pages ${shortcut}`;
+  };
   const [query, setQuery] = createSignal('');
   const [searchActive, setSearchActive] = createSignal(false);
   const [searchPages] = createResource(
@@ -308,7 +318,7 @@ export function DocumentationNavigation(props: { currentPath: string }) {
             aria-label="Search pages"
             aria-controls="site-search-results"
             autocomplete="off"
-            placeholder={`${compact() ? 'Search' : 'Search pages'} ${isMac ? '⌘F' : 'Ctrl+F'}`}
+            placeholder={searchPlaceholder()}
             value={query()}
             onFocus={() => setSearchActive(true)}
             onInput={(event) => {
@@ -328,6 +338,7 @@ export function DocumentationNavigation(props: { currentPath: string }) {
             </button>
           </Show>
         </div>
+        <ThemeToggle />
       </div>
       <Show
         when={query().trim()}
