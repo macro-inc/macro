@@ -9,8 +9,8 @@ type CategorySearchFilters = {
   clientFilters: SetPredicatesInput<string>;
 };
 
-// Each Cmd+K category maps to a search-view index type so the resulting
-// Type: chip behaves the same as one picked from the filter row. Cmd+K DMs
+// Each Cmd+K category maps to a search-view index type: the `type:` the
+// Search field opens with, and the type the phone's search narrows to. Cmd+K DMs
 // maps to the same channels index as Channels for now; channelType-based
 // narrowing (DMs vs non-DMs) is left for a follow-up once the search
 // backend honors it.
@@ -25,6 +25,13 @@ const CATEGORY_TO_INDEX: Partial<
   tasks: 'task',
   chats: 'agent',
 };
+
+/** The Search view type a Cmd+K category searches, if it has one. */
+export function categorySearchIndex(
+  category: EntitySearchCategory | 'commands'
+): SearchIndexId | undefined {
+  return CATEGORY_TO_INDEX[category];
+}
 
 export function getCategorySearchFilters(
   category: EntitySearchCategory | 'commands'

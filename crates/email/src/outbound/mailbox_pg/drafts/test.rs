@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::{
     domain::{
@@ -39,7 +39,7 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
         .await
         .unwrap();
     let stream = sync
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -480,7 +480,7 @@ async fn saving_an_imported_draft_keeps_its_provider_identity_and_baseline(db: P
 async fn remote_ingestion_preserves_an_unsynced_local_edit_and_records_remote_content(db: PgPool) {
     let (sync, _, input, link) = setup(&db, true).await;
     let stream = sync
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -719,7 +719,7 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
     cp.draft = None;
     sync.checkpoint_draft(&lease, &cp).await.unwrap();
     let stream = sync
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();

@@ -118,6 +118,10 @@ const pendingCreates = new Set<string>();
 const answeringCreates = new Set<string>();
 /** The server id each confirmed create replaced its local id with. */
 const landedCreates = new Map<string, string>();
+/** Confirmed creates whose server id the cache has not been able to tell. */
+const unreadCreates = new Set<string>();
+/** Reads where a confirmed create landed, from each tracked host. */
+const createReaders = new Set<(localId: string) => Promise<void>>();
 /**
  * The occurrence each of the latest creates' answers carried for the one
  * drawn locally, by local id: open details move to it before the calendar's
@@ -126,6 +130,147 @@ const landedCreates = new Map<string, string>();
 const landedReplies = new Map<string, CalendarOccurrenceItem>();
 const LANDED_REPLY_LIMIT = 16;
 const landedListeners = new Set<(localId: string, serverId: string) => void>();
+
+/** One occurrence of one event: the pair the calendar keys its chips by. */
+export interface CalendarOccurrenceRef {
+  eventId: string;
+  occurrenceKey: string;
+}
+
+/**
+ * A move made here, as its answer says: a moved event keeps its id, but its
+ * occurrence takes the key of its new start, so another occurrence replaces
+ * the moved one.
+ */
+export interface CalendarOccurrenceMove {
+  from: CalendarOccurrenceRef;
+  to: CalendarOccurrenceRef;
+}
+
+const occurrenceRef = (eventId: string, occurrenceKey: string) =>
+  JSON.stringify([eventId, occurrenceKey]);
+
+/** How many moves made here of each occurrence the queue holds. */
+const movingOccurrences = new Map<string, number>();
+const moveListeners = new Set<(move?: CalendarOccurrenceMove) => void>();
+
+/** Whether a move made here of this occurrence still waits for its answer. */
+export function isCalendarOccurrenceMoving(
+  eventId: string,
+  occurrenceKey: string
+): boolean {
+  return movingOccurrences.has(occurrenceRef(eventId, occurrenceKey));
+}
+
+/**
+ * Calls `listener` with a move made here once its answer names the
+ * occurrence that replaced the moved one, before the calendar drops the
+ * moved one, and with nothing once the move is answered or fails.
+ */
+export function onCalendarOccurrenceMoved(
+  listener: (move?: CalendarOccurrenceMove) => void
+): () => void {
+  moveListeners.add(listener);
+  return () => moveListeners.delete(listener);
+}
+
+/** A listener's failure must not fail a move the server saved. */
+function announceMove(move?: CalendarOccurrenceMove) {
+  for (const listener of [...moveListeners]) {
+    try {
+      listener(move);
+    } catch (error) {
+      console.warn('Calendar move listener failed', error);
+    }
+  }
+}
+
+function holdMoving(ref: string, change: 1 | -1) {
+  const count = (movingOccurrences.get(ref) ?? 0) + change;
+  if (count > 0) movingOccurrences.set(ref, count);
+  else movingOccurrences.delete(ref);
+}
+
+/**
+ * The occurrence a time change moves to a new key: a standalone event's only
+ * one. A series instance keeps its provider's original start as its key, and
+ * a series moved whole moves every instance, so neither is followed.
+ */
+function movedOccurrence(
+  event: EventRecord | undefined,
+  occurrences: readonly OccurrenceRecord[],
+  patch: UpdateCalendarEventArgs['patch'],
+  recurring: boolean
+): OccurrenceRecord | undefined {
+  if (!patch.time || !event || recurring) return undefined;
+  const standalone = occurrences.filter((occurrence) =>
+    isStandalone(event, occurrence)
+  );
+  return standalone.length === 1 ? standalone[0] : undefined;
+}
+
+/**
+ * The occurrence a committed answer put in place of a standalone event's
+ * moved one: its only live occurrence. An answer the queue holds says nothing
+ * yet.
+ */
+function replacingOccurrence(
+  result: OperationResult<UpdateCalendarEventMutation>
+): OccurrenceRecord | undefined {
+  const payload = result.data?.updateCalendarEvent;
+  if (
+    !payload ||
+    result.error ||
+    optimisticMutationDispositionOf(result)?.kind === 'queued'
+  )
+    return undefined;
+  const live = payload.occurrences.filter(
+    (occurrence) => !occurrence.isCancelled
+  );
+  return live.length === 1 ? live[0] : undefined;
+}
+
+function answeredMove(
+  moved: OccurrenceRecord,
+  replacing: OccurrenceRecord | undefined
+): CalendarOccurrenceMove | undefined {
+  // A resize keeps the start, and with it the occurrence.
+  if (
+    !replacing ||
+    occurrenceRef(replacing.eventId, replacing.occurrenceKey) ===
+      occurrenceRef(moved.eventId, moved.occurrenceKey)
+  )
+    return undefined;
+  return {
+    from: { eventId: moved.eventId, occurrenceKey: moved.occurrenceKey },
+    to: { eventId: replacing.eventId, occurrenceKey: replacing.occurrenceKey },
+  };
+}
+
+/**
+ * Holds `moved` while the queue holds its move, and announces where the
+ * move's answer put it. Without a moved occurrence it does nothing.
+ */
+function trackMove(moved: OccurrenceRecord | undefined) {
+  const ref = moved && occurrenceRef(moved.eventId, moved.occurrenceKey);
+  let held = false;
+  return {
+    enqueued() {
+      if (!ref || held) return;
+      held = true;
+      holdMoving(ref, 1);
+    },
+    answered(result: OperationResult<UpdateCalendarEventMutation>) {
+      const move = moved && answeredMove(moved, replacingOccurrence(result));
+      if (move) announceMove(move);
+    },
+    settled() {
+      if (!ref || !held) return;
+      holdMoving(ref, -1);
+      announceMove();
+    },
+  };
+}
 
 /** Whether `eventId` is a local event the server has not confirmed yet. */
 export function isCalendarEventCreating(eventId: string): boolean {
@@ -155,12 +300,25 @@ export function onCalendarEventCreated(
   return () => landedListeners.delete(listener);
 }
 
+function forgetCreate(localId: string) {
+  pendingCreates.delete(localId);
+  unreadCreates.delete(localId);
+}
+
+/** Asks every tracked host where a confirmed create landed, once more. */
+function readUnread(localId: string) {
+  if (!unreadCreates.has(localId)) return;
+  for (const read of createReaders) {
+    fireAndForget(read(localId), 'calendar-create-settlement');
+  }
+}
+
 function landCreate(
   localId: string,
   serverId: string | undefined,
   answered?: OccurrenceRecord
 ) {
-  pendingCreates.delete(localId);
+  forgetCreate(localId);
   if (!serverId || serverId === localId) return;
   landedCreates.set(localId, serverId);
   if (answered) {
@@ -180,6 +338,8 @@ function landCreate(
  */
 function withServerEventId<T extends { eventId: string }>(args: T): T {
   if (pendingCreates.has(args.eventId)) {
+    // The cache may have been too busy to tell where it landed.
+    readUnread(args.eventId);
     throw new CalendarMutationError(
       'This event is still being created. Try again once it syncs.',
       'not_found',
@@ -201,8 +361,8 @@ async function settledEventId(
 ): Promise<string | undefined> {
   const selected = await readRecordsByKeys(host, eventIdentitySelection, [
     eventKey(localId),
-  ]).catch(() => undefined);
-  const identity = selected?.records[0];
+  ]);
+  const identity = selected.records[0];
   if (
     !identity?.record.id ||
     identity.identity?.pending !== false ||
@@ -212,27 +372,57 @@ async function settledEventId(
   return identity.record.id;
 }
 
-/** Records where queued creates land once the queue settles them. */
+/**
+ * Records where queued creates land once the queue settles them. A cache can
+ * tell of a settlement while it cannot be read, as when it is paused, so a
+ * create whose server id was not told stays pending until a host serves.
+ */
 export function trackCalendarCreateSettlements(
-  host: Pick<CacheHost, 'onMutationSettled' | 'readRecordsByKeys'>
+  host: Pick<
+    CacheHost,
+    'onMutationSettled' | 'onOwnerReady' | 'readRecordsByKeys'
+  >
 ): () => void {
-  return host.onMutationSettled((settlement) => {
+  let stopped = false;
+
+  createReaders.add(landConfirmed);
+  async function landConfirmed(localId: string): Promise<void> {
+    let serverId: string | undefined;
+    try {
+      serverId = await settledEventId(host, localId);
+    } catch {
+      return;
+    }
+    if (stopped || !pendingCreates.has(localId)) return;
+    // A create still waiting on its own answer lands from that answer.
+    if (serverId || !answeringCreates.has(localId))
+      landCreate(localId, serverId);
+  }
+
+  function landUnread(): void {
+    for (const localId of unreadCreates) {
+      fireAndForget(landConfirmed(localId), 'calendar-create-settlement');
+    }
+  }
+
+  landUnread();
+  const stopReady = host.onOwnerReady?.(landUnread);
+  const stopSettled = host.onMutationSettled((settlement) => {
     const localId = settlement.mutationUuid;
     if (!localId || !pendingCreates.has(localId)) return;
     if (settlement.status !== 'committed') {
-      pendingCreates.delete(localId);
+      forgetCreate(localId);
       return;
     }
-    fireAndForget(
-      (async () => {
-        const serverId = await settledEventId(host, localId);
-        // A create still waiting on its own answer lands from that answer.
-        if (serverId || !answeringCreates.has(localId))
-          landCreate(localId, serverId);
-      })(),
-      'calendar-create-settlement'
-    );
+    unreadCreates.add(localId);
+    fireAndForget(landConfirmed(localId), 'calendar-create-settlement');
   });
+  return () => {
+    stopped = true;
+    createReaders.delete(landConfirmed);
+    stopReady?.();
+    stopSettled();
+  };
 }
 
 async function cachedEvent(
@@ -525,7 +715,8 @@ export async function executeGraphqlUpdate(
     !oneOccurrence &&
     recurring &&
     (patch.time != null || patch.recurrenceLines != null);
-  const result = await executeOptimisticMutation(
+  const move = trackMove(movedOccurrence(event, occurrences, patch, recurring));
+  const sent = executeOptimisticMutation(
     client,
     UpdateCalendarEventDocument,
     {
@@ -600,13 +791,28 @@ export async function executeGraphqlUpdate(
     } as OptimisticResponse<UpdateCalendarEventMutation>,
     {
       uuid: uuidv4(),
-      onEnqueued: args.onAccepted,
+      onEnqueued: () => {
+        move.enqueued();
+        args.onAccepted?.();
+      },
       ...(uncertain
         ? { uncertainCalendarEventKeys: [eventKey(args.eventId)] }
         : {}),
     }
   ).toPromise();
-  return settle(host, result, result.data?.updateCalendarEvent ?? undefined);
+  try {
+    const result = await sent;
+    // Announced before the answer replaces the event's occurrences, so open
+    // details know where to go before the moved occurrence leaves.
+    move.answered(result);
+    return await settle(
+      host,
+      result,
+      result.data?.updateCalendarEvent ?? undefined
+    );
+  } finally {
+    move.settled();
+  }
 }
 
 /** Deletes an event, one occurrence, or an occurrence onward. */
@@ -719,6 +925,8 @@ export async function executeGraphqlCreate(
     );
   } finally {
     answeringCreates.delete(clientId);
+    // It settled while its call was out, and the call answered nothing more.
+    readUnread(clientId);
   }
 }
 
@@ -919,7 +1127,7 @@ async function createThroughQueue(
   try {
     outcome = await settleCreate(result);
   } catch (error) {
-    pendingCreates.delete(clientId);
+    forgetCreate(clientId);
     throw error;
   }
   if (outcome.kind === 'queued') {
@@ -929,7 +1137,19 @@ async function createThroughQueue(
     // Settlement preserves the local-to-server alias even when its response
     // content is retired. Navigation and later edits must use that server ID.
     const cache = host ?? getGraphqlSoupCacheHost();
-    const serverId = cache ? await settledEventId(cache, clientId) : undefined;
+    // It lands once a host that serves tells its server id.
+    const unread = () => {
+      if (pendingCreates.has(clientId)) unreadCreates.add(clientId);
+      return { outcome };
+    };
+    // A paused cache has no host to ask.
+    if (!cache) return unread();
+    let serverId: string | undefined;
+    try {
+      serverId = await settledEventId(cache, clientId);
+    } catch {
+      return unread();
+    }
     landCreate(clientId, serverId);
     // Creation succeeded. The caller closes and refreshes without offering
     // a duplicate create or navigating to an unconfirmed local identifier.

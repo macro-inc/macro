@@ -670,6 +670,25 @@ export function useEmailDataSource(
     loadMore: search.fetchNextPage,
   });
 
+  // A list page can come back without a row but with a cursor: a label read
+  // that walked old mail without finding one stops there and says where to
+  // go on. Read on until a row shows or the list ends, so such a page never
+  // reads as an empty list.
+  const emptyListPages = advanceEmptyPages({
+    scope,
+    enabled: () => sourceEnabled() && !search.isSearching(),
+    ready: () =>
+      filtersReady() && !isListPending() && !query.isFetching && !query.error,
+    // The server's own rows: a page the client's filters empty is not one
+    // the read cut short, and reading on through those has no end.
+    rows: () => rawEntities().map((email) => email.id),
+    hasNextPage: () => query.hasNextPage,
+    loadMore: () => query.fetchNextPage(),
+    // A safety valve, not a page budget: a label read walks at most 10,000
+    // threads a request, so 50 reach the end of any inbox up to 500,000.
+    maxPages: 50,
+  });
+
   const hasMore = () => {
     if (!filtersReady()) return false;
     if (usesServiceSearch()) return search.hasNextPage();
@@ -686,7 +705,7 @@ export function useEmailDataSource(
         aliasSearchPending() ||
         emptyPages.isFetching()
       );
-    return query.isFetchingNextPage;
+    return query.isFetchingNextPage || emptyListPages.isFetching();
   };
 
   const builtItems = createMemo<EmailDataSourceItem[]>(() => {
@@ -716,8 +735,12 @@ export function useEmailDataSource(
       return false;
     if (!filtersReady()) return true;
     if (!search.isSearching()) {
-      // A query held back for the tag sets is loading, not empty.
-      return isListPending();
+      // A query held back for the tag sets is loading, not empty, and so is
+      // a list still reading on past pages that held no row.
+      return (
+        isListPending() ||
+        (rawEntities().length === 0 && emptyListPages.isFetching())
+      );
     }
     if (entities().length > 0) return false;
     if (usesServiceSearch())
@@ -824,6 +847,7 @@ export function useEmailDataSource(
       return (
         refreshing() ||
         emptyPages.isFetching() ||
+        emptyListPages.isFetching() ||
         (usesServiceSearch() ? search.isFetching() : query.isFetching)
       );
     },
@@ -839,6 +863,7 @@ export function useEmailDataSource(
         (usesServiceSearch() ? search.error() : query.error) ??
         aliasSearchError() ??
         emptyPages.error() ??
+        emptyListPages.error() ??
         retainedQueries()
           .map((lookup) => lookup.error())
           .find((error) => error instanceof Error) ??
@@ -864,7 +889,7 @@ export function useEmailDataSource(
         return;
       }
       if (search.isSearching()) return;
-      await query.fetchNextPage();
+      await emptyListPages.loadMore();
     },
     refresh: async () => {
       if (showsReminders()) {
@@ -882,6 +907,7 @@ export function useEmailDataSource(
       const requestScope = scope();
       setRefreshing(true);
       emptyPages.resetError();
+      emptyListPages.resetError();
       try {
         if (search.isSearching() && searchesFavorites())
           await favorites.refetch();

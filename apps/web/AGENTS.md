@@ -906,6 +906,15 @@ or mention in it presses the row and opens nothing. The same suite's
 `preview-links.browser.e2e.ts` clicks, Cmd-clicks, middle-clicks and taps a
 link in a row and in an unfolded stack; the Signal suite's
 (`next-soup/soup-view/views/inbox/browser-test`) taps one in a Home card.
+Search snippets are a picture of the message too: `SearchContent`
+(`features/entity/extractors-search`), which every snippet renders through
+(channel message search rows, a result's Show more hits, the agent Search
+card), is `inert`, and so is a result's highlighted name (`EntityTitle`, and
+`CallRecordName` in call rows, which render markdown only for a search result
+with a name highlight), so pressing a link in either opens the result; a
+highlight splits a URL, so a live link opened only its first part. Run
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts search-snippet.browser.e2e.ts`,
+which presses a snippet's or title's link on desktop and taps it on phone.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
@@ -1123,6 +1132,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
   consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
   settings page that spans nearly the full width, for its list columns.
+  Settings sections shown outside a `SettingsPage`, such as in a dialog, go in
+  `SettingsSections` so they keep the page's spacing.
 - Preserve email signature HTML through import, preview, and source editing;
   mount Quill only for explicit Rich text editing and confirm custom-layout
   conversion. Keep the settings and composer preview on the same sanitized HTML
@@ -1341,7 +1352,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
-  keyboard in the field); `operators` marks search operators (`in:sent`) in
+  keyboard in the field, and `commit` hears the Enter that runs the typed
+  search, which Email remembers); `operators` marks search operators (`in:sent`) in
   the text, which `search-operator-text.tsx` draws as tokens behind the input
   while the text stays ordinary editable text; future operators reuse it.
   Email's wide search uses all of them. It registers the

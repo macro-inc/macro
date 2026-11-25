@@ -847,6 +847,27 @@ describe('coordinator runtime protocol', () => {
         queue: 'preserved',
       }).ok
     ).toBe(true);
+    for (const [ownerLockClientId, ok] of [
+      ['client', true],
+      [undefined, true],
+      ['', false],
+      [1, false],
+    ] as const) {
+      expect(
+        validateEngineToCoordinatorEnvelope({
+          ...version,
+          kind: 'engine-ready',
+          tabId: 'tab',
+          ownerEpoch: 1,
+          ownerLockName: 'owner-lock',
+          ownerLockHeld: true,
+          ownerLockClientId,
+          databaseActionProof: 'opened-existing',
+          openOutcome: 'opened-existing',
+          queue: 'preserved',
+        }).ok
+      ).toBe(ok);
+    }
     expect(
       validateEngineToCoordinatorEnvelope({
         ...version,

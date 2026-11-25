@@ -100,7 +100,7 @@ export interface CacheEngineRuntimeOptions {
   scope?: DedicatedWorkerScopeLike;
   hooks?: CacheEngineRuntimeHooks;
   createCore?: (options: CacheWorkerCoreOptions) => CacheWorkerCoreLike;
-  ownerLockIsHeld?: (ownerLockName: string) => Promise<boolean>;
+  findOwnerLock?: (ownerLockName: string) => Promise<LockInfo | undefined>;
   telemetry?: CacheTelemetryRecorderLike;
   /** Injectable clock/memory source for throttling tests. */
   now?: () => number;
@@ -156,12 +156,12 @@ async function initializeCore(
   }
 }
 
-async function defaultOwnerLockIsHeld(ownerLockName: string): Promise<boolean> {
+async function findHeldOwnerLock(
+  ownerLockName: string
+): Promise<LockInfo | undefined> {
   const snapshot = await navigator.locks.query();
-  return Boolean(
-    snapshot.held?.some(
-      (lock) => lock.name === ownerLockName && lock.mode === 'exclusive'
-    )
+  return snapshot.held?.find(
+    (lock) => lock.name === ownerLockName && lock.mode === 'exclusive'
   );
 }
 
@@ -513,8 +513,9 @@ async function activate(
     // another context holds it. Storage is touched only after `open-engine`.
     await initializeCore(core, activation);
     if (failed) return;
-    const ownerLockIsHeld = options.ownerLockIsHeld ?? defaultOwnerLockIsHeld;
-    if (!(await ownerLockIsHeld(activation.ownerLockName))) {
+    const findOwnerLock = options.findOwnerLock ?? findHeldOwnerLock;
+    const ownerLock = await findOwnerLock(activation.ownerLockName);
+    if (!ownerLock) {
       throw new Error('cache engine does not hold its physical owner Web Lock');
     }
     core.addPort(enginePort);
@@ -526,6 +527,7 @@ async function activate(
         ownerEpoch: activation.ownerEpoch,
         ownerLockName: activation.ownerLockName,
         ownerLockHeld: true,
+        ownerLockClientId: ownerLock.clientId,
         databaseActionProof: initializationOpenOutcome.startsWith('reset-')
           ? 'wiped-before-open'
           : 'opened-existing',

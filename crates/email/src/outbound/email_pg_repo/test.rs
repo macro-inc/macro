@@ -7,6 +7,7 @@ mod dynamic_query;
 mod folders;
 mod importance_pagination;
 mod inbox_viewed_sort;
+mod label_filter;
 mod label_readers;
 mod labels;
 mod link;

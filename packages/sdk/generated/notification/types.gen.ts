@@ -673,6 +673,28 @@ export type CrmDiscussionMetadata = {
 export type CrmDiscussionReason = 'mention' | 'reply' | 'owner';
 
 /**
+ * Why someone's CRM email sharing rules changed without them.
+ */
+export type CrmEmailSharingChangeReason = 'companies_merged';
+
+/**
+ * Metadata for a notice that the recipient's CRM email sharing rules
+ * changed because of a teammate's action. It names no company, count or
+ * person: the recipient may not be able to see them, and their rules show
+ * what changed.
+ */
+export type CrmEmailSharingChangedMetadata = {
+    /**
+     * Why they changed.
+     */
+    reason: CrmEmailSharingChangeReason;
+    /**
+     * The team whose CRM the rules share mail with.
+     */
+    teamId: string;
+};
+
+/**
  * Request to register or unregister a device for push notifications.
  */
 export type DeviceRequest = {
@@ -1373,6 +1395,12 @@ export type NotifEvent = {
      */
     content: InboxReauthRequiredMetadata;
     tag: 'inbox_reauth_required';
+} | {
+    /**
+     * A teammate's action changed the user's CRM email sharing rules.
+     */
+    content: CrmEmailSharingChangedMetadata;
+    tag: 'crm_email_sharing_changed';
 } | {
     /**
      * A user was invited to a team.

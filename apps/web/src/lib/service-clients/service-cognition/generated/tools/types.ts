@@ -1128,6 +1128,11 @@ export type RoutineTrigger =
        */
       ids?: string[] | null;
       /**
+       * Only for `email.labeled`, alone in its trigger: label ids from
+       * ListLabels, one of which the thread must gain. Omit for any label.
+       */
+      labels?: string[] | null;
+      /**
        * Optional yes/no question the triggering content must answer with
        * yes, e.g. "Is this email from a customer?". Runs where the answer
        * is no are skipped before any step runs.
@@ -1140,6 +1145,7 @@ export type RoutineTrigger =
  */
 export type RoutineEvent =
   | 'email.message_received'
+  | 'email.labeled'
   | 'task.created'
   | 'task.status_changed'
   | 'task.priority_changed'
@@ -4160,6 +4166,14 @@ export type BotChannelAccessAction = 'grant' | 'revoke';
  * Membership change to apply.
  */
 export type ParticipantAction = 'add' | 'remove';
+/**
+ * The kind of record merged.
+ */
+export type ToolMergeRecordType = 'company';
+/**
+ * What happens to teammates' email sharing that names a merged record.
+ */
+export type ToolSharingRules = 'keep' | 'stop';
 /**
  * The kind of entity to move.
  */
@@ -8522,7 +8536,7 @@ export interface CreateProjectResponse {
  *
  * A routine is triggers plus steps. Pass `steps` as a JSON array encoded in a string.
  *
- * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
+ * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`; `email.labeled`, alone in its trigger, runs when a thread gains one of the label ids from ListLabels in `labels`, or any label without them). Only people's actions trigger routines, so labels a routine or an agent adds never start one.
  *
  * Steps run in order and a failed step stops the run:
  * - `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.
@@ -8548,7 +8562,7 @@ export interface CreateProjectResponse {
  *   - `run.at` is when the run counts as happening (ISO 8601) and `run.timezone` the zone to read it in. Use them for "today", "this week" or a cutoff; never `new Date()` or `Date.now()`, so a dry run that replays an earlier trigger gives the same answer.
  *   - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
  *   - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }`, or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
- *   - An event's `item` is JSON. `item.entity_id` is the id of what the event is about (the task, document, channel, email thread or call); there is no `item.id`. A message event adds `item.message_id`, the message's own id. Its other fields depend on the event: `item.item` for a task or document (`name`, `properties`, `content`), `item.channel` (`name`) and `item.message` for a channel event: `text`, `sender` (a person's email, which their handle gives as `email()`, or a bot's name), `is_reply` (true for a reply in a thread, false for a top-level post) and `root_id` (the id of the top-level post that started its thread: its own id on a top-level post), and on a reply `item.thread_parent`, that top-level post, unless it was deleted; `item.email` (`subject`, `from`, `to`, `body`, `labels`) for mail, and `item.call` (`title`, `participants`, `summary`, `transcript`) for a call. Read anything else through the SDK by `entity_id`, such as `macro.tasks.byId(trigger.item.entity_id)`, and answer a message in its own channel, `macro.channels.byId(trigger.item.entity_id)`, never one looked up by name.
+ *   - An event's `item` is JSON. `item.entity_id` is the id of what the event is about (the task, document, channel, email thread or call); there is no `item.id`. A message event adds `item.message_id`, the message's own id. Its other fields depend on the event: `item.item` for a task or document (`name`, `properties`, `content`), `item.channel` (`name`) and `item.message` for a channel event: `text`, `sender` (a person's email, which their handle gives as `email()`, or a bot's name), `is_reply` (true for a reply in a thread, false for a top-level post) and `root_id` (the id of the top-level post that started its thread: its own id on a top-level post), and on a reply `item.thread_parent`, that top-level post, unless it was deleted; `item.email` (`subject`, `from`, `to`, `body`, `labels`) for mail, plus `item.labels_added` (the names of the labels the thread just gained) for `email.labeled`, and `item.call` (`title`, `participants`, `summary`, `transcript`) for a call. Read anything else through the SDK by `entity_id`, such as `macro.tasks.byId(trigger.item.entity_id)`, and answer a message in its own channel, `macro.channels.byId(trigger.item.entity_id)`, never one looked up by name.
  *   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
  *   - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
  *   - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options, and an `entity` the SDK handle of each kind it lists, as `macro.channels.byId`, `documents.byId`, `projects.byId`, `users.byId`, `tasks.byId`, `email.byId`, `chats.byId`, `crm.companyById`, `crm.contactById`, `initiatives.byId` or `databases.byId` gives it. With several kinds it is their union: check its `entityType` (`'channel'`, `'email_thread'`, `'crm_company'`, …; a task's is `'document'`) before calling what only one kind has.
@@ -12325,9 +12339,9 @@ export interface CalendarEventCopyItem {
   isReadOnly: boolean;
 }
 /**
- * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is primary, writable and part of the user's busy time.
+ * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is primary, writable, a subscription and part of the user's busy time.
  *
- * Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a colleague's calendar reports the user's own address, and being writable or not primary proves nothing either way. `contributesToAvailability` marks the calendars that are the user's schedule. Call any other by its name, say whose it is when the name shows that, and otherwise say you cannot tell.
+ * Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a colleague's calendar reports the user's own address, and being writable or not primary proves nothing either way. `contributesToAvailability` marks the calendars that are the user's schedule. Call any other by its name, say whose it is when the name shows that, and otherwise say you cannot tell. Call a calendar with `isSubscription` a subscription the account follows (Google's holidays and birthdays, or a calendar added by URL or from the web); the flag does not say who keeps it.
  *
  * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool unless choosing conference or other provider-dependent behavior. Check `capabilities` before requesting a conference, removing one, or using custom recurrence. An empty result means no calendar is connected.
  */
@@ -12375,6 +12389,12 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
+  /**
+   * Whether the account subscribes to this calendar as a feed: Google's
+   * holidays and birthdays calendars, a calendar added by URL in Google,
+   * or one subscribed from the web in Outlook.
+   */
+  isSubscription: boolean;
   /**
    * Whether this calendar counts toward the user's busy time. Only these
    * are the user's own schedule; false does not say whose calendar it is.
@@ -13459,6 +13479,46 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
+ * Merge duplicate CRM companies into the one that stays, exactly as a PreviewMerge review showed: people, domains, pipeline entries, references, discussions, favorites and lists move to it and the merged companies are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the company that stays. Refused with merge_preview_stale when anything changed since the review: preview again.
+ */
+export interface MergeRecords {
+  recordType: ToolMergeRecordType;
+  /**
+   * The company that stays, as reviewed.
+   */
+  survivorId: string;
+  /**
+   * The companies merged into it, as reviewed.
+   */
+  sourceIds: string[];
+  /**
+   * The revision PreviewMerge returned.
+   */
+  revision: string;
+  /**
+   * A new UUID for this merge. Reuse it only to retry the same call: a retry returns the first result.
+   */
+  requestKey: string;
+  sharingRules?: ToolSharingRules & string;
+}
+/**
+ * A committed merge.
+ */
+export interface MergeRecordsResponse {
+  /**
+   * The merge.
+   */
+  mergeId: string;
+  /**
+   * The record that stays.
+   */
+  survivorId: string;
+  /**
+   * The records merged into it; their ids open the record that stays.
+   */
+  mergedIds: string[];
+}
+/**
  * Move a document, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving a project requires owning it.
  */
 export interface MoveToProject {
@@ -13590,6 +13650,36 @@ export interface OpenDirectMessageResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * Review merging duplicate CRM companies into the one that stays, without changing anything. Returns what moves (people, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged company, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging.
+ */
+export interface PreviewMerge {
+  recordType: ToolMergeRecordType;
+  /**
+   * The company that stays; its name, domains and values win.
+   */
+  survivorId: string;
+  /**
+   * The companies merged into it and deleted, at most ten.
+   */
+  sourceIds: string[];
+}
+/**
+ * A merge's review, as an agent reads it.
+ */
+export interface PreviewMergeResponse {
+  /**
+   * Pass to MergeRecords to merge as reviewed.
+   */
+  revision: string;
+  /**
+   * The review: the record that stays and the ones merged into it, what
+   * moves, differing values, email sync, sharing and blocks.
+   */
+  review: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data, CREATE/ALTER/DROP to edit schema. One statement per call.

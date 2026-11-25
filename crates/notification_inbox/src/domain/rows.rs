@@ -523,6 +523,7 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         | NotifEvent::GithubPrMention(_)
         | NotifEvent::GithubPrReview(_) => (Slot::PullRequest, true),
         NotifEvent::InboxReauthRequired(_)
+        | NotifEvent::CrmEmailSharingChanged(_)
         | NotifEvent::InviteToTeam(_)
         | NotifEvent::ExternalChatMessage(_)
         | NotifEvent::ChannelAccessRequested(_)

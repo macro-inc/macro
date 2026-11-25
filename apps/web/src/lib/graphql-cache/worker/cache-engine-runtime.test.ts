@@ -185,7 +185,7 @@ const attachRuntime = async (
   const scope = new FakeWorkerScope();
   installCacheEngineWorker({
     scope,
-    ownerLockIsHeld: async () => true,
+    findOwnerLock: async () => ({}),
     createCore,
   });
   scope.activate(
@@ -232,7 +232,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async (name) => ({ name, clientId: 'engine-client' }),
       createCore: () => ({
         prepare,
         handleRequest,
@@ -252,7 +252,9 @@ describe('cache engine worker runtime', () => {
     expect(handleRequest).not.toHaveBeenCalled();
     direct.receive({ ...version, kind: 'open-engine', ownerEpoch: 7 });
     await vi.waitFor(() =>
-      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+      expect(messagesOfKind(direct, 'engine-ready')).toEqual([
+        expect.objectContaining({ ownerLockClientId: 'engine-client' }),
+      ])
     );
     expect(handleRequest).toHaveBeenCalledOnce();
   });
@@ -313,7 +315,7 @@ describe('cache engine worker runtime', () => {
     installRuntime({
       scope,
       sleep,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: (coreOptions) => ({
         handleRequest: async (port, request) => {
           if (request.kind === 'init') {
@@ -394,7 +396,7 @@ describe('cache engine worker runtime', () => {
       const direct = new FakePort();
       installRuntime({
         scope,
-        ownerLockIsHeld: async () => true,
+        findOwnerLock: async () => ({}),
         createCore: (coreOptions) => ({
           handleRequest: async (port, request) => {
             await coreOptions.onOwnerLockAcquired?.();
@@ -490,7 +492,7 @@ describe('cache engine worker runtime', () => {
     );
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: (options) => {
         coreOptions = options;
         return {
@@ -590,7 +592,7 @@ describe('cache engine worker runtime', () => {
       now: () => now,
       readLinearMemoryBytes: () => memoryBytes,
       memoryTelemetryIntervalMs: 60_000,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       telemetry: {
         record: (observation) => observations.push(observation),
         flush: vi.fn(),
@@ -650,7 +652,7 @@ describe('cache engine worker runtime', () => {
     const direct = new FakePort();
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         drain: vi.fn(),
@@ -721,7 +723,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       hooks: {
         beforeRequest: async (request) => {
           if (request.kind === 'read') await hookBlocker;
@@ -778,7 +780,7 @@ describe('cache engine worker runtime', () => {
     let corePort: { postMessage(message: unknown): void } | undefined;
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: (port) => {
           corePort = port;
@@ -819,7 +821,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         handleRequest: async (port, request) => {
@@ -880,7 +882,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         handleRequest,
@@ -1233,7 +1235,7 @@ describe('cache engine worker runtime', () => {
     );
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         handleRequest,

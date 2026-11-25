@@ -178,7 +178,7 @@ class IntegrationDedicatedWorker {
           enqueueGates,
           options.onOwnerLockAcquired
         ),
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
     });
   }
 

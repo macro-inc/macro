@@ -46,7 +46,10 @@ the Soup-backed thread list, and saved email views.
   operators, which are still being typed and left out of the search, and what
   finishes one; its tests and the service's read
   `crates/search_service/src/api/search/email_operators/typed_operators.json`),
-  recent searches (`recent-searches.ts`, per person in browser storage) and
+  recent searches (`recent-searches.ts`, per person in browser storage; a
+  search is remembered on Enter, a picked recent search, a thread opened
+  from it, or leaving the field with its own results on screen, `hasResults`)
+  and
   the rows the search field lists: views (then labels) while `in:` is typed,
   people after `from:`/`to:`/`cc:`/`bcc:`, labels and tags after `label:`,
   otherwise the operators that finish the typed token, then recent searches
@@ -127,7 +130,18 @@ the Soup-backed thread list, and saved email views.
   asked (`keepRowsWhileSearching`) and reports it as `showsPreviousRows`; they
   never cross a tab change, and `isLoading` stays false while they show, so
   gate "loading" UI on both.
+- A list page can arrive without a row but with a cursor (a label read that
+  walked old mail). `emptyListPages` reads on from the server's own rows
+  (`rawEntities`, so a page the client's filters empty doesn't count) until a
+  row shows or the list ends, at most 50 pages a load, and the list reads as
+  loading meanwhile: never show the empty state for such a page.
 - Unread dots are presence in a small first unread page per view, never a count.
+- The search field also says it was left (`setFocused(false)`) as it
+  unmounts, inside the teardown of the view leaving Mail. Reading the list's
+  data source (`source`) there runs computations being disposed again,
+  which fails the navigation: leaving reads it in a microtask, and a field
+  without the focus has nothing to leave. Releases from a cleanup wait the
+  same way (`registerSearchField`).
 - Cmd+F is registered for the whole desktop view in
   `use-email-search-hotkeys.ts` and focuses the list header's field through
   `registerListSearch`; while a thread or a new email has replaced that

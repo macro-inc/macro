@@ -9,8 +9,11 @@ use std::{
 
 use tokio::sync::Semaphore;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument as _;
 
-use crate::domain::event_runs::{EventRunKey, PageSize, dispatch::EventRunDispatch};
+use crate::domain::event_runs::{
+    EventRunKey, PageSize, PendingEventRun, dispatch::EventRunDispatch,
+};
 
 #[cfg(test)]
 mod test;
@@ -63,25 +66,29 @@ async fn run(
                         };
                         let service = Arc::clone(&service);
                         let shutdown = shutdown.clone();
-                        executions.spawn(async move {
-                            let _permit = permit;
-                            let _claim = claim;
-                            if shutdown.is_cancelled() {
-                                return;
+                        let span = run_span(&pending);
+                        executions.spawn(
+                            async move {
+                                let _permit = permit;
+                                let _claim = claim;
+                                if shutdown.is_cancelled() {
+                                    return;
+                                }
+                                // Do not select/drop dispatch on shutdown: a claim may
+                                // already have committed. The executor owns cancellation.
+                                if service
+                                    .dispatch(pending, shutdown.cancelled())
+                                    .await
+                                    .is_err()
+                                {
+                                    tracing::warn!(
+                                        outcome = "dispatch_unavailable",
+                                        "event dispatch or bookkeeping deferred"
+                                    );
+                                }
                             }
-                            // Do not select/drop dispatch on shutdown: a claim may
-                            // already have committed. The executor owns cancellation.
-                            if service
-                                .dispatch(pending, shutdown.cancelled())
-                                .await
-                                .is_err()
-                            {
-                                tracing::warn!(
-                                    outcome = "dispatch_unavailable",
-                                    "event dispatch or bookkeeping deferred"
-                                );
-                            }
-                        });
+                            .instrument(span),
+                        );
                     }
                 }
                 Err(_) => tracing::warn!(outcome = "queue_unavailable", "event polling deferred"),
@@ -92,6 +99,21 @@ async fn run(
             _ = tokio::time::sleep(interval) => {},
         }
     }
+}
+
+/// One event run's dispatch, in the trace its event was admitted in.
+fn run_span(pending: &PendingEventRun) -> tracing::Span {
+    let event = &pending.event;
+    let span = tracing::info_span!(
+        "routine.event_run",
+        action_id = %pending.action_id,
+        event_id = %event.event_id().as_uuid(),
+        event_name = event.event_name().as_str(),
+        entity_id = ?event.entity_id(),
+        message_id = ?event.message_id(),
+    );
+    crate::trace_context::adopt(&span, pending.traceparent.as_deref());
+    span
 }
 
 /// Marks a run as being dispatched by this worker until dropped.
