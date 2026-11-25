@@ -146,7 +146,9 @@ fn excluded_sub_types_leave_those_documents_out() -> anyhow::Result<()> {
     );
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
-        !filter.iter().any(|f| f.get("terms").and_then(|t| t.get("sub_type")).is_some()),
+        !filter
+            .iter()
+            .any(|f| f.get("terms").and_then(|t| t.get("sub_type")).is_some()),
         "documents without a sub type must stay: {filter:?}"
     );
     Ok(())

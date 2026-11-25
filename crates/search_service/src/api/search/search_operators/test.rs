@@ -29,10 +29,7 @@ fn every_kind() -> SearchEntityFilters {
     })
 }
 
-fn apply_to(
-    filters: &mut SearchEntityFilters,
-    query: &str,
-) -> (SearchOperators, TypedConditions) {
+fn apply_to(filters: &mut SearchEntityFilters, query: &str) -> (SearchOperators, TypedConditions) {
     apply_search_operators(filters, terms(query), MatchType::Partial, VIEWER).unwrap()
 }
 
@@ -74,18 +71,17 @@ struct TypedQuery {
     operators: usize,
 }
 
-/// The queries the Search view's field draws operators in, which its web
-/// tests read too: each is read as the operators listed, and the rest of
-/// its terms stay words.
+/// Typed queries and how many operators each holds: each is read as the
+/// operators listed, and the rest of its terms stay words.
 #[test]
-fn search_field_draws_exactly_the_operators_the_service_reads() {
+fn typed_queries_read_exactly_the_operators_listed() {
     let cases: Vec<TypedQuery> = serde_json::from_str(include_str!("typed_operators.json"))
         .expect("typed_operators.json lists queries and how many operators each holds");
 
     let wrong: Vec<String> = cases
         .iter()
         .filter_map(|case| {
-            let read = read_search_operators(terms(&case.typed));
+            let read = read_search_operators(terms(&case.typed), true);
             (read.operators != case.operators)
                 .then(|| format!("{} read {} operators", case.typed, read.operators))
         })
@@ -95,10 +91,21 @@ fn search_field_draws_exactly_the_operators_the_service_reads() {
 }
 
 #[test]
-fn the_words_around_operators_are_left_in_order() {
-    let read = read_search_operators(terms("launch type:task OR notes tag:a OR"));
+fn a_plain_or_between_words_stays_a_word() {
+    let read = read_search_operators(terms("tea OR coffee"), true);
 
-    assert_eq!(read.terms, ["launch", "OR", "notes", "OR"]);
+    assert_eq!(read.terms, ["tea", "OR", "coffee"]);
+}
+
+#[test]
+fn the_words_around_operators_are_left_in_order() {
+    let read = read_search_operators(terms("launch type:task OR notes tag:a OR"), true);
+
+    assert_eq!(
+        read.terms,
+        ["launch", "notes"],
+        "an OR that joins nothing beside an operator is dropped"
+    );
     assert_eq!(read.operators, 2);
 }
 
@@ -107,12 +114,16 @@ fn type_names_the_kinds_searched() {
     let (filters, _, conditions) = apply("type:task launch");
     assert_eq!(kinds(&filters), ["documents"]);
     assert_eq!(filters.document_filters.sub_types, ["task"]);
-    assert!(!conditions.exclude_tasks);
+    assert!(conditions.excluded_sub_types.is_empty());
 
     let (filters, _, conditions) = apply("type:doc launch");
     assert_eq!(kinds(&filters), ["documents"]);
     assert!(filters.document_filters.sub_types.is_empty());
-    assert!(conditions.exclude_tasks, "documents alone leave tasks out");
+    assert_eq!(
+        conditions.excluded_sub_types,
+        ["task"],
+        "documents alone leave tasks out"
+    );
 
     let (filters, _, _) = apply("type:agent OR type:email launch");
     assert_eq!(kinds(&filters), ["chats", "agent_sessions", "emails"]);
@@ -125,7 +136,11 @@ fn type_names_the_kinds_searched() {
 fn types_repeated_without_or_must_all_hold() {
     let (filters, read, _) = apply("type:task type:email launch");
 
-    assert!(kinds(&filters).is_empty(), "no item is both: {:?}", kinds(&filters));
+    assert!(
+        kinds(&filters).is_empty(),
+        "no item is both: {:?}",
+        kinds(&filters)
+    );
     assert_eq!(read.terms, ["launch"]);
 }
 
@@ -195,7 +210,7 @@ fn author_means_a_task_creator_unless_type_names_documents() {
 
     let (filters, _, conditions) = apply("type:doc author:ana@example.com launch");
     assert_eq!(kinds(&filters), ["documents"]);
-    assert!(conditions.exclude_tasks);
+    assert_eq!(conditions.excluded_sub_types, ["task"]);
     assert_eq!(filters.document_filters.owners, ["macro|ana@example.com"]);
 }
 
@@ -219,8 +234,43 @@ fn from_names_senders_and_speakers_only_without_email() {
 
     let (filters, read, _) = apply("from:me launch");
     assert_eq!(read.operators, 0);
-    assert_eq!(read.terms, ["from:me", "launch"], "the email operator reads it");
+    assert_eq!(
+        read.terms,
+        ["from:me", "launch"],
+        "the email operator reads it"
+    );
     assert!(filters.channel_filters.sender_ids.is_empty());
+}
+
+#[test]
+fn from_requires_each_sender_and_refuses_two_speakers() {
+    let (filters, _, conditions) = apply("type:channel from:me from:bo@example.com launch");
+    assert!(kinds(&filters).is_empty(), "a message has one sender");
+    assert!(conditions.names_senders);
+
+    let refused = apply_search_operators(
+        &mut every_kind(),
+        terms("type:call from:me from:bo@example.com launch"),
+        MatchType::Partial,
+        VIEWER,
+    );
+    assert!(matches!(refused, Err(SearchError::SpeakersDontCombine)));
+}
+
+#[test]
+fn in_hash_names_a_label_in_a_search_that_cannot_reach_channels() {
+    let mut filters = every_kind();
+    filters.should_include_channels = false;
+    filters.should_include_call_records = false;
+
+    let (read, _) = apply_to(&mut filters, "in:#travel lunch");
+
+    assert_eq!(read.operators, 0);
+    assert_eq!(
+        read.terms,
+        ["in:#travel", "lunch"],
+        "the email operators read it"
+    );
 }
 
 #[test]
@@ -228,7 +278,15 @@ fn named_operators_narrow_to_the_kinds_they_apply_to() {
     let (filters, read, _) = apply("tag:finance launch");
     assert_eq!(
         kinds(&filters),
-        ["documents", "chats", "agent_sessions", "emails", "calls", "folders", "calendar"],
+        [
+            "documents",
+            "chats",
+            "agent_sessions",
+            "emails",
+            "calls",
+            "folders",
+            "calendar"
+        ],
         "channels carry no tags"
     );
     assert_eq!(
@@ -266,9 +324,13 @@ fn too_many_channel_names_are_refused() {
         .collect::<Vec<_>>()
         .join(" ");
 
-    let refused = apply_search_operators(&mut every_kind(), terms(&query), MatchType::Partial, VIEWER);
+    let refused =
+        apply_search_operators(&mut every_kind(), terms(&query), MatchType::Partial, VIEWER);
 
-    assert!(matches!(refused, Err(SearchError::TooManyChannelNames(MAX_CHANNEL_NAMES))));
+    assert!(matches!(
+        refused,
+        Err(SearchError::TooManyChannelNames(MAX_CHANNEL_NAMES))
+    ));
 }
 
 #[test]
@@ -283,10 +345,19 @@ fn operators_alone_search_email_alone() {
 }
 
 /// Names as a lookup resolved them for these tests.
-fn named(tags: &[(&str, &[u128])], inboxes: &[(&str, u128)], channels: &[(&str, u128)]) -> NamedIds {
+fn named(
+    tags: &[(&str, &[u128])],
+    inboxes: &[(&str, u128)],
+    channels: &[(&str, u128)],
+) -> NamedIds {
     NamedIds::from_parts(
         tags.iter()
-            .map(|(name, ids)| (name.to_string(), ids.iter().map(|id| Uuid::from_u128(*id)).collect()))
+            .map(|(name, ids)| {
+                (
+                    name.to_string(),
+                    ids.iter().map(|id| Uuid::from_u128(*id)).collect(),
+                )
+            })
             .collect(),
         inboxes
             .iter()
@@ -310,7 +381,11 @@ fn tags_for(query: &str, named: &NamedIds, requested: TagFilter) -> Result<TagFi
 
 #[test]
 fn tags_join_with_or_and_require_each_otherwise() {
-    let names = named(&[("finance", &[1]), ("legal", &[2]), ("q3", &[3])], &[], &[]);
+    let names = named(
+        &[("finance", &[1]), ("legal", &[2]), ("q3", &[3])],
+        &[],
+        &[],
+    );
 
     assert_eq!(
         tags_for("tag:finance OR tag:legal", &names, TagFilter::default()).unwrap(),
@@ -327,7 +402,11 @@ fn tags_join_with_or_and_require_each_otherwise() {
         }
     );
     assert!(matches!(
-        tags_for("tag:finance OR tag:legal tag:q3", &names, TagFilter::default()),
+        tags_for(
+            "tag:finance OR tag:legal tag:q3",
+            &names,
+            TagFilter::default()
+        ),
         Err(SearchError::TagConditionsDontCombine)
     ));
 }
@@ -361,6 +440,40 @@ fn a_tag_name_that_reaches_nothing_matches_nothing() {
 }
 
 #[test]
+fn an_or_group_beside_the_requests_tags_is_refused() {
+    let names = named(&[("finance", &[1]), ("legal", &[2])], &[], &[]);
+    let requested = TagFilter {
+        option_ids: vec![id(9)],
+        match_all: false,
+    };
+
+    assert!(matches!(
+        tags_for("tag:finance OR tag:legal", &names, requested),
+        Err(SearchError::TagConditionsDontCombine)
+    ));
+}
+
+#[test]
+fn names_narrow_the_requests_own_inboxes_and_channels() {
+    let names = named(&[], &[("ana@example.com", 10)], &[("launch", 20)]);
+
+    let mut filters = every_kind();
+    filters.email_filters.link_ids = vec![id(11)];
+    let (read, _) = apply_to(&mut filters, "inbox:ana@example.com launch");
+    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    assert!(
+        kinds(&filters).is_empty(),
+        "the request reads another inbox only"
+    );
+
+    let mut filters = every_kind();
+    filters.channel_filters.channel_ids = vec![id(20), id(21)];
+    let (read, _) = apply_to(&mut filters, "in:#launch notes");
+    apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
+    assert_eq!(filters.channel_filters.channel_ids, [id(20)]);
+}
+
+#[test]
 fn inbox_and_channel_names_narrow_to_what_they_reach() {
     let names = named(&[], &[("ana@example.com", 10)], &[("launch", 20)]);
 
@@ -377,7 +490,10 @@ fn inbox_and_channel_names_narrow_to_what_they_reach() {
 
     let (mut filters, read, _) = apply("inbox:bo@example.com launch");
     apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();
-    assert!(kinds(&filters).is_empty(), "an inbox the caller doesn't read");
+    assert!(
+        kinds(&filters).is_empty(),
+        "an inbox the caller doesn't read"
+    );
 
     let (mut filters, read, _) = apply("in:#ops launch");
     apply_names(&read, &names, &mut filters, TagFilter::default()).unwrap();

@@ -2,7 +2,9 @@
 //! queries the tag, inbox and channel name searches already run.
 
 use channels::domain::models::ChannelType;
-use channels::outbound::channel_name::{ChannelNameSearch, match_channel_names};
+use channels::outbound::channel_name::{
+    ChannelNameSearch, batch_resolve_channel_names, match_channel_names,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use name_search::escape_regex;
@@ -33,10 +35,14 @@ impl OperatorNameSource for OperatorNamesPgSource {
         caller_tag_options(&self.db, user).await
     }
 
-    async fn inboxes(&self, user: &MacroUserId<Lowercase<'_>>) -> Result<Vec<InboxAddress>, Report> {
-        let links = email_db_client::links::get::fetch_inboxes_for_macro_id(&self.db, user.as_ref())
-            .await
-            .map_err(|error| rootcause::report!("{error:#}"))?;
+    async fn inboxes(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<InboxAddress>, Report> {
+        let links =
+            email_db_client::links::get::fetch_inboxes_for_macro_id(&self.db, user.as_ref())
+                .await
+                .map_err(|error| rootcause::report!("{error:#}"))?;
         Ok(links
             .into_iter()
             .map(|link| InboxAddress {
@@ -67,6 +73,20 @@ impl OperatorNameSource for OperatorNamesPgSource {
         )
         .await
         .map_err(|error| rootcause::report!("{error:#}"))?;
-        Ok(matches.into_iter().map(|hit| hit.channel_id).collect())
+        // An unnamed group matches by any one member's name; keep only the
+        // channels whose whole name, as the caller sees it, is `name`.
+        let ids: Vec<Uuid> = matches.into_iter().map(|hit| hit.channel_id).collect();
+        let names = batch_resolve_channel_names(&self.db, &ids, MacroUserIdStr(user.clone()))
+            .await
+            .map_err(|error| rootcause::report!("{error:#}"))?;
+        let wanted = name.to_lowercase();
+        Ok(ids
+            .into_iter()
+            .filter(|id| {
+                names
+                    .get(id)
+                    .is_some_and(|shown| shown.to_lowercase() == wanted)
+            })
+            .collect())
     }
 }

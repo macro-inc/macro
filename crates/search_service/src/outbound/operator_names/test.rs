@@ -48,13 +48,17 @@ async fn a_channel_name_reaches_the_named_channels_the_viewer_is_in(pool: PgPool
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("operator_names"))
 )]
-async fn a_channel_name_never_reaches_a_dm(pool: PgPool) {
+async fn a_channel_name_is_the_whole_name_the_viewer_sees(pool: PgPool) {
     let found = source(pool)
         .channels_named(&viewer(), "ana lima", 20)
         .await
         .unwrap();
 
-    assert!(found.is_empty(), "a DM is named after its person: {found:?}");
+    assert_eq!(
+        found,
+        ids(&["d4000000-0000-0000-0000-000000000008"]),
+        "the group named after Ana alone, not the DM with her or the group of Ana and Ben"
+    );
 }
 
 #[sqlx::test(
@@ -67,7 +71,10 @@ async fn a_channel_name_is_matched_literally(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(found.is_empty(), "regex syntax in a name is escaped: {found:?}");
+    assert!(
+        found.is_empty(),
+        "regex syntax in a name is escaped: {found:?}"
+    );
 }
 
 #[sqlx::test(
@@ -78,7 +85,10 @@ async fn names_resolve_to_the_viewers_own_tags_and_inboxes(pool: PgPool) {
     let service = OperatorNamesService(source(pool));
     let names = TypedNames {
         tags: vec!["finance".to_string()],
-        inboxes: vec!["viewer@example.com".to_string(), "ana@example.com".to_string()],
+        inboxes: vec![
+            "viewer@example.com".to_string(),
+            "ana@example.com".to_string(),
+        ],
         channels: Vec::new(),
     };
 

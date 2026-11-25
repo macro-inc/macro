@@ -15,6 +15,7 @@
 //! or an address.
 
 use item_filters::{CallFilters, CallStatus};
+use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::unified::SearchEntityFilters;
 use nom::{
@@ -57,7 +58,7 @@ impl Kinds {
     const ALL: Self = Self(u8::MAX);
     const NONE: Self = Self(0);
     /// The kinds tags are indexed on: every kind but channels.
-    const TAGGED: Self = Self(u8::MAX & !Self::CHANNELS.0);
+    const TAGGED: Self = Self(!Self::CHANNELS.0);
 
     const fn or(self, other: Self) -> Self {
         Self(self.0 | other.0)
@@ -102,7 +103,8 @@ enum Name {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Person {
     Me,
-    Address(String),
+    /// The lowercased user id of the person an address names.
+    User(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -187,7 +189,7 @@ impl Group {
         for value in &self.values {
             let id = match value {
                 Value::Person(Person::Me) => user_id.to_lowercase(),
-                Value::Person(Person::Address(address)) => format!("macro|{address}"),
+                Value::Person(Person::User(id)) => id.clone(),
                 _ => continue,
             };
             if !ids.contains(&id) {
@@ -224,7 +226,9 @@ fn person(value: &str) -> Option<Person> {
     if value == "me" {
         return Some(Person::Me);
     }
-    address(value).map(|address| Person::Address(address.to_string()))
+    let user_id = format!("macro|{}", address(value)?);
+    let user_id = MacroUserId::parse_from_str(&user_id).ok()?.lowercase();
+    Some(Person::User(user_id.as_ref().to_string()))
 }
 
 fn status(value: &str) -> Option<Value> {
@@ -290,8 +294,25 @@ enum Entry {
 }
 
 /// `terms` as words and operators, joining an operator to the one before it
-/// when `OR` stands between two of the same name.
+/// when `OR` stands between two of the same name. An `OR` beside an operator
+/// that joins nothing is dropped: it means the operators' `OR`, not a word to
+/// find.
 fn entries(terms: Vec<String>) -> Vec<Entry> {
+    let mut entries = joined_entries(terms);
+    let is_operator = |entry: Option<&Entry>| matches!(entry, Some(Entry::Operator(_)));
+    let mut kept: Vec<Entry> = Vec::with_capacity(entries.len());
+    let mut rest = entries.drain(..).peekable();
+    while let Some(entry) = rest.next() {
+        let stray_or = matches!(&entry, Entry::Word(word) if word == OR)
+            && (is_operator(kept.last()) || is_operator(rest.peek()));
+        if !stray_or {
+            kept.push(entry);
+        }
+    }
+    kept
+}
+
+fn joined_entries(terms: Vec<String>) -> Vec<Entry> {
     let mut entries: Vec<Entry> = Vec::new();
     for term in terms {
         let Some((name, value)) = operator(&term) else {
@@ -332,8 +353,13 @@ pub(in crate::api::search) struct SearchOperators {
     types: Option<Kinds>,
 }
 
-/// Reads the operators out of `terms`.
-pub(in crate::api::search) fn read_search_operators(terms: Vec<String>) -> SearchOperators {
+/// Reads the operators out of `terms`. `reaches_channels` says whether the
+/// search can reach channels or calls; without them `in:#` names a Mail
+/// label, which the email operators read.
+pub(in crate::api::search) fn read_search_operators(
+    terms: Vec<String>,
+    reaches_channels: bool,
+) -> SearchOperators {
     let entries = entries(terms);
     let types = entries
         .iter()
@@ -355,7 +381,7 @@ pub(in crate::api::search) fn read_search_operators(terms: Vec<String>) -> Searc
     for entry in entries {
         match entry {
             Entry::Word(word) => read.terms.push(word),
-            Entry::Operator(group) if readable(&group, reads_from) => {
+            Entry::Operator(group) if readable(&group, reads_from, reaches_channels) => {
                 read.operators += group.values.len();
                 read.groups.push(group);
             }
@@ -367,9 +393,10 @@ pub(in crate::api::search) fn read_search_operators(terms: Vec<String>) -> Searc
 
 /// Whether `group` can apply. A call has one status, so two different call
 /// statuses joined by `OR` name no filter and stay words.
-fn readable(group: &Group, reads_from: bool) -> bool {
+fn readable(group: &Group, reads_from: bool, reaches_channels: bool) -> bool {
     match group.name {
         Name::From => reads_from,
+        Name::Channel => reaches_channels,
         Name::Status => group.call_statuses().len() <= 1,
         _ => true,
     }
@@ -380,8 +407,13 @@ fn readable(group: &Group, reads_from: bool) -> bool {
 pub(in crate::api::search) struct TypedConditions {
     /// Task property filters, ANDed with the request's own.
     pub property_filters: Vec<PropertyFilterArg>,
-    /// Tasks are left out of the documents searched.
-    pub exclude_tasks: bool,
+    /// Sub types left out of the documents searched: tasks, for documents
+    /// alone.
+    pub excluded_sub_types: Vec<String>,
+    /// `from:` named who posted or spoke, which only messages and call
+    /// segments say, so a channel or call matched by its name alone cannot
+    /// meet it.
+    pub names_senders: bool,
 }
 
 impl SearchOperators {
@@ -404,8 +436,12 @@ impl SearchOperators {
 
     /// The names to look up before [`apply_names`] can apply them.
     pub(in crate::api::search) fn names(&self) -> TypedNames {
-        let collect =
-            |name| -> Vec<String> { self.groups_named(name).flat_map(Group::names).map(str::to_string).collect() };
+        let collect = |name| -> Vec<String> {
+            self.groups_named(name)
+                .flat_map(Group::names)
+                .map(str::to_string)
+                .collect()
+        };
         TypedNames {
             tags: collect(Name::Tag),
             inboxes: collect(Name::Inbox),
@@ -468,7 +504,7 @@ fn narrow_kinds(filters: &mut SearchEntityFilters, kinds: Kinds, conditions: &mu
             filters.should_include_documents = false;
         } else {
             sub_types.retain(|t| t != TASK_SUB_TYPE);
-            conditions.exclude_tasks = true;
+            conditions.excluded_sub_types = vec![TASK_SUB_TYPE.to_string()];
         }
     }
     filters.should_include_emails &= kinds.has(Kinds::EMAIL);
@@ -508,16 +544,23 @@ pub(in crate::api::search) fn apply_search_operators(
         };
         return Ok((read, conditions));
     }
-    let read = read_search_operators(terms);
+    let reaches_channels = filters.should_include_channels || filters.should_include_call_records;
+    let read = read_search_operators(terms, reaches_channels);
     if read.operators == 0 {
         return Ok((read, conditions));
     }
+
     let channel_names = read.names().channels;
     if channel_names.len() > MAX_CHANNEL_NAMES {
         return Err(SearchError::TooManyChannelNames(MAX_CHANNEL_NAMES));
     }
 
     narrow_kinds(filters, read.kinds(), &mut conditions);
+    // A call's speakers are known per segment, so meeting two `from:` needs a
+    // call with a segment by each, which its search can't ask.
+    if read.groups_named(Name::From).count() > 1 && filters.should_include_call_records {
+        return Err(SearchError::SpeakersDontCombine);
+    }
     for group in &read.groups {
         match group.name {
             Name::Status => {
@@ -542,11 +585,15 @@ pub(in crate::api::search) fn apply_search_operators(
                 group.user_ids(user_id),
             )),
             Name::Author => {
-                if !narrow_ids(&mut filters.document_filters.owners, &group.user_ids(user_id)) {
+                if !narrow_ids(
+                    &mut filters.document_filters.owners,
+                    &group.user_ids(user_id),
+                ) {
                     filters.should_include_documents = false;
                 }
             }
             Name::From => {
+                conditions.names_senders = true;
                 let people = group.user_ids(user_id);
                 if !narrow_ids(&mut filters.channel_filters.sender_ids, &people) {
                     filters.should_include_channels = false;

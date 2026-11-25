@@ -50,6 +50,9 @@ pub enum SearchError {
     /// Too many `in:#` channel names in one query
     #[error("a search names at most {0} channels with in:#")]
     TooManyChannelNames(usize),
+    /// Two `from:` in a search of calls, which can't require two speakers
+    #[error("a call search names one speaker with from:; join several with OR")]
+    SpeakersDontCombine,
     /// Tags joined with OR beside another tag condition
     #[error(
         "tags joined with OR, or a tag name shared by several tag sets, cannot be combined with another tag in one search"
@@ -121,6 +124,7 @@ impl IntoResponse for SearchError {
             | SearchError::OperatorsNeedAWord
             | SearchError::TooManyChannelNames(_)
             | SearchError::TagConditionsDontCombine
+            | SearchError::SpeakersDontCombine
             | SearchError::InvalidCursor
             | SearchError::InvalidCrmCompanyId(_)
             | SearchError::InvalidAgentSessionId(_)

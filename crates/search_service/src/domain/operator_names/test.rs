@@ -87,7 +87,10 @@ async fn names_resolve_ignoring_case() {
 
     let named = service.resolve(&viewer(), &names).await.unwrap();
 
-    assert_eq!(named.tag("finance"), [Uuid::from_u128(1), Uuid::from_u128(2)]);
+    assert_eq!(
+        named.tag("finance"),
+        [Uuid::from_u128(1), Uuid::from_u128(2)]
+    );
     assert_eq!(named.inbox("ANA@example.com"), [Uuid::from_u128(10)]);
     assert_eq!(named.channel("Launch"), [Uuid::from_u128(20)]);
 }

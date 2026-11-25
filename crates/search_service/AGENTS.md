@@ -209,22 +209,26 @@ per-entity-type search plus a unified search across them — mounted into
   `excluded_sub_types`); `status:` (task statuses, or `missed`, `attended`,
   `unattended` for calls), `priority:`, `assignee:` and `author:` narrow to
   tasks (`author:` beside `type:doc` to documents); `tag:` to the tagged
-  kinds; `inbox:<address>` to email; `in:#<channel>` to channels and calls;
-  `from:` is the email operator unless `type:` leaves email out and names
-  channels or calls, where it names senders and speakers. People are `me` or
-  an address. `OR` between two of the same operator joins their values;
-  repeated without it, each must hold, and kinds that cannot meet them all
-  are left out. Status, priority, assignees and authors need no lookup;
-  tag, inbox and channel names resolve for the caller inside their lane
-  turn (`domain/operator_names.rs`) through the queries tag, inbox and
-  channel name search already run, and a name reaching nothing matches
-  nothing. Tags must fit the search's one any-of or all-of list, so an `OR`
-  group beside another tag is a 400 (`TagConditionsDontCombine`); operators
-  leaving no word are a 400 (`OperatorsNeedAWord`) unless only email is
-  searched; at most `MAX_CHANNEL_NAMES` channel names. An unknown name or
-  invalid value stays a word. `search_operators/typed_operators.json` lists
-  typed queries and how many operators each holds, for these tests and the
-  web Search field; change it with the parser.
+  kinds; `inbox:<address>` to email; `in:#<channel>` (the whole name the
+  caller sees, DMs left out) to channels and calls, and in a search that
+  reaches neither it stays Mail's label operator; `from:` is the email
+  operator unless `type:` leaves email out and names channels or calls,
+  where it names senders and speakers, and then channel and call names no
+  longer match (a name says nothing of who posted or spoke). People are `me`
+  or an address. `OR` between two of the same operator joins their values,
+  and an `OR` beside an operator that joins nothing is dropped; repeated
+  without it, each must hold, and kinds that cannot meet them all are left
+  out. Status, priority, assignees and authors need no lookup; tag, inbox and
+  channel names resolve for the caller inside their lane turn
+  (`domain/operator_names.rs`) through the queries tag, inbox and channel
+  name search already run, and a name reaching nothing matches nothing.
+  Refused with a 400, and not logged as errors: an `OR` tag group beside
+  another tag (`TagConditionsDontCombine`; the search applies one any-of or
+  all-of list), two `from:` on calls (`SpeakersDontCombine`), operators
+  leaving no word unless only email is searched (`OperatorsNeedAWord`), more
+  than `MAX_CHANNEL_NAMES` channel names. An unknown name or invalid value
+  stays a word. `search_operators/typed_operators.json` lists typed queries
+  and how many operators each holds; change it with the parser.
 - The typed conditions that are not thread states run in OpenSearch: text
   matches, labels and tags (`labels` terms or the nested tag filter, each name
   resolved for the caller in Postgres; a required name naming nothing matches
