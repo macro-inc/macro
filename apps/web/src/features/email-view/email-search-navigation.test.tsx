@@ -198,6 +198,8 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   useRouteParams: () => ({}),
   useMatches: () => () => [],
   createSearchParams: () => [{ tab: 'important' }],
+  usePane: () => () => 'mail-pane',
+  useSplitRouter: () => ({ entry: () => undefined }),
 }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },

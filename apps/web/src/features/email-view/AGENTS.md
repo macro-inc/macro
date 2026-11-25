@@ -121,6 +121,14 @@ the Soup-backed thread list, and saved email views.
 - `beforeSavedView` restores the prior tab and inboxes on leaving, and is what
   local and entry persistence save while a view is open; never persist view
   filters as the user's own.
+- The view records its split entry itself (`createEntryRecorder` in
+  `persistence.ts`): the entry it mounts in, each entry it moves to while
+  mounted (a thread, another tab), and every change to what the entry keeps,
+  search included. The view can mount again without leaving its entry (an
+  older-build tab does when a newer build takes the local cache over), and
+  must come back on its own state, not the user-level copy that every tab of
+  the browser profile writes. Only a reload or a new tab starts from that
+  copy.
 - A search reaches all mail from every tab but Spam and Trash; only an `in:`
   filter in its text narrows it, through `EmailDataSourceInput.searchScope`,
   never `tab`. The tab's own slice is dropped; the Filters menu, inbox picker,

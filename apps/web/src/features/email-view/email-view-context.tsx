@@ -28,7 +28,9 @@ import {
   createSearchParams,
   useMatches,
   useNavigate,
+  usePane,
   useRouteParams,
+  useSplitRouter,
 } from '@app/lib/split-router';
 import { beginInteraction } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
@@ -290,6 +292,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const inlinePreviewLayout = useInlinePreviewLayout();
   const navigate = useNavigate();
   const routeParams = useRouteParams(emailThreadRoute);
+  const router = useSplitRouter();
+  const pane = usePane();
   const matches = useMatches();
   const [tabSearch] = createSearchParams(emailTabSearch);
   const selectPreview = createPreviewSelectionGuard();
@@ -324,6 +328,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     }),
     createEmailViewPersistence({
       handle: panel.handle,
+      entryId: () => router.entry(pane())?.id,
       userId,
       restoreEntryState: props.initialState === undefined,
       restoreLocalState: props.initialState === undefined,
