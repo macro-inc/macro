@@ -4300,6 +4300,13 @@
         "description": "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed.",
         "required": ["routineId", "routineName", "outcome"],
         "properties": {
+          "appsToConnect": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The apps the routine needs connected, by name, when the run failed\nbecause one of them is not. Empty for every other run."
+          },
           "outcome": {
             "$ref": "#/components/schemas/RoutineRunOutcome",
             "description": "How the run ended."
