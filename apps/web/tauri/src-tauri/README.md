@@ -71,6 +71,12 @@ answer queues behind data in flight, and a shorter one drops connections that
 are slow, not dead. An HTTP/1.1 connection, such as one to file storage, has no
 probe and waits for TCP to give up. All of this needs a native app release.
 
+The plugin sets each request's `Origin` from the origin it recorded when the
+webview's page started (and finished) loading, and reads the webview's URL only
+before it has seen a load. A webview getter waits for the UI thread while
+holding the async runtime worker that asked, so one per request stalled every
+async command under load; keep webview getters off per-request paths.
+
 Requests on a shared connection share its flow control, so a response body the
 page neither reads nor cancels holds data against the others until it is read
 or released. The plugin gives a connection a window far larger than a few
