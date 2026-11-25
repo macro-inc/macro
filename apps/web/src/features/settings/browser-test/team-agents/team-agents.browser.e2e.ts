@@ -568,14 +568,14 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   const dialog = await openInviteAgent(page);
 
   // Add is always pressable: with no name it marks the field and focuses it.
-  const add = dialog.getByRole('button', { name: /^Add/ });
+  const add = dialog.getByRole('button', { name: /^Add agent/ });
   const nameField = dialog.getByRole('textbox', {
     name: 'Name it',
   });
   // A new invite starts named Macronaught, the avatar its M.
   await expect(nameField).toHaveValue('Macronaught');
   await expect(dialog.locator('[data-slot="avatar"]')).toHaveText('M');
-  await expect(add).toHaveText('Add Macronaught · $40.00/month');
+  await expect(add).toHaveText('Add agent · $40.00/month');
   await screenshot(page, testInfo, 'add-agent-empty');
   // Cleared, it still needs a name.
   await nameField.fill('');
@@ -604,13 +604,13 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   await expect(dialog.getByRole('radio', { name: 'Standard' })).toBeChecked();
   await expect(dialog.getByRole('radio', { name: 'XL' })).toBeDisabled();
   await dialog.getByText('Large', { exact: true }).click();
-  await expect(add).toHaveText('Add Ada · $80.00/month');
+  await expect(add).toHaveText('Add agent · $80.00/month');
   await screenshot(page, testInfo, 'add-agent-named');
 
   await add.click();
   await expect(
-    dialog.getByRole('button', { name: /Adding Ada/ })
-  ).toBeVisible();
+    dialog.getByRole('button', { name: 'Add agent', exact: true })
+  ).toHaveAttribute('aria-busy', 'true');
   await screenshot(page, testInfo, 'add-agent-adding');
   // It closes once the agent reports itself online: no notice, no setup card.
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -686,10 +686,10 @@ test('an agent still starting after five seconds closes the dialog, and its row 
   await page.goto('/');
   const dialog = await openInviteAgent(page);
   await fillAda(page);
-  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await dialog.getByRole('button', { name: /^Add agent ·/ }).click();
   await expect(
-    dialog.getByRole('button', { name: /Adding Ada/ })
-  ).toBeVisible();
+    dialog.getByRole('button', { name: 'Add agent', exact: true })
+  ).toHaveAttribute('aria-busy', 'true');
   await expect(dialog).toBeVisible();
 
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -701,7 +701,7 @@ test('an agent still starting after five seconds closes the dialog, and its row 
   await screenshot(page, testInfo, 'members-slow-path');
 });
 
-test('a declined card keeps the dialog, nothing behind, and Try again buys anew', async ({
+test('a declined card keeps the dialog, nothing behind, and Add agent buys anew', async ({
   page,
 }, testInfo) => {
   const backend = await scriptAuthService(page, 0, {
@@ -711,7 +711,7 @@ test('a declined card keeps the dialog, nothing behind, and Try again buys anew'
   await page.goto('/');
   const dialog = await openInviteAgent(page);
   await fillAda(page);
-  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await dialog.getByRole('button', { name: /^Add agent ·/ }).click();
 
   const notice = dialog.locator('[data-add-agent-state="declined"]');
   await expect(notice).toContainText('Nothing was charged');
@@ -722,7 +722,9 @@ test('a declined card keeps the dialog, nothing behind, and Try again buys anew'
   await expect(page.locator('[data-member-kind="agent"]')).toHaveCount(0);
   await screenshot(page, testInfo, 'add-agent-declined');
 
-  await dialog.getByRole('button', { name: /^Try again/ }).click();
+  await dialog
+    .getByRole('button', { name: 'Add agent · $40.00/month' })
+    .click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
   const [declined, again] = backend.created as { purchaseKey: string }[];
   expect(again?.purchaseKey).not.toBe(declined?.purchaseKey);
@@ -756,7 +758,7 @@ test('Update card after a decline opens Billing, and the next invite keeps the n
   let dialog = await openInviteAgent(page);
   await fillAda(page);
   await dialog.getByText('Large', { exact: true }).click();
-  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await dialog.getByRole('button', { name: /^Add agent ·/ }).click();
   await dialog.getByRole('button', { name: 'Update card' }).click();
   await expect(dialog).toBeHidden();
   expect(
@@ -770,7 +772,7 @@ test('Update card after a decline opens Billing, and the next invite keeps the n
   );
   await expect(dialog.getByRole('radio', { name: 'Large' })).toBeChecked();
   await expect(
-    dialog.getByRole('button', { name: 'Add Ada · $80.00/month' })
+    dialog.getByRole('button', { name: 'Add agent · $80.00/month' })
   ).toBeVisible();
 
   // Cancel forgets it: a fresh invite starts from Macronaught again.
@@ -782,33 +784,36 @@ test('Update card after a decline opens Billing, and the next invite keeps the n
   );
 });
 
-test('a long name shortens on Add while the price stays whole', async ({
+test('a long name keeps the Add agent label and live price on one row', async ({
   page,
-}) => {
+}, testInfo) => {
   await scriptAuthService(page, 2);
   await page.goto('/');
   const dialog = await openInviteAgent(page);
-  const longName = 'Ada Augusta King, Countess of Lovelace and Analyst';
-  await dialog.getByRole('textbox', { name: 'Name it' }).fill(longName);
-  const add = dialog.getByRole('button', { name: /^Add Ada/ });
-  await expect(add).toHaveAccessibleName(`Add ${longName} · $40.00/month`);
-  const price = add.getByText('· $40.00/month');
-  await expect(price).toBeVisible();
+  const longName = 'Research and knowledge management assistant';
+  const name = dialog.getByRole('textbox', { name: 'Name it' });
+  await name.fill(longName);
+  await expect(name).toHaveValue(longName);
+  const add = dialog.getByRole('button', { name: /^Add agent ·/ });
+  await expect(add).toHaveAccessibleName('Add agent · $40.00/month');
+  await dialog.getByText('Large', { exact: true }).click();
+  await expect(add).toHaveAccessibleName('Add agent · $80.00/month');
+
+  const label = add.getByText('Add agent · $80.00/month', { exact: true });
   const addBox = await add.boundingBox();
-  const priceBox = await price.boundingBox();
-  if (!addBox || !priceBox) throw new Error('Add or its price has no box');
-  // The price sits inside the button, uncut, and the button inside the dialog.
-  expect(priceBox.x).toBeGreaterThanOrEqual(addBox.x);
-  expect(priceBox.x + priceBox.width).toBeLessThanOrEqual(
+  const labelBox = await label.boundingBox();
+  const dialogBox = await dialog.boundingBox();
+  if (!addBox || !labelBox || !dialogBox)
+    throw new Error('Add, its label, or the dialog has no box');
+  expect(labelBox.x).toBeGreaterThanOrEqual(addBox.x);
+  expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(
     addBox.x + addBox.width + 0.5
   );
-  const dialogBox = await dialog.boundingBox();
-  if (!dialogBox) throw new Error('The dialog has no box');
   expect(addBox.x + addBox.width).toBeLessThanOrEqual(
     dialogBox.x + dialogBox.width + 0.5
   );
   expect(
-    await price.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
+    await label.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
   ).toBe(true);
   // Cancel stays beside Add, on the same row (measured together, once the
   // sheet has settled).
@@ -821,6 +826,7 @@ test('a long name shortens on Add while the price stays whole', async ({
       return Math.abs(c.y + c.height / 2 - (a.y + a.height / 2));
     })
     .toBeLessThan(4);
+  await screenshot(page, testInfo, 'add-agent-long-name');
 });
 
 test('a size with no room is marked and another size can be added', async ({
@@ -830,13 +836,13 @@ test('a size with no room is marked and another size can be added', async ({
   await page.goto('/');
   const dialog = await openInviteAgent(page);
   await fillAda(page);
-  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await dialog.getByRole('button', { name: /^Add agent ·/ }).click();
 
   await expect(dialog).toContainText('No room for a Standard computer');
   await expect(dialog.getByRole('radio', { name: 'Standard' })).toBeDisabled();
   await expect(dialog.getByRole('radio', { name: 'Large' })).toBeChecked();
   await screenshot(page, testInfo, 'add-agent-no-room');
-  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await dialog.getByRole('button', { name: /^Add agent ·/ }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
 });
 
