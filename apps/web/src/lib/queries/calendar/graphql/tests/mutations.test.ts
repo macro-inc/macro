@@ -1087,6 +1087,54 @@ describe('executeGraphqlCreate', () => {
       untrack();
     });
 
+    it('stays pending when its own answer came without content', async () => {
+      const { host, untrack } = trackedHost();
+      const { calls, client } = fakeClient('committed');
+      const retired = {
+        ...client,
+        mutation: (...args: Parameters<Client['mutation']>) => {
+          const source = client.mutation(...args);
+          return {
+            toPromise: async () => ({
+              ...(await source.toPromise()),
+              data: undefined,
+            }),
+          };
+        },
+      } as unknown as Client;
+
+      const created = await executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+        },
+        retired,
+        host
+      );
+      expect(created).toEqual({ outcome: { kind: 'committed' } });
+      const localId = calls[0]?.optimistic.uuid ?? '';
+      expect(isCalendarEventCreating(localId)).toBe(true);
+      await expect(
+        executeGraphqlUpdate(
+          fakeHost(undefined, []),
+          { eventId: localId, patch: { title: 'Renamed' } },
+          client
+        )
+      ).rejects.toMatchObject({ code: 'not_found' });
+
+      host.readRecordsByKeys.mockImplementation(landedAs('server-15', localId));
+      host.ownerReady();
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-15')
+      );
+      expect(isCalendarEventCreating(localId)).toBe(false);
+      untrack();
+    });
+
     it('is asked for once', async () => {
       const { host, untrack } = trackedHost();
       const localId = await settledWhilePaused(host.settle);

@@ -48,6 +48,9 @@ If a permission change retires a successful create response, the composer uses
 the preserved server identity. If that identity cannot be read yet, it closes
 and refreshes the calendar without opening the event or offering a duplicate
 creation. The universal input reports **Event created** without an Open action.
+An event whose server identity the cache could not tell, as while the cache is
+paused, keeps refusing edits ("This event is still being created") until the
+cache serves again; then it moves to the server's id.
 
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
