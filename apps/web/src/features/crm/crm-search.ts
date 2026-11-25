@@ -3,13 +3,13 @@ import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 export { materializeCachedGraphqlCrmCompanies } from './queries/graphql';
 
 import { queryReadyGate } from '@queries/gate';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { crmCompanySearchQueryOptions } from './queries/company-search';
 import { useQuickAccessCrmCompaniesQuery as createSuggestions } from './queries/company-suggestions';
 export function useQuickAccessCrmCompaniesQuery() {
-  return createSuggestions(useSoupItemsQuery, crmAccessAllowed);
+  return createSuggestions(useSoupAstItemsQuery, crmAccessAllowed);
 }
 
 /** Companies the search service matches by name or domain, beyond the

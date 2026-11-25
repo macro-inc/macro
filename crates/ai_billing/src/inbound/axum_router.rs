@@ -39,8 +39,11 @@ pub struct AiBillingErrorBody {
 pub struct PlanCatalogEntry {
     /// The tier.
     pub tier: PlanTier,
-    /// Monthly subscription price per seat, cents.
+    /// Month-to-month subscription price per seat, cents.
     pub monthly_price_cents: i64,
+    /// Price per seat per month when billed annually, cents. Absent for plans
+    /// not sold annually.
+    pub annual_price_per_month_cents: Option<i64>,
     /// Included AI per seat per period, in cents at provider cost. For the
     /// free plan this is its monthly hard cap.
     pub included_ai_cents_per_seat: i64,
@@ -394,19 +397,24 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
 )]
 pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCatalogResponse> {
     Json(PlanCatalogResponse {
-        plans: [PlanTier::Free, PlanTier::Premium, PlanTier::Max]
-            .into_iter()
-            .map(|tier| PlanCatalogEntry {
-                tier,
-                monthly_price_cents: tier.monthly_price_cents(),
-                included_ai_cents_per_seat: tier.included_ai_cents_per_seat(pricing),
-                purchasable: SeatPlan::PURCHASABLE
-                    .into_iter()
-                    .any(|plan| PlanTier::from(plan) == tier),
-                auto_reload_default_monthly_limit_cents: tier
-                    .default_auto_reload_monthly_limit_cents(),
-            })
-            .collect(),
+        plans: [
+            PlanTier::Free,
+            PlanTier::Premium,
+            PlanTier::Business,
+            PlanTier::Max,
+        ]
+        .into_iter()
+        .map(|tier| PlanCatalogEntry {
+            tier,
+            monthly_price_cents: tier.monthly_price_cents(),
+            annual_price_per_month_cents: tier.annual_price_per_month_cents(),
+            included_ai_cents_per_seat: tier.included_ai_cents_per_seat(pricing),
+            purchasable: SeatPlan::PURCHASABLE
+                .into_iter()
+                .any(|plan| PlanTier::from(plan) == tier),
+            auto_reload_default_monthly_limit_cents: tier.default_auto_reload_monthly_limit_cents(),
+        })
+        .collect(),
         credit_packs_cents: CREDIT_PACKS_CENTS.to_vec(),
         overage_limit_min_cents: OVERAGE_LIMIT_MIN_CENTS,
         overage_limit_max_cents: OVERAGE_LIMIT_MAX_CENTS,

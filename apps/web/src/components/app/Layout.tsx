@@ -15,6 +15,7 @@ import {
   companyCreation,
   contactCreation,
 } from '@app/features/crm/creation-adapter';
+import { recordMerge } from '@app/features/crm/crm-merge';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -24,6 +25,7 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
+import { observeRoutineLimitMutations } from '@app/features/paywall/routine-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
@@ -78,7 +80,6 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { installRowPress } from './mobile/rowPress';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
@@ -125,6 +126,10 @@ const CreateContactModal = lazyNamed(
   () => import('@app/features/crm/crm-create'),
   'CreateContactModal'
 );
+const CrmMergeModal = lazyNamed(
+  () => import('@app/features/crm/crm-merge-dialog'),
+  'CrmMergeModal'
+);
 
 /** True from the first time `opened` is, so a dialog loads on first open and can animate closed. */
 function hasOpened(opened: () => boolean) {
@@ -143,6 +148,7 @@ export function RootFrame(props: ParentProps) {
   const location = useLocation();
 
   onCleanup(observeAiUsageLimitMutations(queryClient));
+  onCleanup(observeRoutineLimitMutations(queryClient));
 
   useAppSquishHandlers();
   // Here rather than in GlobalShortcuts so zoom also works on the pages that
@@ -167,7 +173,6 @@ export function RootFrame(props: ParentProps) {
   });
 
   onMount(() => {
-    onCleanup(installGlassPress());
     onCleanup(installRowPress());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
@@ -260,6 +265,7 @@ export function AppChrome(props: ParentProps) {
   const contactDialogUsed = hasOpened(
     () => contactCreation.target() !== undefined
   );
+  const mergeDialogUsed = hasOpened(recordMerge.open);
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -304,6 +310,11 @@ export function AppChrome(props: ParentProps) {
           <Show when={contactDialogUsed()}>
             <Suspense>
               <CreateContactModal />
+            </Suspense>
+          </Show>
+          <Show when={mergeDialogUsed()}>
+            <Suspense>
+              <CrmMergeModal />
             </Suspense>
           </Show>
           <Show when={isAddInboxDialogOpen()}>

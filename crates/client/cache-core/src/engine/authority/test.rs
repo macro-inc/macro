@@ -319,7 +319,7 @@ fn malformed_authority_is_not_a_fresh_unproven_cache() {
                 fields: [(AUTHORITY_FIELD.into(), state)].into(),
             };
             storage
-                .put_batch(vec![(EntityKey(AUTHORITY_KEY.into()), marker.clone())])
+                .put_batch(vec![(EntityKey(AUTHORITY_META_KEY.into()), marker.clone())])
                 .await
                 .unwrap();
             let mut engine = Engine::new(storage);
@@ -334,7 +334,7 @@ fn malformed_authority_is_not_a_fresh_unproven_cache() {
             assert_eq!(
                 engine
                     .storage()
-                    .get_batch(&[EntityKey(AUTHORITY_KEY.into())])
+                    .get_batch(&[EntityKey(AUTHORITY_META_KEY.into())])
                     .await
                     .unwrap(),
                 vec![Some(marker)]
@@ -831,7 +831,7 @@ fn legacy_identity_hydrates_the_account_without_creating_a_permission_proof() {
             .storage()
             .get_batch(&[
                 EntityKey("__meta:identity".into()),
-                EntityKey(AUTHORITY_KEY.into()),
+                EntityKey(AUTHORITY_META_KEY.into()),
             ])
             .await
             .unwrap();

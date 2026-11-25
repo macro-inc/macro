@@ -92,17 +92,32 @@ pub enum PlanTier {
     Free,
     /// The $40/seat/month plan (recorded as the legacy `sub_opus` role).
     Premium,
-    /// The $200/seat/month plan, with its own configured AI allowance.
+    /// The $80/seat/month annual ($90 monthly) plan, with its own configured
+    /// AI allowance.
+    Business,
+    /// The $200/seat/month annual ($220 monthly) plan, with its own
+    /// configured AI allowance.
     Max,
 }
 
 impl PlanTier {
-    /// Monthly subscription price per seat, in cents.
+    /// Month-to-month subscription price per seat, in cents.
     pub const fn monthly_price_cents(self) -> i64 {
         match self {
             PlanTier::Free => 0,
             PlanTier::Premium => 4_000,
-            PlanTier::Max => 20_000,
+            PlanTier::Business => 9_000,
+            PlanTier::Max => 22_000,
+        }
+    }
+
+    /// Price per seat per month when billed annually, in cents. `None` for
+    /// tiers not sold annually.
+    pub const fn annual_price_per_month_cents(self) -> Option<i64> {
+        match self {
+            PlanTier::Free | PlanTier::Premium => None,
+            PlanTier::Business => Some(8_000),
+            PlanTier::Max => Some(20_000),
         }
     }
 
@@ -112,6 +127,7 @@ impl PlanTier {
         match self {
             PlanTier::Free => None,
             PlanTier::Premium => Some(20_000),
+            PlanTier::Business => Some(40_000),
             PlanTier::Max => Some(100_000),
         }
     }
@@ -129,11 +145,19 @@ impl PlanTier {
         !matches!(self, PlanTier::Free)
     }
 
+    /// Whether this tier is above Pro (Business or Max).
+    pub const fn is_above_premium(self) -> bool {
+        matches!(self, PlanTier::Business | PlanTier::Max)
+    }
+
     /// Derive the tier from a user's roles. `sub_max` wins over every other
-    /// paid role; any other paid subscription role is Premium.
+    /// paid role, then `sub_business`; any other paid subscription role is
+    /// Premium.
     pub fn from_roles(roles: &HashSet<RoleId>) -> Self {
         if roles.contains(&RoleId::SubMax) {
             PlanTier::Max
+        } else if roles.contains(&RoleId::SubBusiness) {
+            PlanTier::Business
         } else if roles.iter().any(RoleId::is_paid_subscription) {
             PlanTier::Premium
         } else {
@@ -146,6 +170,7 @@ impl From<teams::domain::model::SeatPlan> for PlanTier {
     fn from(plan: teams::domain::model::SeatPlan) -> Self {
         match plan {
             teams::domain::model::SeatPlan::Premium => PlanTier::Premium,
+            teams::domain::model::SeatPlan::Business => PlanTier::Business,
             teams::domain::model::SeatPlan::Max => PlanTier::Max,
         }
     }
@@ -167,12 +192,13 @@ impl BillingPeriod {
     /// `current_period_start/end`) the window is the anchor itself, rolled
     /// forward by its own length in months when the webhook that would have
     /// moved it has not landed yet. Without an anchor, the UTC calendar month.
+    /// An annual anchor is metered by the month (see [`Self::month_containing`]).
     pub fn current(anchor: Option<(DateTime<Utc>, DateTime<Utc>)>, now: DateTime<Utc>) -> Self {
         if let Some((start, end)) = anchor
             && start < end
         {
             if now < end {
-                return Self { start, end };
+                return Self { start, end }.month_containing(now);
             }
             let anchor_days = (end - start).num_days().max(1) as f64;
             let months_per_period = (anchor_days / 30.44).round().max(1.0) as u32;
@@ -184,7 +210,9 @@ impl BillingPeriod {
                     .checked_add_months(Months::new(index * months_per_period))
                     .zip(start.checked_add_months(Months::new((index + 1) * months_per_period)));
                 match candidate {
-                    Some((s, e)) if now < e => return Self { start: s, end: e },
+                    Some((s, e)) if now < e => {
+                        return Self { start: s, end: e }.month_containing(now);
+                    }
                     Some(_) => index += 1,
                     None => break,
                 }
@@ -193,13 +221,49 @@ impl BillingPeriod {
         Self::calendar_month(now)
     }
 
-    /// The stored anchor when it contains `now`.
+    /// The month of this subscription period that contains `at`. Allowances
+    /// reset monthly, so an annual subscription is metered in month-long
+    /// windows counted from its period start (the last one ends with the
+    /// period). A monthly period is returned as is, including one Stripe
+    /// stretched or shortened by a few days, as is a period not containing
+    /// `at`: only a period over two months long is split.
+    pub fn month_containing(self, at: DateTime<Utc>) -> Self {
+        let longer_than_two_months = self
+            .start
+            .checked_add_months(Months::new(2))
+            .is_some_and(|two_months| two_months < self.end);
+        if !longer_than_two_months || at < self.start || at >= self.end {
+            return self;
+        }
+        // Each boundary is counted from the period start, so a start on the
+        // 31st keeps landing on each month's last day instead of drifting.
+        let mut month = 0u32;
+        while month < 1_200 {
+            let start = self.start.checked_add_months(Months::new(month));
+            let end = self.start.checked_add_months(Months::new(month + 1));
+            match (start, end) {
+                (Some(start), Some(end)) if at < end => {
+                    return Self {
+                        start,
+                        end: end.min(self.end),
+                    };
+                }
+                (Some(_), Some(_)) => month += 1,
+                _ => break,
+            }
+        }
+        self
+    }
+
+    /// The stored anchor when it contains `now`; for an annual anchor (the
+    /// webhook stores the subscription's whole period), its month containing
+    /// `now`, since allowances reset monthly.
     pub fn covering(
         anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
         now: DateTime<Utc>,
     ) -> Option<Self> {
         let (start, end) = anchor?;
-        (start <= now && now < end).then_some(Self { start, end })
+        (start <= now && now < end).then(|| Self { start, end }.month_containing(now))
     }
 
     /// The part of this subscription window to store and meter after the
@@ -323,6 +387,15 @@ impl From<&PayerScope> for SubscriptionScope {
             }
         }
     }
+}
+
+/// A user's plan tier without loading their team's full billing roster.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserPlan {
+    /// The user's seat tier (or personal tier when not on a paying team).
+    pub tier: PlanTier,
+    /// Enterprise team: billed out of band with top-tier limits.
+    pub unlimited: bool,
 }
 
 /// Who pays for a user's AI, and through what.

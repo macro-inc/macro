@@ -17,16 +17,11 @@ const [calendars, setCalendars] = createSignal<
 >([]);
 const [teamEvents, setTeamEvents] = createSignal<{ id: string }[]>([]);
 
-vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
-  useCalendarPager: () => ({
-    activeData: () => ({
-      range: () => undefined,
-      occurrencesQuery: { isSuccess: true },
-      events: () => [],
-    }),
-    activeTeamEvents: () => teamEvents(),
-  }),
-}));
+const viewportData = {
+  range: () => undefined,
+  occurrencesQuery: { isSuccess: true },
+  events: teamEvents,
+};
 
 vi.mock('@core/context/user', () => ({ useUserId: () => userId }));
 
@@ -63,10 +58,10 @@ function renderSetup() {
   render(() => (
     <>
       <div data-testid="above-grid">
-        <SetupBanner />
+        <SetupBanner data={viewportData} />
       </div>
       <div data-testid="grid">
-        <SetupStatus />
+        <SetupStatus data={viewportData} />
       </div>
     </>
   ));
@@ -106,16 +101,51 @@ afterEach(() => {
 });
 
 describe('SetupStatus', () => {
-  it('asks a delegate with no inbox of their own to connect one', async () => {
+  it('offers inline setup before events load, without blocking the grid', () => {
+    const loadingData = {
+      ...viewportData,
+      occurrencesQuery: { isSuccess: false },
+    };
+    render(() => <SetupStatus data={loadingData} includeBanner />);
+    expect(
+      screen.getByRole('button', { name: 'Connect calendar' })
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('status')
+        .contains(screen.getByRole('button', { name: 'Connect calendar' }))
+    ).toBe(true);
+  });
+
+  it('hides the connection invitation as soon as a calendar is connected', () => {
+    const view = renderSetup();
+    expect(
+      view.aboveGrid().getByRole('button', { name: 'Connect calendar' })
+    ).toBeTruthy();
+    expect(view.grid().queryByRole('button')).toBeNull();
+
+    setLinks([link('own')]);
+    expect(
+      screen.queryByRole('button', { name: 'Connect calendar' })
+    ).toBeNull();
+
+    setLinks([]);
+    expect(
+      view.aboveGrid().getByRole('button', { name: 'Connect calendar' })
+    ).toBeTruthy();
+  });
+  it('asks a delegate with no working calendar to connect one', async () => {
     const user = userEvent.setup();
     setLinks([delegated('shared', { needs_calendar_permission: true })]);
     const view = renderSetup();
 
-    expect(view.grid().getByText('Connect your calendar')).toBeTruthy();
-    expect(view.grid().getByText(CONNECT_DESCRIPTION)).toBeTruthy();
-    expect(view.aboveGrid().queryByRole('button')).toBeNull();
+    expect(view.aboveGrid().getByText('Connect your calendar')).toBeTruthy();
+    expect(view.aboveGrid().getByText(CONNECT_DESCRIPTION)).toBeTruthy();
+    expect(view.grid().queryByRole('button')).toBeNull();
     expect(screen.queryByText('Enable calendar')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Connect calendar' }));
+    await user.click(
+      view.aboveGrid().getByRole('button', { name: 'Connect calendar' })
+    );
 
     expect(mocks.startAddInbox).toHaveBeenCalledWith({
       provider: undefined,
@@ -124,25 +154,14 @@ describe('SetupStatus', () => {
       scopes: 'gmail_and_calendar',
     });
   });
-
-  it('offers a delegate whose shared calendar works their own without covering the grid', async () => {
-    const user = userEvent.setup();
+  it('does not ask a delegate to connect when their shared calendar works', () => {
     setLinks([delegated('shared')]);
-    const view = renderSetup();
+    renderSetup();
 
-    expect(view.aboveGrid().getByText('Connect your calendar')).toBeTruthy();
-    expect(view.aboveGrid().getByText(CONNECT_DESCRIPTION)).toBeTruthy();
-    expect(view.grid().queryByRole('button')).toBeNull();
-    await user.click(
-      view.aboveGrid().getByRole('button', { name: 'Connect calendar' })
-    );
-
-    expect(mocks.startAddInbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reconnectLinkId: undefined,
-        scopes: 'gmail_and_calendar',
-      })
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Connect calendar' })
+    ).toBeNull();
+    expect(screen.queryByText(CONNECT_DESCRIPTION)).toBeNull();
   });
 
   it('keeps an own inbox’s fix out of the way while a shared calendar works', () => {
@@ -177,15 +196,15 @@ describe('SetupStatus', () => {
     );
   });
 
-  it('explains missing setup over an empty grid instead of above it', () => {
+  it('offers missing setup above an empty grid instead of covering it', () => {
     setLinks([link('own', { needs_calendar_permission: true })]);
     const view = renderSetup();
 
-    expect(view.grid().getByText(GRANT_DESCRIPTION)).toBeTruthy();
+    expect(view.aboveGrid().getByText(GRANT_DESCRIPTION)).toBeTruthy();
     expect(
-      view.grid().getByRole('button', { name: 'Grant access' })
+      view.aboveGrid().getByRole('button', { name: 'Grant access' })
     ).toBeTruthy();
-    expect(view.aboveGrid().queryByRole('button')).toBeNull();
+    expect(view.grid().queryByRole('button')).toBeNull();
   });
 
   it('grants access for the viewer’s own inbox, not a delegated one needing reconnect', async () => {
@@ -254,6 +273,9 @@ describe('SetupStatus', () => {
       emailAddress: 'stopped@example.com',
       scopes: 'calendar',
     });
+
+    setLinks([link('working'), link('stopped')]);
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).toBeNull();
   });
 
   it('keeps a working calendar’s sync error in view beside a stopped one', () => {
@@ -297,21 +319,24 @@ describe('SetupStatus', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('explains a stopped calendar over an empty grid when it is the only one', () => {
+  it('offers to reconnect a stopped calendar above an empty grid', () => {
     setLinks([
       link('stopped', {
         needs_calendar_permission: true,
         has_calendar_data: true,
       }),
     ]);
-    renderSetup();
+    const view = renderSetup();
 
     expect(
-      screen.getByText('Calendar for stopped@example.com stopped syncing')
+      view
+        .aboveGrid()
+        .getByText('Calendar for stopped@example.com stopped syncing')
     ).toBeTruthy();
     expect(
-      screen.getByText('Reconnect to show its events in Macro again.')
+      view.aboveGrid().getByText('Reconnect to show its events in Macro again.')
     ).toBeTruthy();
+    expect(view.grid().queryByRole('button')).toBeNull();
   });
 
   it('leaves a calendar that was never enabled, or a delegated stopped one, to settings while another works', () => {
@@ -334,18 +359,38 @@ describe('SetupStatus', () => {
       delegated('reauth', { needs_reauth: true }),
       delegated('permission', { needs_calendar_permission: true }),
     ]);
-    renderSetup();
+    render(() => <SetupStatus data={viewportData} />);
 
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('keeps a real reauthentication warning until the calendar reconnects', async () => {
+    const user = userEvent.setup();
+    setLinks([link('own', { needs_reauth: true })]);
+    const view = renderSetup();
+
+    await user.click(
+      view.aboveGrid().getByRole('button', { name: 'Reconnect' })
+    );
+    expect(mocks.startAddInbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reconnectLinkId: 'own',
+        scopes: 'gmail_and_calendar',
+      })
+    );
+
+    setLinks([link('own')]);
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).toBeNull();
+  });
   it('waits for the viewer’s id before deciding', () => {
     setUserId(undefined);
     setLinks([link('own', { needs_calendar_permission: true })]);
-    renderSetup();
+    const view = renderSetup();
     expect(screen.queryByRole('button')).toBeNull();
 
     setUserId('macro|self');
-    expect(screen.getByRole('button', { name: 'Grant access' })).toBeTruthy();
+    expect(
+      view.aboveGrid().getByRole('button', { name: 'Grant access' })
+    ).toBeTruthy();
   });
 });

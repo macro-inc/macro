@@ -202,6 +202,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   and `GET /internal/computers/{id}/moves` (internal API key only): start and
   watch moving a computer to another host; the operator's move pass (every
   5 s) does the work.
+- The operator's image upgrade pass (every 10 s, development only:
+  `image_upgrades_allowed` in `src/computers.rs`) advances the one unfinished
+  image upgrade (`hosted_runtimes::domain::image_upgrade`), which the
+  Firecracker image rollout workflow records with the `image-upgrade` binary.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
   every computer creation asks the auth service's internal
   `/internal/team_agent_enrollment` route, so an agent computer never enrolls
@@ -222,8 +226,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   from: a Firecracker image such as `macro-box/2026-11-10`, or a Docker tag;
   `COMPUTERS_AGENT_IMAGE` the agent-mode one agent teammates' computers get
   (`macro-box-agent/2026-11-10`, `macro-box-agent:latest`). Each
-  computer records its own image; updates go through hosted_runtimes' image
-  update routes, never by changing this value for existing computers.
+  computer records its own image; existing computers move only through an
+  image upgrade (the pass above), never by changing this value.
   HostedHarnesses pairing records the buyer as the harness owner, but the
   harness belongs to the computer's team: its owner and admins manage it
   (Claude sign-in included) and every member can run agents on it.
@@ -281,7 +285,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`is_program_run`) and agent accounts, checks the rollout and the harness
   (`View` to watch, `Manage` to drive; `access.rs` adapts both, and people's
   names, to the domain's ports), limits tickets per person, and mints a
-  single-use 60 s ticket;
+  single-use 60 s ticket.
+  The existing `computer.screen.session` span records relay progress and a
+  bounded close reason. It joins the ticket trace and carries the browser's
+  journey and attempt number where supplied. The `computer.screen.tunnel`
+  child distinguishes relay and input and records the guest image when
+  resolved. The session records the local macrod connection epoch separately
+  when the runtime is registered on this replica.
   `GET /computers/{harness_id}/screen/ws?ticket=` redeems it and runs the
   socket (`socket.rs`): binary frames are raw RFB both ways, text frames JSON
   control (`takeOver`, `handBack`, `input`, `visibility`, `stop`; server
@@ -326,8 +336,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   this socket's unexpired drive; each send is bounded by the lease's end). A drive that ends in the middle of the guest's
   clipboard ends the socket rather than pass the rest. Xvnc is reached only by a `socat`
   tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,
-  implemented in `computers.rs`): nothing before its ready line is media,
-  and a tunnel still running 2 s after its session closed is killed (on the
+  implemented in `computers.rs`). The Bash wrapper marks the helper pid
+  before it starts, and maps a refused loopback connection to a reserved
+  exit status. Only RFB bytes follow the marker on stdout. A tunnel still
+  running 2 s after its session closed is killed (on the
   computer tasks' tracker, only if the pid is still that socat). When
   media stops short, the operator says whether the computer runs, which
   picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).
@@ -614,6 +626,10 @@ must use distinct identities; replicas of one control plane share an identity.
 An enabled fleet also requires `COMPUTERS_IMAGE` and `COMPUTERS_AGENT_IMAGE`; how
 far each host is overcommitted is its own row's settings
 (`docs/runbooks/computer-overcommit.md`).
+The dev computer operator leases service-only runtime update requests and
+runs the fixed guest helper through the existing Firecracker mTLS identity.
+See the [rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md).
+
 Firecracker additionally requires `COMPUTERS_FIRECRACKER_CLIENT_CERT` and
 `COMPUTERS_FIRECRACKER_CLIENT_KEY`, the mTLS identity every host agent trusts; each
 host's endpoint and pinned certificate are on its row. Docker additionally requires

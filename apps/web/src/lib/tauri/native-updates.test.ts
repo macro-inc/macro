@@ -7,6 +7,10 @@ const native = vi.hoisted(() => ({
   invoke: vi.fn(),
   report: vi.fn(),
   telemetryError: vi.fn(),
+  stage: vi.fn(async () => 'staged'),
+  calls: [] as string[],
+  held: false,
+  toastFailure: vi.fn(),
 }));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: native.telemetryError },
@@ -24,12 +28,20 @@ vi.mock('@core/util/platform', () => ({
 vi.mock('@app/observability/native-update', () => ({
   reportNativeUpdate: native.report,
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: {} }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: native.toastFailure },
+}));
+vi.mock('./stage-bundle', () => ({ stageDeployedBundle: native.stage }));
+vi.mock('@core/util/reloadForNewerBuild', () => ({
+  hasAutomaticReloadHolds: () => native.held,
+}));
 
 import { createNativeUpdates } from './native-updates';
 
 afterEach(() => {
   native.listeners.clear();
+  native.calls.length = 0;
+  native.held = false;
   native.reports.length = 0;
   vi.clearAllMocks();
 });
@@ -48,7 +60,12 @@ native.invoke.mockImplementation(async (command: string) => {
     if (next === brokenTransport) throw 'IPC transport closed';
     return next;
   }
-  if (command === 'get_native_update_status') return { status: 'Idle' };
+  native.calls.push(command);
+  if (command === 'get_native_update_status')
+    return native.calls.includes('ready')
+      ? { status: 'Ready', data: { version: '2026.1124.0' } }
+      : { status: 'Idle' };
+  if (command === 'restart_native_update') return;
   throw new Error(`unexpected ${command}`);
 });
 
@@ -110,5 +127,67 @@ it('keeps sending a batch after one report fails', async () => {
     expect(native.report).toHaveBeenCalledWith({ id: 'good' })
   );
   expect(native.telemetryError).toHaveBeenCalledOnce();
+  dispose();
+});
+
+it('stages the deployed web bundle before installing the app update', async () => {
+  native.calls.push('ready');
+  let finishStaging: (outcome: string) => void = () => {};
+  native.stage.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishStaging = resolve;
+      })
+  );
+  const { updates, dispose } = createRoot((dispose) => ({
+    updates: createNativeUpdates(async () => {}),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(updates.status().status).toBe('Ready'));
+
+  const restarting = updates.restart();
+  await vi.waitFor(() => expect(native.stage).toHaveBeenCalledOnce());
+  await Promise.resolve();
+  expect(native.calls).not.toContain('restart_native_update');
+
+  finishStaging('staged');
+  await restarting;
+  expect(native.calls).toContain('restart_native_update');
+  dispose();
+});
+
+it('neither stages nor restarts while a call or upload blocks the restart', async () => {
+  native.calls.push('ready');
+  native.held = true;
+  const { updates, dispose } = createRoot((dispose) => ({
+    updates: createNativeUpdates(async () => {}),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(updates.status().status).toBe('Ready'));
+
+  await updates.restart();
+
+  expect(native.stage).not.toHaveBeenCalled();
+  expect(native.calls).not.toContain('restart_native_update');
+  expect(native.toastFailure).toHaveBeenCalledOnce();
+  dispose();
+});
+
+it('does not restart when a call starts while the bundle downloads', async () => {
+  native.calls.push('ready');
+  native.stage.mockImplementationOnce(async () => {
+    native.held = true;
+    return 'staged';
+  });
+  const { updates, dispose } = createRoot((dispose) => ({
+    updates: createNativeUpdates(async () => {}),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(updates.status().status).toBe('Ready'));
+
+  await updates.restart();
+
+  expect(native.calls).not.toContain('restart_native_update');
+  expect(native.toastFailure).toHaveBeenCalledOnce();
   dispose();
 });

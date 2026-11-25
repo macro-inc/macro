@@ -55,15 +55,17 @@ later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
 fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
-Messages backed off after their own failures don't count. Importing folders
-are claimed ahead of finished folders' polls that came due less than five
-minutes earlier, so a walk reads its next page soon after its import has
-room; a poll due longer than that goes first again. A new import's Inbox
+Messages backed off after their own failures don't count. Every other folder
+claim of a sync loop takes the longest-due importing folder first, so a walk
+reads its next page soon after its import has room however late the polls
+run; the other claims take the longest-due folder of either kind, where
+importing folders and polls compete by how long they have been due. Enumerate spans name the claim in
+`@outlook.claim` (`import_first`, `longest_due`, `live_pass`). A new import's Inbox
 round is due first and its Sent round next, so their pages are read before
 the other folders', which Graph lists alphabetically (Archive, Deleted Items).
 The snapshot's `import_round_wait_seconds` is how long the mailbox's
-longest-due import round has waited for a claim: when the polls ahead of it
-run more than five minutes late, each page of an import waits that long. With
+longest-due import round has waited for a claim, normally a few seconds: a
+long wait means the import-first claims are not reaching it. With
 the live pass on, the folder's new mail does not wait for its walk
 ([New mail during an import](#new-mail-during-an-import)).
 

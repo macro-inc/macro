@@ -55,6 +55,14 @@ export const PrDetailRouteView = lazyNamed(
   () => import('@app/features/block-pr/route-views'),
   'PrDetailRouteView'
 );
+export const CalendarSearchRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-search-route'),
+  'CalendarSearchRouteView'
+);
+export const CalendarSettingsRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-settings-route'),
+  'CalendarSettingsRouteView'
+);
 export const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'

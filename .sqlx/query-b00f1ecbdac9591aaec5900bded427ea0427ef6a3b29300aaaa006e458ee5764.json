@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_runtime_update SET outcome = $3, source_url = NULL, lease_holder = NULL\n            WHERE id = $1 AND lease_holder = $2 AND lease_until > now() AND outcome IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b00f1ecbdac9591aaec5900bded427ea0427ef6a3b29300aaaa006e458ee5764"
+}

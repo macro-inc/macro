@@ -14,6 +14,7 @@ use hosted_runtimes::domain::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 use super::inbox::{
@@ -532,7 +533,21 @@ where
         // Marked first: a create whose answer is lost may still have made
         // the repo, and deleting a missing one is a no-op.
         undo.repo = true;
-        self.repos.create(&user_id, team_id, &seed).await?;
+        let seed_span = tracing::info_span!(
+            "team_agents.invite.repo_seed",
+            outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let seeded = self
+            .repos
+            .create(&user_id, team_id, &seed)
+            .instrument(seed_span.clone())
+            .await;
+        seed_span.record("outcome", if seeded.is_ok() { "ok" } else { "error" });
+        if seeded.is_err() {
+            seed_span.record("otel.status_code", "ERROR");
+        }
+        seeded?;
 
         Ok(Prepared::New(user_id, seed))
     }

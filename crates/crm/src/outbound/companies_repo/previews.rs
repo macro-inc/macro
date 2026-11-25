@@ -7,8 +7,8 @@
 //! hidden contact, or contact under a hidden company. Admins and owners see
 //! hidden records.
 //!
-//! The id of a company merged away previews the company it was merged into,
-//! with that company's visibility.
+//! The id of a company or contact merged away previews the record it was
+//! merged into, with that record's visibility.
 //!
 //! Each statement reads its records by primary key behind an `OFFSET 0`
 //! fence, then checks the team. Unfenced, a custom plan can AND the ids with
@@ -93,14 +93,26 @@ impl CompaniesRepositoryImpl {
             CrmContactPreview,
             r#"
             SELECT
-                ct.id AS "id!",
+                requested.id AS "id!",
+                requested.merged_into AS "merged_into?",
                 ct.name,
                 ct.email,
                 ct.updated_at AS "updated_at!"
             FROM (
+                SELECT
+                    ids.id,
+                    (
+                        SELECT a.contact_id
+                        FROM crm_contact_aliases a
+                        WHERE a.retired_id = ids.id
+                    ) AS merged_into
+                FROM (SELECT DISTINCT id FROM unnest($2::uuid[]) AS ids (id)) ids
+                OFFSET 0
+            ) requested
+            CROSS JOIN LATERAL (
                 SELECT id, team_id, company_id, name, email, hidden, updated_at
                 FROM crm_contacts
-                WHERE id = ANY($2)
+                WHERE id = COALESCE(requested.merged_into, requested.id)
                 OFFSET 0
             ) ct
             JOIN team_user tu

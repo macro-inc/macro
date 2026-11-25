@@ -109,10 +109,10 @@ impl SearchQueryConfig for DocumentSearchConfig {
 pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
     sub_types: Vec<String>,
+    excluded_sub_types: Vec<String>,
     mode: DocumentSearchMode,
     property_filters: Vec<PropertyFilterArg>,
-    tag_option_ids: Vec<String>,
-    match_all_tags: bool,
+    tag_groups: Vec<Vec<String>>,
     term_matching: DocumentTermMatching,
 }
 
@@ -121,10 +121,10 @@ impl DocumentQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             sub_types: Vec::new(),
+            excluded_sub_types: Vec::new(),
             mode: DocumentSearchMode::default(),
             property_filters: Vec::new(),
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
             term_matching: DocumentTermMatching::default(),
         }
     }
@@ -143,10 +143,18 @@ impl DocumentQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn sub_types(mut self, sub_types: Vec<String>) -> Self {
         self.sub_types = sub_types;
+        self
+    }
+
+    /// Leaves out the documents of these sub types; a document with none
+    /// stays.
+    pub fn excluded_sub_types(mut self, excluded_sub_types: Vec<String>) -> Self {
+        self.excluded_sub_types = excluded_sub_types;
         self
     }
 
@@ -155,13 +163,9 @@ impl DocumentQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
@@ -204,6 +208,12 @@ impl DocumentQueryBuilder {
         if !self.sub_types.is_empty() {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
         }
+        if !self.excluded_sub_types.is_empty() {
+            bool_query.must_not(QueryType::terms(
+                "sub_type",
+                self.excluded_sub_types.clone(),
+            ));
+        }
 
         // Property filters: one nested clause per filter, ANDed via bool.filter.
         // Each matches a `properties` entry whose definition_id and value line
@@ -218,7 +228,7 @@ impl DocumentQueryBuilder {
         // Tag filter: nested clause(s) matching `properties.values` with no
         // definition_id constraint. Option ids are globally unique, so this
         // ORs (or ANDs, for match-all) tags across definitions.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             bool_query.filter(nested);
         }
 
@@ -250,6 +260,23 @@ impl DocumentQueryBuilder {
         } else {
             for clause in self.build_content_clauses() {
                 bool_query.must(clause);
+            }
+        }
+
+        // A term a minus left out drops every document it would match: by
+        // its name, a chunk of its content, or either, as the mode reads.
+        if include_name {
+            for query in self
+                .inner
+                .excluded_field_queries(DocumentSearchConfig::TITLE_KEY)?
+            {
+                bool_query.must_not(query);
+            }
+        }
+        if include_content {
+            for term in &self.inner.excluded_terms {
+                let query = child_content_query(term, &self.inner.match_type);
+                bool_query.must_not(HasChildQuery::new(CHILD_RELATION, query).into());
             }
         }
 
@@ -513,10 +540,10 @@ pub struct DocumentSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub term_matching: DocumentTermMatching,
 }
 
@@ -531,10 +558,10 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
+            .excluded_sub_types(args.excluded_sub_types)
             .mode(args.mode)
             .property_filters(args.property_filters)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
             .term_matching(args.term_matching)
     }
 }

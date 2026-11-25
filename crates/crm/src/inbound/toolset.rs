@@ -13,6 +13,7 @@ mod create_company;
 mod create_contact;
 mod get_company;
 mod list_companies;
+pub mod merge;
 pub mod pipelines;
 pub mod transfer;
 

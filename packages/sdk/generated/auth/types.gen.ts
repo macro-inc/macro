@@ -487,6 +487,7 @@ export type CreateCheckoutSessionV2Request = {
      * Optional discount/promo code to apply
      */
     discount?: string | null;
+    interval?: null | BillingInterval;
     /**
      * Tracking metadata for conversion attribution
      */
@@ -1762,6 +1763,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
+     * Price per seat per month when billed annually, cents. Absent for plans
+     * not sold annually.
+     */
+    annual_price_per_month_cents?: number | null;
+    /**
      * Monthly automatic reload limit a payer on this plan starts from,
      * cents. Absent for plans that cannot reload.
      */
@@ -1772,7 +1778,7 @@ export type PlanCatalogEntry = {
      */
     included_ai_cents_per_seat: number;
     /**
-     * Monthly subscription price per seat, cents.
+     * Month-to-month subscription price per seat, cents.
      */
     monthly_price_cents: number;
     /**
@@ -1819,7 +1825,7 @@ export type PlanCatalogResponse = {
 /**
  * The plans a user can be on, cheapest first.
  */
-export type PlanTier = 'free' | 'premium' | 'max';
+export type PlanTier = 'free' | 'premium' | 'business' | 'max';
 
 export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
@@ -2089,9 +2095,9 @@ export type ScheduledSeatPlan = {
 /**
  * The paid plan a seat is billed at. Every member of a paying team has one;
  * a team may mix them, and its Stripe subscription carries one seat item per
- * plan in use.
+ * plan in use. Variants are ordered cheapest first, so `<` compares plans.
  */
-export type SeatPlan = 'premium' | 'max';
+export type SeatPlan = 'premium' | 'business' | 'max';
 
 /**
  * Response for the domain notice endpoint.
@@ -2402,6 +2408,7 @@ export type SubscriptionSeatTotal = {
  */
 export type SubscriptionStatus = {
     billing?: null | SubscriptionBilling;
+    interval?: null | BillingInterval;
     /**
      * Provider-confirmed subscription renewal date.
      */

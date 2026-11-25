@@ -1,12 +1,36 @@
 //! Context carried by durable computer work, independent of its transport.
 use opentelemetry::trace::{Span as _, SpanKind, TraceContextExt, Tracer};
 use opentelemetry::{Context, KeyValue, global};
-use std::collections::HashMap;
+use std::{collections::HashMap, future::Future};
+use tracing::Instrument as _;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::HostAllocation;
 use crate::domain::setup::{PhaseTiming, SetupTimeline};
+
+/// Time a purchase phase for a teammate purchase. Record only its result class.
+pub(crate) async fn invite_purchase_phase<T, E>(
+    for_agent: bool,
+    phase: &'static str,
+    operation: impl Future<Output = Result<T, E>>,
+) -> Result<T, E> {
+    if !for_agent {
+        return operation.await;
+    }
+    let span = tracing::info_span!(
+        "computer.purchase.invite_phase",
+        phase = phase,
+        outcome = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+    );
+    let result = operation.instrument(span.clone()).await;
+    span.record("outcome", if result.is_ok() { "ok" } else { "error" });
+    if result.is_err() {
+        span.record("otel.status_code", "ERROR");
+    }
+    result
+}
 
 /// Current W3C context, absent when no tracing provider is enabled.
 pub fn traceparent() -> Option<String> {

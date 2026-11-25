@@ -155,7 +155,7 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 specta = { version = "2.0.0-rc.25", features = ["chrono", "derive", "uuid"] }
 spin = { version = "0.9", default-features = false, features = ["once", "spin_mutex"] }
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
-sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
+sqlx-postgres = { path = "../../vendor/sqlx-postgres", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
 subtle = { version = "2", features = ["const-generics"] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
@@ -182,6 +182,9 @@ xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
+zstd = { version = "0.14" }
+zstd-safe = { version = "8", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", default-features = false, features = ["legacy", "std", "zdict_builder"] }
 
 [build-dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
@@ -331,7 +334,7 @@ specta = { version = "2.0.0-rc.25", features = ["chrono", "derive", "uuid"] }
 specta-macros = { version = "2.0.0-rc.25", features = ["serde"] }
 spin = { version = "0.9", default-features = false, features = ["once", "spin_mutex"] }
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
-sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
+sqlx-postgres = { path = "../../vendor/sqlx-postgres", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
 subtle = { version = "2", features = ["const-generics"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "full", "visit-mut"] }
@@ -361,6 +364,9 @@ xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
+zstd = { version = "0.14" }
+zstd-safe = { version = "8", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", default-features = false, features = ["legacy", "std", "zdict_builder"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 crossbeam-epoch = { version = "0.9" }

@@ -12,14 +12,18 @@ it.each([true, false, undefined])(
     render(() => (
       <BillingPlanCard
         plan="premium"
+        interval="year"
         state={{
           hasPaid: false,
+          tier: 'free',
           aiUsageEnabled: false,
           pending: false,
           trialEligible,
         }}
-        onSelectPlan={(plan) =>
-          checkout(getFreePlanCheckoutRequest(plan, trialEligible === true))
+        onSelectPlan={(plan, interval) =>
+          checkout(
+            getFreePlanCheckoutRequest(plan, trialEligible === true, interval)
+          )
         }
       />
     ));
@@ -34,6 +38,7 @@ it.each([true, false, undefined])(
     } else {
       expect(checkout).toHaveBeenCalledWith({
         plan: 'premium',
+        interval: 'month',
         onboardingTrial: trialEligible,
       });
     }

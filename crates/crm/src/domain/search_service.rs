@@ -16,10 +16,15 @@ pub trait CrmSearchService: Clone + Send + Sync + 'static {
     /// (minted from a verified team membership), so authorization is a
     /// compile-time precondition rather than a default-team lookup. See
     /// [`CrmSearchRepository::search_company_names`].
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument narrows the search the receipt allows"
+    )]
     fn search_company_names(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         term: &str,
+        excluded_terms: &[String],
         company_ids: &[Uuid],
         hidden: Option<bool>,
         limit: i64,
@@ -72,11 +77,16 @@ impl<SR> CrmSearchService for CrmSearchServiceImpl<SR>
 where
     SR: CrmSearchRepository,
 {
-    #[tracing::instrument(skip(self, access, term), fields(term_len = term.len()), err)]
+    #[tracing::instrument(
+        skip(self, access, term, excluded_terms),
+        fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
+        err
+    )]
     async fn search_company_names(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         term: &str,
+        excluded_terms: &[String],
         company_ids: &[Uuid],
         hidden: Option<bool>,
         limit: i64,
@@ -99,6 +109,7 @@ where
             .search_company_names(
                 &team_id,
                 term,
+                excluded_terms,
                 company_ids,
                 hidden,
                 include_hidden,

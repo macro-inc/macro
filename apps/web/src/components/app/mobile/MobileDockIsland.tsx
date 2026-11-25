@@ -20,8 +20,7 @@ import type { JSX, ParentProps } from 'solid-js';
  * host is pointer-transparent); layout beyond the pill itself — height,
  * growth, distribution — is the caller's, via `class`. Place a floating
  * island from a wrapper element, not with `absolute`/`fixed` on the island:
- * the iOS press styles in index.css pin it to `position: relative`, unlayered,
- * so they beat any positioning utility.
+ * `glass` sets `position: relative` for its rim.
  */
 export function MobileDockIsland(
   props: ParentProps<{

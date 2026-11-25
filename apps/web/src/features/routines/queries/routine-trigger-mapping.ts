@@ -67,6 +67,7 @@ function serializeFilter(trigger: EventTriggerDraft): EventFilter {
       : {}),
     ...(trigger.property ? { property: trigger.property } : {}),
     ...(trigger.inboxes?.length ? { inboxes: trigger.inboxes } : {}),
+    ...(trigger.labels?.length ? { labels: trigger.labels } : {}),
     ...(condition ? { condition } : {}),
   };
 }
@@ -152,6 +153,7 @@ export function parseRoutineTriggers(
             }
           : undefined,
         inboxes: filter.inboxes?.length ? filter.inboxes : undefined,
+        labels: filter.labels ?? undefined,
         condition: filter.condition ?? undefined,
       }));
     const draft = {

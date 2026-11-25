@@ -135,7 +135,7 @@ export function CalendarDraft(props: {
         startDisabled={s.sending()}
         endDisabled={s.sending()}
         describedBy={assumption() ? hintId : undefined}
-        hour12={preferences.timeFormat === '12-hour'}
+        timeFormat={preferences.timeFormat}
       />
       <Show when={assumption()}>
         {(hint) => (

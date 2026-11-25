@@ -36,7 +36,8 @@ pub trait CrmSearchRepository:
 {
     /// Searches a team's CRM companies by `term` over the company name and
     /// its domains (`crm_domains.domain`), case-insensitive substring
-    /// match. `company_ids` restricts to those ids when non-empty;
+    /// match, leaving out a company whose name or a domain holds one of
+    /// `excluded_terms`. `company_ids` restricts to those ids when non-empty;
     /// `hidden` selects the visible (`None`/`Some(false)`) or hidden
     /// (`Some(true)`) set. Hidden rows are returned only when
     /// `include_hidden` is true (admin/owner); a non-admin requesting
@@ -48,6 +49,7 @@ pub trait CrmSearchRepository:
         &self,
         team_id: &Uuid,
         term: &str,
+        excluded_terms: &[String],
         company_ids: &[Uuid],
         hidden: Option<bool>,
         include_hidden: bool,

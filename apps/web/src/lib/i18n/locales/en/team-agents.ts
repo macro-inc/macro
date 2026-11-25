@@ -1,6 +1,5 @@
 export default {
   inviteTitle: 'Invite an agent',
-  agent: 'Agent',
   nameIt: 'Name it',
   defaultName: 'Macronaught',
   tooLong: {
@@ -33,10 +32,8 @@ export default {
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',
   nameRequired: 'Give your agent a name to continue.',
-  add: 'Add {{name}}',
-  addPriced: 'Add {{name}} · {{price}}',
-  adding: 'Adding {{name}}…',
-  tryAgainPriced: 'Try again · {{price}}',
+  add: 'Add agent',
+  addPriced: 'Add agent · {{price}}',
   declined:
     'Your card was declined. Nothing was charged and nothing was set up. Update the card, or try again if your bank has cleared it.',
   updateCard: 'Update card',
@@ -44,10 +41,9 @@ export default {
   noRoom:
     'No room for a {{size}} computer right now. Nothing was charged. Pick another size.',
   notStarted:
-    "{{name}} didn't start on its computer. Retry starts it again on the same computer; you aren't charged again.",
+    "{{name}} didn't start on its computer. Use Add agent to start it on the same computer at no extra charge.",
   refunded:
-    "{{name}} didn't start again. The charge was undone and the computer released. Retry starts a fresh one; you aren't charged twice.",
-  retryStart: 'Retry',
+    "{{name}} didn't start again. The charge was undone and the computer released. Use Add agent to start a fresh one. You aren't charged twice.",
   inviteInProgress: 'This agent is still being added. Wait a moment.',
   invalid: 'Check the name, job description, and personality.',
   notEnabled: "Agent teammates aren't available for this team yet.",

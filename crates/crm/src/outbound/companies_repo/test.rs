@@ -10,6 +10,7 @@ mod activity_property_edges;
 mod blocked_domains;
 mod company_aliases;
 mod company_domains;
+mod contact_aliases;
 mod contact_emails;
 mod contact_filing;
 mod contact_update;
@@ -39,6 +40,8 @@ mod population_locks;
 mod population_scans;
 #[cfg(feature = "inbound")]
 mod previews;
+#[cfg(feature = "merge")]
+mod record_merge;
 mod resolve_association;
 mod search_contacts_for_team;
 mod selected_email_policy;

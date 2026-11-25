@@ -1,6 +1,9 @@
-import type { CalendarRangeCacheResult } from '@graphql-cache/index';
+import type {
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
+} from '@graphql-cache/index';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarOccurrenceQueryRange } from '../../occurrences';
 import {
   beginCalendarSyncStatusSample,
@@ -88,6 +91,73 @@ describe('readCalendarRange', () => {
       beginCalendarSyncStatusSample()
     )
   );
+  afterEach(() => vi.useRealTimers());
+
+  it('shares cache startup while reading each requested range', async () => {
+    vi.useFakeTimers();
+    const nextWeek = createCalendarOccurrenceQueryRange(
+      new Date(2026, 9, 12),
+      new Date(2026, 9, 19)
+    );
+    let answer!: (value: CalendarRangeCacheResult) => void;
+    const host = {
+      ...fakeHost([]),
+      calendarRange: vi.fn(async (_args: CalendarRangeCacheArgs) =>
+        range({ occurrenceKeys: ['GraphqlCalendarOccurrence:next:a'] })
+      ),
+    };
+    host.calendarRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    const first = readCalendarRange(host, week);
+    const second = readCalendarRange(host, nextWeek);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(host.calendarRange).toHaveBeenCalledTimes(1);
+    answer(range({ occurrenceKeys: ['GraphqlCalendarOccurrence:first:a'] }));
+    expect((await first).kind).toBe('range');
+    expect((await second).kind).toBe('range');
+    expect(host.calendarRange.mock.calls).toEqual([
+      [toCalendarRangeArgs(week)],
+      [toCalendarRangeArgs(nextWeek)],
+    ]);
+    expect(host.readRecordsByKeys).toHaveBeenCalledWith(
+      expect.objectContaining({ keys: ['GraphqlCalendarOccurrence:first:a'] })
+    );
+    expect(host.readRecordsByKeys).toHaveBeenCalledWith(
+      expect.objectContaining({ keys: ['GraphqlCalendarOccurrence:next:a'] })
+    );
+  });
+
+  it('gives joining readers only the remaining startup budget', async () => {
+    vi.useFakeTimers();
+    const host = {
+      ...fakeHost([]),
+      calendarRange: vi.fn(
+        () => new Promise<CalendarRangeCacheResult>(() => {})
+      ),
+    };
+    const first = readCalendarRange(host, week, { headStartMs: 1000 });
+    await vi.advanceTimersByTimeAsync(600);
+    let joined = false;
+    const second = readCalendarRange(host, week, { headStartMs: 1000 }).then(
+      (result) => {
+        joined = true;
+        return result;
+      }
+    );
+    await vi.advanceTimersByTimeAsync(399);
+    expect(joined).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(first).resolves.toEqual({ kind: 'not-ready' });
+    await expect(second).resolves.toEqual({ kind: 'not-ready' });
+    await expect(readCalendarRange(host, week)).resolves.toEqual({
+      kind: 'not-ready',
+    });
+    expect(host.calendarRange).toHaveBeenCalledTimes(1);
+  });
 
   it('answers a covered viewport without the network', async () => {
     const host = fakeHost([
@@ -278,7 +348,7 @@ describe('readCalendarRange', () => {
     });
   });
 
-  it('sends viewports to REST while a starting cache has not answered', async () => {
+  it('sends later viewports to REST after the startup budget expires', async () => {
     let answer: (result: CalendarRangeCacheResult) => void = () => {};
     const host = fakeHost([
       range({ occurrenceKeys: ['GraphqlCalendarOccurrence:event-1:a'] }),
@@ -305,19 +375,29 @@ describe('readCalendarRange', () => {
     expect(data.items).toHaveLength(1);
   });
 
-  it('reads REST and asks again after a starting cache fails its first read', async () => {
-    const host = fakeHost([
-      range({ occurrenceKeys: ['GraphqlCalendarOccurrence:event-1:a'] }),
-    ]);
-    host.calendarRange.mockRejectedValueOnce(new Error('cache worker timeout'));
-
-    await expect(readCalendarRange(host, week)).resolves.toEqual({
-      kind: 'not-ready',
-    });
-    const data = await readData(host, week);
-    expect(data.items).toHaveLength(1);
-    expect(calendarCacheAnswered(host)).toBe(true);
-  });
+  it.each(['rejected', 'thrown'])(
+    'retries after a %s startup failure',
+    async (failure) => {
+      const host = fakeHost([
+        range({ occurrenceKeys: ['GraphqlCalendarOccurrence:event-1:a'] }),
+      ]);
+      const error = new Error('cache worker timeout');
+      if (failure === 'thrown')
+        host.calendarRange.mockImplementationOnce(() => {
+          throw error;
+        });
+      else host.calendarRange.mockRejectedValueOnce(error);
+      await expect(
+        Promise.all([
+          readCalendarRange(host, week),
+          readCalendarRange(host, week),
+        ])
+      ).resolves.toEqual([{ kind: 'not-ready' }, { kind: 'not-ready' }]);
+      const data = await readData(host, week);
+      expect(data.items).toHaveLength(1);
+      expect(calendarCacheAnswered(host)).toBe(true);
+    }
+  );
 
   it('does not count a late unsupported answer as answering', async () => {
     let answer: (result: CalendarRangeCacheResult) => void = () => {};

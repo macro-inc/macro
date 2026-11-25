@@ -43,6 +43,7 @@ const ready = (
       databaseActionProof === 'wiped-before-open'
         ? 'reset-storage-uncertain'
         : 'opened-existing',
+    queue: databaseActionProof === 'wiped-before-open' ? 'reset' : 'preserved',
   });
 };
 
@@ -321,6 +322,7 @@ describe('CoordinatorCore', () => {
         ownerLockHeld: true,
         databaseActionProof: 'opened-existing',
         openOutcome: 'opened-existing',
+        queue: 'preserved',
       })
     ).toContainEqual({
       kind: 'drain-owner',
@@ -540,6 +542,7 @@ describe('CoordinatorCore', () => {
       kind: 'broadcast-engine-replaced',
       ownerEpoch: 2,
       openOutcome: 'opened-existing',
+      queue: 'preserved',
     });
   });
 
@@ -589,11 +592,13 @@ describe('CoordinatorCore', () => {
           ? 'wiped-before-open'
           : 'opened-existing',
         openOutcome,
+        queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
       });
       expect(action(actions, 'broadcast-engine-replaced')).toEqual({
         kind: 'broadcast-engine-replaced',
         ownerEpoch: 2,
         openOutcome,
+        queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
       });
     }
   );
@@ -754,6 +759,7 @@ describe('CoordinatorCore', () => {
       kind: 'broadcast-engine-replaced',
       ownerEpoch: 2,
       openOutcome: 'reset-storage-uncertain',
+      queue: 'reset',
     });
 
     expect(
@@ -989,6 +995,7 @@ describe('CoordinatorCore', () => {
           kind: 'broadcast-engine-replaced',
           ownerEpoch: 2,
           openOutcome: 'reset-storage-uncertain',
+          queue: 'reset',
         },
         { kind: 'drain-owner', tabId: 'tab-b', ownerEpoch: 2, handoff: true },
       ]);
@@ -1168,6 +1175,7 @@ describe('CoordinatorCore', () => {
       ownerLockHeld: true,
       databaseActionProof: 'opened-existing',
       openOutcome: 'opened-existing',
+      queue: 'preserved',
     });
     expect(action(wrongLock, 'protocol-violation').error).toContain(
       'wrong physical owner lock'
@@ -1182,6 +1190,7 @@ describe('CoordinatorCore', () => {
       ownerLockHeld: true,
       databaseActionProof: 'opened-existing',
       openOutcome: 'reset-storage-uncertain',
+      queue: 'reset',
     });
     expect(action(wrongProof, 'protocol-violation').error).toContain(
       'does not match open outcome'

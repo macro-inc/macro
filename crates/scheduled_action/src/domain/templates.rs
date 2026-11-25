@@ -141,9 +141,10 @@ impl ShareRoutineTemplate {
             action_id,
             name: action.name.clone(),
             description: self.description.trim().to_owned(),
-            // The owner's inboxes are theirs alone: whoever activates the
-            // template watches every inbox of their own, and can narrow it.
-            trigger: action.trigger.without_inboxes(),
+            // The owner's inboxes and email labels are theirs alone: whoever
+            // activates the template watches every inbox and any label of
+            // their own, and can narrow them.
+            trigger: action.trigger.without_owners_mail(),
             task,
             variables: self.variables,
             appearance: action.appearance.clone(),

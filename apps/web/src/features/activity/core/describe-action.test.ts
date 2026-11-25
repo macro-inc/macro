@@ -225,3 +225,25 @@ describe('describeRun', () => {
     });
   });
 });
+
+describe('merge phrases', () => {
+  const merge = (names: (string | null)[]): ActivityAction => ({
+    kind: 'record-merged',
+    merged: names.map((name, index) => ({ id: `c${index}`, name })),
+    dropped: [],
+  });
+
+  it('names what was merged into the entity', () => {
+    expect(describeAction(merge(['Old Co']))).toBe('merged Old Co into this');
+    expect(describeAction(merge(['Old Co', null]))).toBe(
+      'merged Old Co and a company into this'
+    );
+    expect(describeAction(merge(['A', 'B', 'C', 'D']))).toBe(
+      'merged A, B and 2 more into this'
+    );
+    expect(describeActionForEntity(merge(['Old Co']))).toEqual({
+      verb: 'merged Old Co',
+      connector: 'into',
+    });
+  });
+});

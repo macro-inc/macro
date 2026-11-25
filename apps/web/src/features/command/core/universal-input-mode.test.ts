@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { shouldUseUniversalInput } from './universal-input-mode';
+import {
+  shouldUseUniversalInput,
+  shouldUseUniversalInputForSearch,
+} from './universal-input-mode';
 
 it.each([
   ['investor update', false],
@@ -15,7 +18,35 @@ it.each([
   expect(shouldUseUniversalInput(text)).toBe(expected);
 });
 
+it('leaves typed search operators out of the phone Search length', () => {
+  const operators = 'type:task assignee:me status:in_progress';
+  expect(shouldUseUniversalInputForSearch(operators)).toBe(false);
+  expect(shouldUseUniversalInput(operators)).toBe(true);
+  expect(shouldUseUniversalInputForSearch(`type:task ${'a'.repeat(34)}`)).toBe(
+    true
+  );
+  expect(shouldUseUniversalInputForSearch(operators, true)).toBe(true);
+  // Text without operators counts as typed, spaces included.
+  const spaced = `${'a'.repeat(16)}  ${'b'.repeat(16)}`;
+  expect(shouldUseUniversalInputForSearch(spaced)).toBe(
+    shouldUseUniversalInput(spaced)
+  );
+  // An operator still being typed doesn't promote the search either.
+  expect(
+    shouldUseUniversalInputForSearch('quarterly financial planning type:')
+  ).toBe(false);
+});
+
 it('keeps a shorter edited draft in composer mode until cleared', () => {
   expect(shouldUseUniversalInput('email julia', true)).toBe(true);
   expect(shouldUseUniversalInput(' \n ', true)).toBe(false);
+});
+
+it("doesn't count an opener's bound token toward the composer length", () => {
+  const binding = {
+    token: 'tag:🎉',
+    tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+  };
+  const text = 'tag:🎉 quarterly planning review notes';
+  expect(shouldUseUniversalInputForSearch(text, false, [binding])).toBe(false);
 });

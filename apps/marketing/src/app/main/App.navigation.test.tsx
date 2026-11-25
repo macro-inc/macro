@@ -17,7 +17,6 @@ vi.mock('../../features/marketing/views/ProductChannelsPage', () => ({
 }));
 vi.mock('../utils/utilFavicon', () => ({ utilFaviconEffect: () => {} }));
 vi.mock('../../lib/theme/utils/themeUtils', () => ({
-  systemThemeEffect: () => {},
   applyTheme: () => {},
 }));
 vi.mock('../../features/marketing/components/DemoMentionMenu', () => ({

@@ -65,16 +65,34 @@ panel, which the phone's Info sheet shares. Someone a thread is shared with sees
 none of the owner's labels: the server leaves out labels of inboxes the reader
 doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
 
+Mail lists can be filtered by a Gmail label or Outlook category of the
+viewer's own or managed inboxes (the `Label` condition). A label in an inbox
+the viewer doesn't own or manage matches nothing, shared threads included. A
+big label whose mail is all old fills over several requests: a page can
+arrive empty with a cursor, and the list keeps loading (a spinner, never the
+empty state) until a row shows or the list ends. Filters (and the phone's
+filter drawer) has a Labels group after Tags on every tab but Reminders: the
+labels people made, by whole name, any of the ticked ones, each inbox's
+together and marked with the inbox's avatar when there are several. A saved
+view keeps them. To check a slow label, use one whose mail is months old in a
+large inbox.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
 Signal; selecting it while in Focus or Noise keeps that tab.
 By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
 `Scheduled`, and `Reminders` (when enabled), followed by **Library** (`All mail`,
-`Archived`, `Shared`, `Spam`, and `Trash`) and **Saved views** (flagged, see
-[Saved email views](#saved-email-views)). Drag the Library or Saved views
-heading before or after the unnamed Inbox/Favorites/Drafts/Sent group to change
-their shared local order. The unnamed group has no grip or keyboard move control.
+`Archived`, `Shared`, `Spam`, and `Trash`), **Labels** and **Saved views**
+(flagged, see [Saved email views](#saved-email-views)). Labels lists the labels
+people made in the inboxes the account picker shows, a row per inbox when it
+shows several, nested Gmail labels as a tree; each inbox shows eight, then
+`N more`, which also holds the labels Gmail hides from its own list. It shows no
+counts and is missing while there are no labels. A label opens `All mail`
+filtered to it alone, and the header names it; choosing the open label again
+shows `All mail` without it. On phone the section comes last in the sheet. Drag
+the Library, Labels or Saved views heading before or after the unnamed
+Inbox/Favorites/Drafts/Sent group to change their shared local order. The unnamed group has no grip or keyboard move control.
 Accounts stays pinned at the top and is not a drop target. Section order is per
 account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
 tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or
@@ -170,11 +188,22 @@ operator's name list that operator above the recent searches (`su` gives
 found and ranked as the composer's recipient picker finds them, and finish
 with their address; `label:` lists the person's tags and their inboxes' own
 labels (not system labels such as Inbox), quoting a name with a space.
+A plain word that stands for a filter offers it as the first row
+(`unread`, `starred`, `attachment`, `today`, `this week`, and `sent` beside
+other words, since a view alone searches nothing), and a word of three or
+more letters that starts part of someone's name, accents aside, offers mail
+from them and to them; picking either replaces the word with the operator,
+and `Enter` still searches the word as typed. While the field is open, an
+info button beside the **Search** title lists nine operators with what each
+finds when hovered, and **All search operators** (or pressing the button)
+opens the operator list on the docs site's Search page; a press keeps the
+focus in the field, since an empty one closes on blur.
 People and labels are read only while the field has focus and such an
-operator is typed. Picking one finishes it the same way. A row is the
+operator is typed (people also for a plain word of three letters or more). Picking one finishes it the same way. A row is the
 filter's text, drawn as an operator, with a few words beside it only when
 they say something the text does not (`to:` also covers Cc and Bcc;
-`after:` counts its day, `before:` does not). Typing changes the rows, so it
+`after:` counts its day, `before:` does not). A row a plain word offers
+instead names what it finds, with its operator beside it to learn. Typing changes the rows, so it
 also clears the row the arrow keys picked out. Operators stay ordinary text (caret,
 selection, `Backspace`, paste), and every one the search service would read,
 once complete and valid (`in:sent`, `subject:"team lunch"`, `-from:ana`,
@@ -201,7 +230,9 @@ menu and keeps the keyboard up, and the list
 below shows the results as ordinary email rows, updating as you type and
 keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
-keeps the keyboard; Cancel (or Android Back) clears the search and returns to
+keeps the keyboard, and while the field is empty an info button in its place
+opens a **Search tips** sheet with the same operator list; Cancel (or Android
+Back) clears the search and returns to
 the mailbox. Opening a result and coming back returns to the search page with
 its results. If the flag turns off, the tab changes to one that cannot be
 searched, or a view is picked before a word is typed while the page is open,
@@ -573,7 +604,11 @@ default All selections are not marked.
 Email Read status and Done are single choices that close the menu; Has
 (Starred, Calendar invite) and Attachments (PDFs, Images, Documents) take
 several and stay open while you tick them. Ticked Has items all apply;
-attachment kinds match any one. Tags supports search, pins selected tags first
+attachment kinds match any one. In Inbox,
+All mail, Archived, Calendar, Favorites, Shared and saved views the server selects
+matching threads first, so a page is full even when matches are rare; Sent, Drafts,
+Spam and Trash still refine the rows they loaded. An inline image counts as an
+image, and plain text and CSV files as documents. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 **Calendar invite** matches meetings carried as attachments or as calendar
 parts of a message, including Outlook invitations.
@@ -859,7 +894,8 @@ must still refresh affected lists after commit. Scroll across a retained row and
 check that the next page remains ordered; a baseline beyond 5,000 rows returns to
 the live server list instead of freezing local membership.
 Tag selections use cached property postings;
-attachment chips refine the cached rows on the client. Sender/recipient filters and
+attachment filters list from the server, which has the thread flags this local
+profile lacks. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
@@ -922,7 +958,10 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. The full subject, including
+participants stay put while only the messages scroll. A subject of more than three
+lines is cut with an ellipsis, on desktop and phones, and the **Show full subject**
+button in the title's bottom corner shows the rest (on desktop a very long one
+scrolls in place) until **Show less** or another thread. The subject shown, including
 its last word beside the title action, supports text selection. Pressing `Escape`
 in the open thread with focus outside any input returns to the originating list
 once there is nothing left to unwind (an open reply, an expanded body, or a
@@ -933,7 +972,8 @@ scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
 place, not the first row. The `⋯` email title menu
-right after the subject's last word, in place of Copy subject, holds **Ask AI**,
+right after the subject's last word (beside **Show full subject** when the subject
+is cut), in place of Copy subject, holds **Ask AI**,
 **Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate
 groups contain **Previous item** / **Next item**, icon-only **Ask Macro** / **Create
@@ -998,7 +1038,7 @@ Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. **Copy Link** on a
 thread copies `/app/mail/<thread-id>` from a row, the title menu, the Share
 dialog, or a reminder notification. The link opens the thread in Mail and
-pastes as an email mention. Click a message header to
+pastes as an email mention, which shows the subject on one line. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
 `?email_message_id=<message-id>` loads older pages as needed, expands the target,
@@ -1982,7 +2022,11 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   a comma, or leaving the field), Match from (From/To/Cc/Bcc toggle buttons, at
   least one on), Subject contains, Tags (a chip picker over the same team and
   personal tags as Filters, shown when any exist; a tag the viewer can no
-  longer see reads Unavailable tag and stays), and an **Advanced settings** toggle that
+  longer see reads Unavailable tag and stays), Labels (a chip picker over the
+  labels people made, by whole name as Filters' Labels group lists them, with
+  each inbox's avatar when labels span several, shown when any exist; a label
+  the viewer can no longer see reads Unavailable label and stays), and an
+  **Advanced settings** toggle that
   reveals Importance, Read status, Done, Latest activity, Inboxes (with two or more
   linked), and **Has** (Starred, Calendar invite, PDFs, Images, Documents); it starts
   open when the view already sets one of them. Values within one

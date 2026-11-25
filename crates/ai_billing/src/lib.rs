@@ -15,6 +15,7 @@
 //! ```text
 //! free cap  = AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS  (provider cost per user per month)
 //! premium   = AI_USAGE_INCLUDED_ALLOWANCE_CENTS       (provider cost per seat per period)
+//! business  = AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS (provider cost per seat per period)
 //! max       = AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS   (provider cost per seat per period)
 //! extra     = cost x (100 + AI_USAGE_OVERAGE_MARKUP_PERCENT) / 100
 //! ```
@@ -61,5 +62,5 @@ pub use domain::{
     BillingError, BillingPeriod, BillingService, BillingSettings, CREDIT_PACKS_CENTS,
     CreditPurchaseSnapshot, CreditPurchaseStatus, DenyReason, DisabledAiAdmissionService,
     Entitlement, IncludedAllowanceCents, OverageMarkupPercent, PayerScope, PlanAllowances,
-    PlanTier, PricingError, UsageSnapshot, cost_cents,
+    PlanTier, PricingError, UsageSnapshot, UserPlan, cost_cents,
 };

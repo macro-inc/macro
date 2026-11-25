@@ -4,10 +4,9 @@ A new agent, ready to become someone's: an agent with its own Macro account
 that talks with you in chat, joins calls with its voice, shares its screen,
 keeps its own memory, and can change its own code.
 
-When its owner described it in the invite, that is who it is
-(`state/memory/identity/identity.md`). When they didn't, it is not anyone
-yet: the first thing it does is DM its owner to ask who it should be, and
-what it is told becomes part of every later run.
+Each wake uses the agent's saved identity (`state/memory/identity/identity.md`)
+when present. With a name-only invite, the agent already knows its name from
+`agent.json` and DMs its owner to ask what to take on first.
 
 - `AGENT.md` is its charter: how it works. It says nothing about who it is.
 - `ARCHITECTURE.md` is how the code is laid out and the rules it keeps.
@@ -25,9 +24,9 @@ repository, provides `@macro-inc/muppet`, `@macro-inc/sdk`, Claude Code and
 the programs the capabilities use, and runs `bin/agent run` as a system
 service.
 
-Once it is running, it DMs you in Macro. Answer it: that conversation is how
-it learns its name, its purpose and how to talk. It writes what you tell it
-to `state/memory/identity/identity.md`.
+When it needs to learn its role, it DMs you in Macro. That conversation is
+how it learns its purpose and how to talk. It writes what you tell it to
+`state/memory/identity/identity.md`.
 
 ## What it can do
 
@@ -169,7 +168,7 @@ intake) and `OTEL_DEPLOYMENT_ENVIRONMENT` (its name), which the image exports as
 
 Exit codes of `run`: `0` stopped; `75` restart after a land; `78` a setting or
 credential is missing or invalid. The launcher (`start-agent`) adds: `78` when
-landed code needs a newer muppet than the image's (`muppetApi` above its
+landed code needs a newer muppet than the selected runtime has (`muppetApi` above its
 `apiLevel`) and last-good would run, so it rolls back; and `79` when there
 is nothing that would run to roll back to (a new agent, last-good itself, or a
 last-good that needs more too), which the service doesn't restart until the
@@ -180,3 +179,8 @@ and three in a row roll the workspace back to the last good HEAD, recorded as
 a commit so it stays rolled back. Any stop of last-good's code starts the
 count again. A lock that differs from the image's is adopted unless the
 agent changed `package.json`.
+
+The hosted launcher optionally preloads a maintenance bridge. The starter
+reports its normal chat readiness and registers detached work through that
+bridge. Earlier images run the same starter with its existing Muppet API
+requirement. See the [dev rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md#service-only-runtime-updates-in-dev).

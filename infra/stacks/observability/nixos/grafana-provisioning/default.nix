@@ -70,6 +70,12 @@ in
         dashboard = dashboard ./firecracker-capacity-dashboard.nix;
       }
     ])
+    (provider "macro-agents" [
+      {
+        name = "agents.json";
+        dashboard = dashboard ./agents-dashboard.nix;
+      }
+    ])
     (provider "macro-run-local" [
       {
         name = "run-local.json";
