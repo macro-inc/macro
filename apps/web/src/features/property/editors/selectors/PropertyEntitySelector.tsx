@@ -747,14 +747,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
-    if (!keyboardMode() || !scrollContainerRef) return;
-    const row = scrollContainerRef.querySelector<HTMLDivElement>(
-      `[data-entity-index="${index}"]`
-    );
-    if (row) return row.scrollIntoView({ block: 'nearest' });
-    // Wrapping around an end lands on a row that isn't mounted.
-    scrollContainerRef.scrollIntoView({ block: 'nearest' });
-    list?.scrollToIndex(index, { align: 'nearest' });
+    if (keyboardMode()) list?.scrollToIndex(index, { align: 'nearest' });
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -884,6 +877,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     index={index()}
                     selected={props.selectedOptions().has(entity.id)}
                     highlighted={index() === selectedIndex()}
+                    keyboardMode={keyboardMode()}
                     divider={!inSheet() && shouldShowSelectedDivider(index())}
                     multiselect={props.config.isMultiSelect}
                     visibleCheckboxes={props.config.visibleCheckboxes}

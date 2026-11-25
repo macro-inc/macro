@@ -3,7 +3,7 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { Entity, type EntityData } from '@entity';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { InlineCheckbox } from '@ui';
-import { Show } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
 import type { CombinedEntity } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
 
@@ -39,6 +39,8 @@ export function PropertyEntityRow(props: {
   index: number;
   selected: boolean;
   highlighted: boolean;
+  /** The highlight moves by keys. */
+  keyboardMode: boolean;
   /** A line above the row, between the selected items and the rest. */
   divider: boolean;
   multiselect: boolean;
@@ -47,12 +49,20 @@ export function PropertyEntityRow(props: {
   onToggle: () => void;
   onMouseEnter: () => void;
 }) {
+  let row!: HTMLDivElement;
+  // The virtualizer scrolls its own list, not a scroller around it.
+  createEffect(() => {
+    if (props.highlighted && props.keyboardMode)
+      row.scrollIntoView({ block: 'nearest' });
+  });
+
   return (
     <>
       <Show when={props.divider}>
         <div class="my-1 border-t border-edge-muted" />
       </Show>
       <div
+        ref={row}
         data-entity-index={props.index}
         role={props.inSheet ? 'checkbox' : undefined}
         aria-checked={props.inSheet ? props.selected : undefined}
