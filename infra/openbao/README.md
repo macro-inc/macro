@@ -62,6 +62,8 @@ When the roles trust several keys during a switch, render the provisioner
 policy with that exact list (old and new), then again with only the new key once
 the old one is retired.
 
+## Provisioning one team
+
 1. Open the [operator tunnel](../stacks/openbao/README.md#operator-tunnel).
    It listens on local port 18443.
 2. Derive the public key and read the issuer from the document storage
@@ -106,4 +108,4 @@ OPENBAO_FIXTURE_ADDRESS=http://127.0.0.1:<port> OPENBAO_FIXTURE_ROOT_TOKEN=root 
   python3 -m unittest discover -s infra/openbao -p 'test_provisioner_fixture.py'
 ```
 
-Record the container in your resources log and remove it afterwards.
+Remove the container afterwards.
