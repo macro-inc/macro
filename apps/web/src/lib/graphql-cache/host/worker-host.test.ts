@@ -415,6 +415,31 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('settles readiness waiters when a recovery listener throws', async () => {
+    const onAvailable = vi.fn(() => {
+      throw new Error('a recovery listener failed');
+    });
+    const host = createWorkerCacheHost({ scope: 'scope-1', onAvailable });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.unavailable('recovery fails', 'recovery-failed');
+    const ready = host.whenReady?.();
+
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2, 'opened-existing', 'preserved');
+    const init = await vi.waitFor(() => {
+      const request = adapter.requests.at(-1);
+      expect(request?.kind).toBe('init');
+      return request;
+    });
+    adapter.respond(init?.id ?? -1, null);
+
+    await vi.waitFor(() => expect(onAvailable).toHaveBeenCalledOnce());
+    await expect(ready).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(true);
+    host.dispose();
+  });
+
   it('notifies generation subscribers only when a live cache change resets storage', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     await host.currentStorageGeneration();

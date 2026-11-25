@@ -1597,8 +1597,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         state = 'ready';
         initialization = undefined;
         reconnects = 0;
-        endOutage();
+        // Before the outage listeners, which may throw. The waiters run after
+        // endOutage has cleared the outage, so they find the engine open.
         releaseReadyWaiters();
+        endOutage();
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
