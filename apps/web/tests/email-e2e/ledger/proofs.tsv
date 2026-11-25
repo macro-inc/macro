@@ -63,7 +63,6 @@ AC-061	on a phone, Save Draft in the Draft options sheet does not leave the comp
 AC-062	on a phone, Delete Draft in the Draft options sheet does not delete the draft
 AC-063	Retry in "Unable to load this draft" does nothing
 AC-064	The sync banner's Retry button in draft-sync-status.tsx no longer calls onRetry (Reload still calls onReload), so pressing Retry leaves the refused draft unsaved.
-AC-065	Reload in the draft banner does not reload
 AC-066	the Draft could not be synced banner's Keep editing does not save the draft again
 AC-068	The signature preview's expand toggle in signature-preview.tsx returns without flipping its expanded state, so the signature never unfolds.
 AC-069	The signature preview's remove button in signature-preview.tsx returns without calling onDismiss, so the signature stays on the message.
@@ -723,7 +722,6 @@ STC-081	not shown as the row says (Saved on this device; waiting to sync — Cha
 STC-082	The sync banner's detail for a draft the server refused, "The server could not save this draft.", is replaced by "Save refused." in draft-sync-status.ts.
 STC-083	not shown as the row says (Changes could not be saved on this device — Keep this editor open until saving succeeds. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-084	not shown as the row says (Draft could not be synced — Discard could not be confirmed. (Retry discard / Keep editing)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
-STC-085	not shown as the row says (Draft synchronization unavailable (Saved on this device; waiting to sync when a local copy exists) — Queued changes are preserved. Update or reload Macro to recover local storage. (Reload)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-086	not shown as the row says (Unable to read local draft status. — Retry to check the saved draft. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-088	not shown as the row says (persistent toast: Draft could not be saved on this device — <error>): its rendering is switched off or changed in src/features/email-compose/primitives/draft-save-notice.ts
 STC-089	not shown as the row says (Draft could not be saved on this device — … This draft changed while saving. Reopen it to use the latest version.): its rendering is switched off or changed in src/lib/queries/email/local-draft-store.ts

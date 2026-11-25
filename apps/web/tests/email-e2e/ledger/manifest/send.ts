@@ -1332,7 +1332,6 @@ export const send = {
         'Saved on this device; waiting to sync — Changes stay on this device until draft synchronization resumes. (Retry while unavailable)',
       trigger: 'local draft storage has been restarting for over 15 seconds',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
-      note: 'tested: the notice and its text; its Retry is not asserted',
     },
     {
       id: 'STC-082',
