@@ -47,9 +47,9 @@ flowchart LR
   with the caller's scoped key, which cannot see another inbox; the service also
   checks the `inbox_id` the provider reports and answers `not_found` on a mismatch.
 - **Send policy.** The agent mailbox's send and reply routes count as sends for
-  a session scoped to sending nothing. Every send and reply must quote the owner's approval (`confirmation`),
-  whatever credential the agent calls with: every mailbox belongs to an agent
-  account, so this is the rule every other email send from a program follows. Each mailbox is capped at 10 sends an hour, 40 a day and 100 recipients a
+  a session scoped to sending nothing. An agent teammate sends on its own: a
+  send or reply goes out when the agent makes it, with no one's approval.
+  Each mailbox is capped at 10 sends an hour, 40 a day and 100 recipients a
   day; a team's agent mailboxes together at 300 recipients a day; a team has at
   most 25 live mailboxes. Caps count sends in flight; the provider's own hourly
   cap is set to the same 10 as a backstop. An agent's team is read from
@@ -65,9 +65,8 @@ flowchart LR
   reported as a rejection.
 - **Send records.** One row per send (`agent_mailbox_sends`) does the dedupe,
   the caps and the audit: mailbox, team, key, kind, recipient count, outcome
-  and reservation time, kept 400 days. No recipients, subjects, bodies or
-  approval text; the approval is the agent's quote, so its time is not
-  recorded as an event. A send reserved after a pause or release committed is
+  and reservation time, kept 400 days. No recipients, subjects or bodies. A
+  send reserved after a pause or release committed is
   refused under the mailbox row lock.
 - **Names.** A role name (`admin`, `postmaster`, `abuse`, `support`, the CA
   domain-validation addresses and the like) is never taken as is: the mailbox
@@ -185,7 +184,6 @@ approved a send.
 - A Macro inbox view of an agent's mailbox and human access to it.
 - Attaching the mailbox through IMAP/SMTP once that provider lands, and
   bring-your-own-domain hosting.
-- Attachments, native AI tools for direct-tool hosts, and autonomous sends
-  without a quoted approval (a policy decision).
+- Attachments, and native AI tools for direct-tool hosts.
 - Production use needs the provider's written permission to provision mailboxes
   for customers, a Macro-owned sending domain, and the KMS key and secrets.

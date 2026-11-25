@@ -542,12 +542,6 @@ pub enum VendorMode {
     Fake,
 }
 
-/// The owner's approval of one send, quoted. Every mailbox belongs to an
-/// agent account, so every send or reply from one needs it, whatever
-/// credential the agent calls with.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OwnerApproval(pub Option<String>);
-
 /// What callers see about a mailbox. No credentials.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
@@ -598,11 +592,6 @@ pub enum AgentMailboxError {
     /// The request is malformed.
     #[error("{0}")]
     Invalid(String),
-    /// A send or reply without its owner's quoted approval.
-    #[error(
-        "an agent cannot send email without its owner's approval; ask the owner, and send again with their reply quoted in `confirmation`"
-    )]
-    ConfirmationRequired,
     /// An earlier send with this key may have gone out and can no longer be
     /// deduplicated: check the sent mail before sending again with a new key.
     #[error(

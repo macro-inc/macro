@@ -226,11 +226,6 @@ export type sendAgentMailboxMessageResponse400 = {
   status: 400;
 };
 
-export type sendAgentMailboxMessageResponse403 = {
-  data: AgentMailboxErrorBody;
-  status: 403;
-};
-
 export type sendAgentMailboxMessageResponse404 = {
   data: AgentMailboxErrorBody;
   status: 404;
@@ -257,7 +252,6 @@ export type sendAgentMailboxMessageResponseSuccess =
   };
 export type sendAgentMailboxMessageResponseError = (
   | sendAgentMailboxMessageResponse400
-  | sendAgentMailboxMessageResponse403
   | sendAgentMailboxMessageResponse404
   | sendAgentMailboxMessageResponse409
   | sendAgentMailboxMessageResponse429
@@ -361,11 +355,6 @@ export type replyAgentMailboxMessageResponse400 = {
   status: 400;
 };
 
-export type replyAgentMailboxMessageResponse403 = {
-  data: AgentMailboxErrorBody;
-  status: 403;
-};
-
 export type replyAgentMailboxMessageResponse404 = {
   data: AgentMailboxErrorBody;
   status: 404;
@@ -387,7 +376,6 @@ export type replyAgentMailboxMessageResponseSuccess =
   };
 export type replyAgentMailboxMessageResponseError = (
   | replyAgentMailboxMessageResponse400
-  | replyAgentMailboxMessageResponse403
   | replyAgentMailboxMessageResponse404
   | replyAgentMailboxMessageResponse429
   | replyAgentMailboxMessageResponse503

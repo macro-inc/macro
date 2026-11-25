@@ -48,7 +48,6 @@ describe('agentMailbox', () => {
     const [message] = page.messages;
     const sent = await message?.reply({
       textBody: 'Thanks',
-      userConfirmation: 'yes, reply',
       idempotencyKey: 'key-1',
     });
 
@@ -60,7 +59,6 @@ describe('agentMailbox', () => {
         body: {
           idempotencyKey: 'key-1',
           textBody: 'Thanks',
-          confirmation: 'yes, reply',
         },
       },
     ]);
@@ -118,14 +116,12 @@ describe('agentMailbox', () => {
       to: ['a@example.com'],
       subject: 'Hi',
       textBody: 'x',
-      userConfirmation: 'yes',
     } as unknown as Parameters<AgentMailboxNamespace['send']>[0];
 
     await expect(mailbox.send(untyped)).rejects.toThrow('idempotencyKey');
     await expect(
       AgentMailMessage.byId(client, 'm-1').reply({
         textBody: 'x',
-        userConfirmation: 'yes',
       } as unknown as Parameters<AgentMailMessage['reply']>[0]),
     ).rejects.toThrow('idempotencyKey');
     expect(requests).toEqual([]);
@@ -146,7 +142,6 @@ describe('agentMailbox', () => {
       to: ['a@example.com'],
       subject: 'Hi',
       textBody: 'x',
-      userConfirmation: 'yes',
       idempotencyKey: 'k-1',
     };
 

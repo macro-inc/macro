@@ -4,7 +4,6 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SendAgentMessageRequestConfirmation } from './sendAgentMessageRequestConfirmation';
 
 /**
  * A new message from the agent's mailbox.
@@ -12,8 +11,6 @@ import type { SendAgentMessageRequestConfirmation } from './sendAgentMessageRequ
 export interface SendAgentMessageRequest {
   /** Copied recipients. */
   cc?: string[];
-  /** The owner's approval, quoted. Required on every send and reply. */
-  confirmation?: SendAgentMessageRequestConfirmation;
   /** Retry-stable: repeating a send with the same key sends once. */
   idempotencyKey: string;
   /** Subject line. */

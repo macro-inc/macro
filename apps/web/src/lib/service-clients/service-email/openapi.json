@@ -134,16 +134,6 @@
               }
             }
           },
-          "403": {
-            "description": "A program sent without the owner's quoted approval",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentMailboxErrorBody"
-                }
-              }
-            }
-          },
           "404": {
             "description": "",
             "content": {
@@ -264,16 +254,6 @@
           },
           "400": {
             "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentMailboxErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "A program replied without the owner's quoted approval",
             "content": {
               "application/json": {
                 "schema": {
@@ -4386,7 +4366,6 @@
           "not_ready",
           "send_limit",
           "invalid",
-          "confirmation_required",
           "not_configured",
           "send_outcome_unknown",
           "busy",
@@ -7914,10 +7893,6 @@
         "description": "A reply from the agent's mailbox.",
         "required": ["idempotencyKey", "textBody"],
         "properties": {
-          "confirmation": {
-            "type": ["string", "null"],
-            "description": "The owner's approval, quoted. Required on every send and reply."
-          },
           "idempotencyKey": {
             "type": "string",
             "format": "uuid",
@@ -7980,10 +7955,6 @@
               "type": "string"
             },
             "description": "Copied recipients."
-          },
-          "confirmation": {
-            "type": ["string", "null"],
-            "description": "The owner's approval, quoted. Required on every send and reply."
           },
           "idempotencyKey": {
             "type": "string",

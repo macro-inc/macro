@@ -93,7 +93,7 @@ export type AgentMailboxErrorBody = {
 /**
  * Why a request was refused, stable for callers to match on.
  */
-export type AgentMailboxErrorCode = 'not_found' | 'not_an_agent' | 'already_provisioned' | 'team_limit' | 'paused' | 'not_ready' | 'send_limit' | 'invalid' | 'confirmation_required' | 'not_configured' | 'send_outcome_unknown' | 'busy' | 'provider_rejected' | 'provider_unavailable' | 'internal';
+export type AgentMailboxErrorCode = 'not_found' | 'not_an_agent' | 'already_provisioned' | 'team_limit' | 'paused' | 'not_ready' | 'send_limit' | 'invalid' | 'not_configured' | 'send_outcome_unknown' | 'busy' | 'provider_rejected' | 'provider_unavailable' | 'internal';
 
 /**
  * Macro's id for an agent's mailbox, also sent to the provider as the owner tag.
@@ -1939,10 +1939,6 @@ export type RefreshEmailEvent = {
  */
 export type ReplyAgentMessageRequest = {
     /**
-     * The owner's approval, quoted. Required on every send and reply.
-     */
-    confirmation?: string | null;
-    /**
      * Retry-stable: repeating a reply with the same key sends once.
      */
     idempotencyKey: string;
@@ -1990,10 +1986,6 @@ export type SendAgentMessageRequest = {
      * Copied recipients.
      */
     cc?: Array<string>;
-    /**
-     * The owner's approval, quoted. Required on every send and reply.
-     */
-    confirmation?: string | null;
     /**
      * Retry-stable: repeating a send with the same key sends once.
      */
@@ -2380,10 +2372,6 @@ export type SendAgentMailboxMessageData = {
 
 export type SendAgentMailboxMessageErrors = {
     400: AgentMailboxErrorBody;
-    /**
-     * A program sent without the owner's quoted approval
-     */
-    403: AgentMailboxErrorBody;
     404: AgentMailboxErrorBody;
     409: AgentMailboxErrorBody;
     /**
@@ -2439,10 +2427,6 @@ export type ReplyAgentMailboxMessageData = {
 
 export type ReplyAgentMailboxMessageErrors = {
     400: AgentMailboxErrorBody;
-    /**
-     * A program replied without the owner's quoted approval
-     */
-    403: AgentMailboxErrorBody;
     /**
      * Not in the caller's mailbox
      */
