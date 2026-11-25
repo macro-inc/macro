@@ -56,7 +56,7 @@ it('opens the video paused and plays only from the play pill', async () => {
 
   fireEvent.click(
     screen.getByRole('button', {
-      name: 'Play Learn how to use Macro Mail, 1:42',
+      name: 'Play Learn how to use Macro Mail, 1:30',
     })
   );
 
@@ -85,11 +85,11 @@ it('starts playback immediately and keeps focus on the video when autoPlay is en
     <TutorialVideoDialog
       tutorial="mail"
       triggerLabel="Watch"
-      triggerAriaLabel="Watch Email demo, 1:42"
+      triggerAriaLabel="Watch Email demo, 1:30"
       autoPlay
     />
   ));
-  fireEvent.click(screen.getByRole('button', { name: 'Watch Email demo, 1:42' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Watch Email demo, 1:30' }));
   const dialog = await screen.findByRole('dialog', {
     name: 'Learn how to use Macro Mail',
   });
@@ -108,7 +108,7 @@ it('restores and focuses the play pill when autoPlay is refused', async () => {
   await openDialog();
 
   const playPill = await screen.findByRole('button', {
-    name: 'Play Learn how to use Macro Mail, 1:42',
+    name: 'Play Learn how to use Macro Mail, 1:30',
   });
   await waitFor(() => expect(document.activeElement).toBe(playPill));
 });

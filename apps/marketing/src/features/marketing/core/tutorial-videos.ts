@@ -7,7 +7,7 @@ export const TUTORIAL_VIDEOS = {
   home: {
     feature: 'Home',
     title: 'Learn how to use Macro Home',
-    length: '1:00',
+    length: '0:59',
   },
   forms: {
     feature: 'Forms',
@@ -17,68 +17,68 @@ export const TUTORIAL_VIDEOS = {
   calendar: {
     feature: 'Calendar',
     title: 'Learn how to use Macro Calendar',
-    length: '0:54',
+    length: '1:01',
   },
   scheduling: {
     feature: 'Booking Links',
     title: 'Learn how to use Macro Booking Links',
-    length: '0:44',
+    length: '1:16',
   },
   drive: {
     feature: 'Drive',
     title: 'Learn how to use Macro Drive',
-    length: '1:29',
+    length: '0:59',
   },
   mail: {
     feature: 'Email',
     title: 'Learn how to use Macro Mail',
-    length: '1:42',
+    length: '1:30',
   },
   tasks: {
     feature: 'Tasks',
     title: 'Learn how to use Macro Tasks',
-    length: '1:57',
+    length: '1:11',
   },
   chat: {
     feature: 'Chat',
     title: 'Learn how to use Macro Chat',
-    length: '1:30',
+    length: '1:10',
   },
   docs: {
     feature: 'Docs',
     title: 'Learn how to use Macro Docs',
-    length: '1:15',
+    length: '1:02',
   },
   spreadsheets: {
     feature: 'Spreadsheets',
     title: 'Learn how to use Macro Spreadsheets',
-    length: '0:56',
+    length: '1:04',
   },
   databases: {
     feature: 'Databases',
     title: 'Learn how to use Macro Databases',
-    length: '1:05',
+    length: '1:28',
   },
   canvas: {
     feature: 'Canvas',
     title: 'Learn how to use Macro Canvas',
-    length: '0:50',
+    length: '1:07',
   },
   calls: {
     feature: 'Calls',
     title: 'Learn how to use Macro Calls',
-    length: '1:10',
+    length: '0:54',
   },
-  crm: { feature: 'CRM', title: 'Learn how to use Macro CRM', length: '1:26' },
+  crm: { feature: 'CRM', title: 'Learn how to use Macro CRM', length: '1:37' },
   agents: {
     feature: 'Agents',
     title: 'Learn how to use Macro Agents',
-    length: '1:05',
+    length: '0:54',
   },
   macrod: {
     feature: 'MacroD',
     title: 'Learn how to use MacroD',
-    length: '1:17',
+    length: '1:13',
   },
   'teams-admin': {
     feature: 'Teams & Admin',
@@ -89,7 +89,7 @@ export const TUTORIAL_VIDEOS = {
   github: {
     feature: 'GitHub',
     title: 'Learn how to use Macro with GitHub',
-    length: '1:01',
+    length: '0:54',
   },
   routines: {
     feature: 'Routines',

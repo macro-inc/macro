@@ -131,10 +131,10 @@ describe('block tutorial row', () => {
     expect(play).not.toHaveBeenCalled();
     // The play pill names the video and shows its presenter and length.
     const pill = screen.getByRole('button', {
-      name: 'Play Learn how to use Macro Mail, 1:42',
+      name: 'Play Learn how to use Macro Mail, 1:30',
     });
     expect(pill.textContent).toContain('Jacob Beckerman');
-    expect(pill.textContent).toContain('Watch demo · 1:42');
+    expect(pill.textContent).toContain('Watch demo · 1:30');
     expect(video()?.autoplay).toBe(false);
     expect(video()?.controls).toBe(false);
 
