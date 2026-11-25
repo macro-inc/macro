@@ -1,3 +1,8 @@
+import {
+  completeSearchOperator,
+  searchOperatorBeingTyped,
+  searchOperatorCompletions,
+} from '@app/features/next-soup/core/search-operator-completions';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { registerSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -15,11 +20,14 @@ import {
   $selectAll,
   COMMAND_PRIORITY_HIGH,
   KEY_ARROW_DOWN_COMMAND,
+  KEY_ARROW_UP_COMMAND,
 } from 'lexical';
 import {
   batch,
   createEffect,
+  createMemo,
   createSignal,
+  createUniqueId,
   on,
   onCleanup,
   onMount,
@@ -28,6 +36,8 @@ import {
 } from 'solid-js';
 import { createSearchOperatorLookup } from '../search-operator-lookup';
 import { searchOperatorHighlights } from './search-operator-highlight';
+import { SearchOperatorSuggestions } from './search-operator-suggestions';
+import { createSearchOperatorValues } from './search-operator-values';
 
 type SearchbarVariant = 'filled' | 'secondary';
 interface SoupSearchbarProps {
@@ -36,6 +46,8 @@ interface SoupSearchbarProps {
   onDismiss?: () => void;
   placeholder?: string;
   initialValue?: string;
+  /** Offer the search operators as they are typed. */
+  operators?: boolean;
 }
 
 // Both variants draw the shared SearchBar pill; they differ only in emphasis.
@@ -105,6 +117,7 @@ export function SoupSearchbar(props: SoupSearchbarProps) {
   return (
     <SearchbarInput
       {...props}
+      operators
       value={searchText()}
       initialValue={initialValue}
       onChange={setSearchText}
@@ -133,6 +146,38 @@ export function SearchbarInput(
     untrack(() => props.initialValue ?? props.value)
   );
   let acknowledgedQuery = markdownToSearchText(props.value).trim();
+
+  // The operator rows offered for what is typed at the field's end.
+  const fieldText = createMemo(() => markdownToSearchText(markdown()));
+  const typing = createMemo(() =>
+    props.operators ? searchOperatorBeingTyped(fieldText()) : undefined
+  );
+  const personTyped = () => {
+    const typed = typing();
+    if (!typed || !('name' in typed)) return undefined;
+    const names = ['assignee', 'author', 'from'];
+    return names.includes(typed.name) ? typed.value : undefined;
+  };
+  const operatorValues = props.operators
+    ? createSearchOperatorValues(personTyped)
+    : undefined;
+  const [focused, setFocused] = createSignal(false);
+  const [dismissedFor, setDismissedFor] = createSignal<string>();
+  const operatorRows = createMemo(() =>
+    operatorValues && focused() && dismissedFor() !== fieldText()
+      ? searchOperatorCompletions(fieldText(), operatorValues())
+      : []
+  );
+  // The active row belongs to the text it was chosen for; typing resets it.
+  const [activeRow, setActiveRow] = createSignal({ text: '', index: -1 });
+  const activeIndex = () =>
+    activeRow().text === fieldText() ? activeRow().index : -1;
+  const moveActive = (step: number) => {
+    const count = operatorRows().length;
+    const next = Math.max(-1, Math.min(count - 1, activeIndex() + step));
+    setActiveRow({ text: fieldText(), index: next });
+  };
+  const listId = createUniqueId();
   const publish = (value: string) => {
     setMarkdown(value);
     if (editor.controls.isInlineMenuOpen()) return;
@@ -159,29 +204,65 @@ export function SearchbarInput(
     .onChange(publish)
     .onEnter(() => {
       if (editor.controls.isInlineMenuOpen()) return false;
+      if (activeIndex() >= 0) {
+        pickOperator(activeIndex());
+        return true;
+      }
       editor.controls.blur();
       return true;
     })
     .onEscape(() => {
+      if (operatorRows().length > 0) {
+        setDismissedFor(fieldText());
+        return true;
+      }
       editor.controls.blur();
       props.onDismiss?.();
       return true;
     })
-    // Declining the key leaves Tab to focus order; having a handler at all
-    // keeps the editor's tab indentation out of this single-line field.
-    .onTab(() => false)
+    // Tab writes the offered operator; declining it otherwise leaves Tab to
+    // focus order, and having a handler at all keeps the editor's tab
+    // indentation out of this single-line field.
+    .onTab(() => {
+      if (operatorRows().length === 0) return false;
+      pickOperator(Math.max(0, activeIndex()));
+      return true;
+    })
     .use(searchOperatorHighlights)
     .use((lex) =>
       lex.registerCommand(
         KEY_ARROW_DOWN_COMMAND,
         () => {
           if (editor.controls.isInlineMenuOpen()) return false;
+          if (operatorRows().length > 0) {
+            moveActive(1);
+            return true;
+          }
           lex.getRootElement()?.blur();
           return true;
         },
         COMMAND_PRIORITY_HIGH
       )
+    )
+    .use((lex) =>
+      lex.registerCommand(
+        KEY_ARROW_UP_COMMAND,
+        () => {
+          if (operatorRows().length === 0 || activeIndex() < 0) return false;
+          moveActive(-1);
+          return true;
+        },
+        COMMAND_PRIORITY_HIGH
+      )
     );
+  const pickOperator = (index: number) => {
+    const row = operatorRows()[index];
+    if (!row) return;
+    const next = completeSearchOperator(markdown(), row);
+    editor.controls.setMarkdown(next);
+    publish(next);
+    editor.controls.getLexical().update(() => $getRoot().selectEnd());
+  };
   const hasContent = () => !!markdown().trim();
   createEffect(
     on(
@@ -194,13 +275,15 @@ export function SearchbarInput(
   );
   return (
     <div
-      class="w-full items-center shrink-0 grow min-w-0 mobile:-order-2"
+      class="relative w-full items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
       data-no-focus-restore
+      onFocusIn={() => setFocused(true)}
       onFocusOut={(event) => {
-        if (hasContent() || !props.onDismiss) return;
         const next = event.relatedTarget as Node | null;
         if (next && event.currentTarget.contains(next)) return;
+        setFocused(false);
+        if (hasContent() || !props.onDismiss) return;
         props.onDismiss();
       }}
     >
@@ -250,6 +333,14 @@ export function SearchbarInput(
           </button>
         </Show>
       </div>
+      <Show when={operatorRows().length > 0}>
+        <SearchOperatorSuggestions
+          rows={operatorRows()}
+          active={activeIndex()}
+          listId={listId}
+          onPick={pickOperator}
+        />
+      </Show>
     </div>
   );
 }

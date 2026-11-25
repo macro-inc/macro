@@ -2144,8 +2144,9 @@ input[type="number"] {
   }
 }
 
-/* The Search field's typed operators (search-operator-highlight.ts), in Mail's operator colours. */
-::highlight(search-operator) {
+/* The Search field's typed operators (search-operator-highlight.ts), in Mail's
+   operator colours. Scoped to the field so other elements never test it. */
+[data-soup-search] ::highlight(search-operator) {
   color: var(--color-accent-ink);
   background-color: var(--color-accent-bg);
 }
