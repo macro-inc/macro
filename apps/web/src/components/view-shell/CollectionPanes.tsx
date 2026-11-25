@@ -11,6 +11,7 @@ import {
   on,
   Show,
 } from 'solid-js';
+import { BelowLeftPaneTitle, LeftPaneTitleRow } from './LeftPaneControls';
 import {
   createTouchTopBarInset,
   TouchTopBarFade,
@@ -47,10 +48,23 @@ export function CollectionPanes(props: {
   const [listFrame, setListFrame] = createSignal<HTMLElement>();
   const [detailFrame, setDetailFrame] = createSignal<HTMLElement>();
   const preferredListWidth = () => ws.main.layout().width ?? listWidth();
-  const listVisible = () => ws.collectionLayout() || !props.hasDetail;
+  // A collapsed list gives a wide-touch detail the width; with nothing
+  // selected it stays, since it holds the only next step.
+  const listCollapsed = () =>
+    ws.leftPane.kind() === 'list' &&
+    ws.leftPane.isCollapsed() &&
+    props.hasDetail;
+  const listVisible = () =>
+    (ws.collectionLayout() && !listCollapsed()) || !props.hasDetail;
   const detailVisible = () => ws.collectionLayout() || props.hasDetail;
-  const stacked = () => isTouchDevice() && !listVisible() && !!props.onBack;
-  const listMounted = () => listVisible() || stacked();
+  const stacked = () =>
+    isTouchDevice() &&
+    !ws.collectionLayout() &&
+    !listVisible() &&
+    !!props.onBack;
+  // A collapsed list keeps its scroll and selection for when it returns.
+  const listMounted = () => listVisible() || stacked() || listCollapsed();
+  const titled = () => ws.leftPane.kind() === 'list';
   const returnToList = () => {
     if (stacked() && panel?.isPanelActive() !== false) return props.onBack;
   };
@@ -86,7 +100,7 @@ export function CollectionPanes(props: {
             ws.collectionLayout() ? preferredListWidth() : undefined
           }
           onSizeChangeEnd={props.onListWidthChangeEnd ?? setListWidth}
-          collapsed={() => !listMounted()}
+          collapsed={() => !listMounted() || listCollapsed()}
           target={
             ws.collectionLayout()
               ? {
@@ -110,11 +124,16 @@ export function CollectionPanes(props: {
                 inert={!listVisible()}
                 aria-hidden={!listVisible()}
               >
-                <Show when={listMounted()}>
-                  <ViewShellListActiveContext.Provider value={listVisible}>
-                    {props.list}
-                  </ViewShellListActiveContext.Provider>
+                <Show when={titled()}>
+                  <LeftPaneTitleRow canCollapse={props.hasDetail} />
                 </Show>
+                <BelowLeftPaneTitle titled={titled()}>
+                  <Show when={listMounted()}>
+                    <ViewShellListActiveContext.Provider value={listVisible}>
+                      {props.list}
+                    </ViewShellListActiveContext.Provider>
+                  </Show>
+                </BelowLeftPaneTitle>
               </div>
             </FloatRegionScope>
           </ViewShellPaneContext.Provider>

@@ -53,6 +53,8 @@ export function ViewSidebarToggle(props: {
     ws?.aside.isSheet() || (isTouchDevice() && ws?.aside.isOverlay());
   const visible = () =>
     !(ws?.collectionLayout() && pane === 'detail') &&
+    // A wide-touch aside comes back from the island ViewShell.TopBar leads with.
+    !(props.action === 'expand' && ws?.leftPane.kind() === 'aside') &&
     ws?.aside.canCollapse() &&
     (props.action === 'expand'
       ? ws.aside.isCollapsed() || ws.aside.isOverlay()

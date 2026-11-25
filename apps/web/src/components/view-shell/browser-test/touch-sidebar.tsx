@@ -148,6 +148,8 @@ function ChannelsWorkspaceFixture() {
       >
         <ViewShell.Root
           asidePreferenceKey="channels-fixture"
+          title="Chat"
+          mainEmpty={selected() === undefined}
           aside={wide() ? {} : false}
           resizable
         >
@@ -309,6 +311,7 @@ function CollectionWorkspaceFixture(
         <ViewShell.Root
           contentLayout="collection"
           asidePreferenceKey="collection-workspace-fixture"
+          title="Items"
           resizable
         >
           <ViewShell.Aside>
@@ -398,6 +401,14 @@ function CollectionWorkspaceFixture(
             >
               <ViewShell.TopBar class="touch:flex">
                 <span>Preview {selected()}</span>
+                {/* As archiving or deleting the open item does. */}
+                <button
+                  type="button"
+                  class="pointer-events-auto ml-auto"
+                  onClick={() => setSelected(undefined)}
+                >
+                  Close preview
+                </button>
               </ViewShell.TopBar>
               <textarea
                 class="ml-12 min-h-0 flex-1"
@@ -549,6 +560,7 @@ function HomeWorkspaceFixture() {
         inlinePreview={
           size.width > DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS.narrow
         }
+        empty={selected() === undefined}
         list={<HomeFixture onSelect={setSelected} />}
       >
         <ViewShell.Header class="empty:hidden">

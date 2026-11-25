@@ -57,6 +57,10 @@ export default {
   helpEmail: 'Email {{email}}',
   signedInAs: 'Signed in as {{name}}',
 
+  // Wide touch left pane (a list or sidebar beside the open item)
+  hideSidePane: 'Hide side pane',
+  showSidePane: 'Show side pane',
+
   // Customize sidebar
   customizeSidebar: 'Customize sidebar',
   customizeSidebarDescription:
