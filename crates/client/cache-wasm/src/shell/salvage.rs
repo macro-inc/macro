@@ -408,10 +408,15 @@ impl QueueReport {
     /// What an open told, then a wipe of the database it opened and the open
     /// that followed: what the later one kept, and every loss, each once.
     pub(super) fn then(self, later: Self) -> Self {
-        // The later open read back what the side file notes, and counted it.
+        // The later open read back what the side file notes and counted it,
+        // or could not read it and counted what it found.
         let (earlier, dropped) = match self.noted {
             true => (QueueOutcome::None, 0),
             false => (self.outcome, self.dropped),
+        };
+        let counted = match self.noted {
+            true => later.dropped.max(self.dropped),
+            false => dropped + later.dropped,
         };
         let lost = !matches!(earlier, QueueOutcome::None | QueueOutcome::Kept) || dropped > 0;
         Self {
@@ -422,7 +427,7 @@ impl QueueReport {
                 outcome => outcome,
             },
             kept: later.kept,
-            dropped: dropped + later.dropped,
+            dropped: counted,
             noted: later.noted && !lost,
             times: self.times.then(later.times),
         }

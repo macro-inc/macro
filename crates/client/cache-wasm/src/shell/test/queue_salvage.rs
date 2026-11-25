@@ -388,6 +388,33 @@ async fn a_loss_the_side_file_refused_once_before_a_schema_wipe_outlives_a_worke
     set_worker_schema(None);
 }
 
+#[wasm_bindgen_test]
+fn a_noted_loss_keeps_its_count_when_the_later_open_could_not_read_it() {
+    let earlier = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 2,
+        noted: true,
+        ..QueueReport::default()
+    };
+    let later = |dropped| QueueReport {
+        outcome: QueueOutcome::Partial,
+        kept: 1,
+        dropped,
+        noted: true,
+        ..QueueReport::default()
+    };
+    // Read back, the note is among what the later open counted.
+    assert_eq!(earlier.then(later(3)).dropped, 3);
+    // Unread, only the earlier open knows its count.
+    assert_eq!(earlier.then(later(0)).dropped, 2);
+    let unnoted = QueueReport {
+        noted: false,
+        ..earlier
+    };
+    assert_eq!(unnoted.then(later(0)).dropped, 2);
+    assert_eq!(unnoted.then(later(3)).dropped, 5);
+}
+
 #[wasm_bindgen_test(async)]
 async fn a_reset_tier_keeps_the_queue_in_its_own_database() {
     const SCOPE: &str = "cache-wasm-salvage-reset-tier";
