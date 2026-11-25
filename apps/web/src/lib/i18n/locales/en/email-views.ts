@@ -34,6 +34,8 @@ export default {
   labels: 'Labels',
   labelsPlaceholder: 'Filter by label...',
   moreLabels: { other: '{{count}} more' },
+  addLabelsPlaceholder: 'Add labels',
+  unavailableLabel: 'Unavailable label',
   addEntry: 'Add “{{entry}}”',
   removeEntry: 'Remove {{entry}}',
   domainContacts: {
