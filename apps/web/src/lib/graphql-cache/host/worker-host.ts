@@ -81,9 +81,14 @@ import {
   COORDINATOR_CONNECT_ATTEMPTS,
   COORDINATOR_CONNECT_RETRY_DELAYS_MS,
   COORDINATOR_CONNECT_TIMEOUT_MS,
+  COORDINATOR_RECONNECT_TIMEOUT_MS,
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
 import { unsupportedBrowserReason } from './browser-support';
+import {
+  CoordinatorGenerations,
+  NewerCoordinatorRunsError,
+} from './coordinator-generations';
 import {
   CacheHostDisposedError,
   CacheHostFailedError,
@@ -334,6 +339,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let initializationTimeoutMs =
     options.initializationTimeoutMs ?? COORDINATOR_CONNECT_TIMEOUT_MS;
+  const coordinatorGenerations = new CoordinatorGenerations(options.scope);
+  /** Whether a coordinator ever answered, so this browser has its script. */
+  let everRegistered = false;
   let registrationInProgress = false;
   let cancelRegistration: ((error: Error) => void) | undefined;
   let nextRequestId = 1;
@@ -724,6 +732,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const created = createCacheCoordinatorPageAdapter({
       scope: options.scope,
       hotCapacity: options.hotCapacity,
+      coordinatorGeneration: () => coordinatorGenerations.pick(),
       onEngineReplaced: (epoch, outcome) => {
         if (adapter === created) onEngineReplaced(epoch, outcome);
       },
@@ -779,26 +788,27 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   async function registerAdapter(initializationId: number): Promise<void> {
     registrationInProgress = true;
     try {
-      for (
-        let attempt = 0;
-        attempt < COORDINATOR_CONNECT_ATTEMPTS;
-        attempt += 1
-      ) {
+      let attempt = 0;
+      while (attempt < COORDINATOR_CONNECT_ATTEMPTS) {
         // Cancellation may arrive after a retry timer fires, before this continuation.
         if (initializationId !== initializationAttempt)
           throw new CacheNavigationError();
         if (state !== 'initializing') throw new CacheHostDisposedError();
         const current = getAdapter();
         let timer: ReturnType<typeof setTimeout> | undefined;
+        const attemptEnded = new AbortController();
         try {
           await Promise.race([
             current.start(),
+            coordinatorGenerations.untilNewerRuns(attemptEnded.signal),
             new Promise<never>((_resolve, reject) => {
               cancelRegistration = reject;
               timer = setTimeout(
                 () => reject(new CacheRequestTimeoutError('registration')),
                 options.initializationTimeoutMs ??
-                  COORDINATOR_CONNECT_TIMEOUT_MS
+                  (everRegistered
+                    ? COORDINATOR_RECONNECT_TIMEOUT_MS
+                    : COORDINATOR_CONNECT_TIMEOUT_MS)
               );
             }),
           ]);
@@ -806,17 +816,21 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             throw new CacheNavigationError();
           if (state !== 'initializing') throw new CacheHostDisposedError();
           registeredAdapter = current;
+          everRegistered = true;
           return;
         } catch (error) {
+          coordinatorGenerations.endAttempt();
           current.onmessage = null;
           await current.dispose({ graceful: false });
           if (adapter === current) adapter = undefined;
+          const moved = error instanceof NewerCoordinatorRunsError;
           if (
             initializationId !== initializationAttempt ||
             state !== 'initializing' ||
-            attempt + 1 === COORDINATOR_CONNECT_ATTEMPTS
+            (!moved && attempt + 1 === COORDINATOR_CONNECT_ATTEMPTS)
           )
             throw error;
+          if (moved) continue;
           if (timer !== undefined) clearTimeout(timer);
           const retryStartedAt = now();
           let completed = false;
@@ -839,14 +853,38 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
               durationMs: now() - retryStartedAt,
             });
           }
+          attempt += 1;
+          if (error instanceof CacheRequestTimeoutError)
+            await renameUnansweredCoordinator(attempt);
         } finally {
+          attemptEnded.abort();
           if (timer !== undefined) clearTimeout(timer);
           cancelRegistration = undefined;
         }
       }
     } finally {
+      coordinatorGenerations.endAttempt();
       registrationInProgress = false;
     }
+  }
+
+  async function renameUnansweredCoordinator(nextAttempt: number) {
+    const renamed = await Promise.race([
+      coordinatorGenerations.renameUnanswered(
+        nextAttempt + 1 === COORDINATOR_CONNECT_ATTEMPTS
+      ),
+      new Promise<never>((_resolve, reject) => {
+        cancelRegistration = reject;
+      }),
+    ]);
+    if (!renamed) return;
+    telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'abrupt',
+      ownerEvent: 'coordinator-renamed',
+      errorCode: 'timeout',
+    });
   }
 
   function startLegacyIdbDeletion(): void {

@@ -26,6 +26,7 @@ import {
 import {
   type ActivationFailureCode,
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CoordinatorIdentity,
   type CoordinatorToEngineEnvelope,
   type CoordinatorToTabEnvelope,
   coordinatorLivenessLockName,
@@ -33,6 +34,7 @@ import {
   type EngineFatalCode,
   type EngineOpenOutcome,
   type EngineToCoordinatorEnvelope,
+  generationFromCoordinatorLockName,
   type TabToCoordinatorEnvelope,
   tabIdFromLivenessLockName,
   tabLivenessLockName,
@@ -83,7 +85,11 @@ export interface CoordinatorRouterOptions {
   hideGraceMs?: number;
   handoffReadTimeoutMs?: number;
   verifyTabLockHeld?: (lockName: string) => Promise<boolean>;
-  holdCoordinatorLock?: (lockName: string) => Promise<void>;
+  holdCoordinatorLock?: (lockName: string, onLost: () => void) => Promise<void>;
+  /** Takes a lock from whoever holds it, and gives it up at once. */
+  stealLock?: (lockName: string) => Promise<void>;
+  /** Ends this worker, whose locks the browser then frees. */
+  endCoordinator?: () => void;
   verifyOwnerLockHeld?: VerifyOwnerLockHeld;
   /** Names of every Web Lock currently held in this storage partition. */
   queryHeldLockNames?: () => Promise<string[]>;
@@ -232,16 +238,33 @@ export async function queryHeldLockNames(): Promise<string[]> {
   );
 }
 
-/** Takes a lock that ends only with this worker. Resolves once it is held. */
-export function holdLockForLife(lockName: string): Promise<void> {
+/** Takes a lock that ends with this worker, or when another context steals it.
+ * Resolves once it is held. */
+export function holdLockForLife(
+  lockName: string,
+  onLost: () => void
+): Promise<void> {
   return new Promise((resolve, reject) => {
+    let held = false;
     navigator.locks
       .request(lockName, { mode: 'exclusive' }, () => {
+        held = true;
         resolve();
         return new Promise<never>(() => undefined);
       })
-      .catch(reject);
+      .catch((error: unknown) => {
+        if (held) onLost();
+        else reject(error);
+      });
   });
+}
+
+async function stealLock(lockName: string): Promise<void> {
+  await navigator.locks.request(
+    lockName,
+    { mode: 'exclusive', steal: true },
+    () => undefined
+  );
 }
 
 /** Waits for the page's liveness lock to be released or abandoned. */
@@ -315,7 +338,14 @@ export class CoordinatorRouter {
   private readonly heartbeatTimeoutMs: number;
   private readonly hideGraceMs: number;
   private readonly verifyTabLockHeld: (lockName: string) => Promise<boolean>;
-  private readonly holdCoordinatorLock: (lockName: string) => Promise<void>;
+  private readonly holdCoordinatorLock: (
+    lockName: string,
+    onLost: () => void
+  ) => Promise<void>;
+  private readonly stealLock: (lockName: string) => Promise<void>;
+  private readonly endCoordinator: () => void;
+  /** Why this coordinator serves nobody any more. */
+  private endedReason: string | undefined;
   /** The lock's name, once held. */
   private coordinatorLock: Promise<string | undefined> | undefined;
   private readonly verifyOwnerLockHeld: VerifyOwnerLockHeld;
@@ -372,6 +402,8 @@ export class CoordinatorRouter {
     this.verifyTabLockHeld =
       options.verifyTabLockHeld ?? verifyExclusiveLockHeld;
     this.holdCoordinatorLock = options.holdCoordinatorLock ?? holdLockForLife;
+    this.stealLock = options.stealLock ?? stealLock;
+    this.endCoordinator = options.endCoordinator ?? (() => undefined);
     this.verifyOwnerLockHeld =
       options.verifyOwnerLockHeld ?? verifyClientHoldsLock;
     this.queryHeldLockNames = options.queryHeldLockNames ?? queryHeldLockNames;
@@ -456,6 +488,10 @@ export class CoordinatorRouter {
       return;
     }
     const message = parsed.value;
+    if (this.endedReason !== undefined) {
+      this.closeConnection(port, this.endedReason);
+      return;
+    }
     if (transferredPorts.length !== 0) {
       for (const transferredPort of transferredPorts) transferredPort.close();
       this.postProtocolError(
@@ -560,7 +596,11 @@ export class CoordinatorRouter {
       tabId: message.tabId,
     };
     this.pendingRegistrations.set(port, registration);
-    this.coordinatorLock ??= this.takeCoordinatorLock();
+    this.coordinatorLock ??= this.takeCoordinatorLock({
+      scope: message.scope,
+      buildTime: message.buildTime,
+      generation: message.generation ?? 0,
+    });
     let lockHeld = false;
     let coordinatorLockName: string | undefined;
     try {
@@ -587,6 +627,10 @@ export class CoordinatorRouter {
       return;
     }
     this.pendingRegistrations.delete(port);
+    if (this.endedReason !== undefined) {
+      this.closeConnection(port, this.endedReason);
+      return;
+    }
     if (!lockHeld) {
       this.postProtocolError(
         port,
@@ -668,14 +712,70 @@ export class CoordinatorRouter {
   }
 
   /** Without it pages work, but don't notice this coordinator's end. */
-  private async takeCoordinatorLock(): Promise<string | undefined> {
-    const lockName = coordinatorLivenessLockName(crypto.randomUUID());
+  private async takeCoordinatorLock(
+    identity: CoordinatorIdentity
+  ): Promise<string | undefined> {
+    const lockName = coordinatorLivenessLockName(identity, crypto.randomUUID());
     try {
-      await this.holdCoordinatorLock(lockName);
-      return lockName;
+      await this.holdCoordinatorLock(lockName, () =>
+        this.end('another coordinator took over')
+      );
+    } catch (error) {
+      reportCoordinatorTaskFailure(error);
+      return;
+    }
+    try {
+      await this.endOlderGenerations(identity);
     } catch (error) {
       reportCoordinatorTaskFailure(error);
     }
+    return lockName;
+  }
+
+  /**
+   * Leaves one coordinator of this build: the newest generation. Run while
+   * holding the own lock, so of two that start at once at least one sees the
+   * other. Taking the lock of an older one ends it, and tells its pages even
+   * where it no longer runs.
+   */
+  private async endOlderGenerations(
+    identity: CoordinatorIdentity
+  ): Promise<void> {
+    const others = (await this.queryHeldLockNames()).flatMap((lockName) => {
+      const generation = generationFromCoordinatorLockName(identity, lockName);
+      return generation === undefined ? [] : [{ lockName, generation }];
+    });
+    if (others.some(({ generation }) => generation > identity.generation)) {
+      this.end('a newer coordinator runs');
+      return;
+    }
+    await Promise.all(
+      others
+        .filter(({ generation }) => generation < identity.generation)
+        .map(({ lockName }) => this.stealLock(lockName))
+    );
+  }
+
+  /** Another coordinator of this build serves its pages, so this one ends. Its
+   * pages connect to that one, as after a restart. */
+  private end(reason: string): void {
+    if (this.endedReason !== undefined) return;
+    this.endedReason = reason;
+    this.telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'abrupt',
+      ownerEvent: 'coordinator-replaced',
+    });
+    for (const { port } of this.tabs.values())
+      this.closeConnection(port, reason);
+    this.endCoordinator();
+  }
+
+  private closeConnection(port: CoordinatorMessagePort, reason: string): void {
+    port.postMessage(
+      envelope<CoordinatorToTabEnvelope>({ kind: 'connection-closed', reason })
+    );
   }
 
   private attachEnginePort(

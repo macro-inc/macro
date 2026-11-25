@@ -1,4 +1,6 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_BUILD_TIME } from '../app-build';
 import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 import {
   type CacheRequest,
@@ -10,6 +12,15 @@ import type {
   CacheCoordinatorPageAdapterOptions,
   PageAdapterDisposeOptions,
 } from '../worker/coordinator-page-adapter';
+import {
+  coordinatorLivenessLockName,
+  newCoordinatorLockName,
+} from '../worker/coordinator-protocol';
+import { WorkerRestartedError } from '../worker/effect-worker-transport';
+import {
+  COORDINATOR_CONNECT_TIMEOUT_MS,
+  COORDINATOR_RECONNECT_TIMEOUT_MS,
+} from '../worker/startup';
 import { CacheHostFailedError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 
@@ -290,5 +301,143 @@ describe('coordinator registration retry', () => {
     await expect(result).resolves.toEqual({ revision: INITIAL_CACHE_REVISION });
     expect(adapters[0].requests).toEqual([]);
     expect(onInitializationError).not.toHaveBeenCalled();
+  });
+});
+
+describe('a coordinator that does not answer', () => {
+  const BUILD = { scope, buildTime: APP_BUILD_TIME };
+  const TURN = newCoordinatorLockName(BUILD);
+  /** The generation each attempt connected to. */
+  let generations: (number | undefined)[];
+  let running: number[];
+  let answers: (generation: number | undefined) => boolean;
+  let turns: number;
+
+  beforeEach(() => {
+    generations = [];
+    running = [];
+    turns = 0;
+    vi.stubGlobal('navigator', {
+      storage: { getDirectory: vi.fn() },
+      locks: {
+        request: vi.fn(
+          async (
+            name: string,
+            _options: LockOptions,
+            callback: () => unknown
+          ) => {
+            if (name === TURN) turns += 1;
+            await callback();
+            if (name === TURN) turns -= 1;
+          }
+        ),
+        query: async () => ({
+          held: running.map((generation) => ({
+            name: coordinatorLivenessLockName({ ...BUILD, generation }, 'id'),
+          })),
+        }),
+      },
+    });
+    adapterFactory.mockImplementation(
+      (options: CacheCoordinatorPageAdapterOptions) => {
+        const adapter = new RegistrationAdapter(options);
+        adapter.start.mockImplementation(async () => {
+          const generation = await options.coordinatorGeneration?.();
+          generations.push(generation);
+          if (!answers(generation)) await new Promise<void>(() => {});
+        });
+        adapters.push(adapter);
+        return adapter;
+      }
+    );
+    vi.setSystemTime(5_000_000);
+  });
+
+  /** Starts the host; the read itself gives up before a coordinator does. */
+  const connect = (): void => {
+    fireAndForget(
+      host.currentRevision().catch(() => undefined),
+      'graphql-cache-host'
+    );
+  };
+  const renames = () =>
+    observations.filter(
+      ({ ownerEvent }) => ownerEvent === 'coordinator-renamed'
+    );
+
+  it('is left for a new name, whose turn ends with the answer', async () => {
+    answers = (generation) => generation !== 0;
+    connect();
+    await vi.advanceTimersByTimeAsync(COORDINATOR_CONNECT_TIMEOUT_MS + 1_000);
+
+    expect(await host.currentRevision()).toBe(INITIAL_CACHE_REVISION);
+    expect(generations).toEqual([
+      0,
+      expect.toSatisfy((generation: number) => generation >= 5_000_000),
+    ]);
+    expect(renames()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(turns).toBe(0);
+  });
+
+  it('keeps its name while it runs, until the last attempt', async () => {
+    running = [0];
+    answers = (generation) => generation !== 0;
+    connect();
+    await vi.advanceTimersByTimeAsync(
+      2 * COORDINATOR_CONNECT_TIMEOUT_MS + 5_000
+    );
+
+    expect(await host.currentRevision()).toBe(INITIAL_CACHE_REVISION);
+    expect(generations).toEqual([
+      0,
+      0,
+      expect.toSatisfy((generation: number) => generation >= 5_000_000),
+    ]);
+  });
+
+  it('is left for the newer one another page started, at no cost in attempts', async () => {
+    answers = (generation) => generation === 9;
+    connect();
+    for (const newer of [5, 6, 7, 8, 9]) {
+      await vi.advanceTimersByTimeAsync(5_000);
+      running = [newer];
+    }
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(await host.currentRevision()).toBe(INITIAL_CACHE_REVISION);
+    expect(generations).toEqual([0, 5, 6, 7, 8, 9]);
+    expect(renames()).toEqual([]);
+    expect(
+      observations.filter(
+        ({ name }) => name === 'graphql_cache.registration_retry'
+      )
+    ).toEqual([]);
+  });
+
+  it('is waited for less by a page that had a coordinator before', async () => {
+    answers = () => true;
+    await host.currentRevision();
+    answers = (generation) => generation !== 0;
+    adapters[0].options.onTerminalError?.(
+      new WorkerRestartedError('coordinator ended')
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    connect();
+    await vi.advanceTimersByTimeAsync(COORDINATOR_RECONNECT_TIMEOUT_MS + 1_000);
+
+    expect(await host.currentRevision()).toBe(INITIAL_CACHE_REVISION);
+    expect(generations).toHaveLength(3);
+  });
+
+  it('gives its turn up when the host is disposed', async () => {
+    answers = () => false;
+    connect();
+    await vi.advanceTimersByTimeAsync(COORDINATOR_CONNECT_TIMEOUT_MS + 1_000);
+    expect(turns).toBe(1);
+    host.dispose();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(turns).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -181,6 +181,55 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(attach?.transfer).toHaveLength(1);
   });
 
+  it.each([
+    { generation: 0, name: 'graphql-cache-coordinator:scope:3' },
+    { generation: 8, name: 'graphql-cache-coordinator:scope:3:8' },
+  ])('connects to generation $generation', async ({ generation, name }) => {
+    const port = new FakeCoordinatorPort();
+    const worker = vi.fn(function FakeSharedWorker() {
+      return { port: port as unknown as MessagePort };
+    });
+    vi.stubGlobal('SharedWorker', worker);
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      buildTime: 3,
+      lockManager: heldLockManager(),
+      coordinatorGeneration: async () => generation,
+      createDedicatedWorker: () => new FakeWorker(),
+    });
+    adapter.postMessage({ id: 1, kind: 'clear' });
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    expect(worker).toHaveBeenCalledExactlyOnceWith(
+      expect.any(URL),
+      expect.objectContaining({ name })
+    );
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      generation,
+    });
+  });
+
+  it('connects to none when it closes before it has a generation', async () => {
+    const generation = Promise.withResolvers<number>();
+    const coordinatorGeneration = vi.fn(() => generation.promise);
+    const createSharedWorker = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      lockManager: heldLockManager(),
+      coordinatorGeneration,
+      createSharedWorker,
+      createDedicatedWorker: () => new FakeWorker(),
+    });
+    const started = expect(adapter.start()).rejects.toThrow('disposed');
+    await vi.waitFor(() => expect(coordinatorGeneration).toHaveBeenCalled());
+    await adapter.dispose({ graceful: false });
+    generation.resolve(8);
+    await started;
+    await generation.promise;
+    expect(createSharedWorker).not.toHaveBeenCalled();
+  });
+
   it('reports visibility changes during registration and fences stale handoff notices', async () => {
     class Visibility extends EventTarget {
       visibilityState: DocumentVisibilityState = 'visible';

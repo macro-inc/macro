@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  coordinatorLivenessLockName,
   databaseOwnerLockName,
   type EngineOpenOutcome,
 } from './coordinator-protocol';
@@ -65,7 +66,8 @@ const register = async (
   router: CoordinatorRouter,
   port: FakePort,
   tabId: string,
-  buildTime = 0
+  buildTime = 0,
+  generation?: number
 ): Promise<void> => {
   await router.handleTabMessage(port as CoordinatorMessagePort, {
     ...version,
@@ -75,6 +77,7 @@ const register = async (
     livenessLockName: `graphql-cache-tab:scope:${tabId}`,
     visible: true,
     buildTime,
+    ...(generation === undefined ? {} : { generation }),
   });
 };
 
@@ -3575,6 +3578,118 @@ describe('registration acknowledgement', () => {
       { tabId: 'tab-a', coordinatorLockName },
       { tabId: 'tab-b', coordinatorLockName },
     ]);
+  });
+
+  it('ends the older coordinators of its build, and no other', async () => {
+    const lockOf = (buildTime: number, generation: number, id: string) =>
+      coordinatorLivenessLockName(
+        { scope: 'scope', buildTime, generation },
+        id
+      );
+    const locks = [
+      lockOf(0, 0, 'first'),
+      lockOf(0, 4, 'second'),
+      lockOf(1, 4, 'other-build'),
+      'graphql-cache-tab:scope:tab-a',
+    ];
+    const stealLock = vi.fn(async (_lockName: string) => {});
+    const endCoordinator = vi.fn();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock: async (lockName) => {
+        locks.push(lockName);
+      },
+      queryHeldLockNames: async () => locks,
+      stealLock,
+      endCoordinator,
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a', 0, 5);
+
+    expect(stealLock.mock.calls).toEqual([
+      [lockOf(0, 0, 'first')],
+      [lockOf(0, 4, 'second')],
+    ]);
+    expect(registered(tab)).toMatchObject([
+      {
+        coordinatorLockName: lockOf(
+          0,
+          5,
+          locks.at(-1)?.split(':').at(-1) ?? ''
+        ),
+      },
+    ]);
+    expect(endCoordinator).not.toHaveBeenCalled();
+  });
+
+  it('ends itself when a newer coordinator of its build runs', async () => {
+    const endCoordinator = vi.fn();
+    const stealLock = vi.fn(async (_lockName: string) => {});
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock: async () => {},
+      queryHeldLockNames: async () => [
+        'graphql-cache-coordinator:scope:0:0:first',
+        'graphql-cache-coordinator:scope:0:6:newer',
+      ],
+      stealLock,
+      endCoordinator,
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a', 0, 5);
+
+    expect(endCoordinator).toHaveBeenCalledOnce();
+    expect(stealLock).not.toHaveBeenCalled();
+    expect(registered(tab)).toEqual([]);
+    expect(messagesOfKind(tab, 'connection-closed')).toHaveLength(1);
+  });
+
+  it('tells its tabs and ends when its lock is taken from it', async () => {
+    const endCoordinator = vi.fn();
+    const lost: (() => void)[] = [];
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock: async (_lockName, onLost) => {
+        lost.push(onLost);
+      },
+      queryHeldLockNames: async () => [],
+      endCoordinator,
+    });
+    const tabs = [new FakePort(), new FakePort()];
+    for (const [index, tab] of tabs.entries())
+      await register(router, tab, `tab-${index}`);
+    expect(lost).toHaveLength(1);
+    lost[0]?.();
+    lost[0]?.();
+
+    expect(endCoordinator).toHaveBeenCalledOnce();
+    for (const tab of tabs)
+      expect(messagesOfKind(tab, 'connection-closed')).toHaveLength(1);
+    const late = new FakePort();
+    await register(router, late, 'tab-late');
+    expect(registered(late)).toEqual([]);
+    expect(messagesOfKind(late, 'connection-closed')).toHaveLength(1);
+  });
+
+  it('serves its tabs when it cannot end an older coordinator', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock: async () => {},
+      queryHeldLockNames: async () => [
+        'graphql-cache-coordinator:scope:0:0:first',
+      ],
+      stealLock: async () => {
+        throw new Error('refused');
+      },
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a', 0, 5);
+    expect(registered(tab)).toMatchObject([{ tabId: 'tab-a' }]);
   });
 
   it('registers a tab without a lock name when the lock is refused', async () => {
