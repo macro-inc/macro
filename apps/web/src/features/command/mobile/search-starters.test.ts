@@ -31,7 +31,7 @@ describe('startSearchOperator', () => {
   });
 
   it('toggles Unread', () => {
-    expect(startSearchOperator('launch', 'unread')).toBe('launch is:unread');
+    expect(startSearchOperator('launch', 'unread')).toBe('launch is:unread ');
     expect(startSearchOperator('is:unread launch', 'unread')).toBe('launch');
   });
 });

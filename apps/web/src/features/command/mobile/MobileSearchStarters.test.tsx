@@ -51,6 +51,10 @@ it('offers spans and a picked date for a date operator', () => {
     setQuery('launch newer_than:');
     suggestions.pickDate('2026-06-01');
     expect(query()).toBe('launch after:2026/06/01 ');
+
+    // A whole date operator at the end offers nothing more.
+    setQuery('launch newer_than:7d');
+    expect(suggestions.typesDate()).toBe(false);
     dispose();
   });
 });

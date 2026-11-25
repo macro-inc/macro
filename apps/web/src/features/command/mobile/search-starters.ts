@@ -76,9 +76,10 @@ export function startSearchOperator(
       token !== 'OR' ||
       (index > 0 && index < kept.length - 1 && kept[index + 1] !== 'OR')
   );
+  // Unread is whole as written, so a space follows for the next word.
   if (starter === 'unread') {
     const had = kept.length !== tokens.length;
-    return [...joined, ...(had ? [] : ['is:unread'])].join(' ');
+    return had ? joined.join(' ') : `${[...joined, 'is:unread'].join(' ')} `;
   }
   const name = starter === 'date' ? 'newer_than' : starter;
   return [...joined, `${name}:`].join(' ');

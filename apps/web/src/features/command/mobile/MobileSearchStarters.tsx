@@ -1,4 +1,5 @@
 import { SearchOperatorText } from '@app/components/view-shell/search-operator-text';
+import { readsAsEmailSearchOperator } from '@app/features/email-view/search/email-search-operators';
 import {
   searchOperatorBeingTyped,
   searchOperatorCompletions,
@@ -93,9 +94,12 @@ export function createMobileSearchSuggestions(
   };
   const values = createSearchOperatorValues(personTyped);
   const rows = createMemo(() => searchOperatorCompletions(query(), values()));
-  const typesDate = createMemo(() =>
-    DATE_TOKEN.test(searchTokenAtEnd(query()) ?? '')
-  );
+  // A date operator still being typed, not a whole one such as Unread left
+  // at the end when it goes.
+  const typesDate = createMemo(() => {
+    const token = searchTokenAtEnd(query()) ?? '';
+    return DATE_TOKEN.test(token) && !readsAsEmailSearchOperator(token);
+  });
   // A whole operator is followed by a space, so the next word starts; the
   // textarea keeps it, as markdown in the desktop field doesn't.
   const write = (insert: string, whole: boolean) => {
