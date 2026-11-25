@@ -392,6 +392,11 @@ and the Settings → Email sample following the Row style tabs. Its
 nested label by its own name, its whole name on hover, three items and then a
 count, none of Gmail's system or hidden labels) and none on narrow or phone
 rows; `ROW_LABELS_SCREENSHOT_DIR` saves its screenshots.
+`sidebar-labels.browser.e2e.ts` checks the sidebar's Labels section on desktop
+and phone (a row per inbox when all show, none for one picked inbox, a nested
+Gmail label under its parent, eight labels then `N more` holding the rest and
+Gmail's hidden ones, the open label marked); `SIDEBAR_LABELS_SCREENSHOT_DIR`
+saves its screenshots.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
