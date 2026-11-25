@@ -134,7 +134,9 @@ fn uuid_fact(attribute: &str, value: &str) -> Option<ExactFact> {
 }
 /// The ids of the labels a thread carries, as its reader may see them: the
 /// server sends only the labels of inboxes the reader owns or manages, plus
-/// Gmail's system labels. A thread read without its labels has none here.
+/// Gmail's system labels. A thread read without its labels has none here:
+/// every document that writes a whole thread row selects them (the shared
+/// `SoupItemPreviewFields`, which the thread page and draft saves spread too).
 fn label_ids(record: &Record) -> Option<Vec<uuid::Uuid>> {
     let Some(CacheValue::List(labels)) = record.fields.get("labels") else {
         return Some(Vec::new());

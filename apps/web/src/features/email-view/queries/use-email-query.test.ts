@@ -928,6 +928,31 @@ describe('Email list query transitions', () => {
     expect(root.source.hasMore()).toBe(false);
   });
 
+  it('clears a failed read-on when the list is refreshed and reads on again', async () => {
+    const root = mount('');
+    root.setRetainedEntities([]);
+    root.listNext
+      .mockImplementationOnce(async () => {
+        throw new Error('page failed');
+      })
+      .mockImplementationOnce(async () => {
+        root.setListHasMore(false);
+      });
+    batch(() => {
+      root.setState('tab', 'all');
+      root.setDiscoveryEntities([]);
+    });
+    await vi.waitFor(() => expect(root.source.error()).toBeDefined());
+    expect(root.listNext).toHaveBeenCalledOnce();
+
+    await root.source.refresh();
+    expect(root.source.error()).toBeUndefined();
+    await vi.waitFor(() => expect(root.listNext).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(root.source.isLoading()).toBe(false));
+    expect(root.source.error()).toBeUndefined();
+    expect(root.source.hasMore()).toBe(false);
+  });
+
   it('shows a list that reaches its end without a row as empty', async () => {
     const root = mount('');
     root.setRetainedEntities([]);

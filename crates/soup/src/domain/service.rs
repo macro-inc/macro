@@ -2028,6 +2028,18 @@ where
                 );
 
                 let (email_soup, email_continues_below) = email_soup?;
+                // The email read cut short has read nothing below where it
+                // walked, and one cursor serves every leg: no leg's rows below
+                // that point belong on this page, which goes on from there.
+                let walked_to = email_continues_below
+                    .filter(|_| matches!(sort_direction, SoupSortDirection::Desc));
+                let mut sort_key = SoupCandidate::sort_on(sort_method);
+                let above_email_walk = move |candidate: &SoupCandidate| {
+                    walked_to.is_none_or(|(last_val, id)| {
+                        let val = sort_key(candidate).last_val;
+                        val > last_val || (val == last_val && candidate.id() >= id.to_string())
+                    })
+                };
                 let entity_filter_for_cursor = entity_filter.clone();
                 let paginator = main_soup?
                     .chain(email_soup)
@@ -2037,6 +2049,7 @@ where
                     .chain(crm_company_soup?)
                     .chain(crm_contact_soup?)
                     .chain(foreign_entity_soup?)
+                    .filter(above_email_walk)
                     .paginate_on(limit.into(), sort_method)
                     .filter_on(entity_filter);
 
@@ -2045,16 +2058,8 @@ where
                     SoupSortDirection::Desc => paginator.sort_desc(),
                 }
                 .into_page();
-                // A page the email read cut short goes on below where it
-                // walked. One cursor serves every leg, so only when email is
-                // the page's only source (Mail's lists) and newest first.
                 if page.next_cursor.is_none()
-                    && matches!(sort_direction, SoupSortDirection::Desc)
-                    && page
-                        .items
-                        .iter()
-                        .all(|candidate| matches!(candidate.item, SoupItem::EmailThread(_)))
-                    && let Some((last_val, id)) = email_continues_below
+                    && let Some((last_val, id)) = walked_to
                 {
                     page.next_cursor = Some(Base64Str::encode_json(Cursor {
                         id: id.to_string(),

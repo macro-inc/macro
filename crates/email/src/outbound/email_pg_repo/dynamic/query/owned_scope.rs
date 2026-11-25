@@ -460,7 +460,8 @@ impl<'a> OwnedRead<'a> {
                 .await?;
             return Ok((stats, rows));
         }
-        let mut window = inbox_window(limit, self.tuning.window_per_row);
+        let mut window = inbox_window(limit, self.tuning.window_per_row)
+            .min(self.tuning.walk_budget.unwrap_or(i64::MAX));
         let mut rows = self
             .page(connection, Stream::Inboxes { window }, None, limit)
             .await?;

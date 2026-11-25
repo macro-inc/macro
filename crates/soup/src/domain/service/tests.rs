@@ -3624,17 +3624,28 @@ async fn a_short_email_page_goes_on_below_where_the_read_walked() {
     assert_eq!(cursor.val.last_val, walked_to.0);
 }
 
-/// One cursor serves every leg, so a page holding another entity's row ends
-/// as before rather than skipping that leg's rows below the email walk.
+/// One cursor serves every leg, so a page holding another entity's rows
+/// stops where the email read walked: rows below it wait for the next page,
+/// which goes on from there for every leg.
 #[tokio::test]
-async fn a_short_page_with_other_rows_keeps_its_own_end() {
+async fn a_page_with_other_rows_stops_where_the_email_read_walked() {
     let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
-    let comms_service = RecordingCommsService::new(vec![channel_thread_message(
-        Uuid::from_u128(0xaaaa),
-        Uuid::from_u128(0xbbbb),
-        Uuid::from_u128(0xcccc),
-        DateTime::default() + Days::new(2),
-    )]);
+    let walked_to = (DateTime::default() + Days::new(3), Uuid::from_u128(9));
+    let newer = Uuid::from_u128(0xaaa1);
+    let comms_service = RecordingCommsService::new(vec![
+        channel_thread_message(
+            newer,
+            Uuid::from_u128(0xbbb1),
+            Uuid::from_u128(0xccc1),
+            DateTime::default() + Days::new(4),
+        ),
+        channel_thread_message(
+            Uuid::from_u128(0xaaa2),
+            Uuid::from_u128(0xbbb2),
+            Uuid::from_u128(0xccc2),
+            DateTime::default() + Days::new(2),
+        ),
+    ]);
     let mut soup_mock = MockSoupRepo::new();
     soup_mock
         .expect_unexpanded_generic_cursor_soup()
@@ -3644,9 +3655,7 @@ async fn a_short_page_with_other_rows_keeps_its_own_end() {
     let page = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        ContinuingEmailPreviewService {
-            walked_to: (DateTime::default() + Days::new(3), Uuid::from_u128(9)),
-        },
+        ContinuingEmailPreviewService { walked_to },
         comms_service,
         NoopCallRecordQueryService,
         NoOpCrmService,
@@ -3659,5 +3668,15 @@ async fn a_short_page_with_other_rows_keeps_its_own_end() {
     .unwrap();
 
     assert_eq!(page.items.len(), 1);
-    assert!(page.next_cursor.is_none());
+    assert_eq!(
+        page.items[0].updated_at(),
+        DateTime::<Utc>::default() + Days::new(4)
+    );
+    let cursor: CursorWithValAndFilter<String, SimpleSortMethod, EntityFilters> = page
+        .next_cursor
+        .expect("the list goes on")
+        .decode_json()
+        .unwrap();
+    assert_eq!(cursor.id, walked_to.1.to_string());
+    assert_eq!(cursor.val.last_val, walked_to.0);
 }

@@ -217,6 +217,104 @@ async fn a_spent_walk_budget_says_where_the_list_goes_on(
     Ok(())
 }
 
+/// The windows shrink to what is left of the budget, so a request never
+/// walks past it.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn a_label_read_walks_no_more_than_its_budget(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let owner = inbox_owner(&pool).await;
+    // The labeled thread is the inbox's oldest, so the walk reaches it last.
+    sqlx::query!(
+        "UPDATE email_threads SET latest_non_spam_message_ts = '2001-01-01 00:00:00+00', updated_at = '2001-01-01 00:00:00+00' WHERE id = $1",
+        Uuid::parse_str(&thread(6))?,
+    )
+    .execute(&pool)
+    .await?;
+    // Windows of one, two and two threads would walk five.
+    let budgeted = dynamic::OwnedReadTuning {
+        walk_budget: Some(4),
+        ..WALK
+    };
+    let (rows, stats) = walked(&pool, owner.as_ref(), label(WORK), 1, budgeted).await?;
+    let stats = stats.expect("an owned read");
+    assert!(rows.is_empty());
+    assert_eq!(stats.walked, 4, "{stats:?}");
+    assert!(stats.continue_below.is_some(), "{stats:?}");
+    Ok(())
+}
+
+/// Each window is the newest threads across the viewer's inboxes before the
+/// label is tested: an older inbox's labeled thread waits for the window that
+/// reaches it, rather than being listed twice.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_shared_threads", "email_label_readers")
+    )
+)]
+async fn an_older_inbox_lists_its_labeled_thread_once(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let owner = inbox_owner(&pool).await;
+    let owner = owner.as_ref();
+    // The viewer also manages the other inbox, whose threads are older than
+    // every thread of their own.
+    sqlx::query!(
+        "INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id) SELECT $1, macro_id, id FROM email_links WHERE id = $2",
+        owner,
+        Uuid::parse_str(OTHER_INBOX)?,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_threads SET latest_non_spam_message_ts = '2001-01-01 00:00:00+00', updated_at = '2001-01-01 00:00:00+00' WHERE link_id = $1",
+        Uuid::parse_str(OTHER_INBOX)?,
+    )
+    .execute(&pool)
+    .await?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let inboxes = [Uuid::parse_str(OWN_INBOX)?, Uuid::parse_str(OTHER_INBOX)?];
+    let mut cursor = None;
+    let mut listed = Vec::new();
+    for _ in 0..20 {
+        let query = Query::new(
+            cursor.take(),
+            SimpleSortMethod::UpdatedAt,
+            Arc::new(label(OTHER_INBOX_WORK)),
+        );
+        let (rows, _) = dynamic::dynamic_email_thread_cursor_owned_with(
+            &pool,
+            &inboxes,
+            2,
+            &view,
+            query,
+            owner,
+            None,
+            Some(WALK),
+        )
+        .await?;
+        listed.extend(rows.iter().map(|row| row.id.to_string()));
+        let (Some(last), true) = (rows.last(), rows.len() == 2) else {
+            break;
+        };
+        cursor = Some(Cursor {
+            id: last.id,
+            limit: 2,
+            val: CursorVal {
+                sort_type: SimpleSortMethod::UpdatedAt,
+                last_val: last.sort_ts,
+            },
+            filter: Arc::new(label(OTHER_INBOX_WORK)),
+        });
+    }
+    assert_eq!(
+        listed,
+        vec!["20000102-0000-0000-0000-000000000102".to_string()]
+    );
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
