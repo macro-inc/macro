@@ -1,0 +1,20 @@
+{
+  "name": "@macro-inc/pi-harness-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun run typecheck && bun run test:offline",
+    "test:offline": "bash run-offline.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "1.6.1",
+    "@earendil-works/pi-coding-agent": "1.6.1",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "typescript": "5.9.3",
+    "zod": "4.4.3"
+  }
+}

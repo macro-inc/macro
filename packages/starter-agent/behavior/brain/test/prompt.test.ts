@@ -2,45 +2,7 @@ import { expect, test } from 'bun:test';
 import { applyBrainEvent } from '../contracts.ts';
 import { assembleBrainPrompt } from '../prompt.ts';
 import { firstFinish, firstStart, queued, secondStart } from './fixture.ts';
-
-const charter =
-  '# Fixture constitution\r\n\r\nUse only approved instructions.\r\n';
-const pack = '# Fixture task pack\n\nSummarize the supplied record.';
-const encoder = new TextEncoder();
-const job = {
-  ...queued.job,
-  prompt: {
-    ...queued.job.prompt,
-    constitution: {
-      ...queued.job.prompt.constitution,
-      charterSha256:
-        '732bd25325f24a24d212fb44d849b538234a6ea646aa491c17edb590007e88f3',
-    },
-  },
-};
-const trusted = {
-  constitution: {
-    repoHeadSha: job.prompt.constitution.repoHeadSha,
-    bytes: encoder.encode(charter),
-  },
-  taskPack: { ...job.prompt.taskPack, bytes: encoder.encode(pack) },
-  state: {
-    code: {
-      catalog: 'readRecord: Read the supplied record.',
-      script: { file: '/fixture/behavior/index.ts', name: 'Script' },
-      describe: async () => '',
-      execute: async () => ({
-        kind: 'failed' as const,
-        error: 'Offline fixture',
-        logs: '',
-      }),
-    },
-  },
-};
-const input = {
-  request: 'Summarize the record.',
-  event: { name: 'record', payload: { title: 'Fixture record' } },
-};
+import { charter, input, job, pack, trusted } from './prompt-fixture.ts';
 
 test('a resumed Brain attempt rebuilds the same prompt from its job pins', async () => {
   const running = applyBrainEvent({ ...queued, job }, firstStart);
@@ -84,7 +46,7 @@ test.each([
       ...trusted,
       constitution: {
         ...trusted.constitution,
-        bytes: encoder.encode(charter.replaceAll('\r\n', '\n')),
+        bytes: new TextEncoder().encode(charter.replaceAll('\r\n', '\n')),
       },
     },
     'digest does not match',
@@ -106,11 +68,14 @@ test.each([
     { ...trusted, taskPack: { ...trusted.taskPack, revision: '2' } },
     'identity or revision does not match',
   ],
-] as const)('rejects unavailable or mismatched prompt material %#', async (snapshots, error) => {
-  await expect(assembleBrainPrompt(job, snapshots, input)).rejects.toThrow(
-    error
-  );
-});
+] as const)(
+  'rejects unavailable or mismatched prompt material %#',
+  async (snapshots, error) => {
+    await expect(assembleBrainPrompt(job, snapshots, input)).rejects.toThrow(
+      error
+    );
+  }
+);
 
 test('tool and policy text from the request and event stays in the input', async () => {
   const untrusted = {
