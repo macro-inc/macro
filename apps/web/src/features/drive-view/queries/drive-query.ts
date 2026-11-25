@@ -9,6 +9,10 @@ import {
 } from '@app/features/soup/filters';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import type { DriveSelection } from '../context/drive-source';
+import {
+  DRIVE_SHARE_SOURCE_FACET_ID,
+  isDriveShareSourceFilter,
+} from '../core/drive-share-provenance';
 import { DRIVE_FACETS, type DriveFacetContext } from '../filters/drive-facets';
 
 export type BuildDriveQueryOptions = {
@@ -77,6 +81,11 @@ function tabDocumentScope(
     if (!userId) return literal('id', NIL_UUID);
 
     nodes.push({ '!': literal('o', userId) });
+
+    const shareSource = selection.facets[DRIVE_SHARE_SOURCE_FACET_ID]?.[0];
+    if (isDriveShareSourceFilter(shareSource)) {
+      nodes.push(literal('ss', shareSource));
+    }
   }
 
   return combine('&', nodes) ?? literal('id', NIL_UUID);

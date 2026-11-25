@@ -10,6 +10,7 @@ use item_filters::ast::{
     email::Email,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyMatchValue},
+    share_source::ShareSource,
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -224,6 +225,9 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         // Soup resolves CRM associations before querying and rejects them on
         // frecency sorts, so an unresolved one matches nothing.
         filter_ast::ExprFrame::Literal(DocumentLiteral::CrmAssociated(_)) => "FALSE".to_string(),
+        filter_ast::ExprFrame::Literal(DocumentLiteral::ShareSource(source)) => {
+            share_source_predicate("fa.entity_id", "document", source)
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -235,6 +239,57 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
 /// A single-quoted SQL string literal with embedded quotes doubled.
 fn sql_string_literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
+}
+
+/// Viewer-relative share provenance check on `entity_access` for frecency rows.
+fn share_source_predicate(entity_id_sql: &str, entity_type: &str, source: ShareSource) -> String {
+    let direct_exists = format!(
+        r#"EXISTS (
+            SELECT 1 FROM entity_access ea_ss
+            WHERE ea_ss.entity_id::text = {entity_id_sql}
+              AND ea_ss.entity_type = '{entity_type}'
+              AND (
+                  ea_ss.source_id = $1
+                  OR EXISTS (
+                      SELECT 1
+                      FROM comms_channel_participants cp
+                      JOIN comms_channels ch ON ch.id = cp.channel_id
+                      WHERE cp.user_id = $1
+                        AND cp.left_at IS NULL
+                        AND ch.channel_type = 'direct_message'
+                        AND cp.channel_id::text = ea_ss.source_id
+                  )
+              )
+            OFFSET 0
+        )"#
+    );
+    match source {
+        ShareSource::Direct => direct_exists,
+        ShareSource::TeamOrChannel => format!(
+            r#"(EXISTS (
+                SELECT 1 FROM entity_access ea_ss
+                WHERE ea_ss.entity_id::text = {entity_id_sql}
+                  AND ea_ss.entity_type = '{entity_type}'
+                  AND (
+                      EXISTS (
+                          SELECT 1 FROM team_user tu
+                          WHERE tu.user_id = $1
+                            AND tu.team_id::text = ea_ss.source_id
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM comms_channel_participants cp
+                          JOIN comms_channels ch ON ch.id = cp.channel_id
+                          WHERE cp.user_id = $1
+                            AND cp.left_at IS NULL
+                            AND ch.channel_type <> 'direct_message'
+                            AND cp.channel_id::text = ea_ss.source_id
+                      )
+                  )
+                OFFSET 0
+            ) AND NOT {direct_exists})"#
+        ),
+    }
 }
 
 /// An EXISTS check that the aggregated document has a property value
@@ -424,6 +479,9 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(DateLiteral::LessThanOrEqual(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "updatedAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::ShareSource(source)) => {
+            share_source_predicate("entity_id", "project", source)
         }
     });
     if formatting.is_empty() {

@@ -25,10 +25,10 @@ use recursion::CollapsibleExt;
 use sqlx::{Postgres, QueryBuilder};
 
 use super::{
-    DOCUMENT_TASK_PROPERTY_JOINS, DocumentIdArrays, build_chat_filter, build_document_filter,
-    build_notification_join, build_project_filter, build_properties_filter, chat_literal_constant,
-    document_filter_needs_task_property_joins, document_literal_constant, project_literal_constant,
-    push_not_inward, push_union_separator,
+    DOCUMENT_TASK_PROPERTY_JOINS, DocumentIdArrays, ShareSourceSlots, build_chat_filter,
+    build_document_filter, build_notification_join, build_project_filter, build_properties_filter,
+    chat_literal_constant, document_filter_needs_task_property_joins, document_literal_constant,
+    project_literal_constant, push_not_inward, push_union_separator,
 };
 
 /// The sort key main gives never-viewed items under `ViewedAt`.
@@ -149,6 +149,11 @@ pub(super) struct FeedArm {
     /// The `source_items` kinds the filter can match. Empty when it matches none.
     kinds: Vec<&'static str>,
     driver: Driver,
+    /// Parameter slot binding the source-id array this arm scans/checks.
+    source_ids: usize,
+    /// Optional parameter slot whose sources exclude a candidate (e.g. direct
+    /// sources excluded when listing team/channel-only shares).
+    exclude_source_ids: Option<usize>,
     /// Joins `filter` needs, after the entity's table.
     joins: String,
     /// ` AND ...` predicates on the entity's table alias.
@@ -162,11 +167,15 @@ pub(super) struct FeedArm {
 impl FeedArm {
     /// `None` when the item tables should list documents for this filter instead; see
     /// [`served_by_scan`].
+    #[expect(clippy::too_many_arguments)]
     pub(super) fn document(
         filter_ast: Option<&Expr<DocumentLiteral>>,
         properties: Option<&Expr<PropertiesLiteral>>,
         notified: bool,
         viewer: &str,
+        source_ids: usize,
+        exclude_source_ids: Option<usize>,
+        share_source_slots: Option<ShareSourceSlots>,
         document_ids: &mut DocumentIdArrays,
     ) -> Option<Self> {
         // Property rows retain their entity type when a document changes subtype.
@@ -246,8 +255,10 @@ impl FeedArm {
                 .filter_map(|(kind, possible)| possible.then_some(kind))
                 .collect(),
             driver,
+            source_ids,
+            exclude_source_ids,
             joins,
-            filter: build_document_filter(filter_ast, Some(document_ids)),
+            filter: build_document_filter(filter_ast, Some(document_ids), share_source_slots),
             properties: properties.cloned(),
             updated_at_bounds,
         })
@@ -259,6 +270,7 @@ impl FeedArm {
         filter_ast: Option<&Expr<ChatLiteral>>,
         properties: Option<&Expr<PropertiesLiteral>>,
         notified: bool,
+        source_ids: usize,
     ) -> Option<Self> {
         let conjuncts = Conjuncts::of(filter_ast);
         let updated_at_bounds = conjuncts
@@ -281,6 +293,8 @@ impl FeedArm {
             FeedArm::single_kind(
                 FeedEntity::Chat,
                 driver,
+                source_ids,
+                None,
                 build_chat_filter(filter_ast),
                 properties,
                 updated_at_bounds,
@@ -294,6 +308,9 @@ impl FeedArm {
         filter_ast: Option<&Expr<ProjectLiteral>>,
         properties: Option<&Expr<PropertiesLiteral>>,
         notified: bool,
+        source_ids: usize,
+        exclude_source_ids: Option<usize>,
+        share_source_slots: Option<ShareSourceSlots>,
     ) -> Option<Self> {
         let conjuncts = Conjuncts::of(filter_ast);
         let updated_at_bounds = conjuncts
@@ -319,7 +336,9 @@ impl FeedArm {
             FeedArm::single_kind(
                 FeedEntity::Project,
                 driver,
-                build_project_filter(filter_ast),
+                source_ids,
+                exclude_source_ids,
+                build_project_filter(filter_ast, share_source_slots),
                 properties,
                 updated_at_bounds,
             )
@@ -329,6 +348,8 @@ impl FeedArm {
     fn single_kind(
         entity: FeedEntity,
         driver: Driver,
+        source_ids: usize,
+        exclude_source_ids: Option<usize>,
         filter: String,
         properties: Option<&Expr<PropertiesLiteral>>,
         updated_at_bounds: Vec<DateLiteral>,
@@ -337,6 +358,8 @@ impl FeedArm {
             entity,
             kinds: entity.kinds().to_vec(),
             driver,
+            source_ids,
+            exclude_source_ids,
             joins: String::new(),
             filter,
             properties: properties.cloned(),
@@ -377,10 +400,10 @@ impl FeedArm {
             .collect()
     }
 
-    /// Keeps rows the user can see through any of the bound sources (`fetch_user_source_ids`, the
-    /// list the item-table arms check), and exposes the item's `sort_ts` as `acc.sort_ts`. Reads
-    /// the item's rows, so its cost follows the item rather than the user's sources.
-    fn access_lateral(&self, id_sql: &str, source_ids: usize) -> String {
+    /// Keeps rows the user can see through any of this arm's bound sources, and exposes
+    /// the item's `sort_ts` as `acc.sort_ts`. Reads the item's rows, so its cost follows
+    /// the item rather than the user's sources.
+    fn access_lateral(&self, id_sql: &str) -> String {
         format!(
             r#"
                     CROSS JOIN LATERAL (
@@ -393,6 +416,33 @@ impl FeedArm {
                     ) acc"#,
             item_type = self.entity.item_type(),
             kinds = self.kind_clause("g.kind"),
+            source_ids = self.source_ids,
+        )
+    }
+
+    /// Excludes rows that also hold a grant in `exclude_source_ids` (e.g. items
+    /// shared directly with the viewer when listing team/channel-only shares).
+    ///
+    /// Uses a `LIMIT 1` optimization fence so Postgres never unnests this into
+    /// a full-index Merge/Hash Anti Join on stale statistics, and uses
+    /// `array_position` so `source_items_pkey` performs one B-tree descent per
+    /// candidate on `(entity_type, entity_id)` rather than one per direct source.
+    fn exclude_sources_clause(&self, id_sql: &str) -> String {
+        let Some(exclude_slot) = self.exclude_source_ids else {
+            return String::new();
+        };
+        format!(
+            r#"
+                    AND NOT EXISTS (
+                        SELECT 1 FROM (
+                            SELECT 1 FROM source_items ex
+                            WHERE ex.entity_type = '{item_type}'
+                            AND ex.entity_id = {id_sql}
+                            AND array_position(${exclude_slot}::text[], ex.source_id) IS NOT NULL
+                            LIMIT 1
+                        ) direct_ex
+                    )"#,
+            item_type = self.entity.item_type(),
         )
     }
 
@@ -450,16 +500,16 @@ impl FeedArm {
     }
 
     /// Reads the arm's driving index in `phase` order.
-    fn ordered_scan(&self, phase: Phase, exclude_frecency: bool, source_ids: usize) -> String {
+    fn ordered_scan(&self, phase: Phase, exclude_frecency: bool) -> String {
         if self.driver == Driver::Owner {
-            self.owner_scan(phase, exclude_frecency, source_ids)
+            self.owner_scan(phase, exclude_frecency)
         } else {
-            self.sources_scan(phase, exclude_frecency, source_ids)
+            self.sources_scan(phase, exclude_frecency)
         }
     }
 
-    /// Reads each of the user's sources in index order, then merges them.
-    fn sources_scan(&self, phase: Phase, exclude_frecency: bool, source_ids: usize) -> String {
+    /// Reads each of the arm's sources in index order, then merges them.
+    fn sources_scan(&self, phase: Phase, exclude_frecency: bool) -> String {
         let id = "si.entity_id";
         let (sort_ts, cursor, order) = match phase {
             Phase::All | Phase::Unviewed => (
@@ -489,13 +539,14 @@ impl FeedArm {
                     WHERE si.source_id = s.source_id
                     AND si.kind = k.kind
                     AND si.sort_ts IS NOT NULL{bounds}
-                    AND {cursor}{unviewed}{frecency}{properties}
+                    AND {cursor}{exclude_sources}{unviewed}{frecency}{properties}
                     ORDER BY {order}
                     LIMIT $3
                 ) t{gate}
                 GROUP BY t.entity_id
 "#,
             item_type = self.entity.item_type(),
+            source_ids = self.source_ids,
             kinds = self
                 .kinds
                 .iter()
@@ -504,13 +555,14 @@ impl FeedArm {
                 .join(", "),
             filter = self.filter_lateral(id),
             bounds = self.bounds("si.sort_ts"),
+            exclude_sources = self.exclude_sources_clause(id),
             frecency = self.frecency_clause(id, exclude_frecency),
             properties = self.properties_clause(id),
         )
     }
 
     /// Reads the filtered owner's live documents in index order.
-    fn owner_scan(&self, phase: Phase, exclude_frecency: bool, source_ids: usize) -> String {
+    fn owner_scan(&self, phase: Phase, exclude_frecency: bool) -> String {
         let id = "d.id";
         let (sort_ts, cursor, order) = match phase {
             Phase::All | Phase::Unviewed => (
@@ -534,15 +586,16 @@ impl FeedArm {
                 SELECT o.item_type, o.id, o.sort_ts FROM (
                     SELECT 'document'::text AS item_type, d.id, {sort_ts} AS sort_ts
                     FROM "Document" d{joins}{access}
-                    WHERE d."deletedAt" IS NULL{filter}{properties}
+                    WHERE d."deletedAt" IS NULL{filter}{exclude_sources}{properties}
                     AND {cursor}{unviewed}{frecency}{gate}
                     ORDER BY {order}
                     LIMIT $3
                 ) o
 "#,
             joins = self.joins,
-            access = self.access_lateral(id, source_ids),
+            access = self.access_lateral(id),
             filter = self.filter,
+            exclude_sources = self.exclude_sources_clause(id),
             properties = self.properties_clause(id),
             frecency = self.frecency_clause(id, exclude_frecency),
         )
@@ -577,7 +630,7 @@ impl FeedArm {
     }
 
     /// Reads the user's history of this entity type, most recent view first.
-    fn viewed_scan(&self, exclude_frecency: bool, source_ids: usize) -> String {
+    fn viewed_scan(&self, exclude_frecency: bool) -> String {
         let id = r#"uh."itemId""#;
         format!(
             r#"
@@ -585,42 +638,44 @@ impl FeedArm {
                     SELECT '{item_type}'::text AS item_type, uh."itemId" AS id, uh."updatedAt"::timestamptz AS sort_ts
                     FROM "UserHistory" uh{access}{filter}
                     WHERE uh."userId" = $1
-                    AND uh."itemType" = '{item_type}'{kind}
+                    AND uh."itemType" = '{item_type}'{kind}{exclude_sources}
                     AND ($4::timestamptz IS NULL OR (uh."updatedAt", uh."itemId") < ($4::timestamp, $5)){frecency}{properties}
                     ORDER BY uh."updatedAt" DESC, uh."itemId" DESC
                     LIMIT $3
                 ) v
 "#,
             item_type = self.entity.item_type(),
-            access = self.access_lateral(id, source_ids),
+            access = self.access_lateral(id),
             filter = self.filter_lateral(id),
             kind = self.viewed_precheck(id),
+            exclude_sources = self.exclude_sources_clause(id),
             frecency = self.frecency_clause(id, exclude_frecency),
             properties = self.properties_clause(id),
         )
     }
 
     /// Lists every notified item the filter keeps.
-    fn notifications_scan(&self, sort: FeedSort, source_ids: usize) -> String {
+    fn notifications_scan(&self, sort: FeedSort) -> String {
         let id = "ni.event_item_id";
         format!(
             r#"
                 SELECT '{item_type}'::text AS item_type, {id} AS id, {sort_ts} AS sort_ts
                 FROM NotificationItems ni{access}{filter}{history}
-                WHERE ni.event_item_type = '{item_type}'{properties}
+                WHERE ni.event_item_type = '{item_type}'{exclude_sources}{properties}
 "#,
             item_type = self.entity.item_type(),
             sort_ts = whole_sort_key(sort, "acc.sort_ts"),
-            access = self.access_lateral(id, source_ids),
+            access = self.access_lateral(id),
             filter = self.filter_lateral(id),
             history = self.history_join(sort, id),
+            exclude_sources = self.exclude_sources_clause(id),
             properties = self.properties_clause(id),
         )
     }
 
     /// Lists every live item the filter keeps, found through the item table's
     /// indexes.
-    fn lookup_scan(&self, sort: FeedSort, notified: bool, source_ids: usize) -> String {
+    fn lookup_scan(&self, sort: FeedSort, notified: bool) -> String {
         let alias = self.entity.alias();
         let id = format!("{alias}.id");
         let notification = if notified {
@@ -635,15 +690,16 @@ impl FeedArm {
             r#"
                 SELECT '{item_type}'::text AS item_type, {id} AS id, {sort_ts} AS sort_ts
                 FROM {table}{joins}{notification}{access}{history}
-                WHERE {alias}."deletedAt" IS NULL{filter}{properties}
+                WHERE {alias}."deletedAt" IS NULL{filter}{exclude_sources}{properties}
 "#,
             item_type = self.entity.item_type(),
             sort_ts = whole_sort_key(sort, &format!(r#"{alias}."updatedAt""#)),
             table = self.entity.table(),
             joins = self.joins,
-            access = self.access_lateral(&id, source_ids),
+            access = self.access_lateral(&id),
             history = self.history_join(sort, &id),
             filter = self.filter,
+            exclude_sources = self.exclude_sources_clause(&id),
             properties = self.properties_clause(&id),
         )
     }
@@ -810,8 +866,6 @@ pub(super) struct Feed {
     arms: Vec<FeedArm>,
     sort: FeedSort,
     exclude_frecency: bool,
-    /// The parameter binding `fetch_user_source_ids`.
-    source_ids: usize,
 }
 
 impl Feed {
@@ -825,7 +879,6 @@ impl Feed {
     pub(super) fn new(
         sort: SimpleSortMethod,
         exclude_frecency: bool,
-        source_ids: usize,
         arms: impl IntoIterator<Item = FeedArm>,
     ) -> Option<Self> {
         let arms: Vec<_> = arms
@@ -839,7 +892,6 @@ impl Feed {
             arms,
             sort: FeedSort::of(sort)?,
             exclude_frecency,
-            source_ids,
         })
     }
 
@@ -880,7 +932,7 @@ impl Feed {
         let mut needs_separator = false;
         for arm in arms {
             push_union_separator(builder, &mut needs_separator);
-            builder.push(arm.viewed_scan(self.exclude_frecency, self.source_ids));
+            builder.push(arm.viewed_scan(self.exclude_frecency));
         }
         builder.push("), ");
     }
@@ -902,22 +954,18 @@ impl Feed {
         }
         for arm in &self.arms {
             match (arm.driver, self.sort) {
-                (Driver::Notifications, sort) => {
-                    push(arm.notifications_scan(sort, self.source_ids))
-                }
-                (Driver::Lookup { notified }, sort) => {
-                    push(arm.lookup_scan(sort, notified, self.source_ids))
-                }
+                (Driver::Notifications, sort) => push(arm.notifications_scan(sort)),
+                (Driver::Lookup { notified }, sort) => push(arm.lookup_scan(sort, notified)),
                 (Driver::Sources | Driver::Owner, FeedSort::UpdatedAt) => {
-                    push(arm.ordered_scan(Phase::All, self.exclude_frecency, self.source_ids))
+                    push(arm.ordered_scan(Phase::All, self.exclude_frecency))
                 }
                 (Driver::Sources | Driver::Owner, FeedSort::ViewedUpdated) => {
-                    push(arm.viewed_scan(self.exclude_frecency, self.source_ids));
-                    push(arm.ordered_scan(Phase::Unviewed, self.exclude_frecency, self.source_ids));
+                    push(arm.viewed_scan(self.exclude_frecency));
+                    push(arm.ordered_scan(Phase::Unviewed, self.exclude_frecency));
                 }
                 // The viewed items come from `ViewedItems`.
                 (Driver::Sources | Driver::Owner, FeedSort::ViewedAt) => {
-                    push(arm.ordered_scan(Phase::Tail, self.exclude_frecency, self.source_ids))
+                    push(arm.ordered_scan(Phase::Tail, self.exclude_frecency))
                 }
             }
         }

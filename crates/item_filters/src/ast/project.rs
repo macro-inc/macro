@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     ProjectFilters,
-    ast::{ExpandErr, date::DateLiteral},
+    ast::{ExpandErr, date::DateLiteral, share_source::ShareSource},
 };
 
 /// the literal ast types for a project
@@ -32,6 +32,9 @@ pub enum ProjectLiteral {
     /// this node value filters by project updatedAt timestamp
     #[serde(rename = "ua")]
     UpdatedAt(DateLiteral),
+    /// viewer-relative share provenance (direct user/mention/DM vs team/channel)
+    #[serde(rename = "ss")]
+    ShareSource(ShareSource),
 }
 
 impl ExpandFrame<ProjectLiteral> for ProjectFilters {

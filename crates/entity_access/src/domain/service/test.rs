@@ -366,6 +366,14 @@ impl AccessRepository for MockRepo {
             .collect())
     }
 
+    async fn get_entities_share_provenance(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _entities: &[(Uuid, EntityType)],
+    ) -> Result<Vec<crate::domain::models::EntityShareProvenance>, AccessError> {
+        Ok(Vec::new())
+    }
+
     async fn get_chat_access(
         &self,
         _chat_id: &str,

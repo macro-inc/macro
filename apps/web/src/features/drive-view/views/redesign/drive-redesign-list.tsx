@@ -56,6 +56,7 @@ import {
 import { DriveSelectionToolbar } from '../../components/redesign/drive-selection-toolbar';
 import { InlineNameInput } from '../../components/redesign/inline-name-input';
 import { driveKindLabel } from '../../components/redesign/kind-label';
+import { ShareProvenanceBadge } from '../../components/redesign/share-provenance-badge';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import {
@@ -275,13 +276,15 @@ function DriveListRowItem(props: {
   splitId: string;
 }) {
   const { actions } = useDriveView();
-  const { inlineEdit, inspector, host } = useDriveRedesign();
+  const { inlineEdit, inspector, host, shareProvenance } = useDriveRedesign();
   const isShared = () => {
     const ownerId =
       'ownerId' in props.row.entity ? props.row.entity.ownerId : undefined;
     const viewerId = actions.userId();
     return Boolean(ownerId && viewerId && ownerId !== viewerId);
   };
+  const provenance = () =>
+    isShared() ? shareProvenance?.get(props.row.entity) : undefined;
 
   const isExpanded = () =>
     props.row.isFolder && props.expandedIds.has(props.row.id);
@@ -446,9 +449,10 @@ function DriveListRowItem(props: {
                   </span>
                 </Show>
                 <Show when={isShared()}>
-                  <span class="shrink-0 rounded-full bg-inset px-1.5 py-0.5 text-[11px] text-ink-muted">
-                    {t('drive.sharedLabel')}
-                  </span>
+                  <ShareProvenanceBadge
+                    provenance={provenance()}
+                    fallbackShared
+                  />
                 </Show>
                 <Show when={starred()}>
                   <StarFillIcon
@@ -1320,27 +1324,69 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
                 </div>
               </Show>
 
-              <Show
-                when={display.isRecentTab()}
+              <Switch
                 fallback={
                   <Key each={rows()} by="id">
                     {(row) => renderRowWithContext(row)}
                   </Key>
                 }
               >
-                <For each={recentGroups()}>
-                  {(group) => (
-                    <section aria-label={timeBucketLabel(group.bucket)}>
-                      <div class="sticky top-0 z-1 border-b border-edge-muted bg-panel/95 px-4 py-1.5 text-xs font-semibold text-ink-muted backdrop-blur-xs">
-                        {timeBucketLabel(group.bucket)}
-                      </div>
-                      <Key each={group.items} by="id">
-                        {(row) => renderRowWithContext(row)}
-                      </Key>
-                    </section>
-                  )}
-                </For>
-              </Show>
+                <Match when={display.isRecentTab()}>
+                  <For each={recentGroups()}>
+                    {(group) => (
+                      <section aria-label={timeBucketLabel(group.bucket)}>
+                        <div class="sticky top-0 z-1 border-b border-edge-muted bg-panel/95 px-4 py-1.5 text-xs font-semibold text-ink-muted backdrop-blur-xs">
+                          {timeBucketLabel(group.bucket)}
+                        </div>
+                        <Key each={group.items} by="id">
+                          {(row) => renderRowWithContext(row)}
+                        </Key>
+                      </section>
+                    )}
+                  </For>
+                </Match>
+                <Match
+                  when={
+                    display.isSharedTab() &&
+                    display.shareScope() === 'all' &&
+                    display.sharedGroups().hasResolvedProvenance
+                  }
+                >
+                  <For each={display.sharedGroups().groups}>
+                    {(group) => {
+                      const title = () =>
+                        group.bucket === 'direct'
+                          ? t('drive.sharedSectionDirectTitle')
+                          : t('drive.sharedSectionTeamOrChannelTitle');
+                      const hint = () =>
+                        group.bucket === 'direct'
+                          ? t('drive.sharedSectionDirectHint')
+                          : t('drive.sharedSectionTeamOrChannelHint');
+                      return (
+                        <section
+                          aria-label={title()}
+                          data-drive-shared-section={group.bucket}
+                        >
+                          <div class="sticky top-0 z-1 flex items-center gap-2 border-b border-edge-muted bg-panel/95 px-4 py-1.5 text-xs backdrop-blur-xs">
+                            <span class="font-semibold text-ink">
+                              {title()}
+                            </span>
+                            <span class="rounded-full bg-inset px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink-muted">
+                              {group.items.length}
+                            </span>
+                            <span class="hidden text-ink-subtle sm:inline">
+                              · {hint()}
+                            </span>
+                          </div>
+                          <Key each={group.items} by="id">
+                            {(row) => renderRowWithContext(row)}
+                          </Key>
+                        </section>
+                      );
+                    }}
+                  </For>
+                </Match>
+              </Switch>
 
               <Show when={source.isLoadingMore()}>
                 <div

@@ -148,3 +148,4 @@ Saved-view definitions live under authenticated `GraphqlUser`; reads include sha
 - Mail capsule negotiation lives in `mail_cache_profile`: absent/unknown capabilities receive v2; explicit `soup-mail-v5` receives current capsules. Never infer client support from the server version.
 
 - Agent-session activity subscriptions recheck current entity access before emitting CRM activity. Session access alone does not disclose CRM record content after revocation.
+- `GraphqlUser.shareProvenance(entities)` resolves viewer-relative share provenance (at most 200 `(entityType, entityId)` pairs, embedded value objects with no `id`) via `graphql_soup::ShareProvenanceQuery` inserted by DSS HTTP and websocket request data.

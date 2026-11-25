@@ -685,6 +685,43 @@ pub struct CallChannelInfo {
     pub share_permission_id: String,
 }
 
+/// Maximum number of entities accepted by one batched share-provenance lookup.
+pub const MAX_SHARE_PROVENANCE_ENTITIES: usize = 200;
+
+/// How an entity was shared with a specific viewer, ranked from most direct
+/// (`Direct`) to broadest (`Team`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShareProvenanceKind {
+    /// Shared directly with the viewer (explicit user grant or `@mention`).
+    Direct,
+    /// Shared inside a direct-message channel the viewer participates in.
+    Dm,
+    /// Shared inside a public, private, or team channel the viewer participates in.
+    Channel,
+    /// Shared with a team the viewer belongs to.
+    Team,
+}
+
+/// Viewer-relative share provenance for one entity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntityShareProvenance {
+    /// The entity's canonical UUID.
+    pub entity_id: Uuid,
+    /// The entity's canonical type.
+    pub entity_type: EntityType,
+    /// Highest-priority provenance category through which the viewer has access.
+    pub kind: ShareProvenanceKind,
+    /// Originating channel ID when `kind` is `Dm` or `Channel`.
+    pub channel_id: Option<Uuid>,
+    /// Originating channel display name when `kind` is `Channel` and named.
+    pub channel_name: Option<String>,
+    /// Originating team ID when `kind` is `Team`.
+    pub team_id: Option<Uuid>,
+    /// Originating team name when `kind` is `Team`.
+    pub team_name: Option<String>,
+}
+
 /// Errors that can occur during access checking.
 ///
 /// The variants are the domain's failure vocabulary; causes never appear as

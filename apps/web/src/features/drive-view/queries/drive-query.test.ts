@@ -214,4 +214,29 @@ describe('buildDriveQuery', () => {
 
     expect(JSON.stringify(modified.body.df)).toContain('"ua":{"gte":');
   });
+
+  it('adds ShareSource server predicate on Shared with me when share-source facet is set', () => {
+    const direct = request({
+      ...selection,
+      location: { kind: 'tab', tab: 'shared' },
+      facets: { 'share-source': ['direct'] },
+    });
+    expect(JSON.stringify(direct.body.df)).toContain('"ss":"direct"');
+
+    const teamOrChannel = request({
+      ...selection,
+      location: { kind: 'tab', tab: 'shared' },
+      facets: { 'share-source': ['team_or_channel'] },
+    });
+    expect(JSON.stringify(teamOrChannel.body.df)).toContain(
+      '"ss":"team_or_channel"'
+    );
+
+    const allShared = request({
+      ...selection,
+      location: { kind: 'tab', tab: 'shared' },
+      facets: {},
+    });
+    expect(JSON.stringify(allShared.body.df)).not.toContain('"ss"');
+  });
 });

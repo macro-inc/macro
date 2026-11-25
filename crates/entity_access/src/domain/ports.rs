@@ -6,7 +6,7 @@ use super::models::EntityType;
 use crate::domain::models::{
     AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
     ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityAudience, EntityPermission,
-    RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+    EntityShareProvenance, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
@@ -37,6 +37,14 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         document_ids: &[String],
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<HashMap<String, AccessLevel>, AccessError>> + Send;
+
+    /// Viewer-relative share provenance for each requested `(entity_id, entity_type)`
+    /// pair that the viewer holds a grant on. Entities with no viewer grant are omitted.
+    fn get_entities_share_provenance(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entities: &[(Uuid, EntityType)],
+    ) -> impl Future<Output = Result<Vec<EntityShareProvenance>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a chat.
     fn get_chat_access(
@@ -1007,4 +1015,17 @@ pub trait EntityAudienceLookup: Clone + Send + Sync + 'static {
         &self,
         channel_id: &str,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+}
+
+/// Resolves viewer-relative share provenance for a bounded batch of entities.
+pub trait EntityShareProvenanceLookup: Clone + Send + Sync + 'static {
+    /// Resolve how each requested entity was shared with `user_id` (direct user /
+    /// `@mention`, DM channel, team/public/private channel, or team). Entities the
+    /// viewer has no grant on are omitted. Rejects batches exceeding
+    /// [`crate::domain::models::MAX_SHARE_PROVENANCE_ENTITIES`].
+    fn get_entities_share_provenance(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entities: &[(Uuid, EntityType)],
+    ) -> impl Future<Output = Result<Vec<EntityShareProvenance>, AccessError>> + Send;
 }

@@ -1090,3 +1090,30 @@ impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
         self.repo.get_current_channel_users(&channel_id).await
     }
 }
+
+impl<R: AccessRepository> crate::domain::ports::EntityShareProvenanceLookup
+    for EntityAccessServiceImpl<R>
+{
+    #[tracing::instrument(
+        err(level = Level::DEBUG),
+        skip(self, user_id, entities),
+        fields(entity_count = entities.len())
+    )]
+    async fn get_entities_share_provenance(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entities: &[(Uuid, EntityType)],
+    ) -> Result<Vec<crate::domain::models::EntityShareProvenance>, AccessError> {
+        if entities.len() > crate::domain::models::MAX_SHARE_PROVENANCE_ENTITIES {
+            return Err(AccessError::BadRequest(
+                "share provenance request exceeds maximum batch size",
+            ));
+        }
+        if entities.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.repo
+            .get_entities_share_provenance(user_id, entities)
+            .await
+    }
+}

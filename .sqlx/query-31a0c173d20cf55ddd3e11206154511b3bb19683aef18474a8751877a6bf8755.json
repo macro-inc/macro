@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ea.entity_id,\n               ea.entity_type,\n               ea.source_id,\n               ea.source_type AS \"source_type!: EntityAccessSourceType\"\n        FROM unnest($1::uuid[], $2::text[]) AS req(entity_id, entity_type)\n        JOIN entity_access ea\n          ON ea.entity_id = req.entity_id\n         AND ea.entity_type = req.entity_type\n        WHERE ea.source_id = ANY($3)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "source_type!: EntityAccessSourceType",
+        "type_info": {
+          "Custom": {
+            "name": "entity_access_source_type",
+            "kind": {
+              "Enum": [
+                "channel",
+                "team",
+                "user",
+                "bot"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "31a0c173d20cf55ddd3e11206154511b3bb19683aef18474a8751877a6bf8755"
+}

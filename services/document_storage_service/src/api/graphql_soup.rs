@@ -201,6 +201,9 @@ fn insert_graphql_context_data(
     data.insert(graphql_soup::FoldersQuery::new(DssFoldersQueryReader(
         state.projects_state.service.clone(),
     )));
+    data.insert(graphql_soup::ShareProvenanceQuery::from_lookup(
+        state.entity_access_service.clone(),
+    ));
     data.insert(state.channel_service.clone());
     data.insert(complete_graph::ChannelQueryContext::new(
         state.channel_service.clone(),

@@ -65,9 +65,10 @@ use graphql_registered_work::{
 };
 use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
-    GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupInitiative,
-    GraphqlSoupProject, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
-    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_folders, resolve_grouped_soup,
+    GraphqlEntityShareProvenance, GraphqlSoupAgentSession, GraphqlSoupEmailThread,
+    GraphqlSoupEntity, GraphqlSoupInitiative, GraphqlSoupProject, GroupedSoup, GroupedSoupInput,
+    ShareProvenanceEntityInput, SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput,
+    SoupPage, SoupPatch, resolve_folders, resolve_grouped_soup, resolve_share_provenance,
     resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread,
     resolve_soup_email_threads, resolve_soup_entity, resolve_soup_updates,
 };
@@ -961,6 +962,16 @@ where
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<GraphqlSoupProject<SoupEdges<NR, PR, ER, FR, AR, AcR>>>> {
         resolve_folders(ctx, &self.user_id).await
+    }
+
+    /// Viewer-relative share provenance (direct / DM / channel / team) for a
+    /// bounded batch of entities (at most 200 per request).
+    async fn share_provenance(
+        &self,
+        ctx: &Context<'_>,
+        entities: Vec<ShareProvenanceEntityInput>,
+    ) -> async_graphql::Result<Vec<GraphqlEntityShareProvenance>> {
+        resolve_share_provenance(ctx, &self.user_id, entities).await
     }
 
     /// A page of activity, newest first: by default the authenticated

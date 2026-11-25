@@ -1692,6 +1692,7 @@ impl TestHarness {
             ))
             .data(NoOpEntityFavoriteEdgeReader)
             .data(graphql_soup::FoldersQuery::noop())
+            .data(graphql_soup::ShareProvenanceQuery::noop())
             .data(self.activity_reader.clone())
             .data(graphql_activity::entity_activity_loader(
                 self.activity_reader.clone(),
@@ -3948,4 +3949,96 @@ async fn initiatives_are_returned_by_soup_with_shared_edges() {
     assert_eq!(item["metadata"]["ownerId"], VALID_USER_ID);
     assert!(item["properties"].is_array());
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn user_share_provenance_returns_viewer_scoped_entries_and_enforces_limit() {
+    use entity_access::domain::{
+        models::{AccessError, EntityShareProvenance, ShareProvenanceKind},
+        ports::EntityShareProvenanceLookup,
+    };
+    use graphql_soup::ShareProvenanceQuery;
+    use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+
+    #[derive(Clone)]
+    struct StubShareProvenanceLookup {
+        entries: Vec<EntityShareProvenance>,
+    }
+
+    impl EntityShareProvenanceLookup for StubShareProvenanceLookup {
+        async fn get_entities_share_provenance(
+            &self,
+            user_id: &MacroUserId<Lowercase<'_>>,
+            _entities: &[(Uuid, EntityType)],
+        ) -> Result<Vec<EntityShareProvenance>, AccessError> {
+            assert_eq!(user_id.as_ref(), VALID_USER_ID);
+            Ok(self.entries.clone())
+        }
+    }
+
+    let harness = harness();
+    let doc_id = Uuid::from_u128(101);
+    let channel_id = Uuid::from_u128(202);
+    let request = harness
+        .request(
+            &format!(
+                r#"{{
+                    user {{
+                        shareProvenance(entities: [{{ entityType: DOCUMENT, entityId: "{doc_id}" }}]) {{
+                            entityType
+                            entityId
+                            kind
+                            channelId
+                            channelName
+                            teamId
+                            teamName
+                        }}
+                    }}
+                }}"#
+            ),
+            authenticated_parts(),
+        )
+        .data(ShareProvenanceQuery::from_lookup(Arc::new(
+            StubShareProvenanceLookup {
+                entries: vec![EntityShareProvenance {
+                    entity_id: doc_id,
+                    entity_type: EntityType::Document,
+                    kind: ShareProvenanceKind::Channel,
+                    channel_id: Some(channel_id),
+                    channel_name: Some("product".to_string()),
+                    team_id: None,
+                    team_name: None,
+                }],
+            },
+        )));
+
+    let response = harness.schema.execute(request).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let entries = data["user"]["shareProvenance"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["entityType"], "DOCUMENT");
+    assert_eq!(entries[0]["entityId"], doc_id.to_string());
+    assert_eq!(entries[0]["kind"], "CHANNEL");
+    assert_eq!(entries[0]["channelId"], channel_id.to_string());
+    assert_eq!(entries[0]["channelName"], "product");
+    assert!(entries[0]["teamId"].is_null());
+
+    // Batch limit (> 200) must fail with BAD_USER_INPUT.
+    let too_many = (0..201)
+        .map(|i| {
+            format!(
+                r#"{{ entityType: DOCUMENT, entityId: "{}" }}"#,
+                Uuid::from_u128(1000 + i)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let over_limit = harness
+        .execute(&format!(
+            r#"{{ user {{ shareProvenance(entities: [{too_many}]) {{ kind }} }} }}"#
+        ))
+        .await;
+    assert_eq!(over_limit.errors.len(), 1);
+    assert!(over_limit.errors[0].message.contains("at most 200"));
 }

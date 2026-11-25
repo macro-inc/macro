@@ -2,7 +2,7 @@ use crate::{
     DocumentFilters,
     ast::{
         ExpandErr, crm_association::CrmAssociation, date::DateLiteral, email::Email,
-        properties::PropertiesLiteral,
+        properties::PropertiesLiteral, share_source::ShareSource,
     },
 };
 use document_sub_type::DocumentSubType;
@@ -79,6 +79,9 @@ pub enum DocumentLiteral {
     /// case-insensitive substring of the document name
     #[serde(rename = "nc")]
     NameContains(String),
+    /// viewer-relative share provenance (direct user/mention/DM vs team/channel)
+    #[serde(rename = "ss")]
+    ShareSource(ShareSource),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {

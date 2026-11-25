@@ -622,6 +622,31 @@ describe('makeGraphqlSoupInput', () => {
       })
     ).toThrow('Unsupported GraphQL Soup AST');
   });
+
+  it('maps share source literals on documents and projects and rejects unknown values', () => {
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: {
+          df: { l: { ss: 'direct' } },
+          pf: { l: { ss: 'team_or_channel' } },
+        },
+      })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          documentFilter: { literal: { shareSource: 'DIRECT' } },
+          projectFilter: { literal: { shareSource: 'TEAM_OR_CHANNEL' } },
+        },
+      },
+    });
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { df: { l: { ss: 'unknown' } } } as never,
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
 });
 
 it('maps open-ended property date ranges and explicit no-date negation', () => {

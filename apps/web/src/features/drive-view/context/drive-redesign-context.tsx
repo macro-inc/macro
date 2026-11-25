@@ -6,6 +6,7 @@ import type { DriveInspectorState } from '../primitives/drive-inspector';
 import type { DriveUndoManager } from '../primitives/drive-undo';
 import type { DriveViewPreferences } from '../primitives/drive-view-preferences';
 import type { DriveAgentsInfo } from '../primitives/use-drive-agents';
+import type { DriveShareProvenanceSource } from '../queries/drive-share-provenance';
 import type { DriveTrashSource } from '../queries/drive-trash';
 import type { DriveListSource } from './drive-source';
 
@@ -69,6 +70,8 @@ export type DriveRedesignContextValue = {
   host: DriveRedesignHostActions;
   /** Viewer's team agent teammates for People/Agent filters. */
   agents?: DriveAgentsInfo;
+  /** Viewer-relative share provenance map for Shared with me grouping & badges. */
+  shareProvenance?: DriveShareProvenanceSource;
   /** Creates a live folder contents source for inline expansion & Miller columns. */
   createFolderContents: (folderId: Accessor<string | null>) => DriveListSource;
   /** Currently inspected entity (derived from list/grid/column focus or selection). */

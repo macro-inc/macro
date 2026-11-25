@@ -97,7 +97,8 @@ fn grouped_access_shape() {
         assert!(candidates.contains(&bound_access_semi_join(
             id,
             entity_type,
-            source_ids_slot(sort, true)
+            source_ids_slot(sort, true),
+            None,
         )));
     }
     assert!(candidates.contains("cp.left_at IS NULL"));

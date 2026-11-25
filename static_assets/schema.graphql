@@ -4839,6 +4839,10 @@ input GraphqlDocumentLiteral @oneOf {
 	Case-insensitive substring of the document name.
 	"""
 	nameContains: String
+	"""
+	Viewer-relative share provenance (direct user/mention/DM vs team/channel).
+	"""
+	shareSource: GraphqlShareSource
 }
 
 """
@@ -5626,6 +5630,42 @@ type GraphqlEntityReferencePropertyValue {
 	The referenced entities.
 	"""
 	references: [GraphqlPropertyEntityReference!]!
+}
+
+"""
+Viewer-relative share provenance for one requested entity.
+
+Embedded value object (no global `id`) scoped to the authenticated viewer.
+"""
+type GraphqlEntityShareProvenance {
+	"""
+	Canonical entity type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Canonical entity UUID.
+	"""
+	entityId: ID!
+	"""
+	Highest-priority share provenance category for the viewer.
+	"""
+	kind: GraphqlShareProvenanceKind!
+	"""
+	Originating channel ID when `kind` is `DM` or `CHANNEL`.
+	"""
+	channelId: ID
+	"""
+	Originating channel name when `kind` is `CHANNEL` and named.
+	"""
+	channelName: String
+	"""
+	Originating team ID when `kind` is `TEAM`.
+	"""
+	teamId: ID
+	"""
+	Originating team name when `kind` is `TEAM`.
+	"""
+	teamName: String
 }
 
 """
@@ -7342,6 +7382,10 @@ input GraphqlProjectLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	Viewer-relative share provenance (direct user/mention/DM vs team/channel).
+	"""
+	shareSource: GraphqlShareSource
 }
 
 """
@@ -8466,6 +8510,42 @@ enum GraphqlSharePolicyOperation {
 	Replace an existing entry.
 	"""
 	REPLACE
+}
+
+"""
+How an entity was shared with the authenticated viewer.
+"""
+enum GraphqlShareProvenanceKind {
+	"""
+	Shared directly with the viewer (explicit user grant or `@mention`).
+	"""
+	DIRECT
+	"""
+	Shared inside a direct-message conversation.
+	"""
+	DM
+	"""
+	Shared inside a public, private, or team channel.
+	"""
+	CHANNEL
+	"""
+	Shared with a team the viewer belongs to.
+	"""
+	TEAM
+}
+
+"""
+GraphQL input representing viewer-relative share provenance filtering.
+"""
+enum GraphqlShareSource {
+	"""
+	Shared directly with the viewer (direct person share, `@mention`, or DM).
+	"""
+	DIRECT
+	"""
+	Shared through a team or non-DM channel, and not also shared directly.
+	"""
+	TEAM_OR_CHANNEL
 }
 
 """
@@ -11461,6 +11541,11 @@ type GraphqlUser {
 	"""
 	folders: [GraphqlSoupProject!]!
 	"""
+	Viewer-relative share provenance (direct / DM / channel / team) for a
+	bounded batch of entities (at most 200 per request).
+	"""
+	shareProvenance(entities: [ShareProvenanceEntityInput!]!): [GraphqlEntityShareProvenance!]!
+	"""
 	A page of activity, newest first: by default the authenticated
 	user's own, delegated actions included; in the `TEAM` scope, their
 	teammates' activity on entities shared with the user.
@@ -13115,6 +13200,20 @@ type SetFavoritePayload {
 	Persisted favorite after an add, or `null` after a removal.
 	"""
 	favorite: GraphqlFavorite
+}
+
+"""
+Entity reference requested for share-provenance lookup.
+"""
+input ShareProvenanceEntityInput {
+	"""
+	Canonical entity type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Canonical entity UUID.
+	"""
+	entityId: ID!
 }
 
 """

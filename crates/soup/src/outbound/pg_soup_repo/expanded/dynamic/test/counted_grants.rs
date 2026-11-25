@@ -80,11 +80,13 @@ fn broad_document_arms_gate_on_the_counted_grants() {
             .to_owned()
     };
     let counted = flat(DocumentGrants::Counted(42));
-    assert!(counted.contains(&counted_document_access_semi_join(source_ids, 42)));
+    assert!(counted.contains(&counted_document_access_semi_join(source_ids, 42, None)));
     assert!(counted.contains("LIMIT 42\n"));
-    assert!(!counted.contains(&bound_access_semi_join("d.id", "document", source_ids)));
+    assert!(!counted.contains(&bound_access_semi_join(
+        "d.id", "document", source_ids, None
+    )));
     for (id, entity_type) in [("c.id", "chat"), ("p.id", "project")] {
-        assert!(counted.contains(&bound_access_semi_join(id, entity_type, source_ids)));
+        assert!(counted.contains(&bound_access_semi_join(id, entity_type, source_ids, None)));
     }
     assert!(!flat(DocumentGrants::Estimated).contains("SELECT DISTINCT held.entity_id::text"));
 
@@ -105,7 +107,8 @@ fn broad_document_arms_gate_on_the_counted_grants() {
     );
     assert!(grouped.sql().contains(&counted_document_access_semi_join(
         source_ids_slot(sort, true),
-        7
+        7,
+        None,
     )));
 }
 
@@ -229,8 +232,9 @@ async fn page(
 ) -> anyhow::Result<Vec<(String, String, After)>> {
     let grouped = matches!(shape, Shape::Grouped(_));
     let mut transaction = begin_dynamic_query(pool).await?;
-    let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
-    let counted = DocumentGrants::count(&mut transaction, filter, &source_ids).await?;
+    let sources = fetch_user_sources(&mut transaction, viewer).await?;
+    let counted = DocumentGrants::count(&mut transaction, filter, &sources).await?;
+    let source_ids = sources.all;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, grouped));
     let grouping = GroupingConfig {
         field: GroupByField::EntityType,
@@ -417,9 +421,10 @@ async fn plan(pool: &PgPool, viewer: &str, grants: Gate) -> anyhow::Result<Strin
     sqlx::query!("SET LOCAL random_page_cost = 1.1")
         .execute(&mut *transaction)
         .await?;
-    let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
+    let sources = fetch_user_sources(&mut transaction, viewer).await?;
     let filter = everything();
-    let counted = DocumentGrants::count(&mut transaction, &filter, &source_ids).await?;
+    let counted = DocumentGrants::count(&mut transaction, &filter, &sources).await?;
+    let source_ids = sources.all;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
     let builder = build_query(&filter, false, sort, grants(counted), &mut document_ids);
     #[expect(
@@ -519,9 +524,9 @@ async fn a_caller_over_the_counted_limit_keeps_the_estimated_gate(
     .await?;
 
     let mut transaction = begin_dynamic_query(&pool).await?;
-    let source_ids = fetch_user_source_ids(&mut transaction, TEAM_ONLY).await?;
+    let sources = fetch_user_sources(&mut transaction, TEAM_ONLY).await?;
     assert_eq!(
-        DocumentGrants::count(&mut transaction, &everything(), &source_ids).await?,
+        DocumentGrants::count(&mut transaction, &everything(), &sources).await?,
         DocumentGrants::Estimated
     );
     transaction.commit().await?;
