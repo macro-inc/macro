@@ -11,7 +11,7 @@ import {
 } from '@components/app/split-layout/entry-persistence';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
-import { type Accessor, createEffect, on } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { z } from 'zod';
 import {
   DEFAULT_EMAIL_FOCUS_SORT,
@@ -325,11 +325,12 @@ function createEntryRecorder(options: {
     restore: () => undefined,
     initialize: (state) => {
       recorded = serialize(state);
-      // The entry lives in the split manager, outside Solid. The first run
-      // comes after setup, once the entry captors are registered.
-      createEffect(
-        on(options.entryId, () => options.handle.captureEntryState())
-      );
+      // The entry lives in the split manager, outside Solid. Record each new
+      // one, not the in-place rewrites of the same entry (search params, a
+      // replace that keeps it). The first run comes after setup, once the
+      // entry captors are registered.
+      const entryId = createMemo(options.entryId);
+      createEffect(on(entryId, () => options.handle.captureEntryState()));
     },
     write: (state) => {
       const serialized = serialize(state);
