@@ -7,8 +7,15 @@
 //! A run only applies frames to the cache it began against: `sync_begin`
 //! records the engine's reset epoch, and `sync_apply_next` fails with
 //! [`SyncStreamError::Superseded`] once a clear or reset renewed it.
+//!
+//! A page can be read on the server before an edit and applied after the
+//! edit's confirmation (the host reads ahead while the cache writes), so a
+//! run leaves alone the records a confirmed edit wrote after it began
+//! ([`SyncFence`]).
 
-use super::{Engine, EngineError, HydrationWriteResult, IdentityState, WriteResult, live_query};
+use super::{
+    Engine, EngineError, HydrationWriteResult, IdentityState, NetworkWrite, WriteResult, live_query,
+};
 use crate::calendar::{CalendarCommit, CalendarRangeStorage, CalendarWatermarkUpdate};
 use crate::deps::OpId;
 use crate::document::{Document, DocumentError, Operation, OperationKind};
@@ -31,6 +38,49 @@ use thiserror::Error;
 
 /// Stale members deleted per storage transaction, bounding each write.
 const DELETE_CHUNK: usize = 1_000;
+
+/// Records server-confirmed edits wrote: a settled mutation's records, a
+/// mutation response, and records a host invalidated because they changed
+/// outside the cache's writes ([`Engine::invalidate_keys`]: a push, or an edit
+/// made through REST). Each is kept with the
+/// fence it was written under; a run begun under an earlier fence may hold
+/// pages the server read before the edit, so its pages leave the record as
+/// it is. The next run reads after the edit and writes it again.
+#[derive(Debug, Default)]
+pub(super) struct SyncFence {
+    current: u64,
+    records: HashMap<EntityKey<'static>, u64>,
+}
+
+impl SyncFence {
+    /// Fences `keys` against every run begun before now.
+    pub(super) fn fence(&mut self, keys: impl IntoIterator<Item = EntityKey<'static>>) {
+        let mut keys = keys.into_iter().peekable();
+        if keys.peek().is_none() {
+            return;
+        }
+        self.current += 1;
+        for key in keys {
+            self.records.insert(key, self.current);
+        }
+    }
+
+    /// Whether a run begun under `run` must leave `key` as it is.
+    fn holds(&self, run: u64, key: &EntityKey<'static>) -> bool {
+        self.records.get(key).is_some_and(|fence| *fence > run)
+    }
+
+    /// Forgets the records fenced before a run begun under `run`: runs are
+    /// one at a time, so no later run began before them.
+    fn forget_before(&mut self, run: u64) {
+        self.records.retain(|_, fence| *fence > run);
+    }
+
+    /// Forgets every record: the cache they were written to is gone.
+    pub(super) fn forget_all(&mut self) {
+        self.records.clear();
+    }
+}
 
 /// Inputs of one page write, for host projection composition.
 #[derive(Clone, Copy, Debug)]
@@ -175,6 +225,7 @@ impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
         };
         let mut run = SyncRun::new(args, &saved, &coverage, started_at_ms)?;
         run.reset_epoch = reset_epoch;
+        run.fence = self.sync_fence.current;
         Ok(run)
     }
 }
@@ -216,6 +267,7 @@ where
         if run.reset_epoch != self.reset_epoch {
             return Err(SyncWriteError::Stream(SyncStreamError::Superseded));
         }
+        self.sync_fence.forget_before(run.fence);
         let Some(frame) = run.pending.pop_front() else {
             return Ok(None);
         };
@@ -336,8 +388,15 @@ where
             .and_then(Json::as_str)
             .map(str::to_owned);
         let operation = lane_operation::<S::Error, H::Error>(run, &lane)?;
-        let updates = crate::normalize::normalize(&self.schema, &operation, &variables, &data)
+        let mut updates = crate::normalize::normalize(&self.schema, &operation, &variables, &data)
             .map_err(engine_error)?;
+        // Records an edit confirmed after the run began keep what it wrote.
+        let fenced = updates
+            .keys()
+            .filter(|key| self.sync_fence.holds(run.fence, key))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        updates.retain(|key, _| !fenced.contains(key));
         let page = SyncPageWrite {
             query: &lane.query,
             operation_name: lane.operation_name.as_deref(),
@@ -347,10 +406,15 @@ where
             operation: &operation,
             updates: &updates,
         };
-        let projections = hooks
+        let mut projections = hooks
             .page_projections(self, page)
             .await
             .map_err(SyncWriteError::Hooks)?;
+        projections.retain(|mutation| {
+            !fenced
+                .iter()
+                .any(|key| key.as_ref() == mutation.record_key().as_str())
+        });
         // The lane's saved state after this page.
         let advance = |mut stored: StoredSyncLane| {
             stored.state.pages += 1;
@@ -385,17 +449,37 @@ where
             } => {
                 // An identity change or pending optimistic layers: the general
                 // network write handles both, then the lane state follows.
-                let result = self
-                    .hydrate_query_with_projections(
-                        &lane.query,
-                        lane.operation_name.as_deref(),
-                        &variables,
-                        &data,
-                        identity.as_deref(),
+                let input = NetworkWrite {
+                    query: &lane.query,
+                    operation_name: lane.operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    identity: identity.as_deref(),
+                };
+                let result = if fenced.is_empty() {
+                    self.hydrate_query_with_projections(
+                        input.query,
+                        input.operation_name,
+                        input.variables,
+                        input.data,
+                        input.identity,
                         projections,
                     )
                     .await
-                    .map_err(SyncWriteError::Engine)?;
+                } else {
+                    match self.normalize_network(None, input) {
+                        Ok(mut normalized) => {
+                            normalized
+                                .result
+                                .updates
+                                .retain(|key, _| !fenced.contains(key));
+                            self.hydrate_normalized_query(input, normalized, projections)
+                                .await
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+                .map_err(SyncWriteError::Engine)?;
                 // The page's own account switch reset a cache bound to another
                 // account: the run carries on in the cache it just rebound.
                 if result.write_result.reset {

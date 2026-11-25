@@ -105,6 +105,11 @@ eviction and reset make it miss. A miss requires full registration and never reu
   fields, dependency fan-out or new hot-tier entries. It falls back to the
   general write for identity changes and pending optimistic layers; keep its
   merge semantics in step with `write_network` / `persist_updates`.
+- A sync page leaves alone the records a confirmed edit wrote after its run
+  began (`SyncFence` in `src/engine/sync.rs`): settled optimistic mutations,
+  mutation responses and `invalidate_keys`. A new write path for
+  server-confirmed edits fences its keys too, or a page read before the edit
+  writes the old state back.
 - A sync run applies frames only under the reset epoch `sync_begin` recorded;
   renew `Engine::reset_epoch` on every path that wipes or rebinds the cache
   (`clear`, `external_reset`, which the account-reset branch of hydration

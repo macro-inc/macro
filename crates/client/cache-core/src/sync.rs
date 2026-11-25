@@ -417,6 +417,9 @@ pub struct SyncRun {
     /// The engine's reset epoch the run applies under, set by
     /// [`crate::engine::Engine::sync_begin`].
     pub(crate) reset_epoch: uuid::Uuid,
+    /// The engine's sync fence when the run began: records a server-confirmed
+    /// edit wrote under a later fence keep their cached state.
+    pub(crate) fence: u64,
 }
 
 impl SyncRun {
@@ -456,6 +459,7 @@ impl SyncRun {
             end: None,
             queries: args.queries.clone(),
             reset_epoch: uuid::Uuid::nil(),
+            fence: 0,
         })
     }
 

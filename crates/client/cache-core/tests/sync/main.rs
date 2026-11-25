@@ -16,6 +16,7 @@ use serde_json::{Value as Json, json};
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+mod edits;
 mod fence;
 mod lane_completion;
 

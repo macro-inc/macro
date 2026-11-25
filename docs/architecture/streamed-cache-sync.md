@@ -309,6 +309,19 @@ Rules:
   each write on the authority generation the run began under, and aborts the
   run on `clear` and on a permission transition that changes the generation;
   the browser engine drops its run on `clear`, `physicalReset` and `close`.
+- A run does not write back over an edit confirmed after it began. A page can
+  be read on the server before the user's edit and applied after it (the host
+  reads ahead while the cache writes, and the second pass lists a year of mail
+  again), and it would put the old state back: a thread marked done back in
+  the inbox. The engine keeps the records each confirmed edit wrote with an
+  in-memory fence counter: a settled optimistic mutation's records, any
+  mutation response, and records invalidated from outside the cache's writes
+  (`invalidate_keys`: a push, or a REST edit, which the app invalidates on
+  success, `queries/email/cache-cleanup.ts`). `sync_begin` records the
+  counter, and a page of the run leaves a record fenced after it as it is
+  (record and projections; the page and its members still count). The next
+  run reads after the edit and writes it. This mirrors the exchange, which
+  drops a query response that predates a settled mutation (`predatesMutation`).
 - Lane state and members live in the cache database (`sync_lanes`,
   `sync_members`, storage schema 13) and are wiped with it.
 - One run at a time per database; a second start returns `busy`.
