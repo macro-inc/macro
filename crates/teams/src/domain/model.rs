@@ -225,6 +225,16 @@ impl SeatPlan {
     }
 }
 
+/// One user's seat on a team that bills seats (enterprise, or paying with an
+/// active subscription).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserTeamSeat {
+    /// The seat plan assigned to this user on the team.
+    pub plan: SeatPlan,
+    /// Whether the team is an enterprise team (billed out of band).
+    pub enterprise: bool,
+}
+
 impl std::fmt::Display for SeatPlan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

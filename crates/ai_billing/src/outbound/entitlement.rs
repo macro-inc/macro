@@ -1,7 +1,9 @@
 //! Resolves a user's plan and payer from their roles and team membership.
 
 use crate::domain::period::{PeriodBindingSource, SubscriptionPeriod};
-use crate::domain::{BillingError, Entitlement, EntitlementSource, PayerScope, PlanTier, Result};
+use crate::domain::{
+    BillingError, Entitlement, EntitlementSource, PayerScope, PlanTier, Result, UserPlan,
+};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -243,6 +245,26 @@ where
                     team_id: *team.id(),
                 }
             },
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn user_plan(&self, user: &MacroUserIdStr<'_>) -> Result<UserPlan> {
+        if let Some(seat) = self
+            .teams
+            .get_user_billed_seat(user)
+            .await
+            .map_err(entitlement_err)?
+        {
+            return Ok(UserPlan {
+                tier: PlanTier::from(seat.plan),
+                unlimited: seat.enterprise,
+            });
+        }
+        let tier = self.tier_of(user).await?;
+        Ok(UserPlan {
+            tier,
+            unlimited: false,
         })
     }
 

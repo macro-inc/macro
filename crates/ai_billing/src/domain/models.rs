@@ -121,11 +121,6 @@ impl PlanTier {
         }
     }
 
-    /// Whether this tier is priced above Premium (Business or Max).
-    pub const fn is_above_premium(self) -> bool {
-        matches!(self, PlanTier::Business | PlanTier::Max)
-    }
-
     /// Monthly automatic reload limit a payer on this tier starts from, in
     /// customer cents. `None` for tiers that cannot reload.
     pub const fn default_auto_reload_monthly_limit_cents(self) -> Option<i64> {
@@ -148,6 +143,11 @@ impl PlanTier {
     /// need a plan). Free is hard-capped at its allowance instead.
     pub const fn is_paid(self) -> bool {
         !matches!(self, PlanTier::Free)
+    }
+
+    /// Whether this tier is above Pro (Business or Max).
+    pub const fn is_above_premium(self) -> bool {
+        matches!(self, PlanTier::Business | PlanTier::Max)
     }
 
     /// Derive the tier from a user's roles. `sub_max` wins over every other
@@ -387,6 +387,15 @@ impl From<&PayerScope> for SubscriptionScope {
             }
         }
     }
+}
+
+/// A user's plan tier without loading their team's full billing roster.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserPlan {
+    /// The user's seat tier (or personal tier when not on a paying team).
+    pub tier: PlanTier,
+    /// Enterprise team: billed out of band with top-tier limits.
+    pub unlimited: bool,
 }
 
 /// Who pays for a user's AI, and through what.

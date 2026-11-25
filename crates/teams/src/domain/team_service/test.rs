@@ -317,6 +317,14 @@ impl TeamRepository for MockTeamRepository {
         async move { Ok(seat_included) }
     }
 
+    fn get_user_billed_seat(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<crate::domain::model::UserTeamSeat>, TeamError>> + Send
+    {
+        async move { Ok(None) }
+    }
+
     fn get_stripe_customer_id(
         &self,
         _: &MacroUserIdStr<'_>,

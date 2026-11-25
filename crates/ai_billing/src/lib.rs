@@ -62,5 +62,5 @@ pub use domain::{
     BillingError, BillingPeriod, BillingService, BillingSettings, CREDIT_PACKS_CENTS,
     CreditPurchaseSnapshot, CreditPurchaseStatus, DenyReason, DisabledAiAdmissionService,
     Entitlement, IncludedAllowanceCents, OverageMarkupPercent, PayerScope, PlanAllowances,
-    PlanTier, PricingError, UsageSnapshot, cost_cents,
+    PlanTier, PricingError, UsageSnapshot, UserPlan, cost_cents,
 };
