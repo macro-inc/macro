@@ -95,18 +95,20 @@ async fn relay_connection(client: TcpStream, server: TcpStream, mut frozen: watc
     let (mut client_read, mut client_write) = client.into_split();
     let (mut server_read, mut server_write) = server.into_split();
     let (mut up, mut down) = ([0_u8; 8192], [0_u8; 8192]);
+    // The freeze is read again before each forward: a read that was already
+    // waiting when the freeze came is dropped, not passed on.
     loop {
         let relaying = !*frozen.borrow();
         tokio::select! {
             read = client_read.read(&mut up) => {
                 let Ok(read @ 1..) = read else { return };
-                if relaying && server_write.write_all(&up[..read]).await.is_err() {
+                if !*frozen.borrow() && server_write.write_all(&up[..read]).await.is_err() {
                     return;
                 }
             }
             read = server_read.read(&mut down), if relaying => {
                 let Ok(read @ 1..) = read else { return };
-                if client_write.write_all(&down[..read]).await.is_err() {
+                if !*frozen.borrow() && client_write.write_all(&down[..read]).await.is_err() {
                     return;
                 }
             }
@@ -144,6 +146,41 @@ async fn a_release_on_a_connection_that_stops_answering_still_frees_its_threads(
     leases.release(granted.lease).await;
 
     wait_until_thread_is_free(&pool, thread).await;
+}
+
+/// A lease asked of a database that stops answering fails within its bound,
+/// so the writer retries instead of holding its lane.
+#[sqlx::test(migrations = false)]
+async fn a_lease_from_a_database_that_stops_answering_fails_in_time(pool: PgPool) {
+    let options = (*pool.connect_options()).clone();
+    let upstream = tokio::net::lookup_host((options.get_host(), options.get_port()))
+        .await
+        .unwrap()
+        .next()
+        .unwrap();
+    let (freeze, frozen) = watch::channel(false);
+    let relayed = relay(upstream, frozen).await;
+    let mut leases = PgEmailThreadLeases::new(
+        options.host(&relayed.ip().to_string()).port(relayed.port()),
+        2,
+    );
+    leases.grant_timeout = Duration::from_millis(200);
+    let thread = Uuid::now_v7();
+    let first = leases
+        .lease(&[thread], LeasePool::Live, EmailWriter::Live)
+        .await
+        .unwrap();
+    leases.release(first.lease).await;
+
+    freeze.send_replace(true);
+    let second = tokio::time::timeout(
+        Duration::from_secs(5),
+        leases.lease(&[thread], LeasePool::Live, EmailWriter::Live),
+    )
+    .await
+    .expect("the lease gave up within its bound");
+
+    assert!(second.is_err());
 }
 
 #[sqlx::test(migrations = false)]
