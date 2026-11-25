@@ -16,6 +16,7 @@ use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing::Instrument as _;
 use utoipa::ToSchema;
 
 use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, ExecutionTurns};
@@ -315,15 +316,27 @@ impl ConnectedAppService {
         let usage = self.admit(access, caller, execution).await?;
         let apps = self.tools.apps(&usage).await?;
         let listings = futures::future::join_all(apps.iter().map(|app| {
+            let tools = Arc::clone(&self.tools);
+            let usage = usage.clone();
             let reference = ConnectedAppRef {
                 kind: app.kind,
                 key: app.key.clone(),
             };
-            let usage = &usage;
+            // Spawned so a listing past the deadline still finishes: dropping
+            // it could lose a rotated OAuth token before it is saved.
+            let listing = tokio::spawn(
+                async move { tools.tools(&usage, &reference).await }.in_current_span(),
+            );
+            let key = app.key.clone();
             async move {
-                tokio::time::timeout(TOOL_LISTING_DEADLINE, self.tools.tools(usage, &reference))
-                    .await
-                    .map_err(|_| CodeModeError::Unavailable)?
+                match tokio::time::timeout(TOOL_LISTING_DEADLINE, listing).await {
+                    Ok(Ok(listed)) => listed,
+                    Ok(Err(_)) => Err(CodeModeError::Unavailable),
+                    Err(_) => {
+                        tracing::warn!(app = %key, "a connected app did not list its tools in time");
+                        Err(CodeModeError::Unavailable)
+                    }
+                }
             }
         }))
         .await;

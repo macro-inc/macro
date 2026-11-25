@@ -77,7 +77,8 @@ export class ConnectedApp {
   /**
    * Find tools across every app the execution's agent was given, by
    * keywords matched against tool names and descriptions, best first (at
-   * most 20). `unsearched` lists apps whose tools could not be read.
+   * most 20). `unsearched` lists apps whose tools could not be read, or not
+   * within 5 seconds.
    */
   static async searchTools(
     client: MacroClient,
