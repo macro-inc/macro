@@ -5,12 +5,33 @@ It shares the repository with the authenticated application, but has its own
 package manifest, Vite entry points, TypeScript aliases, styles, assets, and UI
 components. Application UI changes must not alter the website.
 
-Light mode is temporarily disabled site-wide by `WEBSITE_LIGHT_MODE_ENABLED` in
-`src/features/setup/sitePalette.ts`. Keep its first-paint copies in `index.html`
-and `start.html` in sync. All routes, embedded previews, and `/start` stay dark
-regardless of system preferences or `?theme=cream`; Home navigation must not change
-the palette. The authenticated app is unaffected. The light styles remain for
-future re-enablement.
+The website has two palettes: dark, the default, and a light cream palette
+(`cream`: page `#f5f1e8`, ink `#1d1c1a`). The theme toggle beside the sidebar
+search (`ThemeToggle`, also in the phone menu) switches between them and keeps
+the choice in `localStorage` under `macro-site-palette`. `?theme=cream` or
+`?theme=dark` pins a palette for one URL. The site does not follow the
+operating system's color scheme; `preferredPalette` in
+`src/features/setup/sitePalette.ts` says where to add that fallback. The
+inline first-paint scripts in `index.html` and `start.html` apply the same
+policy before any stylesheet loads, so keep the three in sync; `/start`, the
+homepage and embedded previews all follow it. The authenticated app is
+unaffected.
+
+Light styles key off `html[data-palette='cream']` (and `data-theme-light`),
+never off a component flag. Components draw from tokens, the shared
+`--color-*` set or a few local ones declared beside the component, and
+`cream-preview.css` overrides those tokens for the cream palette. Add a token
+and its cream value rather than a hardcoded hex or a per-component override,
+and keep text at 4.5:1 on both palettes.
+
+An app capture that has a light counterpart renders both images, classed
+`palette-dark-only` and `palette-light-only`; CSS shows the one for the
+palette and the hidden lazy image is never fetched. Prerendered pages are
+dark, so anything that must look right before hydration switches in CSS like
+this. Hydration also skips the first write of a reactive attribute, so on the
+hydrated homepage an attribute bound to `sitePalette()` keeps its prerendered
+dark value until the signal next changes; `ThemeToggle` waits for mount for
+that reason. Product pages render fresh after load and can read it freely.
 
 Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both website entry styles. Keep public website text selectable with native browser behavior; restrict `user-select: none` to interactive controls that need it, never the page globally.
 
@@ -37,7 +58,11 @@ the capture. Place two frosted dark glass pills on the bottom right of each capt
 Scale mobile section headings with `clamp(22px, 6.2vw, 27px)` so short headings fit on one line while longer ones wrap naturally. Follow each capture with one or two short
 sentences in the same type as the introduction that reference other Blocks with `ProductCopy` icon links and explain how they integrate. Below 768px, pricing lists the included modules with an icon and a link to each page. Follow the feature sections with `HomepageTestimonials`, `HomepageBlog` (a horizontal strip on desktop and a vertical post list on phones), and `HomepageClosing`. The captures
 in `src/assets/homepage/`
-come from the in-app tutorial videos and show demo data. Mount shared UI styles
+come from the in-app tutorial videos and show demo data. Each has a
+`-light.webp` counterpart for the light palette, a capture of the website's own
+sample workspace in the same module; recreate them with
+`scripts/capture-light-screens.mjs` (see Tutorial videos) and keep each one's
+own alt text beside its dark capture's. Mount shared UI styles
 scoped to `.macro-homepage` for direct loads and client-side navigation. Keep the
 homepage aura at 25% of the shared gradient and the grain at 1.2% opacity.
 Give each homepage section a faint horizontal oval in its tutorial accent,
@@ -46,7 +71,7 @@ palette.
 The first-paint scripts and `sitePalette.ts` must apply the same palette policy
 before and after hydration.
 
-The neutral light homepage uses a pale secondary action, a sidebar matching the page background, and explicit navigation ink for search text; do not inherit the legacy dark input colors.
+The light homepage uses the cream palette like every other page, with a pale secondary action, a sidebar matching the page background, and explicit navigation ink for search text; do not inherit the legacy dark input colors.
 
 Public actions share the raised white pill, one-pixel glass rim, and subtle
 pointer highlight from #9993. In light mode, keep the lift and rim at 75% of that original treatment, including the header button. The homepage and feature hero buttons use
@@ -317,8 +342,7 @@ Describe task automation through agent assignments and linked pull-request statu
 The homepage uses Solid SSR and hydration through the same App router as feature pages. Prerender it with the website entry template so its styles load before hydration; reserve the signup template for `/start`. Keep SiteHeader mounted in RootLayout when navigating to or from `/`; sidebar Home links must use client-side routing. Desktop sidebar space and visibility must be present before hydration, without waiting for the mobile menu state. `/start` retains its separate signup entry. Both Vite builds compile Tailwind so
 prerendered demos include their UI utilities before the client bundle loads.
 Build verification checks sample workspace controls, icons, avatars, and layout
-with the client bundle blocked on desktop and mobile, including cream URLs that
-must remain dark while light mode is disabled.
+with the client bundle blocked on desktop and mobile, in both palettes.
 It also checks that the homepage's first-painted heading retains its DOM node and
 geometry, then exercises navigation, product links, the product tour, section graphics, and phone
 signup routing. The standalone sample workspace and product demos are checked
@@ -372,6 +396,12 @@ meta-ads repository's tutorial sets, taken at about 1000×600 in dark mode at 2x
 and stored as WebP in `src/features/marketing/assets/screens/`. Register each
 capture in `core/feature-screens.ts` with its alt text and an optional `focus`
 rectangle (capture pixels) that `FeatureScreenshot` outlines in the app accent.
+These screens have no light counterpart yet: the tutorial sets they come from
+build against older app revisions, so they stay dark on the light palette, on
+their wallpaper stage or, on pages without one, a solid dark mat
+(`--feature-screenshot-stage`). Recapture them in the app's light theme from
+those sets, at the same sizes so each `focus` rectangle still lines up, then
+render both with the `palette-dark-only` / `palette-light-only` classes.
 On feature pages with their own hero palette, the screen sits on a toned `TutorialWallpaper` stage (varied per section with a subtle dark atmospheric scrim and grain); pages without a dedicated feature palette keep the flat 50% `#101010` stage.
 On phones the canvas is up to 640px wide, sized so the focus fits, and scrolls sideways starting on it.
 When the focus is too wide for that (about 580 capture pixels or more), add a
@@ -1193,9 +1223,15 @@ Show tutorial previews at full brightness without a dimming overlay.
 Keep tutorial previews and presenter controls theme-aware on feature pages and
 in the merged guides. Dark previews use the original video frames; light previews
 use the existing local UI fixtures. Recreate the light assets with
-`bun scripts/capture-light-tutorial-previews.mjs https://localhost:5191` while Vite
-is running. The generated `*-preview-light.jpg` files are already cropped to the
-app window. Do not invert screenshots or portraits. Keep the per-feature
+`bun scripts/capture-light-screens.mjs <dev server origin>` while Vite is
+running (the origin defaults to `https://localhost:5191`); add capture names,
+such as `mail home`, to redo only those. It mounts the sample workspace in the cream palette in the state
+each capture lists and writes two sets: the `*-preview-light.jpg` tutorial
+previews, already cropped to the app window, and the homepage's
+`src/assets/homepage/*-light.webp` windows. A tutorial listed in
+`LIGHT_PREVIEWS` (`core/tutorial-videos.ts`) shows its light preview; the
+others, whose module the sample workspace does not have, keep their dark
+frame. Do not invert screenshots or portraits. Keep the per-feature
 wallpaper and original playback in both themes. The documentation compiler routes
 known tutorial embeds through this player; external videos stay native.
 
