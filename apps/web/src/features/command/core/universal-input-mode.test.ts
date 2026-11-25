@@ -15,6 +15,13 @@ it.each([
   expect(shouldUseUniversalInput(text)).toBe(expected);
 });
 
+it('leaves typed search operators out of the length', () => {
+  expect(
+    shouldUseUniversalInput('type:task assignee:me status:in_progress')
+  ).toBe(false);
+  expect(shouldUseUniversalInput(`type:task ${'a'.repeat(34)}`)).toBe(true);
+});
+
 it('keeps a shorter edited draft in composer mode until cleared', () => {
   expect(shouldUseUniversalInput('email julia', true)).toBe(true);
   expect(shouldUseUniversalInput(' \n ', true)).toBe(false);

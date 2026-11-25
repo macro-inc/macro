@@ -23,6 +23,7 @@ import { MobileSearchResults } from './MobileSearchResults';
 import { SearchState } from './mobileSearchState';
 
 const mocks = vi.hoisted(() => ({
+  entitySearch: [] as { query: string; category: string }[],
   accountId: (() => 'owner') as Accessor<string>,
   authenticated: (() => true) as Accessor<boolean>,
   fullText: vi.fn(),
@@ -152,9 +153,40 @@ vi.mock('@entity', () => ({
     </div>
   ),
 }));
+vi.mock(
+  '@app/features/next-soup/soup-view/filters-bar/tag-filter-state',
+  () => ({
+    createTagOptions: () => ({
+      options: () => [],
+      defByOption: () => new Map(),
+    }),
+  })
+);
+vi.mock('@app/features/next-soup/soup-view/search-operator-lookup', () => ({
+  createSearchOperatorLookup: () => () => ({
+    userId: 'macro|me@example.com',
+    tags: () => [],
+    inboxes: () => [],
+    channels: () => [],
+  }),
+}));
+vi.mock(
+  '@app/features/next-soup/soup-view/filters-bar/search-operator-values',
+  () => ({
+    createSearchOperatorValues: () => () => ({
+      people: [],
+      tags: [],
+      inboxes: [],
+      channels: [],
+    }),
+  })
+);
 vi.mock('../queries/entity-search', () => ({
-  useEntitySearch: () => ({
-    items: () => mocks.items(),
+  useEntitySearch: (query: () => string, category: () => string) => ({
+    items: () => {
+      mocks.entitySearch.push({ query: query(), category: category() });
+      return mocks.items();
+    },
     rankItems: (items: QuickAccessItem[]) => items,
     isLoadingEntities: () => mocks.loadingEntities(),
     isSearchingEntities: () => false,
@@ -281,15 +313,11 @@ it('offers full text above empty results, only mounts it explicitly, and keeps t
   expect(screen.getByPlaceholderText('Search…')).toBe(input);
 });
 
-it('omits full text for Projects and hides search on result opening', async () => {
+it('lists a project by its name and hides search on result opening', async () => {
   const [items, setItems] = createSignal<QuickAccessItem[]>([]);
   mocks.items = items;
   render(() => <MobileSearchResults />);
   SearchState.setQuery('teo');
-  SearchState.searchFullText();
-  SearchState.setCategory('projects');
-  expect(screen.queryByText(/Search full text for/)).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   setItems([
     {
       id: 'project',
@@ -311,7 +339,6 @@ it('omits full text for Projects and hides search on result opening', async () =
   expect(mocks.open).toHaveBeenCalled();
   SearchState.open();
   expect(SearchState.mode()).toBe('name');
-  expect(SearchState.category()).toBe('all');
 });
 
 it('preserves the search after a failed person lookup and on return from a successful retry', async () => {
@@ -720,7 +747,6 @@ it('reloads name rows on remount instead of storing them in history', async () =
   mocks.items = items;
   mocks.loadingEntities = loading;
   SearchState.setQuery('Project');
-  SearchState.setCategory('projects');
   const view = render(() => <MobileSearchResults />);
   fireEvent.scroll(screen.getByRole('region', { name: 'Search results' }), {
     target: { scrollTop: 800 },
@@ -733,7 +759,7 @@ it('reloads name rows on remount instead of storing them in history', async () =
   expect(mocks.entryState?.['mobileSearch.nameOrder']).toEqual({
     accountId: 'owner',
     query: 'Project',
-    category: 'projects',
+    category: 'all',
     ids: savedItems.map((item) => item.id),
   });
   expect(mocks.entryState?.['mobileSearch.nameScroll']).not.toHaveProperty(
@@ -995,25 +1021,31 @@ it('discards saved full-text rows on access loss even when an old cursor remains
 });
 
 it('keeps a covered native search entry independent of a new dock session', () => {
-  SearchState.setQuery('original');
-  SearchState.setCategory('email');
+  SearchState.setQuery('type:email original');
   render(() => <MobileSearchResults />);
   mocks.setActive(false);
   expect(SearchState.isOpen()).toBe(false);
   SearchState.open();
-  SearchState.setQuery('new search');
-  SearchState.setCategory('tasks');
-  expect(
-    screen.getByRole('button', { name: 'Email' }).getAttribute('aria-pressed')
-  ).toBe('true');
-  expect(
-    screen.getByRole('button', { name: 'Tasks' }).getAttribute('aria-pressed')
-  ).toBe('false');
-  fireEvent.click(screen.getByRole('button', { name: 'Files' }));
-  expect(SearchState.category()).toBe('tasks');
+  SearchState.setQuery('type:task new search');
+  // The covered entry's starters show and edit its own search.
+  expect(screen.queryByRole('button', { name: 'Tasks' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Email' }));
+  expect(SearchState.query()).toBe('type:task new search');
   mocks.setActive(true);
-  expect(SearchState.query()).toBe('original');
-  expect(SearchState.category()).toBe('documents');
+  expect(SearchState.query()).toBe('original type:');
+});
+
+it('narrows name results with type: and lists other operators as full text', () => {
+  render(() => <MobileSearchResults />);
+  SearchState.setQuery('type:task teo');
+  expect(mocks.entitySearch.at(-1)).toEqual({
+    query: 'teo',
+    category: 'tasks',
+  });
+  expect(screen.getByText(/Search full text for/)).toBeTruthy();
+  SearchState.setQuery('assignee:me teo');
+  expect(mocks.fullText).toHaveBeenCalled();
+  expect(screen.queryByText(/Search full text for/)).toBeNull();
 });
 
 it('loads another name page near the end without a persistent paging bar', async () => {
@@ -1240,13 +1272,13 @@ it('resumes viewport paging when editing a restored search in the dock', async (
   mocks.entryState = {
     'mobileSearch.session': {
       query: 'First',
-      category: 'projects',
+      category: 'all',
       mode: 'name',
     },
     'mobileSearch.nameScroll': {
       accountId: 'owner',
       query: 'First',
-      category: 'projects',
+      category: 'all',
       id: 'first',
       offset: 0,
       within: 0,

@@ -1,12 +1,14 @@
-import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
+import type { SearchOperatorLookup } from '@app/features/next-soup/core/search-operator-filters';
 import type { CreateSearchStateOptions } from '@app/features/soup/search/create-search-state';
 import { createRoot, createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
-import type { EntitySearchCategory } from './entity-search';
 import { createMobileFullTextSearch } from './mobile-full-text-search';
 
 const capture = vi.hoisted(() => ({
   options: undefined as CreateSearchStateOptions | undefined,
+  browse: undefined as
+    | { request: () => { body: unknown }; options: () => { enabled: boolean } }
+    | undefined,
   pending: false,
   serviceEnabled: true,
 }));
@@ -26,11 +28,27 @@ vi.mock('@app/features/soup/search', () => ({
     };
   },
 }));
+vi.mock('@queries/soup/items', () => ({
+  useSoupAstItemsQuery: (
+    request: () => { body: unknown },
+    options: () => { enabled: boolean }
+  ) => {
+    capture.browse = { request, options };
+    return { isPending: false, isFetching: false };
+  },
+}));
+
+const LOOKUP: SearchOperatorLookup = {
+  userId: 'macro|me@example.com',
+  tags: () => [],
+  inboxes: () => [],
+  channels: () => [],
+};
 
 it('keeps an enabled initial query settling before it starts fetching', () => {
   createRoot((dispose) => {
     const [query, setQuery] = createSignal('teo');
-    const search = createMobileFullTextSearch(query, () => 'all');
+    const search = createMobileFullTextSearch(query, () => LOOKUP);
     capture.pending = true;
     expect(search.isSettling()).toBe(true);
     capture.pending = false;
@@ -46,34 +64,27 @@ it('keeps an enabled initial query settling before it starts fetching', () => {
   });
 });
 
-it('maps Email and People without mailbox facets and gates Projects/empty queries', () => {
+it('sends words with their operators, and lists operators alone through the feed', () => {
   createRoot((dispose) => {
-    const [category, setCategory] = createSignal<EntitySearchCategory>('email');
-    const [query, setQuery] = createSignal('teo');
-    createMobileFullTextSearch(query, category);
+    const [query, setQuery] = createSignal('type:task teo');
+    createMobileFullTextSearch(query, () => LOOKUP);
     const options = capture.options!;
-    const email = options.buildRequest({
-      query: query(),
-      matchType: 'partial',
-    }).body;
-    expect(email.query).toBe('teo');
-    expect(email.search_on).toBe('name_content');
-    expect(email.filters?.email_filters).toBeUndefined();
-    expect(email.filters?.channel_filters?.channel_ids).toEqual([NIL_UUID]);
-    expect(email.filters?.document_filters?.document_ids).toEqual([NIL_UUID]);
+    expect(options.text()).toBe('type:task teo');
+    expect(options.enabled?.()).toBe(true);
     expect(options.disableLocalSearch?.()).toBe(true);
-    setCategory('dms');
-    const people = options.buildRequest({
-      query: query(),
-      matchType: 'partial',
-    }).body;
-    expect(people.filters?.email_filters?.email_thread_ids).toEqual([NIL_UUID]);
-    expect(people.filters?.channel_filters).toBeUndefined();
-    setCategory('projects');
+    expect(capture.browse?.options().enabled).toBe(false);
+
+    // The service refuses operators alone outside email.
+    setQuery('assignee:me status:in_progress');
     expect(options.enabled?.()).toBe(false);
-    setCategory('all');
+    expect(capture.browse?.options().enabled).toBe(true);
+    expect(JSON.stringify(capture.browse?.request().body)).toContain(
+      'me@example.com'
+    );
+
     setQuery('  ');
     expect(options.enabled?.()).toBe(false);
+    expect(capture.browse?.options().enabled).toBe(false);
     dispose();
   });
 });

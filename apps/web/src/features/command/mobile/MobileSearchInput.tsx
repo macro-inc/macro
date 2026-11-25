@@ -1,3 +1,8 @@
+import {
+  SearchOperatorOverlay,
+  type SearchTextPart,
+} from '@app/components/view-shell/search-operator-text';
+import { searchOperatorSpans } from '@app/features/next-soup/core/search-operators';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import {
@@ -12,6 +17,20 @@ import { CommandMenuSearchInput } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { SearchState } from './mobileSearchState';
+
+/** The field's text with the operators the search reads marked, to draw. */
+function operatorParts(text: string): SearchTextPart[] {
+  const parts: SearchTextPart[] = [];
+  let at = 0;
+  for (const { start, end } of searchOperatorSpans(text)) {
+    if (start > at)
+      parts.push({ text: text.slice(at, start), operator: false });
+    parts.push({ text: text.slice(start, end), operator: true });
+    at = end;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), operator: false });
+  return parts;
+}
 
 const MobileUniversalInput = lazyNamed(
   () => import('../../universal-input/universal-input'),
@@ -96,28 +115,39 @@ export function MobileSearchInput() {
         ref={setContainer}
         class="island pointer-events-auto flex min-h-11 min-w-0 flex-1 items-end gap-1 rounded-[22px] py-1 pr-1 pl-4"
       >
-        <CommandMenuSearchInput
-          as="textarea"
-          ref={inputRef}
-          id="mobile-search-input"
-          aria-label={
-            universalInputEnabled()
-              ? t('commandMenu.mobileSearchOrCreate')
-              : t('commandMenu.hintSearch')
-          }
-          readOnly={sending()}
-          aria-busy={sending()}
-          enterkeyhint="enter"
-          class="min-h-9 max-h-32 py-1.5 text-base text-ink"
-          placeholder={t('commandMenu.mobileSearchPlaceholder')}
-          value={SearchState.query()}
-          // Blurring never ends the session — the keyboard drops but search
-          // mode stays until the X is pressed or navigation covers this entry.
-          onInput={(e) => {
-            if (!e.isComposing) SearchState.setQuery(e.currentTarget.value);
-          }}
-          onCompositionEnd={(e) => SearchState.setQuery(e.currentTarget.value)}
-        />
+        {/* Operators (`type:task`) are drawn as tokens behind the text. */}
+        <div class="relative flex min-w-0 flex-1">
+          <SearchOperatorOverlay
+            multiline
+            parts={operatorParts(SearchState.query())}
+            input={() => inputRef}
+            class="py-1.5 text-base text-ink"
+          />
+          <CommandMenuSearchInput
+            as="textarea"
+            ref={inputRef}
+            id="mobile-search-input"
+            aria-label={
+              universalInputEnabled()
+                ? t('commandMenu.mobileSearchOrCreate')
+                : t('commandMenu.hintSearch')
+            }
+            readOnly={sending()}
+            aria-busy={sending()}
+            enterkeyhint="enter"
+            class="min-h-9 max-h-32 py-1.5 text-base text-transparent caret-ink"
+            placeholder={t('commandMenu.mobileSearchPlaceholder')}
+            value={SearchState.query()}
+            // Blurring never ends the session — the keyboard drops but search
+            // mode stays until the X is pressed or navigation covers this entry.
+            onInput={(e) => {
+              if (!e.isComposing) SearchState.setQuery(e.currentTarget.value);
+            }}
+            onCompositionEnd={(e) =>
+              SearchState.setQuery(e.currentTarget.value)
+            }
+          />
+        </div>
         {/* The input only mounts while a session is open, so the X is always
           available as the exit. */}
         <button
