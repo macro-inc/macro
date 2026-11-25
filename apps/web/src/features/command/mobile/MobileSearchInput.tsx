@@ -2,10 +2,13 @@ import {
   SearchOperatorOverlay,
   type SearchTextPart,
 } from '@app/components/view-shell/search-operator-text';
+import { SearchTipsSheet } from '@app/components/view-shell/search-tips';
+import { SEARCH_OPERATORS_DOCS_URL } from '@app/constants/docs-links';
 import {
   type SearchOperatorBinding,
   searchOperatorSpans,
 } from '@app/features/next-soup/core/search-operators';
+import { searchViewTips } from '@app/features/next-soup/soup-view/search-tips';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import {
@@ -14,6 +17,7 @@ import {
 } from '@components/app/mobile/use-mobile-nav';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
 import { lazyNamed } from '@core/util/lazyNamed';
+import InfoIcon from '@icon/system/regular/info.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { CommandMenuSearchInput } from '@ui';
@@ -54,6 +58,7 @@ export function MobileSearchInput() {
   // The text as shown, a word being composed included, which the search
   // only takes once it commits.
   const [shown, setShown] = createSignal(SearchState.query());
+  const [tipsOpen, setTipsOpen] = createSignal(false);
   createEffect(on(SearchState.query, setShown));
 
   const foregroundView = useForegroundMobileView();
@@ -159,6 +164,17 @@ export function MobileSearchInput() {
             }
           />
         </div>
+        {/* The empty field offers its tips beside the X, as Mail's does. */}
+        <Show when={!shown().trim()}>
+          <button
+            type="button"
+            class="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted"
+            aria-label={t('searchOperators.tips')}
+            onClick={() => setTipsOpen(true)}
+          >
+            <InfoIcon class="size-4" />
+          </button>
+        </Show>
         {/* The input only mounts while a session is open, so the X is always
           available as the exit. */}
         <button
@@ -173,6 +189,12 @@ export function MobileSearchInput() {
           <XIcon class="size-4" />
         </button>
       </div>
+      <SearchTipsSheet
+        tips={searchViewTips()}
+        docsUrl={SEARCH_OPERATORS_DOCS_URL}
+        open={tipsOpen()}
+        onOpenChange={setTipsOpen}
+      />
     </>
   );
 }

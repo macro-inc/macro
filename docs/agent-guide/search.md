@@ -16,7 +16,14 @@ operators, the search service's (`type:task`, `status:in_progress`,
 field draws every whole operator in the accent colour and offers operator
 names, then their values (types, statuses, priorities, `me` and people, the
 person's tags, inboxes and channels), under it as they are typed: arrow keys
-move, Tab or Enter writes the row, Escape hides them. With words beside them the
+move, Enter or a click writes the row, Escape hides them. As in Mail, a plain word
+offers the filter it stands for first (`tasks` gives `type:task`, also `email`,
+`docs`, `unread`), and a word of three letters or more that starts a person's
+name offers `from:` and `assignee:` them; Enter alone still searches the words.
+Hovering the info button beside the `Search` title lists seven operators with
+what each finds, and pressing it (or `All search operators`) opens the docs'
+`#search-operators` section; on touch, the empty bottom field has an info
+button beside the X that opens the same list as a `Search tips` sheet. With words beside them the
 service reads the operators; operators alone (`assignee:me`) list through the
 view's feed with the filters they set. Opening Search on a tag writes `tag:`, a
 Command K category writes `type:`, the universal input writes its extracted

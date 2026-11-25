@@ -1,5 +1,6 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
+import { foldName } from '@core/util/name-match-score';
 import {
   type Accessor,
   createEffect,
@@ -76,24 +77,13 @@ export function emailSearchValueBeingTyped(
 const MIN_NAME_LETTERS = 3;
 
 /**
- * Lowercase without accents, and with one apostrophe, so `jose` finds José
- * and a phone's `o’neil` finds O'Neil.
- */
-const foldName = (text: string) =>
-  text
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replaceAll('’', "'")
-    .toLowerCase();
-
-/**
  * A plain word typed at the end of the field that could start someone's
  * name (`ana`), so the rows can offer mail from or to them.
  */
 export function emailSearchNameBeingTyped(text: string): string | undefined {
   const token = typedToken(text)?.token;
   if (!token || token.length < MIN_NAME_LETTERS) return undefined;
-  return /^\p{L}[\p{L}'’.-]*$/u.test(token) ? token : undefined;
+  return /^\p{L}[\p{L}\p{M}'’.-]*$/u.test(token) ? token : undefined;
 }
 
 /** What a row names, which stays the same as rows load around it. */

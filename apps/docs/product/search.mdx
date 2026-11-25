@@ -10,11 +10,44 @@ Search is the easiest way to find specific files in Macro. When using search for
 
 > Use the <kbd>/</kbd> shortcut to open up search or the <kbd>cmd</kbd>+<kbd>k</kbd> menu to search by name.
 
-Open **Type** to limit results to one kind of Block, such as channels, documents, tasks, or email.
+Type [search operators](#search-operators) such as `type:task` or `tag:finance` to narrow results.
 
 To further narrow search results, combine your keywords with an @mention of a specific person.
 
 Search covers more than titles: document bodies, email threads, channel messages, call transcripts, and file contents are all indexed. You can also ask an [agent](/product/agents) to find things for you; agents use the same index.
+
+## Search operators
+
+The Search field reads search operators: a name, a colon, and a value that narrows the search. Combine as many as you like with ordinary words, in any order. For example, `launch type:task status:in_progress assignee:me` finds your tasks in progress that mention "launch". Operators on their own list everything they match, most recently updated first.
+
+As you type, the field suggests operators, their values, people, tags, and channels. On a computer, a word such as `tasks` or `unread`, or the start of a person's name, also offers the operator it stands for. Hover the info button beside the **Search** title for a few examples; on a phone, tap it in the empty search field. On a phone, the **From**, **Type**, **Tag**, **Date**, and **Unread** buttons above the results start an operator for you.
+
+| Operator | Finds |
+| --- | --- |
+| `type:task` | One kind of item: `task`, `doc`, `email`, `channel`, `call`, `folder`, `agent`, or `calendar` |
+| `status:in_progress` | Tasks with a status: `not_started`, `in_progress`, `in_review`, `completed`, or `canceled`. Calls that were `missed`, `attended`, or `unattended` |
+| `priority:high` | Tasks with a priority: `urgent`, `high`, `medium`, or `low` |
+| `assignee:me` | Tasks assigned to you, or to someone by address, such as `assignee:ana@example.com` |
+| `author:me` | Tasks you created, or that someone created, by address |
+| `tag:finance` | Items with the tag Finance |
+| `inbox:ana@example.com` | Email in one of your connected inboxes |
+| `in:#launch` | Messages and calls in a channel you're in |
+| `from:ana` | Mail from Ana, as in [Search mail](#search-mail). With `type:channel` or `type:call`, who sent the message or spoke: `from:me` or an address |
+| `"q3 plan"` | Containing the exact phrase "q3 plan" |
+
+The operators in [Search mail](#search-mail), such as `subject:lunch`, `is:unread`, `has:attachment`, and `newer_than:7d`, work here too, and keep the results to email.
+
+A few details:
+
+- Put `OR` between two values of the same operator to match either one: `tag:finance OR tag:legal`, `status:completed OR status:canceled`. Without `OR`, every operator must match, so `tag:finance tag:legal` finds items with both tags.
+- `assignee:` and `author:` take `me` or a full address, and `inbox:` takes the address of one of your inboxes. A bare name such as `assignee:ana` is left out of the search until you pick someone from the suggestions or type their full address.
+- A minus before a word, such as `-draft`, leaves it out only when the search is limited to email, by `type:email` or an operator from Search mail. Elsewhere the word is searched as usual.
+- Quote a value that has a space in it: `tag:"team offsite"`, `in:#"team lunch"`.
+- Each operator keeps the results to the kinds of item it applies to. `status:` and `priority:` find tasks (or calls, for a call status), `tag:` finds items that can have tags, and `in:#` finds channels and calls.
+- A sender on its own, such as `type:channel from:me`, needs a word beside it.
+- `@ana` finds items that mention Ana. `from:ana` finds what Ana sent.
+- Operator names are not case sensitive, so `Type:Task` works too.
+- An operator with a value it can't read, such as `type:tasks` or `priority:critical`, is searched as ordinary words.
 
 ## Search mail
 
@@ -50,12 +83,3 @@ A few details:
 - `newer_than:` and `older_than:` take a number and a unit: `d` for days, `w` for weeks, `m` for months, `y` for years.
 - Operator names are not case sensitive, so `From:ana` works too.
 - An operator with a value it can't read, such as `is:important`, is searched as an ordinary word.
-
-## Filtering by tags
-
-Open the filter menu and select the **Tags** chip to narrow results to items carrying specific [tags](/concepts/properties). Once you've selected two or more tags, a match-mode toggle appears on the chip:
-
-- **Any** — return items that have any of the selected tags. This is the default.
-- **All** — return items that have every selected tag.
-
-Use **All** to zero in on the intersection of several tags (for example, everything tagged both `urgent` and `finance`), and **Any** to cast a wider net across related tags.

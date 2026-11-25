@@ -62,7 +62,9 @@ the Soup-backed thread list, and saved email views.
   more, is typed), behind
   `enable-email-wide-search`. `components/EmailSearchTips.tsx` is the
   operator list the header's info button shows on hover and the touch field's
-  Search tips sheet shows, linking to the docs' `#search-mail` section.
+  Search tips sheet shows, linking to the docs' `#search-mail` section; the
+  button and sheet are the shared `components/view-shell/search-tips.tsx`,
+  which the Search view uses with its own list.
   Operators are drawn by the shared
   `components/view-shell/search-operator-text.tsx`, which keeps a quoted
   value in its token.
