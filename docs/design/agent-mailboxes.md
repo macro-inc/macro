@@ -121,12 +121,29 @@ A deployment whose provider URL is not the provider's real API reports
 
 The hosted agent's `mailbox` capability
 (`packages/starter-agent/behavior/capabilities/mailbox`) is how an agent
-teammate uses it: its address, its messages, and drafts. A draft is shown
-to the agent's owner in a DM, and `sendMyEmail` or `replyToMyEmail` sends
-exactly that draft once the owner answers it, quoting their answer as the
-`confirmation`. The capability reaches only `macro.agentMailbox`, never a
-connected inbox, and the agent's `no-email` guard refuses the SDK's mailbox
-sends and routes outside it.
+teammate uses it: its address, its messages, and drafts.
+
+- A draft is shown to the agent's owner in a DM whose text carries the
+  draft's id and a SHA-256 fingerprint of its recipients, subject, body and
+  reply target. Drafts are kept in the agent's run state for a day; a sent
+  one keeps only what went out.
+- `sendMyEmail` or `replyToMyEmail` sends only when the given message is
+  the current owner's latest reply in that DM's thread, says "send", the
+  thread's root is the agent's own message showing the draft's current
+  fingerprint, and the DM is less than a day old. The owner's reply is the
+  `confirmation`, and the send's idempotency key is derived from it.
+- A reply to the mailbox's own sent message is refused (it would go to that
+  message's recipients); a reply to inbound mail goes where the provider
+  sends replies, which may honor a `Reply-To` the draft doesn't show.
+- The capability reaches only `macro.agentMailbox`, never a connected
+  inbox, and a script gets its operations, not the port. The agent's
+  `no-email` guard refuses the plain ways around it (the SDK's mailbox,
+  its routes, the port, the drafts), by matching text.
+
+All of this runs in the agent's own code, which the agent can change and
+which a script can sidestep. The server checks only that `confirmation` is
+non-empty, plus the send caps above: it does not yet know that the owner
+approved a send.
 
 ## Follow-ups
 
