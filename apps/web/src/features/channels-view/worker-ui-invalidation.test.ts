@@ -1,6 +1,6 @@
 import { type ChannelEntity, isChannelEntity } from '@entity';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import type { Client, OperationResult } from '@urql/core';
+import { type Client, CombinedError, type OperationResult } from '@urql/core';
 import {
   createComponent,
   createComputed,
@@ -95,6 +95,10 @@ vi.mock(
 );
 
 import { useCachedChannelsByIds } from '../../lib/queries/channel/by-ids';
+import {
+  channelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../lib/queries/channel/notification-refresh';
 import { createGraphqlSoupAstItemsQuery } from '../../lib/queries/soup/graphql/items';
 
 type WireNotification = {
@@ -491,6 +495,9 @@ describe('worker-to-UI invalidation through CacheWorkerCore and CoordinatorCore'
   });
 
   afterEach(async () => {
+    if (runtimeState.client) {
+      disposeChannelNotificationRefresh(runtimeState.client);
+    }
     await runtimeState.host?.dispose();
     runtimeState.host = undefined;
     runtimeState.engine = undefined;
@@ -858,6 +865,926 @@ describe('worker-to-UI invalidation through CacheWorkerCore and CoordinatorCore'
       expect(missingSnapshots).toEqual([]);
     } finally {
       releaseFetch();
+      dispose();
+      queryClient.clear();
+    }
+  });
+
+  it('keeps a compacted channel visible across a 50 ms fetch even after a previous lookup in the receiving batch failed for another ID', async () => {
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const engine = createChannelCacheEngine(
+      initialIds.map((id) => makeWireChannel(id, { isParticipant: true }))
+    );
+    // Evict ch-0501 before initial mount so Batch 1's first missing-entity
+    // lookup fails and leaves a stale batch error on Batch 1.
+    engine.evictChannel('ch-0501');
+    runtimeState.engine = engine;
+    const host = createWorkerCacheHost({
+      scope: 'worker-ui-test',
+      requestTimeoutMs: 2_000,
+      onInitializationError: vi.fn(),
+      telemetry: { record: vi.fn(), flush: vi.fn() },
+    });
+    runtimeState.host = host;
+
+    const pendingFetches: Promise<void>[] = [];
+    let ch0000Started!: () => void;
+    const ch0000StartedPromise = new Promise<void>((resolve) => {
+      ch0000Started = resolve;
+    });
+    let releaseCh0000!: () => void;
+    const releaseCh0000Promise = new Promise<void>((resolve) => {
+      releaseCh0000 = resolve;
+    });
+
+    runtimeState.client = {
+      executeQuery: (
+        request: { variables?: unknown },
+        opts?: Record<string, unknown>
+      ) => {
+        const subject = makeSubject<OperationResult>();
+        const serialized = JSON.stringify(request?.variables ?? {});
+        if (serialized.includes('ch-0501')) {
+          pendingFetches.push(
+            (async () => {
+              await Promise.resolve();
+              subject.next({
+                operation: { ...request, context: opts ?? {} } as never,
+                error: new CombinedError({
+                  networkError: new Error('ch-0501 lookup failed'),
+                }),
+                stale: false,
+                hasNext: false,
+              });
+              subject.complete();
+            })()
+          );
+        } else if (serialized.includes('ch-0000')) {
+          ch0000Started();
+          pendingFetches.push(
+            (async () => {
+              await releaseCh0000Promise;
+              const restored = makeWireChannel('ch-0000', {
+                isParticipant: true,
+                channelName: 'Restored ch-0000 after stale error',
+              });
+              await host.writeQuery({
+                generation: TEST_AUTHORITY_GENERATION,
+                query:
+                  'query MissingChannels { user { soup { items { id } } } }',
+                data: { channels: [restored] },
+              });
+              subject.next({
+                operation: { ...request, context: opts ?? {} } as never,
+                data: {
+                  user: {
+                    soup: {
+                      items: [restored],
+                      nextCursor: null,
+                    },
+                  },
+                },
+                stale: false,
+                hasNext: false,
+              });
+              subject.complete();
+            })()
+          );
+        }
+        return subject.source;
+      },
+    } as unknown as Client;
+
+    const queryClient = new QueryClient();
+    let result!: ReturnType<typeof useCachedChannelsByIds>;
+    let setIds!: (next: string[]) => void;
+    let watchCompaction = false;
+    const missingSnapshots: Array<{
+      ids: string[];
+      error: string | undefined;
+    }> = [];
+
+    const dispose = createRoot((dispose) => {
+      const [ids, updateIds] = createSignal(initialIds);
+      setIds = updateIds;
+      createComponent(QueryClientProvider, {
+        client: queryClient,
+        get children() {
+          result = useCachedChannelsByIds(ids, () => true);
+          createComputed(() => {
+            const list = result.channels();
+            if (watchCompaction && !list.some((ch) => ch.id === 'ch-0000')) {
+              missingSnapshots.push({
+                ids: list.map((ch) => ch.id).sort(),
+                error: result.error()?.message,
+              });
+            }
+          });
+          return null;
+        },
+      });
+      return dispose;
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(result.channels()).toHaveLength(1500);
+          expect([...result.failedIds()]).toEqual(['ch-0501']);
+          expect(result.error()).toBeDefined();
+        },
+        { timeout: 10_000 }
+      );
+
+      // Evict ch-0000, remove ch-0501 (and bucket 3), and leave bucket 0 (1 ID),
+      // bucket 1 (2 IDs, previously errored on ch-0501), and bucket 2 (3 IDs) so
+      // compaction merges bucket 0 directly into bucket 1.
+      engine.evictChannel('ch-0000');
+      watchCompaction = true;
+      const surviving = [
+        'ch-0000',
+        'ch-0500',
+        'ch-0502',
+        'ch-1000',
+        'ch-1001',
+        'ch-1002',
+      ];
+      setIds(surviving);
+
+      await ch0000StartedPromise;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+      expect(result.error()).toBeUndefined();
+      expect(missingSnapshots).toEqual([]);
+
+      releaseCh0000();
+      await Promise.all(pendingFetches);
+      await vi.waitFor(() => {
+        const ch0 = result.channels().find((ch) => ch.id === 'ch-0000');
+        expect(ch0?.name).toBe('Restored ch-0000 after stale error');
+      });
+      expect([...result.failedIds()]).toEqual([]);
+      expect(result.error()).toBeUndefined();
+      expect(missingSnapshots).toEqual([]);
+    } finally {
+      releaseCh0000();
+      dispose();
+      queryClient.clear();
+    }
+  });
+
+  it('keeps a compacted channel visible while pending when another failed ID stays in the receiving batch, then retires and retries on a new failure', async () => {
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const engine = createChannelCacheEngine(
+      initialIds.map((id) => makeWireChannel(id, { isParticipant: true }))
+    );
+    engine.evictChannel('ch-0501');
+    runtimeState.engine = engine;
+    const host = createWorkerCacheHost({
+      scope: 'worker-ui-test',
+      requestTimeoutMs: 2_000,
+      onInitializationError: vi.fn(),
+      telemetry: { record: vi.fn(), flush: vi.fn() },
+    });
+    runtimeState.host = host;
+
+    const pendingFetches: Promise<void>[] = [];
+    let combinedAttempts = 0;
+    let combinedStarted!: () => void;
+    const combinedStartedPromise = new Promise<void>((resolve) => {
+      combinedStarted = resolve;
+    });
+    let releaseCombinedFailure!: () => void;
+    const releaseCombinedFailurePromise = new Promise<void>((resolve) => {
+      releaseCombinedFailure = resolve;
+    });
+
+    runtimeState.client = {
+      executeQuery: (
+        request: { variables?: unknown },
+        opts?: Record<string, unknown>
+      ) => {
+        const subject = makeSubject<OperationResult>();
+        const serialized = JSON.stringify(request?.variables ?? {});
+        if (serialized.includes('ch-0000') && serialized.includes('ch-0501')) {
+          combinedAttempts += 1;
+          const attempt = combinedAttempts;
+          if (attempt === 1) {
+            combinedStarted();
+            pendingFetches.push(
+              (async () => {
+                await releaseCombinedFailurePromise;
+                subject.next({
+                  operation: { ...request, context: opts ?? {} } as never,
+                  error: new CombinedError({
+                    networkError: new Error('combined lookup failed'),
+                  }),
+                  stale: false,
+                  hasNext: false,
+                });
+                subject.complete();
+              })()
+            );
+          } else {
+            pendingFetches.push(
+              (async () => {
+                await Promise.resolve();
+                const restored = makeWireChannel('ch-0000', {
+                  isParticipant: true,
+                  channelName: 'Recovered ch-0000 on retry',
+                });
+                await host.writeQuery({
+                  generation: TEST_AUTHORITY_GENERATION,
+                  query:
+                    'query MissingChannels { user { soup { items { id } } } }',
+                  data: { channels: [restored] },
+                });
+                subject.next({
+                  operation: { ...request, context: opts ?? {} } as never,
+                  data: {
+                    user: {
+                      soup: {
+                        items: [restored],
+                        nextCursor: null,
+                      },
+                    },
+                  },
+                  stale: false,
+                  hasNext: false,
+                });
+                subject.complete();
+              })()
+            );
+          }
+        } else if (serialized.includes('ch-0501')) {
+          pendingFetches.push(
+            (async () => {
+              await Promise.resolve();
+              subject.next({
+                operation: { ...request, context: opts ?? {} } as never,
+                error: new CombinedError({
+                  networkError: new Error('initial ch-0501 failure'),
+                }),
+                stale: false,
+                hasNext: false,
+              });
+              subject.complete();
+            })()
+          );
+        }
+        return subject.source;
+      },
+    } as unknown as Client;
+
+    const queryClient = new QueryClient();
+    let result!: ReturnType<typeof useCachedChannelsByIds>;
+    let setIds!: (next: string[]) => void;
+    let watchPending = false;
+    const missingWhilePending: string[][] = [];
+
+    const dispose = createRoot((dispose) => {
+      const [ids, updateIds] = createSignal(initialIds);
+      setIds = updateIds;
+      createComponent(QueryClientProvider, {
+        client: queryClient,
+        get children() {
+          result = useCachedChannelsByIds(ids, () => true);
+          createComputed(() => {
+            const list = result.channels();
+            if (watchPending && !list.some((ch) => ch.id === 'ch-0000')) {
+              missingWhilePending.push(list.map((ch) => ch.id).sort());
+            }
+          });
+          return null;
+        },
+      });
+      return dispose;
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(result.channels()).toHaveLength(1500);
+          expect([...result.failedIds()]).toEqual(['ch-0501']);
+        },
+        { timeout: 10_000 }
+      );
+
+      // Keep failed ch-0501 in bucket 1 while compacting evicted ch-0000 into it.
+      engine.evictChannel('ch-0000');
+      watchPending = true;
+      setIds([
+        'ch-0000',
+        'ch-0500',
+        'ch-0501',
+        'ch-1000',
+        'ch-1001',
+        'ch-1002',
+      ]);
+
+      await combinedStartedPromise;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(['ch-0000', 'ch-0500', 'ch-1000', 'ch-1001', 'ch-1002']);
+      expect(missingWhilePending).toEqual([]);
+
+      // Now fail the post-handoff lookup for [ch-0000, ch-0501]: ch-0000 must
+      // retire from handoff so both missing IDs report failure and retry works.
+      watchPending = false;
+      releaseCombinedFailure();
+      await vi.waitFor(() => {
+        expect([...result.failedIds()].sort()).toEqual(['ch-0000', 'ch-0501']);
+        expect(result.error()?.message).toContain('combined lookup failed');
+      });
+      expect(result.channels().some((ch) => ch.id === 'ch-0000')).toBe(false);
+
+      // Retry restores ch-0000 and marks deleted ch-0501 as unavailable.
+      await result.retry();
+      await Promise.all(pendingFetches);
+      await vi.waitFor(() => {
+        expect(result.channels().find((ch) => ch.id === 'ch-0000')?.name).toBe(
+          'Recovered ch-0000 on retry'
+        );
+        expect([...result.failedIds()]).toEqual([]);
+        expect([...result.unavailableIds()]).toEqual(['ch-0501']);
+      });
+    } finally {
+      releaseCombinedFailure();
+      dispose();
+      queryClient.clear();
+    }
+  });
+
+  it('keeps a compacted channel visible when compaction interrupts an in-flight retry on the receiving batch', async () => {
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const engine = createChannelCacheEngine(
+      initialIds.map((id) => makeWireChannel(id, { isParticipant: true }))
+    );
+    engine.evictChannel('ch-0501');
+    runtimeState.engine = engine;
+    const host = createWorkerCacheHost({
+      scope: 'worker-ui-test',
+      requestTimeoutMs: 2_000,
+      onInitializationError: vi.fn(),
+      telemetry: { record: vi.fn(), flush: vi.fn() },
+    });
+    runtimeState.host = host;
+
+    const pendingFetches: Promise<void>[] = [];
+    let ch0501Attempts = 0;
+    let retryStarted!: () => void;
+    const retryStartedPromise = new Promise<void>((resolve) => {
+      retryStarted = resolve;
+    });
+    let releaseOldRetry!: () => void;
+    const releaseOldRetryPromise = new Promise<void>((resolve) => {
+      releaseOldRetry = resolve;
+    });
+    let ch0000Started!: () => void;
+    const ch0000StartedPromise = new Promise<void>((resolve) => {
+      ch0000Started = resolve;
+    });
+    let releaseCh0000!: () => void;
+    const releaseCh0000Promise = new Promise<void>((resolve) => {
+      releaseCh0000 = resolve;
+    });
+
+    runtimeState.client = {
+      executeQuery: (
+        request: { variables?: unknown },
+        opts?: Record<string, unknown>
+      ) => {
+        const subject = makeSubject<OperationResult>();
+        const serialized = JSON.stringify(request?.variables ?? {});
+        if (serialized.includes('ch-0501')) {
+          ch0501Attempts += 1;
+          const attempt = ch0501Attempts;
+          if (attempt === 1) {
+            pendingFetches.push(
+              (async () => {
+                await Promise.resolve();
+                subject.next({
+                  operation: { ...request, context: opts ?? {} } as never,
+                  error: new CombinedError({
+                    networkError: new Error('ch-0501 failed'),
+                  }),
+                  stale: false,
+                  hasNext: false,
+                });
+                subject.complete();
+              })()
+            );
+          } else {
+            retryStarted();
+            pendingFetches.push(
+              (async () => {
+                await releaseOldRetryPromise;
+                subject.next({
+                  operation: { ...request, context: opts ?? {} } as never,
+                  error: new CombinedError({
+                    networkError: new Error('stale retry failed'),
+                  }),
+                  stale: false,
+                  hasNext: false,
+                });
+                subject.complete();
+              })()
+            );
+          }
+        } else if (serialized.includes('ch-0000')) {
+          ch0000Started();
+          pendingFetches.push(
+            (async () => {
+              await releaseCh0000Promise;
+              const restored = makeWireChannel('ch-0000', {
+                isParticipant: true,
+                channelName: 'Restored ch-0000 after interrupted retry',
+              });
+              await host.writeQuery({
+                generation: TEST_AUTHORITY_GENERATION,
+                query:
+                  'query MissingChannels { user { soup { items { id } } } }',
+                data: { channels: [restored] },
+              });
+              subject.next({
+                operation: { ...request, context: opts ?? {} } as never,
+                data: {
+                  user: {
+                    soup: {
+                      items: [restored],
+                      nextCursor: null,
+                    },
+                  },
+                },
+                stale: false,
+                hasNext: false,
+              });
+              subject.complete();
+            })()
+          );
+        }
+        return subject.source;
+      },
+    } as unknown as Client;
+
+    const queryClient = new QueryClient();
+    let result!: ReturnType<typeof useCachedChannelsByIds>;
+    let setIds!: (next: string[]) => void;
+    let watchCompaction = false;
+    const missingSnapshots: string[][] = [];
+
+    const dispose = createRoot((dispose) => {
+      const [ids, updateIds] = createSignal(initialIds);
+      setIds = updateIds;
+      createComponent(QueryClientProvider, {
+        client: queryClient,
+        get children() {
+          result = useCachedChannelsByIds(ids, () => true);
+          createComputed(() => {
+            const list = result.channels();
+            if (watchCompaction && !list.some((ch) => ch.id === 'ch-0000')) {
+              missingSnapshots.push(list.map((ch) => ch.id).sort());
+            }
+          });
+          return null;
+        },
+      });
+      return dispose;
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(result.channels()).toHaveLength(1500);
+          expect([...result.failedIds()]).toEqual(['ch-0501']);
+        },
+        { timeout: 10_000 }
+      );
+
+      // Start retrying Batch 1 and hold the retry in flight.
+      const retryPromise = result.retry();
+      await retryStartedPromise;
+
+      // Compact evicted ch-0000 into Batch 1 while Batch 1 is mid-retry.
+      engine.evictChannel('ch-0000');
+      watchCompaction = true;
+      const surviving = [
+        'ch-0000',
+        'ch-0500',
+        'ch-0502',
+        'ch-1000',
+        'ch-1001',
+        'ch-1002',
+      ];
+      setIds(surviving);
+
+      await ch0000StartedPromise;
+      // Fail the superseded ch-0501 retry while ch-0000's fetch is held open.
+      releaseOldRetry();
+      await retryPromise;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+      expect(missingSnapshots).toEqual([]);
+
+      releaseCh0000();
+      await Promise.all(pendingFetches);
+      await vi.waitFor(() => {
+        expect(result.channels().find((ch) => ch.id === 'ch-0000')?.name).toBe(
+          'Restored ch-0000 after interrupted retry'
+        );
+      });
+      expect(missingSnapshots).toEqual([]);
+    } finally {
+      releaseOldRetry();
+      releaseCh0000();
+      dispose();
+      queryClient.clear();
+    }
+  });
+
+  it('clears pending handoff rows immediately when disabled and reloads cleanly when re-enabled', async () => {
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const engine = createChannelCacheEngine(
+      initialIds.map((id) => makeWireChannel(id, { isParticipant: true }))
+    );
+    runtimeState.engine = engine;
+    const host = createWorkerCacheHost({
+      scope: 'worker-ui-test',
+      requestTimeoutMs: 2_000,
+      onInitializationError: vi.fn(),
+      telemetry: { record: vi.fn(), flush: vi.fn() },
+    });
+    runtimeState.host = host;
+
+    const pendingFetches: Promise<void>[] = [];
+    let fetchCount = 0;
+    let firstFetchStarted!: () => void;
+    const firstFetchStartedPromise = new Promise<void>((resolve) => {
+      firstFetchStarted = resolve;
+    });
+    let releaseFirstFetch!: () => void;
+    const releaseFirstFetchPromise = new Promise<void>((resolve) => {
+      releaseFirstFetch = resolve;
+    });
+
+    runtimeState.client = {
+      executeQuery: (
+        request: { variables?: unknown },
+        opts?: Record<string, unknown>
+      ) => {
+        const subject = makeSubject<OperationResult>();
+        const serialized = JSON.stringify(request?.variables ?? {});
+        if (serialized.includes('ch-0000')) {
+          fetchCount += 1;
+          const attempt = fetchCount;
+          if (attempt === 1) {
+            firstFetchStarted();
+            pendingFetches.push(
+              (async () => {
+                await releaseFirstFetchPromise;
+                subject.complete();
+              })()
+            );
+          } else {
+            pendingFetches.push(
+              (async () => {
+                await Promise.resolve();
+                const restored = makeWireChannel('ch-0000', {
+                  isParticipant: true,
+                  channelName: 'Reloaded ch-0000 after re-enable',
+                });
+                await host.writeQuery({
+                  generation: TEST_AUTHORITY_GENERATION,
+                  query:
+                    'query MissingChannels { user { soup { items { id } } } }',
+                  data: { channels: [restored] },
+                });
+                subject.next({
+                  operation: { ...request, context: opts ?? {} } as never,
+                  data: {
+                    user: {
+                      soup: {
+                        items: [restored],
+                        nextCursor: null,
+                      },
+                    },
+                  },
+                  stale: false,
+                  hasNext: false,
+                });
+                subject.complete();
+              })()
+            );
+          }
+        }
+        return subject.source;
+      },
+    } as unknown as Client;
+
+    const queryClient = new QueryClient();
+    let result!: ReturnType<typeof useCachedChannelsByIds>;
+    let setIds!: (next: string[]) => void;
+    let setEnabled!: (next: boolean) => void;
+
+    const dispose = createRoot((dispose) => {
+      const [ids, updateIds] = createSignal(initialIds);
+      const [enabled, updateEnabled] = createSignal(true);
+      setIds = updateIds;
+      setEnabled = updateEnabled;
+      createComponent(QueryClientProvider, {
+        client: queryClient,
+        get children() {
+          result = useCachedChannelsByIds(ids, enabled);
+          return null;
+        },
+      });
+      return dispose;
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(result.channels()).toHaveLength(1501);
+        },
+        { timeout: 10_000 }
+      );
+
+      engine.evictChannel('ch-0000');
+      const surviving = [
+        'ch-0000',
+        'ch-0500',
+        'ch-0502',
+        'ch-1000',
+        'ch-1001',
+        'ch-1002',
+      ];
+      setIds(surviving);
+      await firstFetchStartedPromise;
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // Disabling mid-handoff immediately disposes batches and drops handoff rows.
+      setEnabled(false);
+      expect(result.channels()).toEqual([]);
+      expect(result.isLoading()).toBe(false);
+      expect(result.error()).toBeUndefined();
+
+      // Re-enabling mounts fresh batches and resolves ch-0000 cleanly.
+      setEnabled(true);
+      releaseFirstFetch();
+      await vi.waitFor(() => {
+        expect(result.channels().find((ch) => ch.id === 'ch-0000')?.name).toBe(
+          'Reloaded ch-0000 after re-enable'
+        );
+      });
+      await Promise.all(pendingFetches);
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+    } finally {
+      releaseFirstFetch();
+      dispose();
+      queryClient.clear();
+    }
+  });
+
+  it('keeps a compacted channel visible when compaction happens during a notification-driven refetch on the receiving batch', async () => {
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const engine = createChannelCacheEngine(
+      initialIds.map((id) => makeWireChannel(id, { isParticipant: true }))
+    );
+    runtimeState.engine = engine;
+    const host = createWorkerCacheHost({
+      scope: 'worker-ui-test',
+      requestTimeoutMs: 2_000,
+      onInitializationError: vi.fn(),
+      telemetry: { record: vi.fn(), flush: vi.fn() },
+    });
+    runtimeState.host = host;
+
+    const pendingFetches: Promise<void>[] = [];
+    let notifRefetchStarted!: () => void;
+    const notifRefetchStartedPromise = new Promise<void>((resolve) => {
+      notifRefetchStarted = resolve;
+    });
+    let releaseNotifRefetch!: () => void;
+    const releaseNotifRefetchPromise = new Promise<void>((resolve) => {
+      releaseNotifRefetch = resolve;
+    });
+    let ch0000Started!: () => void;
+    const ch0000StartedPromise = new Promise<void>((resolve) => {
+      ch0000Started = resolve;
+    });
+    let releaseCh0000!: () => void;
+    const releaseCh0000Promise = new Promise<void>((resolve) => {
+      releaseCh0000 = resolve;
+    });
+
+    runtimeState.client = {
+      query: (_doc: unknown, variables?: unknown) => ({
+        toPromise: async () => {
+          const serialized = JSON.stringify(variables ?? {});
+          if (serialized.includes('ch-0500')) {
+            notifRefetchStarted();
+            await releaseNotifRefetchPromise;
+            // Old notification refetch writes updated ch-0500 (not ch-0000) into
+            // the cache while ch-0000's missing-entity fetch is still in flight.
+            const updatedCh0500 = makeWireChannel('ch-0500', {
+              isParticipant: true,
+              unreadNotifications: [
+                {
+                  id: 'notif-500',
+                  state: 'UNREAD',
+                  createdAt: '2026-11-25T13:00:00.000Z',
+                },
+              ],
+            });
+            await host.writeQuery({
+              generation: TEST_AUTHORITY_GENERATION,
+              query:
+                'query NotificationRefetch { user { soup { items { id } } } }',
+              data: { channels: [updatedCh0500] },
+            });
+            return {
+              data: {
+                user: { soup: { items: [updatedCh0500], nextCursor: null } },
+              },
+            };
+          }
+          return { data: { user: { soup: { items: [], nextCursor: null } } } };
+        },
+      }),
+      executeQuery: (
+        request: { variables?: unknown },
+        opts?: Record<string, unknown>
+      ) => {
+        const subject = makeSubject<OperationResult>();
+        const serialized = JSON.stringify(request?.variables ?? {});
+        if (serialized.includes('ch-0000')) {
+          ch0000Started();
+          pendingFetches.push(
+            (async () => {
+              await releaseCh0000Promise;
+              const restored = makeWireChannel('ch-0000', {
+                isParticipant: true,
+                channelName: 'Restored ch-0000 after notification refetch',
+              });
+              await host.writeQuery({
+                generation: TEST_AUTHORITY_GENERATION,
+                query:
+                  'query MissingChannels { user { soup { items { id } } } }',
+                data: { channels: [restored] },
+              });
+              subject.next({
+                operation: { ...request, context: opts ?? {} } as never,
+                data: {
+                  user: {
+                    soup: {
+                      items: [restored],
+                      nextCursor: null,
+                    },
+                  },
+                },
+                stale: false,
+                hasNext: false,
+              });
+              subject.complete();
+            })()
+          );
+        }
+        return subject.source;
+      },
+    } as unknown as Client;
+
+    const queryClient = new QueryClient();
+    let result!: ReturnType<typeof useCachedChannelsByIds>;
+    let setIds!: (next: string[]) => void;
+    let watchCompaction = false;
+    const missingSnapshots: string[][] = [];
+
+    const dispose = createRoot((dispose) => {
+      const [ids, updateIds] = createSignal(initialIds);
+      setIds = updateIds;
+      createComponent(QueryClientProvider, {
+        client: queryClient,
+        get children() {
+          result = useCachedChannelsByIds(ids, () => true);
+          createComputed(() => {
+            const list = result.channels();
+            if (watchCompaction && !list.some((ch) => ch.id === 'ch-0000')) {
+              missingSnapshots.push(list.map((ch) => ch.id).sort());
+            }
+          });
+          return null;
+        },
+      });
+      return dispose;
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(result.channels()).toHaveLength(1501);
+        },
+        { timeout: 10_000 }
+      );
+
+      // Deliver a notification patch for ch-0500 so ChannelNotificationRefresh
+      // starts a background network-only refetch on Batch 1.
+      const coordinator = channelNotificationRefresh(runtimeState.client);
+      coordinator.onPatch(
+        {
+          __typename: 'GraphqlNewNotification',
+          notification: {
+            id: 'notif-500',
+            entityId: 'ch-0500',
+            entityType: 'CHANNEL',
+            state: 'UNREAD',
+            createdAt: '2026-11-25T13:00:00.000Z',
+          },
+        } as never,
+        false
+      );
+      await notifRefetchStartedPromise;
+
+      // Compact evicted ch-0000 into Batch 1 while the notification refetch is
+      // still in flight.
+      engine.evictChannel('ch-0000');
+      watchCompaction = true;
+      const surviving = [
+        'ch-0000',
+        'ch-0500',
+        'ch-0502',
+        'ch-1000',
+        'ch-1001',
+        'ch-1002',
+      ];
+      setIds(surviving);
+
+      await ch0000StartedPromise;
+      // Let the old notification refetch settle and trigger a predicate refresh
+      // on Batch 1 while ch-0000's fetch is held open for 50 ms.
+      releaseNotifRefetch();
+      await vi.waitFor(() => {
+        const ch500 = result.channels().find((ch) => ch.id === 'ch-0500');
+        expect(ch500?.unreadNotifications?.length).toBe(1);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+      expect(missingSnapshots).toEqual([]);
+
+      releaseCh0000();
+      await Promise.all(pendingFetches);
+      await vi.waitFor(() => {
+        expect(result.channels().find((ch) => ch.id === 'ch-0000')?.name).toBe(
+          'Restored ch-0000 after notification refetch'
+        );
+      });
+      expect(missingSnapshots).toEqual([]);
+    } finally {
+      releaseNotifRefetch();
+      releaseCh0000();
       dispose();
       queryClient.clear();
     }

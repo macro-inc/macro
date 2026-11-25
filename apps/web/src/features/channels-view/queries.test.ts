@@ -643,6 +643,160 @@ describe('channels resolved by id', () => {
       useSoupAstItemsQuery.mockReset();
     }
   });
+
+  it('keeps handoff rows across a pre-existing error, an active retry, a disabled receiving query, and a notification refetch until a post-handoff failure settles', async () => {
+    const batchStates: Array<{
+      enabled: ReturnType<typeof createSignal<boolean>>;
+      fetching: ReturnType<typeof createSignal<boolean>>;
+      hasPageData: ReturnType<typeof createSignal<boolean>>;
+      error: ReturnType<typeof createSignal<Error | undefined>>;
+      entities: ReturnType<typeof createSignal<ChannelEntity[]>>;
+      refresh: ReturnType<typeof vi.fn<() => Promise<void>>>;
+      disposed: boolean;
+    }> = [];
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const initialMatches =
+        JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
+      const enabled = createSignal(true);
+      const fetching = createSignal(false);
+      const hasPageData = createSignal(true);
+      const error = createSignal<Error | undefined>(undefined);
+      const entities = createSignal(
+        initialMatches.map((id) => channelEntity(id))
+      );
+      const refresh = vi.fn(async () => {});
+      const state = {
+        enabled,
+        fetching,
+        hasPageData,
+        error,
+        entities,
+        refresh,
+        disposed: false,
+      };
+      batchStates.push(state);
+      onCleanup(() => {
+        state.disposed = true;
+      });
+      return {
+        get isEnabled() {
+          return enabled[0]();
+        },
+        isPending: false,
+        isLoading: false,
+        get isFetching() {
+          return fetching[0]();
+        },
+        get fetchError() {
+          return error[0]();
+        },
+        get hasPageData() {
+          return hasPageData[0]();
+        },
+        hasNextPage: false,
+        refresh,
+        get data() {
+          return { entities: entities[0]() };
+        },
+      };
+    });
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(initialIds);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(batchStates).toHaveLength(4);
+      const receiving = batchStates[1];
+      const staleError = new Error('stale ch-0501 failure');
+
+      // Receiving batch 1 already holds a stale error for ch-0501 at handoff.
+      batch(() => {
+        receiving.hasPageData[1](false);
+        receiving.error[1](staleError);
+      });
+
+      // Drop bucket 3, remove ch-0501, and leave bucket 0 (1 ID), bucket 1
+      // (2 IDs), and bucket 2 (3 IDs) so bucket 0 merges into bucket 1.
+      const surviving = [
+        'ch-0000',
+        'ch-0500',
+        'ch-0502',
+        'ch-1000',
+        'ch-1001',
+        'ch-1002',
+      ];
+      setIds(surviving);
+      expect(batchStates[0].disposed).toBe(true);
+      expect(receiving.disposed).toBe(false);
+
+      // 1. Pre-existing stale error on the receiving batch must NOT clear ch-0000.
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 2. Active retry carrying the stale error must NOT clear ch-0000.
+      receiving.fetching[1](true);
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 3. Temporarily disabled receiving query with stale page data must NOT clear ch-0000.
+      batch(() => {
+        receiving.fetching[1](false);
+        receiving.enabled[1](false);
+        receiving.hasPageData[1](true);
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 4. Re-enabled and refetching after a notification (`fetching: true,
+      // hasPageData: true, error: undefined`) must NOT clear ch-0000.
+      batch(() => {
+        receiving.enabled[1](true);
+        receiving.error[1](undefined);
+        receiving.fetching[1](true);
+        receiving.hasPageData[1](true);
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 5. A fresh post-handoff lookup failing MUST retire ch-0000 and surface
+      // failedIds, error, and retry.
+      const postHandoffError = new Error('ch-0000 lookup failed');
+      batch(() => {
+        receiving.fetching[1](false);
+        receiving.hasPageData[1](false);
+        receiving.error[1](postHandoffError);
+      });
+      expect(result.channels().some((ch) => ch.id === 'ch-0000')).toBe(false);
+      expect([...result.failedIds()]).toEqual(['ch-0000']);
+      expect(result.error()).toBe(postHandoffError);
+      await result.retry();
+      expect(receiving.refresh).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
 });
 
 describe('Threads rail source', () => {
