@@ -64,11 +64,13 @@ describe('the Kimi adapter', () => {
         'max_tokens',
         'messages',
         'model',
+        'reasoning_effort',
         'response_format',
         'temperature',
       ].sort()
     );
     expect(request.model).toBe(KIMI_MODEL);
+    expect(request.reasoning_effort).toBe('none');
     expect(request.response_format).toEqual({
       type: 'json_schema',
       json_schema: {

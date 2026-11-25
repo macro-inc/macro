@@ -132,6 +132,8 @@ export const kimiPlanner = ({
       body: JSON.stringify({
         model,
         temperature: 0,
+        // Kimi K3 reasons by default and would spend the token cap on it.
+        reasoning_effort: 'none',
         max_tokens: 64,
         response_format: {
           type: 'json_schema',
