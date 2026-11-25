@@ -34,6 +34,7 @@ mod moves;
 mod records;
 mod reservations;
 mod row;
+mod runtime_updates;
 mod usage;
 use row::{ComputerRow, ReservationRow};
 

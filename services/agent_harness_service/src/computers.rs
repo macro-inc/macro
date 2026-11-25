@@ -385,6 +385,7 @@ enum Pass {
     Overcommit,
     Moves,
     ImageUpgrade,
+    RuntimeUpdate,
     ClaudeSignIns,
     ClaudeStatus,
 }
@@ -397,7 +398,7 @@ impl Pass {
             Self::Reconcile => RECONCILE_TICK,
             Self::Overcommit => OVERCOMMIT_TICK,
             Self::Moves => MOVE_TICK,
-            Self::ImageUpgrade => IMAGE_UPGRADE_TICK,
+            Self::ImageUpgrade | Self::RuntimeUpdate => IMAGE_UPGRADE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
             Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
@@ -440,6 +441,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     ];
     if image_upgrades_allowed(environment) {
         passes.push(Pass::ImageUpgrade);
+        passes.push(Pass::RuntimeUpdate);
     }
     for pass in passes {
         tracker.spawn(run_pass(
@@ -447,6 +449,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
             Arc::clone(&operator),
             Arc::clone(&claude_sign_ins),
             effect_signals.clone(),
+            environment,
             shutdown.clone(),
         ));
     }
@@ -457,6 +460,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
     effect_signals: PgEffectSignals,
+    environment: macro_env::Environment,
     shutdown: CancellationToken,
 ) {
     let mut interval = tokio::time::interval(pass.tick());
@@ -474,6 +478,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                 | Pass::Overcommit
                 | Pass::Moves
                 | Pass::ImageUpgrade
+                | Pass::RuntimeUpdate
                 | Pass::ClaudeSignIns
                 | Pass::ClaudeStatus => std::future::pending().await,
             }
@@ -517,6 +522,12 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map_err(anyhow::Error::from),
                 Pass::ImageUpgrade => shutdown
                     .run_until_cancelled(operator.advance_image_upgrade())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::RuntimeUpdate => shutdown
+                    .run_until_cancelled(operator.advance_runtime_update(environment))
                     .await
                     .transpose()
                     .map(|_| ())

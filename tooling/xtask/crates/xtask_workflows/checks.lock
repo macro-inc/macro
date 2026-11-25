@@ -4,6 +4,9 @@ required-status	CI gate	pr-ci.yml
 required-status	cla	cla.yml
 script-reads-job	pr-ci.yml	Start
 script-reads-job	pr-ci.yml	CI gate
+check	agent-runtime-rollout.yml	validate	Validate the inputs
+check	agent-runtime-rollout.yml	build	Build and publish the runtime
+check	agent-runtime-rollout.yml	roll-out	Activate on the selected dev teammate
 check	alert-native-build-failures.yml	alert	alert
 check	android-apk-on-release.yml	build	Build signed Android APK
 check	android-apk-on-release.yml	publish	Attach the APK to the release

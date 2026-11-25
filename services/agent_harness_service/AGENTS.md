@@ -618,6 +618,10 @@ must use distinct identities; replicas of one control plane share an identity.
 An enabled fleet also requires `COMPUTERS_IMAGE` and `COMPUTERS_AGENT_IMAGE`; how
 far each host is overcommitted is its own row's settings
 (`docs/runbooks/computer-overcommit.md`).
+The dev computer operator leases service-only runtime update requests and
+runs the fixed guest helper through the existing Firecracker mTLS identity.
+See the [rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md).
+
 Firecracker additionally requires `COMPUTERS_FIRECRACKER_CLIENT_CERT` and
 `COMPUTERS_FIRECRACKER_CLIENT_KEY`, the mTLS identity every host agent trusts; each
 host's endpoint and pinned certificate are on its row. Docker additionally requires

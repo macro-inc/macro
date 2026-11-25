@@ -74,6 +74,11 @@ impl ComputerMoves for PgComputerRepo {
             }
             Some(_) => {}
         }
+        if Self::runtime_update_pending(&mut tx, computer_id).await? {
+            return Ok(Err(StartMoveError::NotMovable(
+                "a runtime update is pending".to_owned(),
+            )));
+        }
         // The ticket is 244 random bits (two v4 UUIDs, which are random by
         // construction); it is a one-time secret, not an id.
         let row = sqlx::query_as!(
@@ -224,10 +229,16 @@ impl ComputerMoves for PgComputerRepo {
             SELECT computer_id AS "computer_id!" FROM computer_move
             WHERE stage IN ('cutting_over', 'rolling_back') AND (from_host = $1 OR to_host = $1)
             UNION
-            SELECT upgrade.computer_id FROM image_upgrade_computer upgrade
-            JOIN hosted_runtime computer ON computer.id = upgrade.computer_id
-            WHERE upgrade.state IN ('replacing', 'verifying', 'rolling_back')
+            SELECT plan.computer_id FROM image_upgrade batch
+            JOIN image_upgrade_computer plan ON plan.upgrade_id = batch.id
+            JOIN hosted_runtime computer ON computer.id = plan.computer_id
+            WHERE batch.finished_at IS NULL
+              AND plan.state IN ('replacing', 'verifying', 'rolling_back')
               AND computer.host_id = $1
+            UNION
+            SELECT request.computer_id FROM agent_runtime_update request
+            JOIN hosted_runtime computer ON computer.id = request.computer_id
+            WHERE request.outcome IS NULL AND computer.host_id = $1
             "#,
             host.into_inner(),
         )
@@ -247,6 +258,8 @@ impl ComputerMoves for PgComputerRepo {
             ) OR EXISTS (
                 SELECT 1 FROM image_upgrade_computer
                 WHERE computer_id = $1 AND state IN ('replacing', 'verifying', 'rolling_back')
+            ) OR EXISTS (
+                SELECT 1 FROM agent_runtime_update WHERE computer_id = $1 AND outcome IS NULL
             ) AS "held!"
             "#,
             computer_id.as_uuid(),
