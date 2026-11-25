@@ -22,7 +22,8 @@ followed by a fresh lock acquisition and `recovery_wipe()`.
 for what has to outlive a wipe. A wipe or reset of the pair leaves it alone;
 `remove_and_release()` deletes all three. Its calls need the owner lock to be
 held, whether or not the pair is open. Each opens the file, flushes and closes
-it again, so no handle outlives a call, and `write_tail(offset, bytes)` cuts off
+it again, so no handle outlives a call, unless `hold()` keeps one until the
+sidecar is dropped or the file removed, and `write_tail(offset, bytes)` cuts off
 whatever followed `offset`, a torn earlier write included.
 
 `connect()` also caps Turso's page cache at `PAGE_CACHE_PAGES` (8,000 pages,

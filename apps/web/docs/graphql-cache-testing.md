@@ -105,7 +105,7 @@ field-level reconciliation for those response shapes.
 
 A surviving exchange retains a successful server response while retrying failed
 local settlement under a fresh lease. It discards that response when a storage
-reset lost the mutation queue, and fences late replies from the old storage generation. This is **not
+reset is reported with `queue: reset`, and fences late replies from the old storage generation. This is **not
 exactly-once network execution**: process loss, another runner taking over, or a
 lost network response can still make the outcome unknown. Non-idempotent server
 mutations need server-supported idempotency keys or reconciliation before replay.
