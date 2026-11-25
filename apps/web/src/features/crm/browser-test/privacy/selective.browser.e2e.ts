@@ -247,6 +247,36 @@ test('limit refusals stay inline and do not save', async ({ page }) => {
   await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
 });
 
+test('a long blacklist domain wraps beside Remove, lined up with short rows', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&long-domain&admin');
+  const long = 'regional-sales-office.north-america.example.com';
+  for (const [title, short] of [
+    ['Team blacklist', 'team.example.com'],
+    ['My blacklist', 'personal.example.com'],
+  ]) {
+    const section = page
+      .getByRole('heading', { name: title, exact: true })
+      .locator('xpath=ancestor::section');
+    const removeX: number[] = [];
+    for (const domain of [long, short]) {
+      const label = await section
+        .getByText(domain, { exact: true })
+        .boundingBox();
+      const remove = await section
+        .getByRole('button', { name: `Remove ${domain}`, exact: true })
+        .boundingBox();
+      if (!label || !remove) throw new Error(`${domain} row is not laid out`);
+      // Beside the domain, not on a line of its own below it.
+      expect(remove.x).toBeGreaterThanOrEqual(label.x + label.width);
+      expect(remove.y).toBeLessThan(label.y + label.height);
+      removeX.push(remove.x);
+    }
+    expect(Math.abs(removeX[0] - removeX[1])).toBeLessThan(1);
+  }
+});
+
 test('gate off retains selected rules, history and single-action withdrawal', async ({
   page,
 }) => {

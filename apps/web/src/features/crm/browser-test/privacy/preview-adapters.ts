@@ -27,16 +27,21 @@ const pendingPrivacyRead = Promise.withResolvers<void>();
 export const finishPrivacyRead = () => pendingPrivacyRead.resolve();
 let privacyReads = 0;
 export const mailboxId = '00000000-0000-4000-8000-000000000045';
+const longDomain = 'regional-sales-office.north-america.example.com';
 const [state, setState] = createSignal<EmailPrivacy>({
   enabled: params.has('contributing'),
   mailboxEmail: params.has('disconnected') ? null : 'member@example.com',
   mailboxLinkId: params.has('disconnected') ? null : mailboxId,
   teamDomains: params.has('mailbox-guard')
     ? ['example.com']
-    : ['team.example.com'],
+    : params.has('long-domain')
+      ? [longDomain, 'team.example.com']
+      : ['team.example.com'],
   personalDomains: params.has('mailbox-guard')
     ? ['gmail.com']
-    : ['personal.example.com'],
+    : params.has('long-domain')
+      ? [longDomain, 'personal.example.com']
+      : ['personal.example.com'],
   teamDomainWarnings: params.has('mailbox-guard')
     ? { 'example.com': 'company' }
     : {},

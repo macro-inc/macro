@@ -119,6 +119,17 @@ for (const admin of [false, true]) {
     expect(
       shareBox && teamHeading && shareBox.y + shareBox.height < teamHeading.y
     ).toBe(true);
+    // Sections keep the settings page's spacing inside the dialog.
+    const sections = await dialog
+      .locator('section')
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.getBoundingClientRect())
+      );
+    expect(sections.length).toBeGreaterThan(2);
+    for (let i = 1; i < sections.length; i++)
+      expect(sections[i].top - sections[i - 1].bottom).toBeGreaterThanOrEqual(
+        24
+      );
     await page.screenshot({ path: testInfo.outputPath('privacy-review.png') });
     const teamRemove = dialog.getByRole('button', {
       name: 'Remove team.example.com',
@@ -128,8 +139,9 @@ for (const admin of [false, true]) {
       name: 'Remove personal.example.com',
       exact: true,
     });
+    // Like Team > Members, a member is not shown an action only admins have.
     if (admin) await expect(teamRemove).toBeEnabled();
-    else await expect(teamRemove).toBeDisabled();
+    else await expect(teamRemove).toHaveCount(0);
     await expect(personalRemove).toBeEnabled();
     await personalRemove.click();
     await expect(page.getByTestId('last-change')).toHaveText(
