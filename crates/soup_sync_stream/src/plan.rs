@@ -7,7 +7,7 @@ mod test;
 
 use crate::calendar::{CalendarWindow, MaterializedRange, calendar_windows, iso_instant};
 use crate::catalog::{
-    CALENDAR_PAGE, CALENDAR_QUERY, LaneSpec, SoupLaneKind, SoupLaneSpec, lane_specs,
+    CALENDAR_PAGE, CALENDAR_QUERY, LaneInput, LaneSpec, SoupLaneKind, SoupLaneSpec, lane_specs,
     with_updated_since,
 };
 use crate::lane::{
@@ -201,7 +201,13 @@ fn soup_lane(
             pass_started_at,
         })
     };
-    let fresh = |input: Map<String, Value>| draft(json!({ "initial": input }), 0, iso_instant(now));
+    let json = |input: &LaneInput| {
+        input.to_json().map_err(|_| RequestError::Catalog {
+            lane: spec.id.to_owned(),
+            source: LaneError::InvalidInput,
+        })
+    };
+    let fresh = |input: LaneInput| draft(json!({ "initial": json(&input)? }), 0, iso_instant(now));
     let Some(state) = state.filter(|_| resumable) else {
         return fresh(input);
     };
@@ -210,10 +216,11 @@ fn soup_lane(
         .clone()
         .and_then(|resume| serde_json::from_value::<Resume>(resume).ok())
     {
+        let first = json(&input)?;
         let mut continuation = SOUP_CARRIED_FIELDS
             .iter()
             .filter_map(|field| {
-                input
+                first
                     .get(*field)
                     .map(|value| ((*field).to_owned(), value.clone()))
             })

@@ -8,8 +8,16 @@
 mod test;
 
 use chrono::{DateTime, TimeDelta, Utc};
+use graphql_soup_filter_input::{
+    GraphqlCalendarEventLiteral, GraphqlCallLiteral, GraphqlChannelLiteral,
+    GraphqlChannelThreadLiteral, GraphqlChatExpr, GraphqlChatLiteral, GraphqlCrmCompanyLiteral,
+    GraphqlCrmContactExpr, GraphqlCrmContactLiteral, GraphqlDateLiteral, GraphqlDocumentExpr,
+    GraphqlDocumentLiteral, GraphqlDocumentSubType, GraphqlEmailExpr, GraphqlEmailFilterAst,
+    GraphqlEmailLiteral, GraphqlEntityFilterAst as Filters, GraphqlForeignEntityLiteral,
+    GraphqlInitiativeLiteral, GraphqlProjectExpr, GraphqlProjectLiteral, GraphqlSharedEmailFilter,
+};
 use serde::Deserialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 use crate::calendar::iso_instant;
 
@@ -72,7 +80,7 @@ pub(crate) struct SoupLaneSpec {
     pub(crate) id: &'static str,
     pub(crate) query: &'static LaneQuery,
     /// The first page's `initial` input of a pass started at the given time.
-    pub(crate) input: fn(DateTime<Utc>) -> Map<String, Value>,
+    pub(crate) input: fn(DateTime<Utc>) -> LaneInput,
     pub(crate) kind: SoupLaneKind,
     /// A full pass every run: never resumed, never narrowed to changes.
     pub(crate) restart_on_run: bool,
@@ -296,15 +304,7 @@ fn first_pass() -> Vec<LaneSpec> {
 fn second_pass() -> Vec<LaneSpec> {
     vec![
         hydrate_lane("crm-contacts", &CRM_CONTACTS_QUERY, |_| {
-            let mut filters = excluded_filters();
-            filters.insert(
-                "crmContactFilter".to_owned(),
-                json!({ "and": {
-                    "left": { "literal": { "hidden": false } },
-                    "right": { "literal": { "include": true } },
-                } }),
-            );
-            object(json!({ "limit": HYDRATE_PAGE, "sortMethod": "UPDATED_AT", "filters": filters }))
+            crm_contacts_input()
         }),
         // Core entities except documents and tasks (their own lanes), plus
         // CRM companies and foreign entities.
@@ -343,7 +343,7 @@ fn second_pass() -> Vec<LaneSpec> {
 fn soup_hydrate(
     id: &'static str,
     query: &'static LaneQuery,
-    input: fn(DateTime<Utc>) -> Map<String, Value>,
+    input: fn(DateTime<Utc>) -> LaneInput,
 ) -> SoupLaneSpec {
     SoupLaneSpec {
         id,
@@ -358,7 +358,7 @@ fn soup_hydrate(
 fn hydrate_lane(
     id: &'static str,
     query: &'static LaneQuery,
-    input: fn(DateTime<Utc>) -> Map<String, Value>,
+    input: fn(DateTime<Utc>) -> LaneInput,
 ) -> LaneSpec {
     LaneSpec::Soup(soup_hydrate(id, query, input))
 }
@@ -366,7 +366,7 @@ fn hydrate_lane(
 fn ids_lane(
     id: &'static str,
     query: &'static LaneQuery,
-    input: fn(DateTime<Utc>) -> Map<String, Value>,
+    input: fn(DateTime<Utc>) -> LaneInput,
     scopes: &'static [&'static str],
 ) -> LaneSpec {
     LaneSpec::Soup(SoupLaneSpec {
@@ -375,130 +375,205 @@ fn ids_lane(
     })
 }
 
-fn object(value: Value) -> Map<String, Value> {
-    match value {
-        Value::Object(map) => map,
-        _ => Map::new(),
+/// A Soup lane's first input (GraphQL `SoupInput`). Its filters are the
+/// GraphQL filter input types the server parses
+/// (`graphql_soup_filter_input`), so a lane can only name filter fields and
+/// values that exist.
+pub(crate) struct LaneInput {
+    limit: u32,
+    expand: Option<bool>,
+    sort_method: &'static str,
+    email_view: Option<&'static str>,
+    filters: Filters,
+}
+
+impl LaneInput {
+    /// The input as the lane's `initial` variable: absent fields left out,
+    /// as GraphQL clients send them.
+    pub(crate) fn to_json(&self) -> Result<Map<String, Value>, serde_json::Error> {
+        let mut input = Map::new();
+        input.insert("limit".to_owned(), Value::from(self.limit));
+        if let Some(expand) = self.expand {
+            input.insert("expand".to_owned(), Value::Bool(expand));
+        }
+        input.insert(
+            "sortMethod".to_owned(),
+            Value::String(self.sort_method.to_owned()),
+        );
+        if let Some(view) = self.email_view {
+            input.insert("emailView".to_owned(), Value::String(view.to_owned()));
+        }
+        input.insert(
+            "filters".to_owned(),
+            without_nulls(serde_json::to_value(&self.filters)?),
+        );
+        Ok(input)
     }
 }
 
-fn excluded(field: &str) -> Value {
-    json!({ "literal": { field: EXCLUDED_ENTITY_ID } })
+/// `value` without object fields whose value is null: the filter input types
+/// serialize an absent option as null.
+fn without_nulls(value: Value) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(
+            object
+                .into_iter()
+                .filter(|(_, value)| !value.is_null())
+                .map(|(key, value)| (key, without_nulls(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.into_iter().map(without_nulls).collect()),
+        other => other,
+    }
+}
+
+/// The id no entity has, as whichever id type the filter input uses.
+fn excluded_id<I: From<&'static str>>() -> I {
+    I::from(EXCLUDED_ENTITY_ID)
+}
+
+/// The email filter with this thread tree.
+fn email_tree(tree: GraphqlEmailExpr) -> GraphqlEmailFilterAst {
+    GraphqlEmailFilterAst {
+        tree: Some(tree),
+        ..GraphqlEmailFilterAst::default()
+    }
+}
+
+fn excluded_email() -> GraphqlEmailFilterAst {
+    email_tree(GraphqlEmailLiteral::ThreadId(excluded_id()).into())
 }
 
 /// The Soup branches other than email, each excluded.
-fn non_email_excluded() -> Map<String, Value> {
-    Map::from_iter([
-        ("calendarEventFilter".to_owned(), excluded("id")),
-        ("documentFilter".to_owned(), excluded("id")),
-        ("projectFilter".to_owned(), excluded("projectIdSelf")),
-        ("chatFilter".to_owned(), excluded("chatId")),
-        ("channelFilter".to_owned(), excluded("channelId")),
-        ("channelThreadFilter".to_owned(), excluded("threadId")),
-        ("callFilter".to_owned(), excluded("callId")),
-        ("crmCompanyFilter".to_owned(), excluded("id")),
-        ("foreignEntityFilter".to_owned(), excluded("id")),
-    ])
+fn non_email_excluded() -> Filters {
+    Filters {
+        calendar_event_filter: Some(GraphqlCalendarEventLiteral::Id(excluded_id()).into()),
+        document_filter: Some(GraphqlDocumentLiteral::Id(excluded_id()).into()),
+        project_filter: Some(GraphqlProjectLiteral::ProjectIdSelf(excluded_id()).into()),
+        chat_filter: Some(GraphqlChatLiteral::ChatId(excluded_id()).into()),
+        channel_filter: Some(GraphqlChannelLiteral::ChannelId(excluded_id()).into()),
+        channel_thread_filter: Some(GraphqlChannelThreadLiteral::ThreadId(excluded_id()).into()),
+        call_filter: Some(GraphqlCallLiteral::CallId(excluded_id()).into()),
+        crm_company_filter: Some(GraphqlCrmCompanyLiteral::Id(excluded_id()).into()),
+        foreign_entity_filter: Some(GraphqlForeignEntityLiteral::Id(excluded_id()).into()),
+        ..Filters::default()
+    }
 }
 
 /// Every Soup branch excluded; a lane's filter then includes its own.
-fn excluded_filters() -> Map<String, Value> {
-    let mut filters = non_email_excluded();
-    filters.insert(
-        "emailFilter".to_owned(),
-        json!({ "tree": excluded("threadId") }),
-    );
-    filters
+fn excluded_filters() -> Filters {
+    Filters {
+        email_filter: Some(excluded_email()),
+        ..non_email_excluded()
+    }
 }
 
-fn with_filter(mut filters: Map<String, Value>, key: &str, filter: Value) -> Map<String, Value> {
-    filters.insert(key.to_owned(), filter);
-    filters
+fn task_subtype() -> GraphqlDocumentExpr {
+    GraphqlDocumentLiteral::SubType(GraphqlDocumentSubType::Task).into()
 }
 
-fn task_filters() -> Map<String, Value> {
-    with_filter(
-        excluded_filters(),
-        "documentFilter",
-        json!({ "literal": { "subType": "TASK" } }),
-    )
+fn task_filters() -> Filters {
+    Filters {
+        document_filter: Some(task_subtype()),
+        ..excluded_filters()
+    }
 }
 
-fn document_filters() -> Map<String, Value> {
-    with_filter(
-        excluded_filters(),
-        "documentFilter",
-        json!({ "not": { "literal": { "subType": "TASK" } } }),
-    )
+fn document_filters() -> Filters {
+    Filters {
+        document_filter: Some(!task_subtype()),
+        ..excluded_filters()
+    }
 }
 
 /// Every task project the viewer can read.
-fn task_project_filters() -> Map<String, Value> {
-    with_filter(
-        excluded_filters(),
-        "initiativeFilter",
-        json!({ "literal": { "include": true } }),
-    )
+fn task_project_filters() -> Filters {
+    Filters {
+        initiative_filter: Some(GraphqlInitiativeLiteral::Include(true).into()),
+        ..excluded_filters()
+    }
 }
 
 /// Channels with no channel filter: Soup then lists the channels the viewer
 /// actively takes part in.
-fn channel_filters() -> Map<String, Value> {
-    let mut filters = excluded_filters();
-    filters.remove("channelFilter");
-    filters
+fn channel_filters() -> Filters {
+    Filters {
+        channel_filter: None,
+        ..excluded_filters()
+    }
 }
 
 /// Every thread shared with the viewer, outside the owned and delegated inboxes.
-fn shared_email_filters() -> Map<String, Value> {
-    with_filter(
-        non_email_excluded(),
-        "emailFilter",
-        json!({ "tree": { "literal": { "shared": "ONLY" } } }),
-    )
+fn shared_email_filters() -> Filters {
+    Filters {
+        email_filter: Some(email_tree(
+            GraphqlEmailLiteral::Shared(GraphqlSharedEmailFilter::Only).into(),
+        )),
+        ..non_email_excluded()
+    }
 }
 
-fn core_rest_filters() -> Map<String, Value> {
-    Map::from_iter([
-        ("calendarEventFilter".to_owned(), excluded("id")),
-        (
-            "emailFilter".to_owned(),
-            json!({ "tree": excluded("threadId") }),
-        ),
-        ("channelThreadFilter".to_owned(), excluded("threadId")),
-        ("callFilter".to_owned(), excluded("callId")),
-        ("documentFilter".to_owned(), excluded("id")),
-    ])
+/// Visible CRM contacts.
+fn crm_contact_filters() -> Filters {
+    Filters {
+        crm_contact_filter: Some(GraphqlCrmContactExpr::and(
+            GraphqlCrmContactLiteral::Hidden(false).into(),
+            GraphqlCrmContactLiteral::Include(true).into(),
+        )),
+        ..excluded_filters()
+    }
 }
 
-fn rows(filters: Map<String, Value>, sort_method: &str, limit: u32) -> Map<String, Value> {
-    object(json!({
-        "limit": limit,
-        "expand": true,
-        "sortMethod": sort_method,
-        "emailView": "ALL",
-        "filters": filters,
-    }))
+fn core_rest_filters() -> Filters {
+    Filters {
+        calendar_event_filter: Some(GraphqlCalendarEventLiteral::Id(excluded_id()).into()),
+        email_filter: Some(excluded_email()),
+        channel_thread_filter: Some(GraphqlChannelThreadLiteral::ThreadId(excluded_id()).into()),
+        call_filter: Some(GraphqlCallLiteral::CallId(excluded_id()).into()),
+        document_filter: Some(GraphqlDocumentLiteral::Id(excluded_id()).into()),
+        ..Filters::default()
+    }
+}
+
+fn rows(filters: Filters, sort_method: &'static str, limit: u32) -> LaneInput {
+    LaneInput {
+        limit,
+        expand: Some(true),
+        sort_method,
+        email_view: Some("ALL"),
+        filters,
+    }
 }
 
 /// Creation order never changes mid-scan, so a channel cannot be skipped.
-fn channels_input() -> Map<String, Value> {
-    object(json!({
-        "limit": HYDRATE_PAGE,
-        "expand": true,
-        "sortMethod": "CREATED_AT",
-        "filters": channel_filters(),
-    }))
+fn channels_input() -> LaneInput {
+    LaneInput {
+        limit: HYDRATE_PAGE,
+        expand: Some(true),
+        sort_method: "CREATED_AT",
+        email_view: None,
+        filters: channel_filters(),
+    }
+}
+
+fn crm_contacts_input() -> LaneInput {
+    LaneInput {
+        limit: HYDRATE_PAGE,
+        expand: None,
+        sort_method: "UPDATED_AT",
+        email_view: None,
+        filters: crm_contact_filters(),
+    }
 }
 
 /// Email threads, newest message first, so each page is an ordered index
 /// range ending at the recency cutoff.
-fn email_rows(filters: Map<String, Value>, limit: u32) -> Map<String, Value> {
+fn email_rows(filters: Filters, limit: u32) -> LaneInput {
     rows(filters, "UPDATED_AT", limit)
 }
 
 /// Threads of every owned and delegated inbox updated within `days`.
-fn mail_rows(days: i64, limit: u32, now: DateTime<Utc>) -> Map<String, Value> {
+fn mail_rows(days: i64, limit: u32, now: DateTime<Utc>) -> LaneInput {
     with_email_recency(
         email_rows(non_email_excluded(), limit),
         &[EmailWindow {
@@ -509,83 +584,80 @@ fn mail_rows(days: i64, limit: u32, now: DateTime<Utc>) -> Map<String, Value> {
     )
 }
 
-fn and(left: Option<Value>, right: Value) -> Value {
-    match left {
-        Some(left) if !left.is_null() => json!({ "and": { "left": left, "right": right } }),
-        _ => right,
+/// `existing` and `narrowing` both, or `narrowing` alone.
+fn and_with<E>(existing: Option<E>, narrowing: E, and: fn(E, E) -> E) -> E {
+    match existing {
+        Some(existing) => and(existing, narrowing),
+        None => narrowing,
     }
 }
 
 /// `filters` with the email tree narrowed by `tree`.
-fn and_email_tree(filters: &mut Map<String, Value>, tree: Value) {
-    let mut email = match filters.remove("emailFilter") {
-        Some(Value::Object(email)) => email,
-        _ => Map::new(),
-    };
-    let narrowed = and(email.remove("tree"), tree);
-    email.insert("tree".to_owned(), narrowed);
-    filters.insert("emailFilter".to_owned(), Value::Object(email));
+fn and_email_tree(filters: &mut Filters, tree: GraphqlEmailExpr) {
+    let email = filters
+        .email_filter
+        .get_or_insert_with(GraphqlEmailFilterAst::default);
+    email.tree = Some(and_with(email.tree.take(), tree, GraphqlEmailExpr::and));
 }
 
-/// Runs `update` on the input's `filters` object, created when missing.
-fn update_filters(input: &mut Map<String, Value>, update: impl FnOnce(&mut Map<String, Value>)) {
-    let mut filters = match input.remove("filters") {
-        Some(Value::Object(filters)) => filters,
-        _ => Map::new(),
-    };
-    update(&mut filters);
-    input.insert("filters".to_owned(), Value::Object(filters));
+fn since(at: DateTime<Utc>) -> GraphqlDateLiteral {
+    GraphqlDateLiteral::Gte(iso_instant(at))
 }
 
 /// Restricts email threads to those matching any window. In the ALL view an
 /// email's `updatedAt` is its latest non-spam message's time.
 fn with_email_recency(
-    mut input: Map<String, Value>,
+    mut input: LaneInput,
     windows: &[EmailWindow],
     now: DateTime<Utc>,
-) -> Map<String, Value> {
+) -> LaneInput {
     let recency = windows
         .iter()
         .map(|window| {
-            let cutoff = now - TimeDelta::days(window.days);
-            let updated = json!({ "literal": { "updatedAt": { "gte": iso_instant(cutoff) } } });
+            let updated: GraphqlEmailExpr =
+                GraphqlEmailLiteral::UpdatedAt(since(now - TimeDelta::days(window.days))).into();
             match window.important {
                 None => updated,
-                Some(important) => json!({ "and": {
-                    "left": { "literal": { "importance": important } },
-                    "right": updated,
-                } }),
+                Some(important) => GraphqlEmailExpr::and(
+                    GraphqlEmailLiteral::Importance(important).into(),
+                    updated,
+                ),
             }
         })
-        .reduce(|left, right| json!({ "or": { "left": left, "right": right } }));
+        .reduce(GraphqlEmailExpr::or);
     if let Some(recency) = recency {
-        update_filters(&mut input, |filters| and_email_tree(filters, recency));
+        and_email_tree(&mut input.filters, recency);
     }
     input
 }
 
 /// Narrows the entity types that filter on `updatedAt` to changes since
-/// `since`; the others are fetched in full.
-pub(crate) fn with_updated_since(
-    mut input: Map<String, Value>,
-    since: DateTime<Utc>,
-) -> Map<String, Value> {
-    let since = iso_instant(since);
-    let updated = json!({ "literal": { "updatedAt": { "gte": since } } });
-    update_filters(&mut input, |filters| {
-        for key in ["documentFilter", "projectFilter", "chatFilter"] {
-            let narrowed = and(filters.remove(key), updated.clone());
-            filters.insert(key.to_owned(), narrowed);
-        }
-        // A cached email row changes through either the thread's time or this
-        // viewer's history time, and VIEWED_UPDATED sorts on both.
-        and_email_tree(
-            filters,
-            json!({ "or": {
-                "left": updated,
-                "right": { "literal": { "viewedAt": { "gte": since } } },
-            } }),
-        );
-    });
+/// `at`; the others are fetched in full.
+pub(crate) fn with_updated_since(mut input: LaneInput, at: DateTime<Utc>) -> LaneInput {
+    let filters = &mut input.filters;
+    filters.document_filter = Some(and_with(
+        filters.document_filter.take(),
+        GraphqlDocumentLiteral::UpdatedAt(since(at)).into(),
+        GraphqlDocumentExpr::and,
+    ));
+    filters.project_filter = Some(and_with(
+        filters.project_filter.take(),
+        GraphqlProjectLiteral::UpdatedAt(since(at)).into(),
+        GraphqlProjectExpr::and,
+    ));
+    filters.chat_filter = Some(and_with(
+        filters.chat_filter.take(),
+        GraphqlChatLiteral::UpdatedAt(since(at)).into(),
+        GraphqlChatExpr::and,
+    ));
+    // A cached email row changes through either the thread's time or this
+    // viewer's history time, and VIEWED_UPDATED sorts on both.
+    and_email_tree(
+        filters,
+        GraphqlEmailExpr::or(
+            GraphqlEmailLiteral::UpdatedAt(since(at)).into(),
+            GraphqlEmailLiteral::ViewedAt(since(at)).into(),
+        ),
+    );
     input
 }

@@ -2,7 +2,11 @@
 //!
 //! This crate owns the GraphQL variables shape and conversion into the
 //! authoritative `item_filters` AST without depending on Axum or a GraphQL
-//! server adapter crate.
+//! server adapter crate. The input types are public so a server-side caller
+//! that sends Soup filters as variables (the streamed sync's lane catalog)
+//! builds them typed: each expression family has `and`, `or`, `!` and
+//! `From<literal>`, and the filter structs implement `Default`. They
+//! serialize absent options as null, which GraphQL treats as absent.
 #![deny(missing_docs)]
 
 use std::{str::FromStr, sync::Arc};
@@ -54,7 +58,7 @@ mod reminder;
 #[cfg(test)]
 mod test;
 
-use reminder::GraphqlReminderExpr;
+pub use reminder::{GraphqlReminderBinaryExpr, GraphqlReminderExpr, GraphqlReminderLiteral};
 
 /// Maximum accepted GraphQL filter expression depth.
 pub const MAX_FILTER_DEPTH: usize = 64;
@@ -190,18 +194,18 @@ macro_rules! filter_expr_input {
         #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
         #[derive(Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
-        struct $binary_name {
+        pub struct $binary_name {
             /// Left expression.
-            left: Box<$name>,
+            pub left: Box<$name>,
             /// Right expression.
-            right: Box<$name>,
+            pub right: Box<$name>,
         }
 
         #[doc = concat!("A recursive `", $type_name, "` filter expression.")]
         #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
         #[derive(Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
-        enum $name {
+        pub enum $name {
             /// Both expressions must match.
             And($binary_name),
             /// Either expression may match.
@@ -210,6 +214,39 @@ macro_rules! filter_expr_input {
             Not(Box<$name>),
             /// Match a literal.
             Literal($literal),
+        }
+
+        impl $name {
+            /// Both `left` and `right` must match.
+            pub fn and(left: Self, right: Self) -> Self {
+                Self::And($binary_name {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                })
+            }
+
+            /// Either `left` or `right` may match.
+            pub fn or(left: Self, right: Self) -> Self {
+                Self::Or($binary_name {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                })
+            }
+        }
+
+        /// The negated expression.
+        impl std::ops::Not for $name {
+            type Output = Self;
+
+            fn not(self) -> Self {
+                Self::Not(Box::new(self))
+            }
+        }
+
+        impl From<$literal> for $name {
+            fn from(literal: $literal) -> Self {
+                Self::Literal(literal)
+            }
         }
 
         impl IntoFilterExpr<$target> for $name {
@@ -241,13 +278,13 @@ filter_expr_input!(
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GraphqlFilterPropertiesLiteral {
+pub struct GraphqlFilterPropertiesLiteral {
     /// Property definition id to match.
-    property_definition_id: ID,
+    pub property_definition_id: ID,
     /// Optional entity type scope for the property match.
-    entity_type: Option<GraphqlPropertyEntityType>,
+    pub entity_type: Option<GraphqlPropertyEntityType>,
     /// Value to compare against the property.
-    value: GraphqlFilterPropertyMatchValue,
+    pub value: GraphqlFilterPropertyMatchValue,
 }
 
 impl GraphqlFilterPropertiesLiteral {
@@ -277,7 +314,7 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlFilterPropertyMatchValue {
+pub enum GraphqlFilterPropertyMatchValue {
     /// Select option id to match.
     SelectOption(ID),
     /// Entity reference id to match.
@@ -290,11 +327,11 @@ enum GraphqlFilterPropertyMatchValue {
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GraphqlPropertyDateRange {
+pub struct GraphqlPropertyDateRange {
     /// Inclusive UTC start, or no lower bound.
-    start: Option<String>,
+    pub start: Option<String>,
     /// Exclusive UTC end, or no upper bound.
-    end: Option<String>,
+    pub end: Option<String>,
 }
 
 impl GraphqlFilterPropertyMatchValue {
@@ -334,7 +371,7 @@ impl GraphqlFilterPropertyMatchValue {
 #[cfg(not(feature = "server"))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlPropertyEntityType {
+pub enum GraphqlPropertyEntityType {
     /// Calendar event entity.
     CalendarEvent,
     /// Call record entity.
@@ -390,40 +427,40 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 
 /// GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GraphqlEntityFilterAst {
     /// Restrict results to the authenticated viewer's favorites when true.
-    favorites_only: Option<bool>,
+    pub favorites_only: Option<bool>,
     /// Restrict every entity type to items associated with this CRM record,
     /// or to activity across visible CRM-enabled teams.
     /// Requires an expanded query sorted by a timestamp or selected property.
-    crm_association: Option<GraphqlCrmAssociation>,
+    pub crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
-    calendar_event_filter: Option<GraphqlCalendarEventExpr>,
+    pub calendar_event_filter: Option<GraphqlCalendarEventExpr>,
     /// The document filter to apply.
-    document_filter: Option<GraphqlDocumentExpr>,
+    pub document_filter: Option<GraphqlDocumentExpr>,
     /// The project filter to apply.
-    project_filter: Option<GraphqlProjectExpr>,
+    pub project_filter: Option<GraphqlProjectExpr>,
     /// The chat filter to apply.
-    chat_filter: Option<GraphqlChatExpr>,
+    pub chat_filter: Option<GraphqlChatExpr>,
     /// The email filter to apply.
-    email_filter: Option<GraphqlEmailFilterAst>,
+    pub email_filter: Option<GraphqlEmailFilterAst>,
     /// The channel filter to apply.
-    channel_filter: Option<GraphqlChannelExpr>,
+    pub channel_filter: Option<GraphqlChannelExpr>,
     /// The channel thread filter to apply.
-    channel_thread_filter: Option<GraphqlChannelThreadExpr>,
+    pub channel_thread_filter: Option<GraphqlChannelThreadExpr>,
     /// The call filter to apply.
-    call_filter: Option<GraphqlCallExpr>,
+    pub call_filter: Option<GraphqlCallExpr>,
     /// The crm company filter to apply.
-    crm_company_filter: Option<GraphqlCrmCompanyExpr>,
+    pub crm_company_filter: Option<GraphqlCrmCompanyExpr>,
     /// Opt-in CRM contact filters, applied before contacts are collapsed by
     /// normalized email address.
-    crm_contact_filter: Option<GraphqlCrmContactExpr>,
+    pub crm_contact_filter: Option<GraphqlCrmContactExpr>,
     /// The foreign entity filter to apply.
-    foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
+    pub foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The GitHub pull request filter to apply, on top of the foreign entity filter.
-    github_pull_request_filter: Option<GraphqlGithubPullRequestExpr>,
+    pub github_pull_request_filter: Option<GraphqlGithubPullRequestExpr>,
     /// Ignored: Soup no longer returns reminders.
     #[cfg_attr(
         feature = "server",
@@ -431,15 +468,15 @@ pub struct GraphqlEntityFilterAst {
             deprecation = "Soup no longer returns reminders (#7536). Remove after 2026-11-30."
         )
     )]
-    reminder_filter: Option<GraphqlReminderExpr>,
+    pub reminder_filter: Option<GraphqlReminderExpr>,
     /// The agent session filter to apply.
-    agent_session_filter: Option<GraphqlAgentSessionExpr>,
+    pub agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The initiative filter to apply. Initiatives are opt-in.
-    initiative_filter: Option<GraphqlInitiativeExpr>,
+    pub initiative_filter: Option<GraphqlInitiativeExpr>,
     /// The database row filter to apply. Rows are opt-in: name a table.
-    database_row_filter: Option<GraphqlDatabaseRowExpr>,
+    pub database_row_filter: Option<GraphqlDatabaseRowExpr>,
     /// The properties filter to apply.
-    properties_filter: Option<GraphqlFilterPropertiesExpr>,
+    pub properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
 
 impl GraphqlEntityFilterAst {
@@ -503,7 +540,7 @@ filter_expr_input!(
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlCalendarEventLiteral {
+pub enum GraphqlCalendarEventLiteral {
     /// Canonical event id.
     Id(ID),
     /// Event status.
@@ -619,13 +656,13 @@ filter_expr_input!(
 );
 /// GraphQL input representing the email filter ast.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GraphqlEmailFilterAst {
+pub struct GraphqlEmailFilterAst {
     /// The tree.
-    tree: Option<GraphqlEmailExpr>,
+    pub tree: Option<GraphqlEmailExpr>,
     /// The crm scope.
-    crm_scope: Option<GraphqlCrmScope>,
+    pub crm_scope: Option<GraphqlCrmScope>,
 }
 
 impl GraphqlEmailFilterAst {
@@ -642,7 +679,7 @@ impl GraphqlEmailFilterAst {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlCrmScope {
+pub enum GraphqlCrmScope {
     /// The domains option.
     Domains(Vec<String>),
     /// The addresses option.
@@ -669,7 +706,7 @@ impl GraphqlCrmScope {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlDateLiteral {
+pub enum GraphqlDateLiteral {
     /// The gt option.
     Gt(String),
     /// The lt option.
@@ -703,7 +740,7 @@ impl GraphqlDateLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlDocumentLiteral {
+pub enum GraphqlDocumentLiteral {
     /// The file type option.
     FileType(String),
     /// The id option.
@@ -746,7 +783,7 @@ enum GraphqlDocumentLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlCrmAssociation {
+pub enum GraphqlCrmAssociation {
     /// Items associated with the company or any of its contacts.
     Company(ID),
     /// Items associated with the contact.
@@ -808,7 +845,7 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlDocumentSubType {
+pub enum GraphqlDocumentSubType {
     /// The task option.
     Task,
     /// The snippet option.
@@ -835,7 +872,7 @@ impl GraphqlDocumentSubType {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlProjectLiteral {
+pub enum GraphqlProjectLiteral {
     /// The project id option.
     ProjectId(ID),
     /// The project id self option.
@@ -875,7 +912,7 @@ impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlChatLiteral {
+pub enum GraphqlChatLiteral {
     /// The project id option.
     ProjectId(ID),
     /// The role option.
@@ -916,7 +953,7 @@ impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlChatRole {
+pub enum GraphqlChatRole {
     /// The user option.
     User,
     /// The system option.
@@ -940,7 +977,7 @@ impl GraphqlChatRole {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlEmailLiteral {
+pub enum GraphqlEmailLiteral {
     /// The sender option.
     Sender(GraphqlEmailValue),
     /// The cc option.
@@ -1016,7 +1053,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlEmailValue {
+pub enum GraphqlEmailValue {
     /// The partial option.
     Partial(String),
     /// The complete option.
@@ -1046,7 +1083,7 @@ impl GraphqlEmailValue {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlAttachmentKind {
+pub enum GraphqlAttachmentKind {
     /// PDF files.
     Pdf,
     /// PNG, JPEG, GIF, WebP or SVG images.
@@ -1070,7 +1107,7 @@ impl GraphqlAttachmentKind {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlSharedEmailFilter {
+pub enum GraphqlSharedEmailFilter {
     /// The exclude option.
     Exclude,
     /// The include option.
@@ -1094,7 +1131,7 @@ impl GraphqlSharedEmailFilter {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlChannelLiteral {
+pub enum GraphqlChannelLiteral {
     /// The thread id option.
     ThreadId(ID),
     /// The mention option.
@@ -1147,7 +1184,7 @@ impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlChannelTypeFilter {
+pub enum GraphqlChannelTypeFilter {
     /// The public option.
     Public,
     /// The private option.
@@ -1174,7 +1211,7 @@ impl GraphqlChannelTypeFilter {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlChannelThreadLiteral {
+pub enum GraphqlChannelThreadLiteral {
     /// The thread id option.
     ThreadId(ID),
     /// The channel id option.
@@ -1212,7 +1249,7 @@ impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlCallLiteral {
+pub enum GraphqlCallLiteral {
     /// The call id option.
     CallId(ID),
     /// The channel id option.
@@ -1245,7 +1282,7 @@ impl IntoFilterExpr<CallLiteral> for GraphqlCallLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlCallStatus {
+pub enum GraphqlCallStatus {
     /// The attended option.
     Attended,
     /// The missed option.
@@ -1269,7 +1306,7 @@ impl GraphqlCallStatus {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlAgentSessionLiteral {
+pub enum GraphqlAgentSessionLiteral {
     /// Opt this query into agent sessions at all. Agent sessions are off by
     /// default, so without this (or an `id`/`owner`) Soup omits them entirely.
     /// Must be `true`; there is no literal for excluding agent sessions, that
@@ -1385,7 +1422,7 @@ impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlCrmCompanyLiteral {
+pub enum GraphqlCrmCompanyLiteral {
     /// The id option.
     Id(ID),
     /// The hidden option.
@@ -1407,7 +1444,7 @@ impl IntoFilterExpr<CrmCompanyLiteral> for GraphqlCrmCompanyLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlForeignEntityLiteral {
+pub enum GraphqlForeignEntityLiteral {
     /// The id option.
     Id(ID),
     /// The foreign entity id option.
@@ -1443,7 +1480,7 @@ impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlGithubPullRequestLiteral {
+pub enum GraphqlGithubPullRequestLiteral {
     /// The numeric GitHub repository id option.
     RepositoryId(String),
     /// The author's numeric GitHub user id option.
@@ -1505,7 +1542,7 @@ filter_expr_input!(
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlInitiativeLiteral {
+pub enum GraphqlInitiativeLiteral {
     /// Opt into initiatives; must be true. Omit the filter to exclude them.
     Include(bool),
     /// Match an initiative identifier.
@@ -1554,7 +1591,7 @@ filter_expr_input!(
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlDatabaseRowLiteral {
+pub enum GraphqlDatabaseRowLiteral {
     /// Include accessible rows of every table; must be true.
     Include(bool),
     /// Match the rows of a table.
@@ -1582,7 +1619,7 @@ impl IntoFilterExpr<DatabaseRowLiteral> for GraphqlDatabaseRowLiteral {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlGithubPullRequestState {
+pub enum GraphqlGithubPullRequestState {
     /// The open option.
     Open,
     /// The closed option.
@@ -1606,7 +1643,7 @@ impl GraphqlGithubPullRequestState {
 #[cfg_attr(feature = "server", derive(async_graphql::Enum))]
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlGithubPullRequestReviewStatus {
+pub enum GraphqlGithubPullRequestReviewStatus {
     /// The no reviews option.
     None,
     /// The review required option.
@@ -1633,7 +1670,7 @@ impl GraphqlGithubPullRequestReviewStatus {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlCrmContactLiteral {
+pub enum GraphqlCrmContactLiteral {
     /// Include visible contacts. Must be true.
     Include(bool),
     /// Exact team-owned contact ID.

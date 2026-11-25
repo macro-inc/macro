@@ -45,7 +45,9 @@ whose pages took the least time first.
 ## Boundaries
 
 - Depends on: `async-graphql` (parser and `Request` only), `chrono` and
-  `chrono-tz` (calendar months in the client's zone); no schema or database.
+  `chrono-tz` (calendar months in the client's zone), and
+  `graphql_soup_filter_input`, whose filter input types the lanes' Soup
+  filters are built from (`LaneInput`); no schema or database.
   Tests validate the catalog with `apollo-compiler` against
   `static_assets/schema.graphql`.
 - Used by: `services/document_storage_service` (`src/api/graphql_soup/stream.rs`),
@@ -69,7 +71,8 @@ whose pages took the least time first.
   `LANE_DOCUMENTS` in `apps/web/src/lib/queries/soup/sync/lane-queries.ts`,
   then to `LANE_QUERIES` here. Older clients do not send it, and the server
   leaves their lane out.
-- Change a lane: `src/catalog.rs`, then
+- Change a lane: `src/catalog.rs`, building its filters from the
+  `graphql_soup_filter_input` types (never JSON by hand), then
   `src/catalog/test/expected_lanes.json`. The catalog test validates every
   lane's document (from the fixture) and variables against
   `static_assets/schema.graphql`. Keep a
