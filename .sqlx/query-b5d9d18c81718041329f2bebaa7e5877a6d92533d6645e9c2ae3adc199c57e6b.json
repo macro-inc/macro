@@ -33,7 +33,8 @@
                 "upgraded",
                 "skipped",
                 "rolled_back",
-                "rollback_failed"
+                "rollback_failed",
+                "failed"
               ]
             }
           }

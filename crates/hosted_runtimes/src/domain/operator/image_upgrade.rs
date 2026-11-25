@@ -144,7 +144,10 @@ where
                         computer.state = ComputerUpgradeState::RollbackFailed;
                         computer.error = Some(format!(
                             "{}; the upgrade ran out of time while it was under way",
-                            computer.error.as_deref().unwrap_or("no answer from its host")
+                            computer
+                                .error
+                                .as_deref()
+                                .unwrap_or("no answer from its host")
                         ));
                         tracing::error!(computer_id = %computer.computer_id, reason = "image upgrade ran out of time with the computer under way", "computer needs an operator");
                         self.save_computer(computer).await?;
@@ -381,10 +384,7 @@ where
         // The host's record, not the row's last write: the image it boots is
         // the one a rollback goes back to.
         let fleet = self.fleet_for(computer.host).await?;
-        let disk = fleet
-            .system_disk(computer.id)
-            .await
-            .map_err(internal)?;
+        let disk = fleet.system_disk(computer.id).await.map_err(internal)?;
         if disk.image == row.new_image {
             return Ok(Err(NotNow::Skip("it runs the image already".to_owned())));
         }

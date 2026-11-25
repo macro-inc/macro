@@ -436,13 +436,9 @@ async fn killed_after_the_save_a_repeated_replacement_boots_the_computer_it_stop
     // It ran when the replacement stopped it.
     swapped.boot_after_system_disk = true;
     saved(&store, &swapped).await;
-    let host = super::super::test::host_with_disks(
-        store,
-        disks_with(&[0, 1]),
-        FakeMachines::default(),
-        1,
-    )
-    .await;
+    let host =
+        super::super::test::host_with_disks(store, disks_with(&[0, 1]), FakeMachines::default(), 1)
+            .await;
 
     let computer = host
         .service
@@ -465,13 +461,9 @@ async fn killed_after_the_shutdown_a_repeated_replacement_clones_and_boots_it() 
     let mut stopped = record(PowerState::Stopped, None);
     stopped.boot_after_system_disk = true;
     saved(&store, &stopped).await;
-    let host = super::super::test::host_with_disks(
-        store,
-        disks_with(&[0]),
-        FakeMachines::default(),
-        1,
-    )
-    .await;
+    let host =
+        super::super::test::host_with_disks(store, disks_with(&[0]), FakeMachines::default(), 1)
+            .await;
     let new_image = firecracker_host_api::GuestImage::try_new("macro-box/2026-11-24a").unwrap();
 
     let computer = host

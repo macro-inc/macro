@@ -19,7 +19,9 @@ prefix="firecracker-images/$IMAGE_VERSION"
 files="$FILES_DIR/files.json"
 [ -s "$files" ] || fail "the build job's digests are missing"
 
-secrets=$(mktemp -d)
+# The runner's own temp directory: emptied at the start of every job, so a
+# job killed before its trap still leaves nothing for the next one.
+secrets=$(mktemp -d "$RUNNER_TEMP/rollout.XXXXXX")
 chmod 700 "$secrets"
 trap 'rm -rf "$secrets"' EXIT
 
@@ -58,5 +60,7 @@ echo "upgrade $upgrade_id recorded"
 # staging; the control plane carries on if this job stops waiting.
 count=$(tr ',' '\n' <<<"$COMPUTERS" | wc -l)
 timeout=$((IDLE_WAIT_MINUTES + 60 + count * (RECONNECT_TIMEOUT_MINUTES + 5)))
+# Under the job's 360 minutes, so the cleanup above runs.
+if [ "$timeout" -gt 300 ]; then timeout=300; fi
 "$bin" wait --environment dev --database-url-file "$secrets/database.url" \
   --upgrade-id "$upgrade_id" --timeout-minutes "$timeout" | tee -a "$GITHUB_STEP_SUMMARY"

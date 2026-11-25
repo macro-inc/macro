@@ -139,12 +139,16 @@ not shared across `zfs send`.
   `.#macro-box-firecracker`, publishes the files with their SHA-256 to the Nix
   cache bucket, and records the upgrade from the in-VPC migrator runner. The
   harness's upgrade pass stages the image on each host (checked by hash),
-  then gives each idle computer (no agent turn, no screen or shell) a fresh
+  then gives each idle computer (no agent turn under way or queued, no screen
+  open; terminal shells are not seen) a fresh
   system disk of it with its own `/home` and identity, a batch at a time. A
   failed boot, or no macrod within the timeout, rolls that computer back to
-  its previous system disk and pauses the upgrade. A computer still busy at
-  the idle deadline is skipped, never forced. Hibernated computers are
-  skipped.
+  its previous system disk and pauses the upgrade; a host that refuses, or
+  fails before the computer left its own disk, leaves it there (failed) and
+  pauses it too. A computer still busy at the idle deadline is skipped, never
+  forced. Hibernated computers are skipped. Two hours after the idle
+  deadline whatever is unfinished stops: waiting computers are skipped, and
+  one still mid-upgrade is logged for an operator.
 - **The agent runtime ships in the image**: an agent teammate runs
   `packages/muppet` and its dependencies from the image's
   `macro-agent-runtime` (`nix/macro-box/_agent-runtime.nix`). A harness deploy

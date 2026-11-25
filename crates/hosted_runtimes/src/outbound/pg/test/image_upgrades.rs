@@ -84,7 +84,11 @@ async fn an_upgrade_is_leased_by_one_replica_holds_its_computers_and_hears_macro
     row.state = ComputerUpgradeState::Verifying;
     row.old_image = Some(GuestImage::try_new("macro-box/2026-11-19a").unwrap());
     row.phase_started_at = Some(now());
-    assert!(repo.update_computer_upgrade(first, row, now()).await.unwrap());
+    assert!(
+        repo.update_computer_upgrade(first, row, now())
+            .await
+            .unwrap()
+    );
     assert!(repo.held(computer.id).await.unwrap());
     assert_eq!(
         repo.held_on(host.id).await.unwrap(),
@@ -103,10 +107,23 @@ async fn an_upgrade_is_leased_by_one_replica_holds_its_computers_and_hears_macro
     done.sources = None;
     let mut row = computers[0].clone();
     row.state = ComputerUpgradeState::Upgraded;
-    assert!(repo.update_computer_upgrade(first, &row, now()).await.unwrap());
+    assert!(
+        repo.update_computer_upgrade(first, &row, now())
+            .await
+            .unwrap()
+    );
     // Another replica's writes are refused.
-    assert!(!repo.update_upgrade(second, &done, true, now()).await.unwrap());
-    assert!(repo.update_upgrade(first, &done, true, now()).await.unwrap());
+    assert!(
+        !repo
+            .update_upgrade(second, &done, true, now())
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.update_upgrade(first, &done, true, now())
+            .await
+            .unwrap()
+    );
     assert!(!repo.held(computer.id).await.unwrap());
     assert!(
         repo.lease_upgrade(second, now(), until)

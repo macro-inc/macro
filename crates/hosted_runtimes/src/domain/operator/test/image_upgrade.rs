@@ -115,7 +115,10 @@ impl HostImages for FakeFleet {
         Ok(self.state_of_disk(computer_id))
     }
 
-    async fn system_disk(&self, computer_id: ComputerId) -> Result<SystemDiskState, FakeFleetError> {
+    async fn system_disk(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<SystemDiskState, FakeFleetError> {
         Ok(self.state_of_disk(computer_id))
     }
 }
@@ -534,7 +537,13 @@ async fn a_refusal_before_the_computer_was_touched_fails_it_without_a_rollback()
 
     assert_eq!(state_of(&operator, id), ComputerUpgradeState::Failed);
     // Nothing to roll back and no reconnect to wait for.
-    assert_eq!(operator.fleet.home.logged(&format!("replace {id} {BASE_IMAGE}")), 0);
+    assert_eq!(
+        operator
+            .fleet
+            .home
+            .logged(&format!("replace {id} {BASE_IMAGE}")),
+        0
+    );
     assert_eq!(operator.fleet.home.logged(&format!("start {id}")), 0);
     let (state, finished) = upgrade_state(&operator);
     assert_eq!((state, finished), (UpgradeState::Paused, true));
@@ -608,7 +617,10 @@ async fn past_its_deadline_an_upgrade_skips_what_waits_and_leaves_what_is_under_
 
     operator.advance_image_upgrade().await.unwrap();
 
-    assert_eq!(state_of(&operator, first), ComputerUpgradeState::RollbackFailed);
+    assert_eq!(
+        state_of(&operator, first),
+        ComputerUpgradeState::RollbackFailed
+    );
     assert_eq!(state_of(&operator, second), ComputerUpgradeState::Skipped);
     assert_eq!(upgrade_state(&operator), (UpgradeState::Paused, true));
 }
