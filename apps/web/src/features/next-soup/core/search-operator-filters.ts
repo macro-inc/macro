@@ -391,8 +391,17 @@ export function searchFiltersOperatorText(
     return id.startsWith('macro|') ? id.slice('macro|'.length) : id;
   };
   const bindings: SearchOperatorBinding[] = [];
+  const written = new Set<string>();
   const boundTag = (tag: SearchFiltersState['tags'][number]) => {
-    const token = `tag:${shownValue(names.tag(tag.value) ?? tag.value)}`;
+    const named = `tag:${shownValue(names.tag(tag.value) ?? tag.value)}`;
+    // Tags that must all hold need tokens of their own: a token bound twice
+    // stands for either tag, so a second tag of the same name is written by
+    // its id.
+    const token =
+      state.tagMode === 'all' && written.has(named)
+        ? `tag:${shownValue(tag.value)}`
+        : named;
+    written.add(token);
     bindings.push({
       token,
       tags: [{ propertyId: tag.propertyId, optionId: tag.value }],

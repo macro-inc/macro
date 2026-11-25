@@ -246,6 +246,36 @@ describe('searchFiltersOperatorText', () => {
     });
   });
 
+  it('keeps tags that must all hold apart when they share a name', () => {
+    const written = searchFiltersOperatorText(
+      {
+        ...compile('').state,
+        type: 'task',
+        tags: [
+          { propertyId: 'set-1', type: 'select', value: 'work-1' },
+          { propertyId: 'set-2', type: 'select', value: 'work-2' },
+        ],
+        tagMode: 'all',
+      },
+      { ...NAMES, tag: () => 'Work' }
+    );
+    expect(written.text).toBe('type:task tag:Work tag:work-2');
+    const read = searchOperatorFilters(
+      readSearchOperators(
+        splitSearchTerms(written.text),
+        true,
+        written.bindings
+      ),
+      LOOKUP
+    );
+    expect(read.matchesNothing).toBe(false);
+    expect(read.state.tagMode).toBe('all');
+    expect(read.state.tags.map((tag) => tag.value)).toEqual([
+      'work-1',
+      'work-2',
+    ]);
+  });
+
   it('writes only the active type’s facets, as they are compiled', () => {
     const { text } = searchFiltersOperatorText(
       {
