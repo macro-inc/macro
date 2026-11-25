@@ -8,9 +8,14 @@ import {
   createSignal,
   on,
   onCleanup,
+  type Signal,
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import {
+  registerRowVersion,
+  unwrapStoreProxy,
+} from '../../../graphql-cache/exchange/live-query';
 import type { RecordSelection } from '../../../graphql-cache/exchange/record-selection';
 import type { CacheHost } from '../../../graphql-cache/host/types';
 import {
@@ -91,10 +96,23 @@ export function createPredicateQuery<T extends object>(options: {
       }
       const id = crypto.randomUUID();
       const [rows, setRows] = createStore<Record<string, LiveQueryRow<T>>>({});
+      const rowVersions = new Map<string, Signal<number>>();
+      const touchRowVersion = (recordKey: string) => {
+        const row = rows[recordKey];
+        if (!row) return;
+        let version = rowVersions.get(recordKey);
+        if (!version) {
+          version = createSignal(0);
+          rowVersions.set(recordKey, version);
+        }
+        registerRowVersion(unwrapStoreProxy(row.record), version[0]);
+        version[1]((count) => count + 1);
+      };
       let keys: readonly string[] = [];
       let orderedRows: readonly LiveQueryRow<T>[] = [];
       let since: CacheRevision | undefined;
       let latest: CacheRevision | undefined;
+      let observationId: string | undefined;
       let epoch = 0;
       let active = true;
       let running = false;
@@ -137,6 +155,7 @@ export function createPredicateQuery<T extends object>(options: {
               if (result.kind !== 'live-query') {
                 outcome = 'unsupported';
                 unsupported = true;
+                observationId = undefined;
                 pending = false;
                 setStatus('unsupported');
                 continue;
@@ -189,8 +208,14 @@ export function createPredicateQuery<T extends object>(options: {
                     result.reset ||
                     result.keys !== undefined ||
                     result.removed.length > 0;
-                  if (result.reset) setRows(reconcile({}));
-                  for (const key of result.removed) setRows(key, undefined!);
+                  if (result.reset) {
+                    rowVersions.clear();
+                    setRows(reconcile({}));
+                  }
+                  for (const key of result.removed) {
+                    rowVersions.delete(key);
+                    setRows(key, undefined!);
+                  }
                   for (const row of result.upserts) {
                     if (!rows[row.recordKey]) orderChanged = true;
                     setRows(
@@ -200,6 +225,7 @@ export function createPredicateQuery<T extends object>(options: {
                         merge: true,
                       })
                     );
+                    touchRowVersion(row.recordKey);
                   }
                   for (const patch of result.patches) {
                     setRows(
@@ -223,6 +249,7 @@ export function createPredicateQuery<T extends object>(options: {
                         row.identity = patch.identity;
                       })
                     );
+                    touchRowVersion(patch.recordKey);
                   }
                   if (result.keys !== undefined) keys = result.keys;
                   if (orderChanged)
@@ -230,6 +257,7 @@ export function createPredicateQuery<T extends object>(options: {
                       rows[key] ? [rows[key]] : []
                     );
                   since = revision;
+                  observationId = result.observationId;
                   setData({
                     revision,
                     keys,
@@ -248,6 +276,7 @@ export function createPredicateQuery<T extends object>(options: {
                 continue;
               }
               outcome = 'error';
+              observationId = undefined;
               setError(() => cause);
               setStatus('error');
             } finally {
@@ -280,7 +309,17 @@ export function createPredicateQuery<T extends object>(options: {
       // instead of reading on each revision; initial and explicit reads still run.
       const deferral = createHiddenDeferral(refresh);
       const unsubscribeChanges = host.onCacheChanged(
-        (revision) => {
+        (revision, changes) => {
+          if (
+            !running &&
+            !pending &&
+            observationId !== undefined &&
+            changes?.unchangedViews?.includes(observationId)
+          ) {
+            latest = revision;
+            return;
+          }
+          observationId = undefined;
           latest = revision;
           deferral.request();
         },
@@ -291,6 +330,7 @@ export function createPredicateQuery<T extends object>(options: {
         unsupported = false;
         since = undefined;
         latest = undefined;
+        observationId = undefined;
         batch(() => {
           setData(undefined);
           setStatus('loading');
@@ -300,6 +340,7 @@ export function createPredicateQuery<T extends object>(options: {
       refresh();
       onCleanup(() => {
         active = false;
+        rowVersions.clear();
         clearTimeout(retryTimer);
         deferral.dispose();
         unsubscribeChanges();

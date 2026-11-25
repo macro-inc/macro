@@ -245,7 +245,8 @@ function restSoupAstItemsQueryOptions(
   staleTime: StaleTime | undefined,
   meta: RestSoupAstItemsMeta,
   showSupportedForeignEntities: boolean | undefined,
-  keepPrevious: boolean | undefined
+  keepPrevious: boolean | undefined,
+  gcTime?: number
 ) {
   const { params, body, groupBy, transport } = args;
 
@@ -313,6 +314,7 @@ function restSoupAstItemsQueryOptions(
     // A timed-out native request should reach the view's load-error state.
     // Retry remains available explicitly from that state.
     staleTime,
+    ...(gcTime !== undefined ? { gcTime } : {}),
     placeholderData: (prev, prevQuery) => {
       if (keepPrevious === false) return undefined;
       // Keep the previous rows on screen while params/filters change, but
@@ -339,7 +341,7 @@ function restSoupAstItemsQueryOptions(
 /** REST implementation kept private behind {@link useSoupAstItemsQuery}. */
 const useRestSoupAstItemsQuery = (
   args: Accessor<SoupAstItemsQueryArgs>,
-  options?: Accessor<SoupItemsQueryOptions>
+  options?: Accessor<SoupItemsQueryOptions & { gcTime?: number }>
 ) => {
   return useInfiniteQuery(() =>
     restSoupAstItemsQueryOptions(
@@ -348,7 +350,8 @@ const useRestSoupAstItemsQuery = (
       options?.().staleTime,
       options?.().meta,
       options?.().showSupportedForeignEntities,
-      options?.().keepPreviousData
+      options?.().keepPreviousData,
+      options?.().gcTime
     )
   );
 };
@@ -436,9 +439,13 @@ export function useSoupAstItemsQuery(
 
   const restQuery = useRestSoupAstItemsQuery(args, () => {
     const currentOptions = options?.();
+    const usingGraphql = usesGraphql();
     return {
       ...currentOptions,
-      enabled: queryEnabled() && !usesGraphql(),
+      enabled: queryEnabled() && !usingGraphql,
+      // Do not retain disabled REST query entries (and large filter AST keys)
+      // in TanStack Query once GraphQL serves the request.
+      gcTime: usingGraphql ? 0 : undefined,
     };
   });
 

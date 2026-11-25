@@ -5565,4 +5565,166 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       dispose();
     });
   });
+
+  it('projects predicate rows without attaching Solid store nodes to nested arrays and updates on patches', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const changes = new Set<(revision: string) => void>();
+    const rawParticipants = Array.from({ length: 10 }, (_, index) => ({
+      userId: `user-${index}`,
+      role: 'MEMBER',
+    }));
+    const rawRecord = {
+      __typename: 'GraphqlSoupChannel' as const,
+      id: 'chan-1',
+      name: 'Before',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      participants: rawParticipants,
+    };
+    let callCount = 0;
+    entityFilterMock.mockImplementation(async (args) => {
+      if (args.liveQuery?.release) return { kind: 'unsupported' };
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          kind: 'live-query',
+          revision: parseCacheRevision(REVISION_1),
+          reset: true,
+          keys: ['GraphqlSoupChannel:chan-1'],
+          upserts: [
+            { recordKey: 'GraphqlSoupChannel:chan-1', record: rawRecord },
+          ],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        };
+      }
+      return {
+        kind: 'live-query',
+        revision: parseCacheRevision(REVISION_2),
+        reset: false,
+        upserts: [],
+        patches: [
+          {
+            recordKey: 'GraphqlSoupChannel:chan-1',
+            fields: [{ path: ['name'], value: 'After' }],
+            identity: { mutationUuid: null, pending: false },
+          },
+        ],
+        removed: [],
+        retainedKeys: [],
+        optimistic: false,
+      };
+    });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => REVISION_1,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        changes.add(callback);
+        return () => changes.delete(callback);
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    mapGraphqlSoupItemMock.mockImplementation((record: typeof rawRecord) => ({
+      id: record.id,
+      name: record.name,
+      memberIds: record.participants.map((p) => p.userId),
+    }));
+    const ready = deferred<void>();
+    const patched = deferred<void>();
+    const { query, dispose } = createRoot((dispose) => {
+      const query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }) as never,
+        () => ({
+          enabled: true,
+          projection: 'channel-list',
+          cacheFirstEntities: [{ entityType: 'CHANNEL', entityId: 'chan-1' }],
+        })
+      );
+      createComputed(() => {
+        if (query.cacheStatus?.() === 'ready') ready.resolve();
+        if (query.data()?.entities[0]?.name === 'After') patched.resolve();
+      });
+      return { query, dispose };
+    });
+    try {
+      await ready.promise;
+      expect(query.data()?.entities[0]?.name).toBe('Before');
+      expect(query.data()?.itemsById).toBeUndefined();
+      // Walking `participants` during projection must not allocate Solid store
+      // proxy/signal symbols on nested array elements.
+      expect(Object.getOwnPropertySymbols(rawParticipants[0])).toEqual([]);
+
+      for (const changed of changes) changed(REVISION_2);
+      await patched.promise;
+      expect(query.data()?.entities[0]?.name).toBe('After');
+      expect(Object.getOwnPropertySymbols(rawParticipants[0])).toEqual([]);
+    } finally {
+      dispose();
+      mapGraphqlSoupItemMock.mockImplementation((item) => item);
+    }
+  });
+
+  it('fences a same-host cache generation reset while disabled and resyncs revision on re-enable', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let currentRev = '5';
+    let onGeneration: (() => void) | undefined;
+    let currentRevCalls = 0;
+    const revSynced = deferred<void>();
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: false,
+      currentRevision: async () => {
+        currentRevCalls += 1;
+        if (currentRevCalls >= 2) revSynced.resolve();
+        return currentRev;
+      },
+      entityFilter: vi.fn(async () => ({
+        kind: 'reconciled',
+        revision: parseCacheRevision(currentRev),
+        keys: [],
+        retainedKeys: [],
+        optimistic: false,
+      })),
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: (cb: () => void) => {
+        onGeneration = cb;
+        return () => {
+          onGeneration = undefined;
+        };
+      },
+    });
+    const [enabled, setEnabled] = createSignal(true);
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(
+        () => ({ sortMethod: 'UPDATED_AT', limit: 20 }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'before-reset' }], next_cursor: null }),
+        { source: 'live-network', revision: '5' }
+      );
+      expect(source.hasPageData()).toBe(true);
+      const scopeBefore = source.queryScope();
+
+      setEnabled(false);
+      // A same-host generation reset arrives while disabled.
+      currentRev = '0';
+      onGeneration?.();
+      expect(source.hasPageData()).toBe(false);
+      expect(source.queryScope()).not.toBe(scopeBefore);
+
+      setEnabled(true);
+      await revSynced.promise;
+      expect(currentRevCalls).toBe(2);
+    } finally {
+      dispose();
+    }
+  });
 });

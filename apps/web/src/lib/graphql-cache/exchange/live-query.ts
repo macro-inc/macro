@@ -1,5 +1,12 @@
 import type { OperationResult } from '@urql/core';
-import { batch, createSignal, untrack } from 'solid-js';
+import {
+  $PROXY,
+  type Accessor,
+  batch,
+  createSignal,
+  type Signal,
+  untrack,
+} from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
 import { queryDelta } from './query-patches';
@@ -13,6 +20,41 @@ import {
 
 const LIVE_DATA = Symbol('live-query-data');
 const QUERY_SNAPSHOT = Symbol('query-snapshot');
+const rowVersions = new WeakMap<object, Accessor<unknown>>();
+
+/**
+ * Unwraps a Solid store proxy in O(1) without recursively walking plain
+ * objects (which `solid-js/store`'s `unwrap` otherwise traverses with
+ * `Object.getOwnPropertyDescriptors`).
+ */
+export function unwrapStoreProxy<T extends object>(value: T): T {
+  return Reflect.get(value, $PROXY) === value ? unwrap(value) : value;
+}
+
+/**
+ * Associates an unwrapped store-backed record with a coarse version signal so
+ * whole-row projections can track updates without allocating Solid store nodes
+ * for every nested field and array element.
+ */
+export function registerRowVersion(
+  rawRecord: object,
+  readVersion: Accessor<unknown>
+): void {
+  rowVersions.set(rawRecord, readVersion);
+}
+
+/**
+ * Subscribes to a registered record's coarse version signal and returns its
+ * unwrapped object; unregistered values are returned unchanged so ad-hoc
+ * stores keep fine-grained tracking.
+ */
+export function readRowSnapshot<T extends object>(record: T): T {
+  const raw = unwrapStoreProxy(record);
+  const readVersion = rowVersions.get(raw);
+  if (!readVersion) return record;
+  readVersion();
+  return raw;
+}
 
 /** Immutable evidence for consumers that compare earlier query results. */
 export function querySnapshot<T>(data: T): T {
@@ -44,6 +86,8 @@ export class LiveQuery {
   private readonly state;
   private readonly setState;
   private readonly source = createSignal<Record<string, unknown>>({});
+  private readonly rowSignals = new WeakMap<object, Signal<number>>();
+  private readonly knownRows = new WeakSet<object>();
   snapshot: Record<string, unknown>;
 
   constructor(
@@ -61,6 +105,57 @@ export class LiveQuery {
     return this.state.data;
   }
 
+  private ensureRowSignal(rawRow: object): Signal<number> {
+    let signal = this.rowSignals.get(rawRow);
+    if (!signal) {
+      signal = createSignal(0);
+      this.rowSignals.set(rawRow, signal);
+    }
+    return signal;
+  }
+
+  private registerRow(rawRow: object): void {
+    if (this.knownRows.has(rawRow)) return;
+    this.knownRows.add(rawRow);
+    rowVersions.set(rawRow, () => this.ensureRowSignal(rawRow)[0]());
+  }
+
+  private bumpRow(rawRow: object): void {
+    this.registerRow(rawRow);
+    const signal = this.rowSignals.get(rawRow);
+    if (signal) signal[1]((version) => version + 1);
+  }
+
+  /** Register identified list items lazily and bump only changed rows. */
+  private syncLiveQueryRows(value: unknown, unchanged?: WeakSet<object>): void {
+    if (value === null || typeof value !== 'object') return;
+    const raw = unwrapStoreProxy(value);
+    if (unchanged?.has(raw)) return;
+    if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (item === null || typeof item !== 'object') continue;
+        const rawItem = unwrapStoreProxy(item);
+        if (typeof Reflect.get(rawItem, RECONCILE_KEY) === 'string') {
+          if (unchanged?.has(rawItem)) this.registerRow(rawItem);
+          else this.bumpRow(rawItem);
+        } else {
+          this.syncLiveQueryRows(rawItem, unchanged);
+        }
+      }
+      return;
+    }
+    if (typeof Reflect.get(raw, RECONCILE_KEY) === 'string') {
+      if (unchanged?.has(raw)) this.registerRow(raw);
+      else this.bumpRow(raw);
+      return;
+    }
+    for (const child of Object.values(raw)) {
+      if (child !== null && typeof child === 'object') {
+        this.syncLiveQueryRows(child, unchanged);
+      }
+    }
+  }
+
   replace(data: Record<string, unknown>): void {
     if (data === this.snapshot) return;
     if (!supportsStoreReconciliation(data))
@@ -74,6 +169,7 @@ export class LiveQuery {
       untrack(() =>
         batch(() => {
           this.source[1](() => this.snapshot);
+          const unchanged = new WeakSet<object>();
           this.setState(
             'data',
             produce((draft) => {
@@ -101,7 +197,8 @@ export class LiveQuery {
                         value,
                         shapeAtPath(this.shape, path),
                         current,
-                        previous
+                        previous,
+                        unchanged
                       ),
                     },
                     { key: RECONCILE_KEY, merge: false }
@@ -115,6 +212,28 @@ export class LiveQuery {
               }
             })
           );
+          const rawRoot = unwrap(this.state.data);
+          for (const { path } of delta.patches) {
+            let current: unknown = rawRoot;
+            let rowOwner: object | undefined;
+            for (const part of path) {
+              if (current === null || typeof current !== 'object') {
+                current = undefined;
+                break;
+              }
+              current = (current as Record<string | number, unknown>)[part];
+              if (
+                current !== null &&
+                typeof current === 'object' &&
+                this.knownRows.has(current)
+              ) {
+                rowOwner = current;
+              }
+            }
+            if (rowOwner) this.bumpRow(rowOwner);
+            else if (current !== null && typeof current === 'object')
+              this.syncLiveQueryRows(current, unchanged);
+          }
         })
       );
       return;
@@ -123,6 +242,7 @@ export class LiveQuery {
     this.snapshot = data;
     untrack(() =>
       batch(() => {
+        const unchanged = new WeakSet<object>();
         // Network/worker snapshots remain immutable and independent of store ownership.
         this.setState(
           'data',
@@ -131,7 +251,8 @@ export class LiveQuery {
               data,
               this.shape,
               unwrap(this.state.data),
-              previousSnapshot
+              previousSnapshot,
+              unchanged
             ) as Record<string, unknown>,
             {
               key: RECONCILE_KEY,
@@ -140,6 +261,7 @@ export class LiveQuery {
           )
         );
         const raw = unwrap(this.state.data);
+        this.syncLiveQueryRows(raw, unchanged);
         if (!Object.hasOwn(raw, QUERY_SNAPSHOT)) {
           Object.defineProperty(raw, QUERY_SNAPSHOT, {
             get: () => this.source[0](),

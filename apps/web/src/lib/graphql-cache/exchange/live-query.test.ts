@@ -1,10 +1,11 @@
 import { gql } from '@urql/core';
 import fc from 'fast-check';
 import { createComputed, createRoot } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { describe, expect, it } from 'vitest';
 import { createKeyedProjection } from '../../queries/soup/create-keyed-projection';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
-import { LiveQuery, querySnapshot } from './live-query';
+import { LiveQuery, querySnapshot, readRowSnapshot } from './live-query';
 import { applyQueryPatches } from './query-patches';
 import { queryShape } from './query-shape';
 
@@ -348,6 +349,65 @@ describe('live query field propagation', () => {
       expect(live.rows[1]).toBe(first);
       expect(first.tags).toEqual(['tag']);
       expect(reads).toBe(2);
+      dispose();
+    });
+  });
+
+  it('tracks per-row patches through readRowSnapshot without attaching Solid store nodes to nested arrays', () => {
+    type NestedRow = {
+      __typename: string;
+      id: string;
+      isRead: boolean;
+      participants: Array<{ userId: string; role: string }>;
+    };
+    createRoot((dispose) => {
+      const rows: NestedRow[] = Array.from({ length: 20 }, (_, id) => ({
+        __typename: 'Channel',
+        id: String(id),
+        isRead: false,
+        participants: Array.from({ length: 15 }, (_, p) => ({
+          userId: `user-${p}`,
+          role: 'MEMBER',
+        })),
+      }));
+      const view = new LiveQuery({ rows });
+      const live = view.data as { rows: NestedRow[] };
+      let maps = 0;
+      const projected = createKeyedProjection(
+        () => live.rows,
+        (row) => row.id,
+        (row) => {
+          maps += 1;
+          const raw = readRowSnapshot(row);
+          return {
+            id: raw.id,
+            read: raw.isRead,
+            members: raw.participants.map((p) => `${p.userId}:${p.role}`),
+          };
+        }
+      );
+
+      expect(projected()).toHaveLength(20);
+      expect(maps).toBe(20);
+      const rawParticipant = unwrap(live.rows[0]).participants[0];
+      expect(Object.getOwnPropertySymbols(rawParticipant)).toEqual([]);
+
+      view.replace(
+        applyQueryPatches(view.snapshot, [
+          { path: ['rows', 5, 'isRead'], value: true },
+        ])
+      );
+      expect(maps).toBe(21);
+      expect(projected()[5].read).toBe(true);
+      expect(projected()[4].read).toBe(false);
+
+      // A full snapshot replacement must also remap only the row that changed.
+      const fullNext = structuredClone(view.snapshot as { rows: NestedRow[] });
+      fullNext.rows[7].isRead = true;
+      view.replace(fullNext);
+      expect(maps).toBe(22);
+      expect(projected()[7].read).toBe(true);
+      expect(projected()[4].read).toBe(false);
       dispose();
     });
   });

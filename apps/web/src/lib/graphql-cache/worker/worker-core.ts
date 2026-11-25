@@ -1145,6 +1145,9 @@ export class CacheWorkerCore {
             ...(result.searchChangedBuckets !== undefined
               ? { searchChangedBuckets: result.searchChangedBuckets }
               : {}),
+            ...(result.unchangedViews !== undefined
+              ? { unchangedViews: result.unchangedViews }
+              : {}),
           });
         }
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
@@ -1727,6 +1730,9 @@ export class CacheWorkerCore {
         revision: result.revision,
         ...(!result.reset && result.searchChangedBuckets !== undefined
           ? { searchChangedBuckets: result.searchChangedBuckets }
+          : {}),
+        ...(!result.reset && result.unchangedViews !== undefined
+          ? { unchangedViews: result.unchangedViews }
           : {}),
         ...(result.reset ? { reset: true } : {}),
       });
