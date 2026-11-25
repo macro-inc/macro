@@ -9,7 +9,7 @@ import { useUserId } from '@core/context/user';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { Button } from '@ui/components/Button';
 import { openDialog } from '@ui/components/ImperativeDialog';
-import { Show } from 'solid-js';
+import { children, type JSX, Show } from 'solid-js';
 import { supportsEntityAppearance } from './core/appearance';
 import type { AppearanceEntity } from './types';
 
@@ -49,36 +49,39 @@ export function useChangeEntityIcon() {
 export function EntityAppearanceTrigger(props: {
   entity: AppearanceEntity;
   editable: boolean;
+  /** What to draw: the entity's type icon in its appearance by default. */
+  children?: JSX.Element;
 }) {
-  const icon = () => (
-    <EntityIcon
-      targetType={getEntityIconType(props.entity)}
-      appearance={props.entity.appearance}
-      size="xs"
-    />
-  );
+  const given = children(() => props.children);
+  const icon = () =>
+    given() ?? (
+      <EntityIcon
+        targetType={getEntityIconType(props.entity)}
+        appearance={props.entity.appearance}
+        size="xs"
+      />
+    );
   return (
     <Show
       when={props.editable && supportsEntityAppearance(props.entity)}
       fallback={icon()}
     >
-      <EditableAppearanceTrigger entity={props.entity} />
+      <EditableAppearanceTrigger entity={props.entity}>
+        {icon()}
+      </EditableAppearanceTrigger>
     </Show>
   );
 }
 
-function EditableAppearanceTrigger(props: { entity: AppearanceEntity }) {
+function EditableAppearanceTrigger(props: {
+  entity: AppearanceEntity;
+  children: JSX.Element;
+}) {
   const changeIcon = useChangeEntityIcon();
   const flag = useFeatureFlag(enableEntityAppearance);
-  const icon = (
-    <EntityIcon
-      targetType={getEntityIconType(props.entity)}
-      appearance={props.entity.appearance}
-      size="xs"
-    />
-  );
+  const icon = children(() => props.children);
   return (
-    <Show when={flag().enabled} fallback={icon}>
+    <Show when={flag().enabled} fallback={icon()}>
       <Button
         variant="ghost"
         size="icon-xs"
@@ -90,7 +93,7 @@ function EditableAppearanceTrigger(props: { entity: AppearanceEntity }) {
           changeIcon(props.entity, event.currentTarget);
         }}
       >
-        {icon}
+        {icon()}
       </Button>
     </Show>
   );

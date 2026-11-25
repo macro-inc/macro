@@ -1,0 +1,16 @@
+id: email-link-lock-transactions-time-out
+snapshots:
+  ? |
+    async fn admit(&self) { let mut tx = self.pool.begin().await?; }
+  : labels:
+    - source: self.pool.begin()
+      style: primary
+      start: 37
+      end: 54
+  ? |
+    async fn save(pool: &PgPool) { let mut tx = pool.begin().await?; }
+  : labels:
+    - source: pool.begin()
+      style: primary
+      start: 44
+      end: 56

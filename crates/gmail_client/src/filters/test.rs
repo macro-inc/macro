@@ -21,17 +21,11 @@ fn filter() -> Filter {
         id: None,
         criteria: FilterCriteria {
             from: Some("sender@example.com".to_string()),
-            to: None,
-            subject: None,
-            query: None,
-            negated_query: None,
-            has_attachment: None,
-            exclude_chats: None,
+            ..FilterCriteria::default()
         },
         action: FilterAction {
             add_label_ids: Some(vec!["TRASH".to_string()]),
-            remove_label_ids: None,
-            forward: None,
+            ..FilterAction::default()
         },
     }
 }
@@ -74,6 +68,63 @@ async fn lists_generic_filters() {
 
     let filters = list_filters(&client(&server), "token").await.unwrap();
     assert_eq!(filters[0].id.as_deref(), Some("filter-1"));
+}
+
+#[tokio::test]
+async fn lists_filters_without_criteria_or_action() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/settings/filters"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "filter": [
+                {"id": "template-reply", "criteria": {"from": "newsletter@example.com"}},
+                {"id": "action-only", "action": {"removeLabelIds": ["SPAM"]}},
+                {
+                    "id": "large-mail",
+                    "criteria": {"size": 10485760, "sizeComparison": "larger", "hasAttachment": true},
+                    "action": {"forward": "archive@example.com"}
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let filters = list_filters(&client(&server), "token").await.unwrap();
+
+    assert_eq!(filters.len(), 3);
+    assert_eq!(
+        filters[0].criteria.from.as_deref(),
+        Some("newsletter@example.com")
+    );
+    assert_eq!(filters[0].action.add_label_ids, None);
+    assert_eq!(filters[1].criteria.from, None);
+    assert_eq!(
+        filters[1].action.remove_label_ids,
+        Some(vec!["SPAM".to_string()])
+    );
+    assert_eq!(filters[2].criteria.has_attachment, Some(true));
+}
+
+#[tokio::test]
+async fn list_decode_error_names_the_field_path_without_its_value() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/settings/filters"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "filter": [
+                {"id": "ok", "criteria": {"from": "first@example.com"}, "action": {}},
+                {"id": "odd", "criteria": {"hasAttachment": "second@example.com"}}
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let error = list_filters(&client(&server), "token").await.unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "Gmail API response decode error: unexpected value at filter[1].criteria.hasAttachment"
+    );
 }
 
 #[tokio::test]

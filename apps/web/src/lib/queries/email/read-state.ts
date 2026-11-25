@@ -35,7 +35,7 @@ export async function markEmailThreadSeen(
       getUnmaintainedGraphqlSoupRevalidations()
     );
     if (disposition === 'committed' && !graphqlCacheEnabled()) {
-      await refreshActiveGraphqlSoupQueries();
+      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
     }
   } finally {
     await invalidateEmailFolderQueries();
@@ -57,7 +57,7 @@ function observeUnreadSettlement(host: CacheHost, uuid: string) {
     finish(result.status === 'superseded' ? undefined : result.status);
   });
   const unsubscribeGeneration = host.onCacheGenerationChanged((change) => {
-    if (change.storage === 'reset') finish(undefined);
+    if (change.queue === 'reset') finish(undefined);
   });
   return { settlement, stop: () => finish(undefined) };
 }
@@ -83,7 +83,8 @@ export async function markEmailThreadUnread(
     );
     queued = disposition === 'queued';
     if (queued) return { kind: 'queued', settlement: tracked?.settlement };
-    if (!graphqlCacheEnabled()) await refreshActiveGraphqlSoupQueries();
+    if (!graphqlCacheEnabled())
+      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
     return { kind: 'committed' };
   } finally {
     if (!queued) tracked?.stop();

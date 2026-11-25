@@ -24,6 +24,7 @@ mod purchase_offers;
 mod quarantine;
 pub(crate) mod rollout;
 mod sold_resources;
+mod status;
 
 /// What the fake subscription does with a removal.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -419,6 +420,7 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
         created_by: admin(),
         created_at: now() - chrono::Duration::days(30),
         enrolled_at: Some(now() - chrono::Duration::days(30)),
+        hibernated_at: None,
         setup_completed_at: None,
         default_agent_id: None,
         image: None,

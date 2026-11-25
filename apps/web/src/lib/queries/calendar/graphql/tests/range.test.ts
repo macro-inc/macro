@@ -151,23 +151,26 @@ describe('readCalendarRange', () => {
     });
     expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({ after: 'next' });
     expect(host.calendarCommit).toHaveBeenCalledTimes(1);
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      coverage: [
-        { kind: 'timed', start: gapStart, end: args.endMs },
-        {
-          kind: 'allDay',
-          start: epochDay('2026-10-08'),
-          end: epochDay('2026-10-12'),
-        },
-      ],
-      watermark: {
-        kind: 'merge',
-        links: [
-          { linkId: 'link-1', seq: '7' },
-          { linkId: 'link-2', seq: '4' },
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      {
+        coverage: [
+          { kind: 'timed', start: gapStart, end: args.endMs },
+          {
+            kind: 'allDay',
+            start: epochDay('2026-10-08'),
+            end: epochDay('2026-10-12'),
+          },
         ],
+        watermark: {
+          kind: 'merge',
+          links: [
+            { linkId: 'link-1', seq: '7' },
+            { linkId: 'link-2', seq: '4' },
+          ],
+        },
       },
-    });
+      expect.any(String)
+    );
     expect(host.calendarRange).toHaveBeenCalledTimes(2);
     expect(data?.items).toHaveLength(1);
     expect(data?.syncStatus).toBe(CalendarSyncStatus.syncing);
@@ -211,13 +214,16 @@ describe('readCalendarRange', () => {
       endDate: week.endDate,
       first: 2000,
     });
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      coverage: [
-        { kind: 'timed', start: args.startMs, end: args.endMs },
-        { kind: 'allDay', start: args.startDay, end: args.endDay },
-      ],
-      watermark: { kind: 'merge', links: [{ linkId: 'link-1', seq: '9' }] },
-    });
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      {
+        coverage: [
+          { kind: 'timed', start: args.startMs, end: args.endMs },
+          { kind: 'allDay', start: args.startDay, end: args.endDay },
+        ],
+        watermark: { kind: 'merge', links: [{ linkId: 'link-1', seq: '9' }] },
+      },
+      expect.any(String)
+    );
     expect(host.calendarRange).toHaveBeenCalledTimes(2);
     expect(data.items).toHaveLength(1);
   });

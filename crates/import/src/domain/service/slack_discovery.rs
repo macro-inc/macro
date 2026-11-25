@@ -10,8 +10,8 @@ use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, SlackSourceError, SlackWorkspaceSession,
     SlackWorkspaceSource,
 };
+use connectors::McpConnectionsService;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio::time::{Instant, timeout_at};
@@ -124,7 +124,7 @@ impl<Sess: SlackWorkspaceSession> SlackBatch<Sess> {
     ) -> Vec<String>
     where
         R: ImportRepo + CanonicalImportRepo + Clone,
-        S: ConnectorSelect,
+        S: McpConnectionsService,
         C: EntityCreator,
         W: SlackWorkspaceSource<Session = Sess>,
     {
@@ -231,7 +231,7 @@ pub(super) async fn discover_slack<R, S, C, W, N: Send + Sync + 'static>(
 ) -> Result<usize, SlackSourceError>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
     W: SlackWorkspaceSource,
 {
@@ -335,7 +335,7 @@ async fn enrich_slack<R, S, C, W, N: Send + Sync + 'static>(
 ) -> Result<(), SlackSourceError>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
     W: SlackWorkspaceSource,
 {

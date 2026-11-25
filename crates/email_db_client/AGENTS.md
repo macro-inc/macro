@@ -61,6 +61,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   Search reads attachment kinds per page from `email_attachments` with the
   same prefixes (`threads::search_filters`), since the kind flags are not
   backfilled everywhere.
+- A backfill over every mailbox walks the source table in heap-block batches,
+  one short transaction each (`backfill_attachment_kind_flags_in_blocks`): a
+  statement per mailbox reads the whole table again for each large one and
+  holds its row locks until the mailbox is done.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded, including the timestamp override for synced Macro
   drafts. Keep ingestion, recomputation, and cached projections aligned.
@@ -109,7 +113,13 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 - A query that claims rows (`upload_claimed_at`) must return every row it
   claims: read optional columns such as the sender through a `LEFT JOIN`. A
   claimed attachment the caller never sees is never uploaded, and the Outlook
-  projection waits on its claim forever.
+  projection waits on its claim forever. An abandoned attachment
+  (`upload_abandoned_at`) keeps its claim on purpose, so claims skip it; a
+  query that waits on, releases or reclaims claims (`oldest_pending_upload_claim`,
+  `release_upload_claim`, the projection's stale-claim release) must leave it out.
+  The new-mail claims return each claim's `upload_claimed_at` from the claiming
+  statement (`ClaimedAttachment`); a write that must apply only while that claim
+  holds compares the column with it.
 - The document auto-import (`attachments/provider/upload.rs`: the new-mail
   claims and both backfill queries) skips drafts. A draft's row is deleted
   when it is saved again, sent or discarded, and `document_email` cascades

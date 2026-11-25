@@ -61,6 +61,23 @@ fn projects_quick_access_document_without_decoding_other_records() {
 }
 
 #[test]
+fn projecting_from_stored_bytes_matches_encoding_the_record() {
+    let key = EntityKey::entity("GraphqlSoupDocument", &["d1"]);
+    for name in ["Plan".to_owned(), "Quarterly plan ".repeat(200)] {
+        let record = string_record(&[
+            ("__typename", "GraphqlSoupDocument"),
+            ("documentName", &name),
+            ("fileType", "md"),
+        ]);
+        let encoded = encode_record(&record);
+        assert_eq!(
+            project_encoded_search_documents(&key, &record, &encoded),
+            project_search_documents(&key, &record)
+        );
+    }
+}
+
+#[test]
 fn projection_removes_deleted_and_handles_subtype_refs() {
     let mut record = string_record(&[
         ("__typename", "GraphqlSoupDocument"),

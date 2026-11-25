@@ -33,7 +33,8 @@ per-entity-type search plus a unified search across them — mounted into
 
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
-  (domain only, no features, for its Macro call rule and label port).
+  (domain only, no features, for its Macro call rule and label port),
+  `rate_limit` (its token bucket, for the API-key search allowance).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 
@@ -49,6 +50,12 @@ per-entity-type search plus a unified search across them — mounted into
 ## Checks
 
 - `cargo test -p search_service` (`SQLX_OFFLINE` unset).
+- `simple_unified/test/delegated_inbox.rs` searches through both routes
+  against Postgres and OpenSearch, so it is ignored: run it with
+  `SEARCH_TEST_OPENSEARCH_URL` set to an OpenSearch with the search indices
+  (set up as `opensearch_client`'s AGENTS.md describes) and `--ignored`. It
+  cleans up the mail it indexes, so the content search tests can run after
+  it on the same node.
 - `SQLX_OFFLINE=true cargo check` (`just check` recipe in `justfile`).
 
 ## Gotchas
@@ -58,6 +65,60 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
+- A unified search (`/search`, `/search/simple`, on both DSS mounts) waits
+  for its caller's turn in `domain::search_lanes` after the request's own
+  checks (query, paging, cursor, terms, sessions, email filters; ids a source
+  parses when it runs, such as channel and CRM company ids, are checked in the
+  turn) and before it reads anything: per process, three searches in
+  flight for the person's app session (the mention menu sends three one-type
+  searches per term) and two for every other caller, the rest waiting in
+  arrival order, and one still waiting after
+  20 s answered 429 (`SearchError::Busy`, `Retry-After`). OpenSearch has few
+  search threads per node, and one caller's burst of heavy searches filled
+  them for everyone. The caller (`api::search::caller::search_caller`) is the
+  user plus who acts: a signed agent (one lane across all its sessions for
+  that user) or routine, else the credential's kind: the app session, a
+  service searching for them (`Internal`: the AI tools, an agent's native
+  search tools, routine drafting), or an API credential. So a person's app
+  searches never wait behind a program's or a service's. The turn covers the
+  CRM membership read (so a receipt is never older than its search) and the
+  Postgres and OpenSearch search, not enrichment; the span records
+  `search.lane`, `search.lane_wait_ms` and `search.lane_outcome`
+  (`immediate`, `queued`, `refused`). Lanes are per process, so a caller's
+  bound grows with the replica count; DSS builds one `SearchLanes` for both
+  mounts. The internal mount runs under `connection_drop_prevention_handler`,
+  so a service search whose caller gave up keeps its place in the service's
+  lane and runs to the end.
+- Before its turn, a unified search sent with a user API key
+  (`CredentialOrigin::UserApiKey`, `search.caller = user_api_key`) draws on
+  its account's search allowance (`domain::search_allowance`): one token
+  bucket per account in Redis, shared by all its keys and every process, of
+  200 searches that refills one a second. An empty bucket answers 429
+  (`SearchError::RateLimited`, `Retry-After` in whole seconds) without
+  waiting in the lane. The lanes bound searches in flight per process; the
+  bucket bounds the rate across processes, which lanes cannot. It is a safety
+  net, sized from production traces so today's busiest keys, which search in
+  batches that a fixed 60-a-minute window would refuse, never reach it;
+  measure before tightening it. A bucket that errors or does not answer
+  within 500 ms lets the search run. A limited search is not logged as an
+  error. The span records `search.rate_limit` (`allowed`, `limited`,
+  `unavailable`), `search.rate_limit_remaining` (searches the account may
+  still send at once) and `search.rate_limit_wait_ms`. App sessions,
+  agents, routines, services, Macro API tokens and account-manager
+  credentials never draw on it, and neither does `/search/channel`, which
+  takes no lane turn either.
+- Search never returns an item in the Trash. The documents and chats indexes
+  keep trashed items until a purge (projects leave the index on trash).
+  Enrichment drops a document, chat or project hit whose row has `deletedAt`,
+  as it drops a hit whose row is gone, so the SDK, the API, the AI tools and
+  the web app get the same results. The web mapper still checks
+  `metadata.deleted_at`: saved AI chats render their stored search results
+  through it, and older ones hold trashed hits. `/search/simple` returns hits
+  unenriched and is not covered.
+- A phrase is quoted with straight or curly double quotes
+  (`terms::is_phrase_quote`), since phones and Macs type `“ ”` and `„ “` for
+  `"`. The web app reads a query's quotes too, to gate empty searches and pick
+  exact matching (`straightenQuotes`): change both together.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
@@ -115,12 +176,111 @@ per-entity-type search plus a unified search across them — mounted into
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
 
-- Email search scopes by the owners of the inboxes the caller can reach
-  (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
-  documents are deleted. An inbox whose disconnect has started (`deleting_at`)
-  is excluded by `link_id` at once, because search-processing deletes its
-  documents only after the email service purges its rows. Threads someone
-  else shared from such an inbox are not excluded.
+- Typed Mail search operators are read out of the query by the service, so
+  Mail's search field, the API, the SDK and the AI tools search the same way
+  (`api/search/email_operators.rs`, after `split_search_terms`): `subject:`,
+  `from:`, `to:` (To, Cc and Bcc), `cc:`, `bcc:`, `in:<view>` (the last one
+  wins; `in:focus` is the web app's and stays a word here), `in:<name>` and
+  `label:` (a tag or inbox label of that name), `is:unread|read|starred|shared`,
+  `has:attachment`, `after:`/`before:` (a day, from its midnight in the
+  request's `time_zone`) and `newer_than:`/`older_than:` (`3d`, `2w`, `1m`,
+  `1y` back on that zone's calendar), each with a minus to leave matches out.
+  Each becomes an `EmailFilters` field ANDed with the request's own, applied
+  before paging; an unknown name or invalid value stays a word. A search that
+  types a named operator becomes an email search (no other kind can meet
+  them); one that leaves email out, or uses `regexp`/`query` matching, reads
+  none. A minus before a plain word or phrase says nothing about email, so
+  beside a named operator or in a search of email alone it becomes mail's
+  excluded text (`EmailTextPart::Any`), and otherwise the generic reading
+  below takes it; a term starting `--` stays a word. Opposite
+  operators search nothing. A cursor keeps the first page's moment
+  (`query_time_millis`) so relative dates bound the same instants on every
+  page, and the response's `query_filters` reports what the operators became.
+  `-in:signal` and `-in:noise` stay a word left out: each view is two
+  conditions, so leaving it out is an OR across the index and Postgres.
+  `email_operators/typed_operators.json` lists typed terms and whether each
+  is an operator; these tests and Mail's search field
+  (`apps/web/src/features/email-view/search/email-search-operators.ts`, which
+  draws and completes operators) both check it, so change it with the parser.
+- Typed search operators that choose kinds and narrow them are read out of
+  the query before the email operators, for every caller of the unified
+  search (`api/search/search_operators.rs`): `type:doc|task|email|channel|
+  call|folder|agent|calendar` names the kinds (`doc` leaves tasks out through
+  `excluded_sub_types`); `status:` (task statuses, or `missed`, `attended`,
+  `unattended` for calls), `priority:`, `assignee:` and `author:` narrow to
+  tasks (`author:` beside `type:doc` to documents); `tag:` to the tagged
+  kinds; `inbox:<address>` to email; `in:#<channel>` (the whole name the
+  caller sees, DMs left out, reading up to `MAX_CANDIDATE_PAGES` pages of
+  candidates since an unnamed group matches by one member's name) to
+  channels and calls, and where the request or the other operators leave
+  neither it stays Mail's label operator; `from:` is the email
+  operator unless `type:` leaves email out and names channels or calls,
+  where it names senders and speakers, and then channel and call names no
+  longer match (a name says nothing of who posted or spoke). People are `me`
+  or an address. `OR` between two of the same operator joins their values,
+  and an `OR` beside an operator that joins nothing is dropped; repeated
+  without it, each must hold, and kinds that cannot meet them all are left
+  out. Status, priority, assignees and authors need no lookup; tag, inbox and
+  channel names resolve for the caller inside their lane turn
+  (`domain/operator_names.rs`) through the queries tag, inbox and channel
+  name search already run, and a name reaching nothing matches nothing.
+  Tags are groups that must each hold, any one option id of a group being
+  enough (`TagFilter`): each `tag:` (with the values `OR` joins, and every
+  tag set a name is in) is a group, beside the request's own
+  `tag_option_ids`, which are one group, or one per id under
+  `tag_filter_mode: all`. Every tag source applies them as groups: the
+  OpenSearch builders through `build_tag_filter` (one nested clause per
+  group) and the Postgres chat name search, one `?|` probe per group.
+  Refused with a 400, and not logged as errors: two `from:` on calls
+  (`SpeakersDontCombine`), operators or minus words leaving no word unless
+  only email is searched (`OperatorsNeedAWord`), more than
+  `MAX_CHANNEL_NAMES` channel names. An unknown name or invalid value stays
+  a word. `search_operators/typed_operators.json` lists typed queries
+  and how many operators each holds; change it with the parser.
+- A minus before a word or quoted phrase (`-draft`, `-"team lunch"`) leaves
+  out what holds it in every kind the unified search reaches, for every
+  caller (`terms::left_out` is the one rule; Mail's reader uses it too).
+  After both operator readers, `limited_terms` takes the minus words the Mail
+  reader left (`terms::take_left_out_terms`, exact and partial matching
+  only) as `ReadQuery::excluded_terms`, counted toward `MAX_SEARCH_TERMS` and
+  cut to `MAX_TERM_CHARS`. They reach every OpenSearch index as
+  `UnifiedSearchArgs::excluded_terms` (each leaves out what the word would
+  match as one of its terms in the search's mode; email as Mail's excluded
+  text), and the Postgres name searches as excluded patterns built like
+  their own: chat names (`name_search`), channel names as the viewer sees
+  them, and CRM company names and domains. The name search text drops them.
+  `/search/channel` and the per-type endpoints read no minus, as they read
+  no operators. The web Search field waits for a word while every word is a
+  minus word, and leaves local name matches that hold one out
+  (`apps/web/src/features/next-soup/core/search-operators.ts`).
+- The typed conditions that are not thread states run in OpenSearch: text
+  matches, labels and tags (`labels` terms or the nested tag filter, each name
+  resolved for the caller in Postgres; a required name naming nothing matches
+  nothing), favorites (the caller's favorite threads as required or excluded
+  ids) and the sent range on `sent_at_millis`, which is stored for sorting
+  only (doc values, not indexed), so the range is checked per candidate.
+  `has:attachment` and the left-out views past `MAX_THREAD_SET_ALLOWLIST`
+  are page checks: `ThreadStates::excluded` runs each as its own positive
+  check and drops the threads it matches.
+  A label matches a message only in an inbox the caller owns or manages
+  (`UnifiedEmailSearchArgs::label_link_ids`, filled from the inboxes search
+  reaches), for `label:`, `in:<name>`, `include_labels` and `exclude_labels`
+  alike, and a hit from any other inbox (a thread shared with the caller)
+  comes back with no labels: the labels people make are theirs.
+- Email search reaches mail by the inbox holding it (`link_id`), in the
+  inboxes the caller can reach (`fetch_search_inboxes_for_macro_id`: the set
+  `fetch_inboxes_for_macro_id` returns, their own and those delegated to
+  them), plus the threads it names by id (shares, folders, view allowlists).
+  Never scope it by owner: the index files every inbox of one person under
+  that person's `user_id`, and inboxes are delegated one at a time, so the
+  owner's id reaches inboxes the caller was never given. These are
+  `UnifiedEmailSearchArgs::inbox_link_ids`, empty when a search reaches
+  threads by id alone (folders, view allowlists, shares only), unlike
+  `label_link_ids`, which keeps the caller's own labels matching there. An inbox whose
+  disconnect has started (`deleting_at`) is excluded by `link_id` at once,
+  because search-processing deletes its documents only after the email
+  service purges its rows. Threads someone else shared from such an inbox
+  are not excluded.
 - Email filters mean what the Email list query means by them, applied before
   pagination (`domain/email_search.rs`). Shared threads are resolved from
   `entity_access` grants to the caller's sources, leaving out their own

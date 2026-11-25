@@ -10,13 +10,13 @@ import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { MenuItem } from '@core/component/ContextMenu';
-import { useChannelName, useChannelType } from '@core/context/channels';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Check from '@icon/system/regular/check.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import type { TabOption } from '@ui';
 import { type ComponentProps, For, type JSX, Show } from 'solid-js';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from './channel-actions';
+import { useChannelAskMacroEntity } from './channel-ask-macro';
 import { useChannelEntity } from './channel-entity';
 import type { ChannelTabId } from './channel-tabs';
 
@@ -29,20 +29,10 @@ function useChannelTitleActions(channelId: () => string) {
     return resolved && withEntityNotifications(resolved, notificationSource);
   };
   const list = toSingleEntityActionListState(entity);
-  const channelName = useChannelName(channelId());
-  const channelType = useChannelType(channelId());
-
-  // Seed for "Ask Macro": a new chat with this channel @mentioned.
-  const askMacroEntity = () => {
-    const type = channelType();
-    if (!type) return undefined;
-    return {
-      type: 'channel' as const,
-      id: channelId(),
-      name: channelName() ?? channel()?.name ?? 'New Channel',
-      channelType: type,
-    };
-  };
+  const askMacroEntity = useChannelAskMacroEntity(
+    channelId,
+    () => channel()?.name
+  );
   const askMacro = () => {
     const seed = askMacroEntity();
     if (seed) fireAndForget(openChatWithAgent(seed), 'channel-title-menu');
@@ -67,8 +57,7 @@ const DEFAULT_TRIGGER_PROPS = {
  * The conversation's entity actions behind the same ellipsis a document's
  * title menu uses. The actions match the channel's row in the rail, so
  * favoriting, muting or renaming a conversation does not depend on finding
- * that row. It also offers Ask Macro, which would otherwise take a top bar
- * button.
+ * that row. It also offers Ask Macro, as a document's title menu does.
  *
  * Owned by the channel top bar rather than by each of its hosts: the menu
  * resolves the conversation from its id, so a surface that opens a channel

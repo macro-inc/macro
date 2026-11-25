@@ -68,6 +68,9 @@ vi.mock('@property/hooks', () => ({
   }),
   usePropertyEntityDisplay: vi.fn(),
 }));
+vi.mock('@property/hooks/usePropertyEntityLink', () => ({
+  usePropertyEntityLink: vi.fn(),
+}));
 vi.mock('@property/tags', () => ({
   isTaggableEntityType: () => false,
   TagsRow: () => null,

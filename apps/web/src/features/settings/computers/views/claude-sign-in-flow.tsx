@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
+import { reserveOauthPopup } from '@core/pipedream/oauth-popup';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
@@ -177,7 +177,9 @@ export function ClaudeSignInFlow(props: {
       if (current !== linkGeneration) return;
       if (!isHttpsUrl(result.url)) throw new Error('untrusted sign-in link');
       setUrl(result.url);
-      if (waitingTab) assignOauthUrl(waitingTab, result.url);
+      // A tab the user closed meanwhile stays closed.
+      if (waitingTab && !waitingTab.closed)
+        waitingTab.location.href = result.url;
       else if (openWhenReady) openExternalUrl(result.url);
       waitingTab = undefined;
       openWhenReady = false;
@@ -199,14 +201,15 @@ export function ClaudeSignInFlow(props: {
   // for the code.
   const pageTitle = document.title;
   const markTab = (waiting: boolean) => {
-    document.title = waiting ? t('computers.signInTabTitle') : pageTitle;
+    if (waiting) document.title = t('computers.signInTabTitle');
+    // Only undo our own title; the page may have set a newer one.
+    else if (document.title === t('computers.signInTabTitle'))
+      document.title = pageTitle;
   };
 
   onCleanup(() => {
     disposed = true;
-    // Only undo our own title; the page may have set a newer one.
-    if (document.title === t('computers.signInTabTitle'))
-      document.title = pageTitle;
+    markTab(false);
     linkGeneration++;
     linkRequest?.abort();
     forgetWaitingTab();
@@ -287,8 +290,6 @@ export function ClaudeSignInFlow(props: {
         harnessId: props.harnessId,
         entry: props.entry,
         code: code().trim(),
-        // Never aborted: closing mid-check lets the computer finish.
-        signal: new AbortController().signal,
       });
       if (current !== codeGeneration) return;
       if (!disposed) markTab(false);

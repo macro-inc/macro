@@ -420,7 +420,7 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'unhealthy' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
 
 /**
  * A computer's CPU and memory over the last day.
@@ -458,6 +458,7 @@ export type CreateCheckoutSessionV2Request = {
      * Optional discount/promo code to apply
      */
     discount?: string | null;
+    interval?: null | BillingInterval;
     /**
      * Tracking metadata for conversion attribution
      */
@@ -1728,6 +1729,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
+     * Price per seat per month when billed annually, cents. Absent for plans
+     * not sold annually.
+     */
+    annual_price_per_month_cents?: number | null;
+    /**
      * Monthly automatic reload limit a payer on this plan starts from,
      * cents. Absent for plans that cannot reload.
      */
@@ -1738,7 +1744,7 @@ export type PlanCatalogEntry = {
      */
     included_ai_cents_per_seat: number;
     /**
-     * Monthly subscription price per seat, cents.
+     * Month-to-month subscription price per seat, cents.
      */
     monthly_price_cents: number;
     /**
@@ -1785,7 +1791,7 @@ export type PlanCatalogResponse = {
 /**
  * The plans a user can be on, cheapest first.
  */
-export type PlanTier = 'free' | 'premium' | 'max';
+export type PlanTier = 'free' | 'premium' | 'business' | 'max';
 
 export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
@@ -2055,9 +2061,9 @@ export type ScheduledSeatPlan = {
 /**
  * The paid plan a seat is billed at. Every member of a paying team has one;
  * a team may mix them, and its Stripe subscription carries one seat item per
- * plan in use.
+ * plan in use. Variants are ordered cheapest first, so `<` compares plans.
  */
-export type SeatPlan = 'premium' | 'max';
+export type SeatPlan = 'premium' | 'business' | 'max';
 
 /**
  * Response for the domain notice endpoint.
@@ -2192,7 +2198,7 @@ export type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting' | 'rea
  */
 export type SizeOffer = {
     /**
-     * Root disk size in GiB.
+     * Whole disk quota in GiB: root and `/home` together.
      */
     diskGb: number;
     /**
@@ -2368,6 +2374,7 @@ export type SubscriptionSeatTotal = {
  */
 export type SubscriptionStatus = {
     billing?: null | SubscriptionBilling;
+    interval?: null | BillingInterval;
     /**
      * Provider-confirmed subscription renewal date.
      */
@@ -2496,7 +2503,7 @@ export type TeamAgentErrorBody = {
 /**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
 
 /**
  * A team's agents.

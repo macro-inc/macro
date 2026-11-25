@@ -116,21 +116,44 @@ each run.
   bounded by `DRAFT_TIMEOUT`). It turns the last passing check (else the
   last check) into the draft (a single agent task, which the SDK still
   accepts, becomes one agent step holding its prompt and user prompt, or
-  fails the draft if it declares apps, which a draft can't hold, or that
-  step breaks a program's rules), then stops and deletes the session and the
+  fails the draft if that step breaks a program's rules; a new routine's
+  draft keeps the `appearance` its check picked, dropped when `check_pick`
+  refuses it), then stops and deletes the session and the
   row, also once it sees the request dropped mid-draft (the web composer,
   given no answer, sends the draft once more, `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
-  again. The `routine.draft` span records the drafter (`found` or
+  again. A routine draft's prompt (not the cached instructions: they differ
+  per person) lists the apps its owner connected (`drafts/apps.md`, through
+  the `DraftApps` port the harness sets with `RoutineDrafts::with_apps`);
+  without the port, or when it fails, the draft goes on without the list.
+  The session requires (`apps`, the task's `mcp_servers`) the listed ones
+  its Ask AI step uses, and names in its check (`missingApps`, kept as
+  `RoutineCheck::missing_apps` by `named_missing_apps`: well-formed, not
+  already required, at most ten) those it needs that aren't connected; a
+  check never fails for them. The draft holds both (`apps`,
+  `missing_apps`), sorted again against the listed apps so a required one
+  is always connected, and neither when it has no Ask AI step. The
+  required apps that aren't connected join the missing ones unbounded, so
+  the drafter bounds the list again (`service::missing_apps`) before it
+  asks which of them a routine of the owner's can require once connected
+  (`DraftApps::requirable`). For an owner on Macro Connect alone, who
+  connects every app through Connect, the harness keeps only the apps
+  Connect serves; for anyone else it drops an app overlaid with its
+  vendor's own MCP server, which connects outside the counted grants. The
+  review then asks the person to connect only apps that make the routine
+  saveable; when that can't be read, the draft names none. A step draft
+  holds no apps. The `routine.draft` span records the drafter (`found` or
   `session`), names found, left and not looked up, the session id,
   checks, items created, the session's tool calls and turns, status
   reads, whether a single
-  agent task became steps (`routine.draft.agent_task`) and outcome
+  agent task became steps (`routine.draft.agent_task`), the apps listed,
+  required and missing (`routine.draft.connected_apps`, `.apps`,
+  `.missing_apps`) and outcome
   (`timeout` included), never the words or the names; `routine.draft.find` records
   the answer's size and `routine.draft.lookup` what it found;
   `routine.check` records whether a check passed and kept a draft's
-  answer. `DraftContext` still accepts and ignores the `workspace` older
+  answer, and the missing apps it named. `DraftContext` still accepts and ignores the `workspace` older
   web clients send. `bench/` is the drafting eval: 20 requests on a seeded
   workspace, drafted by Draft it and by a bare agent session on a local
   stack against the live model, timed phase by phase and checked three ways
@@ -144,7 +167,7 @@ each run.
   /scheduled-actions/draft-jobs` validates the request and waits only for
   its usage to be admitted (the find call's admission, or a session's
   prompt; the blocking route's 400/402/503,
-  plus 409 past `MAX_DRAFTING` drafting at once), then answers 202 with the
+  plus 409 past `MAX_DRAFTING` (3) drafting at once), then answers 202 with the
   job. The body carries a client-made `clientId`; a start sent again with
   it (the client resends when its connection drops) answers with the live
   job that start began and creates no session (`client_id` and a unique
@@ -211,8 +234,34 @@ each run.
   brackets in the data swapped so it can't close them; a nightly or manual
   brief adds review and retire, and only onboarding's asks for speed; a
   drafted routine is told to start on mail only where saving one can: the
-  person has `enable-event-routines` and the deployment evaluates conditions) and
-  count what it suggested (`suggested`). A session hands back
+  person has `enable-event-routines` and the deployment evaluates conditions,
+  and to add CRM companies only where the person may: in a team whose CRM is
+  open to them) and
+  count what it suggested (`suggested`). A brief is for a `BriefPart`:
+  `Whole` (today's session, which picks and drafts), or, at an onboarding
+  with `routine-suggestions-find-work` on, `Picks` (catalog picks only, no
+  guide) and `Drafts` (drafted routines only). A `Drafts` brief carries the
+  work streams `RoutineSuggestionApi::find_work` found (`suggestions/work.rs`:
+  one model call (`WORK_TRIES`: asked once more when its answer strays
+  from the list's shape), `WORK_MODEL` thinking little, over the person's last 30
+  days of mail, up to 500 messages, the text of the newest 100, read through
+  `SuggestionSources::inbox_window`, beside what they sent in those days, up
+  to `SENT_MESSAGES` with the text of the newest `SENT_TEXTS`, through
+  `SuggestionSources::sent_window`; the answer bounded by `WorkList::from_answer`
+  and passed inside `<untrusted>` tags in a fenced `json` block, which the
+  harness's Markdown round trip leaves as written: `WorkList::to_brief`
+  writes `&` and backticks as JSON escapes), and drafts one routine per stream
+  the catalog lacks, at most `MAX_DRAFTS`. The list and the month's mail are
+  stored nowhere: the finding call runs inside
+  `genai_telemetry::withhold_content`, so its spans carry none of what it
+  reads or answers, and the drafting sessions that carry the list are
+  prompted with `PromptRoutineSession::withhold_content`
+  (`BriefPart::carries_work_list`), so their turns record no content on
+  traces either. The list lives in those sessions' prompts (their control
+  queue and log) until the generation deletes them as it ends. Its
+  fields (senders, cadence, what each asks, what the person does with it and
+  to whom, who already handles it) are
+  meant to serve other setup suggestions later. A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
   `macro.routines.review()` (`GET .../suggestions/review`) and retires open
@@ -253,13 +302,16 @@ each run.
   never generates: per surface, drafted routines, then catalog picks (each
   best first, a second with the same catalog title or name left out), then
   catalog routines marked `suggest` as Macro's templates (stable ids,
-  `template_id`) to `PER_SURFACE`, showing only open AI suggestions and
+  `template_id`) to `PER_SURFACE` (drafted routines to `DRAFTED_PER_SURFACE`
+  with `routine-suggestions-find-work` on), showing only open AI suggestions and
   skipping dismissed templates (permanent, `.../{id}/dismiss` for either
   kind) and templates saved from (`scheduled_action.suggestion_id`); its
   `status` is the person's latest
   generation's (`GenerationStatuses`). `onByDefault` marks at most two safe
   catalog picks AI rated likely kept, never one that affects others. Spans:
-  `routine.suggestions.brief`, `.suggest`, `.review`, `.retire`, `.texts`; log events
+  `routine.suggestions.brief` (with its `part`), `.find_work` (with
+  `.read_month`, `.read_sent` and `.list_work` under it), `.suggest`, `.review`,
+  `.retire`, `.texts`; log events
   `routine_suggestions.generated` and `.surface` (from `record`, after a
   generation's routines sessions), `.suggested`, `.retired`, `.dismissed`,
   `.saved`.
@@ -329,6 +381,9 @@ each run.
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
   property change filters take, matched on the values a change adds.
+- `src/domain/event_trigger/label_selector.rs`: the `labels` selector an
+  `email.labeled` filter takes (label row ids, up to 100), matched on the
+  labels the thread gained.
 - `src/domain/event_trigger/describe.rs`: a trigger in words for a routine
   suggestion's card; a schedule it can't word reads as its cron.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
@@ -348,6 +403,24 @@ each run.
   loads the routine only for its owner (`granted_action`). Without a grant
   they answer 401; with a grant but not the owner, 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
+  An agent picks a routine's look through `appearance` on create, update
+  and check (`ActionConfiguration`, `ActionConfigurationUpdate`; validated by
+  `appearance::check_pick`, which names Macro's icons when it refuses one). An
+  update applies a pick after saving the configuration, and only when the
+  caller acts for the owner; a repeated sub-routine key checks a pick but
+  keeps the look the key created. `PUT /appearance` is the owner's choice and
+  sets `scheduled_action.appearance_chosen_by_owner`, even for no icon; an
+  agent's pick (`AppearanceChooser::Agent`) never replaces it.
+  Every change to a look records an `appearance_changed` activity, on this
+  code and on replicas built before these columns, which change the look for
+  the owner without marking it; `appearance_changes_by_agent` counts the ones
+  an agent's pick recorded, so any beyond it are the owner's. A routine from
+  before the columns, or one such a replica created, holds NULL in both, and
+  a look it has is its owner's. Only an agent's pick reads the activity
+  (`pg_activity_repo::appearance_changes_exceed`), in its own statement once
+  the row is locked, and no more than one event past the agent's count. A
+  refused pick answers with the look read under that lock
+  (`AppearanceSet::Kept`), not the one the update loaded.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
@@ -359,7 +432,12 @@ each run.
   (`domain/event_rollout.rs`): saving one needs it, and dispatch cancels runs
   (`NotEnabled`) for owners without it. Pausing an event routine never needs
   it. Without PostHog configured, no one has it and the host starts no event
-  intake.
+  intake. An `email.labeled` trigger also needs `enable-email-labeled-trigger`
+  (`EmailLabelsDisabled`, 400; at dispatch a run only label filters took is
+  cancelled `NotEnabled`, and one a receipt filter took too runs as plain
+  received mail, under the receipt filter's condition); the host treats
+  it as on in dev and local while that key doesn't exist
+  (`FlaggedEventRoutines::with_email_labels_without_flag`).
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 
@@ -382,6 +460,22 @@ each run.
 - Change dispatch behavior: `src/outbound/pg_polling_dispatcher.rs` /
   `src/outbound/tokio_dispatcher.rs` → `src/domain/execution.rs`.
 
+- Active routines are capped by the owner's plan (`domain/routine_limit.rs`):
+  Free 10, Pro 1,000, Business 3,000, Max 10,000, enterprise teams as Max.
+  Active means `ScheduledAction::is_active`: enabled, and watching events or
+  holding a next run. Only a write that makes a routine active is checked
+  (create, enable, or rescheduling a finished one-off), through the
+  `RoutinePlans` port (`outbound/routine_plans.rs` calls
+  `EntitlementSource::user_plan`, so it does a single-row team-seat check
+  without loading a team's roster; defaults to `FreePlans` so an unwired host
+  fails closed). `PgScheduledActionRepo` takes a transaction-scoped advisory
+  lock per owner and runs a bounded count (`LIMIT limit`) backed by the
+  partial index `scheduled_action_active_owner_idx` so concurrent activations
+  cannot pass the cap and finished one-time routines are never scanned.
+  Refusal is 402 with `RoutineLimitErrorBody` (`code: "routine_limit_reached"`,
+  distinct from AI allowance codes). Paused saves, edits to already-active
+  routines, pauses, and deletes never look up a plan or hit the cap.
+
 ## Checks
 
 - `cargo test -p scheduled_action` (`SQLX_OFFLINE` unset).
@@ -400,7 +494,13 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   single-agent task) are apps the routine requires, handed to its agent step;
   a program with apps needs one. The owner must have each connected:
   `TargetValidation` checks on save and `RoutineSessions::prepare` checks
-  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
+  again on every run, then adds them to an agent limited to selected apps.
+  A run that fails that check (`AppNotConnected`) reports the routine's app
+  names as `FinishedRoutineRun::apps_to_connect`, so its notification says
+  which to reconnect.
+  The harness counts the grants connector dispatch would use: enabled rows,
+  a Connect grant only where Macro Connect is configured, and for an owner
+  on Connect alone only their Connect grants. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - An agent target is any agent the owner may run: built in, their own, or
   one on a self-hosted runtime. `TargetValidation` authorizes it on save
@@ -428,7 +528,14 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   and an `Option` in `ActionConfigurationUpdate` that keeps the stored value
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
-  which builds its own `ScheduledAction`.
+  which builds its own `ScheduledAction`. `appearance` is the exception: an
+  agent's pick, written through `ScheduledActionRepo::set_appearance`, not a
+  stored configuration field. It is serialized only when set, and kept JSON
+  never holds it inside a configuration, which a replica built before it
+  rejects: a draft's hand-back check keeps it beside the routine
+  (`pg_draft_hand_backs::KeptCheck`), and a kept routine suggestion drops it
+  (`decode::drafted_pick`), since suggestions outlive a rollback and one
+  unreadable row fails the person's whole list.
 - A `once` trigger (stored as `trigger_type = 'once'`, or inside `multiple`)
   runs a single time at `at`, kept to whole seconds. A past `at` is due as soon
   as it is saved, unless the stored routine already consumed it (its
@@ -443,9 +550,18 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names
   the field. Cron schedules have 6 or 7 fields.
+- `POST /scheduled-actions/{id}/stop` (owner only) stops the routine's run in
+  progress, found by its claim (`running_run`); with none running it changes
+  nothing. Any instance can serve it, so the stop goes to every instance
+  through Postgres `NOTIFY` (`outbound/pg_run_stops.rs`, the `StopRelay`
+  port) and `RunStops` (`domain/run_stops.rs`) hands it to the executor,
+  which ends that run as `RunEnd::Stopped`: its runner is cancelled, its
+  claim released and its record kept with `stopped` set and error "Stopped".
+  A stopped event run is `Interrupted`, for good. No notification is sent
+  for it. A stop sent while an instance's listener is reconnecting is lost.
 - The list response carries each routine's `last_run`, its latest finished
   run record (what each step did), so clients can flag failures and say what
-  it did; single reads omit it. Every finished run is
+  it did; single reads omit it. Every finished run but a stopped one is
   reported to the owner by the host's `RoutineRunObserver`
   (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
   as an inbox-only `routine_run_finished` notification.
@@ -458,14 +574,51 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   rejects it as `RoutineWrite`, for any routine, so two can't trigger each
   other. Mail received, internal hops and sync-service document edits carry
   no stamp.
-- Received mail is for its inbox's owner and for each account that inbox is
+- `email.labeled` runs when a thread gains a user label (Gmail label or
+  Outlook category): the email domain publishes the gained label ids as
+  `labels_gained` on `email.message_received` (mail that arrives labeled) and
+  `email.thread_labels_updated` (added later); see `crates/email/AGENTS.md`.
+  `EventReference::general_event` lets received mail with gained labels match
+  `email.labeled` filters too, and `EventFilters::run_event` runs it as
+  `email.labeled` when only those matched; a routine watching both runs it
+  once, as received mail. A label event marked `automated` (an agent's or a
+  routine's write) is rejected as `UnsafeAttribution`, like a `routine_id`.
+  A run that one of its routine's `email.labeled` filters took keeps
+  `labels_gained` and the mail's `inbox` in `event_context`, also when it
+  runs as received mail, so dispatch weighs exactly the filters that took
+  the event: a label filter without a condition beside a conditional
+  receipt filter runs the mail, and a filter for another inbox adds no
+  condition of its own and drops none. Other runs keep neither. Code from
+  before `email.labeled` can't read the runs that keep them (see the
+  `EventReference` note below), so turn its flag on only once every replica
+  runs code that knows it.
+- Received and labeled mail is for its inbox's owner and for each account that inbox is
   delegated to (multi-inbox, `macro_user_links`): admission asks the
   `InboxDelegates` port (`PgInboxDelegates`) once per event, and only when a
   candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
   Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
   an access grant: each owner's entity access is still checked.
+- A new-email or `email.labeled` filter can name `inboxes` (email link ids,
+  at most 25; empty is every inbox). Saving checks them against the owner's current own and
+  delegated inboxes on create and on a trigger change, so a later disconnect
+  never blocks unrelated edits. `OwnerInboxes` asks the email domain's
+  `EmailRepo` which of the picked ids the owner reads (`inbox_ids_among`, the
+  same own-plus-delegated set the app lists, one index probe per pick), so the
+  check never reads the owner's other inboxes or an inbox's other delegates.
+  `routine.admit_event` counts the routines only their inboxes turned away as
+  `outside_inboxes`. No run of a routine without label filters keeps the
+  mail's `inbox`, so every replica can read those runs: admission checks it,
+  and a filter changed since supersedes the run by revision. At dispatch
+  such a run matches every filter of its event whatever their inboxes: a
+  known gap, since a receipt filter with a condition can be outweighed by
+  another inbox's receipt filter without one. A shared template drops its inboxes: they are the
+  publisher's own. Code without inbox filters can't decode a routine that
+  picks some, and skips it at intake.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
+  Its dispatcher fails a whole page of pending runs on one such row, stopping
+  every routine's event runs, so don't store what only admission needs, as
+  the received inbox.
 
 ## Related
 

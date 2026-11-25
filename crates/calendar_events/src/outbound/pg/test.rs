@@ -8,9 +8,10 @@ mod team_refresh;
 mod team_sharing;
 mod team_sync_coverage;
 use crate::domain::models::{
-    GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
-    GoogleWatchChannel, OccurrenceException, OccurrenceListing, ProviderEventSource,
-    REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+    GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX, GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES,
+    GOOGLE_SYSTEM_CALENDAR_SUFFIX, GoogleCalendarSyncSnapshot, GoogleWatchChannel,
+    OccurrenceException, OccurrenceListing, ProviderEventSource, REMINDER_METHOD_EMAIL,
+    REMINDER_METHOD_POPUP,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
 use crate::domain::service::{CalendarService, GoogleCalendarBackfillFailureService};
@@ -548,6 +549,150 @@ async fn reaper_rearms_a_running_job_behind_a_dead_lease(pool: PgPool) {
     assert_eq!(row.status, "pending");
     assert!(row.lease_token.is_none());
     assert!(row.published_at.is_none());
+}
+
+/// A round deferred at the inbox's request limit goes back to pending with
+/// nothing recorded as failed, and its next delivery resumes the same round:
+/// the claim hands back the round's start, which the calendars it already
+/// synced are stamped after. A new round starts afresh.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deferred_round_resumes_with_its_start_and_no_failure(pool: PgPool) {
+    let owner_id = "macro|calendar-deferred-round@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let account_id = google_job.account_id.unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed {
+        lease_token,
+        round_started_at,
+        ..
+    } = repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    let provider_calendar = ProviderCalendar {
+        provider_calendar_id: "primary".to_string(),
+        name: "Primary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("owner".to_string()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: Vec::new(),
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(key, lease_token, account_id, provider_calendar.clone())
+        .await
+        .unwrap()
+        .id;
+    repo.commit_google_calendar_sync(
+        key,
+        lease_token,
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id,
+            next_sync_token: "next-sync-token".to_string(),
+            observed_provider_event_ids: Some(Vec::new()),
+            materialized_range: Some(OccurrenceRange::maintenance_horizon(Utc::now())),
+            cancelled_provider_event_ids: Vec::new(),
+        },
+        0,
+    )
+    .await
+    .unwrap();
+
+    repo.defer_google_backfill(key, lease_token).await.unwrap();
+
+    let job = sqlx::query!(
+        r#"
+        SELECT job.status, job.lease_token, job.last_error, job.started_at,
+               account.sync_status, account.last_sync_error
+        FROM calendar_backfill_jobs job
+        JOIN calendar_accounts account ON account.id = job.account_id
+        WHERE job.id = $1
+        "#,
+        key.job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(job.status, "pending");
+    assert!(job.lease_token.is_none());
+    assert!(job.last_error.is_none());
+    assert_eq!(job.started_at, Some(round_started_at));
+    assert_eq!(
+        job.sync_status, "syncing",
+        "a deferral leaves the account's state as the round found it"
+    );
+    assert!(job.last_sync_error.is_none());
+    assert!(
+        repo.defer_google_backfill(key, lease_token).await.is_err(),
+        "a released lease cannot defer again"
+    );
+
+    let CalendarBackfillClaim::Claimed {
+        lease_token,
+        round_started_at: resumed_at,
+        ..
+    } = repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("a deferred job should be claimable again");
+    };
+    assert_eq!(resumed_at, round_started_at);
+    let stored = repo
+        .upsert_google_calendar(key, lease_token, account_id, provider_calendar)
+        .await
+        .unwrap();
+    assert!(
+        stored
+            .synced_at
+            .is_some_and(|synced_at| synced_at >= round_started_at),
+        "the calendar the first delivery synced reads as synced this round"
+    );
+
+    repo.complete_google_backfill(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.schedule_due_google_syncs(Utc::now() + Duration::minutes(1))
+            .await
+            .unwrap(),
+        1
+    );
+    let CalendarBackfillClaim::Claimed {
+        round_started_at: next_round,
+        ..
+    } = repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("a scheduled job should be claimable");
+    };
+    assert!(next_round > round_started_at);
+    assert!(
+        stored
+            .synced_at
+            .is_some_and(|synced_at| synced_at < next_round),
+        "the next round syncs every calendar again"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1149,6 +1294,7 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
     let CalendarBackfillClaim::Claimed {
         lease_token,
         account_id: claimed_account_id,
+        ..
     } = repo.claim_google_backfill(key).await.unwrap()
     else {
         panic!("Google job should be claimable");
@@ -7622,6 +7768,7 @@ mod join_requests;
 mod meeting_copies;
 mod meeting_uid;
 mod mention_join_link;
+mod nul_characters;
 mod organizer_calendar;
 mod source_access;
 mod sync_health;
@@ -7743,4 +7890,137 @@ async fn mention_previews_say_how_the_viewer_holds_the_meeting(pool: PgPool) {
         Some(CalendarMentionViewerCopy::Snapshot)
     );
     assert_eq!(held_as(member_id).await, None);
+}
+
+/// Google's system calendars and the calendars a person added by URL list as
+/// subscriptions, whatever role Google reports for them; the person's own
+/// calendars and the ones colleagues share with them do not.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn google_calendars_added_by_url_are_subscriptions(pool: PgPool) {
+    let owner_id = "macro|calendar-subscriptions@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _) = grant_and_provider_ids(&repo, link_id).await;
+    for (provider_calendar_id, name, access_role) in [
+        ("ada@example.com".to_string(), "Ada", "reader"),
+        ("c_team".to_string(), "Team", "owner"),
+        (
+            format!("en.usa#holiday{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+            "Holidays in United States",
+            "reader",
+        ),
+        (
+            format!("1f0e4ab52d4b0b9d{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+            "Sports schedule",
+            "reader",
+        ),
+        (
+            format!("8c1f0e4ab52d4b0b{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+            "Added by URL, listed as owner",
+            "owner",
+        ),
+    ] {
+        repo.upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id,
+                name: name.to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some(access_role.to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let mut marked = repo
+        .list_visible_calendars(owner_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|calendar| {
+            (
+                calendar.name,
+                calendar.is_subscription,
+                calendar.is_writable,
+            )
+        })
+        .collect::<Vec<_>>();
+    marked.sort();
+    assert_eq!(
+        marked,
+        [
+            ("Ada".to_string(), false, false),
+            ("Added by URL, listed as owner".to_string(), true, true),
+            ("Holidays in United States".to_string(), true, false),
+            ("Primary".to_string(), false, true),
+            ("Sports schedule".to_string(), true, false),
+            ("Team".to_string(), false, true),
+        ]
+    );
+}
+
+/// The migration that logs every visible Google calendar added by URL, so
+/// caches that hold one refetch it as a subscription.
+const LOG_GOOGLE_CALENDARS_ADDED_BY_URL: &str = include_str!(
+    "../../../../macro_db_client/migrations/20261124224228_log_google_calendars_added_by_url.sql"
+);
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_by_url_backfill_logs_each_visible_google_calendar_added_by_url(pool: PgPool) {
+    let owner_id = "macro|calendar-by-url-backfill@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _) = grant_and_provider_ids(&repo, link_id).await;
+    let mut ids = Vec::new();
+    for provider_calendar_id in [
+        format!("1f0e4ab52d4b0b9d{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+        format!("8c1f0e4ab52d4b0b{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+        format!("en.usa#holiday{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+        "ada@example.com".to_string(),
+    ] {
+        ids.push(
+            repo.upsert_calendar_fixture(
+                account_id,
+                ProviderCalendar {
+                    name: provider_calendar_id.clone(),
+                    provider_calendar_id,
+                    description: None,
+                    time_zone: Some("UTC".to_string()),
+                    color: None,
+                    access_role: Some("reader".to_string()),
+                    is_primary: false,
+                    is_selected: true,
+                    default_reminders: Vec::new(),
+                },
+            )
+            .await
+            .unwrap(),
+        );
+    }
+    sqlx::query!(
+        "UPDATE calendars SET is_deleted = true WHERE id = $1",
+        ids[1]
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let before = changes::counter(&pool, link_id).await;
+
+    sqlx::raw_sql(LOG_GOOGLE_CALENDARS_ADDED_BY_URL)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        changes::ops_after(&pool, link_id, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(ids[0])],
+        "only the visible calendar added by URL logs; a removed one, a system \
+        calendar and a colleague's calendar do not"
+    );
 }

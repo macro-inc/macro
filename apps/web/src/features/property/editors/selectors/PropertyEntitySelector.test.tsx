@@ -12,6 +12,130 @@ const sources = vi.hoisted(() => ({
   emailBrowse: [] as boolean[],
   emailSearch: [] as boolean[],
   pinnedPeople: [] as boolean[],
+  contactSearches: [] as string[],
+  contactSearchDisabled: false,
+  contactCopies: [] as ReturnType<typeof contactItem>[],
+  contactError: undefined as Error | undefined,
+  contactRetries: 0,
+  companySearches: [] as string[],
+  companyError: undefined as Error | undefined,
+  companyRetries: 0,
+  addCompanyPage: undefined as (() => void) | undefined,
+}));
+
+function companyEntity(id: string, name: string, domain: string) {
+  return {
+    type: 'crm_company',
+    id,
+    name,
+    hidden: false,
+    domains: [{ id: `${id}-domain`, companyId: id, domain }],
+  };
+}
+
+function contactItem(
+  id: string,
+  name: string,
+  email: string,
+  sortTimestamp = 0
+) {
+  return {
+    kind: 'entity',
+    id,
+    bucket: 'crm_contact',
+    searchText: `${name} | ${email}`,
+    sortTimestamp,
+    timestamps: {},
+    data: { type: 'crm_contact', id, name, email, hidden: false },
+  };
+}
+
+// The search service matches companies Quick Access does not hold.
+vi.mock('@app/features/crm/crm-search', async () => {
+  const { createSignal } =
+    await vi.importActual<typeof import('solid-js')>('solid-js');
+  return {
+    useCrmCompanySearchSource: (
+      search: () => string,
+      enabled: () => boolean
+    ) => {
+      const [pages, setPages] = createSignal(1);
+      sources.addCompanyPage = () => setPages((count) => count + 1);
+      return {
+        companies: () => {
+          if (!enabled()) return [];
+          sources.companySearches.push(search());
+          const loaded = [
+            companyEntity(
+              'company-old',
+              'Northwind Traders',
+              'northwind.example.com'
+            ),
+            ...(pages() > 1
+              ? [
+                  companyEntity(
+                    'company-later',
+                    'Northwind Logistics',
+                    'northwind-logistics.example.com'
+                  ),
+                ]
+              : []),
+          ];
+          return loaded.filter((company) =>
+            `${company.name} | ${company.domains[0]?.domain}`
+              .toLowerCase()
+              .includes(search().toLowerCase())
+          );
+        },
+        hasMore: () => false,
+        isLoading: () => false,
+        isLoadingMore: () => false,
+        loadMore: async () => {},
+        error: () => sources.companyError,
+        retry: async () => {
+          sources.companyRetries += 1;
+        },
+      };
+    },
+  };
+});
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: sources.contactSearchDisabled }),
+}));
+// The server's CRM contact search finds contacts Quick Access does not hold.
+vi.mock('@app/features/crm/record-adapter', () => ({
+  useCrmContactMentionSource: (
+    search: () => string,
+    enabled: () => boolean
+  ) => {
+    const matches = () => {
+      if (!enabled()) return [];
+      sources.contactSearches.push(search());
+      return 'northwind support | support@northwind.example.com'.includes(
+        search().toLowerCase()
+      )
+        ? [
+            contactItem(
+              'contact-old',
+              'Northwind Support',
+              'support@northwind.example.com',
+              10
+            ),
+          ]
+        : [];
+    };
+    return {
+      entities: matches,
+      hasMore: () => false,
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      loadMore: async () => {},
+      error: () => sources.contactError,
+      retry: async () => {
+        sources.contactRetries += 1;
+      },
+    };
+  },
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -43,20 +167,41 @@ vi.mock('@core/context/quickAccess', () => ({
       windowKey: () => undefined,
       loadMore: async () => {},
       items: () =>
-        options.buckets.includes('task')
+        options.buckets.includes('crm_company')
           ? [
               {
-                kind: 'task',
-                id: 'task-1',
-                data: {
-                  type: 'document',
-                  id: 'task-1',
-                  name: 'Ship it',
-                  subType: { type: 'task' },
-                },
+                kind: 'entity',
+                id: 'company-recent',
+                bucket: 'crm_company',
+                searchText: 'Initech | initech.example.com',
+                sortTimestamp: 0,
+                timestamps: {},
+                data: companyEntity(
+                  'company-recent',
+                  'Initech',
+                  'initech.example.com'
+                ),
               },
             ]
-          : [],
+          : options.buckets.includes('crm_contact')
+            ? [
+                contactItem('contact-recent', 'Ada Recent', 'ada@example.com'),
+                ...sources.contactCopies,
+              ]
+            : options.buckets.includes('task')
+              ? [
+                  {
+                    kind: 'task',
+                    id: 'task-1',
+                    data: {
+                      type: 'document',
+                      id: 'task-1',
+                      name: 'Ship it',
+                      subType: { type: 'task' },
+                    },
+                  },
+                ]
+              : [],
     }),
   }),
 }));
@@ -112,12 +257,29 @@ afterEach(() => {
   sources.emailBrowse.length = 0;
   sources.emailSearch.length = 0;
   sources.pinnedPeople.length = 0;
+  sources.contactSearches.length = 0;
+  sources.contactSearchDisabled = false;
+  sources.contactCopies.length = 0;
+  sources.contactError = undefined;
+  sources.contactRetries = 0;
+  sources.companySearches.length = 0;
+  sources.companyError = undefined;
+  sources.companyRetries = 0;
+  sources.addCompanyPage = undefined;
 });
 
-function renderSelector(specificEntityType: EntityType | EntityType[]) {
+function renderSelector(
+  specificEntityType: EntityType | EntityType[],
+  excludedIds: string[] = []
+) {
   render(() => (
     <PropertyEntitySelector
-      config={{ isMultiSelect: false, specificEntityType, placeholder: 'Find' }}
+      config={{
+        isMultiSelect: false,
+        specificEntityType,
+        placeholder: 'Find',
+        excludedIds: () => new Set(excludedIds),
+      }}
       selectedOptions={() => new Set()}
       setSelectedOptions={() => {}}
     />
@@ -152,5 +314,128 @@ describe('an entity selector limited to several kinds', () => {
     renderSelector(['TASK', 'USER']);
     expect(await screen.findByText('Pat')).toBeTruthy();
     expect(sources.pinnedPeople).toContain(true);
+  });
+});
+
+describe('a contact selector', () => {
+  const type = (value: string) =>
+    fireEvent.input(screen.getByPlaceholderText('Find'), {
+      target: { value },
+    });
+
+  it('lists recent contacts without searching the server', async () => {
+    renderSelector('CONTACT');
+    expect(await screen.findByText('Ada Recent')).toBeTruthy();
+    expect(sources.contactSearches).toEqual([]);
+  });
+
+  it('finds a contact Quick Access does not hold by email, part of it, or name', async () => {
+    renderSelector('CONTACT');
+    await screen.findByText('Ada Recent');
+    for (const query of [
+      'support@northwind.example.com',
+      'support@north',
+      'northwind.example.com',
+      'Northwind',
+    ]) {
+      type(query);
+      expect(await screen.findByText('Northwind Support')).toBeTruthy();
+      expect(screen.queryByText('No contacts found')).toBeNull();
+    }
+    expect(sources.contactSearches).toContain('support@northwind.example.com');
+  });
+
+  it('keeps an eligible record when an excluded one shares its email', async () => {
+    sources.contactCopies.push(
+      contactItem(
+        'contact-copy',
+        'Northwind Support',
+        'support@northwind.example.com'
+      )
+    );
+    renderSelector('CONTACT', ['contact-old']);
+    await screen.findByText('Ada Recent');
+    type('support@northwind.example.com');
+    await waitFor(() =>
+      expect(sources.contactSearches).toContain('support@northwind.example.com')
+    );
+    expect(await screen.findByText('Northwind Support')).toBeTruthy();
+  });
+
+  it('offers Retry when a server contact page fails', async () => {
+    sources.contactError = new Error('contact page failed');
+    renderSelector('CONTACT');
+    await screen.findByText('Ada Recent');
+    type('northwind');
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(sources.contactRetries).toBe(1));
+  });
+
+  it('leaves the server alone when contact search is switched off', async () => {
+    sources.contactSearchDisabled = true;
+    renderSelector('CONTACT');
+    await screen.findByText('Ada Recent');
+    type('support@northwind.example.com');
+    expect(await screen.findByText('No contacts found')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(screen.queryByText('Northwind Support')).toBeNull();
+    expect(sources.contactSearches).toEqual([]);
+  });
+});
+
+describe('a company selector', () => {
+  const type = (value: string) =>
+    fireEvent.input(screen.getByPlaceholderText('Find'), {
+      target: { value },
+    });
+
+  it('lists recent companies without searching the server', async () => {
+    renderSelector('COMPANY');
+    expect(await screen.findByText('Initech')).toBeTruthy();
+    expect(sources.companySearches).toEqual([]);
+  });
+
+  it('finds a company Quick Access does not hold by name or domain', async () => {
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    for (const query of ['Northwind', 'northwind.example.com', 'wind.exa']) {
+      type(query);
+      await waitFor(() =>
+        expect(sources.companySearches).toContain(query.toLowerCase())
+      );
+      expect(await screen.findByText('Northwind Traders')).toBeTruthy();
+      expect(screen.queryByText('No companies found')).toBeNull();
+    }
+  });
+
+  it('finds a recent company by its domain', async () => {
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    type('initech.example');
+    await waitFor(() =>
+      expect(sources.companySearches).toContain('initech.example')
+    );
+    expect(screen.getByText('Initech')).toBeTruthy();
+  });
+
+  it('keeps listed server rows mounted when another page arrives', async () => {
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    type('northwind');
+    const row = (await screen.findByText('Northwind Traders')).closest(
+      '[data-entity-index]'
+    );
+    sources.addCompanyPage?.();
+    expect(await screen.findByText('Northwind Logistics')).toBeTruthy();
+    expect(row?.isConnected).toBe(true);
+  });
+
+  it('offers Retry when a server company page fails', async () => {
+    sources.companyError = new Error('company page failed');
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    type('northwind');
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(sources.companyRetries).toBe(1));
   });
 });

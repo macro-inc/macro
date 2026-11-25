@@ -125,7 +125,7 @@ where
     T: MailboxTokenSource,
     L: ProviderRateLimiter,
 {
-    async fn folders(&self, mailbox: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
+    async fn folders(&self, mailbox: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
         self.0.folders(access(mailbox)).await
     }
     async fn changes(

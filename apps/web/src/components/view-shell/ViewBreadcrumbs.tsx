@@ -226,6 +226,8 @@ export type ViewBreadcrumbsOutletProps = Omit<
 > & {
   children?: JSX.Element;
   fallback?: JSX.Element;
+  /** Replaces the active breadcrumb without duplicating its title. */
+  activeItem?: JSX.Element;
   separator?: (state: ViewBreadcrumbsSeparatorState) => JSX.Element;
 };
 
@@ -241,6 +243,7 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
     'children',
     'class',
     'fallback',
+    'activeItem',
     'separator',
   ]);
   const entries = createMemo(() =>
@@ -270,7 +273,14 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
             <Show when={index() > 0}>
               {renderSeparator(entries()[index() - 1]!, entry)}
             </Show>
-            {entry.render()}
+            <Show
+              when={
+                entry.value() === context.value() && local.activeItem != null
+              }
+              fallback={entry.render()}
+            >
+              {local.activeItem}
+            </Show>
           </>
         )}
       </For>

@@ -63,3 +63,42 @@ test('an empty task or label hands nothing over', async () => {
   ).toBe('invalid');
   expect(await schedules.list()).toEqual([]);
 });
+
+test("a task's hand-over is a span whose trace context the schedule keeps, for the run that does it", async () => {
+  const schedules = scheduler({ store: memoryStore(), clock, tz: 'UTC' });
+  const spans: { name: string; attributes: Record<string, unknown> }[] = [];
+  const traceparent = `00-${'1'.repeat(32)}-${'2'.repeat(16)}-01`;
+  const work = later({
+    schedules,
+    clock,
+    id: () => '7',
+    trace: async (name, run) => {
+      const span = { name, attributes: {} as Record<string, unknown> };
+      spans.push(span);
+      return run({
+        set: (key, value) => {
+          span.attributes[key] = value;
+        },
+        traceparent: () => traceparent,
+      });
+    },
+  });
+
+  await work.start({ task: 'x', label: 'y', channelId: 'c1' });
+
+  expect(spans).toEqual([
+    {
+      name: 'agent.task.queue',
+      attributes: {
+        'agent.task_id': `${prefix}7`,
+        'agent.task.reports_back': true,
+        'chat.channel_id': 'c1',
+      },
+    },
+  ]);
+  const [status] = await schedules.list();
+  expect(status?.schedule.data).toEqual({
+    wake: request({ task: 'x', label: 'y', channelId: 'c1' }),
+    traceparent,
+  });
+});

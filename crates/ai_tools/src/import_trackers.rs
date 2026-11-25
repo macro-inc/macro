@@ -32,7 +32,7 @@ impl ToolEntityCreator {
         id: Uuid,
         name: &str,
         markdown: &str,
-        shared: bool,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
         let project = self
             .initiative_service
@@ -42,11 +42,15 @@ impl ToolEntityCreator {
                     name: capped_name(name, MAX_INITIATIVE_NAME_GRAPHEMES),
                     description: Some(markdown.to_string()),
                     member_ids: None,
-                    share_with_team: Some(shared),
+                    share_with_team: Some(match visibility {
+                        import::domain::ports::ImportVisibility::Shared => true,
+                        import::domain::ports::ImportVisibility::Personal => false,
+                    }),
                     property_values: Vec::new(),
                 },
                 activity::Attribution::from(&Self::creation_principal(user)),
                 InitiativeId::from_uuid(id),
+                crate::tool_context::imported_link_share(visibility),
             )
             .await?;
         Ok(project.id.as_uuid())
@@ -60,8 +64,8 @@ impl ToolEntityCreator {
         name: &str,
         markdown: &str,
         properties: &ImportedTaskProperties,
-        shared: bool,
-    ) -> anyhow::Result<String> {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         let created = self
             .create_imported_task(
                 user,
@@ -71,14 +75,18 @@ impl ToolEntityCreator {
                 properties,
                 None,
                 None,
-                shared,
+                false,
+                visibility,
             )
             .await;
-        let task = crate::import_workspace::already_created(created, id)?;
+        let initial_notice = created.as_ref().ok().and_then(|created| created.notice);
+        let task = crate::import_workspace::already_created(created.map(|created| created.id), id)?;
         // A replay may have returned a document created just before a crash.
-        // Apply enrichment and sharing again to repair that partial attempt.
+        // Apply enrichment again and keep the explicit team grant off until
+        // the import domain has linked relationships successfully.
         let (_, roster) = self.team_roster(user).await;
-        self.apply_task_properties(user, &task, properties, &roster)
+        let notice = self
+            .apply_task_properties(user, &task, properties, &roster, visibility)
             .await;
         let receipt = self
             .entity_access_service
@@ -90,10 +98,11 @@ impl ToolEntityCreator {
             )
             .await
             .map_err(|error| anyhow::anyhow!("no edit access to imported task: {error:?}"))?;
-        self.document_service
-            .set_team_share(receipt, shared)
-            .await?;
-        Ok(task)
+        self.document_service.set_team_share(receipt, false).await?;
+        Ok(import::domain::ports::CreatedImportTask {
+            id: task,
+            notice: notice.or(initial_notice),
+        })
     }
 
     #[tracing::instrument(skip_all, fields(task_id = %id), err)]

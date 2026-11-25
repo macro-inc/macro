@@ -2,7 +2,7 @@
 //!
 //! Events can be lost, a classification can fail, initial sync emits no
 //! events, and a thread can become signal without one. The sweep covers all
-//! of these. It covers the inboxes whose owner is in the Focus rollout: those
+//! of these. It covers the inboxes in the Focus rollout: those
 //! holding Focus, and those the backfill's looks or mail since the worker
 //! started found in it, leaving an inbox being backfilled to the backfill. The
 //! first sweep runs at startup and decides rows from an older rule again, from
@@ -61,9 +61,16 @@ where
                 if report.stopped_early {
                     metrics.add(Metric::SweepsStoppedEarly, 1.0);
                 }
+                // A sweep that left out an inbox it could not read failed for
+                // that inbox, though it went on to the others.
+                if report.inboxes_failed > 0 {
+                    metrics.add(Metric::SweepFailures, 1.0);
+                }
                 tracing::info!(
                     inboxes = report.inboxes,
                     inboxes_unknown = report.inboxes_unknown,
+                    inboxes_left = report.inboxes_left,
+                    inboxes_failed = report.inboxes_failed,
                     candidates = report.candidates,
                     classified = report.classified,
                     redecided = report.redecided,

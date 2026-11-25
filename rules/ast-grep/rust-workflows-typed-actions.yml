@@ -1,0 +1,16 @@
+id: rust-workflows-typed-actions
+language: rust
+severity: error
+message: Use a third-party action through its generated type in `workflows/actions.rs`, not `.uses(owner, repo, sha)`.
+note: |-
+  The generated type pins the action from `actions.lock` and turns each
+  input into a setter, so a misspelled input fails to compile. Add the action
+  to `actions.lock`, run `cargo x workflows actions fetch` and
+  `cargo x workflows`. See `.agents/rules/infra/github-workflows.md`.
+files:
+  - tooling/xtask/crates/xtask_workflows/src/workflows/**
+ignores:
+  - tooling/xtask/crates/xtask_workflows/src/workflows/actions.rs
+  - '**/test.rs'
+rule:
+  pattern: $STEP.uses($OWNER, $REPO, $VERSION)

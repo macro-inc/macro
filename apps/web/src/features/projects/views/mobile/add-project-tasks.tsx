@@ -1,101 +1,49 @@
 import { t } from '@app/lib/i18n';
+import { activeElement } from '@app/signal/focus';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { MobileCreateMenu } from '@components/app/mobile/MobileCreateMenu';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
-import { isMobile } from '@core/mobile/isMobile';
-import { fireAndForget } from '@core/util/fireAndForget';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { isEditableInput } from '@core/util/isEditableInput';
 import ListPlusIcon from '@icon/system/regular/list-plus.svg';
-import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
-import { Button } from '@ui';
-import { createSignal, Show, Suspense } from 'solid-js';
-import { match } from 'ts-pattern';
-import { useProjectsContext } from '../../context/projects-context';
-import type { ProjectDetail } from '../../core/project';
-import {
-  type AddProjectTasksError,
-  createAddProjectTasks,
-} from '../../primitives/add-project-tasks';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import type { AddProjectTasksViewProps } from '../../add-project-tasks';
 
-function errorText(error: AddProjectTasksError) {
-  return match(error)
-    .with({ kind: 'partial' }, ({ count, reason }) =>
-      t('mobile.addTasksPartialFailure', { count, reason })
-    )
-    .with(
-      { kind: 'request' },
-      ({ message }) => message ?? t('mobile.addTasksFailed')
-    )
-    .exhaustive();
-}
-
-/** Add existing tasks on touch: a picker sheet; phones show the icon alone. */
-export function MobileAddProjectTasks(props: { project: ProjectDetail }) {
-  const commands = useProjectsContext().createCommands();
-  const picker = createAddProjectTasks({
-    project: () => props.project,
-    assignTasks: commands.assignTasks,
-  });
-  const [open, setOpen] = createSignal(false);
-  const cancel = () => {
-    if (!picker.saving()) setOpen(false);
-  };
-  const add = async () => {
-    if (await picker.add()) setOpen(false);
-  };
-
+export function MobileAddProjectTasks(props: AddProjectTasksViewProps) {
   return (
     <>
-      <Button
-        variant="secondary"
-        size={isMobile() ? 'icon-md' : 'md'}
-        aria-label={isMobile() ? t('mobile.addExistingTasks') : undefined}
-        onClick={() => {
-          picker.reset();
-          setOpen(true);
-        }}
+      <FloatRegion
+        region="accessory"
+        active={() =>
+          !virtualKeyboardVisible() && !isEditableInput(activeElement())
+        }
       >
-        <ListPlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
-        {isMobile() ? null : t('mobile.addExistingTasks')}
-      </Button>
-      <PickerSheet.Root open={open()} onCancel={cancel}>
-        <PickerSheet.Header
-          title={t('mobile.addTasks')}
-          onDone={() => fireAndForget(add(), 'projects')}
-          doneDisabled={picker.saving() || !picker.selected().size}
-        />
-        <PickerSheet.Body>
-          <Show when={picker.error()}>
-            {(error) => (
-              <p role="alert" class="shrink-0 px-4 pb-2 text-sm text-failure">
-                {errorText(error())}
-              </p>
-            )}
-          </Show>
-          <div
-            inert={picker.saving()}
-            class="flex min-h-0 flex-1 flex-col"
-            classList={{ 'opacity-50': picker.saving() }}
-          >
-            <Suspense
-              fallback={
-                <p role="status" class="px-4 py-3 text-ink-muted">
-                  {t('mobile.loadingTasks')}
-                </p>
-              }
-            >
-              <PropertyEntitySelector
-                config={{
-                  specificEntityType: 'TASK',
-                  isMultiSelect: true,
-                  placeholder: t('mobile.searchTasks'),
-                  excludedIds: picker.excludedIds,
-                  fillHeight: true,
-                }}
-                selectedOptions={picker.selected}
-                setSelectedOptions={picker.select}
-                onCancel={cancel}
-              />
-            </Suspense>
-          </div>
-        </PickerSheet.Body>
+        <div class="flex h-(--mobile-chrome-button-size) justify-end px-(--mobile-chrome-gutter) pointer-events-auto">
+          <MobileCreateMenu
+            label={t('viewMenus.task')}
+            items={[
+              {
+                label: t('viewMenus.newTask'),
+                icon: PlusIcon,
+                onSelect: props.createTask,
+                disabled: !props.canCreate,
+              },
+              {
+                label: t('viewMenus.addExistingTasks'),
+                icon: ListPlusIcon,
+                onSelect: props.openExisting,
+              },
+            ]}
+          />
+        </div>
+      </FloatRegion>
+      <PickerSheet.Root open={props.open} onCancel={props.close}>
+        <MobileDrawer.Title class="px-6 pt-4 pb-3 text-lg font-semibold">
+          {t('viewMenus.addExistingTasks')}
+        </MobileDrawer.Title>
+        <PickerSheet.Body>{props.pickerFields('sheet')}</PickerSheet.Body>
+        {props.pickerFooter('sheet')}
       </PickerSheet.Root>
     </>
   );

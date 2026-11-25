@@ -13,7 +13,7 @@ import type { Quote } from './quote';
  */
 export interface SizeOffer {
   /**
-   * Root disk size in GiB.
+   * Whole disk quota in GiB: root and `/home` together.
    * @minimum 0
    */
   diskGb: number;

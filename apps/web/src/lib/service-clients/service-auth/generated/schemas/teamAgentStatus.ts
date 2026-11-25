@@ -17,6 +17,7 @@ export const TeamAgentStatus = {
   starting: 'starting',
   running: 'running',
   paused: 'paused',
+  unhealthy: 'unhealthy',
   failed: 'failed',
   released: 'released',
 } as const;

@@ -13,10 +13,12 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 # Define GitHub Actions workflows in Rust.
-gh-workflow = "0.8"
+gh_workflow = { path = "../gh_workflow" }
+indexmap = { workspace = true }
 indoc = { workspace = true }
 serde_yaml = { workspace = true }
 xtask_paths = { path = "../xtask_paths" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+toml = { workspace = true }

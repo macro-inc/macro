@@ -133,3 +133,122 @@ fn each_kind_of_typo_counts_once() {
     }
     assert_eq!(weekday("fdiray"), None);
 }
+
+/// Every spelling a table reads exactly: names, their prefixes down to the
+/// shortest allowed, and aliases.
+fn spellings<T>(names: &Names<T>) -> Vec<(&'static str, &T)> {
+    names
+        .iter()
+        .flat_map(|(value, name, shortest, aliases)| {
+            (*shortest..=name.len())
+                .map(|len| &name[..len])
+                .chain(aliases.iter().copied())
+                .map(move |spelling| (spelling, value))
+        })
+        .collect()
+}
+
+fn reads_each_spelling<T: Copy + PartialEq + std::fmt::Debug>(names: &Names<T>) {
+    for (spelling, value) in spellings(names) {
+        assert_eq!(named(spelling, names), Some(*value), "{spelling}");
+    }
+}
+
+#[test]
+fn every_prefix_and_alias_reads_as_its_value() {
+    reads_each_spelling(WEEKDAYS);
+    reads_each_spelling(MONTHS);
+    reads_each_spelling(RELATIVE);
+    reads_each_spelling(RELATIONS);
+    reads_each_spelling(DAYPARTS);
+    reads_each_spelling(UNITS);
+}
+
+#[test]
+fn no_spelling_belongs_to_two_values_or_two_tables() {
+    fn words<T: PartialEq>(names: &Names<T>) -> Vec<&'static str> {
+        let spellings = spellings(names);
+        for (spelling, value) in &spellings {
+            let other = spellings
+                .iter()
+                .find(|(other, them)| other == spelling && them != value);
+            assert!(other.is_none(), "{spelling} reads as two values");
+        }
+        spellings
+            .into_iter()
+            .map(|(spelling, _)| spelling)
+            .collect()
+    }
+    let tables = [
+        ("weekday", words(WEEKDAYS)),
+        ("month", words(MONTHS)),
+        ("relative day", words(RELATIVE)),
+        ("relation", words(RELATIONS)),
+        ("daypart", words(DAYPARTS)),
+        ("unit", words(UNITS)),
+    ];
+    for (index, (class, spellings)) in tables.iter().enumerate() {
+        for (other_class, others) in &tables[index + 1..] {
+            for spelling in spellings {
+                assert!(
+                    !others.contains(spelling),
+                    "{spelling} is both a {class} and a {other_class}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn truncated_names_read_down_to_their_shortest_prefix() {
+    for (word, day) in [
+        ("mond", Weekday::Mon),
+        ("monda", Weekday::Mon),
+        ("wedn", Weekday::Wed),
+        ("wednes", Weekday::Wed),
+        ("thursd", Weekday::Thu),
+        ("frid", Weekday::Fri),
+        ("satur", Weekday::Sat),
+        ("sund", Weekday::Sun),
+    ] {
+        assert_eq!(weekday(word), Some(day), "{word}");
+    }
+    assert_eq!(month("septem"), Some(9));
+    assert_eq!(month("novem"), Some(11));
+    assert_eq!(relative("tomor"), Some(RelativeWord::Tomorrow));
+    assert_eq!(relative("yester"), Some(RelativeWord::Yesterday));
+    assert_eq!(relation("nex"), Some(Relation::Next));
+    assert_eq!(relation("prev"), Some(Relation::Previous));
+    assert_eq!(unit("minute"), Some((Unit::Minute, 1)));
+    assert_eq!(unit("hou"), Some((Unit::Hour, 1)));
+    assert_eq!(unit("mont"), Some((Unit::Month, 1)));
+}
+
+#[test]
+fn short_prefixes_that_are_other_words_are_not_read() {
+    assert_eq!(weekday("mo"), None);
+    assert_eq!(month("ma"), None);
+    assert_eq!(month("ju"), None);
+    assert_eq!(relative("to"), None);
+    assert_eq!(relative("ton"), None);
+    assert_eq!(relative("yes"), None);
+    assert_eq!(relation("ne"), None);
+    assert_eq!(relation("las"), None);
+    assert_eq!(daypart("after"), None);
+    assert_eq!(daypart("mid"), None);
+    assert_eq!(daypart("even"), None);
+    assert_eq!(unit("mon"), None);
+    assert_eq!(unit("mi"), None);
+}
+
+#[test]
+fn relations_and_units_take_typos_like_names() {
+    assert_eq!(relation("folowing"), Some(Relation::Following));
+    assert_eq!(relation("previus"), Some(Relation::Previous));
+    assert_eq!(relation("upcomming"), Some(Relation::Coming));
+    assert_eq!(unit("minuts"), Some((Unit::Minute, 1)));
+    assert_eq!(unit("monts"), Some((Unit::Month, 1)));
+    // Four letters or fewer take none.
+    assert_eq!(relation("nexy"), None);
+    assert_eq!(unit("hors"), None);
+}

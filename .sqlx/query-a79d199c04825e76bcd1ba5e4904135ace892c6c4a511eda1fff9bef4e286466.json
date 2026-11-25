@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, label_id, built_in_section, disabled_event_types, muted, snoozed_until\n           FROM user_channel_section_notification_setting\n           WHERE user_id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "label_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "built_in_section",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "disabled_event_types",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "muted",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "snoozed_until",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "a79d199c04825e76bcd1ba5e4904135ace892c6c4a511eda1fff9bef4e286466"
+}

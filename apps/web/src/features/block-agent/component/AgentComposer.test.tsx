@@ -1,10 +1,24 @@
-import { setPreferredSpeed } from '@core/component/AI/signal/speed';
+import { Model } from '@core/component/AI/constant/model';
+import {
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
-import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DiscoverAgentCapabilitiesRequest } from '@service-agent-harness/generated/schemas';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal, mergeProps } from 'solid-js';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
+import type { UnifiedModelSelectorState } from '../../agents-view/components/unified-model-selector/root';
+import type { SelectSessionConfigOption } from '../state/session-config';
 import type { AgentInputProps } from '../ui/AgentInput';
-import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 import type { QueuedPromptsProps } from '../ui/QueuedPrompts';
 import { AgentComposer } from './AgentComposer';
 
@@ -37,7 +51,12 @@ const mocks = vi.hoisted(() => ({
   metadata: () =>
     undefined as { model: string; configOptions: unknown[] } | undefined,
   input: undefined as AgentInputProps | undefined,
-  model: undefined as AgentModelSelectorProps | undefined,
+  model: undefined as UnifiedModelSelectorState | undefined,
+  realSelector: false,
+  capabilityTarget: undefined as
+    | (() => DiscoverAgentCapabilitiesRequest | undefined)
+    | undefined,
+  capabilities: () => ({ configOptions: [] as SelectSessionConfigOption[] }),
   queued: undefined as QueuedPromptsProps | undefined,
 }));
 
@@ -54,6 +73,21 @@ vi.mock('@channel/Input', () => ({
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
+vi.mock('@queries/agents/capabilities', () => ({
+  useAgentCapabilitiesQuery: (
+    target: () => DiscoverAgentCapabilitiesRequest | undefined
+  ) => {
+    mocks.capabilityTarget = target;
+    return {
+      get isSuccess() {
+        return target() !== undefined;
+      },
+      get data() {
+        return mocks.capabilities();
+      },
+    };
+  },
+}));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
     session: () => mocks.session(),
@@ -88,16 +122,27 @@ vi.mock('../ui', () => ({
     mocks.input = props;
     return <div>{props.modelControl}</div>;
   },
-  AgentModelSelector: (props: AgentModelSelectorProps) => {
-    mocks.model = props;
-    return null;
-  },
   QueuedPrompts: (props: QueuedPromptsProps) => {
     mocks.queued = props;
     return null;
   },
   ComposerNotice: () => null,
 }));
+vi.mock('@app/features/agents-view/model-selector', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@app/features/agents-view/model-selector')
+    >();
+  return {
+    UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
+      mocks.model = mergeProps(() => props.state);
+      return mocks.realSelector ? (
+        <actual.UnifiedModelSelector {...props} />
+      ) : null;
+    },
+  };
+});
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 
 beforeEach(() => {
@@ -105,6 +150,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
+  mocks.realSelector = false;
+  mocks.capabilityTarget = undefined;
+  mocks.capabilities = () => ({ configOptions: [] });
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
@@ -117,8 +165,64 @@ it('passes opening context to the composer without issuing it', () => {
   expect(mocks.issue).not.toHaveBeenCalled();
 });
 
+it('opens Auto directly from the session composer', async () => {
+  mocks.realSelector = true;
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.metadata = () => ({ model: 'auto', configOptions: [] });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+  });
+  render(() => <AgentComposer />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose an agent or model' })
+  );
+  expect(
+    await screen.findByRole('textbox', { name: 'Search agents and models' })
+  ).toBeTruthy();
+  expect(mocks.model?.model).toBe('auto');
+});
+
+it('keeps the advertised default separate from confirmed session effort and scopes it to the model', () => {
+  const effort: SelectSessionConfigOption = {
+    id: 'opaque-effort',
+    name: 'Thinking',
+    description: null,
+    category: 'thought_level',
+    type: 'select',
+    currentValue: 'high',
+    options: [
+      { value: 'low', name: 'Low', description: null, group: null },
+      { value: 'high', name: 'High', description: null, group: null },
+    ],
+  };
+  const [model, setModel] = createSignal('gpt-6.1-sol');
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.metadata = () => ({ model: model(), configOptions: [effort] });
+  mocks.capabilities = () => ({
+    configOptions: [{ ...effort, currentValue: 'low' }],
+  });
+  render(() => <AgentComposer />);
+  expect(mocks.model?.effort?.currentValue).toBe('high');
+  expect(mocks.model?.defaultEffortValue).toBe('low');
+  expect(mocks.capabilityTarget?.()).toEqual({
+    harness: 'in-memory',
+    model: 'gpt-6.1-sol',
+  });
+  setModel('gpt-6-astra');
+  expect(mocks.capabilityTarget?.()?.model).toBe('gpt-6-astra');
+  mocks.session = () => ({ canEdit: true, harness: 'macrod' });
+  expect(mocks.capabilityTarget?.()).toBeUndefined();
+});
 describe('view-only session controls', () => {
-  it('disables and guards prompt, model, stop, queue, and attachment actions', () => {
+  it('disables and guards prompt, model, stop, queue, and attachment actions', async () => {
     render(() => <AgentComposer />);
 
     expect(mocks.input?.disabled).toBe(true);
@@ -132,7 +236,7 @@ describe('view-only session controls', () => {
     mocks.input?.onSend('A new prompt', []);
     mocks.input?.onStop?.();
     mocks.input?.onAttachFiles?.([new File(['text'], 'note.txt')]);
-    mocks.model?.onSelect('new-model');
+    await mocks.model?.onModel('new-model');
     // Read-only: the edit is not sent, so nothing is there to await.
     expect(mocks.queued?.onEdit('queued-1', 'Edited prompt')).toBeUndefined();
     mocks.queued?.onRemove('queued-1');
@@ -203,6 +307,45 @@ it('keeps steering queued messages while the turn transitions', () => {
     setTurn(next);
     expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
   }
+});
+
+it('resets speed only after a confirmed in-memory model pick', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.selectModel.mockResolvedValue(undefined);
+  render(() => <AgentComposer />);
+  expect(await mocks.model?.onModel('new-model')).toBe(true);
+  expect(preferredSpeed()).toBe('standard');
+  setPreferredSpeed('priority');
+  mocks.session = () => ({ canEdit: true, harness: 'cursor' });
+  expect(await mocks.model?.onModel('cursor-model')).toBe(true);
+  expect(preferredSpeed()).toBe('priority');
+});
+
+it('preserves later speed picks across an asynchronous model change', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  let finish!: () => void;
+  mocks.selectModel.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  render(() => <AgentComposer />);
+  const change = mocks.model?.onModel('new-model');
+  expect(preferredSpeed()).toBe('priority');
+  setPreferredSpeed('ultrafast');
+  setPreferredSpeed('priority');
+  finish();
+  expect(await change).toBe(true);
+  expect(preferredSpeed()).toBe('priority');
+});
+
+it('does not reset speed after a rejected model pick', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.selectModel.mockRejectedValue(new Error('Unavailable'));
+  render(() => <AgentComposer />);
+  expect(await mocks.model?.onModel('new-model')).toBe(false);
+  expect(preferredSpeed()).toBe('priority');
 });
 
 it('retains an unsent draft when speed configuration is rejected', async () => {
@@ -292,3 +435,17 @@ it('allows another prompt after a failed turn', () => {
     prompt: 'Try again',
   });
 });
+
+it.each([
+  ['in-memory', Model.gpt62Sol],
+  ['macrod', 'openai/gpt-5.6'],
+])(
+  "shows a %s session's last model %s until its next turn",
+  (harness, shown) => {
+    mocks.session = () => ({ canEdit: true, harness });
+    mocks.metadata = () => ({ model: 'openai/gpt-5.6', configOptions: [] });
+    render(() => <AgentComposer />);
+    expect(mocks.model?.model).toBe(shown);
+    expect(mocks.selectModel).not.toHaveBeenCalled();
+  }
+);

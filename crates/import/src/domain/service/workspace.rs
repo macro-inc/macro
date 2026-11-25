@@ -2,9 +2,9 @@
 //! writing; leases, adoption, reviews, reporting and notifications are shared.
 
 use agent_session::domain::model::AgentSessionId;
+use connectors::McpConnectionsService;
 use import_notion::domain::{model::ImportScope, ports::NotionConnections};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -52,6 +52,24 @@ pub trait WorkspaceImporter: NotionWorkspaceImporter {
         review: Uuid,
         choices: NotionWriteChoices,
     ) -> impl Future<Output = Result<NotionImportReport>> + Send;
+    /// Persist exactly the saved dependency selection being approved; later approvals replace it.
+    fn approve_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+    ) -> impl Future<Output = Result<()>> + Send;
+    /// Reconcile dependency defaults; `saved` acknowledges only a successfully saved draft.
+    fn review_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+        saved: bool,
+    ) -> impl Future<Output = Result<crate::domain::models::NotionDependencyReview>> + Send;
+
     /// Cancel this source only; imported entities remain.
     fn cancel_workspace_import(
         &self,
@@ -97,7 +115,10 @@ where
 
 fn workspace_source(source: ImportSource) -> Result<()> {
     match source {
-        ImportSource::Notion | ImportSource::Linear | ImportSource::Jira => Ok(()),
+        ImportSource::Notion
+        | ImportSource::Linear
+        | ImportSource::Jira
+        | ImportSource::Hubspot => Ok(()),
         ImportSource::Slack => Err(ImportError::NotReady(
             "Slack uses channel discovery, not workspace plans.",
         )),
@@ -107,7 +128,7 @@ fn workspace_source(source: ImportSource) -> Result<()> {
 impl<R, S, C, W, N> WorkspaceImporter for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -156,6 +177,32 @@ where
             .start_notion_write(user, review, choices)
             .await
     }
+    async fn approve_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+    ) -> Result<()> {
+        workspace_source(source)?;
+        self.scoped(source)
+            .approve_review_dependencies(user, review, excluded)
+            .await
+    }
+    async fn review_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+        saved: bool,
+    ) -> Result<crate::domain::models::NotionDependencyReview> {
+        workspace_source(source)?;
+        self.scoped(source)
+            .review_dependencies(user, review, excluded, saved)
+            .await
+    }
+
     async fn cancel_workspace_import(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -169,7 +216,7 @@ where
 impl<R, S, C, W, N> Importer for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -187,6 +234,7 @@ where
             ImportSource::Linear | ImportSource::Jira => {
                 self.plan_tracker(user, sharing, control).await
             }
+            ImportSource::Hubspot => self.plan_hubspot(user, control).await,
             ImportSource::Slack => workspace_source(self.workspace_source),
         }
     }
@@ -204,6 +252,7 @@ where
             ImportSource::Linear | ImportSource::Jira => {
                 self.write_tracker(user, review, control).await
             }
+            ImportSource::Hubspot => self.write_hubspot(user, review, control).await,
             ImportSource::Slack => Err(ImportError::NotReady("Slack uses channel discovery.")),
         }
     }

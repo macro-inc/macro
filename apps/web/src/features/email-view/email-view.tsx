@@ -3,7 +3,6 @@ import {
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
-  ViewSidebar,
 } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import {
@@ -14,13 +13,13 @@ import {
   useSavedView,
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
+import { SavedViewDraftHost } from '@app/features/saved-views/views/saved-view-draft-host';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
-import { PillButton, PillTabs } from '@components/app/mobile/PillTabs';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { PillButton } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -48,20 +47,18 @@ import { EmailFilterDrawer } from './components/EmailFilterDrawer';
 import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader, EmailReaderEmpty } from './components/EmailReader';
-import { EmailRecentSearches } from './components/EmailRecentSearches';
+import { EmailSearchSuggestionList } from './components/EmailSearchSuggestionList';
 import { EmailSidebar } from './components/EmailSidebar';
-import {
-  canSearchEmailTab,
-  EMAIL_INBOX_TAB_IDS,
-  EMAIL_TAB_LABELS,
-  isEmailInboxTab,
-} from './constants';
+import { canSearchEmailTab } from './constants';
 import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import { createEmailMobileSearch } from './primitives/create-email-mobile-search';
+import type { EmailDataSource } from './queries/use-email-query';
+import { useEmailSearchValues } from './queries/use-email-search-values';
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
+import { useEmailSearchScopeAvailability } from './tab-availability';
 import { emailTour } from './tour';
 import type { EmailViewStateOptions } from './types';
 import { useEmailSearchHotkeys } from './use-email-search-hotkeys';
@@ -71,15 +68,15 @@ import {
   READING_PANE_LIST_WIDTH,
   useReadingPaneListWidth,
 } from './use-reading-pane-list-width';
-import { useVisibleEmailTab } from './use-visible-email-tab';
 import {
   EmailSavedViewUnavailable,
   EmailSavedViewWarning,
 } from './views/email-saved-views';
 import {
-  EmailMobileRecentSearches,
   EmailMobileSearchField,
+  EmailMobileSearchSuggestions,
 } from './views/mobile/email-search';
+import { EmailMobileTabs } from './views/mobile/email-tabs';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -118,6 +115,22 @@ function EmailListFallback() {
   );
 }
 
+/** The list shows the typed search's own answer, not rows kept from before. */
+const answersTypedSearch = (source: EmailDataSource) =>
+  !source.isLoading() &&
+  !source.isFetching() &&
+  !(source.showsPreviousRows?.() ?? false);
+
+const showsTypedSearchResults = (source: EmailDataSource) =>
+  answersTypedSearch(source) &&
+  source.items().some((row) => row.kind === 'entity');
+
+const isTypedSearchResult = (source: EmailDataSource, threadId: string) =>
+  !(source.showsPreviousRows?.() ?? false) &&
+  source
+    .items()
+    .some((row) => row.kind === 'entity' && row.entity.id === threadId);
+
 function DesktopEmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
@@ -127,19 +140,26 @@ function DesktopEmailPanes(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, setState, list, source } = useEmailView();
+  const { state, setState, list, source, openedFromList } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const recentSearches = createEmailSearchSuggestions({
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
+    hasResults: () => showsTypedSearchResults(source),
+    openedThread: openedFromList,
+    isResult: (threadId) => isTypedSearchResult(source, threadId),
+    scopeAvailable: useEmailSearchScopeAvailability(),
+    people: () => searchValues.people(),
+    labels: () => searchValues.labels(),
   });
+  const searchValues = useEmailSearchValues(
+    () => state.search,
+    () => wideSearchFlag().enabled && recentSearches.focused()
+  );
   const pickedResultsArrived = () =>
-    recentSearches.awaitsPickedResults() &&
-    !source.isLoading() &&
-    !source.isFetching() &&
-    !(source.showsPreviousRows?.() ?? false);
+    recentSearches.awaitsPickedResults() && answersTypedSearch(source);
   // The list is driven imperatively, so the arrival is an effect.
   createEffect(
     on(pickedResultsArrived, (arrived) => {
@@ -170,11 +190,12 @@ function DesktopEmailPanes(props: {
       />
       <Show when={searchSuggestions()}>
         {(suggestions) => (
-          <EmailRecentSearches
+          <EmailSearchSuggestionList
             suggestions={suggestions()}
             onPick={(index) => {
+              const editsQuery = suggestions().editsQuery?.(index) ?? false;
               suggestions().pick(index);
-              props.focusSearchResults();
+              if (!editsQuery) props.focusSearchResults();
             }}
           />
         )}
@@ -317,9 +338,8 @@ function EmailLayout(props: {
   );
 }
 
-function EmailMobileLayout(props: ParentProps) {
-  const isVisible = useVisibleEmailTab();
-  const { state, setState, setTab, tagViewTitle, savedViewActive } =
+export function EmailMobileLayout(props: ParentProps) {
+  const { state, setState, registerSearchField, source, openedFromList } =
     useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
@@ -327,7 +347,17 @@ function EmailMobileLayout(props: ParentProps) {
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
+    hasResults: () => showsTypedSearchResults(source),
+    openedThread: openedFromList,
+    isResult: (threadId) => isTypedSearchResult(source, threadId),
+    scopeAvailable: useEmailSearchScopeAvailability(),
+    people: () => searchValues.people(),
+    labels: () => searchValues.labels(),
   });
+  const searchValues = useEmailSearchValues(
+    () => state.search,
+    () => wideSearchFlag().enabled && suggestions.focused()
+  );
   let searchInput: HTMLInputElement | undefined;
   const mobileSearch = createEmailMobileSearch({
     available: () => wideSearchFlag().enabled && canSearchEmailTab(state.tab),
@@ -343,6 +373,7 @@ function EmailMobileLayout(props: ParentProps) {
     triggerFocusInput(() => searchInput);
   };
   const closeSearch = mobileSearch.close;
+  registerSearchField({ open: searching, close: closeSearch });
   useAndroidBackNavigation(() => {
     if (!searching()) return false;
 
@@ -354,58 +385,28 @@ function EmailMobileLayout(props: ParentProps) {
   // the header's height again.
   const listsRecent = () => searching() && suggestions.listed().length > 0;
 
-  const inboxSelected = () => isEmailInboxTab(state.tab);
-  const tabs = () =>
-    inboxSelected()
-      ? EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
-          value: id,
-          label: EMAIL_TAB_LABELS[id],
-        }))
-      : [];
-
   return (
     <MobileListLayout
       header={
         <Show
           when={searching()}
           fallback={
-            <PillTabs
-              scrollable
-              class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
-              contentClass="px-(--mobile-chrome-gutter)"
-              leading={
-                <>
-                  <ViewSidebar.Toggle action="expand" presentation="pill" />
-                  <Show
-                    when={
-                      wideSearchFlag().enabled && canSearchEmailTab(state.tab)
-                    }
-                  >
-                    <PillButton
-                      active={false}
-                      iconOnly
-                      aria-label={t('emailViews.searchEmail')}
-                      onClick={openSearch}
-                    >
-                      <SearchIcon class="size-5" />
-                    </PillButton>
-                  </Show>
-                  <EmailFilterDrawer />
-                </>
-              }
-              items={tabs()}
-              trailing={
-                <Show when={!inboxSelected()}>
-                  <HeaderIsland>
-                    <span class="truncate text-sm font-medium">
-                      {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
-                    </span>
-                  </HeaderIsland>
-                </Show>
-              }
-              value={savedViewActive() ? undefined : state.tab}
-              onChange={setTab}
-            />
+            <div class="flex min-w-0 items-center gap-2">
+              <EmailMobileTabs />
+              <Show
+                when={wideSearchFlag().enabled && canSearchEmailTab(state.tab)}
+              >
+                <PillButton
+                  active={false}
+                  iconOnly
+                  aria-label={t('emailViews.searchEmail')}
+                  onClick={openSearch}
+                >
+                  <SearchIcon class="size-5" />
+                </PillButton>
+              </Show>
+              <EmailFilterDrawer />
+            </div>
           }
         >
           <EmailMobileSearchField
@@ -421,7 +422,7 @@ function EmailMobileLayout(props: ParentProps) {
       }
     >
       <Show when={searching()}>
-        <EmailMobileRecentSearches
+        <EmailMobileSearchSuggestions
           suggestions={suggestions}
           onPicked={() => searchInput?.blur()}
         />
@@ -444,6 +445,7 @@ function EmailViewRoot() {
   const {
     state,
     setTab,
+    searchOpen,
     selectedThread,
     composing,
     list: listController,
@@ -451,6 +453,9 @@ function EmailViewRoot() {
     setReadingPane,
     savedViews,
     savedViewScope,
+    savedViewCreation,
+    savedViewsList,
+    discardNewSavedView,
   } = useEmailView();
   const savedViewKey = () => savedViewScope()?.id;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -484,8 +489,7 @@ function EmailViewRoot() {
       return selectedThread() === undefined && !composing();
     },
     hasSelection: () => listController.selection.count() > 0,
-    hasSearch: () =>
-      canSearchEmailTab(state.tab) && state.search.trim().length > 0,
+    hasSearch: searchOpen,
   });
 
   const savedViewKind = () => savedViews?.view().kind;
@@ -518,6 +522,14 @@ function EmailViewRoot() {
   return (
     <StaticMarkdownContext>
       <SplitPanel.Root>
+        <Show when={savedViewCreation && savedViewsList}>
+          <SavedViewDraftHost
+            creation={savedViewCreation!}
+            refresh={savedViewsList!.refresh}
+            discard={discardNewSavedView}
+            selection={{ mail: ['tab', 'savedView'] }}
+          />
+        </Show>
         <SplitPanel.Body>
           <EmailLayout
             list={list()}

@@ -22,6 +22,8 @@ read it before changing behaviour.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, purchase_offers, list, power, retry, cancel, release). `purchase_offers` is the buy dialog's listing: one `Billing::purchase_terms` call for every size (today's prorated charge, renewal date, card), never made on the purchase path.
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
+- `src/domain/size.rs`: `SIZE_SPECS`, every tier's vCPUs, memory, root and
+  `/home` disks and units written out; tests pin them to the fleet's derivations.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
   macrod presence); wired in `services/agent_harness_service/src/computers.rs`.
 - `src/inbound/axum_router.rs`: `/team/computers*`, mounted by
@@ -35,7 +37,8 @@ read it before changing behaviour.
   the operator drives: a `FirecrackerFleet` per host row with an endpoint,
   or the local Docker home host).
 - `src/domain/operator/`: `hosts.rs` (home registration, per-host fleets,
-  reconcile) and `effects.rs` (the effect pass: each host's effects in lease
+  reconcile, and the guest image from the same fleet lookup for tracing)
+  and `effects.rs` (the effect pass: each host's effects in lease
   order, `max_concurrent_starts` at a time).
 - `src/domain/overcommit.rs` (+ `overcommit/`): pure per-host capacity,
   admission (allocation + fresh memory report + pending starts), relief
@@ -61,6 +64,21 @@ read it before changing behaviour.
   and applies `Event::Moved` in one transaction. While a cutover or rollback
   holds a computer, reconcile skips it and its fleet effects wait; an open
   move counts the computer on both hosts in the held-capacity CTEs.
+- `src/domain/image_upgrade.rs` + `src/domain/operator/image_upgrade.rs`: an
+  operator's image upgrade of named computers (stage on their hosts, then a
+  fresh system disk per idle computer, a batch at a time; rollback and pause
+  when macrod does not come back), advanced by the upgrade pass (dev only,
+  `agent_harness_service`). One unfinished upgrade at a time, leased by one
+  replica; computers under way are held like a move's. Recorded by the
+  `image-upgrade` binary (`src/bin/image_upgrade.rs`, feature
+  `image-upgrade-cli`), which the Firecracker image rollout workflow runs.
+
+- `src/domain/runtime_update.rs` and `src/domain/operator/runtime_update.rs`:
+  the dev-only single-teammate runtime update, queued by the
+  `agent-runtime-update` CLI. The Postgres lease holds the computer against
+  moves and image upgrades while the host's fixed guest updater runs.
+  Repeated failed settlement probes past the deadline leave a recovery
+  hold that a successful image upgrade clears.
 
 ## Scope
 
@@ -125,6 +143,8 @@ read it before changing behaviour.
   `Failure::AgentNotStarted`; a macrod that declared no `apply-agent`
   capability when it dialed applies `Event::MacrodConnectedWithoutAgentHandOff`
   instead, which fails it at once with `Failure::AgentUnsupported` and pages).
+  An `AgentOnline` after the deadline recovers the computer (`Running`,
+  failure cleared); see the recovery rules in the architecture doc.
   A give-up during the first start counts in `first_start_failures`, except
   `Failure::HostLost` (a host outage is not the computer's failure); the first
   leaves the computer for a team retry

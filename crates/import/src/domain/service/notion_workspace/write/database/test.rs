@@ -25,6 +25,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn source_item(title: &str) -> WriteItem {
     WriteItem {
+        dependency_of: Vec::new(),
         import_id: Uuid::from_u128(1),
         parent: None,
         notion_id: id('e'),
@@ -38,63 +39,45 @@ fn source_item(title: &str) -> WriteItem {
     }
 }
 
-/// What earlier attempts recorded, kept the way the ledger keeps it: the
-/// first record of an object wins.
-#[derive(Default)]
-struct FakeStore(Mutex<Vec<WrittenObject>>);
-
-impl WrittenObjects for FakeStore {
-    async fn written(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        import_ids: &[Uuid],
-    ) -> crate::domain::ports::Result<Vec<WrittenObject>> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|object| import_ids.contains(&object.import_id))
-            .cloned()
-            .collect())
-    }
-
-    async fn record_written(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        objects: &[WrittenObject],
-    ) -> crate::domain::ports::Result<Vec<WrittenObject>> {
-        let mut stored = self.0.lock().unwrap();
-        Ok(objects
-            .iter()
-            .map(|object| {
-                let existing = stored.iter().find(|known| {
-                    known.import_id == object.import_id
-                        && known.kind == object.kind
-                        && known.object == object.object
-                });
-                match existing {
-                    Some(known) => known.clone(),
-                    None => {
-                        stored.push(object.clone());
-                        object.clone()
-                    }
-                }
-            })
-            .collect())
-    }
-}
+mod store;
+use store::FakeStore;
 
 /// A Notion workspace holding one data source with two rows.
 struct FakeNotion {
+    views: Vec<import_notion::domain::views::NotionView>,
     source: NotionDataSource,
     rows: Vec<NotionPage>,
     bodies: HashMap<NotionId, String>,
     /// How many page bodies were read.
     fetched: Mutex<usize>,
+    queries: Mutex<usize>,
+    scan_stop: Option<std::sync::Arc<Cancel>>,
+    paginated: bool,
 }
 
 impl NotionApi for FakeNotion {
+    async fn list_views(
+        &self,
+        _scope: &import_notion::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        Ok(Paged {
+            results: self.views.iter().map(|view| view.id.clone()).collect(),
+            next_cursor: None,
+        })
+    }
+
+    async fn retrieve_view(
+        &self,
+        id: &NotionId,
+    ) -> std::result::Result<import_notion::domain::views::NotionView, NotionError> {
+        self.views
+            .iter()
+            .find(|view| &view.id == id)
+            .cloned()
+            .ok_or(NotionError::NotFound)
+    }
+
     async fn search(
         &self,
         _object: SearchObject,
@@ -126,17 +109,27 @@ impl NotionApi for FakeNotion {
         &self,
         _database: &NotionId,
     ) -> std::result::Result<Vec<NotionId>, NotionError> {
-        unimplemented!("writing never expands databases")
+        Ok(vec![self.source.id.clone()])
     }
 
     async fn query_data_source(
         &self,
         _id: &NotionId,
-        _cursor: Option<String>,
+        cursor: Option<String>,
     ) -> std::result::Result<RowsPage, NotionError> {
+        *self.queries.lock().unwrap() += 1;
+        if let Some(cancel) = &self.scan_stop {
+            cancel.stop();
+        }
         Ok(RowsPage {
             rows: self.rows.clone(),
-            next: RowsNext::End,
+            next: if self.paginated && cursor.is_none() {
+                RowsNext::More {
+                    cursor: "next".into(),
+                }
+            } else {
+                RowsNext::End
+            },
         })
     }
 
@@ -155,6 +148,8 @@ struct WrittenDocument {
     markdown: String,
     links: NotionLinks,
     dates: Option<SourceDates>,
+    folder: Option<Uuid>,
+    visibility: crate::domain::ports::ImportVisibility,
 }
 
 /// Records what the import asks Macro to create. `fail_at_batch` makes that
@@ -162,7 +157,16 @@ struct WrittenDocument {
 /// leave it.
 #[derive(Default)]
 struct FakeWriter {
+    reject_assignee_replay: bool,
+    reapplied_tasks: Mutex<Vec<(Uuid, String, ImportVisibility)>>,
+    task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
+    saved_views: Mutex<HashSet<models_databases::views::ViewId>>,
+    view_names: Mutex<Vec<String>>,
+    fail_after_view: Mutex<bool>,
     databases: Mutex<usize>,
+    tasks: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
+    task_folders: Mutex<Vec<Option<Uuid>>>,
+    folder_visibilities: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
     folders: Mutex<Vec<(String, Option<Uuid>)>>,
     documents: Mutex<Vec<WrittenDocument>>,
     batches: Mutex<Vec<Vec<DatabaseOp>>>,
@@ -188,7 +192,7 @@ impl WorkspaceWriter for FakeWriter {
         _: Uuid,
         _: &str,
         _: &str,
-        _: bool,
+        _visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
         unreachable!("Notion-only test writer")
     }
@@ -199,8 +203,8 @@ impl WorkspaceWriter for FakeWriter {
         _: &str,
         _: &str,
         _: &ImportedTaskProperties,
-        _: bool,
-    ) -> anyhow::Result<String> {
+        _visibility: crate::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
         unreachable!("Notion-only test writer")
     }
     async fn link_tracker_task(
@@ -217,10 +221,28 @@ impl WorkspaceWriter for FakeWriter {
         _user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
+        self.folder_visibilities.lock().unwrap().push(visibility);
         let mut folders = self.folders.lock().unwrap();
         folders.push((name.to_string(), parent));
         Ok(Uuid::from_u128(900 + folders.len() as u128))
+    }
+
+    async fn folder_has_explicit_grant(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
+    async fn folder_has_team_edit_grant(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
     }
 
     async fn folder_exists(
@@ -248,9 +270,10 @@ impl WorkspaceWriter for FakeWriter {
         markdown: &str,
         links: &NotionLinks,
         _properties: &ImportedDocumentProperties,
-        _folder: Option<Uuid>,
+        folder: Option<Uuid>,
         dates: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
+        visibility: crate::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportDocument> {
         let mut documents = self.documents.lock().unwrap();
         // Like Macro: a document id already in use is the earlier attempt's.
         if !documents.iter().any(|document| document.id == id) {
@@ -260,29 +283,127 @@ impl WorkspaceWriter for FakeWriter {
                 markdown: markdown.to_string(),
                 links: links.clone(),
                 dates,
+                folder,
+                visibility,
             });
         }
-        Ok(id.to_string())
+        Ok(crate::domain::ports::CreatedImportDocument {
+            id: id.to_string(),
+            link_revision: None,
+        })
+    }
+
+    async fn owns_notion_link_target(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: crate::domain::ports::ImportedTarget,
+    ) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+
+    async fn inspect_import_links(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: Uuid,
+    ) -> anyhow::Result<Option<crate::domain::ports::ImportedLinkBody>> {
+        Ok(None)
+    }
+
+    async fn rewrite_import_links(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: crate::domain::ports::ImportedLinkBody,
+        _: &[(
+            crate::domain::ports::NotionLinkReference,
+            crate::domain::ports::NotionLinkDestination,
+        )],
+    ) -> anyhow::Result<usize> {
+        Ok(0)
+    }
+
+    async fn reapply_task_assignee(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        id: Uuid,
+        email: &str,
+        visibility: ImportVisibility,
+    ) -> anyhow::Result<Option<crate::domain::ports::TaskImportNoticeReason>> {
+        self.reapplied_tasks
+            .lock()
+            .unwrap()
+            .push((id, email.to_string(), visibility));
+        anyhow::ensure!(!self.reject_assignee_replay, "assignee update failed");
+        Ok(None)
     }
 
     async fn create_task(
         &self,
         _user: &MacroUserIdStr<'static>,
-        _id: Uuid,
+        id: Uuid,
         _name: &str,
         _markdown: &str,
         _links: &NotionLinks,
         _properties: &ImportedTaskProperties,
-        _folder: Option<Uuid>,
+        folder: Option<Uuid>,
         _dates: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
-        unimplemented!("a copied database writes no tasks")
+        visibility: crate::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
+        self.tasks.lock().unwrap().push(visibility);
+        self.task_folders.lock().unwrap().push(folder);
+        Ok(crate::domain::ports::CreatedImportTask {
+            id: id.to_string(),
+            notice: self.task_notice,
+        })
+    }
+
+    async fn database_access(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+    async fn database(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: TableId,
+    ) -> anyhow::Result<crate::domain::ports::ImportedDatabase> {
+        unreachable!()
+    }
+    async fn ensure_database_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        database: Uuid,
+        table: TableId,
+        id: models_databases::views::ViewId,
+        view: models_databases::views::NewView,
+    ) -> anyhow::Result<()> {
+        if self.saved_views.lock().unwrap().contains(&id) {
+            return Ok(());
+        }
+        self.view_names.lock().unwrap().push(view.name.clone());
+        self.apply_database_ops(
+            user,
+            database,
+            vec![DatabaseOp::View {
+                table,
+                view: id,
+                change: models_databases::ViewChange::Create { view },
+            }],
+        )
+        .await?;
+        self.saved_views.lock().unwrap().insert(id);
+        if std::mem::take(&mut *self.fail_after_view.lock().unwrap()) {
+            anyhow::bail!("lost view response");
+        }
+        Ok(())
     }
 
     async fn create_database(
         &self,
         _user: &MacroUserIdStr<'static>,
+        _id: Uuid,
         _name: &str,
+        _folder: Option<Uuid>,
     ) -> anyhow::Result<NewDatabase> {
         *self.databases.lock().unwrap() += 1;
         Ok(NewDatabase {
@@ -359,7 +480,11 @@ fn notion_row(hex: char, title: &str, properties: Vec<(&str, NotionValue)>) -> N
 #[tokio::test]
 async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pending_relations() {
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -397,7 +522,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
                 '1',
                 "Login fails",
                 vec![
-                    ("Severity", NotionValue::Option("High".to_string())),
+                    ("Severity", NotionValue::Option("High".into())),
                     ("Project", NotionValue::Relation(vec![id('8')])),
                 ],
             ),
@@ -410,6 +535,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
     let writer = FakeWriter::default();
     let folder = Uuid::from_u128(42);
     let links = NotionLinks {
+        databases: Vec::new(),
         pages: [(
             id('7'),
             NotionPageLink {
@@ -436,10 +562,23 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
         &tokio::sync::RwLock::new(links.clone()),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
 
+    assert!(
+        writer
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|doc| doc.visibility == crate::domain::ports::ImportVisibility::Personal)
+    );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![crate::domain::ports::ImportVisibility::Personal]
+    );
     let batches = writer.batches.lock().unwrap();
     // Schema first: rename the starter table and title and add the select;
     // the relation waits, and the Page column comes once a row has content.
@@ -512,7 +651,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
         }),
         "a row body keeps its Notion page's dates"
     );
-    // The Page column is created first in the table...
+    // The text title stays first so relation chips can name the target row.
     let DatabaseOp::Column {
         column: page_column,
         change:
@@ -540,8 +679,8 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
     else {
         panic!("expected the column order, got {:?}", batches[2]);
     };
-    assert_eq!(order[0], *page_column);
-    assert_eq!(order[1], ColumnId::from_uuid(TITLE_COLUMN));
+    assert_eq!(order[0], ColumnId::from_uuid(TITLE_COLUMN));
+    assert_eq!(order[1], *page_column);
     assert_eq!(order.len(), 3);
     // ...then filled with the row's document.
     let DatabaseOp::Rows {
@@ -583,7 +722,11 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
 #[tokio::test]
 async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -601,7 +744,8 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
             .collect(),
     };
     let writer = FakeWriter::default();
-    let source_item = source_item("Bugs");
+    let mut source_item = source_item("Bugs");
+    source_item.shared = true;
     let store = FakeStore::default();
     let user = user();
     let progress = Progress::new(&store, &user, source_item.import_id, &[]);
@@ -617,10 +761,23 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
 
+    assert!(
+        writer
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|doc| doc.visibility == crate::domain::ports::ImportVisibility::Shared)
+    );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![crate::domain::ports::ImportVisibility::Shared]
+    );
     assert_eq!(
         writer.folders.lock().unwrap().as_slice(),
         [("Bugs pages".to_string(), Some(Uuid::from_u128(42)))]
@@ -637,7 +794,11 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
 #[tokio::test]
 async fn a_cancelled_import_stops_before_writing_rows() {
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -668,16 +829,20 @@ async fn a_cancelled_import_stops_before_writing_rows() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &cancel,
+        None,
     )
     .await;
 
     assert_eq!(outcome.unwrap_err().to_string(), "Cancelled");
     let batches = writer.batches.lock().unwrap();
-    assert_eq!(batches.len(), 1, "only the schema was written");
     assert!(
-        !batches[0]
-            .iter()
-            .any(|op| matches!(op, DatabaseOp::Rows { .. }))
+        batches.is_empty(),
+        "an already cancelled reservation writes no schema or rows"
+    );
+    assert_eq!(
+        *writer.databases.lock().unwrap(),
+        0,
+        "no database is created after cancellation"
     );
 }
 
@@ -699,7 +864,11 @@ fn the_page_column_never_takes_a_name_the_data_source_already_uses() {
 #[tokio::test]
 async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -728,6 +897,7 @@ async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -769,28 +939,43 @@ fn inserted(batches: &[Vec<DatabaseOp>]) -> usize {
 }
 
 #[tokio::test]
-async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates() {
-    // 600 rows: two insert batches, the second lost with its process.
+async fn date_ranges_are_planned_before_schema_is_written() {
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
-            title: "Accounts".to_string(),
+            title: "Schedule".into(),
             database_parent: NotionParent::Workspace,
             in_trash: false,
-            properties: Vec::new(),
+            properties: vec![NotionPropertySchema {
+                id: "dates".into(),
+                name: "Dates".into(),
+                kind: NotionPropertyKind::Date,
+            }],
         },
-        rows: (1..=600).map(numbered_row).collect(),
+        rows: vec![notion_row(
+            '1',
+            "Release",
+            vec![(
+                "Dates",
+                NotionValue::Date {
+                    start: "2026-11-17".into(),
+                    end: Some("2026-11-19".into()),
+                },
+            )],
+        )],
         bodies: HashMap::new(),
     };
     let writer = FakeWriter::default();
-    *writer.fail_at_batch.lock().unwrap() = Some(2);
     let store = FakeStore::default();
     let user = user();
-    let item = source_item("Accounts");
-
-    let first = write_database(
+    let item = source_item("Schedule");
+    write_database(
         &notion,
         &writer,
         &user,
@@ -801,136 +986,37 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
-    )
-    .await;
-    assert_eq!(first.unwrap_err().to_string(), "the process stopped");
-    assert_eq!(inserted(&writer.batches.lock().unwrap()), 500);
-
-    // Another process resumes from what was recorded.
-    *writer.fail_at_batch.lock().unwrap() = None;
-    let recorded = store.written(&user, &[item.import_id]).await.unwrap();
-    let written = write_database(
-        &notion,
-        &writer,
-        &user,
-        &item,
-        Uuid::from_u128(42),
-        false,
-        &PeopleMap::new(),
-        &tokio::sync::RwLock::new(NotionLinks::default()),
-        &Progress::new(&store, &user, item.import_id, &recorded),
-        &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
-
-    assert_eq!(*writer.databases.lock().unwrap(), 1, "one database");
-    let batches = writer.batches.lock().unwrap();
-    let schemas = batches
-        .iter()
-        .filter(|batch| {
-            batch.iter().any(|op| {
-                matches!(
-                    op,
-                    DatabaseOp::Table {
-                        change: TableChange::Rename { .. },
+    assert!(
+        writer
+            .batches
+            .lock()
+            .unwrap()
+            .iter()
+            .flatten()
+            .any(|op| matches!(
+                op,
+                DatabaseOp::Column {
+                    change: ColumnChange::Create {
+                        definition: NewColumn::New {
+                            kind: ColumnKind::DateRange,
+                            ..
+                        },
                         ..
-                    }
-                )
-            })
-        })
-        .count();
-    assert_eq!(schemas, 1, "the schema is written once");
-    assert_eq!(inserted(&batches), 600, "every row once");
-    assert_eq!(written.rows.len(), 600);
-    let distinct: HashSet<RowId> = written.rows.values().map(|row| row.row).collect();
-    assert_eq!(distinct.len(), 600);
-    assert_eq!(written.database_id, DATABASE);
-}
-
-#[tokio::test]
-async fn resumed_row_bodies_are_neither_read_nor_created_again() {
-    let notion = FakeNotion {
-        fetched: Mutex::new(0),
-        source: NotionDataSource {
-            id: id('e'),
-            database_id: id('f'),
-            title: "Bugs".to_string(),
-            database_parent: NotionParent::Workspace,
-            in_trash: false,
-            properties: Vec::new(),
-        },
-        rows: vec![
-            notion_row('1', "Login fails", vec![]),
-            notion_row('2', "Typo", vec![]),
-        ],
-        bodies: [
-            (id('1'), "Steps".to_string()),
-            (id('2'), "Where".to_string()),
-        ]
-        .into_iter()
-        .collect(),
-    };
-    let writer = FakeWriter::default();
-    // Schema, rows, then the Page column, which the stop takes down.
-    *writer.fail_at_batch.lock().unwrap() = Some(2);
-    let store = FakeStore::default();
-    let user = user();
-    let item = source_item("Bugs");
-
-    write_database(
-        &notion,
-        &writer,
-        &user,
-        &item,
-        Uuid::from_u128(42),
-        false,
-        &PeopleMap::new(),
-        &tokio::sync::RwLock::new(NotionLinks::default()),
-        &Progress::new(&store, &user, item.import_id, &[]),
-        &Cancel::default(),
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(*notion.fetched.lock().unwrap(), 2);
-    assert_eq!(writer.documents.lock().unwrap().len(), 2);
-
-    *writer.fail_at_batch.lock().unwrap() = None;
-    let recorded = store.written(&user, &[item.import_id]).await.unwrap();
-    write_database(
-        &notion,
-        &writer,
-        &user,
-        &item,
-        Uuid::from_u128(42),
-        false,
-        &PeopleMap::new(),
-        &tokio::sync::RwLock::new(NotionLinks::default()),
-        &Progress::new(&store, &user, item.import_id, &recorded),
-        &Cancel::default(),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(*notion.fetched.lock().unwrap(), 2, "no body is read twice");
-    assert_eq!(writer.documents.lock().unwrap().len(), 2);
-    assert_eq!(
-        writer.folders.lock().unwrap().len(),
-        1,
-        "the bodies folder is reused"
+                    },
+                    ..
+                }
+            )),
+        "an endpoint must survive schema creation"
     );
-    let batches = writer.batches.lock().unwrap();
-    assert_eq!(inserted(&batches), 2);
-    // The Page column, then its two links.
-    let DatabaseOp::Rows {
-        change:
-            RowsChange::Update {
-                changes: RowChanges::PerRow { rows: linked },
-            },
-        ..
-    } = &batches[batches.len() - 1][0]
-    else {
-        panic!("expected the Page links, got {:?}", batches.last());
-    };
-    assert_eq!(linked.len(), 2);
 }
+
+mod folders;
+mod resume;
+
+mod review;
+
+mod fable;

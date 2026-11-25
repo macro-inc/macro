@@ -3,7 +3,10 @@ import type {
   SettingsTabGroup,
   SettingsTabItem,
 } from '@core/constant/settingsTabsConfig';
-import { NOTIFICATION_EVENT_GROUPS } from '../../notifications/notification-event-catalog';
+import {
+  AGENT_PINGS_EVENT_TYPE,
+  NOTIFICATION_EVENT_GROUPS,
+} from '../../notifications/notification-event-catalog';
 import { settingsTarget } from './settings-target';
 
 type Setting = {
@@ -13,6 +16,8 @@ type Setting = {
   keywords: string;
   /** Listed only with `enable-macro-computers` on. */
   macroComputers?: true;
+  /** The notification event this setting toggles. */
+  eventType?: string;
 };
 export type SettingsSearchResult = Setting & {
   id: string;
@@ -62,6 +67,7 @@ const SETTINGS: Setting[] = [
       target: group.label,
       keywords: `${group.label} ${event.description}`,
       macroComputers: event.macroComputers,
+      eventType: event.type,
     }))
   ),
   {
@@ -348,14 +354,28 @@ const SETTINGS: Setting[] = [
     keywords: 'agent manager token access revoke',
   },
   {
-    tab: 'Desktop App',
-    title: 'Desktop app version and download',
-    keywords: 'download mac macos linux version latest release updated',
+    tab: 'Downloads',
+    title: 'Download the desktop app',
+    target: 'Desktop app',
+    keywords: 'download install mac macos linux computer latest release',
   },
   {
-    tab: 'Mobile App',
-    title: 'Mobile app version and download',
-    keywords: 'download phone ios android qr code version build bundle',
+    tab: 'Downloads',
+    title: 'Get the mobile app',
+    target: 'Mobile app',
+    keywords: 'download phone ios android iphone qr code app store play',
+  },
+  {
+    tab: 'Native App',
+    title: 'Version and build',
+    target: 'About',
+    keywords: 'installed version build date bundle about',
+  },
+  {
+    tab: 'Native App',
+    title: 'App updates',
+    target: 'Updates',
+    keywords: 'update upgrade check download install restart',
   },
 ];
 
@@ -411,6 +431,10 @@ export function searchSettings(
     emailRowStyle?: boolean;
     outlook?: boolean;
     macroComputers?: boolean;
+    /** The desktop app's Downloads page has no installers to find. */
+    desktopDownload?: boolean;
+    /** Whether search lists the Agent pings notification setting. */
+    agentNotifications?: boolean;
   } = {}
 ): SettingsSearchResult[] {
   const tokens = words(query);
@@ -433,7 +457,11 @@ export function searchSettings(
         (options.emailRowStyle !== false ||
           setting.title !== 'Email row style') &&
         (options.outlook !== false || setting.title !== 'Outlook') &&
-        (options.macroComputers !== false || !setting.macroComputers)
+        (options.macroComputers !== false || !setting.macroComputers) &&
+        (options.desktopDownload !== false ||
+          setting.title !== 'Download the desktop app') &&
+        (options.agentNotifications !== false ||
+          setting.eventType !== AGENT_PINGS_EVENT_TYPE)
     ).map((setting) => ({
       ...setting,
       target: settingsTarget(setting.target),

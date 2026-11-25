@@ -51,7 +51,18 @@ pub async fn seed<S: Storage>(storage: &mut S, count: usize) {
                     .map(|index| {
                         let user = format!("macro|p{index:06}@example.com");
                         let key = contact_key(&user);
-                        let record = contact(&user, key.id().unwrap());
+                        let mut record = contact(&user, key.id().unwrap());
+                        // A few teammates, then larger lists. Without a list
+                        // priority these change no order.
+                        let list = match index {
+                            0..20 => "teammates",
+                            20..5_000 => "interacted",
+                            _ => "gmail",
+                        };
+                        record.fields.insert(
+                            "lists".into(),
+                            CacheValue::List(vec![CacheValue::String(list.into())]),
+                        );
                         (key, record)
                     })
                     .collect(),
@@ -111,6 +122,8 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         limit: 1,
         now_ms: 2_000,
         cursor: None,
+        list_priority: vec![],
+        only_listed: false,
     };
     assert!(
         engine.search_people(&request).await.is_err(),

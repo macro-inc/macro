@@ -3,6 +3,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { NotificationStack } from '@notifications';
 import {
   getNotificationAgentSender,
+  getNotificationUserSenderId,
   getUniqueAgentSenders,
   type NotificationAgentSender,
 } from '@notifications/notification-sender';
@@ -55,7 +56,8 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
 
   const senderIds = () => {
     if (props.notification?.sender_id) {
-      return [props.notification.sender_id];
+      const senderId = getNotificationUserSenderId(props.notification);
+      return senderId ? [senderId] : [];
     }
     if (props.stack) {
       return getUniqueSenderIds(props.stack.notifications);

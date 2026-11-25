@@ -2,7 +2,7 @@
 cd ROOT
 printf '%s\n' "$*" >> calls
 case "$1:$2" in
-  tab:create)
+  workspace:create)
     printf '{"result":{"root_pane":{"tab_id":"w1:t1","pane_id":"w1:p1"}}}\n' ;;
   agent:start) touch started ;;
   agent:get)

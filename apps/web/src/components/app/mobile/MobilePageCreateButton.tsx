@@ -17,7 +17,8 @@ import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import DocumentIcon from '@icon/system/regular/file-text.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
-import { Show } from 'solid-js';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+import { Match, Show, Switch } from 'solid-js';
 import { MobileCreateButton } from './MobileCreateButton';
 import {
   MobileCreateMenu,
@@ -25,10 +26,7 @@ import {
 } from './MobileCreateMenu';
 import type { MobileNavViewId } from './mobile-nav-views';
 import { mobilePageCreateBlock } from './mobile-page-create-action';
-import {
-  useForegroundMobileView,
-  useForegroundProject,
-} from './use-mobile-nav';
+import { useForegroundMobileView } from './use-mobile-nav';
 
 const QUICK_CREATE_VIEWS = [
   { view: 'mail', icon: EmailIcon },
@@ -48,6 +46,7 @@ const NEW_ITEM_LABELS: Partial<Record<MobileNavViewId, TranslationKey>> = {
   channels: 'mobile.newMessage',
   documents: 'mobile.newDocument',
   tasks: 'mobile.newTask',
+  projects: 'viewMenus.newProject',
   companies: 'mobile.newCompany',
 };
 
@@ -59,7 +58,6 @@ type PageCreateAction = Pick<
 /** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
-  const foregroundProject = useForegroundProject();
   const createBlocks = useCreateMenuBlocks();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
@@ -68,6 +66,7 @@ export function MobilePageCreateButton() {
     view: MobileNavViewId | undefined
   ): PageCreateAction | undefined => {
     if (view === 'companies') {
+      if (!crmAccessAllowed()) return;
       return { label: t('mobile.company'), onSelect: openCreateCompanyModal };
     }
     if (view === 'calendar') {
@@ -136,34 +135,24 @@ export function MobilePageCreateButton() {
     return viewAction() && key ? t(key) : t('mobile.new');
   };
 
-  // A project's own pill creates its tasks in the project; this one would not,
-  // so it stays out of the slot while the project's tabs load.
-  const shown = () =>
-    foregroundView() !== 'agents' &&
-    !foregroundProject() &&
-    !virtualKeyboardVisible();
-
   return (
-    <Show when={shown()}>
-      <Show
-        when={foregroundView() === 'home'}
+    <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
+      <Switch
         fallback={
-          <Show
-            when={foregroundView() === 'calendar'}
-            fallback={
-              <MobileCreateButton
-                ariaLabel={actionAriaLabel()}
-                label={action().label}
-                onClick={() => action().onSelect()}
-              />
-            }
-          >
-            <MobileCreateMenu items={calendarActions()} />
-          </Show>
+          <MobileCreateButton
+            ariaLabel={actionAriaLabel()}
+            label={action().label}
+            onClick={() => action().onSelect()}
+          />
         }
       >
-        <MobileCreateMenu items={quickActions()} />
-      </Show>
+        <Match when={foregroundView() === 'home'}>
+          <MobileCreateMenu items={quickActions()} />
+        </Match>
+        <Match when={foregroundView() === 'calendar'}>
+          <MobileCreateMenu items={calendarActions()} />
+        </Match>
+      </Switch>
     </Show>
   );
 }

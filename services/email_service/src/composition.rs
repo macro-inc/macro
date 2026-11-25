@@ -7,13 +7,41 @@ use crate::outbound::{
     email_api::{GmailApi, MicrosoftCredentialsClient},
     inbox_health::{PgInboxHealth, ProviderInboxHealth},
 };
-use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
+use contacts::{
+    domain::{
+        list_writes::{ContactListWrites, ListWritesGate},
+        service::SqsContactsIngress,
+    },
+    outbound::ingress::SqsContactsQueue,
+};
 use email::{
     domain::mailbox::{credentials::MailboxCredentials, health::InboxHealthService},
     outbound::mailbox_pg::PgMailboxSync,
 };
+use feature_flags::outbound::posthog::PostHogFeatureFlags;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use tokio_util::task::TaskTracker;
+
+/// The contacts queue every email path publishes through: legacy messages
+/// always, list-aware ones only once `contacts-list-writes` is on.
+pub type ContactsProducer =
+    ListWritesGate<SqsContactsIngress<SqsContactsQueue>, PostHogFeatureFlags>;
+
+/// The contacts producer for `queue_url`. `flags` is `None` without a PostHog
+/// key, which leaves list-aware messages off outside a local stack.
+pub fn contacts_producer(
+    sqs: aws_sdk_sqs::Client,
+    queue_url: String,
+    environment: macro_env::Environment,
+    flags: Option<PostHogFeatureFlags>,
+) -> ContactsProducer {
+    ListWritesGate {
+        inner: SqsContactsIngress {
+            queue: SqsContactsQueue::new(sqs, queue_url),
+        },
+        writes: ContactListWrites::new(environment, flags),
+    }
+}
 
 pub type InboxLifecycle = email::domain::mailbox::lifecycle::InboxLifecycleService<
     PgMailboxSync,
@@ -43,7 +71,7 @@ pub type InboxHealth = InboxHealthService<
     ProviderInboxHealth<
         MicrosoftTokens,
         MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
-        SqsContactsIngress<SqsContactsQueue>,
+        ContactsProducer,
     >,
 >;
 
@@ -54,7 +82,7 @@ pub fn inbox_health(
     redis: crate::util::redis::RedisClient,
     queue: sqs_client::SQS,
     broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
-    contacts: std::sync::Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts: std::sync::Arc<ContactsProducer>,
 ) -> InboxHealth {
     InboxHealthService::new(
         PgInboxHealth {

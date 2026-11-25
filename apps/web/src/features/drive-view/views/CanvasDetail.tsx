@@ -10,6 +10,7 @@ import {
 } from '@core/component/SharePermissions';
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { useSearchParams } from '@solidjs/router';
 import { err, ok } from 'neverthrow';
 import type { Accessor, JSX } from 'solid-js';
@@ -124,6 +125,7 @@ export function CanvasDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="canvas"
       label="canvas"

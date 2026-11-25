@@ -54,7 +54,7 @@ its thresholds many times a day.
 `outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts` and `search-freshness.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics, except those `queues.ts` marks Datadog only, have
 hand-written copies in Grafana
-(`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
+(`infra/stacks/observability/nixos/grafana-provisioning/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
 Notify service), so one incident pages once. Keep thresholds and windows in sync by hand. The error-logs
 anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
@@ -237,7 +237,7 @@ renotify hourly, and recover when their rolling count falls below the threshold:
 | Native MCP token exchange/provider rejection or Pipedream connection failure | 3 in 1 hour | Provider error, redirect URL, scopes, app configuration and organization permissions. Explicit `access_denied`, `user_cancelled` and `user_canceled` codes are excluded. |
 | OAuth client rejection codes in `error` or `reason` | 1 in 15 minutes | Client ID/secret, app status and allowed grant types for `invalid_client`, `unauthorized_client` or `incorrect_client_credentials`. |
 
-The first two read existing logs from `mcp_client` and `pipedream_mcp`;
+The first two read existing logs from the `connectors` crate's native and Pipedream stacks;
 the third is provider-independent. Log samples are not included in notifications;
 follow the filtered log links for investigation. The linked-token log was
 verified in production during the internal-key failure. Ordinary unlinked or

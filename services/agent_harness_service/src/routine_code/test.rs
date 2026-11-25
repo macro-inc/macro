@@ -166,6 +166,14 @@ struct Programs(std::sync::Mutex<usize>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for Programs {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,
@@ -190,6 +198,7 @@ impl ProgramChecker for NoChecks {
         &self,
         _: &[code_execution::domain::SourceFile],
         _: &str,
+        _: code_execution::domain::ProgramImports,
     ) -> Result<Vec<code_execution::domain::Diagnostic>, code_execution::domain::CheckError> {
         Ok(Vec::new())
     }
@@ -332,6 +341,14 @@ struct RunTokens(std::sync::Mutex<Vec<String>>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for RunTokens {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,
@@ -500,10 +517,13 @@ mod real_deno {
         let runner = DenoRunner::new(deno.clone(), root.path().join("runs"), 128)
             .await
             .unwrap();
-        let executor = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
-        let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
-            .await
-            .unwrap();
+        let checker = Arc::new(
+            DenoChecker::new(deno, root.path().join("checks"), 1, 4, 64 * 1024)
+                .await
+                .unwrap(),
+        );
+        let executor =
+            ExecutionService::new(Arc::new(runner), checker.clone(), Limits::default()).unwrap();
         let endpoints = code_execution::domain::SdkEndpoints {
             hosts: ["cognition", "email", "storage"]
                 .map(|name| (name.to_owned(), host.to_owned()))
@@ -512,7 +532,7 @@ mod real_deno {
         };
         let code = SdkRoutineCode::new(
             Arc::new(executor),
-            Arc::new(checker),
+            checker,
             FixedToken,
             endpoints,
             Arc::new(ai_usage::NoOpUsageRecorder),
@@ -674,6 +694,58 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert_eq!(failing.len(), 1, "{failing:?}");
         assert_eq!((failing[0].index, failing[0].title.as_str()), (1, "Report"));
         assert!(failing[0].problems[0].contains("Property 'total' does not exist"));
+    }
+
+    /// A channel message is typed, so a field the event doesn't carry fails
+    /// the check; every read the code-step guide has taught still checks,
+    /// so saved routines that make them aren't rewritten when the contract
+    /// changes.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn an_event_message_is_typed_and_the_reads_the_guide_taught_still_check() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let step = |body: &str| {
+            program(json!([{
+                "type": "code",
+                "title": "Read the event",
+                "source": format!(
+                    "export async function main({{ trigger }}: StepContext) {{\n  if (trigger.kind !== 'event') return null;\n  {body}\n}}\n"
+                ),
+            }]))
+        };
+        for body in [
+            // What the guide teaches now.
+            "const reply: boolean = trigger.item.message.is_reply; const root: string = trigger.item.message.root_id; return { reply, root, id: trigger.item.message_id ?? null };",
+            "if (trigger.item.message.is_reply) return { skipped: true }; return { text: trigger.item.message.text.toUpperCase() };",
+            "return { parent: trigger.item.thread_parent?.text ?? null, by: trigger.item.thread_parent?.sender ?? null };",
+            // What it taught before: `thread_id`, and the other events' items.
+            "if (trigger.item.message.thread_id !== trigger.item.message_id) return { skipped: true }; return { thread: trigger.item.message.thread_id };",
+            "const message = trigger.item.message; return { from: message.sender.toLowerCase(), text: message.text, channel: trigger.item.channel.name };",
+            "if (!trigger.item.message?.text || trigger.item.message.unavailable) return null; return trigger.item.message.text.length;",
+            "return { name: trigger.item.item.name, status: trigger.item.item.properties?.Status, body: trigger.item.item.content };",
+            "if (!trigger.item.email || trigger.item.email.unavailable) return null; return { subject: trigger.item.email.subject, from: trigger.item.email.from?.email, labels: trigger.item.email.labels };",
+            "return { title: trigger.item.call?.title, people: trigger.item.call?.participants?.length, lines: trigger.item.call?.transcript?.join('\\n') };",
+            "const { message } = trigger.item; return { edited: message.edited, files: message.attachments, at: message.sent_at };",
+        ] {
+            assert_eq!(
+                code.check_program(&step(body)).await.unwrap(),
+                Vec::new(),
+                "{body}"
+            );
+        }
+        for (body, field) in [
+            ("return trigger.item.message.isReply;", "isReply"),
+            ("return trigger.item.message.parent_id;", "parent_id"),
+            ("return trigger.item.message.id;", "id"),
+            ("return trigger.item.thread_parent?.thread;", "thread"),
+        ] {
+            let failing = code.check_program(&step(body)).await.unwrap();
+            assert_eq!(failing.len(), 1, "{body}");
+            assert!(
+                failing[0].problems[0].contains(&format!("Property '{field}' does not exist")),
+                "{failing:?}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -1165,11 +1237,22 @@ fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
     assert_eq!(
         files,
         [
+            "src/entities/task-templates/namespace.d.ts",
             "src/entities/tasks/namespace.d.ts",
-            "src/entities/tasks/task.d.ts"
+            "src/entities/time/namespace.d.ts",
+            "src/entities/task-templates/task-template.d.ts",
+            "src/entities/tasks/task.d.ts",
+            "src/entities/time/errors.d.ts",
+            "src/entities/time/report.d.ts",
+            "src/entities/time/task-time.d.ts",
+            "src/entities/time/time-entry.d.ts",
+            "src/entities/time/timer.d.ts"
         ]
     );
     assert!(reference.contains("class TaskNamespace "));
+    assert!(reference.contains("class TaskTemplateNamespace "));
+    assert!(reference.contains("class TaskTemplate "));
+    assert!(reference.contains("class TimeEntry "));
     assert!(!reference.lines().any(|line| line.starts_with("import ")));
     assert!(reference.len() <= ONE_AREA_BYTES + IMPORTED_TYPE_BYTES + 256);
 }

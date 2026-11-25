@@ -32,9 +32,9 @@ impl EmailHistoryPopulationRepository for CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let Some(interaction) =
-            Self::eligible_interactions_with_authority(&mut tx, team, link, email, Some(authority))
-                .await?
+        let Some(interaction) = self
+            .eligible_interactions_with_authority(&mut tx, team, link, email, Some(authority))
+            .await?
         else {
             return Ok(None);
         };

@@ -2,6 +2,7 @@ import { VideoContent } from '@block-video/component/VideoContent';
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { getFileDocumentBlob } from '@queries/storage/file-document';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
@@ -70,6 +71,7 @@ export function VideoDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="video"
       label="video"

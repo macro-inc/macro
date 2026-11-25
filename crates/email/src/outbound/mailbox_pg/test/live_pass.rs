@@ -8,8 +8,8 @@ use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
-    StreamPosition, StreamToken,
+    EmailApiError, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId,
+    RoundStart, StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -38,8 +38,8 @@ impl Folder {
 }
 
 impl MailboxGateway for Arc<Folder> {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(Vec::new())
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,

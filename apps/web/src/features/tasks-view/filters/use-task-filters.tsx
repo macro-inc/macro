@@ -7,18 +7,24 @@ import {
   AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
+import { t } from '@app/lib/i18n';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
+import { beginInteraction } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
 import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useQueryAccount } from '@queries/auth/use-query-account';
 import { batch, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
+import { taskStartDateBucketLabel } from '../constants';
 import {
   isTaskDueDateBucket,
+  isTaskStartDateBucket,
   TASK_DUE_DATE_BUCKETS,
+  TASK_START_DATE_BUCKETS,
 } from '../core/task-due-date';
 import { useAiTaskFilterPlan } from '../queries/ai-task-filter-plan';
 import { useTasksView } from '../tasks-view-context';
@@ -29,6 +35,10 @@ import {
   TASK_VIEWER,
 } from './task-facets';
 import { taskPeopleSource, taskViewerOption } from './task-people-options';
+import {
+  taskProjectSource,
+  useTaskProjectLabels,
+} from './task-project-options';
 
 const AI_FILTER_STALE_MESSAGE =
   'The account or filters changed. Try the request again.';
@@ -44,14 +54,23 @@ export type TaskFilterGroupId =
   | 'priority'
   | 'assignees'
   | 'created-by'
+  | 'project'
   | 'tags'
-  | 'due_date';
+  | 'due_date'
+  | 'start_date';
 
 export function useTaskFilters() {
-  const { state, setFacets, setState, savedViews, savedViewScope } =
-    useTasksView();
+  const {
+    state,
+    setFacets,
+    setState,
+    savedViews,
+    savedViewScope,
+    showProjectFilter,
+  } = useTasksView();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
+  const startDates = useStartDateEnabled();
   const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
   const assigneePicker = useAssigneePicker(
     () => (state.facets.assignees ?? []).filter((id) => id !== TASK_VIEWER),
@@ -73,6 +92,11 @@ export function useTaskFilters() {
   );
   const labels = useContactFilterLabels(selectedPeople);
   const createPeopleSource = taskPeopleSource(!!savedViews);
+  const projectOptions = useTaskProjectLabels(
+    () => state.facets.project ?? [],
+    () => true
+  );
+  const createProjectSource = taskProjectSource();
   const peopleOptions = (group: 'assignees' | 'created-by') =>
     (state.facets[group] ?? []).flatMap((id) => {
       const option =
@@ -111,7 +135,10 @@ export function useTaskFilters() {
       .filter((selected) => !options.some((option) => option.id === selected))
       .map((selected) => ({
         id: selected,
-        label: `Unavailable ${id === 'tags' ? 'tag' : 'option'}`,
+        label:
+          id === 'tags'
+            ? t('viewMenus.unavailableTag')
+            : t('viewMenus.unavailableOption'),
       })),
   ];
 
@@ -119,7 +146,7 @@ export function useTaskFilters() {
     (): ListFilterGroup<TaskFilterGroupId, string>[] => [
       {
         id: 'status',
-        label: 'Status',
+        label: t('viewMenus.status'),
         options: withUnavailable(
           'status',
           TASK_STATUS_OPTIONS.map((option) => ({
@@ -135,7 +162,7 @@ export function useTaskFilters() {
       },
       {
         id: 'priority',
-        label: 'Priority',
+        label: t('viewMenus.priority'),
         options: withUnavailable(
           'priority',
           TASK_PRIORITY_OPTIONS.map((option) => ({
@@ -151,25 +178,56 @@ export function useTaskFilters() {
       },
       {
         id: 'due_date',
-        label: 'Due date',
+        label: t('viewMenus.dueDate'),
         selectionMode: 'single',
         defaultOptionId: 'any',
         options: [
-          { id: 'any', label: 'Any due date' },
+          { id: 'any', label: t('viewMenus.anyDueDate') },
           ...TASK_DUE_DATE_BUCKETS,
-          { id: 'has_due_date', label: 'Has due date' },
+          { id: 'has_due_date', label: t('viewMenus.hasDueDate') },
           {
             id: 'range',
             label:
               state.dueDate?.type === 'range'
-                ? `Custom range (${state.dueDate.start ?? 'Any'} – ${state.dueDate.end ?? 'Any'})`
-                : 'Custom range…',
+                ? t('viewMenus.customRangeSummary', {
+                    start: state.dueDate.start ?? t('viewMenus.any'),
+                    end: state.dueDate.end ?? t('viewMenus.any'),
+                  })
+                : t('viewMenus.customRange'),
           },
         ],
       },
+      ...(startDates()
+        ? [
+            {
+              id: 'start_date' as const,
+              label: t('viewMenus.startDate'),
+              selectionMode: 'single' as const,
+              defaultOptionId: 'any',
+              options: [
+                { id: 'any', label: t('viewMenus.anyStartDate') },
+                ...TASK_START_DATE_BUCKETS.map((bucket) => ({
+                  id: bucket.id,
+                  label: taskStartDateBucketLabel(bucket.id),
+                })),
+                { id: 'has_start_date', label: t('viewMenus.hasStartDate') },
+                {
+                  id: 'range',
+                  label:
+                    state.startDate?.type === 'range'
+                      ? t('viewMenus.customRangeSummary', {
+                          start: state.startDate.start ?? t('viewMenus.any'),
+                          end: state.startDate.end ?? t('viewMenus.any'),
+                        })
+                      : t('viewMenus.customRange'),
+                },
+              ],
+            },
+          ]
+        : []),
       {
         id: 'assignees',
-        label: 'Assignee',
+        label: t('viewMenus.assignee'),
         searchPlaceholder: assigneePicker.placeholder(),
         options: assigneeOptions(),
         footer: <AssigneePickerStatus picker={assigneePicker} />,
@@ -177,11 +235,22 @@ export function useTaskFilters() {
       },
       {
         id: 'created-by',
-        label: 'Created by',
-        searchPlaceholder: 'Search creators...',
+        label: t('viewMenus.createdBy'),
+        searchPlaceholder: t('viewMenus.searchCreators'),
         options: peopleOptions('created-by'),
         createSource: createPeopleSource,
       },
+      ...(showProjectFilter()
+        ? [
+            {
+              id: 'project' as const,
+              label: t('viewMenus.project'),
+              searchPlaceholder: t('viewMenus.searchProjects'),
+              options: projectOptions(),
+              createSource: createProjectSource,
+            },
+          ]
+        : []),
       ...(tagGroup().options.length > 0 || (state.facets.tags?.length ?? 0) > 0
         ? [
             {
@@ -193,10 +262,13 @@ export function useTaskFilters() {
     ]
   );
 
-  const isSelected = (groupId: TaskFilterGroupId, optionId: string) =>
-    groupId === 'due_date'
-      ? (state.dueDate?.type ?? 'any') === optionId
-      : (state.facets[groupId] ?? []).includes(optionId);
+  const isSelected = (groupId: TaskFilterGroupId, optionId: string) => {
+    if (groupId === 'due_date')
+      return (state.dueDate?.type ?? 'any') === optionId;
+    if (groupId === 'start_date')
+      return (state.startDate?.type ?? 'any') === optionId;
+    return (state.facets[groupId] ?? []).includes(optionId);
+  };
 
   const setSelected = (
     groupId: TaskFilterGroupId,
@@ -207,6 +279,7 @@ export function useTaskFilters() {
       if (optionId === 'range') {
         const current = state.dueDate;
         setCustomRange({
+          field: 'due',
           start: current?.type === 'range' ? (current.start ?? '') : '',
           end: current?.type === 'range' ? (current.end ?? '') : '',
         });
@@ -217,17 +290,42 @@ export function useTaskFilters() {
       }
       return;
     }
+    if (groupId === 'start_date') {
+      if (optionId === 'range') {
+        const current = state.startDate;
+        setCustomRange({
+          field: 'start',
+          start: current?.type === 'range' ? (current.start ?? '') : '',
+          end: current?.type === 'range' ? (current.end ?? '') : '',
+        });
+      } else if (!selected || optionId === 'any') {
+        setState('startDate', undefined);
+      } else if (
+        isTaskStartDateBucket(optionId) ||
+        optionId === 'has_start_date'
+      ) {
+        setState('startDate', { type: optionId });
+      }
+      return;
+    }
     const update = selected ? addUnique(optionId) : removeValue(optionId);
-    setFacets({
-      ...state.facets,
-      [groupId]: update(state.facets[groupId]),
+    const interaction = beginInteraction('tasks.filter', {
+      attributes: { 'task.filter.group': groupId },
     });
+    try {
+      setFacets({
+        ...state.facets,
+        [groupId]: update(state.facets[groupId]),
+      });
+    } finally {
+      interaction.end();
+    }
   };
 
   const activeCount = () =>
     Object.values(state.facets).reduce(
       (count, optionIds) => count + optionIds.length,
-      state.dueDate ? 1 : 0
+      (state.dueDate ? 1 : 0) + (state.startDate ? 1 : 0)
     );
 
   const aiCatalog = (): AiTaskFilterCatalog => ({
@@ -280,6 +378,7 @@ export function useTaskFilters() {
       batch(() => {
         setFacets({});
         setState('dueDate', undefined);
+        setState('startDate', undefined);
       }),
     customRange,
     setCustomRange,
@@ -291,7 +390,7 @@ export function useTaskFilters() {
         (range.start && range.end && range.start > range.end)
       )
         return;
-      setState('dueDate', {
+      setState(range.field === 'start' ? 'startDate' : 'dueDate', {
         type: 'range',
         start: range.start || undefined,
         end: range.end || undefined,

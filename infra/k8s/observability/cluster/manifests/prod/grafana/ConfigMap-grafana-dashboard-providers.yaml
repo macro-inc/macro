@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  providers.yaml: '{"apiVersion":1,"providers":[{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro-email-focus","options":{"path":"/etc/grafana/dashboards/macro-email-focus"},"orgId":1,"type":"file"},{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro-prod-alerts","options":{"path":"/etc/grafana/dashboards/macro-prod-alerts"},"orgId":1,"type":"file"},{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro-postgres-queries","options":{"path":"/etc/grafana/dashboards/macro-postgres-queries"},"orgId":1,"type":"file"},{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro-postgres","options":{"path":"/etc/grafana/dashboards/macro-postgres"},"orgId":1,"type":"file"},{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro-computers-fleet","options":{"path":"/etc/grafana/dashboards/macro-computers-fleet"},"orgId":1,"type":"file"},{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro-run-local","options":{"path":"/etc/grafana/dashboards/macro-run-local"},"orgId":1,"type":"file"},{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro-ci","options":{"path":"/etc/grafana/dashboards/macro-ci"},"orgId":1,"type":"file"},{"allowUiUpdates":false,"disableDeletion":true,"folder":"Macro","name":"macro","options":{"path":"/etc/grafana/dashboards/macro"},"orgId":1,"type":"file"}]}'
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-providers
+  namespace: observability

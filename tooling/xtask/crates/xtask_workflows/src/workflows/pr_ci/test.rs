@@ -1,24 +1,26 @@
 use super::*;
 
 fn rendered() -> serde_yaml::Value {
-    let yaml = crate::workflows::render_patched(pr_ci, patch).expect("PR CI should render");
+    let yaml = crate::workflows::render_gh_workflow(pr_ci)().expect("PR CI should render");
     serde_yaml::from_str(&yaml).expect("PR CI should parse")
+}
+
+/// The path of the workflow a call runs, as its `uses` names it.
+fn uses(call: &Call) -> String {
+    (call.workflow)().uses
 }
 
 /// The committed YAML of a workflow PR CI calls.
 fn called(call: &Call) -> serde_yaml::Value {
-    let path = format!(
-        "{}/../../../../.github/workflows/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        call.file
-    );
+    let path = format!("{}/../../../../{}", env!("CARGO_MANIFEST_DIR"), uses(call));
     serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
         .expect("called workflow parses")
 }
 
-/// A called workflow the gate doesn't wait for could fail after the gate passed.
+/// A called workflow the gate doesn't wait for could fail after the gate passed,
+/// so only a call marked outside the gate may be left out.
 #[test]
-fn the_gate_waits_for_start_and_every_call() {
+fn the_gate_waits_for_start_and_every_gating_call() {
     let workflow = rendered();
     let needs: Vec<&str> = workflow["jobs"]["gate"]["needs"]
         .as_sequence()
@@ -30,8 +32,18 @@ fn the_gate_waits_for_start_and_every_call() {
     assert_eq!(needs[0], "start");
     assert_eq!(
         &needs[1..],
-        CALLS.iter().map(|call| call.id).collect::<Vec<_>>()
+        CALLS
+            .iter()
+            .filter(|call| call.gating)
+            .map(|call| call.id)
+            .collect::<Vec<_>>()
     );
+    let outside: Vec<&str> = CALLS
+        .iter()
+        .filter(|call| !call.gating)
+        .map(|call| call.id)
+        .collect();
+    assert_eq!(outside, ["desktop-windows"]);
 }
 
 /// GitHub refuses to call a workflow without a `workflow_call` trigger.
@@ -44,7 +56,7 @@ fn every_called_workflow_can_be_called() {
         assert!(
             triggers.get("workflow_call").is_some(),
             "{} has no workflow_call trigger",
-            call.file
+            uses(call)
         );
     }
 }
@@ -53,8 +65,8 @@ fn every_called_workflow_can_be_called() {
 /// A job limit at or just above a step limit inside it would cut that step short.
 #[test]
 fn every_job_the_gate_waits_for_has_a_timeout() {
-    let workflows = std::iter::once(("pr-ci.yml", rendered()))
-        .chain(CALLS.iter().map(|call| (call.file, called(call))));
+    let workflows = std::iter::once(("pr-ci.yml".to_string(), rendered()))
+        .chain(CALLS.iter().map(|call| (uses(call), called(call))));
 
     for (file, workflow) in workflows {
         let jobs = workflow["jobs"].as_mapping().expect("jobs");
@@ -96,13 +108,13 @@ fn every_called_job_reaches_the_gate() {
             assert!(
                 job.get("continue-on-error").is_none(),
                 "{} job {id} continues on error, so the gate can't see it fail",
-                call.file
+                uses(call)
             );
             let condition = job.get("if").and_then(serde_yaml::Value::as_str);
             assert!(
                 !condition.is_some_and(|condition| condition.contains("always()")),
                 "{} job {id} is a roll-up; the gate reads the call's result instead",
-                call.file
+                uses(call)
             );
         }
     }
@@ -171,7 +183,7 @@ fn full_history_checkouts_fetch_no_blobs_up_front() {
                 assert!(
                     !full || with["filter"].as_str() == Some("blob:none"),
                     "{} job {id} fetches every blob of the full history",
-                    call.file
+                    uses(call)
                 );
             }
         }
@@ -203,7 +215,7 @@ fn blobless_history_is_prepared() {
                     run.contains("git config --unset extensions.partialclone")
                         && run.contains("git config diff.renames false"),
                     "{} job {id} doesn't prepare its blobless checkout",
-                    call.file
+                    uses(call)
                 );
             }
         }

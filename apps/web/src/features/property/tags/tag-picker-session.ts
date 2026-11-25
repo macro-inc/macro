@@ -304,6 +304,10 @@ export function createTagPickerSession(props: {
       {
         optionId: item.option.id,
         propertyDefinitionId: item.option.propertyDefinitionId,
+        label:
+          item.option.value.type === 'string'
+            ? item.option.value.value
+            : item.option.id,
       },
       { handle: panel?.handle }
     );

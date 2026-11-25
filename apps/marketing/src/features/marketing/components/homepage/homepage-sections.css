@@ -1,0 +1,83 @@
+/* Homepage product sections: the feature-page chapter layout with a captured app window. */
+.macro-homepage .feature-page-section { isolation: isolate; }
+.macro-homepage .feature-page[data-product-spacing=true] .feature-page-section {
+  padding-bottom: 64px;
+}
+.macro-homepage .feature-page[data-product-spacing=true] .homepage-testimonials {
+  margin-top: 0;
+}
+.macro-homepage .feature-page-section::after {
+  --glow-width: min(1120px, 100vw);
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  top: calc(32% + 5px);
+  left: 50%;
+  width: calc(var(--glow-width) + 48px);
+  height: calc(var(--glow-width) / 3 - 10px);
+  transform: translate(-50%, -50%);
+  background-color: color-mix(in srgb, var(--page-aura-primary) 12%, transparent);
+  background-image: radial-gradient(color-mix(in srgb, var(--page-aura-primary) 16%, transparent) .7px, transparent .7px);
+  background-size: 8px 8px;
+  mask-image: radial-gradient(ellipse closest-side, black, #0009 25%, #0003 55%, transparent);
+}
+
+.macro-homepage .product-feature-intro h2 {
+  white-space: normal;
+  text-wrap: pretty;
+}
+
+.macro-homepage .homepage-section-caption {
+  width: var(--product-feature-intro-width);
+  margin: 22px auto 0;
+}
+
+.macro-homepage .product-feature-intro .homepage-feature-more {
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+
+.macro-homepage .product-feature-intro .homepage-feature-more > a {
+  padding-block: 0;
+}
+
+.homepage-modules {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  padding: 0;
+  columns: 2;
+  column-gap: 40px;
+  list-style: none;
+}
+
+.homepage-modules li {
+  break-inside: avoid;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent);
+  color: var(--color-ink);
+  font: 370 16px/1.4 'Inter Variable', Inter, sans-serif;
+}
+
+.homepage-modules a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+.homepage-modules a:hover { text-decoration: underline; }
+.homepage-modules svg { flex: none; width: 16px; height: 16px; }
+
+@media (min-width: 768px) {
+  .macro-homepage #pricing { display: none; }
+}
+@media (max-width: 699px) {
+  .macro-homepage .feature-page[data-product-spacing=true] .feature-page-section { padding-block: 48px; }
+  .macro-homepage .product-feature-intro { margin-bottom: 24px; }
+  .macro-homepage .product-feature-intro h2 { font-size: clamp(22px, 6.2vw, 27px); margin-bottom: 14px; }
+  .macro-homepage .product-feature-intro p,
+  .macro-homepage .homepage-section-caption { font-size: 15px; line-height: 1.6; }
+  .macro-homepage .homepage-section-caption { margin-top: 20px; }
+  .homepage-modules { width: 100%; column-gap: 24px; }
+}

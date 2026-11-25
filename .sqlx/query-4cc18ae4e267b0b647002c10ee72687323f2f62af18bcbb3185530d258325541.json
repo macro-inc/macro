@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM user_channel_section_notification_setting\n                   WHERE user_id = $1\n                     AND section_key = COALESCE('label:' || $2::uuid::text, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4cc18ae4e267b0b647002c10ee72687323f2f62af18bcbb3185530d258325541"
+}

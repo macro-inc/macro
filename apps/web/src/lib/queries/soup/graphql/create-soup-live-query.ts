@@ -38,6 +38,9 @@ import {
   SoupDocument,
   type SoupInitialInput,
   SoupItemFieldsFragmentDoc,
+  SoupItemPreviewFieldsFragmentDoc,
+  SoupPreviewPageDocument,
+  type SoupPreviewPageQuery,
   type SoupQuery,
   type SoupQueryVariables,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
@@ -63,11 +66,16 @@ import {
 import { crmExternalWriteTypes } from './external-write-scope';
 import { isCachedMailView } from './mail-view';
 import {
+  recordSoupNetworkAnswer,
+  soupNetworkAnswerFresh,
+} from './network-freshness';
+import {
   usePendingGraphqlSoupDeleteKeys,
   withoutPendingSoupEntities,
 } from './optimistic-deletions';
 import { readSoupPage } from './read-soup-page';
 import {
+  isLocallySortable,
   materializeReconciledSoup,
   soupItemKey,
   soupReconciliationBaseline,
@@ -77,25 +85,47 @@ import {
 /** A Soup query declaration. The source owns page cursors and cache baselines. */
 export type SoupLiveQueryInput = Omit<SoupInitialInput, 'expand'>;
 
+export type SoupProjection = 'channel-list' | 'preview';
+
 export type SoupLiveQueryOptions = {
   enabled?: boolean;
   networkPaused?: boolean;
   keepPreviousData?: boolean;
   /** Reuse local Mail evaluation beneath a grouped server query. */
   localOnly?: boolean;
-  /** Select bounded unread evidence for channel navigation. */
-  projection?: 'channel-list';
+  /**
+   * `channel-list` selects bounded unread evidence for channel navigation;
+   * `preview` selects rows without notifications, for lists that show none.
+   */
+  projection?: SoupProjection;
   /** Select known entities locally, then fetch only missing records. */
   cacheFirstEntities?: readonly SoupEntityRef[];
   /** Include indexed non-email rows while server pages supply email. */
   localReconciliation?: 'without-email';
+  /**
+   * Milliseconds a network answer for this first page stays fresh: a list
+   * mounted within it reads the cached page and does not fetch it again.
+   */
+  staleTime?: number;
 };
+
+/** Whether a list may take its cached first page, for one input and client. */
+type FreshDecision = { key: string; client: object; fresh: boolean };
+
+const SOUP_DOCUMENTS = {
+  'channel-list': ChannelListSoupDocument,
+  preview: SoupPreviewPageDocument,
+} satisfies Record<SoupProjection, unknown>;
+
+const soupDocumentFor = (projection: SoupProjection | undefined) =>
+  projection ? SOUP_DOCUMENTS[projection] : SoupDocument;
 
 // A page result can carry the viewer without its `soup` field. Selection runs
 // over every loaded page, so such a page reads as unloaded instead of failing
 // the whole list.
-const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
-  page.user?.soup != null;
+const hasSoupPage = (
+  page: SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery
+): boolean => page.user?.soup != null;
 
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
  * Data is a non-suspending accessor of reactive GraphQL records, before UI mapping.
@@ -164,6 +194,31 @@ export function createSoupLiveQuery(
   const inputKey = createMemo(() =>
     JSON.stringify([options().projection, firstPageInput()])
   );
+  const staleTime = createMemo(() => options().staleTime);
+  const fetches = createMemo(() => {
+    const queryOptions = options();
+    return (
+      queryOptions.enabled !== false &&
+      !queryOptions.localOnly &&
+      networkInput() !== undefined
+    );
+  });
+  // Decided once per list and client, when it first starts to fetch: a write
+  // while it waited disabled may have made the answer stale, and a policy
+  // change afterwards would discard the pages it loaded.
+  const freshDecision = createMemo((previous?: FreshDecision) => {
+    const key = inputKey();
+    const client = getGraphqlSoupClient();
+    if (previous?.key === key && previous.client === client) return previous;
+    if (!fetches()) return previous;
+    const freshFor = staleTime();
+    const fresh = untrack(
+      () =>
+        freshFor !== undefined && soupNetworkAnswerFresh(client, key, freshFor)
+    );
+    return { key, client, fresh };
+  });
+  const answeredFresh = () => freshDecision()?.fresh ?? false;
   type ServerProjection = {
     pageParams: readonly (string | null)[];
     records: Accessor<GraphqlSoupItem[]>;
@@ -206,14 +261,16 @@ export function createSoupLiveQuery(
   const localProjection = () =>
     maintainedProjection?.() ?? legacyLocalProjection();
   const [localEvaluationTrigger, setLocalEvaluationTrigger] = createSignal(0);
-  const queryDocument = () =>
-    options().projection === 'channel-list'
-      ? ChannelListSoupDocument
-      : SoupDocument;
+  const queryDocument = () => soupDocumentFor(options().projection);
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
   const channelListItemSelection = selectRecords(
     ChannelListItemFieldsFragmentDoc
   );
+  const previewItemSelection = selectRecords(SoupItemPreviewFieldsFragmentDoc);
+  const projectionSelections = {
+    'channel-list': channelListItemSelection,
+    preview: previewItemSelection,
+  } satisfies Record<SoupProjection, unknown>;
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
   let localEvaluationRunning = false;
@@ -368,7 +425,7 @@ export function createSoupLiveQuery(
     pages,
     pageParams,
   }: UrqlInfiniteData<
-    SoupQuery | ChannelListSoupQuery,
+    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
     string | null
   >): ServerProjection => {
     const soupPages = pages.filter(hasSoupPage);
@@ -386,7 +443,7 @@ export function createSoupLiveQuery(
   };
 
   const query = createUrqlInfiniteQuery<
-    SoupQuery | ChannelListSoupQuery,
+    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
     SoupQueryVariables,
     string | null,
     ServerProjection
@@ -394,10 +451,11 @@ export function createSoupLiveQuery(
     const firstInput = firstPageInput();
     const firstInputKey = inputKey();
     const queryOptions = options();
+    const client = getGraphqlSoupClient();
 
     return {
       query: queryDocument(),
-      client: getGraphqlSoupClient(),
+      client,
       initialPageParam: null,
       context: {
         externalCacheWriteTypes: crmExternalWriteTypes(
@@ -415,13 +473,12 @@ export function createSoupLiveQuery(
         hasSoupPage(lastPage)
           ? (lastPage.user.soup.nextCursor ?? undefined)
           : undefined,
-      enabled:
-        queryOptions.enabled !== false &&
-        !queryOptions.localOnly &&
-        networkInput() !== undefined,
+      enabled: fetches(),
       requestPolicy: queryOptions.networkPaused
         ? 'cache-only'
-        : 'cache-and-network',
+        : answeredFresh()
+          ? 'cache-first'
+          : 'cache-and-network',
       keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
         const metadata = normalizedCacheResultMetadata(result);
@@ -438,6 +495,8 @@ export function createSoupLiveQuery(
           return;
         }
         if (!result.data) return;
+        if (metadata?.source === 'live-network' && page.pageIndex === 0)
+          recordSoupNetworkAnswer(client, firstInputKey);
         if (metadata?.source !== 'live-network') {
           // An affected/cache result already reflects local state. Its pending
           // network acknowledgement may no longer claim authority over it.
@@ -501,8 +560,6 @@ export function createSoupLiveQuery(
     };
   });
 
-  usePending('soup.network', () => query.isLoading);
-
   const isEnabled = () =>
     cacheFirstEntities()
       ? options().enabled !== false && !options().localOnly && isSupported()
@@ -553,11 +610,7 @@ export function createSoupLiveQuery(
     )
       return;
     const initial = input.initial;
-    if (
-      initial.sortMethod !== 'CREATED_AT' &&
-      initial.sortMethod !== 'UPDATED_AT'
-    )
-      return;
+    if (!isLocallySortable(initial.sortMethod)) return;
     const withoutEmail = queryOptions.localReconciliation === 'without-email';
     const mailView =
       !withoutEmail && isCachedMailView(initial.emailView)
@@ -583,10 +636,9 @@ export function createSoupLiveQuery(
       records,
       withoutEmail,
       mailView,
-      select:
-        queryOptions.projection === 'channel-list'
-          ? channelListItemSelection
-          : soupItemSelection,
+      select: queryOptions.projection
+        ? projectionSelections[queryOptions.projection]
+        : soupItemSelection,
       source: {
         filters: withoutEmail
           ? {
@@ -1103,6 +1155,15 @@ export function createSoupLiveQuery(
     })
   );
 
+  const isLoading = () => {
+    if (!query.isLoading) return false;
+    const local = displayLocalProjection();
+    if (!local) return true;
+    // A partial local index cannot prove an empty list. Keep a true cold load
+    // pending, but never make already visible cache rows wait for revalidation.
+    return local.records.length === 0 && !offline() && !options().networkPaused;
+  };
+  usePending('soup.network', isLoading);
   return {
     cacheMaintained,
     revalidationQueries,
@@ -1141,19 +1202,11 @@ export function createSoupLiveQuery(
     fetchError: () => query.error ?? undefined,
     isSupported,
     isEnabled,
-    isLoading: () => {
-      if (!query.isLoading) return false;
-      const local = displayLocalProjection();
-      if (!local) return true;
-      // An empty local Mail page does not establish complete mailbox coverage.
-      // Wait for the first query response before showing an online empty state.
-      return (
-        local.mail !== undefined &&
-        local.records.length === 0 &&
-        !offline() &&
-        !options().networkPaused
-      );
-    },
+    hasPageData: () =>
+      baselineInputKey() === inputKey() &&
+      baselineGeneration() === cacheGeneration &&
+      query.data !== undefined,
+    isLoading,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () =>
       fetchingMailPage() || (!cachedMail() && query.isFetchingNextPage),

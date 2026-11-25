@@ -78,6 +78,18 @@ impl OutlookCalendar {
                 .as_deref()
                 .is_some_and(|owner| owner.eq_ignore_ascii_case(mailbox_address))
     }
+
+    /// Whether the mailbox subscribed to this calendar from the web (an
+    /// internet calendar), which shows as a subscription as Google's
+    /// calendars added by URL do. Graph lists one as read-only with no owner,
+    /// while it names the mailbox as owner of its own calendars, holidays and
+    /// Birthdays included, and the sharer as owner of a calendar someone
+    /// shared.
+    pub fn is_web_subscription(&self) -> bool {
+        self.calendar.access_role.as_deref() == Some("reader")
+            && !self.calendar.is_primary
+            && self.owner_address.is_none()
+    }
 }
 
 /// What a claim changed about the account's calendars, for their viewers: a
@@ -509,8 +521,19 @@ impl<
                         .refresh_calendar_event(&token, target, &id)
                         .await?
                     {
-                        OutlookEventRefresh::Refreshed { upsert, skipped } => {
+                        OutlookEventRefresh::Refreshed {
+                            mut upsert,
+                            skipped,
+                        } => {
                             span.record("outcome", "refreshed");
+                            // A series without an occurrence Macro could not
+                            // read is not the calendar's whole snapshot of
+                            // it. Stored under no role, it stays out of team
+                            // reads, which would take the gap for free time,
+                            // as Google fails such a series instead.
+                            if !skipped.is_empty() {
+                                upsert.source.details_mut().observed_access_role = None;
+                            }
                             if let Some(first) = skipped.first() {
                                 span.record("rejected_field", first.field.as_str());
                                 span.record("skipped_occurrences", skipped.len() as i64);

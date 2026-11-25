@@ -18,7 +18,8 @@ use crate::predicate::{
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
-    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
+    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, PersistedOptimisticLayer,
+    QueuedMutation,
 };
 use crate::search::{
     SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
@@ -58,10 +59,115 @@ pub struct QueueDiagnostics {
     pub oldest_created_at_ms: Option<i64>,
 }
 
+/// Where a storage stands in its history of commits. Two equal positions
+/// from one storage mean it committed nothing in between.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WritePosition {
+    /// Changes whenever the storage starts its history over, such as a new log.
+    pub epoch: u64,
+    /// Advances with every commit within an epoch.
+    pub offset: u64,
+}
+
+/// The durable reads a projection pass makes before a write. Every
+/// [`Storage`] serves them; [`crate::engine::PassReads`] serves them through
+/// the engine's hot tier and reads each key once, so the write that follows
+/// does not read again.
+pub trait DurableRead {
+    type Error: std::error::Error + MaybeSend + 'static;
+    /// The storage underneath, for the reads this trait does not cover.
+    type Storage: crate::predicate::PredicateIndexStorage<Error = Self::Error>;
+
+    /// The storage underneath.
+    fn storage(&self) -> &Self::Storage;
+
+    /// Durable records aligned with `keys`, as [`Storage::get_batch`].
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend;
+
+    /// Projection states aligned with `keys`, as
+    /// [`Storage::load_projection_states`].
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend;
+
+    /// The queued mutations, as [`Storage::load_mutation_queue`].
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend;
+}
+
+impl<S: crate::predicate::PredicateIndexStorage> DurableRead for S {
+    type Error = S::Error;
+    type Storage = S;
+
+    fn storage(&self) -> &S {
+        self
+    }
+
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend {
+        self.get_batch(keys)
+    }
+
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend {
+        self.load_projection_states(keys)
+    }
+
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend {
+        self.load_mutation_queue()
+    }
+}
+
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
 pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
+
+    /// The current [`WritePosition`], or `None` when this storage does not
+    /// track one. Engines reuse what they read for a write only while it
+    /// holds still, so `None` turns that off.
+    fn write_position(&self) -> Option<WritePosition> {
+        None
+    }
+
+    /// Atomically replace copied layers and recomposed shadows for affected keys.
+    /// Preserve all other shadows and authored command metadata.
+    fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Enumerate raw normalized keys of one type, including hidden, partial and
+    /// unprojected records. The exclusive cursor is the entity ID; at most 500
+    /// keys are returned. Mutation commands are separate and remain untouched.
+    fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
+
+    /// Enumerate authoritative predicate keys even when their normalized record
+    /// is absent. Uses the same exclusive ID cursor and 500-key page bound.
+    fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
 
     /// Fetches records; result is aligned with `keys` (`None` = absent).
     fn get_batch(
@@ -81,6 +187,16 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// [`Self::put_batch_with_projections`] with borrowed records, for a caller
+    /// that keeps them. The default clones them.
+    fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+        self.put_batch_with_projections(entries.to_vec(), projections)
+    }
 
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
@@ -448,6 +564,50 @@ impl InMemoryStorage {
 impl Storage for InMemoryStorage {
     type Error = Infallible;
 
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        let mut keys: Vec<_> = self
+            .projections
+            .keys()
+            .map(|key| EntityKey(key.as_str().to_owned().into()))
+            .filter(|key| {
+                key.typename() == Some(typename)
+                    && key
+                        .id()
+                        .is_some_and(|id| after_id.is_none_or(|after| id > after))
+            })
+            .collect();
+        keys.sort();
+        keys.truncate(limit.min(500));
+        Ok(keys)
+    }
+
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        let mut keys: Vec<_> = self
+            .records
+            .keys()
+            .filter(|key| {
+                key.typename() == Some(typename)
+                    && key
+                        .id()
+                        .is_some_and(|id| after_id.is_none_or(|after| id > after))
+            })
+            .cloned()
+            .collect();
+        keys.sort();
+        keys.truncate(limit.min(500));
+        Ok(keys)
+    }
+
     async fn visit_name_search(
         &self,
         read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
@@ -712,6 +872,27 @@ impl Storage for InMemoryStorage {
             .iter()
             .map(|key| self.optimistic_projections.get(key).cloned())
             .collect())
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        for (id, layer) in layers {
+            if let Some(entry) = self.mutations.get_mut(id) {
+                entry.optimistic = layer.clone();
+            }
+        }
+        for key in affected_projection_keys {
+            self.optimistic_projections.remove(key);
+        }
+        for projection in projections {
+            self.optimistic_projections
+                .insert(projection.state.record_key().clone(), projection.clone());
+        }
+        Ok(())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

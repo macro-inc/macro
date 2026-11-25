@@ -18,7 +18,7 @@ export function parseCalendarDate(value: string) {
 }
 
 export function formatEventSchedule(
-  event: CalendarEvent,
+  event: Pick<CalendarEvent, 'start' | 'end' | 'allDay'>,
   timeFormat: CalendarTimeFormat
 ) {
   const start = parseCalendarDate(event.start);

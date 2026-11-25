@@ -48,6 +48,8 @@ pub struct TaskBrief {
     pub status: Option<String>,
     /// Current Priority option name.
     pub priority: Option<String>,
+    /// Current start date.
+    pub start: Option<chrono::DateTime<chrono::Utc>>,
     /// Current due date.
     pub due: Option<chrono::DateTime<chrono::Utc>>,
     /// User and bot ids in the Assignees property, people and agents alike.
@@ -257,6 +259,7 @@ async fn assigned_context(
             markdown: brief.markdown.clone(),
             status: brief.status.clone(),
             priority: brief.priority.clone(),
+            start: brief.start,
             due: brief.due,
             assignees: named.collect(),
             project: brief.project.clone(),

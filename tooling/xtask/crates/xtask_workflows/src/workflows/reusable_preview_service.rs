@@ -10,73 +10,89 @@
 //! too, which makes an unchanged handler a download. It holds no signing key, so
 //! it can't write to that cache.
 
-use anyhow::Result;
-use gh_workflow::{Event, Job, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::expr::typed::{Bool, StepHandle, StepOutput, Str, input};
+use gh_workflow::{
+    Event, Job, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput, ZizmorRule,
+};
 
-use crate::workflows::{runners, steps};
+use crate::workflows::actions::{
+    ActionsCheckout, LocalGetProjectName, LocalPreviewCloudStoragePulumi,
+};
+use crate::workflows::{runners, steps, vars};
 
-/// Build the workflow. The `workflow_call` input/secret block is filled in by
-/// [`patch`] (gh-workflow models it as unordered maps).
-pub fn reusable_preview_service() -> Workflow {
-    Workflow::new("Reusable Preview Service")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job("preview", preview())
+pub(crate) struct ProjectNameOutputs {
+    /// The service's Pulumi project name.
+    pub project_name: StepOutput<Str>,
 }
 
-/// Fill in the ordered `workflow_call` inputs/secrets block.
-///
-/// Lambda artifacts build inside Nix derivations, so this workflow does not
-/// need a separate sccache secret (the sole caller uses `secrets: inherit`, so
-/// no caller change is needed).
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: string
-                description: The environment to preview
-              service-name:
-                required: true
-                type: string
-                description: The name of the service to preview
-              pulumi-stack-name:
-                required: false
-                type: string
-                description: Override pulumi stack name (defaults to service-name)
-              use-docker:
-                required: false
-                type: boolean
-                default: true
-                description: Whether to setup docker
-              use-lfs:
-                required: false
-                type: boolean
-                default: false
-                description: Whether to checkout LFS content
-              github-token:
-                required: false
-                type: string
-                description: GitHub token for PR comments
-            secrets:
-              AWS_ACCESS_KEY:
-                required: true
-              AWS_SECRET_ACCESS_KEY:
-                required: true
-              PULUMI_ACCESS_TOKEN:
-                required: true
-              DD_APP_KEY:
-                required: true
-              DD_API_KEY:
-                required: true
-        "#})?,
-    );
-    Ok(())
+/// The step that resolves the service's Pulumi project, when no stack name is
+/// given.
+pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
+    "project-name",
+    ProjectNameOutputs {
+        project_name: LocalGetProjectName::project_name_output("project-name"),
+    },
+);
+
+/// Build the workflow.
+pub fn reusable_preview_service() -> Workflow {
+    Workflow::new("Reusable Preview Service")
+        .on(Event::default().workflow_call(
+            WorkflowCall::default()
+                .add_input(
+                    "environment",
+                    WorkflowInput::string()
+                        .description("The environment to preview")
+                        .required(true),
+                )
+                .add_input(
+                    "service-name",
+                    WorkflowInput::string()
+                        .description("The name of the service to preview")
+                        .required(true),
+                )
+                .add_input(
+                    "pulumi-stack-name",
+                    WorkflowInput::string()
+                        .description("Override pulumi stack name (defaults to service-name)")
+                        .required(false),
+                )
+                .add_input(
+                    "use-docker",
+                    WorkflowInput::boolean()
+                        .description("Whether to setup docker")
+                        .required(false)
+                        .default(true),
+                )
+                .add_input(
+                    "use-lfs",
+                    WorkflowInput::boolean()
+                        .description("Whether to checkout LFS content")
+                        .required(false)
+                        .default(false),
+                )
+                .add_input(
+                    "github-token",
+                    WorkflowInput::string()
+                        .description("GitHub token for PR comments")
+                        .required(false),
+                )
+                .add_secret(
+                    "AWS_ACCESS_KEY",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret(
+                    "AWS_SECRET_ACCESS_KEY",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret(
+                    "PULUMI_ACCESS_TOKEN",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret("DD_APP_KEY", WorkflowCallSecret::default().required(true))
+                .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true)),
+        ))
+        .add_job("preview", preview())
 }
 
 fn preview() -> Job {
@@ -91,41 +107,34 @@ fn preview() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    )) // v6
+    ActionsCheckout::new("Checkout Repo").step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "Pulumi previews run from the checkout",
+    )
 }
 
 fn get_project_name() -> Step<Use> {
-    steps::uses_local(
-        "Get project name",
-        xtask_paths::repo_dir!(".github/actions/get-project-name"),
-    )
-    .id("project-name")
-    .add_with(("service-name", "${{ inputs.service-name }}"))
+    LocalGetProjectName::new("Get project name", input::<Str>("service-name"))
+        .step()
+        .id(PROJECT_NAME.id())
 }
 
 fn preview_pulumi() -> Step<Use> {
-    steps::uses_local(
+    LocalPreviewCloudStoragePulumi::new(
         "Preview pulumi stack",
-        xtask_paths::repo_dir!(".github/actions/preview-cloud-storage-pulumi"),
+        vars::AWS_ACCESS_KEY,
+        vars::AWS_SECRET_ACCESS_KEY,
+        vars::PULUMI_ACCESS_TOKEN,
+        input::<Str>("pulumi-stack-name").or_else(PROJECT_NAME.outputs.project_name.read()),
+        vars::DD_APP_KEY,
+        vars::DD_API_KEY,
     )
-    .add_with(("environment", "${{ inputs.environment }}"))
-    .add_with(("aws-access-key", "${{ secrets.AWS_ACCESS_KEY }}"))
-    .add_with(("aws-secret-key", "${{ secrets.AWS_SECRET_ACCESS_KEY }}"))
-    .add_with(("pulumi-access-token", "${{ secrets.PULUMI_ACCESS_TOKEN }}"))
-    .add_with((
-        "pulumi-service-name",
-        "${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}",
-    ))
-    .add_with(("dd-app-key", "${{ secrets.DD_APP_KEY }}"))
-    .add_with(("dd-api-key", "${{ secrets.DD_API_KEY }}"))
-    .add_with(("use-docker", "${{ inputs.use-docker }}"))
-    .add_with(("use-lfs", "${{ inputs.use-lfs }}"))
-    .add_with(("github-token", "${{ inputs.github-token }}"))
-    .add_with(("cloud-storage-service-name", "${{ inputs.service-name }}"))
+    .environment(input::<Str>("environment"))
+    .use_docker(input::<Bool>("use-docker"))
+    .use_lfs(input::<Bool>("use-lfs"))
+    .github_token(input::<Str>("github-token"))
+    .cloud_storage_service_name(input::<Str>("service-name"))
+    .step()
 }
 
 #[cfg(test)]
@@ -140,7 +149,7 @@ mod test {
             .to_string()
             .expect("workflow yaml");
         assert!(
-            yaml.contains("nix-cache-url: ${{ vars.NIX_CACHE_URL }}"),
+            yaml.contains(&format!("nix-cache-url: {}", vars::NIX_CACHE_URL)),
             "{yaml}"
         );
         assert!(!yaml.contains("NIX_CACHE_SIGNING_KEY"), "{yaml}");

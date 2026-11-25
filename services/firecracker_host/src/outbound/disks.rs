@@ -12,7 +12,7 @@ use std::sync::{Arc, PoisonError};
 
 use firecracker_host_api::{ComputerId, ComputerResources, DiskBackend, GoldenKey};
 
-use crate::domain::model::ComputerRecord;
+use crate::domain::model::{ComputerRecord, SystemDisk};
 use crate::domain::ports::{ComputerDisks, Disks, DriveBacking};
 use crate::outbound::file_clone::clone_file;
 use crate::outbound::layout::Layout;
@@ -242,8 +242,10 @@ impl FileDisks {
         Ok(())
     }
 
-    fn rootfs(&self, computer_id: ComputerId) -> PathBuf {
-        self.layout.computer(computer_id).join("rootfs.ext4")
+    fn rootfs(&self, computer_id: ComputerId, disk: SystemDisk) -> PathBuf {
+        self.layout
+            .computer(computer_id)
+            .join(system_disk_file_name(disk))
     }
 
     fn home(&self, computer_id: ComputerId) -> PathBuf {
@@ -309,22 +311,89 @@ impl FileDisks {
 
     async fn clone_rootfs(&self, record: &ComputerRecord) -> Result<(), DiskError> {
         let source = self.layout.golden(&record.golden_key()).join("rootfs.ext4");
-        reflink_file(&source, &self.rootfs(record.computer_id)).await
+        reflink_file(
+            &source,
+            &self.rootfs(record.computer_id, record.system_disk),
+        )
+        .await
     }
 }
 
+/// System disks a computer's dataset holds at most: the current one and
+/// the previous one, or the current one and the clone replacing it.
+const SYSTEM_DISKS_HELD: u64 = 2;
+
 /// The quota of a computer's dataset. Every byte the guest can write must
 /// fit, or a full disk reads to the guest as an I/O error instead of ENOSPC:
-/// the rootfs is at least the golden's size, and a hibernation holds up to
-/// all of memory.
+/// each system disk is at least the golden's size, two of them while a
+/// replacement keeps the previous one, and a hibernation holds up to all of
+/// memory.
 fn computer_quota_bytes(resources: &ComputerResources, golden_root_disk_gib: u32) -> u64 {
     let root_gib = resources.root_disk_gib.max(golden_root_disk_gib);
-    let quota_gib = u64::from(root_gib)
+    let quota_gib = SYSTEM_DISKS_HELD * u64::from(root_gib)
         + u64::from(resources.home_disk_gib)
         + u64::from(resources.memory_mib).div_ceil(1024)
         + QUOTA_HEADROOM_GIB;
     quota_gib * BYTES_PER_GIB
 }
+
+/// The file of a system disk in a computer's directory: `rootfs.ext4` for
+/// the one its create cloned (what agents before system disk replacement
+/// knew), `rootfs.<n>.ext4` after.
+fn system_disk_file_name(disk: SystemDisk) -> String {
+    match disk.0 {
+        0 => ROOTFS_FILE.to_owned(),
+        generation => format!("rootfs.{generation}.ext4"),
+    }
+}
+
+/// The system disk a file in a computer's directory is, if it is one.
+fn system_disk_of_file(name: &str) -> Option<SystemDisk> {
+    if name == ROOTFS_FILE {
+        return Some(SystemDisk(0));
+    }
+    let generation: u32 = name
+        .strip_prefix("rootfs.")?
+        .strip_suffix(".ext4")?
+        .parse()
+        .ok()?;
+    (generation > 0 && system_disk_file_name(SystemDisk(generation)) == name)
+        .then_some(SystemDisk(generation))
+}
+
+/// Delete the system disk files in `directory` other than `keep`, and
+/// their staged copies; the ones deleted.
+fn remove_system_disks_except(
+    directory: &Path,
+    keep: &[SystemDisk],
+) -> Result<Vec<SystemDisk>, DiskError> {
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(io("list", directory)(error)),
+    };
+    let mut removed = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(io("list", directory))?;
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        // A clone cut short leaves its staged `.ext4.new` too.
+        let disk = system_disk_of_file(&name)
+            .or_else(|| name.strip_suffix(".new").and_then(system_disk_of_file));
+        if let Some(disk) = disk
+            && !keep.contains(&disk)
+        {
+            let path = entry.path();
+            std::fs::remove_file(&path).map_err(io("remove", &path))?;
+            removed.push(disk);
+        }
+    }
+    Ok(removed)
+}
+
+/// The first system disk's file.
+const ROOTFS_FILE: &str = "rootfs.ext4";
 
 /// Ready spares kept per golden and `/home` size.
 const SPARES_PER_KIND: usize = 2;
@@ -491,13 +560,11 @@ impl Disks for FileDisks {
     #[tracing::instrument(name = "firecracker_host.disks_prepare", skip_all, fields(computer_id = %record.computer_id), err)]
     async fn prepare(&self, record: &ComputerRecord) -> Result<ComputerDisks, DiskError> {
         self.ensure_computer(record).await?;
-        if !self.rootfs(record.computer_id).exists() {
+        let rootfs = self.rootfs(record.computer_id, record.system_disk);
+        if !rootfs.exists() {
             self.clone_rootfs(record).await?;
         }
-        grow(
-            &self.rootfs(record.computer_id),
-            record.resources.root_disk_gib,
-        )?;
+        grow(&rootfs, record.resources.root_disk_gib)?;
         let home = self.home(record.computer_id);
         if !home.exists() {
             match &self.containers {
@@ -526,9 +593,54 @@ impl Disks for FileDisks {
         }
         grow(&home, record.resources.home_disk_gib)?;
         Ok(ComputerDisks {
-            rootfs: DriveBacking::File(self.rootfs(record.computer_id)),
+            rootfs: DriveBacking::File(rootfs),
             home: DriveBacking::File(self.home(record.computer_id)),
         })
+    }
+
+    #[tracing::instrument(name = "firecracker_host.system_disk_clone", skip_all, fields(computer_id = %record.computer_id, image = %key.image, disk = disk.0), err)]
+    async fn clone_system_disk(
+        &self,
+        record: &ComputerRecord,
+        key: &GoldenKey,
+        disk: SystemDisk,
+    ) -> Result<(), DiskError> {
+        if let Containers::Zfs(datasets) = &self.containers {
+            // A dataset made by an agent before system disk replacement has
+            // room for one system disk.
+            let relative = format!("computers/{}", record.computer_id);
+            datasets
+                .set_refquota(
+                    &relative,
+                    computer_quota_bytes(&record.resources, self.golden_root_disk_gib),
+                )
+                .await?;
+        }
+        let source = self.layout.golden(key).join(ROOTFS_FILE);
+        let target = self.rootfs(record.computer_id, disk);
+        reflink_file(&source, &target).await?;
+        grow(&target, record.resources.root_disk_gib)
+    }
+
+    fn quota_bytes(&self, resources: &ComputerResources) -> u64 {
+        computer_quota_bytes(resources, self.golden_root_disk_gib)
+    }
+
+    async fn remove_other_system_disks(
+        &self,
+        computer_id: ComputerId,
+        keep: &[SystemDisk],
+    ) -> Result<Vec<SystemDisk>, DiskError> {
+        let directory = self.layout.computer(computer_id);
+        let keep = keep.to_vec();
+        // Deleting a 32 GiB disk file takes a while: off the async workers.
+        tokio::task::spawn_blocking(move || remove_system_disks_except(&directory, &keep))
+            .await
+            .map_err(|error| DiskError::Io {
+                action: "remove system disks",
+                path: PathBuf::new(),
+                source: std::io::Error::other(error),
+            })?
     }
 
     #[tracing::instrument(name = "firecracker_host.golden_rootfs_create", skip(self), err)]
@@ -721,13 +833,12 @@ impl Disks for FileDisks {
                 .destroy(&format!("computers/{computer_id}"))
                 .await?);
         }
-        for path in [self.rootfs(computer_id), self.home(computer_id)] {
-            match std::fs::remove_file(&path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == ErrorKind::NotFound => {}
-                Err(error) => return Err(io("remove", &path)(error)),
-            }
+        self.remove_other_system_disks(computer_id, &[]).await?;
+        let home = self.home(computer_id);
+        match std::fs::remove_file(&home) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(io("remove", &home)(error)),
         }
-        Ok(())
     }
 }

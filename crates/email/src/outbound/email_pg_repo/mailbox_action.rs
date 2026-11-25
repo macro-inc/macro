@@ -1,4 +1,6 @@
+use crate::domain::models::label::LabelsGained;
 use crate::domain::models::mailbox_action::*;
+use email_db_client::labels::thread_gain;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -31,7 +33,7 @@ pub(super) async fn enqueue(
     action: &MailboxAction,
     targets: &[MailboxActionTarget],
 ) -> Result<Uuid, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = super::begin(pool).await?;
     // Serialize acceptance per mailbox and recheck the scoped delegation edge at
     // commit, so an access revocation cannot create new pending work.
     let binding = sqlx::query!(r#"
@@ -61,7 +63,15 @@ pub(super) async fn enqueue(
     )
     .execute(&mut *tx)
     .await?;
+    let added_category = match action {
+        MailboxAction::Category {
+            name,
+            present: true,
+        } => vec![name.clone()],
+        _ => Vec::new(),
+    };
     let mut threads = std::collections::HashSet::new();
+    let mut absent = Vec::new();
     for target in targets {
         let mut pending =
             serde_json::to_value(&target.pending).map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
@@ -83,7 +93,17 @@ pub(super) async fn enqueue(
         )
         .fetch_one(&mut *tx)
         .await?;
-        threads.insert(message.thread_id);
+        if threads.insert(message.thread_id) {
+            // Before this command's own pending category overlays the thread.
+            let missing = thread_gain::absent_from_thread(
+                &mut tx,
+                link_id,
+                message.thread_id,
+                &added_category,
+            )
+            .await?;
+            absent.extend(missing.into_iter().map(|label| (message.thread_id, label)));
+        }
         sqlx::query!(
             r#"
             INSERT INTO email_mailbox_command_targets (command_id,message_id,provider_id,pending)
@@ -111,10 +131,27 @@ pub(super) async fn enqueue(
                 .execute(&mut *tx).await?;
         }
     }
+    let message_ids: Vec<Uuid> = targets.iter().map(|target| target.message_id).collect();
+    let absent_labels: Vec<Uuid> = absent.iter().map(|(_, label)| *label).collect();
+    let carried = thread_gain::carried_by_messages(&mut tx, &message_ids, &absent_labels).await?;
     for thread_id in threads {
         email_db_client::threads::update::recompute_thread_metadata(&mut tx, thread_id, link_id)
             .await?;
-        let payload = serde_json::json!({"kind":"organization","thread_id":thread_id,"actor":actor.as_ref(),"action":action,"agent_correlation_id":agent_correlation::context::current()});
+        let label_ids: Vec<Uuid> = carried
+            .iter()
+            .filter(|label| {
+                label.thread_id == thread_id && absent.contains(&(thread_id, label.label_id))
+            })
+            .map(|label| label.label_id)
+            .collect();
+        let labels_gained = (!label_ids.is_empty()).then(|| LabelsGained {
+            event_id: macro_uuid::generate_uuid_v7(),
+            label_ids,
+            message_id: None,
+            automated: agent_correlation::context::by_program(),
+        });
+        let payload = serde_json::json!({"kind":"organization","thread_id":thread_id,"actor":actor.as_ref(),"action":action,"agent_correlation_id":agent_correlation::context::current(),
+            "routine_id":agent_correlation::context::current_routine(),"labels_gained":labels_gained,"traceparent":crate::trace_context::current()});
         sqlx::query!(
             r#"
             INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)

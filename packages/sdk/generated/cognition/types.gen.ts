@@ -37,15 +37,15 @@ export type ActivityReports = {
 };
 
 /**
- * Request body for adding a new MCP server.
+ * Adding a server by URL.
  */
 export type AddServerRequest = {
     /**
-     * Human-readable name for the server.
+     * Its display name; its tools are listed under it.
      */
-    server_name: string;
+    name: string;
     /**
-     * The MCP server's streamable HTTP URL.
+     * The server's streamable HTTP URL.
      */
     url: string;
 };
@@ -201,6 +201,50 @@ export type CallToolResponse = {
      * The tool execution result.
      */
     result: unknown;
+};
+
+/**
+ * One connectable app.
+ */
+export type CatalogApp = {
+    /**
+     * The directory's categories for it.
+     */
+    categories: Array<string>;
+    /**
+     * One line on what connecting it enables.
+     */
+    description?: string | null;
+    /**
+     * Its icon.
+     */
+    iconUrl?: string | null;
+    /**
+     * Its connector key, `app/{slug}`.
+     */
+    key: string;
+    /**
+     * The display name.
+     */
+    name: string;
+    /**
+     * Its canonical slug.
+     */
+    slug: string;
+};
+
+/**
+ * A page of the catalog, most popular first.
+ */
+export type CatalogPage = {
+    /**
+     * The apps, in display order.
+     */
+    apps: Array<CatalogApp>;
+    /**
+     * The cursor for the next page; absent on the last.
+     */
+    nextCursor?: string | null;
 };
 
 /**
@@ -458,19 +502,146 @@ export type CompletionUsage = {
 };
 
 /**
- * One of the user's MCP server connections, as the setup page sees it.
+ * Objects confirmed in the current Notion write's ledger.
+ */
+export type ConfirmedNotionWrites = {
+    /**
+     * Rows inserted into databases, including writes from unfinished copies.
+     */
+    databaseRows: number;
+    /**
+     * Copied databases.
+     */
+    databases: number;
+    /**
+     * Copied pages.
+     */
+    documents: number;
+    /**
+     * The subset of database rows written before their source stopped.
+     */
+    partialDatabaseRows?: number;
+    /**
+     * The subset of tasks written before their source stopped.
+     */
+    partialTasks?: number;
+    /**
+     * Databases copied as task lists.
+     */
+    taskLists: number;
+    /**
+     * Tasks inserted into task lists, including writes from unfinished lists.
+     */
+    tasks: number;
+};
+
+/**
+ * What the user must do next to connect. It never says whose flow it is.
+ */
+export type ConnectStep = {
+    type: 'openUrl';
+    /**
+     * The page.
+     */
+    url: string;
+} | {
+    /**
+     * RFC 3339 expiry of the token.
+     */
+    expiresAt: string;
+    /**
+     * A page that opens the same flow in a browser tab.
+     */
+    link: string;
+    /**
+     * The token the dialog opens with.
+     */
+    token: string;
+    type: 'embeddedDialog';
+};
+
+/**
+ * One of the user's usable connections, an app or a server added by URL,
+ * as the setup page sees it.
  */
 export type ConnectedServer = {
     /**
-     * Whether the user has completed OAuth against it.
+     * Whether it is usable; always true, since only usable connections are
+     * listed.
      */
     authenticated: boolean;
     /**
-     * The server's display name.
+     * The display name.
      */
     name: string;
     /**
-     * The server URL.
+     * The app's slug, or the server's URL.
+     */
+    url: string;
+};
+
+/**
+ * One app or server and where the user stands with it. It never says
+ * which provider holds the connection.
+ */
+export type Connector = {
+    /**
+     * Whether its connection provides the app's REST API.
+     */
+    api: boolean;
+    /**
+     * Whether the user can connect it from here.
+     */
+    connectable: boolean;
+    /**
+     * Whether Macro can import from it through its connection.
+     */
+    importAvailable: boolean;
+    /**
+     * The stable key, also its path under `/connectors/`.
+     */
+    key: string;
+    /**
+     * Whether its connection provides MCP tools.
+     */
+    mcp: boolean;
+    /**
+     * The display name.
+     */
+    name: string;
+    /**
+     * Where the user stands with it.
+     */
+    status: ConnectorStatus;
+    /**
+     * What the key names.
+     */
+    target: ConnectorTarget;
+};
+
+/**
+ * Which kind of connector a key names.
+ */
+export type ConnectorKind = 'app' | 'server';
+
+/**
+ * Where a user stands with an app or server.
+ */
+export type ConnectorStatus = 'connected' | 'disabled' | 'needsReauth' | 'notConnected';
+
+/**
+ * What a key names, for display.
+ */
+export type ConnectorTarget = {
+    /**
+     * Its canonical slug.
+     */
+    slug: string;
+    type: 'app';
+} | {
+    type: 'server';
+    /**
+     * Its normalized URL.
      */
     url: string;
 };
@@ -897,6 +1068,77 @@ export type HttpSendChatMessageRequest = {
 };
 
 /**
+ * Something a HubSpot import cannot carry into Macro CRM, counted on the
+ * review card and in the final report.
+ */
+export type HubspotLoss = 'owner_not_member' | 'deal_without_company' | 'deal_without_pipeline' | 'extra_company_links' | 'domain_rejected' | 'unsupported_currency' | 'additional_domains' | 'company_owner' | 'merged_company' | 'merged_contact' | 'contact_without_company';
+
+/**
+ * How many records lost one thing.
+ */
+export type HubspotLossCount = {
+    /**
+     * Records affected.
+     */
+    count: number;
+    /**
+     * What was lost.
+     */
+    loss: HubspotLoss;
+};
+
+/**
+ * What a HubSpot plan holds, for the review card.
+ */
+export type HubspotReport = {
+    /**
+     * Records already in Macro from an earlier import, left as they are.
+     */
+    alreadyImported: number;
+    /**
+     * Companies.
+     */
+    companies: number;
+    /**
+     * Contacts.
+     */
+    contacts: number;
+    /**
+     * Records this import created in the CRM.
+     */
+    created?: number;
+    /**
+     * Portal-defined property names whose values stay in HubSpot.
+     */
+    customProperties: Array<string>;
+    /**
+     * Deals, each becoming an entry in its pipeline.
+     */
+    deals: number;
+    /**
+     * Records this import matched to ones already in the CRM (same domain,
+     * address or deal) or to a teammate's import, instead of creating them.
+     */
+    linked?: number;
+    /**
+     * What cannot be carried over, by kind.
+     */
+    losses: Array<HubspotLossCount>;
+    /**
+     * HubSpot owners named by the planned records.
+     */
+    owners: number;
+    /**
+     * Of those, owners matched to a team member by email.
+     */
+    ownersMatched: number;
+    /**
+     * Deal pipelines, each becoming a Macro pipeline.
+     */
+    pipelines: number;
+};
+
+/**
  * The caller's ledger rows.
  */
 export type ImportEntitiesResponse = {
@@ -993,7 +1235,7 @@ export type ImportEntity = {
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
  */
-export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
+export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel' | 'hubspot_pipeline' | 'hubspot_company' | 'hubspot_contact' | 'hubspot_deal';
 
 /**
  * Body for importing one Notion page.
@@ -1059,7 +1301,7 @@ export type ImportRun = {
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
 
 /**
  * The full import aggregate for a user: discovery runs plus visible ledger
@@ -1234,9 +1476,45 @@ export type NotionAlreadyImported = {
      */
     entityId: string;
     /**
-     * That entity's type (`md`, `project`).
+     * That entity's type (`md`, `project`, `database`).
      */
     entityType: string;
+};
+
+/**
+ * Changes to one view of an imported database.
+ */
+export type NotionChangedView = {
+    /**
+     * Changes ordered by impact.
+     */
+    changes: Array<NotionViewChange>;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Stable Notion identity, separate from the title.
+     */
+    viewId: string;
+};
+
+/**
+ * Views that changed on one database.
+ */
+export type NotionDatabaseViewChanges = {
+    /**
+     * Stable Notion data source identity.
+     */
+    databaseId: string;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Views ordered by their highest impact.
+     */
+    views: Array<NotionChangedView>;
 };
 
 /**
@@ -1277,6 +1555,7 @@ export type NotionImportReport = {
      * they link to that copy and are not counted as copies.
      */
     alreadyInMacro?: number;
+    confirmed?: null | ConfirmedNotionWrites;
     /**
      * Objects to copy as they are.
      */
@@ -1286,7 +1565,7 @@ export type NotionImportReport = {
      */
     dataSources: number;
     /**
-     * Rows those databases hold, every one counted while planning.
+     * Estimated database rows while planning, confirmed rows once completed.
      */
     databaseRows: number;
     /**
@@ -1298,6 +1577,7 @@ export type NotionImportReport = {
      * planning is still `running`.
      */
     deciding?: number;
+    details?: null | NotionReportDetails;
     /**
      * Pages written as documents.
      */
@@ -1306,6 +1586,10 @@ export type NotionImportReport = {
      * Why the run failed, when it did.
      */
     error?: string | null;
+    /**
+     * Total objects that failed, including those outside the sample.
+     */
+    failureCount?: number;
     /**
      * Objects that failed to import, with the failure.
      */
@@ -1318,8 +1602,9 @@ export type NotionImportReport = {
      * Objects that need handling by hand, with reasons.
      */
     handItems?: Array<NotionReportItem>;
+    hubspot?: null | HubspotReport;
     /**
-     * Plan objects already imported.
+     * Plan objects finished so far, or confirmed new copies once completed.
      */
     imported: number;
     /**
@@ -1401,6 +1686,14 @@ export type NotionPlanItem = {
     alreadyImported?: null | NotionAlreadyImported;
     decision?: null | NotionDecision;
     /**
+     * Notion objects whose bodies require this external data source.
+     */
+    dependencyOf?: Array<string>;
+    /**
+     * Planned objects whose bodies display this source inline.
+     */
+    inlineOn?: Array<string>;
+    /**
      * Titles of the pages above it, outermost first.
      */
     path?: Array<string>;
@@ -1433,6 +1726,48 @@ export type NotionPlanItem = {
 };
 
 /**
+ * Details alongside the outcome on a Notion import card.
+ */
+export type NotionReportDetails = {
+    /**
+     * A sample of items deliberately left out, with the reviewed reasons.
+     */
+    notImported: Array<NotionReviewOmission>;
+    /**
+     * Totals for each kind of notice.
+     */
+    noteCounts?: Array<NotionReportNoteCount>;
+    /**
+     * A sample of legacy notices and non-view fidelity changes.
+     */
+    notes: Array<NotionReportNote>;
+    /**
+     * Totals for each review choice.
+     */
+    omissionCounts?: Array<NotionReviewOmissionCount>;
+    /**
+     * Total number of placements that used a default tab.
+     */
+    tabChoiceCount?: number;
+    /**
+     * A sample of tab selections caused by an unspecified Notion tab.
+     */
+    tabChoices: Array<NotionTabChoice>;
+    /**
+     * Total number of displayed and undisplayed change lines.
+     */
+    viewChangeCount?: number;
+    /**
+     * Saved view differences, sampled by impact and grouped by source and view.
+     */
+    viewChanges: Array<NotionDatabaseViewChanges>;
+    /**
+     * Total number of changed views.
+     */
+    viewCount?: number;
+};
+
+/**
  * One object a workspace import report calls out.
  */
 export type NotionReportItem = {
@@ -1459,6 +1794,110 @@ export type NotionReportItem = {
 };
 
 /**
+ * A counted content or compatibility note.
+ */
+export type NotionReportNote = {
+    /**
+     * Number of incidents represented by this notice.
+     */
+    count: number;
+    /**
+     * Semantic category.
+     */
+    kind: NotionReportNoteKind;
+    /**
+     * Human-readable text, with affected source and property titles.
+     */
+    message: string;
+};
+
+/**
+ * Counts for one kind of content note, including notes outside the sample.
+ */
+export type NotionReportNoteCount = {
+    /**
+     * Number of incidents described by the notices.
+     */
+    count: number;
+    /**
+     * Semantic category.
+     */
+    kind: NotionReportNoteKind;
+    /**
+     * Number of notices.
+     */
+    lines: number;
+};
+
+/**
+ * Content-level notes that do not describe a saved view or a reviewed skip.
+ */
+export type NotionReportNoteKind = 'omitted' | 'snapshot' | 'reference' | 'other';
+
+/**
+ * A review choice and the item it left out.
+ */
+export type NotionReviewOmission = {
+    /**
+     * Source title, link and review reason.
+     */
+    item: NotionReportItem;
+    /**
+     * Which review choice led to the omission.
+     */
+    kind: NotionReviewOmissionKind;
+};
+
+/**
+ * Counts for one review choice, including items outside the sample.
+ */
+export type NotionReviewOmissionCount = {
+    /**
+     * Databases left out.
+     */
+    databases: number;
+    /**
+     * The reviewed choice responsible.
+     */
+    kind: NotionReviewOmissionKind;
+    /**
+     * Other objects left out.
+     */
+    other: number;
+    /**
+     * Pages left out.
+     */
+    pages: number;
+};
+
+/**
+ * Why an item was left for the user in the reviewed plan.
+ */
+export type NotionReviewOmissionKind = 'left_out' | 'excluded' | 'by_hand';
+
+/**
+ * A first-tab choice when Notion omitted the view from a reference.
+ */
+export type NotionTabChoice = {
+    /**
+     * Container identity. Different linked placements may choose different tabs.
+     */
+    containerId: string;
+    /**
+     * Title of the page or row containing the reference.
+     */
+    containerTitle?: string | null;
+    /**
+     * Database name shown in the reference.
+     */
+    database: string;
+    /**
+     * Name of the returned first tab.
+     */
+    tab: string;
+};
+
+/**
  * Which Notion columns hold a task list's task fields, by property name.
  */
 export type NotionTaskFields = {
@@ -1479,6 +1918,29 @@ export type NotionTaskFields = {
      */
     status?: string | null;
 };
+
+/**
+ * A counted, readable difference in an imported view.
+ */
+export type NotionViewChange = {
+    /**
+     * Number of changed settings represented in this line.
+     */
+    count: number;
+    /**
+     * Semantic category used for ordering and grouping.
+     */
+    kind: NotionViewChangeKind;
+    /**
+     * Human-readable description.
+     */
+    message: string;
+};
+
+/**
+ * The kind and severity of a user-visible change to a saved view.
+ */
+export type NotionViewChangeKind = 'filter' | 'layout' | 'sort' | 'visibility' | 'display';
 
 /**
  * One user's onboarding row.
@@ -1508,7 +1970,7 @@ export type OnboardingRow = {
  */
 export type OnboardingState = {
     /**
-     * The user's MCP server connections.
+     * The user's usable connections.
      */
     connected_servers: Array<ConnectedServer>;
     /**
@@ -1543,191 +2005,6 @@ export type PatchChatRequest = {
      */
     projectId?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
-};
-
-/**
- * One connectable app in the catalog.
- */
-export type PipedreamCatalogEntryResponse = {
-    /**
-     * Pipedream app name slug — pass this to the connect flow.
-     */
-    app_slug: string;
-    /**
-     * Categories assigned by Pipedream.
-     */
-    categories?: Array<string>;
-    /**
-     * One-line description of the app.
-     */
-    description?: string | null;
-    /**
-     * Human-readable name to display.
-     */
-    display_name: string;
-    /**
-     * URL of the app's icon, when available.
-     */
-    icon_url?: string | null;
-};
-
-/**
- * A page of the connector catalog.
- */
-export type PipedreamCatalogResponse = {
-    /**
-     * Cursor for the next page. Absent on the last page.
-     */
-    next_cursor?: string | null;
-    /**
-     * Catalog entries in display order (most popular first).
-     */
-    servers: Array<PipedreamCatalogEntryResponse>;
-};
-
-/**
- * Request body for completing a Pipedream connect flow.
- */
-export type PipedreamCompleteRequest = {
-    /**
-     * The connected-account ID reported by the Connect UI on success.
-     */
-    account_id: string;
-    /**
-     * Optional display name for the connector. Defaults to the app's name
-     * for new connections; existing connections keep their name.
-     */
-    server_name?: string | null;
-};
-
-/**
- * Request body for recording a finished Macro Connect flow.
- */
-export type PipedreamConnectCompleteRequest = {
-    /**
-     * The app that was connected, by Pipedream slug.
-     */
-    app_slug: string;
-    /**
-     * Optional display name for the connector, as for completion.
-     */
-    server_name?: string | null;
-};
-
-/**
- * A connected MCP app as returned by the API.
- */
-export type PipedreamConnectionResponse = {
-    /**
-     * Pipedream app name slug, e.g. `linear`.
-     */
-    app_slug: string;
-    /**
-     * Whether the connector is enabled for tool use.
-     */
-    enabled: boolean;
-    /**
-     * The backend holding the grant.
-     */
-    provider: PipedreamProviderResponse;
-    /**
-     * Human-readable display name.
-     */
-    server_name: string;
-};
-
-/**
- * A catalog app that connects through its own MCP server instead of
- * Pipedream.
- */
-export type PipedreamOverlayResponse = {
-    /**
-     * Pipedream app name slug, as it appears in the catalog.
-     */
-    app_slug: string;
-    /**
-     * The MCP server to authorize with the native MCP OAuth flow.
-     */
-    server_url: string;
-};
-
-/**
- * Which backend a connection or connect flow uses.
- */
-export type PipedreamProviderResponse = 'pipedream' | 'connect';
-
-/**
- * Request body for recovering a connect flow whose result the Connect UI
- * never reported.
- */
-export type PipedreamRecoverRequest = {
-    /**
-     * The Pipedream app the flow was connecting, by name slug.
-     */
-    app_slug: string;
-    /**
-     * Optional display name for the connector, as for completion.
-     */
-    server_name?: string | null;
-};
-
-/**
- * Request body for starting a connect flow.
- */
-export type PipedreamTokenRequest = {
-    /**
-     * The app to connect, by Pipedream slug. With it, an app Macro Connect
-     * serves can answer with a Connect URL instead of a Pipedream token.
-     */
-    app_slug?: string | null;
-};
-
-/**
- * Response from starting a connect flow: a Pipedream Connect token, or for
- * `provider = connect` a Macro Connect URL.
- */
-export type PipedreamTokenResponse = {
-    /**
-     * Shareable link that opens the same connect flow in a browser tab.
-     * Pipedream only.
-     */
-    connect_link_url?: string | null;
-    /**
-     * URL to open in a popup or browser tab for Macro Connect's consent
-     * flow; once it finishes, call `/pipedream/mcp/connect/complete`.
-     * Connect only.
-     */
-    connect_url?: string | null;
-    /**
-     * RFC 3339 expiry of the token. Pipedream only.
-     */
-    expires_at?: string | null;
-    /**
-     * The backend this flow connects through.
-     */
-    provider: PipedreamProviderResponse;
-    /**
-     * Short-lived token to open the Pipedream Connect UI with. Pipedream only.
-     */
-    token?: string | null;
-};
-
-/**
- * Request body for updating a connected app.
- */
-export type PipedreamUpdateRequest = {
-    /**
-     * The app slug to update.
-     */
-    app_slug: string;
-    /**
-     * Enable or disable the connector.
-     */
-    enabled?: boolean | null;
-    /**
-     * New display name for the connector.
-     */
-    server_name?: string | null;
 };
 
 /**
@@ -1893,28 +2170,6 @@ export type SendChatMessageResponse = {
      * The stream ID that will receive the response chunks (same as message_id)
      */
     stream_id: string;
-};
-
-/**
- * An MCP server record as returned by the API.
- */
-export type ServerResponse = {
-    /**
-     * Whether the server has valid stored credentials.
-     */
-    authenticated: boolean;
-    /**
-     * Whether the server is enabled for tool use.
-     */
-    enabled: boolean;
-    /**
-     * Human-readable server name.
-     */
-    server_name: string;
-    /**
-     * The MCP server URL.
-     */
-    url: string;
 };
 
 /**
@@ -2095,30 +2350,6 @@ export type SlackParticipant = {
      * Display name or Slack handle.
      */
     name: string;
-};
-
-/**
- * Request body for starting an OAuth authorization flow.
- */
-export type StartAuthRequest = {
-    /**
-     * Human-readable name for the server.
-     */
-    server_name: string;
-    /**
-     * The MCP server URL to authorize against.
-     */
-    server_url: string;
-};
-
-/**
- * Response from starting an OAuth authorization flow.
- */
-export type StartAuthResponse = {
-    /**
-     * The OAuth authorization URL to redirect the user to.
-     */
-    authorization_url: string;
 };
 
 /**
@@ -2413,6 +2644,20 @@ export type UpdateChannelSharePermission = {
 };
 
 /**
+ * Changing a connection. Each field present is applied.
+ */
+export type UpdateConnectorRequest = {
+    /**
+     * Turn it on or off.
+     */
+    enabled?: boolean | null;
+    /**
+     * A new display name.
+     */
+    name?: string | null;
+};
+
+/**
  * One explicit memory edit at the revision it was based on.
  */
 export type UpdateExplicitMemoryRequest = {
@@ -2427,24 +2672,6 @@ export type UpdateExplicitMemoryRequest = {
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
-
-/**
- * Request body for updating an MCP server.
- */
-export type UpdateServerRequest = {
-    /**
-     * Enable or disable the server.
-     */
-    enabled?: boolean | null;
-    /**
-     * New name for the server.
-     */
-    server_name?: string | null;
-    /**
-     * The server URL to update.
-     */
-    url: string;
-};
 
 export type UpdateSharePermissionRequestV2 = {
     /**
@@ -3310,6 +3537,207 @@ export type GetCitationHandlerResponses = {
 
 export type GetCitationHandlerResponse = GetCitationHandlerResponses[keyof GetCitationHandlerResponses];
 
+export type ListConnectorsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/connectors';
+};
+
+export type ListConnectorsErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type ListConnectorsError = ListConnectorsErrors[keyof ListConnectorsErrors];
+
+export type ListConnectorsResponses = {
+    200: Array<Connector>;
+};
+
+export type ListConnectorsResponse = ListConnectorsResponses[keyof ListConnectorsResponses];
+
+export type AddConnectorServerData = {
+    body: AddServerRequest;
+    path?: never;
+    query?: never;
+    url: '/connectors';
+};
+
+export type AddConnectorServerErrors = {
+    400: ErrorResponse;
+    401: string;
+    500: ErrorResponse;
+};
+
+export type AddConnectorServerError = AddConnectorServerErrors[keyof AddConnectorServerErrors];
+
+export type AddConnectorServerResponses = {
+    201: Connector;
+};
+
+export type AddConnectorServerResponse = AddConnectorServerResponses[keyof AddConnectorServerResponses];
+
+export type BrowseConnectorCatalogData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter apps by name; omit to browse.
+         */
+        search?: string;
+        /**
+         * The cursor from the previous page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1 to 50 (default 20).
+         */
+        limit?: number;
+    };
+    url: '/connectors/catalog';
+};
+
+export type BrowseConnectorCatalogErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type BrowseConnectorCatalogError = BrowseConnectorCatalogErrors[keyof BrowseConnectorCatalogErrors];
+
+export type BrowseConnectorCatalogResponses = {
+    200: CatalogPage;
+};
+
+export type BrowseConnectorCatalogResponse = BrowseConnectorCatalogResponses[keyof BrowseConnectorCatalogResponses];
+
+export type RemoveConnectorData = {
+    body?: never;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}';
+};
+
+export type RemoveConnectorErrors = {
+    400: ErrorResponse;
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveConnectorError = RemoveConnectorErrors[keyof RemoveConnectorErrors];
+
+export type RemoveConnectorResponses = {
+    204: void;
+};
+
+export type RemoveConnectorResponse = RemoveConnectorResponses[keyof RemoveConnectorResponses];
+
+export type UpdateConnectorData = {
+    body: UpdateConnectorRequest;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}';
+};
+
+export type UpdateConnectorErrors = {
+    400: ErrorResponse;
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateConnectorError = UpdateConnectorErrors[keyof UpdateConnectorErrors];
+
+export type UpdateConnectorResponses = {
+    204: void;
+};
+
+export type UpdateConnectorResponse = UpdateConnectorResponses[keyof UpdateConnectorResponses];
+
+export type CompleteConnectorConnectData = {
+    body?: never;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}/complete';
+};
+
+export type CompleteConnectorConnectErrors = {
+    400: ErrorResponse;
+    401: string;
+    /**
+     * Not connected yet; poll again while the connect page is open
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CompleteConnectorConnectError = CompleteConnectorConnectErrors[keyof CompleteConnectorConnectErrors];
+
+export type CompleteConnectorConnectResponses = {
+    200: Connector;
+};
+
+export type CompleteConnectorConnectResponse = CompleteConnectorConnectResponses[keyof CompleteConnectorConnectResponses];
+
+export type StartConnectorConnectData = {
+    body?: never;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}/connect';
+};
+
+export type StartConnectorConnectErrors = {
+    400: ErrorResponse;
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type StartConnectorConnectError = StartConnectorConnectErrors[keyof StartConnectorConnectErrors];
+
+export type StartConnectorConnectResponses = {
+    200: ConnectStep;
+};
+
+export type StartConnectorConnectResponse = StartConnectorConnectResponses[keyof StartConnectorConnectResponses];
+
 export type GenerateDatabaseQueryData = {
     body: DatabaseQueryRequest;
     path?: never;
@@ -3771,167 +4199,60 @@ export type CancelWorkspaceHandlerResponses = {
 
 export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
 
-export type DeleteMcpServerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The server URL to delete.
-         */
-        url: string;
-    };
-    url: '/mcp/servers';
-};
-
-export type DeleteMcpServerErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type DeleteMcpServerError = DeleteMcpServerErrors[keyof DeleteMcpServerErrors];
-
-export type DeleteMcpServerResponses = {
-    204: void;
-};
-
-export type DeleteMcpServerResponse = DeleteMcpServerResponses[keyof DeleteMcpServerResponses];
-
-export type ListMcpServersData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers';
-};
-
-export type ListMcpServersErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type ListMcpServersError = ListMcpServersErrors[keyof ListMcpServersErrors];
-
-export type ListMcpServersResponses = {
-    200: Array<ServerResponse>;
-};
-
-export type ListMcpServersResponse = ListMcpServersResponses[keyof ListMcpServersResponses];
-
-export type AddMcpServerData = {
-    body: AddServerRequest;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers';
-};
-
-export type AddMcpServerErrors = {
-    400: ErrorResponse;
-    401: string;
-    500: ErrorResponse;
-};
-
-export type AddMcpServerError = AddMcpServerErrors[keyof AddMcpServerErrors];
-
-export type AddMcpServerResponses = {
-    201: ServerResponse;
-};
-
-export type AddMcpServerResponse = AddMcpServerResponses[keyof AddMcpServerResponses];
-
-export type UpdateMcpServerData = {
-    body: UpdateServerRequest;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers';
-};
-
-export type UpdateMcpServerErrors = {
-    401: string;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpdateMcpServerError = UpdateMcpServerErrors[keyof UpdateMcpServerErrors];
-
-export type UpdateMcpServerResponses = {
-    200: ServerResponse;
-};
-
-export type UpdateMcpServerResponse = UpdateMcpServerResponses[keyof UpdateMcpServerResponses];
-
-export type McpAuthCallbackData = {
+export type ConnectorOauthCallbackData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Authorization code from the OAuth provider. Present on success.
+         * The authorization code, on success.
          */
         code?: string;
         /**
-         * CSRF state parameter.
+         * The one-time state the flow started with.
          */
         state?: string;
         /**
-         * OAuth error code from the provider, e.g. `access_denied`. Present on failure.
+         * The provider's error code, e.g. `access_denied`, on failure.
          */
         error?: string;
         /**
-         * Human-readable error description from the provider.
+         * The provider's description of the error.
          */
         error_description?: string;
     };
     url: '/mcp/servers/auth/callback';
 };
 
-export type McpAuthCallbackErrors = {
+export type ConnectorOauthCallbackErrors = {
     /**
-     * Provider rejected authorization, or the callback was malformed
+     * The provider refused, or the redirect was malformed
      */
     400: ErrorResponse;
     500: ErrorResponse;
 };
 
-export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackErrors];
+export type ConnectorOauthCallbackError = ConnectorOauthCallbackErrors[keyof ConnectorOauthCallbackErrors];
 
-export type McpAuthCallbackResponses = {
+export type ConnectorOauthCallbackResponses = {
     /**
-     * OAuth flow completed successfully
+     * Signed in
      */
     200: unknown;
 };
 
-export type McpOauthClientMetadataData = {
+export type ConnectorOauthClientMetadataData = {
     body?: never;
     path?: never;
     query?: never;
     url: '/mcp/servers/auth/client-metadata';
 };
 
-export type McpOauthClientMetadataResponses = {
+export type ConnectorOauthClientMetadataResponses = {
     /**
-     * Macro OAuth client metadata document
+     * Macro's OAuth client metadata document
      */
     200: unknown;
 };
-
-export type StartMcpAuthData = {
-    body: StartAuthRequest;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers/auth/start';
-};
-
-export type StartMcpAuthErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type StartMcpAuthError = StartMcpAuthErrors[keyof StartMcpAuthErrors];
-
-export type StartMcpAuthResponses = {
-    200: StartAuthResponse;
-};
-
-export type StartMcpAuthResponse = StartMcpAuthResponses[keyof StartMcpAuthResponses];
 
 export type GetMemoryHandlerData = {
     body?: never;
@@ -4174,215 +4495,6 @@ export type DismissPromptHandlerResponses = {
 };
 
 export type DismissPromptHandlerResponse = DismissPromptHandlerResponses[keyof DismissPromptHandlerResponses];
-
-export type BrowsePipedreamMcpCatalogData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Search query to filter apps by name. Omit to browse.
-         */
-        search?: string;
-        /**
-         * Opaque pagination cursor from a previous response.
-         */
-        cursor?: string;
-        /**
-         * Page size (default 20, max 50).
-         */
-        limit?: number;
-    };
-    url: '/pipedream/mcp/catalog';
-};
-
-export type BrowsePipedreamMcpCatalogErrors = {
-    401: string;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type BrowsePipedreamMcpCatalogError = BrowsePipedreamMcpCatalogErrors[keyof BrowsePipedreamMcpCatalogErrors];
-
-export type BrowsePipedreamMcpCatalogResponses = {
-    200: PipedreamCatalogResponse;
-};
-
-export type BrowsePipedreamMcpCatalogResponse = BrowsePipedreamMcpCatalogResponses[keyof BrowsePipedreamMcpCatalogResponses];
-
-export type CompletePipedreamMcpConnectionData = {
-    body: PipedreamCompleteRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/complete';
-};
-
-export type CompletePipedreamMcpConnectionErrors = {
-    401: string;
-    404: ErrorResponse;
-    409: ErrorResponse;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type CompletePipedreamMcpConnectionError = CompletePipedreamMcpConnectionErrors[keyof CompletePipedreamMcpConnectionErrors];
-
-export type CompletePipedreamMcpConnectionResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type CompletePipedreamMcpConnectionResponse = CompletePipedreamMcpConnectionResponses[keyof CompletePipedreamMcpConnectionResponses];
-
-export type CompletePipedreamMcpConnectData = {
-    body: PipedreamConnectCompleteRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/connect/complete';
-};
-
-export type CompletePipedreamMcpConnectErrors = {
-    401: string;
-    404: ErrorResponse;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type CompletePipedreamMcpConnectError = CompletePipedreamMcpConnectErrors[keyof CompletePipedreamMcpConnectErrors];
-
-export type CompletePipedreamMcpConnectResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type CompletePipedreamMcpConnectResponse = CompletePipedreamMcpConnectResponses[keyof CompletePipedreamMcpConnectResponses];
-
-export type DeletePipedreamMcpConnectionData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The app slug to disconnect.
-         */
-        app_slug: string;
-    };
-    url: '/pipedream/mcp/connections';
-};
-
-export type DeletePipedreamMcpConnectionErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type DeletePipedreamMcpConnectionError = DeletePipedreamMcpConnectionErrors[keyof DeletePipedreamMcpConnectionErrors];
-
-export type DeletePipedreamMcpConnectionResponses = {
-    204: void;
-};
-
-export type DeletePipedreamMcpConnectionResponse = DeletePipedreamMcpConnectionResponses[keyof DeletePipedreamMcpConnectionResponses];
-
-export type ListPipedreamMcpConnectionsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/connections';
-};
-
-export type ListPipedreamMcpConnectionsErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type ListPipedreamMcpConnectionsError = ListPipedreamMcpConnectionsErrors[keyof ListPipedreamMcpConnectionsErrors];
-
-export type ListPipedreamMcpConnectionsResponses = {
-    200: Array<PipedreamConnectionResponse>;
-};
-
-export type ListPipedreamMcpConnectionsResponse = ListPipedreamMcpConnectionsResponses[keyof ListPipedreamMcpConnectionsResponses];
-
-export type UpdatePipedreamMcpConnectionData = {
-    body: PipedreamUpdateRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/connections';
-};
-
-export type UpdatePipedreamMcpConnectionErrors = {
-    401: string;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpdatePipedreamMcpConnectionError = UpdatePipedreamMcpConnectionErrors[keyof UpdatePipedreamMcpConnectionErrors];
-
-export type UpdatePipedreamMcpConnectionResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type UpdatePipedreamMcpConnectionResponse = UpdatePipedreamMcpConnectionResponses[keyof UpdatePipedreamMcpConnectionResponses];
-
-export type ListPipedreamMcpOverlaysData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/overlays';
-};
-
-export type ListPipedreamMcpOverlaysErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type ListPipedreamMcpOverlaysError = ListPipedreamMcpOverlaysErrors[keyof ListPipedreamMcpOverlaysErrors];
-
-export type ListPipedreamMcpOverlaysResponses = {
-    200: Array<PipedreamOverlayResponse>;
-};
-
-export type ListPipedreamMcpOverlaysResponse = ListPipedreamMcpOverlaysResponses[keyof ListPipedreamMcpOverlaysResponses];
-
-export type RecoverPipedreamMcpConnectionData = {
-    body: PipedreamRecoverRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/recover';
-};
-
-export type RecoverPipedreamMcpConnectionErrors = {
-    401: string;
-    404: ErrorResponse;
-    409: ErrorResponse;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type RecoverPipedreamMcpConnectionError = RecoverPipedreamMcpConnectionErrors[keyof RecoverPipedreamMcpConnectionErrors];
-
-export type RecoverPipedreamMcpConnectionResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type RecoverPipedreamMcpConnectionResponse = RecoverPipedreamMcpConnectionResponses[keyof RecoverPipedreamMcpConnectionResponses];
-
-export type CreatePipedreamMcpTokenData = {
-    body?: null | PipedreamTokenRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/token';
-};
-
-export type CreatePipedreamMcpTokenErrors = {
-    401: string;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type CreatePipedreamMcpTokenError = CreatePipedreamMcpTokenErrors[keyof CreatePipedreamMcpTokenErrors];
-
-export type CreatePipedreamMcpTokenResponses = {
-    200: PipedreamTokenResponse;
-};
-
-export type CreatePipedreamMcpTokenResponse = CreatePipedreamMcpTokenResponses[keyof CreatePipedreamMcpTokenResponses];
 
 export type GetBatchPreviewData = {
     body: GetBatchPreviewRequest;

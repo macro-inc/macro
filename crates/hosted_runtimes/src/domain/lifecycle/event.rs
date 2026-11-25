@@ -112,6 +112,9 @@ pub enum Event {
     /// The agent teammate the computer was bought for reported itself
     /// online.
     AgentOnline,
+    /// macrod took the agent teammate handed to it: the
+    /// [`Effect::DeliverAgent`] hand-off finished.
+    AgentDelivered,
     /// Timer: [`AGENT_START_DEADLINE`] after macrod connected; an agent that
     /// still hasn't reported online failed its start.
     AgentStartDue,
@@ -173,6 +176,9 @@ pub enum Rejected {
     /// The purchase's charge has not settled yet.
     #[error("this computer's payment is still being confirmed")]
     PaymentPending,
+    /// A service-only update or its recovery currently holds the guest.
+    #[error("a runtime update or recovery is holding this computer")]
+    RuntimeUpdateInProgress,
     /// Only a computer whose guest exists can move to another host.
     #[error("this computer cannot move to another host now")]
     NotMovable,

@@ -19,6 +19,16 @@
   transition: grid-template-columns 160ms ease;
 }
 
+/* With start dates the Due date cell can hold a range. */
+.task-grid-row.task-grid-icon-creator.task-grid-dates {
+  --task-col-due-date: 10.5rem;
+}
+
+/* Project metadata uses task tracks but keeps Updated through 600px. */
+.task-grid-row.task-grid-icon-creator.project-grid-row {
+  --task-col-timestamp: 4.5rem;
+}
+
 .task-grid-icon-creator .task-updated-cell {
   min-width: 0;
   overflow: hidden;
@@ -47,7 +57,8 @@
     --task-col-initiative: 6rem;
   }
 
-  .task-grid-row.task-grid-icon-creator {
+  .task-grid-row.task-grid-icon-creator,
+  .task-grid-row.task-grid-icon-creator.task-grid-dates {
     --task-col-assignees: 3.25rem;
     --task-col-due-date: 2.5rem;
     --task-col-initiative: 2.5rem;
@@ -74,6 +85,12 @@
     opacity: 0;
     transform: translateX(4px);
     visibility: hidden;
+  }
+}
+
+@container u-list (max-width: 600px) {
+  .task-grid-row.task-grid-icon-creator.project-grid-row {
+    --task-col-timestamp: 0rem;
   }
 }
 

@@ -2,6 +2,7 @@
 //! explicit credential refresh after a definitive authentication rejection.
 
 use crate::domain::{models::*, ports::*};
+use models_email::email::service::message::RecentMailFolder;
 
 mod contacts;
 mod drafts;
@@ -65,8 +66,12 @@ impl<
     L: ProviderRateLimiter,
 > MailboxApiService<R, T, L>
 {
-    /// Resolve the complete physical folder hierarchy.
-    pub async fn folders(&self, mailbox: MailboxAccess) -> Result<Vec<MailFolder>, EmailApiError> {
+    /// Resolve the complete physical folder hierarchy, or report that the
+    /// account has no mailbox the provider will serve.
+    pub async fn folders(
+        &self,
+        mailbox: MailboxAccess,
+    ) -> Result<MailFolderCatalog, EmailApiError> {
         let token = self
             .token(
                 mailbox,
@@ -148,12 +153,15 @@ impl<
         }
     }
 
-    /// The newest inbox messages, newest first, read straight from the
+    /// Up to `limit` messages from `folder`, newest first, dated no
+    /// earlier than `since` when it is given, read straight from the
     /// provider, so a mailbox can be looked at before it synchronizes.
     pub async fn recent_inbox_messages(
         &self,
         mailbox: MailboxAccess,
+        folder: RecentMailFolder,
         limit: u16,
+        since: Option<chrono::DateTime<chrono::Utc>>,
         folders: &[MailFolder],
     ) -> Result<Vec<MailboxMessage>, EmailApiError> {
         let token = self
@@ -165,7 +173,7 @@ impl<
             .await?;
         let repository = self.repository.for_mailbox(mailbox);
         match repository
-            .recent_inbox_messages(&token, mailbox.link_id, limit, folders)
+            .recent_inbox_messages(&token, mailbox.link_id, folder, limit, since, folders)
             .await
         {
             Err(EmailApiError::AuthRequired) => {
@@ -177,7 +185,7 @@ impl<
                     )
                     .await?;
                 repository
-                    .recent_inbox_messages(&fresh, mailbox.link_id, limit, folders)
+                    .recent_inbox_messages(&fresh, mailbox.link_id, folder, limit, since, folders)
                     .await
             }
             result => result,

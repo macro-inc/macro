@@ -9,7 +9,9 @@ export function FoldedTerminal(props: {
   return (
     <div class="flex flex-col gap-1">
       <Show when={props.exitCode != null && props.exitCode !== 0}>
-        <span class="text-xs text-failure">Exit code {props.exitCode}</span>
+        <span class="text-xs text-ink-disabled">
+          Exit code {props.exitCode}
+        </span>
       </Show>
       <pre class="overflow-x-auto rounded bg-surface p-2 font-mono text-xs whitespace-pre-wrap text-ink-muted wrap-break-word">
         <FoldedAnsiText text={props.output} />

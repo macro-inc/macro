@@ -87,11 +87,16 @@ python3 -m unittest discover -s crates/universal_input/eval -p 'test_*.py'
 
 ## Thread due dates
 
-`thread_due_dates.json` holds 20 synthetic threads and the due date a reader would
-give each: explicit dates, "by Friday", "EOD tomorrow", an older message's relative
-date, "next week sometime", meeting times, past dates, dates under discussion,
-quoted old mail, closed deadlines and injection attempts. Every message carries the
-day it was written, so the suite needs no fixed clock.
+`thread_due_dates.json` holds 39 synthetic threads with the due date a reader would
+give each, and the day of the meeting or event the thread is about
+(`expected_event_on`, none when absent): explicit dates, "by Friday", "EOD
+tomorrow", an older message's relative date, "next week sometime", meeting times,
+agendas, moved and agreed meetings, notes and recordings of meetings just held
+(one on a written month and day, one on last week's weekday, one on "last Friday" written on a Friday, one on a bare weekday written that day), a meeting a year
+off, mail after the meeting and long after it, past
+dates, dates under discussion, quoted old mail, closed deadlines, newsletters and
+injection attempts. Every message carries the day it was written, so the suite
+needs no fixed clock.
 
 With the model router's provider keys in the environment, run it through the real
 prompt, schema, model and resolver:
@@ -100,7 +105,13 @@ prompt, schema, model and resolver:
 cargo run -p universal_input --example thread_due_date_eval
 ```
 
-It prints each case's result and the precision and recall, and needs no running
-service. An answer that fails validation stores no date, so it scores as no date.
-Tune for precision: a wrong date is worse than a missing one. As above, do not
-change an expectation to accommodate a prediction, and never add real mail.
+It prints each case's result, the precision and recall of due dates and of event
+days, the share of answers rejected and of reads that failed, and the tokens, cost
+and latency of the reads, and needs no running service. An answer whose deadline or
+closure cites text the thread lacks is rejected: it stores no date, so it scores as
+no date, and its usage still counts. A read that fails (the model could not answer)
+also scores as no date but returns no usage: its tokens are left out of the token
+and cost figures, which are still averaged over every read, so a run with failed
+reads understates them. Tune for precision: a wrong date is worse than a missing one, and
+a wrong event day takes a thread out of Focus early. As above, do not change an
+expectation to accommodate a prediction, and never add real mail.

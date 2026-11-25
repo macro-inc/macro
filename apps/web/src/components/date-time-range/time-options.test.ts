@@ -3,6 +3,7 @@ import {
   completedTypedTime,
   DAY_TIME_OPTIONS,
   dayOffsetBetween,
+  dayTimeOptions,
   endTimeOptions,
   endValueFor,
   formatDuration,
@@ -26,6 +27,27 @@ describe('DAY_TIME_OPTIONS', () => {
     expect(
       DAY_TIME_OPTIONS.every((option) => option.detail === undefined)
     ).toBe(true);
+  });
+});
+
+describe('dayTimeOptions', () => {
+  it('labels the same quarter-hours on the clock it is given', () => {
+    const at = (options: typeof DAY_TIME_OPTIONS, value: string) =>
+      options.find((option) => option.value === value)?.label;
+    expect(at(dayTimeOptions(false), '14:00')).toBe('14:00');
+    expect(at(dayTimeOptions(true), '14:00')).toBe('2:00 PM');
+    expect(dayTimeOptions(false).map((option) => option.value)).toEqual(
+      DAY_TIME_OPTIONS.map((option) => option.value)
+    );
+    expect(dayTimeOptions()).toBe(DAY_TIME_OPTIONS);
+  });
+
+  it('labels end times and typed times on that clock too', () => {
+    expect(endTimeOptions('13:30', false)[0]?.label).toBe('13:45');
+    expect(endTimeOptions('', false)).toBe(dayTimeOptions(false));
+    expect(
+      typedTimeOption(endTimeOptions('09:00', false), '3:10', false)?.label
+    ).toBe('15:10');
   });
 });
 

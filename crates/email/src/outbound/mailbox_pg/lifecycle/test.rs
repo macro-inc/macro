@@ -1,6 +1,7 @@
 use super::*;
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::credentials::{CredentialHealth, MailboxCredentialHealthRepository};
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use email_api_client::domain::models::{MailboxAccess, TokenError};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -547,7 +548,7 @@ async fn generation_bumps_delete_superseded_sync_work(db: PgPool) {
         "rebinding carries the work into the new generation and drops the old copy"
     );
     assert!(
-        repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_some()
@@ -604,7 +605,7 @@ async fn final_shared_disconnect_freezes_ingestion_and_keeps_revocation_after_ca
     assert!(!row.is_sync_active);
     assert!(row.disconnect_requested_at.is_some());
     assert!(
-        repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_none()
@@ -665,7 +666,7 @@ async fn inaccessible_mailbox_cannot_be_removed_or_resynced(db: PgPool) {
 async fn outlook_resync_fences_page_workers_and_never_creates_a_gmail_backfill(db: PgPool) {
     let (repo, link, _) = shared(&db).await;
     let old = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -693,7 +694,8 @@ async fn outlook_resync_fences_page_workers_and_never_creates_a_gmail_backfill(d
     assert!(again.already_in_progress);
     assert_eq!(first.run_id, again.run_id);
     assert!(matches!(
-        repo.commit_page(&old, &super::super::test::page()).await,
+        repo.commit_page(&old, &super::super::test::page(), POLL_INTERVALS)
+            .await,
         Err(MailboxError::Stale)
     ));
     assert_eq!(
@@ -879,4 +881,66 @@ async fn outlook_resync_drops_the_live_passes_of_the_rounds_it_restarts(db: PgPo
     .await
     .unwrap();
     assert_eq!(kinds, ["mail_folder"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_disconnect_behind_a_share_locked_link_fails_fast_then_disconnects(db: PgPool) {
+    let (repo, link, _) = shared(&db).await;
+    let service = InboxLifecycleService::new(repo, Effects);
+    service.remove(&actor("remaining"), link).await.unwrap();
+    let queued = sqlx::query_scalar!(
+        "SELECT count(*) FROM email_mailbox_lifecycle_outbox WHERE link_id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id=$1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        service.remove(&actor("leaving"), link),
+    )
+    .await;
+    assert!(
+        matches!(blocked, Ok(Err(InboxLifecycleError::Contended))),
+        "{blocked:?}"
+    );
+    let row = sqlx::query!(
+        "SELECT is_sync_active,disconnect_requested_at FROM email_links WHERE id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(row.is_sync_active);
+    assert!(row.disconnect_requested_at.is_none());
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM email_mailbox_lifecycle_outbox WHERE link_id = $1",
+            link
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        queued
+    );
+
+    population.rollback().await.unwrap();
+    service.remove(&actor("leaving"), link).await.unwrap();
+    let row = sqlx::query!(
+        "SELECT is_sync_active,disconnect_requested_at FROM email_links WHERE id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!row.is_sync_active);
+    assert!(row.disconnect_requested_at.is_some());
 }

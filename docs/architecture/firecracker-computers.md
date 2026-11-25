@@ -41,6 +41,23 @@ A golden's memory matches only its own rootfs, so a golden is restored only
 onto a fresh copy of the golden's rootfs. Every later boot is a cold boot of
 the computer's own rootfs, or a wake from its own hibernation snapshot.
 
+## Image upgrades
+
+`POST /v1/computers/{id}/system-disk {image}` moves an existing computer to
+another image: the agent stops it, block-clones the sealed rootfs of that
+image's golden (for the computer's shape) into a new system disk file
+(`rootfs.<n>.ext4`), saves the record naming it, and cold boots it if it was
+running. `home.ext4`, identity, enrollment and pairing stay; golden memory is
+never restored over an existing `/home`. The old system disk stays as the
+previous one; asking for the previous image swaps it back (a rollback, no
+clone). The record save is the commit point, and a disk file no record names
+is deleted at startup. A hibernated computer is refused. `POST /v1/images`
+stages an image from URLs (zstd, SHA-256 checked, never replacing a version
+in place with other contents). The control plane drives both through its
+image upgrade pass (`crates/hosted_runtimes`, `domain::image_upgrade`).
+Anything outside `/home` on the old system disk (`/etc`, `/nix` additions) does
+not move.
+
 ## Power
 
 | State | Process | RAM | `start` |
@@ -134,7 +151,8 @@ With `macro.firecrackerHost.alloy.enable`, Grafana Alloy on the host
 (`firecracker-host.alloy`) reads host metrics (CPU, memory, pressure, swap,
 KSM) and each computer's CPU, memory and disk IO from its VM's cgroup
 (`<unit>/vms/c-<id>`, labelled `computer_id`), and writes them every 30 s to
-Macro's Prometheus (`infra/stacks/observability`), where the **Macro
+Macro's Mimir in the observability cluster (`infra/k8s/observability`), where the **Macro
 computers fleet** dashboard shows capacity, noisy neighbours and overcommit
-in use. Nothing runs in guests. The Datadog agent stays for the agent's
+in use, and **Firecracker hosts: capacity** shows how full each host is and
+its running VMs. Nothing runs in guests. The Datadog agent stays for the agent's
 spans, its `firecracker_host.*` metrics and the monitors.

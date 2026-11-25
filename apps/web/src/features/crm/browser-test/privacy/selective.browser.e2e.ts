@@ -11,6 +11,7 @@ test.beforeEach(async ({ page }) => {
         })
       : route.continue()
   );
+  await page.route('https://**', (route) => route.abort());
   await page.routeWebSocket('**/*', (socket) => socket.close());
 });
 
@@ -80,6 +81,21 @@ test('read-only overview, aligned rule kinds, automatic validation and verified 
   await expect(
     page.getByRole('textbox', { name: 'Sharing rules JSON' })
   ).toHaveCount(0);
+});
+
+test('keeps the open sharing draft through CRM access retirement', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&contributing&retirement');
+  await page.getByRole('button', { name: 'Edit JSON', exact: true }).click();
+  const draft = page.getByRole('textbox', { name: 'Sharing rules JSON' });
+  const edited =
+    '{"schema_version":1,"include":[{"kind":"domain","domain":"draft.example.com"}]}';
+  await draft.fill(edited);
+  await page.getByRole('button', { name: 'Retire CRM cache' }).click();
+  await expect(page.getByTestId('retirement-complete')).toHaveText('true');
+  await expect(draft).toHaveValue(edited);
+  await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
 });
 
 for (const pending of ['policy-pending', 'policy-flag-pending']) {
@@ -231,6 +247,65 @@ test('limit refusals stay inline and do not save', async ({ page }) => {
   await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
 });
 
+test('a long blacklist domain wraps beside Remove, lined up with short rows', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&long-domain&admin');
+  const long = 'regional-sales-office.north-america.example.com';
+  for (const [title, short] of [
+    ['Team blacklist', 'team.example.com'],
+    ['My blacklist', 'personal.example.com'],
+  ]) {
+    const section = page
+      .getByRole('heading', { name: title, exact: true })
+      .locator('xpath=ancestor::section');
+    await expect(
+      section.getByRole('button', { name: `Remove ${short}`, exact: true })
+    ).toBeVisible();
+    // Both rows in one frame, so the phone sheet's opening animation moves
+    // them together.
+    const rows = () =>
+      section.evaluate(
+        (node, domains) =>
+          domains.map((domain) => {
+            const label = [...node.querySelectorAll('*')].find(
+              (element) =>
+                element.childElementCount === 0 &&
+                element.textContent?.trim() === domain
+            );
+            const remove = node.querySelector(
+              `button[aria-label="Remove ${domain}"]`
+            );
+            if (!label || !remove) return undefined;
+            const l = label.getBoundingClientRect();
+            const r = remove.getBoundingClientRect();
+            return {
+              labelRight: l.right,
+              labelBottom: l.bottom,
+              x: r.x,
+              y: r.y,
+            };
+          }),
+        [long, short]
+      );
+    await expect
+      .poll(async () => {
+        const [a, b] = await rows();
+        return (
+          !!a &&
+          !!b &&
+          // Beside the domain, not on a line of its own below it.
+          a.x >= a.labelRight &&
+          a.y < a.labelBottom &&
+          b.x >= b.labelRight &&
+          b.y < b.labelBottom &&
+          Math.abs(a.x - b.x) < 1
+        );
+      })
+      .toBe(true);
+  }
+});
+
 test('gate off retains selected rules, history and single-action withdrawal', async ({
   page,
 }) => {
@@ -247,12 +322,46 @@ test('gate off retains selected rules, history and single-action withdrawal', as
   await expect(
     page.getByRole('button', { name: 'History', exact: true })
   ).toBeEnabled();
-  await page
+  const contribution = page
+    .getByText('Primary mailbox · Selected by rules', { exact: true })
+    .locator('xpath=ancestor::section');
+  await expect(
+    contribution.getByText(
+      'Stopping withdraws your email from CRM. Companies and contacts stay.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  await contribution
     .getByRole('button', { name: 'Stop sharing my emails', exact: true })
     .click();
   await expect(page.getByTestId('last-change')).toHaveText(
     '{"action":"set_consent","enabled":false}'
   );
+});
+
+test('a disconnected mailbox connects without enabling selected sharing', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&disconnected');
+  await expect(page.getByText('No email connected')).toBeVisible();
+  const connect = page.getByRole('button', {
+    name: 'Connect email',
+    exact: true,
+  });
+  await connect.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('member@example.com')).toBeVisible();
+  await expect(connect).toHaveCount(0);
+  await expect(
+    page.getByText('Primary mailbox · Sharing off', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('Review both blacklists below before you share.', {
+      exact: true,
+    })
+  ).toBeVisible();
+  await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
+  await expect(page.getByTestId('last-change')).toHaveText('');
 });
 
 test('gate off preserves the legacy all-mail settings', async ({ page }) => {

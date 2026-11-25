@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The keys of the viewer's lists each requested contact is in, in request\n-- order. A contact in none (including the viewer, who is never their own\n-- teammate) is left out. $1 viewer, $2 canonical requested ids (at most 500,\n-- deduplicated), $3 the teammates list key.\n-- Each id is two index range reads over its few rows; the roster is read once.\nWITH teammates AS MATERIALIZED (\n    SELECT lower(teammate.user_id COLLATE \"C\") AS id\n    FROM team_user AS own\n    JOIN team_user AS teammate ON teammate.team_id = own.team_id\n    WHERE own.user_id IN (\n        -- team_user may hold a legacy mixed-case id for this user. Find\n        -- it through the lower(email) index and keep it only if it folds\n        -- to the canonical id.\n        SELECT $1::text\n        UNION\n        SELECT account.id\n        FROM \"User\" AS account\n        WHERE lower(account.email) = substr($1, length('macro|') + 1)\n          AND lower(account.id COLLATE \"C\") = $1\n    )\n)\nSELECT\n    requested.contact AS \"contact!\",\n    array_agg(DISTINCT listed.list_key ORDER BY listed.list_key) AS \"lists!\"\nFROM unnest($2::text[]) WITH ORDINALITY AS requested (contact, ordinal)\nCROSS JOIN LATERAL (\n    SELECT list_key\n    FROM contact_list_members\n    WHERE user_id = $1 AND contact_user_id = requested.contact\n    UNION ALL\n    SELECT list_key\n    FROM contact_inbox_members\n    WHERE user_id = $1 AND contact_user_id = requested.contact\n    UNION ALL\n    SELECT $3::text\n    WHERE requested.contact <> $1\n      AND requested.contact COLLATE \"C\" IN (SELECT id FROM teammates)\n) AS listed\nGROUP BY requested.ordinal, requested.contact\nORDER BY requested.ordinal\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "lists!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "c04a7c042e6170439b90e1b9a33c9766025aa36ca3fde1c8ed1b0b670c754131"
+}

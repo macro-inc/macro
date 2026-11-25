@@ -42,6 +42,8 @@ export function ProjectsGantt(props: {
   groupMoves: Omit<ComponentProps<typeof Gantt.GroupDrag>, 'children'>;
   onOpen: (id: string, metadata?: ProjectListActivation) => void;
   onCreate?: (dates: GanttCreation) => void;
+  /** Bars start at the Start Date and the zoom reaches hours for timed dates. */
+  startDates?: boolean;
   /** Compose the complete project row so host-owned menus cover its label and bar. */
   renderEntity: (
     entity: Accessor<ProjectListEntity>,
@@ -53,7 +55,9 @@ export function ProjectsGantt(props: {
   const range = createMemo(() => {
     const state = collection.state();
     return deriveGanttRange(
-      state.kind === 'ready' ? state.rows.map(projectTimelineDates) : []
+      state.kind === 'ready'
+        ? state.rows.map((row) => projectTimelineDates(row, props.startDates))
+        : []
     );
   });
   const sourceError = () => {
@@ -108,7 +112,7 @@ export function ProjectsGantt(props: {
               Could not refresh projects. Showing the last loaded timeline.
             </p>
           </Show>
-          <Gantt.Root range={range()} labelWidth={0}>
+          <Gantt.Root range={range()} labelWidth={0} hours={props.startDates}>
             <Gantt.SidebarToggle />
             <Gantt.Controls>
               <Gantt.TodayButton />
@@ -135,7 +139,7 @@ export function ProjectsGantt(props: {
                     return (
                       entity && (
                         <Gantt.DropPreview
-                          {...projectTimelineDates(entity)}
+                          {...projectTimelineDates(entity, props.startDates)}
                           title={entity.project.name}
                         />
                       )
@@ -192,7 +196,8 @@ export function ProjectsGantt(props: {
                                           </span>
                                           <Gantt.DateHint
                                             {...projectTimelineDates(
-                                              item().entity
+                                              item().entity,
+                                              props.startDates
                                             )}
                                             class="leading-3"
                                           />

@@ -7,7 +7,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import {
   completedTypedTime,
-  DAY_TIME_OPTIONS,
+  dayTimeOptions,
   formatTimeValue,
   matchTypedTime,
   selectedTimeOptionId,
@@ -29,6 +29,8 @@ interface TimeInputProps {
   value: string;
   /** Selectable times; defaults to every quarter-hour in a day. */
   options?: TimeOption[];
+  /** A 12-hour (`true`) or 24-hour (`false`) clock; the locale's when unset. */
+  hour12?: boolean;
   /** Highlighted option; defaults to `value` on the anchor day. */
   selectedId?: string;
   onChange: (option: TimeOption) => void;
@@ -57,7 +59,9 @@ export function TimeInput(props: TimeInputProps) {
   let input!: HTMLInputElement;
   let list: HTMLDivElement | undefined;
 
-  const options = createMemo(() => props.options ?? DAY_TIME_OPTIONS);
+  const options = createMemo(
+    () => props.options ?? dayTimeOptions(props.hour12)
+  );
   const selectedId = () =>
     props.selectedId ?? selectedTimeOptionId(props.value);
   const optionDomId = (option: TimeOption) =>
@@ -100,7 +104,7 @@ export function TimeInput(props: TimeInputProps) {
   const commit = () => {
     const text = typed();
     if (text !== undefined) {
-      choose(highlighted() ?? typedTimeOption(options(), text));
+      choose(highlighted() ?? typedTimeOption(options(), text, props.hour12));
     } else {
       choose(navigated() ? highlighted() : undefined);
     }
@@ -186,7 +190,7 @@ export function TimeInput(props: TimeInputProps) {
         aria-invalid={props.invalid || undefined}
         aria-describedby={props.describedBy}
         disabled={props.disabled}
-        value={shown() ?? formatTimeValue(props.value) ?? ''}
+        value={shown() ?? formatTimeValue(props.value, props.hour12) ?? ''}
         placeholder="Time"
         size="sm"
         class={cn('w-[4.75rem] shrink-0', props.class)}

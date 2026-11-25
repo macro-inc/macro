@@ -1,7 +1,7 @@
 use crate::api::context::SearchHandlerState;
 use axum::{
     Json, Router,
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::post,
 };
@@ -42,6 +42,17 @@ pub enum SearchError {
     /// Query expands into too many search terms
     #[error("query has too many terms (max 50)")]
     TooManyTerms,
+    /// The query's operators leave no word, and a kind it searches needs one
+    #[error(
+        "type a word to search for beside the operators; only a search of email alone runs on operators alone"
+    )]
+    OperatorsNeedAWord,
+    /// Too many `in:#` channel names in one query
+    #[error("a search names at most {0} channels with in:#")]
+    TooManyChannelNames(usize),
+    /// Two `from:` in a search of calls, which can't require two speakers
+    #[error("a call search names one speaker with from:; join several with OR")]
+    SpeakersDontCombine,
     /// No query or terms provided
     #[error("query or terms must be provided")]
     NoQueryOrTermsProvided,
@@ -69,6 +80,18 @@ pub enum SearchError {
     /// Too many Drive folders in one email search
     #[error("email_filters.project_ids takes at most {0} folders")]
     TooManyEmailProjects(usize),
+
+    #[error("time_zone must be an IANA time zone name, such as America/New_York")]
+    InvalidTimeZone,
+    /// The caller's other searches held every slot of its lane until the wait
+    /// ran out
+    #[error("too many of your searches are running at once; retry with fewer at once")]
+    Busy,
+    /// The account's user API keys used their search allowance
+    #[error(
+        "search rate limit reached for this account's API keys; retry after {retry_after_seconds}s"
+    )]
+    RateLimited { retry_after_seconds: u64 },
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -80,6 +103,10 @@ pub enum SearchError {
     InternalError(#[from] anyhow::Error),
 }
 
+/// How soon a caller refused as busy may search again: by then one of its
+/// running searches has usually finished.
+const BUSY_RETRY_AFTER_SECONDS: &str = "1";
+
 impl IntoResponse for SearchError {
     fn into_response(self) -> Response {
         let status_code = match self {
@@ -89,6 +116,9 @@ impl IntoResponse for SearchError {
             SearchError::InvalidPageSize
             | SearchError::EmptyQuery
             | SearchError::TooManyTerms
+            | SearchError::OperatorsNeedAWord
+            | SearchError::TooManyChannelNames(_)
+            | SearchError::SpeakersDontCombine
             | SearchError::InvalidCursor
             | SearchError::InvalidCrmCompanyId(_)
             | SearchError::InvalidAgentSessionId(_)
@@ -96,20 +126,29 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidChannelType(_)
             | SearchError::UnsupportedEmailFilter(_)
             | SearchError::TooManyEmailProjects(_)
+            | SearchError::InvalidTimeZone
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
+            SearchError::Busy | SearchError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: self.to_string().into(),
-            }),
-        )
-            .into_response()
+        let retry_after = match &self {
+            SearchError::Busy => Some(BUSY_RETRY_AFTER_SECONDS.to_string()),
+            SearchError::RateLimited {
+                retry_after_seconds,
+            } => Some(retry_after_seconds.to_string()),
+            _ => None,
+        };
+        let body = Json(ErrorResponse {
+            message: self.to_string().into(),
+        });
+        match retry_after {
+            Some(seconds) => (status_code, [(header::RETRY_AFTER, seconds)], body).into_response(),
+            None => (status_code, body).into_response(),
+        }
     }
 }

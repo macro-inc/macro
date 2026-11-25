@@ -30,7 +30,9 @@ async fn refresh_preserves_absent_replacement_and_redacts_errors() {
     server.reset().await;
     Mock::given(method("POST"))
         .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
-            "error":"invalid_grant", "error_description":"secret refresh token"
+            "error":"invalid_grant",
+            "error_description":"AADSTS50076: secret refresh token for the signed-in user",
+            "error_codes":[50076],
         })))
         .expect(1)
         .mount(&server)
@@ -46,10 +48,49 @@ async fn refresh_preserves_absent_replacement_and_redacts_errors() {
     .err()
     .unwrap();
     assert!(matches!(
-        error,
-        MicrosoftRuntimeError::ReauthorizationRequired
+        &error,
+        MicrosoftRuntimeError::ReauthorizationRequired(refusal) if *refusal == MicrosoftRefusal {
+            status: 400,
+            error: Some("invalid_grant".into()),
+            aadsts: Some(50076),
+        }
     ));
-    assert!(!format!("{error:?}").contains("secret"));
+    let debug = format!("{error:?}");
+    assert!(!debug.contains("secret"));
+    assert!(!debug.contains("signed-in user"));
+}
+
+#[tokio::test]
+async fn refresh_keeps_the_code_of_a_refusal_reconnecting_does_not_fix() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error":"unauthorized_client",
+            "error_description":"AADSTS700016: Application not found in the directory.",
+            "error_codes":[700016],
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error = refresh(
+        &client().unwrap(),
+        format!("{}/token", server.uri()).parse().unwrap(),
+        "client",
+        "secret",
+        "refresh",
+    )
+    .await
+    .err()
+    .unwrap();
+    assert_eq!(
+        error.refusal(),
+        Some(&MicrosoftRefusal {
+            status: 400,
+            error: Some("unauthorized_client".into()),
+            aadsts: Some(700016),
+        })
+    );
+    assert!(matches!(error, MicrosoftRuntimeError::Refused(_)));
 }
 
 #[tokio::test]

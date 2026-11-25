@@ -209,3 +209,152 @@ async fn when_the_work_panics_the_other_callers_run_it_themselves() {
     assert_eq!(flights.run("user-1", panics_on_first_run).await, Ok(4));
     assert_eq!(runs.load(Ordering::SeqCst), 3);
 }
+
+#[tokio::test]
+async fn a_run_to_completion_abandoned_by_every_caller_is_joined_by_the_next() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let (release, released) = watch::channel(None);
+
+    let mut abandoned: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", counted(&runs, &released)));
+    assert!(futures::poll!(abandoned.as_mut()).is_pending());
+    drop(abandoned);
+
+    let mut next: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", counted(&runs, &released)));
+    assert!(futures::poll!(next.as_mut()).is_pending());
+    release.send(Some(Ok(5))).unwrap();
+
+    assert_eq!(next.await, Ok(5));
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_run_to_completion_finishes_with_no_caller_left() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let (release, released) = watch::channel(None::<()>);
+    // The work holds the only sender, so work that is dropped unfinished
+    // closes the channel and fails the wait below instead of hanging it.
+    let (finish, mut finished) = watch::channel(false);
+    let work = move || {
+        let mut released = released.clone();
+        let finish = finish.clone();
+        async move {
+            released.wait_for(Option::is_some).await.unwrap();
+            finish.send(true).unwrap();
+            Ok(6)
+        }
+    };
+
+    let mut abandoned: Caller<'_> = Box::pin(flights.run_to_completion("user-1", work));
+    assert!(futures::poll!(abandoned.as_mut()).is_pending());
+    drop(abandoned);
+    release.send(Some(())).unwrap();
+
+    assert!(finished.wait_for(|done| *done).await.is_ok());
+}
+
+#[tokio::test]
+async fn when_a_run_to_completion_panics_every_caller_runs_it_itself() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let (release, released) = watch::channel(None::<()>);
+    let panics_on_first_run = || {
+        let runs = Arc::clone(&runs);
+        let mut released = released.clone();
+        async move {
+            let run = runs.fetch_add(1, Ordering::SeqCst);
+            released.wait_for(Option::is_some).await.unwrap();
+            assert_ne!(run, 0, "the first run panics");
+            Ok(4)
+        }
+    };
+
+    let mut started: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", panics_on_first_run));
+    let mut joined: Caller<'_> = Box::pin(flights.run_to_completion("user-1", panics_on_first_run));
+    assert!(futures::poll!(started.as_mut()).is_pending());
+    assert!(futures::poll!(joined.as_mut()).is_pending());
+    release.send(Some(())).unwrap();
+
+    // The task drives the work, so its panic reaches no caller.
+    assert_eq!(joined.await, Ok(4));
+    assert_eq!(started.await, Ok(4));
+    assert_eq!(runs.load(Ordering::SeqCst), 3);
+}
+
+/// A caller that polled the work alongside the task could find it poisoned by
+/// a panic on the task's thread. Work that panics on its first poll shows
+/// whether a caller ever polls it.
+#[tokio::test]
+async fn a_run_to_completion_caller_never_polls_the_work() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let panics_on_first_poll = || {
+        let runs = Arc::clone(&runs);
+        async move {
+            let run = runs.fetch_add(1, Ordering::SeqCst);
+            assert_ne!(run, 0, "the first run panics");
+            Ok(8)
+        }
+    };
+
+    let mut caller: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", panics_on_first_poll));
+    let polled = AssertUnwindSafe(async { futures::poll!(caller.as_mut()) })
+        .catch_unwind()
+        .await;
+    assert!(
+        polled.is_ok_and(|poll| poll.is_pending()),
+        "the caller waits for the task instead of polling the work"
+    );
+
+    assert_eq!(caller.await, Ok(8));
+    assert_eq!(runs.load(Ordering::SeqCst), 2);
+}
+
+/// A run's guard locks the registry when dropped, so it must not exist yet
+/// while the start path holds that lock and makes the work. The check runs on
+/// its own thread so that a deadlock fails the test instead of hanging it.
+#[test]
+fn a_work_factory_that_panics_leaves_the_key_to_the_next_caller() {
+    let (done, finished) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let flights = SingleFlight::<&str, Output>::new();
+            let factory = |panics: bool| {
+                move || {
+                    assert!(!panics, "the work factory panics");
+                    std::future::ready(Ok(1))
+                }
+            };
+
+            let started = AssertUnwindSafe(flights.run("user-1", factory(true)))
+                .catch_unwind()
+                .await;
+            assert!(started.is_err());
+            assert_eq!(flights.run("user-1", factory(false)).await, Ok(1));
+
+            let started = AssertUnwindSafe(flights.run_to_completion("user-2", factory(true)))
+                .catch_unwind()
+                .await;
+            assert!(started.is_err());
+            assert_eq!(
+                flights.run_to_completion("user-2", factory(false)).await,
+                Ok(1)
+            );
+        });
+        done.send(()).unwrap();
+    });
+
+    assert!(
+        finished
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .is_ok(),
+        "a panicking work factory left the registry locked or failed a check"
+    );
+}

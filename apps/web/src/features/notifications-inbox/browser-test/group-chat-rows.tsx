@@ -6,13 +6,14 @@ import { MobileSettingsProvider } from '@app/features/settings/context/mobile-se
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
@@ -25,6 +26,7 @@ import { NotificationRow } from '../components/notification-row';
 import type { NotificationInboxRow } from '../context/notifications-inbox-context';
 import { describeInboxCard } from '../primitives/describe-row';
 import { InboxRowAvatar } from '../views/inbox-row-avatar';
+import { NotificationGenerationFixture } from './generation-fixture';
 
 const VIEWER_ID = 'macro|viewer@example.test';
 
@@ -217,25 +219,31 @@ function Fixture() {
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <AnalyticsContextProvider>
-        <PosthogProvider>
-          <EntityProvider>
-            <UserContextProvider>
-              <ChannelsContextProvider>
-                <EmailLinksContextProvider>
-                  <MobileSettingsProvider>
-                    <StaticMarkdownContext>
-                      <MemoryRouter>
-                        <Route path="*" component={Fixture} />
-                      </MemoryRouter>
-                    </StaticMarkdownContext>
-                  </MobileSettingsProvider>
-                </EmailLinksContextProvider>
-              </ChannelsContextProvider>
-            </UserContextProvider>
-          </EntityProvider>
-        </PosthogProvider>
-      </AnalyticsContextProvider>
+      {new URLSearchParams(location.search).has('generation') ? (
+        <NotificationGenerationFixture />
+      ) : (
+        <AnalyticsContextProvider>
+          <PosthogProvider>
+            <EntityProvider>
+              <UserContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
+                  <EmailLinksContextProvider>
+                    <MobileSettingsProvider>
+                      <StaticMarkdownContext>
+                        <MemoryRouter>
+                          <Route path="*" component={Fixture} />
+                        </MemoryRouter>
+                      </StaticMarkdownContext>
+                    </MobileSettingsProvider>
+                  </EmailLinksContextProvider>
+                </ChannelDirectoryProvider>
+              </UserContextProvider>
+            </EntityProvider>
+          </PosthogProvider>
+        </AnalyticsContextProvider>
+      )}
     </QueryClientProvider>
   ),
   document.getElementById('root') as HTMLElement

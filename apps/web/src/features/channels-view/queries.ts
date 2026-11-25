@@ -4,6 +4,7 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { useFlow, usePending } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -12,11 +13,13 @@ import {
   isChannelEntity,
   isChannelThreadEntity,
 } from '@entity';
+import type { QueryAccount } from '@queries/auth/account-scope';
+import { useQueryAccount } from '@queries/auth/use-query-account';
 import {
   registerChannelListNotificationRefresh,
   useChannelsByIdsQuery,
 } from '@queries/channel/by-ids';
-import { fetchAllChannels } from '@queries/channel/channels';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 
 export {
   channelsByIdsQueryArgs,
@@ -29,7 +32,7 @@ import {
   type SoupAstParams,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
-import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on, untrack } from 'solid-js';
 import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import { channelTypesShownBy } from './core/channel-types';
@@ -67,6 +70,11 @@ type ChannelsListScope = ChannelsQueryScope | 'search';
 
 export type ChannelsSourceScope = ChannelsListScope | 'threads';
 
+type ChannelListSnapshot = {
+  account: QueryAccount | undefined;
+  items: ChannelEntity[];
+  source: 'shared-list' | 'soup' | 'none';
+};
 export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
 export const CHANNELS_QUERY_DEFINITIONS = {
@@ -136,30 +144,32 @@ export function filterChannelsForScope(
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
 }
 
-/** Resolve full built-in membership without changing the rail's loaded pages. */
-export async function fetchChannelGroupIds(
+/** A built-in group's full membership among the viewer's joined channels,
+ * without changing the rail's loaded pages. */
+export function channelGroupIds(
   group: ChannelsGroup,
   excludedIds: readonly string[],
-  signal?: AbortSignal
-): Promise<string[]> {
+  channels: readonly Pick<
+    DirectoryChannel,
+    'id' | 'channelType' | 'isParticipant'
+  >[]
+): string[] {
   const excluded = new Set(excludedIds);
-  const channels = await fetchAllChannels(signal);
   const members = channels.filter((channel) => {
-    if (!channel.is_participant || excluded.has(channel.id)) {
+    if (!channel.isParticipant || excluded.has(channel.id)) {
       return false;
     }
 
     if (group === 'team_channels') {
-      return channel.channel_type === 'team';
+      return channel.channelType === 'team';
     }
 
     if (group === 'direct_messages') {
-      return channel.channel_type === 'direct_message';
+      return channel.channelType === 'direct_message';
     }
 
     return (
-      channel.channel_type !== 'team' &&
-      channel.channel_type !== 'direct_message'
+      channel.channelType !== 'team' && channel.channelType !== 'direct_message'
     );
   });
 
@@ -315,100 +325,227 @@ function useThreadChannelsDataSource(
 function useChannelsDataSource(
   scope: ChannelsListScope,
   enabled: Accessor<boolean>,
-  sortMethod: Accessor<ChannelListSort | undefined>
+  sortMethod: Accessor<ChannelListSort | undefined>,
+  cachedChannels: Accessor<readonly ChannelEntity[]>
 ): ChannelsDataSource {
+  const account = useQueryAccount();
+  const sourceEnabled = () => enabled() && account() !== undefined;
   const query = useSoupAstItemsQuery(
     () => channelsQueryArgs(scope, sortMethod()),
     () => ({
-      enabled: enabled(),
+      enabled: sourceEnabled(),
       staleTime: 30_000,
       graphqlProjection: 'channel-list',
     })
   );
+  const isEnabled = () => sourceEnabled() && query.isEnabled;
+  const cachedItems = createMemo(() => {
+    if (!sourceEnabled()) return [];
+    if (query.hasPageData) return [];
+    const channels = cachedChannels().filter(
+      (channel) => channel.isParticipant !== false
+    );
+    return sortChannels(
+      filterChannelsForScope(scope, channels),
+      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
+    ).slice(0, CHANNELS_QUERY_PARAMS.limit);
+  });
   registerChannelListNotificationRefresh(
     query,
     channelTypesShownBy(CHANNELS_QUERY_DEFINITIONS[scope].filters)
   );
-  const items = createMemo<ChannelEntity[]>((previous) => {
-    if (!query.isEnabled || query.isPending) return previous;
-
-    const channels = filterChannelsForScope(
-      scope,
-      (query.data?.entities ?? []).filter(isChannelEntity)
-    );
-
-    if (scope === 'recents') return channels;
-
-    return sortChannels(
-      channels,
-      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
-    );
-  }, []);
+  const snapshot = createMemo<ChannelListSnapshot>(
+    (previous) => {
+      const owner = account();
+      const sameAccount =
+        owner !== undefined &&
+        previous.account?.userId === owner.userId &&
+        previous.account.session === owner.session;
+      const previousItems = sameAccount ? previous.items : [];
+      if (!owner || !isEnabled())
+        return { account: owner, items: [], source: 'none' };
+      const data = query.isPending ? undefined : query.data;
+      const seeded = !query.hasPageData;
+      const cached = seeded ? cachedItems() : [];
+      if (data === undefined && cached.length === 0) {
+        return {
+          account: owner,
+          items: previousItems,
+          source: previousItems.length ? previous.source : 'none',
+        };
+      }
+      // A partial local index can enrich the seed but cannot remove its rows.
+      // Only a cached or fetched page for this input establishes membership.
+      const local = (data?.entities ?? []).filter(isChannelEntity);
+      const channels = filterChannelsForScope(
+        scope,
+        seeded ? deduplicateChannels([local, cached]) : local
+      );
+      const sorted =
+        scope === 'recents' && !seeded
+          ? channels
+          : sortChannels(
+              channels,
+              sortMethod() ??
+                CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
+            );
+      let source: ChannelListSnapshot['source'] = 'soup';
+      if (cached.length) source = 'shared-list';
+      else if (seeded && channels.length === 0) source = 'none';
+      return {
+        account: owner,
+        source,
+        items: seeded ? sorted.slice(0, CHANNELS_QUERY_PARAMS.limit) : sorted,
+      };
+    },
+    { account: undefined, items: [], source: 'none' }
+  );
+  const items = () => snapshot().items;
+  const flow = useFlow();
+  let recordedDisplay = false;
+  createEffect(
+    on(
+      () => [isEnabled(), snapshot()] as const,
+      ([active, display]) => {
+        if (!active) {
+          recordedDisplay = false;
+          return;
+        }
+        if (recordedDisplay || display.source === 'none') return;
+        recordedDisplay = true;
+        const cacheHit =
+          display.source === 'shared-list' ||
+          !query.hasPageData ||
+          query.isFetching;
+        let source = 'network';
+        if (display.source === 'shared-list') source = 'shared-list';
+        else if (cacheHit) source = 'normalized';
+        flow.span.setAttr(`channels.sidebar.${scope}.cache_hit`, cacheHit);
+        flow.span.setAttr(`channels.sidebar.${scope}.source`, source);
+        flow.span.setAttr(
+          `channels.sidebar.${scope}.rows`,
+          display.items.length
+        );
+      }
+    )
+  );
+  usePending(
+    `channels.sidebar.${scope}.render`,
+    () => isEnabled() && query.isLoading && items().length === 0
+  );
 
   return {
     items,
-    isLoading: () => query.isEnabled && query.isLoading && items().length === 0,
-    isFetching: () => query.isEnabled && query.isFetching,
+    isLoading: () => isEnabled() && query.isLoading && items().length === 0,
+    isFetching: () => isEnabled() && query.isFetching,
     // The live query hides a network failure behind its local cache rows,
-    // which are empty when the list was never cached. An empty list after a
-    // failed fetch is unknown, not "no conversations".
+    // which are empty when the list was never cached. Until a cached or
+    // fetched page answers, an empty list after a failed fetch is unknown, not
+    // "no conversations"; a page that answered empty is.
     error: () => {
-      if (!query.isEnabled) return undefined;
-      return (
-        query.error ??
-        (items().length === 0 ? query.fetchError : null) ??
-        undefined
-      );
+      if (!isEnabled()) return undefined;
+      const unanswered =
+        !query.hasPageData &&
+        (items().length === 0 || snapshot().source === 'shared-list');
+      return query.error ?? (unanswered ? query.fetchError : null) ?? undefined;
     },
-    hasMore: () => query.isEnabled && query.hasNextPage,
-    isLoadingMore: () => query.isEnabled && query.isFetchingNextPage,
+    hasMore: () => isEnabled() && query.hasNextPage,
+    isLoadingMore: () => isEnabled() && query.isFetchingNextPage,
     loadMore: async () => {
-      if (!query.isEnabled || query.isFetchingNextPage || !query.hasNextPage) {
+      if (!isEnabled() || query.isFetchingNextPage || !query.hasNextPage) {
         return;
       }
 
       await query.fetchNextPage();
     },
     refresh: async () => {
-      if (!query.isEnabled) return;
+      if (!isEnabled()) return;
       await query.refresh();
     },
   };
 }
 
-export function useChannelsSources(
+function createAccountChannelsSources(
   enabled: (scope: ChannelsSourceScope) => boolean,
-  sortBy: (group: ChannelsSortGroup) => ChannelListSort
+  sortBy: (group: ChannelsSortGroup) => ChannelListSort,
+  cachedChannels: Accessor<readonly ChannelEntity[]> = () => []
 ): ChannelsSources {
   return {
     team_channels: useChannelsDataSource(
       'team_channels',
       () => enabled('team_channels'),
-      () => sortBy('team_channels')
+      () => sortBy('team_channels'),
+      cachedChannels
     ),
     channels: useChannelsDataSource(
       'channels',
       () => enabled('channels'),
-      () => sortBy('channels')
+      () => sortBy('channels'),
+      cachedChannels
     ),
     direct_messages: useChannelsDataSource(
       'direct_messages',
       () => enabled('direct_messages'),
-      () => sortBy('direct_messages')
+      () => sortBy('direct_messages'),
+      cachedChannels
     ),
     recents: useChannelsDataSource(
       'recents',
       () => enabled('recents'),
-      () => undefined
+      () => undefined,
+      cachedChannels
     ),
     search: useChannelsDataSource(
       'search',
       () => enabled('search'),
-      () => undefined
+      () => undefined,
+      cachedChannels
     ),
     threads: useThreadChannelsDataSource(
       () => enabled('threads'),
       () => sortBy('threads')
     ),
+  };
+}
+
+/** Retire observers with their login session, without clearing account caches. */
+export function useChannelsSources(
+  enabled: (scope: ChannelsSourceScope) => boolean,
+  sortBy: (group: ChannelsSortGroup) => ChannelListSort,
+  cachedChannels: Accessor<readonly ChannelEntity[]> = () => []
+): ChannelsSources {
+  const account = useQueryAccount();
+  const sources = createMemo(
+    on(account, (owner) => {
+      if (!owner) return;
+      return untrack(() =>
+        createAccountChannelsSources(enabled, sortBy, cachedChannels)
+      );
+    })
+  );
+  const scopedSource = (scope: ChannelsSourceScope): ChannelsDataSource => {
+    const current = () => sources()?.[scope];
+    return {
+      items: () => current()?.items() ?? [],
+      isLoading: () => current()?.isLoading() ?? false,
+      isFetching: () => current()?.isFetching() ?? false,
+      error: () => current()?.error(),
+      hasMore: () => current()?.hasMore() ?? false,
+      isLoadingMore: () => current()?.isLoadingMore() ?? false,
+      loadMore: async () => {
+        await current()?.loadMore();
+      },
+      refresh: async () => {
+        await current()?.refresh();
+      },
+    };
+  };
+  return {
+    team_channels: scopedSource('team_channels'),
+    channels: scopedSource('channels'),
+    direct_messages: scopedSource('direct_messages'),
+    recents: scopedSource('recents'),
+    search: scopedSource('search'),
+    threads: scopedSource('threads'),
   };
 }

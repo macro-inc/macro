@@ -45,6 +45,10 @@ pub mod service;
 #[cfg(feature = "ports")]
 pub mod stages;
 
+/// Operator-run filing of manual contacts under their email domain's company
+#[cfg(feature = "ports")]
+pub mod contact_filing;
+
 /// Capability-token receipt wrappers gating per-entity CRM service calls
 #[cfg(feature = "ports")]
 pub mod auth;
@@ -81,6 +85,12 @@ pub mod pipelines;
 /// Company and contact chip titles, read many at a time.
 #[cfg(feature = "ports")]
 pub mod previews;
+/// Companies, contacts and deal pipelines another CRM's import writes.
+#[cfg(feature = "ports")]
+pub mod record_import;
+/// Merging duplicate companies or contacts into the one that stays.
+#[cfg(feature = "ports")]
+pub mod record_merge;
 
 /// Pipeline outcome and per-amount currency fields.
 #[cfg(feature = "ports")]
@@ -89,3 +99,7 @@ pub mod pipeline_commercial;
 /// Explicit contact field edits.
 #[cfg(feature = "ports")]
 pub mod contact_update;
+
+/// Adding and removing a company's domains.
+#[cfg(feature = "ports")]
+pub mod company_domains;

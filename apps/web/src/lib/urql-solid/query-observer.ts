@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type AnyVariables,
   type Client,
@@ -9,6 +10,7 @@ import {
 } from '@urql/core';
 import { onEnd, pipe, type Subscription, subscribe } from 'wonka';
 import { liveQueryData } from '../graphql-cache/exchange/live-query';
+import { crmSnapshotAuthorization } from './authorization';
 import type { ObserverEndReason, UrqlObserver } from './observer';
 import {
   createReactiveSelection,
@@ -29,10 +31,13 @@ type PendingRefetch<QueryData, Variables extends AnyVariables, Data> = {
 
 type QueryExecution<QueryData, Variables extends AnyVariables, Data> = {
   options: UrqlQueryOptions<QueryData, Variables, Data>;
+  context: Partial<OperationContext>;
   source: OperationResultSource<OperationResult<QueryData, Variables>>;
   subscription?: Subscription;
   pending?: PendingRefetch<QueryData, Variables, Data>;
   lastError?: CombinedError;
+  networkOnly: boolean;
+  authorityRetryScheduled?: boolean;
 };
 
 type QueryObserverState<QueryData, Variables extends AnyVariables, Data> = {
@@ -251,8 +256,12 @@ export class QueryObserver<
         });
       }
 
+      context.cacheAuthorizationEpoch = crmSnapshotAuthorization().epoch;
+
       const currentExecution: QueryExecution<QueryData, Variables, Data> = {
         options,
+        context,
+        networkOnly: context.requestPolicy === 'network-only',
         source: client.executeQuery<QueryData, Variables>(request, context),
         pending,
       };
@@ -336,6 +345,41 @@ export class QueryObserver<
     nextResult: OperationResult<QueryData, Variables>
   ): void {
     if (this.execution !== execution) return;
+    const authorization = crmSnapshotAuthorization();
+    if (
+      nextResult.data != null &&
+      (authorization.paused ||
+        !cacheSessionGeneration.isCurrent(
+          nextResult.operation.context.cacheAuthorizationEpoch
+        ))
+    ) {
+      // urql can replay a retained result without entering any exchange. Never
+      // let a same-key imperative subscriber keep that older snapshot alive here.
+      this.clearSelection();
+      this.setState({ data: undefined, fetched: false });
+      this.result.notify();
+      if (
+        !authorization.paused &&
+        !execution.networkOnly &&
+        !execution.authorityRetryScheduled
+      ) {
+        execution.authorityRetryScheduled = true;
+        queueMicrotask(() => {
+          if (this.execution !== execution || this.destroyed) return;
+          // Transfer the caller's refetch promise before cancelling the old
+          // subscription; only the replacement can settle its outcome.
+          const pending = execution.pending;
+          execution.pending = undefined;
+          this.execute(
+            execution.options,
+            this.client,
+            { requestPolicy: 'network-only', context: execution.context },
+            pending
+          );
+        });
+      }
+      return;
+    }
 
     const stale = nextResult.stale === true;
     const hasNext = nextResult.hasNext === true;

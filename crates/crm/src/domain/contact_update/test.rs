@@ -174,11 +174,26 @@ fn a_company_domain_contact_cannot_be_unlinked_or_moved() {
 }
 
 #[test]
-fn linking_still_requires_a_personal_provider_primary() {
+fn a_work_address_links_a_first_company_but_cannot_switch() {
     let personal = format!("a@{PERSONAL_DOMAIN}");
-    let work = contact(None, &["a@example.org", &personal], &[]);
+    let company = Uuid::from_u128(1);
+    let unfiled = contact(None, &["a@example.org", &personal], &[]);
+    let linked = ContactFieldUpdate::Company(company)
+        .resolve(&unfiled)
+        .unwrap();
+    assert_eq!(linked.company_id, Some(company));
+    assert_eq!(linked.primary.as_deref(), Some("a@example.org"));
+
+    let filed = contact(Some(company), &["a@example.org", &personal], &[]);
+    // A retried link finds the contact already there.
+    assert!(
+        ContactFieldUpdate::Company(company)
+            .resolve(&filed)
+            .unwrap()
+            .changes_nothing(&filed)
+    );
     assert_eq!(
-        rejected(ContactFieldUpdate::Company(Uuid::from_u128(1)).resolve(&work)),
+        rejected(ContactFieldUpdate::Company(Uuid::from_u128(2)).resolve(&filed)),
         "company changes require a personal-provider email"
     );
 }

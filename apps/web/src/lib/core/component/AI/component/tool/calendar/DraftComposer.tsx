@@ -18,6 +18,7 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
@@ -57,6 +58,8 @@ export type CalendarDraftComposerProps = {
   previewKey: string;
   /** Show the calendar preview under the form. On by default. */
   showPreview?: boolean;
+  /** The Macro event this draft created, once the create is confirmed. */
+  createdEventId?: string;
 };
 
 function CalendarDraftComposerFallback() {
@@ -130,6 +133,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   // choice under the same flag as the calendar's own event composer.
   // Guest permissions roll out with guest invites.
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
+  const [preferences] = useCalendarPreferences();
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
   let finalized = false;
 
@@ -322,6 +326,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
             controller={controller}
             macroCallsEnabled
             guestPolicyEditable={guestInvitesEnabled()}
+            timeFormat={preferences.timeFormat}
             class="min-w-0"
             disabled={
               finalized || !props.sink.canAct() || operation() === 'reject'
@@ -354,6 +359,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
                   : undefined
               }
               class="h-96 shrink-0"
+              createdEventId={props.createdEventId}
             />
           </ErrorBoundary>
         </Show>

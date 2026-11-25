@@ -118,7 +118,7 @@ pub struct ExecutionRecord {
     /// Original turn, preventing another requester from replaying a saved result.
     #[serde(default)]
     pub turn_id: Option<Uuid>,
-    /// The submitted JavaScript module.
+    /// The submitted TypeScript module.
     pub source: String,
     /// Overall execution state.
     pub status: ExecutionStatus,

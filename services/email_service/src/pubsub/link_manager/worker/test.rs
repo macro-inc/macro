@@ -109,3 +109,62 @@ async fn a_crashed_worker_stops_renewing() {
 
     assert_eq!(renewals.load(Ordering::SeqCst), 2);
 }
+
+/// The daily removal window is measured from these fields: which lane carried a
+/// removal and how long it waited there.
+#[test]
+fn a_delivery_span_records_its_lane_kind_and_queue_wait() {
+    use aws_sdk_sqs::types::{Message, MessageSystemAttributeName};
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use std::time::UNIX_EPOCH;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("link-manager-test")));
+    let message = Message::builder()
+        .message_id("delivery")
+        .body(
+            r#"{"operation":"DeleteLink","link_id":"01a1fc80-0000-7000-8000-000000000001","deletion_reason":"ManuallyDisabled"}"#,
+        )
+        .attributes(MessageSystemAttributeName::SentTimestamp, "1700000000000")
+        .build();
+    let now = UNIX_EPOCH + Duration::from_millis(1_700_000_042_000);
+
+    let decoded = tracing::subscriber::with_default(subscriber, || {
+        // Another test may have cached a "never" interest for the callsite.
+        tracing::callsite::rebuild_interest_cache();
+        let (span, decoded) = delivery_span(LinkManagerLane::Interactive, &message, now);
+        drop(span);
+        decoded
+    });
+
+    assert!(matches!(decoded, Ok(LinkManagerMessage::DeleteLink { .. })));
+    let spans = exporter.get_finished_spans().unwrap();
+    let span = spans
+        .iter()
+        .find(|span| span.name == "email.link_manager.message")
+        .expect("delivery span exported");
+    let field = |key: &str| {
+        span.attributes
+            .iter()
+            .find(|attribute| attribute.key.as_str() == key)
+            .map(|attribute| attribute.value.clone())
+    };
+    assert_eq!(
+        field("lane"),
+        Some(opentelemetry::Value::from("interactive"))
+    );
+    assert_eq!(
+        field("kind"),
+        Some(opentelemetry::Value::from("DeleteLink"))
+    );
+    assert_eq!(
+        field("queue_wait_ms"),
+        Some(opentelemetry::Value::I64(42_000))
+    );
+}

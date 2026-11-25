@@ -21,8 +21,8 @@ describe('documents.create', () => {
     } as unknown as MacroClient;
     const documents = new DocumentNamespace(client);
 
-    // Code-mode programs are plain JavaScript, so nothing stops this call
-    // before it runs.
+    // A code-mode program can still cast its way past the type check, so
+    // the call refuses this at run time.
     const call = documents.create({
       name: 'Launch plan',
       content: '- Ship it',

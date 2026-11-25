@@ -24,7 +24,21 @@ Their isolation and threat model is in
   The host is a column and a `Computer` field, not part of the phase. Billing
   events change only `Billing` and emit the machine effects billing calls for.
   `Crashed` with no `retry` gave up (too many crashes, a failed effect, a lost
-  host): it paged, and `OperatorRetry` restarts it.
+  host): it paged, and `OperatorRetry` restarts it. A give-up stops nothing,
+  so a sign of life ends one whose cause can pass (`Failure::ended_by`):
+  macrod connecting ends `Power` and `KeptCrashing`, the agent reporting
+  online ends those and `AgentNotStarted`; the computer is `Running` again
+  with its failure cleared. `Create`, `SetupExhausted`, `AgentUnsupported`,
+  `HostLost` and `Payment` wait for a retry. A give-up leaves
+  `macrod_connected` as observed.
+- The team sees `ComputerStatusKind::Unhealthy` for a computer past its
+  first connection that is `Running` with macrod missing at one or more
+  `MACROD_GRACE` checks (`macrod_misses >= 1`, so a reconnect flap stays
+  Ready; never while hibernated), `Crashed` with a restart scheduled, or
+  `Booting` again after a crash inside `CRASH_WINDOW` or with a missed check
+  (a retry boot, or a power-on or move with no recent crash, reads
+  Starting). Before the first
+  connection the same states read as setting up; only a give-up reads Failed.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
   A failed fleet effect retries with backoff up to `MAX_EFFECT_ATTEMPTS`, except
@@ -34,7 +48,19 @@ Their isolation and threat model is in
   is its fixed user-safe sentence, and the raw error stays in the logs and the
   operator page. `setup.stepStartedAt` is when the current setup step began
   (null for Booting, which records no start).
-- Keep literal purchase resources in the versioned `domain::size::current_catalog`.
+- Keep literal purchase resources in the versioned `domain::size::SIZE_SPECS`
+  (`current_catalog` maps it to offers). Each tier writes out every quantity;
+  the size tests fail if its root disk, `/home` disk or units disagree with
+  what the fleet derives from a recorded purchase:
+
+  | Tier | Catalog entry | vCPUs | Memory | Root disk | `/home` | Disk quota | Units |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | Standard | `standard@2026-11` | 4 | 8 GiB | 32 GiB | 68 GiB | 100 GiB | 1 |
+  | Large | `large@2026-11` | 8 | 16 GiB | 32 GiB | 168 GiB | 200 GiB | 2 |
+  | XL | `xl@2026-11` | 16 | 32 GiB | 32 GiB | 368 GiB | 400 GiB | 4 |
+
+  Prices are per-size Stripe config (`computer_billing`), not derived from
+  resources. `SizeOffer.memoryGb`/`diskGb` carry GiB despite their wire names.
 - Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
   reserves sold units on a host; starting checks awake units (`Context::host_has_room`).
 - A powered-on computer stays Running until the team turns it off (Stopped).
@@ -118,8 +144,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   Drift logs an operator error without resizing.
   Docker enforces/checks CPU and RAM only (overlayfs has no disk quota).
   The disk quota splits into a fixed `image::ROOT_DISK_GIB` (32 GiB) root disk
-  and a data disk of the rest (`image::data_disk_gib`; 68/168/368 GiB for the
-  current sizes); drift checks compare the root disk only.
+  and a data disk of the rest (`image::data_disk_gib`; per tier in the table above);
+  drift checks compare the root disk only.
   Subscription reconcile matches computer ids, never prices.
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
   Read configured offers without billing through `ComputerService::catalog()`
@@ -470,7 +496,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   `apply-agent` in its `x-macro-runtime-accepts` dial header fails it at once
   with `Failure::AgentUnsupported`). A lost host is no strike: a
   host outage must not release every computer setting up on it. The first
-  give-up in it waits for a team retry on the same computer, with no new charge. The second
+  give-up in it waits for a team retry on the same computer, with no new charge,
+  unless the agent then reports online after all, which recovers it. The second
   (`MAX_FIRST_START_FAILURES`) releases the computer (`EndsAt{now}`, Destroy,
   RevokeHarness), queues `RefundPurchase` and `UndoAgentInvite`, and notifies
   `SetupOutcome::Released` (a `computer_setup` `Failed` notice with
@@ -497,7 +524,8 @@ the operator publishes `{harness, computer, generation}` (plus trace context)
 on the runtime bus via `Harnesses::deliver_agent`, and only the replica
 holding macrod's socket issues the agent's environment through its
 `AgentEnrollmentSource` (team_agents' `issue_enrollment`, which rotates the
-agent's key) and sends it down that socket as `ToRuntimeMessage::ApplyAgent`.
+agent's key) and sends it down that socket as `ToRuntimeMessage::ApplyAgent`,
+with the setup `traceparent` the agent's start joins.
 Each macrod connection hands it over again until the agent reports online.
 team_agents reads an agent computer's roster state with
 `ComputerService::status_for_roster` (answered on a detached fleet too) and
@@ -578,7 +606,10 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   tracer: `computer.setup.payment` (reservation → charge settled or comp;
   it overlaps the next waits), `computer.setup.create` (conversion → guest
   booting, including outbox and capacity waits), `computer.setup.boot` (→ first macrod connection) and the total
-  `computer.setup`. They carry `computer_id`, `team_id`, `size`, `host_id`,
+  `computer.setup`; for an agent teammate also `computer.setup.agent_handoff`
+  (→ macrod took the agent, `Event::AgentDelivered` from the finished hand-off) and `computer.setup.agent_start` (→ the agent
+  online). Work parents under the purchase for the whole first start
+  (`ComputerState::first_start`), so the hand-off joins the setup trace. They carry `computer_id`, `team_id`, `size`, `host_id`,
   `generation`, `billing_kind` and `capacity_waited`. A rolled-back
   transaction can export a wait that a retry exports again.
 - `Enrollment.traceparent` carries the setup context to macrod; see

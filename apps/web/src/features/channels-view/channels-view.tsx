@@ -1,4 +1,8 @@
-import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import {
+  ViewShell,
+  type ViewShellRootProps,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
@@ -35,6 +39,7 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import {
+  type Accessor,
   createContext,
   createEffect,
   createMemo,
@@ -79,7 +84,10 @@ export type ChannelsViewProps = {
 };
 
 // Mounted inside the mobile list's Suspense boundary.
-function MobileChannelsList(props: { sources: ChannelsSources }) {
+function MobileChannelsList(props: {
+  sources: ChannelsSources;
+  localChannels: Accessor<ChannelEntity[]>;
+}) {
   const {
     mobileLayout,
     selectedChannel,
@@ -135,7 +143,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
     }
     return true;
   };
-  const listChannels = useChannelListSearchPool();
+  const listChannels = props.localChannels;
   const mobileSearchText = () => '';
   const mobileSearchSource = createChannelSearchSource({
     additionalLocalChannels: listChannels,
@@ -172,6 +180,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
       >
         <MobileSectionsView
           sources={props.sources}
+          localChannels={listChannels}
           pinned={pinned()}
           openPreview={mobileLayout() ? undefined : openPreview}
         />
@@ -182,10 +191,11 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
 
 function DesktopChannelsRail(props: {
   sources: ChannelsSources;
+  localChannels: Accessor<ChannelEntity[]>;
   searchOpen: boolean;
   onSearchOpenChange: (open: boolean) => void;
 }) {
-  const listChannels = useChannelListSearchPool();
+  const listChannels = props.localChannels;
   const { sectionsEnabled } = useChannelsView();
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchSource = createChannelSearchSource({
@@ -241,18 +251,41 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
     />
   );
 }
-function ChannelsViewRoot() {
+type ChannelsAsideList = ViewShellRootProps['asideList'];
+
+function ChannelsViewRoot(props: {
+  registerAsideList: (list: (() => ChannelsAsideList) | undefined) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const {
     state,
     tab,
+    setTab,
     mobileLayout,
     sectionsLoading,
     sectionsEnabled,
     selectedChannel,
+    setSelectedChannel,
   } = useChannelsView();
   const threadsTab = () => !isTouchDevice() && tab() === 'threads';
+  // Threads fill Main like a conversation, so going back leaves them first.
+  const returnToList = () => {
+    if (threadsTab()) setTab('browse');
+    else setSelectedChannel(undefined);
+  };
+  // Narrow desktop, the rail and the conversation take turns at full width.
+  // The loading spinner has no rail to take turns with.
+  props.registerAsideList(() =>
+    isTouchDevice() || sectionsLoading()
+      ? undefined
+      : {
+          open: selectedChannel() !== undefined || threadsTab(),
+          onBack: returnToList,
+        }
+  );
+  onCleanup(() => props.registerAsideList(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
+  const localChannels = useChannelListSearchPool();
 
   const sources = useChannelsSources(
     (scope) => {
@@ -271,7 +304,8 @@ function ChannelsViewRoot() {
       if (scope === 'threads') return tab() === 'threads';
       return tab() === 'browse';
     },
-    (group) => state.sortBy[group]
+    (group) => state.sortBy[group],
+    localChannels
   );
   onMount(() => {
     panel.handle.setDisplayName('Channels');
@@ -310,6 +344,7 @@ function ChannelsViewRoot() {
                   fallback={
                     <DesktopChannelsRail
                       sources={sources}
+                      localChannels={localChannels}
                       searchOpen={railSearchOpen()}
                       onSearchOpenChange={setRailSearchOpen}
                     />
@@ -317,7 +352,10 @@ function ChannelsViewRoot() {
                 >
                   <ChannelsTouchSidebar>
                     <MaybeSoupEntityActionDrawerManager>
-                      <MobileChannelsList sources={sources} />
+                      <MobileChannelsList
+                        sources={sources}
+                        localChannels={localChannels}
+                      />
                     </MaybeSoupEntityActionDrawerManager>
                   </ChannelsTouchSidebar>
                 </Show>
@@ -338,7 +376,10 @@ function ChannelsViewRoot() {
                     name="ChannelsView.mobile"
                     fallback={<SpinnerIcon class="size-5 animate-spin" />}
                   >
-                    <MobileChannelsList sources={sources} />
+                    <MobileChannelsList
+                      sources={sources}
+                      localChannels={localChannels}
+                    />
                   </DebugSuspense>
                 </MaybeSoupEntityActionDrawerManager>
               }
@@ -542,6 +583,8 @@ export function ChannelDetailRouteView() {
 /** Chat workspace with shared workspace navigation. */
 export function ChannelsView(props: ChannelsViewProps) {
   const inlinePreviewLayout = useInlinePreviewLayout();
+  // The selection lives in the provider, which needs the shell around it.
+  const [asideList, setAsideList] = createSignal<() => ChannelsAsideList>();
   return (
     <DebugSuspense name="ChannelsView.root">
       <SplitPanel.Root>
@@ -551,11 +594,14 @@ export function ChannelsView(props: ChannelsViewProps) {
             aside={
               inlinePreviewLayout() ? { preserveDuringResize: false } : false
             }
+            asideList={asideList()?.()}
             main={{ preferredWidth: 640 }}
             resizable
           >
             <ChannelsViewProvider initialState={props.initialState}>
-              <ChannelsViewRoot />
+              <ChannelsViewRoot
+                registerAsideList={(list) => setAsideList(() => list)}
+              />
             </ChannelsViewProvider>
           </ViewShell.Root>
         </SplitPanel.Body>

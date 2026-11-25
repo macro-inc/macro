@@ -14,7 +14,10 @@ interface SearchContentProps {
 }
 
 /**
- * Displays the content/snippet of a search hit
+ * Displays the content/snippet of a search hit. A snippet is a picture of the
+ * message, so its links and mentions are inert: pressing one presses the row
+ * and opens the result. Highlights split a URL, so a live link there would
+ * open only its first part.
  */
 export function SearchContent(props: SearchContentProps) {
   const content = () => props.hit?.content ?? '';
@@ -36,7 +39,7 @@ export function SearchContent(props: SearchContentProps) {
           fallback={<span class="italic text-ink-disabled">No content</span>}
         >
           {(trimmedContent) => (
-            <StaticMarkdown markdown={trimmedContent()} theme={theme()} />
+            <StaticMarkdown inert markdown={trimmedContent()} theme={theme()} />
           )}
         </Show>
       )}

@@ -5,7 +5,6 @@ import {
   type DummyWorkspace,
 } from '../../primitives/createDummyWorkspace';
 import DummyWorkspaceView from '../workspace/DummyWorkspace';
-import { AgentMcpDemo } from './AgentStories';
 import { NorthwindCollaboration } from './NorthwindCollaboration';
 import { NorthwindSession, NorthwindStory } from './NorthwindSession';
 import { createNorthwindAccessTask, NORTHWIND_PLAN } from './northwindScenario';
@@ -283,22 +282,6 @@ it('switches Work and Code while keeping the unsent prompt', () => {
     view.getByRole('textbox', { name: 'Message the agent' }).textContent
   ).toBe('Investigate the customer follow-up');
   expect(view.getByRole('button', { name: 'Choose repository' })).toBeTruthy();
-});
-
-it('lists the real MCP command and does not report copy success on failure', async () => {
-  const view = render(() => <AgentMcpDemo />);
-  expect(
-    view.getByText(
-      'claude mcp add --transport http macro https://mcp-server.macro.com/mcp'
-    )
-  ).toBeTruthy();
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: { writeText: vi.fn().mockRejectedValue(new Error('Not allowed')) },
-  });
-  fireEvent.click(view.getByRole('button', { name: 'Copy' }));
-  await Promise.resolve();
-  expect(view.queryByText('Copied')).toBeNull();
 });
 
 it('returns focus to Share when the local sharing sheet closes', async () => {

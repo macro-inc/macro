@@ -29,6 +29,12 @@ pub enum Staged {
     Unchanged,
 }
 
+/// Where macrod stages the computer's setup trace for the agent's start
+/// (`start-agent` reads it). Beside the environment, never in it: each
+/// redelivery carries a fresh trace context, and a changed environment
+/// restarts the agent.
+pub const SETUP_TRACEPARENT_INBOX: &str = "/run/macro-agent-inbox/setup-traceparent";
+
 /// Validate an environment from the wire and stage it at `path` (mode 0600),
 /// written whole: it appears under its name only once complete, so the unit
 /// that watches for it never installs a partial file. A re-sent environment
@@ -64,6 +70,25 @@ pub fn stage_agent_env(
     write_private(&staging, &contents)?;
     std::fs::rename(&staging, path).context(format!("could not stage {}", path.display()))?;
     Ok(Staged::Written)
+}
+
+/// Stage the first valid setup `traceparent` at `path` for the agent's start;
+/// a later one (a redelivery's) leaves it, and a malformed or absent one
+/// stages nothing rather than failing the hand-off. Not a secret.
+pub fn stage_setup_traceparent(path: &Path, traceparent: Option<&str>) -> rootcause::Result<()> {
+    let Some(traceparent) = traceparent.filter(|traceparent| {
+        hosted_runtimes::domain::telemetry::is_valid_traceparent(traceparent)
+    }) else {
+        return Ok(());
+    };
+    // Without the inbox the environment's staging refuses, with the reason.
+    if path.exists() || !path.parent().is_some_and(Path::is_dir) {
+        return Ok(());
+    }
+    let staging = path.with_extension("partial");
+    write_private(&staging, traceparent)?;
+    std::fs::rename(&staging, path).context(format!("could not stage {}", path.display()))?;
+    Ok(())
 }
 
 /// `KEY="value"` lines, with `\` and `"` escaped as systemd expects. Names

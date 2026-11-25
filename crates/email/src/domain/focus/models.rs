@@ -183,9 +183,11 @@ impl FocusSignals {
 /// The rule's decision about one thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FocusVerdict {
-    /// Whether the thread belongs in Focus whatever the time. A thread awaiting
-    /// a reply also joins once it has waited long enough, and a calendar change
-    /// holds one until `calendar_hold_until`.
+    /// Whether the thread belongs in Focus while its latest message is someone
+    /// else's. Once the owner writes last it leaves, and one awaiting an answer
+    /// comes back once it has waited long enough or its due day comes. A calendar
+    /// change holds one until `calendar_hold_until`, and none stays once the
+    /// event its mail is about is over.
     pub is_focus: bool,
     /// Key mail: in Focus even when the thread is not in the signal inbox.
     pub pinned: bool,
@@ -265,8 +267,8 @@ pub struct StoredClassification {
     pub answers: Option<FocusAnswers>,
     /// The model that answered.
     pub model: String,
-    /// The day the classified mail says the thread is due.
-    pub due_on: Option<NaiveDate>,
+    /// What the classified mail says about the thread's days.
+    pub dates: FocusDates,
 }
 
 /// Where a thread lives and how it stands; read before any message content.
@@ -278,6 +280,9 @@ pub struct FocusInbox {
     pub link_id: Uuid,
     /// Owner of that inbox.
     pub owner: MacroUserIdStr<'static>,
+    /// The users other than the owner the inbox is linked to, whose Focus tab
+    /// shows it too.
+    pub delegates: Vec<MacroUserIdStr<'static>>,
     /// The inbox's address, lowercased.
     pub owner_email: String,
     /// Whether the thread is in the signal inbox.
@@ -337,13 +342,16 @@ impl FocusThread {
     }
 }
 
-/// An inbox and the person who holds it.
+/// An inbox and the people whose Focus tab shows it, whose places in the
+/// rollout decide whether it is classified.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FocusInboxOwner {
     /// The inbox.
     pub link_id: Uuid,
-    /// Its owner, whose place in the rollout decides whether it is classified.
+    /// Its owner.
     pub owner: MacroUserIdStr<'static>,
+    /// The users other than the owner the inbox is linked to.
+    pub delegates: Vec<MacroUserIdStr<'static>>,
 }
 
 /// An inbox thread whose stored classification may be out of date.
@@ -374,9 +382,36 @@ pub struct FocusRecord {
     pub model: String,
     /// When the classification was made.
     pub classified_at: DateTime<Utc>,
-    /// The day the classified mail says the thread is due. No mail text or
-    /// extracted span is ever stored with it.
+    /// What the classified mail says about the thread's days. No mail text or
+    /// extracted span is ever stored with them.
+    pub dates: FocusDates,
+}
+
+/// What a thread's mail says about its days, as the due date extractor reads them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ThreadDates {
+    /// The day it is due, when an open deadline stands.
     pub due_on: Option<NaiveDate>,
+    /// The day of the meeting, call or other event it is about, still to come or
+    /// just past.
+    pub event_on: Option<NaiveDate>,
+}
+
+/// A classified thread's days, and when they take effect for its owner.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FocusDates {
+    /// The day the classified mail says the thread is due, as a calendar date so
+    /// no time zone can shift it.
+    pub due_on: Option<NaiveDate>,
+    /// When that day begins for the owner: a thread they wrote last on comes
+    /// back to Focus then, if the wait for an answer hasn't brought it back first.
+    pub due_at: Option<DateTime<Utc>>,
+    /// When the day of the meeting the classified mail is about is over for the
+    /// owner: the thread leaves Focus then, unless newer mail came. Never set for
+    /// a calendar change, whose `calendar_hold_until` decides instead, while a
+    /// deadline stands after that day, nor for mail written once that day was over
+    /// that leaves the owner something to do (`rule::owner_has_something_to_do`).
+    pub event_over_at: Option<DateTime<Utc>>,
 }
 
 /// Which way a thread's importance is moving.
@@ -391,8 +426,8 @@ pub enum ImportanceTrend {
 }
 
 /// A stored classification as it stands when read: who wrote last, how long the
-/// owner has waited, whether a changed event is over and how far importance has
-/// moved are applied to what was stored.
+/// owner has waited, whether its due day has come, whether the event it is about
+/// is over and how far importance has moved are applied to what was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThreadFocus {
     /// Whether the thread belongs in Focus.
@@ -403,8 +438,8 @@ pub struct ThreadFocus {
     pub importance: u8,
     /// The latest message is someone else's and waits on the owner's answer.
     pub needs_reply: bool,
-    /// The latest message is the owner's, and the thread has an open loop or
-    /// has waited past the threshold for an answer.
+    /// The latest message is the owner's, and the thread came back to Focus:
+    /// it has waited past the threshold for an answer, or its due day has come.
     pub needs_follow_up: bool,
     /// When the classification was made.
     pub classified_at: DateTime<Utc>,

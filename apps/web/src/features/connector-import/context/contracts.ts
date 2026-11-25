@@ -1,15 +1,14 @@
 import type { Accessor } from 'solid-js';
 import type { AgentImportHandoff } from '../core/agent-handoff';
 
-/**
- * `started` means authorization continues in another tab; the connection
- * shows up in `createConnections` once it finishes.
- */
-export type ConnectOutcome = 'connected' | 'started' | 'closed' | 'unsupported';
+/** `closed` means the user left the flow; nothing was connected. */
+export type ConnectOutcome = 'connected' | 'closed';
 
 /** The user's connected apps; `ready` is false until the answer is known. */
 type ConnectionsSource = {
   connected: Accessor<ReadonlySet<string>>;
+  /** Connected apps whose connection provides what Macro's import reads. */
+  importable: Accessor<ReadonlySet<string>>;
   ready: Accessor<boolean>;
 };
 
@@ -17,11 +16,11 @@ export type ConnectorImportContext = {
   /** Called inside an open dialog so its queries live only that long. */
   createConnections(): ConnectionsSource;
   /**
-   * Connect through the app's native MCP server when it has one, otherwise
-   * Pipedream; `container` keeps Pipedream's iframe usable in a modal.
+   * Connect the app however the server says; `container` keeps an embedded
+   * connect dialog usable in a modal.
    */
   connect(
-    app: { appSlug: string; name: string; mcpUrl?: string },
+    app: { appSlug: string; name: string },
     container?: HTMLElement
   ): Promise<ConnectOutcome>;
   /** Hand the import to an agent chat in a split beside the current view. */

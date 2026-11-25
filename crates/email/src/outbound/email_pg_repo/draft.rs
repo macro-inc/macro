@@ -75,7 +75,7 @@ pub(crate) async fn insert_message(
     new_thread: Option<ThreadRow>,
     is_draft: bool,
 ) -> Result<Option<SettledDraftIds>, EmailErr> {
-    let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
+    let mut tx = super::begin(pool).await.map_err(anyhow::Error::from)?;
 
     let settled =
         insert_message_in_transaction(&mut tx, input, contacts, link_id, new_thread, is_draft)
@@ -99,7 +99,7 @@ pub(super) async fn insert_message_in_transaction(
     let mailbox = sqlx::query!(r#"
         SELECT macro_id,
             ($2::text = macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = email_links.id AND u.primary_macro_id = $2)) AS authorized
-        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE
+        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR SHARE
     "#,link_id,input.actor_id).fetch_optional(&mut **tx).await.map_err(anyhow::Error::from)?;
     if mailbox
         .as_ref()

@@ -6,10 +6,9 @@ use std::{
     time::Duration,
 };
 
-use chrono::NaiveDate;
 use email::domain::focus::{
-    DueDateExtractor, DueDateInput, FocusClassifier, FocusClassifierError, FocusEnrollment,
-    FocusNotifier, ProfileSource,
+    ClassifierLane, DueDateExtractor, DueDateInput, FocusClassifier, FocusClassifierError,
+    FocusEnrollment, FocusNotifier, ProfileSource, ThreadDates,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -20,6 +19,10 @@ use uuid::Uuid;
 
 /// Link f01 in the Focus fixtures, held by owner@acme.example.
 pub const OWNERS_LINK: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000f01");
+/// Link f02 in the Focus fixtures, held by other@elsewhere.example. The
+/// email_focus_linked fixture links it to owner@acme.example, whose Focus tab
+/// lists it as a secondary inbox.
+pub const OTHERS_LINK: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000f02");
 /// Thread f201 in link f01.
 pub const OWNERS_THREAD: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f201");
 /// Thread f207 in link f02, held by other@elsewhere.example.
@@ -73,6 +76,7 @@ impl FocusClassifier for RecordingClassifier {
         thread_id: Uuid,
         _input: &Value,
         questions: &[&'static str],
+        _lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         if !self.latency.is_zero() {
             tokio::time::sleep(self.latency).await;
@@ -101,7 +105,7 @@ impl FocusNotifier for NoReaders {
     fn focus_changed(&self, _owner: &MacroUserIdStr<'static>, _link_id: Uuid) {}
 }
 
-/// Finds no due date after `latency`, counting the calls.
+/// Finds no dates after `latency`, counting the calls.
 #[derive(Clone, Default)]
 pub struct NoDueDates {
     pub calls: Arc<Mutex<usize>>,
@@ -109,17 +113,17 @@ pub struct NoDueDates {
 }
 
 impl DueDateExtractor for NoDueDates {
-    async fn due_on(
+    async fn dates(
         &self,
         _owner: &MacroUserIdStr<'static>,
         _thread_id: Uuid,
         _input: &DueDateInput,
-    ) -> Result<Option<NaiveDate>, Report> {
+    ) -> Result<ThreadDates, Report> {
         if !self.latency.is_zero() {
             tokio::time::sleep(self.latency).await;
         }
         *self.calls.lock().unwrap() += 1;
-        Ok(None)
+        Ok(ThreadDates::default())
     }
 }
 

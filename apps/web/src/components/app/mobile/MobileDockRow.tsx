@@ -200,6 +200,9 @@ function MoreViewsDrawer(props: {
 function MobileNavigationDockRow(props: { vertical?: boolean }) {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
+  // Projects keeps its create action but belongs to the Tasks dock destination.
+  const activeView = () =>
+    foregroundView() === 'projects' ? 'tasks' : foregroundView();
   const availableViews = useMobileDockViews();
   // The dock's bell is Home, and opens Notifications when that view is on.
   const unread = useNavigationUnread({ homeIsNotifications: true });
@@ -265,12 +268,12 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
           {(button) => (
             <MobileDockButton
               icon={
-                foregroundView() === button.id
+                activeView() === button.id
                   ? (button.iconActive ?? button.icon)
                   : button.icon
               }
               ariaLabel={button.label}
-              active={foregroundView() === button.id}
+              active={activeView() === button.id}
               unread={unread.has(button.id)}
               unreadCount={unread.count(button.id)}
               onClick={() => navigate(button.id)}
@@ -281,7 +284,7 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
           views={dockViews()}
           visibleCount={visibleCount()}
           onMove={move}
-          isActive={(id) => foregroundView() === id}
+          isActive={(id) => activeView() === id}
           unread={unread}
           onNavigate={navigate}
         />
@@ -314,8 +317,8 @@ type MobileDockRowProps = {
 /**
  * The bottom-most chrome row. By default it is the navigation dock (see
  * MobileNavigationDockRow); pressing its Search button opens a search session,
- * which swaps in the search bar; category pills sit at the top of the
- * results (see MobileViewsRow). Pressing the
+ * which swaps in the search bar; operator starters sit at the top of the
+ * results (see MobileSearchStarters). Pressing the
  * input's X ends the session and restores the navigation dock.
  */
 export function MobileDockRow(props: MobileDockRowProps) {

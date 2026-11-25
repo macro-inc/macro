@@ -31,6 +31,7 @@ export function SettingsSidebar(props: {
   let root: HTMLDivElement | undefined;
   return (
     <ViewSidebar.Root
+      reorderId="settings"
       ref={root}
       aria-label={t('settingsNav.settingsNavigation')}
     >
@@ -68,9 +69,15 @@ export function SettingsSidebar(props: {
       <ViewSidebar.Content>
         {/* Search results replace the pills, so they replace the action too. */}
         <Show when={action() && !props.searchQuery.trim()}>
-          <ViewSidebar.Nav aria-label={t('settingsNav.teamActions')}>
-            {action()}
-          </ViewSidebar.Nav>
+          <ViewSidebar.Section
+            id="team-actions"
+            label={t('settingsNav.teamActions')}
+            pinned
+          >
+            <ViewSidebar.Nav aria-label={t('settingsNav.teamActions')}>
+              {action()}
+            </ViewSidebar.Nav>
+          </ViewSidebar.Section>
         </Show>
         <Show
           when={!props.searchQuery.trim()}
@@ -92,10 +99,16 @@ export function SettingsSidebar(props: {
           >
             <For each={props.groups}>
               {(group) => (
-                <section class="flex min-w-0 flex-col gap-0.5">
-                  <h2 class="flex h-7 min-w-0 items-center px-(--sidebar-item-inset) text-xs font-medium text-ink/50">
-                    <span class="truncate">{group.label}</span>
-                  </h2>
+                <ViewSidebar.Section
+                  id={group.id}
+                  label={group.label}
+                  class="flex min-w-0 flex-col gap-0.5"
+                >
+                  <ViewSidebar.SectionHeader>
+                    <h2 class="flex h-7 min-w-0 items-center px-(--sidebar-item-inset) text-xs font-medium text-ink/50">
+                      <span class="truncate">{group.label}</span>
+                    </h2>
+                  </ViewSidebar.SectionHeader>
                   <ViewSidebar.Nav aria-label={group.label}>
                     <For each={group.items}>
                       {(item) => (
@@ -115,7 +128,7 @@ export function SettingsSidebar(props: {
                       )}
                     </For>
                   </ViewSidebar.Nav>
-                </section>
+                </ViewSidebar.Section>
               )}
             </For>
           </Show>

@@ -28,6 +28,8 @@ export type NotificationMuteMenuProps = {
    * supports it; `active` when every target already has it.
    */
   mentionsOnly?: { active: boolean; onChange: (active: boolean) => void };
+  /** Why the target is muted, beside Unmute: "Until 3:00 PM", "Muted by Work". */
+  mutedHint?: string;
   onActionComplete?: () => void;
 };
 
@@ -110,19 +112,40 @@ function muteOptions(props: MuteOptionsProps) {
 
 /** Shared entity and section submenu; callers own targets and mutations. */
 export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
+  const unmute = () => {
+    props.onMute(false);
+    props.onActionComplete?.();
+  };
+
   return (
     <Show
       when={!props.muted}
       fallback={
-        <MenuItem
-          text={props.unmuteLabel}
-          icon={BellIcon}
-          disabled={props.disabled}
-          onClick={() => {
-            props.onMute(false);
-            props.onActionComplete?.();
-          }}
-        />
+        <Show
+          when={props.mutedHint}
+          fallback={
+            <MenuItem
+              text={props.unmuteLabel}
+              icon={BellIcon}
+              disabled={props.disabled}
+              onClick={unmute}
+            />
+          }
+        >
+          {(hint) => (
+            <ContextMenu.Item
+              class={MENU_ITEM_CLASS}
+              disabled={props.disabled}
+              onSelect={unmute}
+            >
+              <BellIcon class="size-4 shrink-0" />
+              <span class="min-w-0 flex-1 truncate">{props.unmuteLabel}</span>
+              <span class="ml-auto shrink-0 text-right text-xs whitespace-nowrap text-ink-extra-muted">
+                {hint()}
+              </span>
+            </ContextMenu.Item>
+          )}
+        </Show>
       }
     >
       <ContextMenu.Sub>

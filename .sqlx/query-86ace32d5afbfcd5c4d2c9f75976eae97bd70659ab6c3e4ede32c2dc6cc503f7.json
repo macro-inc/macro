@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of the April 2026 channel snapshot in id order, keeping the Macro\n-- users it lists that still have an account. A row lists one channel, so\n-- each array is bounded by that channel's size.\nSELECT\n    o.id,\n    o.comms_channel_id AS channel_id,\n    o.created_at,\n    ARRAY(\n        SELECT DISTINCT listed.id\n        FROM jsonb_array_elements_text(o.user_ids) AS listed (id)\n        WHERE listed.id COLLATE \"C\" LIKE 'macro|%'\n          AND EXISTS (SELECT 1 FROM \"User\" u WHERE u.id = listed.id)\n    ) AS \"user_ids!\"\nFROM contacts_backfill_outbox o\nWHERE o.id > $1\nORDER BY o.id\nLIMIT $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_ids!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "86ace32d5afbfcd5c4d2c9f75976eae97bd70659ab6c3e4ede32c2dc6cc503f7"
+}

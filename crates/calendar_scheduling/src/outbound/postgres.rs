@@ -162,9 +162,10 @@ impl Repository for PostgresRepository {
         event_type: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        exclude: Option<Uuid>,
     ) -> Result<i64, Error> {
         let mut tx = self.pool.begin().await.map_err(db_error)?;
-        let count = count_daily_bookings(&mut tx, profile, event_type, start, end, None).await?;
+        let count = count_daily_bookings(&mut tx, profile, event_type, start, end, exclude).await?;
         tx.commit().await.map_err(db_error)?;
         Ok(count)
     }

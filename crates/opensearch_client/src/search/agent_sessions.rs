@@ -7,11 +7,9 @@ use opensearch_query_builder::{BoolQueryBuilder, HasChildQuery, InnerHits, Query
 
 use super::{
     builder::{SearchQueryBuilder, SearchQueryConfig},
-    chats::{
-        build_all_terms_highlight_query, build_child_content_query, inner_hits_content_highlight,
-    },
+    chats::{build_all_terms_highlight_query, inner_hits_content_highlight},
     model::{Hit, SearchGotoAgentSession, SearchGotoContent, SearchHit, parse_highlight_hit},
-    query::Keys,
+    query::{Keys, child_content_query},
     utils::{millis_to_datetime, split_inner_hits_budget},
 };
 use crate::Result;
@@ -56,11 +54,13 @@ impl SearchQueryConfig for AgentSessionSearchConfig {
 pub(super) fn build_query(
     args: &AgentSessionSearchArgs,
     match_type: &str,
+    excluded_terms: &[String],
 ) -> Result<BoolQueryBuilder<'static>> {
     let inner = SearchQueryBuilder::<AgentSessionSearchConfig>::new(args.terms.clone())
         .ids(args.session_ids.clone())
         .ids_only(true)
-        .match_type(match_type);
+        .match_type(match_type)
+        .excluded_terms(excluded_terms.to_vec());
     if args.terms.is_empty() {
         return Err(crate::error::OpensearchClientError::NoTermsProvided);
     }
@@ -69,23 +69,24 @@ pub(super) fn build_query(
     query.filter(QueryType::term("agent_session_relation", "agent_session"));
     query.filter(inner.build_filter_query(None)?.to_owned());
     query.minimum_should_match(1);
-    if matches!(
+    let include_name = matches!(
         args.mode,
         AgentSessionSearchMode::Name | AgentSessionSearchMode::NameContent
-    ) {
-        query.should(inner.build_title_term_query()?.to_owned());
-    }
-    if matches!(
+    );
+    let include_content = matches!(
         args.mode,
         AgentSessionSearchMode::Content | AgentSessionSearchMode::NameContent
-    ) {
+    );
+    if include_name {
+        query.should(inner.build_title_term_query()?.to_owned());
+    }
+    if include_content {
         let mut content = BoolQueryBuilder::new();
         let highlight = build_all_terms_highlight_query(&args.terms, match_type);
         let budget = split_inner_hits_budget(args.terms.len());
 
         for (index, term) in args.terms.iter().enumerate() {
-            let has_child =
-                HasChildQuery::new("message", build_child_content_query(term, match_type));
+            let has_child = HasChildQuery::new("message", child_content_query(term, match_type));
             let Some(size) = budget.size_for_clause(index) else {
                 content.must(has_child.into());
                 continue;
@@ -99,6 +100,20 @@ pub(super) fn build_query(
             content.must(has_child.inner_hits(inner_hits).into());
         }
         query.should(content.build().into());
+    }
+
+    // A term a minus left out drops every session it would match: by its
+    // name, a message, or either, as the mode reads.
+    if include_name {
+        for excluded in inner.excluded_field_queries(AgentSessionSearchConfig::TITLE_KEY)? {
+            query.must_not(excluded);
+        }
+    }
+    if include_content {
+        for term in excluded_terms {
+            let has_child = HasChildQuery::new("message", child_content_query(term, match_type));
+            query.must_not(has_child.into());
+        }
     }
     Ok(query)
 }

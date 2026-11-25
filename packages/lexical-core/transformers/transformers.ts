@@ -96,6 +96,29 @@ const EMPTY_PARAGRAPH_SENTINEL = '\u200b';
 const CODE_FENCE_START = /^[ \t]*`{3,}/;
 
 /**
+ * For each line, whether Lexical's CODE import reads it as part of fenced code
+ * (the fence lines included), so text rewrites before import can skip it.
+ */
+export function codeFenceLines(lines: readonly string[]): boolean[] {
+  let closingFence: RegExp | undefined;
+  return lines.map((line) => {
+    if (closingFence) {
+      if (closingFence.test(line.trimEnd())) closingFence = undefined;
+      return true;
+    }
+    const fence = CODE_FENCE_START.exec(line.trimEnd())?.[0];
+    if (fence === undefined) return false;
+    const length = fence.trim().length;
+    const rest = line.trimEnd().slice(fence.length);
+    // A fence that also closes on its own line is a one-line code block.
+    if (!new RegExp(`\`{${length},}$`).test(rest)) {
+      closingFence = new RegExp(`^[ \\t]*\`{${length},}$`);
+    }
+    return true;
+  });
+}
+
+/**
  * Rewrite every empty-paragraph line outside fenced code to a sentinel Lexical
  * will not erase. `$convertFromMarkdownString` normalizes its input before any
  * transformer runs, and that normalizer trims trailing whitespace off every
@@ -110,28 +133,14 @@ export function protectEmptyParagraphLines(
 ): string {
   if (!transformers.includes(PRESERVE_LINES)) return markdown;
   const lines = markdown.split('\n');
-  let closingFence: RegExp | undefined;
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
-    if (closingFence) {
-      if (closingFence.test(line.trimEnd())) closingFence = undefined;
-      continue;
-    }
-    const fence = CODE_FENCE_START.exec(line.trimEnd())?.[0];
-    if (fence !== undefined) {
-      const length = fence.trim().length;
-      const rest = line.trimEnd().slice(fence.length);
-      // A fence that also closes on its own line is a one-line code block.
-      if (!new RegExp(`\`{${length},}$`).test(rest)) {
-        closingFence = new RegExp(`^[ \\t]*\`{${length},}$`);
-      }
-      continue;
-    }
-    if (line === EMPTY_PARAGRAPH_LINE) {
-      lines[index] = EMPTY_PARAGRAPH_SENTINEL;
-    }
-  }
-  return lines.join('\n');
+  const inCode = codeFenceLines(lines);
+  return lines
+    .map((line, index) =>
+      !inCode[index] && line === EMPTY_PARAGRAPH_LINE
+        ? EMPTY_PARAGRAPH_SENTINEL
+        : line
+    )
+    .join('\n');
 }
 
 export const PRESERVE_LINES: ConversionOnlyTransformer<ElementTransformer> = {

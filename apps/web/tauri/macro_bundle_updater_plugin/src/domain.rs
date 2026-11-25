@@ -2,6 +2,8 @@
 pub mod asset_service;
 /// Shared routing state for active frontend bundle generations.
 pub mod bundle_routes;
+/// The record that marks a bundle directory as fully extracted.
+pub mod completion;
 /// Data types and error definitions for bundle updates.
 pub mod models;
 /// Trait definitions (ports) for update, filesystem, and system queries.

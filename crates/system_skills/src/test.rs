@@ -86,3 +86,31 @@ fn compose_routines_finds_items_with_the_sdk_and_ends_with_the_code_step_text() 
     assert!(direct.contains("`NameSearch`"));
     assert!(!direct.contains("ExecuteCode"));
 }
+
+/// The skill's routine looks list Macro's icons and colors, as saving takes
+/// them.
+#[test]
+fn compose_routines_lists_macros_icons_and_colors() {
+    let content = compose_routines::SKILL.render_content();
+    let listed = |label: &str| -> Vec<String> {
+        let line = content
+            .lines()
+            .find_map(|line| line.trim().strip_prefix(label))
+            .unwrap_or_else(|| panic!("no {label} line"));
+        line.trim_end_matches('.')
+            .replace(" or ", ", ")
+            .split(", ")
+            .map(str::to_owned)
+            .collect()
+    };
+    assert_eq!(
+        listed("- `name`, an icon: "),
+        model_entity::macro_icon_names().to_vec()
+    );
+    let colors = listed("- `color`: ");
+    assert_eq!(colors.len(), 12, "{colors:?}");
+    for color in colors {
+        serde_json::from_value::<model_entity::AppearanceColor>(serde_json::json!(color))
+            .unwrap_or_else(|error| panic!("{color}: {error}"));
+    }
+}

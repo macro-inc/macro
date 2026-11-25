@@ -1,4 +1,5 @@
 import type {
+  BookingAccount,
   BookingInsights,
   BookingLinkDraft,
   BookingProfile,
@@ -33,6 +34,11 @@ export interface BookingLinkListing {
   schedules: BookingSchedule[];
   /** The user, as the host to name in a personal draft's `hosts`. */
   host: User;
+  /**
+   * The user's connected accounts a personal link can book on, primary first;
+   * empty for a team's links.
+   */
+  accounts: BookingAccount[];
   /** The user's teams, whose links {@link BookingNamespace.links} lists with `team`. */
   teams: Team[];
   /** The profile's public booking page. */
@@ -86,6 +92,7 @@ export class BookingNamespace {
       ),
       schedules: listing.schedules,
       host: User.byId(this.client, listing.userId),
+      accounts: listing.accounts,
       teams: listing.teamIds.map((id) => Team.byId(this.client, id)),
       pageUrl: bookingPageUrl(this.client, listing.profileId),
     };
@@ -108,7 +115,11 @@ export class BookingNamespace {
    * real hosts: a personal link names {@link BookingLinkListing.host} with
    * mode `individual`; a team link uses `collective` or `roundRobin`.
    * `requiresConfirmation` must be false. For video set `macroCall`
-   * or `googleMeet`, as the user asks, never both. Creating sends no invitations.
+   * or `googleMeet`, as the user asks, never both. To have a personal link's
+   * bookings land on another connected account, with invitations from its
+   * address, set the event's `emailLinkId` to one of
+   * {@link BookingLinkListing.accounts}; omit it for the primary account.
+   * Creating sends no invitations.
    * Replaying an identical draft at the same slug returns the saved link; a
    * different draft at that slug conflicts (409). Share the link's
    * {@link BookingLink.webUrl} as an `<m-booking-link-mention>` chip.

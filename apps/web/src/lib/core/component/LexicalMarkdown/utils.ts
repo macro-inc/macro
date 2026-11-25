@@ -1407,6 +1407,20 @@ function _pendingEditorState(editor: LexicalEditor): Promise<EditorState> {
 }
 
 /**
+ * Focuses `editor` for a click on its container, unless focus is already inside
+ * the editor. A click in the text has already focused the editor and put the
+ * caret where it landed, and `editor.focus()` writes Lexical's stored selection
+ * back to the page. That selection is still the previous caret when the click
+ * arrives before Lexical reads the browser's selectionchange (a quick click, a
+ * trackpad or touch tap, or a busy main thread), so the click would be lost. A
+ * click beside the text, on the container's padding, still focuses the editor.
+ */
+export function focusEditorFromClick(editor: LexicalEditor): void {
+  if (editor.getRootElement()?.contains(document.activeElement)) return;
+  editor.focus();
+}
+
+/**
  * Calls `editor.focus()` on the editor instance with `SKIP_SCROLL_INTO_VIEW_TAG`
  * to prevent focus scrolling
  */

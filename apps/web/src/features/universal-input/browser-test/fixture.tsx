@@ -50,12 +50,13 @@ import { fixtureSearchFields } from './search-extractions-fixture';
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import { createPersonList } from '@core/context/quickAccess/person-list';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, Show } from 'solid-js';
 import { DraftEditor } from '../components/draft-editor';
@@ -95,6 +96,39 @@ function FixtureLayout(parts: InputLayoutParts) {
       </div>
       {parts.result}
     </>
+  );
+}
+
+/**
+ * The Search field with operators inside a header that clips what overflows
+ * it, as a split header does, over a result its suggestion rows must cover.
+ */
+function OperatorSearchbarFixture() {
+  const [query, setQuery] = createSignal('');
+  const [opened, setOpened] = createSignal(0);
+  return (
+    <div>
+      <div class="relative isolate h-12 overflow-clip border-b border-edge">
+        <div class="flex h-full items-center px-2">
+          <SearchbarInput
+            operators
+            floatingSuggestions
+            label="Operator search"
+            value={query()}
+            onChange={setQuery}
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        class="block h-60 w-full text-left"
+        onClick={() => setOpened((count) => count + 1)}
+      >
+        First result
+      </button>
+      <output data-testid="operator-query">{query()}</output>
+      <output data-testid="opened-results">{opened()}</output>
+    </div>
   );
 }
 
@@ -704,7 +738,9 @@ export function UniversalInputFixture(
       <UserContextProvider>
         <QuickAccessContextProvider value={quickAccess}>
           <EmailLinksContextProvider>
-            <ChannelsContextProvider>
+            <ChannelDirectoryProvider
+              directory={staticChannelDirectory(() => [])}
+            >
               <main
                 class={
                   props.command
@@ -761,6 +797,11 @@ export function UniversalInputFixture(
                 </Show>
                 <Show when={!props.embedded && params.has('searchbar')}>
                   <SearchbarFixture />
+                </Show>
+                <Show
+                  when={!props.embedded && params.has('operator-searchbar')}
+                >
+                  <OperatorSearchbarFixture />
                 </Show>
                 <Show when={!props.embedded && params.has('pagination')}>
                   <PaginationFixture short={params.has('short')} />
@@ -861,7 +902,7 @@ export function UniversalInputFixture(
                   </div>
                 </Show>
               </main>
-            </ChannelsContextProvider>
+            </ChannelDirectoryProvider>
           </EmailLinksContextProvider>
         </QuickAccessContextProvider>
       </UserContextProvider>

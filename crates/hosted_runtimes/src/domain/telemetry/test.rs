@@ -194,7 +194,7 @@ fn effect_queued_spans_the_wait_from_queue_to_start_under_the_purchase_trace() {
 }
 
 #[test]
-fn work_joins_the_purchase_trace_only_while_setup_runs() {
+fn work_joins_the_purchase_trace_only_during_the_first_start() {
     use crate::domain::ids::HostId;
     use crate::domain::lifecycle::{Billing, BillingPolicy, Context, Phase, provision};
 
@@ -239,6 +239,13 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
             crate::domain::setup::PaymentProgress::Settled,
             now,
         );
+        // macrod connected, but the agent teammate hasn't reported online:
+        // handing it over is still part of the first start.
+        state.awaiting_agent = true;
+        let awaiting_agent = tracing::info_span!("awaiting_agent");
+        adopt(&awaiting_agent, &state);
+        drop(awaiting_agent.enter());
+        state.awaiting_agent = false;
         let after = tracing::info_span!("after");
         adopt(&after, &state);
         drop(after.enter());
@@ -248,6 +255,14 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
     let during = spans.iter().find(|span| span.name == "during").unwrap();
     assert_eq!(
         during.span_context.trace_id().to_string(),
+        "11111111111111111111111111111111"
+    );
+    let awaiting_agent = spans
+        .iter()
+        .find(|span| span.name == "awaiting_agent")
+        .unwrap();
+    assert_eq!(
+        awaiting_agent.span_context.trace_id().to_string(),
         "11111111111111111111111111111111"
     );
     let after = spans.iter().find(|span| span.name == "after").unwrap();

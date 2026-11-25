@@ -137,6 +137,86 @@ it('accepts external menu queries and resets ranked continuation when policy cha
   client.clear();
 });
 
+it("keeps a policy's list order when it rebuilds the policy, and restarts paging when the order changes", async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const order = [['teammates'], ['interacted', 'invited']];
+  const [listPriority, setListPriority] = createSignal<string[][] | undefined>(
+    order
+  );
+  let committed = Promise.withResolvers<void>();
+  let window: ReturnType<typeof createContactDirectoryWindow> | undefined;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (user, _host, request) => ({
+      ...result(user, request.query),
+      nextCursor: {
+        source: 'people',
+        userId: user,
+        query: request.query,
+        generation: 'generation',
+        after: 'rank-position',
+        policyKey: hashKey([request.policy]),
+      },
+    }));
+  function Harness() {
+    const directory = createContactDirectoryWindow(
+      () => ({ userId: 'viewer' }),
+      reader,
+      () => true,
+      {
+        search: () => '',
+        policy: () => ({
+          mode: 'mention',
+          excluded: [],
+          listPriority: listPriority(),
+          onlyListed: listPriority() ? true : undefined,
+        }),
+      }
+    );
+    window = directory;
+    createEffect(() => {
+      if (directory.data()) committed.resolve();
+    });
+    return null;
+  }
+  const mounted = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(200);
+  await committed.promise;
+  const sent = reader.mock.calls.at(-1)?.[2].policy;
+  expect(sent).toEqual({
+    mode: 'mention',
+    excluded: [],
+    listPriority: order,
+    onlyListed: true,
+  });
+  // A copy, not the caller's arrays.
+  expect(sent?.listPriority).not.toBe(order);
+  committed = Promise.withResolvers<void>();
+  window!.next();
+  await vi.runOnlyPendingTimersAsync();
+  await committed.promise;
+  expect(reader.mock.calls.at(-1)?.[2].cursor?.source).toBe('people');
+  committed = Promise.withResolvers<void>();
+  setListPriority(undefined);
+  await vi.runOnlyPendingTimersAsync();
+  await committed.promise;
+  const last = reader.mock.calls.at(-1)?.[2];
+  expect(last?.cursor).toBeUndefined();
+  expect(last?.policy).toEqual({
+    mode: 'mention',
+    excluded: [],
+    senderDomain: undefined,
+  });
+  expect(last?.policy).not.toHaveProperty('listPriority');
+  mounted.unmount();
+  client.clear();
+});
+
 it('snapshots continuation values instead of retaining reactive previous-page proxies', async () => {
   vi.useFakeTimers();
   const client = new QueryClient();

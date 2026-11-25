@@ -31,6 +31,7 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { DocumentNotificationReadMarker } from '@notifications';
 import { useItemRawName } from '@queries/preview';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { Button } from '@ui';
 import {
   createComputed,
@@ -216,6 +217,7 @@ function MarkdownDetailContent(props: {
 export function MarkdownDetail(props: MarkdownDetailProps) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="md"
       label={props.kind === 'task' ? 'task' : 'document'}

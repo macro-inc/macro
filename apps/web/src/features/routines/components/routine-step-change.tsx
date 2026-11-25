@@ -167,7 +167,7 @@ export function StepRevision(props: {
               </span>
               <For each={problems()}>
                 {(problem) => (
-                  <pre class="min-w-0 overflow-auto whitespace-pre-wrap font-mono text-xs text-ink-muted">
+                  <pre class="min-w-0 select-text select-children overflow-auto whitespace-pre-wrap font-mono text-xs text-ink-muted">
                     {problem}
                   </pre>
                 )}
@@ -255,7 +255,7 @@ function CodeChanges(props: { before: string; after: string }) {
   return (
     <pre
       aria-label="Code changes"
-      class="max-h-80 min-w-0 overflow-auto rounded-xl border border-edge-frame bg-control py-2 font-mono text-xs leading-relaxed"
+      class="max-h-80 min-w-0 select-text select-children overflow-auto rounded-xl border border-edge-frame bg-control py-2 font-mono text-xs leading-relaxed"
     >
       <For each={lines()}>
         {(line) => (

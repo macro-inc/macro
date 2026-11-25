@@ -24,11 +24,13 @@
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
+use gh_workflow::expr::typed::{Expr, StepHandle, StepOutput, Str, failure, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Use, Workflow,
+    Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
+    Workflow,
 };
 
+use crate::workflows::actions::{ActionsCheckout, ActionsGithubScript, ActionsUploadArtifact};
 use crate::workflows::android_build::{self, Artifact};
 use crate::workflows::{steps, vars};
 
@@ -37,8 +39,9 @@ pub fn android_play_release() -> Workflow {
     Workflow::new("Android Play Release")
         .on(Event::default()
             .pull_request(PullRequest::default().add_type(PullRequestType::Labeled)))
-        .concurrency(Concurrency::new(Expression::new(
-            "android-play-release-${{ github.event.pull_request.number }}",
+        .concurrency(Concurrency::new(format!(
+            "android-play-release-{}",
+            pr_number()
         )))
         .add_job("release", release_job())
 }
@@ -48,10 +51,16 @@ fn release_job() -> Job {
         .name("Android Play Release")
         // Same-repo PRs only: the release needs the signing secrets and the
         // Play identity, which fork PRs don't receive anyway.
-        .cond(Expression::new(
-            "github.event.label.name == 'android-update' && \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github()
+                .event::<Str>("label.name")
+                .eq("android-update")
+                .and(
+                    github()
+                        .event::<Str>("pull_request.head.repo.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         // The former tag-driven build ran on this hosted image (Android SDK
         // preinstalled, no Nix cache mount; see docs/development/android.md).
         .runs_on("ubuntu-24.04")
@@ -66,10 +75,13 @@ fn release_job() -> Job {
                 .statuses(Level::Read),
         )
         .add_env(("CI", "true"))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-        .add_env(("BASE_BRANCH", "${{ github.event.pull_request.base.ref }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", pr_number()))
+        .add_env((
+            "BASE_BRANCH",
+            github().event::<Str>("pull_request.base.ref"),
+        ))
         .add_step(checkout_pr_head())
         .add_step(setup_bun())
         .add_step(preconditions())
@@ -86,14 +98,52 @@ fn release_job() -> Job {
         .add_step(pr_comment())
 }
 
+fn pr_number() -> Expr<Str> {
+    github().event("pull_request.number")
+}
+
+fn head_sha() -> Expr<Str> {
+    github().event("pull_request.head.sha")
+}
+
+struct PreconditionsOutputs {
+    /// The PR's bumped version code.
+    version_code: StepOutput<Str>,
+}
+
+/// The [`preconditions`] step.
+const PRECONDITIONS: StepHandle<PreconditionsOutputs> = StepHandle::new(
+    "preconditions",
+    PreconditionsOutputs {
+        version_code: StepOutput::new("preconditions", "version_code"),
+    },
+);
+
+struct PrepareOutputs {
+    /// The release file name, from the release metadata.
+    filename: StepOutput<Str>,
+    /// The release's display name, from the release metadata.
+    release_name: StepOutput<Str>,
+}
+
+/// The [`prepare_version_and_signing`] step.
+const PREPARE: StepHandle<PrepareOutputs> = StepHandle::new(
+    "metadata",
+    PrepareOutputs {
+        filename: StepOutput::new("metadata", "filename"),
+        release_name: StepOutput::new("metadata", "release_name"),
+    },
+);
+
+fn version_code() -> Expr<Str> {
+    PRECONDITIONS.outputs.version_code.read()
+}
+
 fn checkout_pr_head() -> Step<Use> {
-    steps::abort_stalled_fetch(Step::new("Checkout PR head").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    )) // v6
-    .add_with(("ref", "${{ github.event.pull_request.head.sha }}"))
-    .add_with(("persist-credentials", false))
+    ActionsCheckout::new("Checkout PR head")
+        .r#ref(head_sha())
+        .persist_credentials(false)
+        .step()
 }
 
 /// Bun before Nix: the preconditions run the Android scripts before the
@@ -116,9 +166,9 @@ fn preconditions() -> Step<Run> {
             include_str!("scripts/release_wait_for_checks.sh")
         ),
     )
-    .id("preconditions")
+    .id(PRECONDITIONS.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+    .add_env(("HEAD_SHA", head_sha()))
     .add_env(("WAIT_MINUTES", "30"))
     .add_env(("RELEASE_LABEL", "android-update"))
 }
@@ -144,10 +194,10 @@ fn prepare_version_and_signing() -> Step<Run> {
               tauri/src-tauri/gen/android/keystore.properties
             bun scripts/android-firebase.ts build --doppler "$RUNNER_TEMP/android-google-services.json"
         "#})
-        .id("metadata")
+        .id(PREPARE.id())
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
+        .add_env(("VERSION_CODE", version_code()))
         .add_env(("DOPPLER_TOKEN", vars::ANDROID_RELEASE_DOPPLER_TOKEN))
 }
 
@@ -188,8 +238,8 @@ fn verify_and_collect() -> Step<Run> {
     )
     .id("artifact")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
-    .add_env(("RELEASE_FILENAME", "${{ steps.metadata.outputs.filename }}"))
+    .add_env(("VERSION_CODE", version_code()))
+    .add_env(("RELEASE_FILENAME", PREPARE.outputs.filename.read()))
 }
 
 /// Native code pushed while the build ran, on the PR or on `main`, would make
@@ -209,38 +259,21 @@ fn head_guard() -> Step<Run> {
 }
 
 fn upload_workflow_artifact() -> Step<Use> {
-    Step::new("Upload verified Android artifact")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .add_with(("name", "android-release"))
-        .add_with(("path", "android-artifacts/"))
-        .add_with(("if-no-files-found", "error"))
-        .add_with(("retention-days", 90))
+    ActionsUploadArtifact::new("Upload verified Android artifact", "android-artifacts/")
+        .name("android-release")
+        .if_no_files_found("error")
+        .retention_days(90)
+        .step()
 }
 
 fn pr_comment() -> Step<Use> {
-    Step::new("Comment on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        // Failures only: Android Play Publish comments the outcome of a
-        // successful build. Not `always()` either: a run the drift workflow
-        // cancelled must not post "failed, re-add the label" next to drift's
-        // own comment.
-        .if_condition(Expression::new("failure()"))
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_with((
-            "script",
-            indoc::indoc! {r#"
+    ActionsGithubScript::new(
+        "Comment on the PR",
+        indoc::indoc! {r#"
                 const fs = require('fs');
                 const path = require('path');
-                const versionCode = '${{ steps.preconditions.outputs.version_code }}' || '?';
-                const releaseName = '${{ steps.metadata.outputs.release_name }}' || `version code ${versionCode}`;
+                const versionCode = process.env.VERSION_CODE || '?';
+                const releaseName = process.env.RELEASE_NAME || `version code ${versionCode}`;
                 const runUrl =
                   `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                   `/actions/runs/${context.runId}`;
@@ -284,7 +317,16 @@ fn pr_comment() -> Step<Use> {
                   body,
                 });
             "#},
-        ))
+    )
+    .github_token(vars::GITHUB_TOKEN)
+    .step()
+    .add_env(("VERSION_CODE", version_code()))
+    .add_env(("RELEASE_NAME", PREPARE.outputs.release_name.read()))
+    // Failures only: Android Play Publish comments the outcome of a
+    // successful build. Not `always()` either: a run the drift workflow
+    // cancelled must not post "failed, re-add the label" next to drift's
+    // own comment.
+    .if_condition(failure())
 }
 
 #[cfg(test)]

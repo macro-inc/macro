@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ea.entity_id\n        FROM entity_access ea\n        WHERE ea.source_id = ANY($1)\n            AND ea.entity_type = 'document'\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9307cf828c54630123bf63826c3fe3aed4f4dca550ebcefd62c8edd263e2ffb4"
+}

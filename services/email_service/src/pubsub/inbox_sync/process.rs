@@ -4,12 +4,42 @@ use anyhow::{Context, Result};
 use email::domain::mailbox::inbox_sync::InboxSyncDisposition;
 use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
 use sqs_worker::cleanup_message;
+use tracing::Instrument as _;
+
+#[cfg(test)]
+mod test;
 
 /// Decode one delivery and perform only the domain-selected acknowledgement.
 pub(crate) async fn process_message(
     ctx: InboxSyncContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> Result<()> {
+    dispose(ctx, message)
+        .instrument(delivery_span(message))
+        .await
+}
+
+/// The delivery's span, in the trace that queued the notification when the
+/// message carries one. Built by hand: its parent must be set before it is
+/// first entered.
+fn delivery_span(message: &aws_sdk_sqs::types::Message) -> tracing::Span {
+    let span = tracing::info_span!(
+        parent: None,
+        "email.inbox_sync.process",
+        message_id = message.message_id(),
+        receive_count = sqs_worker::receive_count(message).map(i64::from),
+    );
+    sqs_client::email::trace_context::adopt(
+        &span,
+        message
+            .message_attributes()
+            .and_then(|attributes| attributes.get(sqs_client::email::trace_context::ATTRIBUTE))
+            .and_then(|attribute| attribute.string_value()),
+    );
+    span
+}
+
+async fn dispose(ctx: InboxSyncContext, message: &aws_sdk_sqs::types::Message) -> Result<()> {
     let disposition = ctx
         .service
         .process(extract_inbox_sync_message(message))

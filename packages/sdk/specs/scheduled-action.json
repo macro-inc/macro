@@ -186,6 +186,16 @@
               }
             }
           },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "",
             "content": {
@@ -1096,6 +1106,16 @@
               }
             }
           },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -1415,6 +1435,16 @@
               }
             }
           },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -1575,6 +1605,59 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}/stop": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "description": "Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.",
+        "operationId": "stop_scheduled_action_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The stop was sent, or nothing was running"
           },
           "401": {
             "description": "",
@@ -1847,6 +1930,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
                 }
               }
             }
@@ -2352,6 +2445,85 @@
         }
       }
     },
+    "/suggestions/runs/report": {
+      "put": {
+        "tags": ["suggestions"],
+        "summary": "A suggestion's background run says, in one line for the person, what it\ndid and what it sent.",
+        "operationId": "report_suggestion_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the report was stored, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestion's background run, still under way, may report",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions/seen": {
       "post": {
         "tags": ["suggestions"],
@@ -2374,6 +2546,85 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/topics": {
+      "put": {
+        "tags": ["suggestions"],
+        "summary": "Name a topic suggestions may belong to, from a suggestions generation\nsession, or change the name and reason of the one with its key.",
+        "operationId": "name_suggestion_topic",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NameTopic"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the topic was named, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may name a topic",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2786,7 +3037,7 @@
     "/suggestions/{id}/restore": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller, or their own agent, takes back dismissing a suggestion, within\nfive minutes of it.",
+        "summary": "The caller, or their own agent, takes back dismissing a suggestion, or\ncompleting one by acting on it (not a finished run or an answered reply),\nwithin five minutes of it.",
         "operationId": "restore_suggestion",
         "parameters": [
           {
@@ -2834,7 +3085,7 @@
             }
           },
           "409": {
-            "description": "Not dismissed in the last five minutes, or a routine suggestion",
+            "description": "Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2945,6 +3196,69 @@
           }
         }
       }
+    },
+    "/suggestions/{id}/stop": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller, or their own agent, stops an open suggestion's run without\ndismissing it.",
+        "operationId": "stop_suggestion_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not stop a run",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open suggestion with this id for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2966,6 +3280,10 @@
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked for what the routine does. Saved\nunless the owner chose the routine's appearance, which only the\nappearance endpoint does; absent leaves the stored one."
+          },
           "description": {
             "type": "string",
             "description": "What the routine is for, in the owner's words; empty when unset."
@@ -2997,6 +3315,10 @@
         "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked, as on create. Saved only when the\nupdate is made for the routine's owner; skipped for anyone else."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "An empty string clears it."
@@ -3433,6 +3755,13 @@
               "$ref": "#/components/schemas/CreatedItem"
             },
             "description": "What a routine draft's session created for the routine to use, such as\nthe database it writes to; kept with its draft for the person to see."
+          },
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps a routine draft's session found the routine needs that its owner\nhasn't connected, for the person to connect before saving. The routine\nitself requires only connected ones."
           },
           "routine": {
             "$ref": "#/components/schemas/ActionConfiguration"
@@ -4091,12 +4420,30 @@
         "description": "A drafted routine.",
         "required": ["name", "steps", "problems", "created"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "The icon and colour AI picked for it from Macro's icons; absent when\nit picked none, or one Macro doesn't have."
+          },
+          "apps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps outside Macro its Ask AI step uses that its owner connected,\nwhich the routine requires (its task's `mcp_servers`)."
+          },
           "created": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DraftCreated"
             },
             "description": "What AI created while drafting, such as the database the routine\nwrites to. These exist whether or not the routine is saved."
+          },
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps its Ask AI step needs that its owner hasn't connected: the owner\nconnects each one, or removes it, before saving."
           },
           "name": {
             "type": "string"
@@ -4259,6 +4606,20 @@
               "type": "string"
             }
           },
+          "inboxes": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "The inboxes (email link ids) whose new or labeled mail starts the\nroutine. Absent: every inbox the owner reads, their own and those\ndelegated to them."
+          },
+          "labels": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Email labels, one of which the thread must gain: their row ids. Any\nlabel when absent. Only for `email.labeled`."
+          },
           "match": {
             "type": ["array", "null"],
             "items": {
@@ -4298,6 +4659,7 @@
           "task.priority_changed",
           "task.property_changed",
           "email.message_received",
+          "email.labeled",
           "channel.created",
           "channel.message_posted",
           "channel.mentioned",
@@ -4397,6 +4759,10 @@
               "type": "object"
             },
             "description": "What each step that ran did, in order: decisions, tool calls, the agent."
+          },
+          "stopped": {
+            "type": "boolean",
+            "description": "The owner stopped the run before it finished. Older records, and\nreplicas built before it, leave it out."
           },
           "version": {
             "type": "integer",
@@ -4655,6 +5021,33 @@
           }
         }
       },
+      "NameTopic": {
+        "type": "object",
+        "description": "A topic a generation session names, or names again, through\n`macro.suggestions.nameTopic`.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights; the same key updates the same topic."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TopicReason",
+                "description": "Why it matters now; left out when no item says."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "NamedItemKind": {
         "type": "string",
         "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
@@ -4734,6 +5127,10 @@
           "title": {
             "type": "string",
             "description": "What to do, in a few words."
+          },
+          "topic": {
+            "type": ["string", "null"],
+            "description": "The key of the topic it belongs to, named with\n`macro.suggestions.nameTopic` first, or null for none; left out, a\nsuggestion that exists keeps the one it has."
           }
         },
         "additionalProperties": false
@@ -4804,6 +5201,11 @@
           }
         ],
         "description": "A JSON text, number, boolean or null that payload values are compared with."
+      },
+      "PlanTier": {
+        "type": "string",
+        "description": "The plans a user can be on, cheapest first.",
+        "enum": ["free", "premium", "business", "max"]
       },
       "PropertySelector": {
         "type": "object",
@@ -4976,6 +5378,10 @@
           "title": {
             "type": ["string", "null"],
             "description": "A new title."
+          },
+          "topic": {
+            "type": ["string", "null"],
+            "description": "The key of the topic it now belongs to, or null for none."
           }
         },
         "additionalProperties": false
@@ -4985,6 +5391,13 @@
         "description": "What saving a routine would find wrong, without saving it: the answer to\n`POST /scheduled-actions/check`.",
         "required": ["ok", "problems", "steps", "routine"],
         "properties": {
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps the routine needs that its owner hasn't connected, as a routine\ndraft's session named them (`missingApps`): the person connects each\none before saving. Never ones the routine already requires."
+          },
           "ok": {
             "type": "boolean",
             "description": "Whether saving it would succeed: no problems and no failing steps."
@@ -5220,6 +5633,35 @@
           "crm_contact",
           "initiative"
         ]
+      },
+      "RoutineLimitCode": {
+        "type": "string",
+        "description": "Stable code clients match on, distinct from AI allowance codes.",
+        "enum": ["routine_limit_reached"]
+      },
+      "RoutineLimitErrorBody": {
+        "type": "object",
+        "description": "A write that would activate more routines than the owner's plan allows.",
+        "required": ["error", "code", "limit", "plan"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/RoutineLimitCode"
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many routines the plan allows to be active at once.",
+            "minimum": 0
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PlanTier",
+            "description": "The plan the limit comes from."
+          }
+        }
       },
       "RoutineModelId": {
         "type": "string",
@@ -5614,6 +6056,18 @@
         "type": "string",
         "description": "How a prompt suggestion runs.",
         "enum": ["composer", "background"]
+      },
+      "RunReport": {
+        "type": "object",
+        "description": "What a background run did, in one line for the person, written by the\nrun before its last message.",
+        "required": ["report"],
+        "properties": {
+          "report": {
+            "type": "string",
+            "description": "What it did and what it sent, as the card shows it, such as \"12 seats\nadded · Nothing was sent\". One plain line; it names no email address,\nphone number or street address."
+          }
+        },
+        "additionalProperties": false
       },
       "RunStart": {
         "oneOf": [
@@ -6300,6 +6754,17 @@
                 "type": "string",
                 "description": "What to do, in a few words."
               },
+              "topic": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TopicName",
+                    "description": "The topic it belongs to, if any; never on a routine suggestion."
+                  }
+                ]
+              },
               "updatedAt": {
                 "type": "string",
                 "format": "date-time",
@@ -6365,6 +6830,13 @@
               "$ref": "#/components/schemas/Suggestion"
             },
             "description": "The open suggestions, at most `limit` of them."
+          },
+          "topics": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Topic"
+            },
+            "description": "The topics the open suggestions belong to, in the order they first\nappear among them; left out when the feed was read with a `limit`."
           }
         }
       },
@@ -6499,6 +6971,10 @@
         "description": "A run of a background prompt suggestion: a hidden agent session of the\nperson's, with the full toolset, that never stops to ask.",
         "required": ["sessionId", "startedAt", "state", "stateChangedAt"],
         "properties": {
+          "report": {
+            "type": ["string", "null"],
+            "description": "The one line the run wrote for the person before it ended, saying\nwhat it did and what it sent; none until it writes one."
+          },
           "sessionId": {
             "type": "string",
             "format": "uuid",
@@ -6595,6 +7071,13 @@
               "$ref": "#/components/schemas/Suggestion"
             },
             "description": "Open suggestions first, best first, then closed ones newest first. A\ndismissed suggestion's `stateChangedAt` is when the person dismissed it."
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Topic"
+            },
+            "description": "The topics those suggestions belong to, in the order they first\nappear, each with how many of its suggestions are open. Absent from a\nserver that has none."
           }
         }
       },
@@ -6698,6 +7181,69 @@
           }
         ],
         "description": "A user-specific part of a shared routine."
+      },
+      "Topic": {
+        "type": "object",
+        "description": "One thing in the person's work that several suggestions may belong to,\nsuch as a customer, an event or a hire, as generation sessions named it.",
+        "required": ["key", "name", "open"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many of the listed suggestions are open and belong to it.",
+            "minimum": 0
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TopicReason",
+                "description": "Why it matters now, when an item says."
+              }
+            ]
+          }
+        }
+      },
+      "TopicName": {
+        "type": "object",
+        "description": "A topic, as a suggestion names it.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          }
+        }
+      },
+      "TopicReason": {
+        "type": "object",
+        "description": "Why a topic matters now: one fact, and the item it was read in.",
+        "required": ["text", "source"],
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/Target",
+            "description": "The item that states it: whoever can't open it isn't shown the fact."
+          },
+          "text": {
+            "type": "string",
+            "description": "The fact, in one line."
+          }
+        },
+        "additionalProperties": false
       },
       "UnusableKnob": {
         "type": "object",

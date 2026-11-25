@@ -11,6 +11,9 @@ import type { RoutineRunOutcome } from './routineRunOutcome';
 whether it succeeded or failed.
  */
 export interface RoutineRunFinishedMetadata {
+  /** The apps the routine needs connected, by name, when the run failed
+because one of them is not. Empty for every other run. */
+  appsToConnect?: string[];
   /** How the run ended. */
   outcome: RoutineRunOutcome;
   /** The routine that ran. */

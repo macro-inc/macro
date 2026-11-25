@@ -26,6 +26,31 @@ fn is_unique_violation(error: &sqlx::Error) -> bool {
 }
 
 impl NotionPlanRepo for PgImportRepo {
+    #[tracing::instrument(skip_all, fields(review_id = %review), err)]
+    async fn dependency_ids(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+    ) -> Result<Vec<Uuid>> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        let ids = sqlx::query_scalar!(
+            r#"SELECT id FROM import_entity
+               WHERE review_id IS NOT NULL AND review_id = $2 AND user_id = $1 AND source = 'notion'
+                 AND status = 'staged' AND kind = 'data_source'
+                 AND metadata #> '{plan,dependencyOf}' <> '[]'::jsonb
+               ORDER BY id"#,
+            user.as_ref(),
+            review,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(ids)
+    }
+
     async fn require_replan(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -39,9 +64,8 @@ impl NotionPlanRepo for PgImportRepo {
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
-        shared: bool,
     ) -> Result<bool> {
-        self.clear_stale_team_link(user, import_id, shared).await
+        self.clear_stale_team_link(user, import_id).await
     }
 
     async fn renew_deleted_copy<F, Fut>(
@@ -60,7 +84,7 @@ impl NotionPlanRepo for PgImportRepo {
             .await
     }
 
-    #[tracing::instrument(skip(self, rows), fields(rows = rows.len()), err)]
+    #[tracing::instrument(skip(self, rows, user), fields(rows = rows.len()), err)]
     async fn replace_plan(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -98,7 +122,7 @@ impl NotionPlanRepo for PgImportRepo {
                       (entity.status IN ('importing', 'imported') AND entity.parent_id IS NOT NULL)
                       OR EXISTS (
                           SELECT 1 FROM import_entity_written AS written
-                          WHERE written.import_id = entity.id
+                          WHERE written.import_id = entity.id AND written.kind NOT IN ('task_notice', 'dependency_reviewed', 'dependency_included')
                           OFFSET 0
                       )
                   )
@@ -131,10 +155,12 @@ impl NotionPlanRepo for PgImportRepo {
                 r#"
                 INSERT INTO import_entity
                     (user_id, source, kind, foreign_id, status, initiator, metadata, parent_id,
-                     review_id)
-                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7)
+                     review_id, id)
+                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7, $8)
                 ON CONFLICT (user_id, source, foreign_id) DO UPDATE
-                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata,
+                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(
+                        'personalFolderId', import_entity.metadata -> 'personalFolderId',
+                        'separateFolder', import_entity.metadata -> 'separateFolder')),
                     parent_id = EXCLUDED.parent_id, status = 'staged',
                     review_id = EXCLUDED.review_id, last_error = NULL, updated_at = NOW()
                 WHERE import_entity.status IN ('staged', 'discarded')
@@ -149,6 +175,8 @@ impl NotionPlanRepo for PgImportRepo {
                 row.metadata,
                 parent_id,
                 review_id,
+                // Transaction timestamps tie; new IDs retain the input order.
+                Uuid::now_v7(),
             )
             .fetch_optional(&mut *transaction)
             .await?;
@@ -180,7 +208,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(staged)
     }
 
-    #[tracing::instrument(skip(self, rows), fields(rows = rows.len()), err)]
+    #[tracing::instrument(skip(self, rows, user), fields(rows = rows.len()), err)]
     async fn update_plan_rows(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -196,10 +224,18 @@ impl NotionPlanRepo for PgImportRepo {
         let result = sqlx::query!(
             r#"
             UPDATE import_entity AS entity
-            SET metadata = decided.metadata, updated_at = NOW()
+            SET metadata = decided.metadata || jsonb_strip_nulls(jsonb_build_object(
+                        'personalFolderId', entity.metadata -> 'personalFolderId',
+                        'separateFolder', entity.metadata -> 'separateFolder')), updated_at = NOW()
             FROM UNNEST($3::text[], $4::jsonb[]) AS decided(foreign_id, metadata)
-            WHERE entity.user_id = $1 AND entity.source = $2
-              AND entity.foreign_id = decided.foreign_id
+            JOIN LATERAL (
+                SELECT candidate.id FROM import_entity AS candidate
+                WHERE candidate.user_id = $1 AND candidate.source = $2
+                  AND candidate.foreign_id = decided.foreign_id
+                OFFSET 0
+            ) AS target ON true
+            WHERE entity.id = target.id AND (SELECT entity.user_id OFFSET 0) = $1
+              AND entity.source = $2
               AND entity.status = 'staged' AND entity.metadata->'plan' IS NOT NULL
             "#,
             user.as_ref(),
@@ -212,7 +248,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn attach_review(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -255,7 +291,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user, error), err)]
     async fn transition_run(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -283,7 +319,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), fields(pages = scanned.pages, data_sources = scanned.data_sources), err)]
+    #[tracing::instrument(skip(self, user), fields(pages = scanned.pages, data_sources = scanned.data_sources), err)]
     async fn record_scan(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -308,7 +344,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self, foreign_ids), fields(objects = foreign_ids.len()), err)]
+    #[tracing::instrument(skip(self, foreign_ids, user), fields(objects = foreign_ids.len()), err)]
     async fn team_copies(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -343,6 +379,24 @@ impl NotionPlanRepo for PgImportRepo {
                 "#,
                 user.as_ref(), foreign_ids,
             ).fetch_all(&mut *transaction).await?,
+            ImportSource::Hubspot => sqlx::query_as!(
+                ImportEntityDbRow,
+                r#"
+                    SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
+                           initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
+                           updated_at
+                    FROM import_entity
+                    WHERE source = 'hubspot'
+                      -- Same leading-key bound as Jira, over the HubSpot team index.
+                      AND source = ANY(ARRAY(SELECT 'hubspot'::text))
+                      AND foreign_id = ANY($2::text[])
+                      AND status IN ('importing', 'imported')
+                      AND user_id <> $1
+                      AND team_id IS NOT NULL
+                      AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1)
+                "#,
+                user.as_ref(), foreign_ids,
+            ).fetch_all(&mut *transaction).await?,
             ImportSource::Notion | ImportSource::Linear => sqlx::query_as!(
                 ImportEntityDbRow,
                 r#"
@@ -364,7 +418,7 @@ impl NotionPlanRepo for PgImportRepo {
         rows.into_iter().map(ImportEntity::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self, shared, personal), fields(shared = shared.len(), personal = personal.len()), err)]
+    #[tracing::instrument(skip(self, shared, personal, user), fields(shared = shared.len(), personal = personal.len()), err)]
     async fn set_plan_sharing(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -391,7 +445,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self, ids, shared), fields(rows = ids.len(), shared = shared.len()), err)]
+    #[tracing::instrument(skip(self, ids, shared, user), fields(rows = ids.len(), shared = shared.len()), err)]
     async fn claim_importing(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -447,7 +501,7 @@ impl NotionPlanRepo for PgImportRepo {
         rows.into_iter().map(ImportEntity::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn claim_team_object(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -474,7 +528,7 @@ impl NotionPlanRepo for PgImportRepo {
         }
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn wait_on(
         &self,
         user: &MacroUserIdStr<'static>,

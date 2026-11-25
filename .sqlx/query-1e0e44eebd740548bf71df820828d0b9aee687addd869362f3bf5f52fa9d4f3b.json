@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"Document\"\n            SET \"uploaded\" = TRUE,\n                \"contentState\" = $2,\n                \"contentLocation\" = $3,\n                \"updatedAt\" = $4\n            WHERE id = $1 AND NOT \"uploaded\"\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e0e44eebd740548bf71df820828d0b9aee687addd869362f3bf5f52fa9d4f3b"
+}

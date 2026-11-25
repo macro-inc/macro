@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InviteToTeamMetadata } from './inviteToTeamMetadata';
+import type { CrmEmailSharingChangedMetadata } from './crmEmailSharingChangedMetadata';
 import type { NotifEventOneOfThreeoneTag } from './notifEventOneOfThreeoneTag';
 
 /**
- * A user was invited to a team.
+ * A teammate's action changed the user's CRM email sharing rules.
  */
 export type NotifEventOneOfThreeone = {
-  /** A user was invited to a team. */
-  content: InviteToTeamMetadata;
+  /** A teammate's action changed the user's CRM email sharing rules. */
+  content: CrmEmailSharingChangedMetadata;
   tag: NotifEventOneOfThreeoneTag;
 };

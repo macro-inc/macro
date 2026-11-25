@@ -3,6 +3,13 @@ import type { CalendarEventFormController } from '@app/features/calendar/compone
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import {
+  attachGlobalDOMScope,
+  registerHotkey,
+  useHotKeyRoot,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
+import { setActiveScope, setPressedKeys } from '@core/hotkey/state';
+import {
   cleanup,
   fireEvent,
   render,
@@ -41,9 +48,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     handle: { close: vi.fn(), setDisplayName: vi.fn() },
   }),
 }));
-vi.mock('@core/hotkey/hotkeys', () => ({
-  useHotkeyDOMScope: () => [() => {}],
-}));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@app/features/calendar/hooks/use-synced-calendar-event', () => ({
   useSyncedCalendarEvent: () => () => undefined,
 }));
@@ -53,6 +58,10 @@ vi.mock('@app/features/calendar/hooks/use-event-editor', () => ({
     calendarOptions: () => [],
     guestOptions: () => [],
   }),
+}));
+vi.mock('@app/features/calendar/views/event-replacement', () => ({
+  useEventReplacement: () => ({}),
+  EventReplacement: () => null,
 }));
 vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
   EventForm: (props: {
@@ -78,7 +87,11 @@ vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
     </>
   ),
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setActiveScope('global');
+  setPressedKeys(new Set<string>());
+});
 
 it('defaults a new event to a Macro call', () => {
   render(() => <EventComposerSplit />);
@@ -184,4 +197,43 @@ it('keeps what the user changed before suggestions arrived', async () => {
     'My title'
   );
   expect(screen.getByLabelText('Location').textContent).toBe('');
+});
+
+// The composer opens in a popover split, under the app's global hotkeys. A
+// global shortcut such as Ctrl+; (toggle settings) must still run from its
+// fields and claim the key, or WebKitGTK's own Ctrl+; opens its emoji picker.
+it('runs global hotkeys from its fields', () => {
+  const toggleSettings = vi.fn(() => true);
+  render(() => {
+    useHotKeyRoot();
+    const [attachPopoverScope] = useHotkeyDOMScope('popover-split');
+    registerHotkey({
+      hotkey: 'cmd+;',
+      scopeId: 'global',
+      description: 'Toggle settings',
+      keyDownHandler: toggleSettings,
+      runWithInputFocused: true,
+    });
+    return (
+      <div ref={attachGlobalDOMScope}>
+        <div ref={attachPopoverScope}>
+          <EventComposerSplit />
+        </div>
+      </div>
+    );
+  });
+  const title = screen.getByRole('textbox');
+  title.focus();
+
+  const keydown = new KeyboardEvent('keydown', {
+    key: ';',
+    code: 'Semicolon',
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  title.dispatchEvent(keydown);
+
+  expect(toggleSettings).toHaveBeenCalledTimes(1);
+  expect(keydown.defaultPrevented).toBe(true);
 });

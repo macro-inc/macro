@@ -214,3 +214,49 @@ fn only_offset_reset_warnings_are_counted_by_topic() {
         .collect();
     assert_eq!(points, [(vec!["topic=macro.email".to_owned()], 2)]);
 }
+
+/// A consumer with no traffic keeps sampling while its loop waits in `recv`,
+/// and stops once nothing polls it: a fresh sample means the loop is alive.
+#[tokio::test]
+async fn statistics_keep_arriving_while_idle_and_stop_without_polling() {
+    let cluster = MockCluster::new(1).expect("mock broker");
+    cluster.create_topic("idle-stats", 1, 1).expect("topic");
+    let samples = Arc::new(AtomicUsize::new(0));
+    let observer: ConsumerStatistics = Arc::new({
+        let samples = Arc::clone(&samples);
+        move |_| {
+            samples.fetch_add(1, Ordering::SeqCst);
+        }
+    });
+    let mut config = crate::ungrouped_config(&cluster.bootstrap_servers());
+    config.set("statistics.interval.ms", "50");
+    let consumer: StreamConsumer<_> = config
+        .create_with_context(StatisticsContext {
+            inner: DefaultConsumerContext,
+            offset_resets: offset_resets_counter(),
+            observer: Some(observer),
+        })
+        .expect("consumer");
+    let mut assignment = rdkafka::TopicPartitionList::new();
+    assignment
+        .add_partition_offset("idle-stats", 0, rdkafka::Offset::End)
+        .expect("assignment");
+    consumer.assign(&assignment).expect("manual assignment");
+
+    // librdkafka samples on its own thread, so this waits in real time; ten
+    // 50 ms intervals each way are enough to tell samples from none.
+    let idle = std::time::Duration::from_millis(500);
+    assert!(
+        tokio::time::timeout(idle, consumer.recv()).await.is_err(),
+        "nothing was published"
+    );
+    let while_polling = samples.load(Ordering::SeqCst);
+    assert!(
+        while_polling >= 5,
+        "an idle recv kept sampling: {while_polling} samples in {idle:?}"
+    );
+
+    tokio::time::sleep(idle).await;
+    let without_polling = samples.load(Ordering::SeqCst) - while_polling;
+    assert_eq!(without_polling, 0, "samples need a polling loop");
+}

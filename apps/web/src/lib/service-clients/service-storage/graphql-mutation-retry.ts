@@ -12,6 +12,9 @@ const DRAFT_WRITES = ['SaveEmailDraft', 'DeleteEmailDraft'];
 // write the server keeps faulting gives up after a few seconds of backoff.
 const MAX_DRAFT_SERVER_FAULT_RETRIES = 2;
 const MAX_TRACKED_WRITES = 256;
+// A server fault, or an inbox that stayed locked past its lock timeout: the
+// write rolled back, so sending it again is safe.
+const RETRIED_DRAFT_CODES = ['INTERNAL', 'INBOX_BUSY'];
 /** Server faults in a row for each queued draft write. */
 const draftFaults = new Map<string, number>();
 // Transaction ids restart when the cache is rebuilt; the draft's key does not.
@@ -28,7 +31,9 @@ function retriesDraftServerFault(
 ): boolean {
   if (
     !DRAFT_WRITES.includes(mutation.operationName ?? '') ||
-    !error.graphQLErrors.every((entry) => entry.extensions.code === 'INTERNAL')
+    !error.graphQLErrors.every((entry) =>
+      RETRIED_DRAFT_CODES.includes(String(entry.extensions.code))
+    )
   )
     return false;
 

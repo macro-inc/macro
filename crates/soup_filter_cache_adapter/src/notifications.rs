@@ -1,11 +1,9 @@
 //! Notification contributions derived from GraphQL state, never viewing timestamps.
 
 use super::*;
-use crate::parsed_document::parsed_document;
 use cache_core::{
-    normalize::normalize,
     predicate::ProjectionState,
-    store::Storage,
+    store::DurableRead,
     value::{CacheValue, EntityKey, Record},
 };
 use predicate_index::ExactFact;
@@ -250,7 +248,7 @@ fn change(
 /// emitting a patch or invalidation for them would introduce an incomplete marker
 /// and force unrelated local lists to fall back. Full snapshots establish coverage
 /// independently, including when they arrive in the same write as these rows.
-async fn retain_complete_parents<S: Storage>(
+async fn retain_complete_parents<S: DurableRead>(
     storage: &S,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
@@ -265,7 +263,7 @@ async fn retain_complete_parents<S: Storage>(
         .into_iter()
         .collect::<Vec<_>>();
     let states = storage
-        .load_projection_states(&keys)
+        .read_projection_states(&keys)
         .await
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
     let states = keys.into_iter().zip(states).collect::<IndexMap<_, _>>();
@@ -304,7 +302,7 @@ async fn retain_complete_parents<S: Storage>(
 /// ID-only patches against durable normalized identity. No aggregate snapshot is
 /// stored in an optimistic layer: replay edits only this notification's
 /// contribution, even after another layer fails.
-pub async fn notification_projection_updates<S: Storage>(
+pub async fn notification_projection_updates<S: cache_core::predicate::PredicateIndexStorage>(
     schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
@@ -312,18 +310,22 @@ pub async fn notification_projection_updates<S: Storage>(
     variables: &serde_json::Map<String, serde_json::Value>,
     data: &serde_json::Value,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
-    let document =
-        parsed_document(query).map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let operation = document
-        .operation(operation_name)
-        .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let updates = normalize(schema, operation, variables, data)
-        .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let updates = updates
-        .into_iter()
+    let response = WriteResponse::new(schema, query, operation_name, variables, data);
+    notification_projection_updates_for(storage, &response).await
+}
+
+/// [`notification_projection_updates`] over a response the other passes share.
+pub async fn notification_projection_updates_for<S: DurableRead>(
+    storage: &S,
+    response: &WriteResponse<'_>,
+) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+    let updates = response
+        .updates()?
+        .iter()
         .filter(|(key, record)| {
             key.as_ref().starts_with("GraphqlNotification:") && record.fields.contains_key("state")
         })
+        .map(|(key, record)| (key.clone(), record.clone()))
         .collect::<Vec<_>>();
     let keys = updates
         .iter()
@@ -333,7 +335,7 @@ pub async fn notification_projection_updates<S: Storage>(
         return Ok(Vec::new());
     }
     let bases = storage
-        .get_batch(&keys)
+        .read_records(&keys)
         .await
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
     let mut mutations = Vec::new();
@@ -412,7 +414,7 @@ pub fn optimistic_notification_updates(
 
 /// Resolve complete parent projections for notification deletion/invalidation
 /// before deleting the normalized notification records.
-pub async fn notification_deletion_updates<S: Storage>(
+pub async fn notification_deletion_updates<S: cache_core::predicate::PredicateIndexStorage>(
     storage: &S,
     keys: &[String],
     invalidate: bool,

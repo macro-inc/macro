@@ -10,6 +10,7 @@ mod charging;
 mod comped;
 mod first_start;
 mod instance_lost;
+mod recovery;
 mod setup_notice;
 
 const HOST: HostId = HostId::new(uuid::Uuid::from_u128(
@@ -1003,6 +1004,7 @@ proptest! {
             let index = index % fleet.computers.len();
             at += Duration::minutes(minutes);
             let before = fleet.computers[index].1.clone();
+            let awake_before = fleet.awake_units();
             let effects = fleet.apply(index, &event, at);
             let after = fleet.computers[index].1.clone();
             // Undo and restore bill an item again; it may be removed again later.
@@ -1036,7 +1038,16 @@ proptest! {
             if after.phase == Phase::Destroying {
                 prop_assert!(after.billing.subscription_item().is_none(), "a released computer is not billed");
             }
-            prop_assert!(fleet.awake_units() <= fleet.capacity);
+            // A computer that gave up never stopped its guest, so one that
+            // recovers counts as awake again even on a full host. Nothing
+            // else may push a host over.
+            let recovered = super::gave_up(&before.phase) && after.phase == Phase::Running;
+            prop_assert!(
+                fleet.awake_units() <= fleet.capacity
+                    || fleet.awake_units() <= awake_before
+                    || recovered,
+                "only a recovered guest overcommits a host"
+            );
         }
     }
 }

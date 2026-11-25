@@ -1,11 +1,17 @@
-use super::mutations::{IssuedToken, NoOpenClients, OWNER, connected_mailbox, linked_mailbox};
+use super::mutations::{
+    GraphSeries, INBOX, IssuedToken, NoOpenClients, OWNER, connected_mailbox, linked_mailbox,
+    mutations,
+};
 use super::*;
+use calendar_events::domain::ports::CalendarRepository;
+use calendar_events::domain::team::{CalendarTeamRepository, TeamCalendarCoverage};
 use calendar_events::outbound::pg::PgCalendarRepository;
+use calendar_events::outbound::pg_team::PgCalendarTeamRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
-use wiremock::matchers::query_param_is_missing;
+use wiremock::matchers::{path_regex, query_param_is_missing};
 
 type Sync = OutlookCalendarSync<
     PgCalendarRepository,
@@ -510,6 +516,210 @@ async fn a_first_import_reads_the_events_closest_to_today_first(pool: PgPool) {
         "the near window reads tomorrow, then last week, then next month"
     );
     assert_synced(&pool).await;
+}
+
+const TEAMMATE: &str = "macro|tess@example.com";
+
+/// Puts the mailbox's owner on a team with `TEAMMATE`.
+async fn on_a_team(pool: &PgPool) {
+    let macro_user_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $3)",
+        macro_user_id,
+        TEAMMATE,
+        format!("cus_{macro_user_id}"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, 'tess@example.com', $2)"#,
+        TEAMMATE,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let team = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)",
+        team,
+        TEAMMATE
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO team_user (user_id, team_id, team_role) SELECT unnest($1::text[]), $2, 'member'",
+        &[TEAMMATE.to_owned(), OWNER.to_owned()],
+        team
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// The next three days, where the fixtures' meetings fall.
+fn next_days() -> OccurrenceRange {
+    let starts_at = Utc::now();
+    let ends_at = starts_at + chrono::Duration::days(3);
+    OccurrenceRange {
+        starts_at,
+        ends_at,
+        start_date: starts_at.date_naive(),
+        end_date: ends_at.date_naive(),
+    }
+}
+
+/// What `TEAMMATE` reads of the owner's calendar: its coverage, the Graph ids
+/// of the events team availability and browsing read, and the out-of-office
+/// overlay's titles by Graph id.
+async fn teammate_reads(
+    pool: &PgPool,
+) -> (
+    TeamCalendarCoverage,
+    Vec<String>,
+    Vec<(String, Option<String>)>,
+) {
+    let team = PgCalendarTeamRepository::new(pool.clone());
+    let coverage = team
+        .members(TEAMMATE, false, &next_days())
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|member| member.user_id == OWNER)
+        .unwrap()
+        .coverage;
+    let graph_id = |ical_uid: &str| ical_uid.trim_end_matches("@outlook").to_owned();
+    let mut sources: Vec<_> = team
+        .sources(TEAMMATE, next_days(), &[OWNER.to_owned()], None, 100)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| graph_id(&row.event.ical_uid))
+        .collect();
+    sources.sort();
+    sources.dedup();
+    let out_of_office = PgCalendarRepository::new(pool.clone())
+        .list_team_out_of_office(TEAMMATE, next_days(), 100)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (graph_id(&row.ical_uid), row.title))
+        .collect();
+    (coverage, sources, out_of_office)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_imported_outlook_calendar_shows_teammates_its_busy_time_and_time_off(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    on_a_team(&pool).await;
+    let mut away = upcoming("AAMkAway");
+    away["showAs"] = json!("oof");
+    away["subject"] = json!("Vacation");
+    serve_near_window(&server, &[upcoming("AAMkMeeting"), away.clone()]).await;
+    serve_delta(
+        &server,
+        None,
+        &[single("AAMkAway"), single("AAMkMeeting")],
+        "complete",
+    )
+    .await;
+    serve_event(&server, upcoming("AAMkMeeting")).await;
+    serve_event(&server, away).await;
+    sync_until_idle(&sync).await;
+    assert_synced(&pool).await;
+
+    assert_eq!(
+        teammate_reads(&pool).await,
+        (
+            TeamCalendarCoverage::Ready,
+            vec!["AAMkAway".to_owned(), "AAMkMeeting".to_owned()],
+            vec![("AAMkAway".to_owned(), None)],
+        ),
+        "busy-only sharing shows the time off without its title"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_series_missing_an_occurrence_macro_cannot_read_stays_out_of_team_reads(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    on_a_team(&pool).await;
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[occurrence("AAMkDaily")], "complete").await;
+    let (master, mut instances) = upcoming_series("AAMkDaily", "ada@example.com", false);
+    // The moved meeting, without the original start that pairs it with its
+    // slot, is left out of the series.
+    instances[2]
+        .as_object_mut()
+        .unwrap()
+        .remove("originalStart");
+    serve_series(&server, master, instances).await;
+    sync_until_idle(&sync).await;
+
+    assert_synced(&pool).await;
+    assert_eq!(imported(&pool).await, vec!["AAMkDaily"]);
+    assert_eq!(
+        teammate_reads(&pool).await,
+        (TeamCalendarCoverage::Unavailable, vec![], vec![]),
+        "teammates would read the moved meeting's time as free"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn editing_a_series_missing_an_occurrence_keeps_it_out_of_team_reads(pool: PgPool) {
+    let (server, api) = setup().await;
+    let repo = connected_mailbox(
+        &pool,
+        &server,
+        &api,
+        json!([{"id":"AAMkCalendar","name":"Calendar","canEdit":true,"isDefaultCalendar":true}]),
+    )
+    .await;
+    on_a_team(&pool).await;
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[occurrence("AAMkDaily")], "complete").await;
+    let (master, mut instances) = upcoming_series("AAMkDaily", INBOX, true);
+    instances[2]
+        .as_object_mut()
+        .unwrap()
+        .remove("originalStart");
+    Mock::given(path_regex(r"^/v1\.0/me/(calendars/[^/]+/)?events/"))
+        .respond_with(GraphSeries(Arc::new(Mutex::new((master, instances)))))
+        .mount(&server)
+        .await;
+    sync_until_idle(&OutlookCalendarSync::new(
+        repo.clone(),
+        api.clone(),
+        IssuedToken,
+        NoOpenClients,
+    ))
+    .await;
+    assert_synced(&pool).await;
+    let event_id = sqlx::query_scalar!("SELECT id FROM calendar_events WHERE owner_id = $1", OWNER)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    mutations(repo, api)
+        .update_event(
+            OWNER,
+            event_id,
+            None,
+            CalendarEventPatch {
+                title: Some("Standup in the new room".into()),
+                ..Default::default()
+            },
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        teammate_reads(&pool).await,
+        (TeamCalendarCoverage::Unavailable, vec![], vec![]),
+        "the edit's echo still lacks the moved meeting"
+    );
 }
 
 /// Macro's per-mailbox admission, refusing every request as a mailbox whose

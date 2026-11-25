@@ -136,6 +136,11 @@ export function computerStatusLabel(computer: ComputerStatus): {
       tone: 'failure',
     }))
     .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
+    .with('unhealthy', () => ({
+      label: t('computers.unhealthy'),
+      detail: t('computers.unhealthyHint'),
+      tone: 'failure',
+    }))
     .with('starting', () => ({
       label: t('computers.starting'),
       tone: 'progress',
@@ -180,7 +185,7 @@ export function isProvisioning(computer: ComputerStatus): boolean {
 /** Power can change only once a computer is set up and before it is gone. */
 export function canTogglePower(computer: ComputerStatus): boolean {
   return match(computer.status)
-    .with('ready', 'stopped', 'waiting_for_capacity', () => true)
+    .with('ready', 'unhealthy', 'stopped', 'waiting_for_capacity', () => true)
     .with(
       'setting_up',
       'starting',

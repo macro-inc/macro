@@ -37,7 +37,7 @@ import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
-import { SetupStatus } from './SetupStatus';
+import { SetupBanner, SetupStatus } from './SetupStatus';
 import { SyncStatus } from './SyncStatus';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
@@ -137,6 +137,10 @@ function CalendarPages() {
           syncing={calendarPager.activeData()?.isSyncing() ?? false}
         />
         <RangeUnavailableBanner
+          class={isMobile() ? 'order-last' : undefined}
+          fullWidth={isMobile()}
+        />
+        <SetupBanner
           class={isMobile() ? 'order-last' : undefined}
           fullWidth={isMobile()}
         />

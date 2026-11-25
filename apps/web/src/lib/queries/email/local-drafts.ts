@@ -801,7 +801,11 @@ export function localDraftQueueLifecycle(
       (!draft || migrated.get(id) === draft.revision)
     ) {
       const optimistic = object(object(mutation.optimisticData).saveEmailDraft);
-      const message = object(optimistic.draft);
+      // Permission retirement preserves authored attachment/sender recovery
+      // metadata while removing the copied response that contained it.
+      const message = object(
+        optimistic.draft ?? object(mutation.clientMetadata).legacyDraftRecovery
+      );
       const attachments: LocalDraftAttachment[] = [
         ...objects(message.attachmentsDraft).map(
           (attachment): LocalDraftAttachment => ({
@@ -933,6 +937,9 @@ export function localDraftQueueLifecycle(
         (draft.status !== 'queued' && draft.status !== 'deleting')
       )
         continue;
+      // A save that lost to its draft's send has left the queue; the send
+      // settles the copy.
+      if (await emailSendOwnsDraft(draft.key)) continue;
       const status =
         draft.status === 'deleting' ? 'delete-failed' : 'unconfirmed';
       const marked = await localDraftStore.update(

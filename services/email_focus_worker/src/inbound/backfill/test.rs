@@ -16,6 +16,7 @@ fn inbox(n: u128) -> FocusInboxOwner {
     FocusInboxOwner {
         link_id: Uuid::from_u128(n),
         owner: MacroUserIdStr::try_from_email(&format!("owner{n}@acme.example")).unwrap(),
+        delegates: Vec::new(),
     }
 }
 
@@ -86,6 +87,103 @@ fn an_owner_who_leaves_and_comes_back_is_filled_again() {
     backfills.found(Vec::new(), Instant::now());
     backfills.found(vec![inbox(1)], Instant::now());
     assert_eq!(start(&mut backfills).1, vec![(1, Pass::First)]);
+}
+
+/// Inbox `n`, linked to the user at `email`.
+fn linked_to(n: u128, email: &str) -> FocusInboxOwner {
+    FocusInboxOwner {
+        delegates: vec![MacroUserIdStr::try_from_email(email).unwrap()],
+        ..inbox(n)
+    }
+}
+
+#[test]
+fn a_waiting_pass_asks_who_the_inbox_is_linked_to_at_the_latest_look() {
+    const BEFORE: &str = "before@acme.example";
+    const NOW: &str = "now@acme.example";
+    let mut backfills = Backfills::default();
+    backfills.found(
+        (1..=3).map(|n| linked_to(n, BEFORE)).collect(),
+        Instant::now(),
+    );
+    let (passes, _) = start(&mut backfills);
+    complete(&mut backfills, passes);
+
+    // Inbox 3 waits for its first pass, 1 and 2 for the rest: each takes
+    // whom the look read.
+    backfills.found((1..=3).map(|n| linked_to(n, NOW)).collect(), Instant::now());
+    let mut started = Vec::new();
+    loop {
+        let (passes, _) = start(&mut backfills);
+        if passes.is_empty() {
+            break;
+        }
+        for (waiting, pass) in &passes {
+            started.push((
+                waiting.inbox.link_id.as_u128(),
+                *pass,
+                waiting.inbox.clone(),
+            ));
+        }
+        complete(&mut backfills, passes);
+    }
+    let expected: Vec<_> = [
+        (3, Pass::First),
+        (1, Pass::Rest),
+        (2, Pass::Rest),
+        (3, Pass::Rest),
+    ]
+    .into_iter()
+    .map(|(n, pass)| (n, pass, linked_to(n, NOW)))
+    .collect();
+    assert_eq!(started, expected);
+}
+
+#[test]
+fn a_pass_that_finds_the_inbox_out_of_the_rollout_leaves_it_for_the_next_look() {
+    let metrics = FocusMetrics::default();
+    let filled = SweepReport {
+        inboxes: 1,
+        ..SweepReport::default()
+    };
+    // Out at the start, or partway through.
+    let out = [
+        SweepReport::default(),
+        SweepReport {
+            inboxes_left: 1,
+            ..filled
+        },
+    ];
+    for report in out {
+        let mut backfills = Backfills::default();
+        let pass_ending = |backfills: &mut Backfills, report: SweepReport| {
+            let (mut passes, _) = start(backfills);
+            let (waiting, pass) = passes.pop().unwrap();
+            let started = Instant::now();
+            finish(
+                backfills,
+                Finished {
+                    waiting,
+                    pass,
+                    started,
+                    report: Ok(report),
+                },
+                &metrics,
+            );
+        };
+        backfills.found(vec![inbox(1)], Instant::now());
+        pass_ending(&mut backfills, filled);
+        pass_ending(&mut backfills, report);
+        assert!(backfills.filled.is_empty(), "{report:?}");
+
+        // In at the next look: filled again from the start.
+        backfills.found(vec![inbox(1)], Instant::now());
+        assert_eq!(
+            start(&mut backfills).1,
+            vec![(1, Pass::First)],
+            "{report:?}"
+        );
+    }
 }
 
 #[test]
@@ -240,6 +338,7 @@ async fn fill_speed(pool: Pool<Postgres>) {
                 &FocusInboxOwner {
                     link_id,
                     owner: MacroUserIdStr::try_from_email(&owner).unwrap(),
+                    delegates: Vec::new(),
                 },
                 chrono::Duration::days(30),
                 THREADS_AT_ONCE,

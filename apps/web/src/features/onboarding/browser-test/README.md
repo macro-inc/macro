@@ -33,6 +33,9 @@ bunx vite --config src/features/onboarding/browser-test/vite.config.ts
   the fixture follows the system color scheme. Overrides survive simulated redirects.
 - `/?view=signup` shows the signed-out slides; Google or Microsoft sign-up continues into the flow.
 - `/?view=flow&next=/channel/x` shows the signed-in flow with a deep link.
+- `/?view=flow&step=plan&handoff` finishes on the phone-browser last screen,
+  "Macro is better on desktop", instead of landing in the app; `&handoff=android`
+  shows the Google Play button.
 - `/?view=flow&step=plan` opens that step. `step` must be a current step name.
   Progress is stored in localStorage, so a later load without the query stays
   on the saved step. Saved progress wins over `step`.

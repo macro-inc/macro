@@ -22,6 +22,7 @@ fn work_request<'a>(
         hydratable: EVERYTHING,
         crm: false,
         only,
+        assume_attention: false,
     }
 }
 

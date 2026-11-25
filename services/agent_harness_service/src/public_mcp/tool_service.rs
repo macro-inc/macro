@@ -9,15 +9,23 @@ use ai_toolset::ToolCaller;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_auth_proxy::inbound::middleware::McpCallerIds;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        CallToolResult, ContentBlock, Icon, InitializeRequestParams, InitializeResult,
-        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
-        ToolAnnotations,
+        CacheScope, CallToolResult, ContentBlock, DiscoverResult, Icon, InitializeRequestParams,
+        InitializeResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+        ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
     },
 };
-use std::{sync::Arc, time::Instant};
+use std::{borrow::Cow, sync::Arc, time::Instant};
+use tracing::Instrument as _;
+
+/// The newest MCP protocol revision this server answers. Raising it opts the
+/// server into that revision's lifecycle (2026-07-28 replaced `initialize` with
+/// `server/discover`): first teach the test `every_handshake_describes_the_listed_tools`
+/// its handshake, and make sure each one serves `instructions` for the caller's mode.
+const NEWEST_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V_2026_07_28;
 
 /// Maps our protocol-agnostic annotations onto the MCP wire representation.
 ///
@@ -142,6 +150,18 @@ impl<Context> AuthenticatedToolService<Context> {
         }
     }
 
+    /// The server instructions for a mode, the same for every handshake
+    /// (`initialize`, `server/discover`). They name only the tools
+    /// `tool_definitions_for` lists in that mode.
+    fn instructions(&self, mode: ToolMode) -> String {
+        let base_url = self.item_base_url.trim_end_matches('/');
+        let surface = match (mode, &self.code_mode) {
+            (ToolMode::Code, Some(_)) => include_str!("code_mode_instructions.md"),
+            _ => include_str!("direct_tools_instructions.md"),
+        };
+        format!("{}\n\n{}", surface.trim(), mcp_instructions(base_url))
+    }
+
     fn authenticated_user_id(
         extensions: &rmcp::model::Extensions,
     ) -> Result<MacroUserIdStr<'static>, rmcp::ErrorData> {
@@ -170,14 +190,49 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
         })
 }
 
+/// The span over one public MCP tool call, with the opaque ids that tie it to
+/// its caller: the user's FusionAuth id, the OAuth client's id and registered
+/// name, or the agent a credential was signed for. Never the Macro user id,
+/// which is an email.
+fn tool_call_span(
+    tool_name: &str,
+    mode: ToolMode,
+    extensions: &rmcp::model::Extensions,
+) -> tracing::Span {
+    let parts = extensions.get::<http::request::Parts>();
+    let ids = parts
+        .and_then(|parts| parts.extensions.get::<McpCallerIds>())
+        .cloned()
+        .unwrap_or_default();
+    let caller = parts.and_then(|parts| parts.extensions.get::<ToolCaller>());
+    let (caller_kind, client_name, agent_id) = match caller {
+        Some(ToolCaller::McpClient { name }) => ("oauth_client", name.as_deref(), None),
+        Some(ToolCaller::ApiKey) => ("api_key", None, None),
+        Some(ToolCaller::Agent(agent)) => ("agent", None, Some(agent.to_string())),
+        None => ("none", None, None),
+    };
+    tracing::info_span!(
+        "public_mcp.call_tool",
+        mcp.tool.name = %tool_name,
+        mcp.tool_mode = match mode {
+            ToolMode::Standard => "standard",
+            ToolMode::Code => "code",
+        },
+        mcp.caller = caller_kind,
+        mcp.client.id = ids.oauth_client_id.as_deref(),
+        mcp.client.name = client_name,
+        agent_id = agent_id.as_deref(),
+        fusionauth_user_id = ids.fusionauth_user_id.as_deref(),
+        mcp.outcome = tracing::field::Empty,
+    )
+}
+
 /// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
 /// task to an agent, and the plugin directory refuses generic executors.
-const HIDDEN_FROM_CHATGPT: [&str; 5] = [
-    "BashCodeExecution",
+const HIDDEN_FROM_CHATGPT: [&str; 3] = [
     "CreateAgentSession",
     "DispatchCodingAgent",
     "ManageAgentSession",
-    "TextEditorCodeExecution",
 ];
 
 /// Whether an OAuth caller might be ChatGPT: registered under its name, or
@@ -226,21 +281,9 @@ where
                     .with_mime_type("image/svg+xml")
                     .with_sizes(vec!["any".to_owned()]),
             ]);
-        info.instructions = Some(format!(
-            "This server provides tools for interacting with a user's Macro workspace. \
-             Use ContentSearch and NameSearch to find entities. \
-             Use ReadContent and ReadMetadata for documents, ReadAgentSession for agent-session conversations. \
-             Use ReadChannelMessages, ReadChannelThread, and ReadChannelMessageContext \
-             to read channel messages and their attachments. Channel image attachments \
-             include inline images when available; image and video attachments include \
-             downloadable URLs. Use a video-capable tool to inspect video URLs. \
-             Use CreateDocument to create new documents. \
-             Use EditDocument to edit existing documents. \
-             Use ListSkills to discover available skills, SearchSkills to find a skill by name, \
-             and ReadSkill to read its full instructions before following them for the current request. \
-             Use ListEntities to browse recent items.\n\n{}",
-            mcp_instructions(base_url),
-        ));
+        // The direct tools' text. What a caller is told comes from
+        // `instructions`, in `initialize` and `discover`, by the caller's mode.
+        info.instructions = Some(self.instructions(ToolMode::Standard));
         info
     }
 
@@ -250,8 +293,8 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<InitializeResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
-        // `initialize` is the only message that names the client, so it is
-        // where sessions are counted per client.
+        // The handshake names the client, so sessions are counted per client
+        // here and in `discover`.
         self.analytics.record(
             user_id.clone(),
             Self::client_signals(&context.extensions),
@@ -265,15 +308,50 @@ where
             context.peer.set_peer_info(request);
         }
         let mut info = self.get_info();
-        if self.tool_mode(&context.extensions) == ToolMode::Code {
-            let base_url = self.item_base_url.trim_end_matches('/');
-            info.instructions = Some(format!(
-                "{}\n\n{}",
-                include_str!("code_mode_instructions.md").trim(),
-                mcp_instructions(base_url),
-            ));
-        }
+        info.instructions = Some(self.instructions(self.tool_mode(&context.extensions)));
         Ok(info)
+    }
+
+    /// The protocol revisions this server answers. Capped, so an rmcp upgrade
+    /// cannot opt it into a revision whose lifecycle it has not been tested
+    /// against.
+    fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+        Cow::Borrowed(ProtocolVersion::known_up_to(&NEWEST_PROTOCOL_VERSION))
+    }
+
+    /// The 2026-07-28 lifecycle's handshake, which clients send instead of
+    /// `initialize`. rmcp's default answers it from `get_info`, which would
+    /// describe the direct tools to a client listed only the code-mode ones.
+    async fn discover(
+        &self,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<DiscoverResult, rmcp::ErrorData> {
+        let user_id = Self::authenticated_user_id(&context.extensions)?;
+        // This revision's clients never send `initialize`; they name
+        // themselves in the request's `_meta`.
+        if let Some(client) = context.meta.client_info() {
+            self.analytics.record(
+                user_id,
+                Self::client_signals(&context.extensions),
+                McpAnalyticsEvent::Initialize {
+                    client_name: client.name,
+                    client_version: client.version,
+                    protocol_version: context
+                        .meta
+                        .protocol_version()
+                        .map(|version| version.to_string())
+                        .unwrap_or_default(),
+                },
+            );
+        }
+        let mut info = self.get_info();
+        info.instructions = Some(self.instructions(self.tool_mode(&context.extensions)));
+        let mut result =
+            DiscoverResult::from_server_info(self.supported_protocol_versions().into_owned(), info);
+        // The instructions depend on who is asking (rmcp's default too; kept
+        // explicit so it can't change under us).
+        result.cache_scope = CacheScope::Private;
+        Ok(result)
     }
 
     async fn list_tools(
@@ -302,9 +380,18 @@ where
         let user_id = Self::authenticated_user_id(&context.extensions)?;
         let started = Instant::now();
         // Bounded: an unknown tool's name is whatever the client sent.
-        let tool_name = request.name.chars().take(128).collect();
+        let tool_name: String = request.name.chars().take(128).collect();
 
-        let (outcome, result) = self.run_tool(user_id.clone(), request, &context).await;
+        let span = tool_call_span(
+            &tool_name,
+            self.tool_mode(&context.extensions),
+            &context.extensions,
+        );
+        let (outcome, result) = self
+            .run_tool(user_id.clone(), request, &context)
+            .instrument(span.clone())
+            .await;
+        span.record("mcp.outcome", outcome.as_str());
 
         self.analytics.record(
             user_id,

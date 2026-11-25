@@ -74,6 +74,14 @@ event contract (schema, sanitization, delivery semantics).
   `traced(stripe_span!("stripe.<object>.<verb>", <object>_id = …), …)`.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
+- `src/domain/contacts_enqueuer.rs` (`ContactsEnqueuer`, adapter
+  `outbound/contacts_enqueuer.rs`): the contacts side effects of membership,
+  best-effort after the change commits. A join also enqueues legacy edges
+  joiner ↔ teammates. Joins and removals send `directory_changed` both ways
+  (the roster re-reads the member; the member re-reads the roster), and team
+  deletion sends every member the whole roster. Teammates are computed from the
+  roster, so nothing is written; a roster over 500 is sent as unknown.
+  `authentication_service` wires it through the `contacts-list-writes` gate.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
 - `src/domain/team_repo.rs`: reuse `get_user_teams` for viewer teams and `get_all_team_members` for team membership, including owners.
 
@@ -111,10 +119,19 @@ event contract (schema, sanitization, delivery semantics).
   and `team_user_user_id_unique` constraints. `create_team` maps either
   violation to `CreateTeamError::AlreadyOnTeam` (409); a new insert path into
   `team` or `team_user` must map them too, or it answers 500.
-- A trialing subscription that gains its first Max seat ends the trial and
-  starts a new billing cycle immediately. Every other seat change keeps the
-  trial, including on a subscription already trialing on Max, so its scheduled
-  downgrades still apply at the trial's end.
+- A trialing subscription that gains its first seat above Premium (Business or
+  Max) ends the trial and starts a new billing cycle immediately. Every other
+  seat change keeps the trial, including on a subscription already trialing
+  on one, so its scheduled downgrades still apply at the trial's end.
+- Seat prices come per plan and interval (`SeatPrices`, `PlanPrices`). A new
+  seat item uses the price sold at the subscription's interval; an existing
+  item keeps its price, so a legacy price is reused for added seats. Premium
+  has no annual price: on an annual subscription Premium seats are refused
+  (`PlanUnavailable`) and joining members start on Business
+  (`SeatPlan::cheapest_at`, `joining_seat_plan`).
+- A scheduled downgrade records its source and target plan
+  (`subscription_plan_schedule.member_plans` values `{"from", "to"}`); a record
+  written before Business is a bare target plan and reads as from Max.
 - Creating or linking a team moves the owner's personal subscription onto the
   team, but the owner keeps the `professional_subscriber` role it granted. When
   the team subscription lapses, `revoke_permissions_for_team_members` removes

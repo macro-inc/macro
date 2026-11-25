@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 
 mod agent_dm;
 mod agent_enabled;
+mod channel_announcements;
 mod profile_fanout;
 
 const USER_OWNER: &str = "macro|bot-owner@example.com";
@@ -152,6 +153,15 @@ impl RecordingEventBroker {
 
     fn events(&self) -> Vec<PublishedEvent> {
         self.published.lock().expect("event lock poisoned").clone()
+    }
+
+    /// The events published on the bot topic, without the channel updates
+    /// that announce a change of the bots in a channel.
+    fn bot_events(&self) -> Vec<PublishedEvent> {
+        self.events()
+            .into_iter()
+            .filter(|event| event.topic == "macro.bots")
+            .collect()
     }
 
     fn clear(&self) {
@@ -1854,7 +1864,7 @@ async fn lifecycle_creation_publishes_exact_sanitized_events(pool: PgPool) -> an
         )
         .await?;
 
-    let events = broker.events();
+    let events = broker.bot_events();
     assert_eq!(events.len(), 3);
     assert_event(
         &events[0],
@@ -2001,6 +2011,10 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
     service
         .remove_bot_from_channel(user_id(USER_OWNER), channel_id, bot.id)
         .await?;
+    // Adding and removing the bot announce its channel on the channel topic
+    // (`channel_announcements`); nothing after them publishes anything.
+    let announced = broker.events().len();
+    assert_eq!(announced, 2);
 
     let token = service
         .create_token(
@@ -2046,7 +2060,8 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
         )
         .await;
     assert!(matches!(repository_failure, Err(BotError::Repo(_))));
-    assert!(broker.events().is_empty());
+    assert!(broker.bot_events().is_empty());
+    assert_eq!(broker.events().len(), announced);
 
     Ok(())
 }

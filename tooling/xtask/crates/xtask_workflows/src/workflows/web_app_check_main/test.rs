@@ -264,7 +264,7 @@ fn generated_code_alone_keeps_a_cargo_target() {
             );
             if workflow.file_name == "web-app-check-main.yml" {
                 assert_eq!(
-                    text.contains(vars::CARGO_TARGET_VOLUME_DIR),
+                    text.contains(&vars::cargo_target_volume_dir()),
                     owner,
                     "web job {id}: only generated-code mounts a cargo target"
                 );
@@ -287,7 +287,7 @@ fn generated_code_builds_without_debug_info_for_every_step() {
         "the job env turns debug info off: {header}"
     );
     assert!(
-        header.contains("RUSTFLAGS: '-C link-arg=-fuse-ld=mold'"),
+        header.contains("RUSTFLAGS: -C link-arg=-fuse-ld=mold"),
         "the job links with mold like the Rust jobs: {header}"
     );
     for flag in ["CARGO_PROFILE_DEV_DEBUG", "RUSTFLAGS", "--config"] {
@@ -437,7 +437,7 @@ fn test_job_shards_vitest_after_building_its_wasm() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let test_job = test_job(&yaml);
     let vitest = test_job
-        .find("bun run test --shard=${{ matrix.shard }}/6")
+        .find(r#"bun run test --shard="${SHARD}/6""#)
         .expect("vitest step runs one shard");
     for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
         let wasm = test_job
@@ -523,6 +523,41 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
         step.contains("needs.path-check.outputs.calendar_details_changed == 'true'")
             && step.contains("just test-calendar-details-browser"),
         "the step runs the suite when calendar details change: {step}"
+    );
+}
+
+/// The agent screen suite renders the viewer and the agent DM's top bar over
+/// stubs of the channel and team queries, so it runs when any of them change.
+#[test]
+fn agent_screen_browser_tests_run_when_the_viewer_or_dm_header_change() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let screen = filters
+        .split("agent_screen_changed:")
+        .nth(1)
+        .expect("agent_screen_changed filter");
+    for path in [
+        "apps/web/src/features/agent-screen/**",
+        "apps/web/src/features/channel/Channel/ChannelDetail.tsx",
+        "apps/web/src/features/settings/views/team-agent-dm-status.tsx",
+        "apps/web/src/components/app/split-layout/**",
+        "apps/web/src/components/ui/components/Dialog.tsx",
+    ] {
+        assert!(screen.contains(path), "{path} runs the suite: {screen}");
+    }
+    let step = browser_job(&yaml)
+        .split("- name: Agent Screen Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("agent screen browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.agent_screen_changed == 'true'")
+            && step.contains("just test-agent-screen-browser"),
+        "the step runs the suite when the agent screen changes: {step}"
     );
 }
 
@@ -919,7 +954,7 @@ fn path_check_fetches_no_blobs_up_front() {
     let path_check = job(&yaml, "path-check", "android-native-check");
     assert!(path_check.contains("filter: blob:none"), "{path_check}");
     assert!(
-        path_check.contains("sparse-checkout: '.github'"),
+        path_check.contains("sparse-checkout: .github"),
         "{path_check}"
     );
 }

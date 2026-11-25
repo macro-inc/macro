@@ -30,7 +30,6 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import { createChannelLabelsClient } from './channel-labels';
-import type { ApiChannelListPage } from './channel-list-types';
 import { crmValidationError } from './crm-errors';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
@@ -42,7 +41,6 @@ import type { AddParticipantsRequest } from './generated/schemas/addParticipants
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
-import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { Bot } from './generated/schemas/bot';
@@ -69,6 +67,8 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CompanyContactsPageResponse } from './generated/schemas/companyContactsPageResponse';
+import type { CompanyDomainRequest } from './generated/schemas/companyDomainRequest';
+import type { CompanyDomainTakenResponse } from './generated/schemas/companyDomainTakenResponse';
 import type { ContactEmailRequest } from './generated/schemas/contactEmailRequest';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
@@ -152,6 +152,12 @@ import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesP
 import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { MergeBlock } from './generated/schemas/mergeBlock';
+import type { MergeCommitRequest } from './generated/schemas/mergeCommitRequest';
+import type { MergeErrorResponse } from './generated/schemas/mergeErrorResponse';
+import type { MergeOutcome } from './generated/schemas/mergeOutcome';
+import type { MergePreview } from './generated/schemas/mergePreview';
+import type { MergePreviewRequest } from './generated/schemas/mergePreviewRequest';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
@@ -255,6 +261,59 @@ export function dssFetch<T extends Record<string, any> | null = never>(
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
+/** Why the storage service refused to review or commit a merge. */
+export type CrmMergeErrorCode =
+  | 'merge_permission_required'
+  | 'merge_unavailable'
+  | 'record_unavailable'
+  | 'record_hidden'
+  | 'record_already_merged'
+  | 'merge_preview_stale'
+  | 'merge_request_reused'
+  | 'merge_conflict'
+  | 'merge_sharing_rules_too_large'
+  | 'invalid_request';
+
+export const CRM_MERGE_ERROR_CODES: readonly string[] = [
+  'merge_permission_required',
+  'merge_unavailable',
+  'record_unavailable',
+  'record_hidden',
+  'record_already_merged',
+  'merge_preview_stale',
+  'merge_request_reused',
+  'merge_conflict',
+  'merge_sharing_rules_too_large',
+  'invalid_request',
+] satisfies CrmMergeErrorCode[];
+
+/** A merge refusal: its code, and what a conflict or an earlier merge names. */
+export type CrmMergeError = ResultError<
+  CrmMergeErrorCode | FetchWithTokenErrorCode
+> & {
+  blocked?: MergeBlock | null;
+  currentId?: string | null;
+};
+
+async function crmMergeErrorHandler(response: Response) {
+  const body = (await response
+    .json()
+    .catch(() => null)) as MergeErrorResponse | null;
+  if (body?.code && CRM_MERGE_ERROR_CODES.includes(body.code)) {
+    const error: CrmMergeError = {
+      code: body.code as CrmMergeErrorCode,
+      message: body.message,
+      blocked: body.blocked ?? null,
+      currentId: body.currentId ?? null,
+    };
+    return error;
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
+}
+
 /**
  * Join-request failures carry a machine-readable `{ code, message }` body;
  * surface it so callers can explain a refusal.
@@ -275,6 +334,24 @@ async function calendarJoinRequestErrorHandler(response: Response) {
     code: 'HTTP_ERROR' as const,
     message: `HTTP error! status: ${response.status}`,
   };
+}
+
+/**
+ * A refused company domain edit. A 409 carries, as its message, the name of
+ * the company that already has the domain, empty when the caller cannot see
+ * it (an archived company, for a member).
+ */
+async function companyDomainErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return { code: 'BAD_REQUEST' as const, message: 'Domain change refused' };
+  }
+  if (response.status === 409) {
+    const body = (await response
+      .json()
+      .catch(() => null)) as CompanyDomainTakenResponse | null;
+    return { code: 'CONFLICT' as const, message: body?.companyName ?? '' };
+  }
+  return statusError(response.status);
 }
 
 async function contactEditErrorHandler(response: Response) {
@@ -732,11 +809,13 @@ export const storageServiceClient = {
       ? `?cursor=${args.params.cursor}`
       : '';
 
-    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
+    const body = JSON.stringify(args.body);
+    const result = await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
-      body: JSON.stringify(args.body),
+      body,
       signal: args.signal,
     });
+    return result;
   },
 
   async getGroupedSoupAstItems(args: {
@@ -813,30 +892,6 @@ export const storageServiceClient = {
         method: 'POST',
         body: JSON.stringify(args),
       })
-    ).map((result) => result);
-  },
-
-  // The channel list is still served by the comms hex, mounted at
-  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
-  // list moves into the channels hex (alongside the comms teardown).
-  async getChannels(args: {
-    cursor?: string;
-    limit?: number;
-    signal?: AbortSignal;
-  }) {
-    const params = new URLSearchParams();
-    if (args.cursor) params.set('cursor', args.cursor);
-    if (args.limit != null) params.set('limit', String(args.limit));
-    const query = params.toString();
-
-    return (
-      await dssFetch<ApiChannelListPage>(
-        `/comms/channels${query ? `?${query}` : ''}`,
-        {
-          method: 'GET',
-          signal: args.signal,
-        }
-      )
     ).map((result) => result);
   },
 
@@ -1355,14 +1410,6 @@ export const storageServiceClient = {
         `/channels/attachments/${entity_type}/${entity_id}/references`,
         { method: 'GET' }
       )
-    ).map((result) => result);
-  },
-
-  async getActivity() {
-    return (
-      await dssFetch<Array<ApiActivity>>(`/channels/activity`, {
-        method: 'GET',
-      })
     ).map((result) => result);
   },
 
@@ -2807,6 +2854,28 @@ export const storageServiceClient = {
       { method: 'GET' }
     );
   },
+  /** Review merging CRM records into the one that stays; changes nothing. */
+  async previewCrmMerge(body: MergePreviewRequest) {
+    return await fetchWithToken<MergePreview, CrmMergeErrorCode>(
+      `${dssHost}/crm/merges/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: crmMergeErrorHandler,
+      }
+    );
+  },
+  /** Commit a reviewed merge; a retry with the same request key returns its result. */
+  async commitCrmMerge(body: MergeCommitRequest) {
+    return await fetchWithToken<MergeOutcome, CrmMergeErrorCode>(
+      `${dssHost}/crm/merges`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: crmMergeErrorHandler,
+      }
+    );
+  },
   /** Titles of many company and contact chips; records the caller can't open are left out. */
   async previewCrmRecords(body: CrmPreviewsRequest) {
     return await dssFetch<CrmPreviews>('/crm/previews', {
@@ -2977,6 +3046,32 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
+  async addCompanyDomain({
+    companyId,
+    ...body
+  }: { companyId: string } & CompanyDomainRequest) {
+    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/companies/${companyId}/domains`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: companyDomainErrorHandler,
+      }
+    );
+  },
+  async removeCompanyDomain({
+    companyId,
+    ...body
+  }: { companyId: string } & CompanyDomainRequest) {
+    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/companies/${companyId}/domains`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify(body),
+        errorResponseHandler: companyDomainErrorHandler,
+      }
+    );
+  },
   async setCompanyHidden({
     companyId,
     hidden,
@@ -3006,6 +3101,7 @@ export const storageServiceClient = {
   async getCrmTeamSettings() {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'GET',
+      cache: 'no-store',
     });
   },
   async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {

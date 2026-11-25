@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { catchToResult, throwOnErr } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   assertQueryAccount,
@@ -20,6 +21,7 @@ import type {
 } from '../context/email-policy';
 import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listReadsCrmEmail } from './list-refresh';
 
 type Dependencies = Pick<CrmQueryDependencies, 'client' | 'feedback'> & {
   policy: typeof crmEmailPolicyClient;
@@ -192,10 +194,7 @@ export function createEmailPolicySource(
               ),
               span.run(() =>
                 refreshActiveGraphqlSoupQueries({
-                  where: (body) =>
-                    typeof body === 'object' &&
-                    body !== null &&
-                    ('ecd' in body || 'eca' in body || 'crma' in body),
+                  where: listReadsCrmEmail,
                   throwOnError: true,
                 })
               ),
@@ -261,20 +260,30 @@ export function createEmailPolicySource(
     startPreview: (input) =>
       catchToResult(async () => {
         const ownerScope = scope();
+        const generation = cacheSessionGeneration.capture();
         assertQueryAccount(account());
         const value = await throwOnErr(() =>
           Telemetry.span('crm.email_policy.preview', () =>
             deps.policy.startPreview(input, abort.signal)
           )
         );
-        if (ownerScope === scope() && !abort.signal.aborted) {
+        if (
+          ownerScope === scope() &&
+          !abort.signal.aborted &&
+          cacheSessionGeneration.isCurrent(generation)
+        ) {
           await deps.client.cancelQueries({
             queryKey: crmKeys.emailPolicyPreview(ownerScope).queryKey,
           });
-          deps.client.setQueryData(
-            crmKeys.emailPolicyPreview(ownerScope).queryKey,
-            value
-          );
+          if (
+            ownerScope === scope() &&
+            !abort.signal.aborted &&
+            cacheSessionGeneration.isCurrent(generation)
+          )
+            deps.client.setQueryData(
+              crmKeys.emailPolicyPreview(ownerScope).queryKey,
+              value
+            );
         }
         return value;
       }),

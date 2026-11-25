@@ -146,6 +146,9 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
     if (
       operation === 'SoupNotifications' ||
       operation === 'HomeUnreadPresence' ||
+      // The fixture user is in no channels.
+      operation === 'SoupChannelDirectoryBackfill' ||
+      operation === 'ChannelDirectoryPage' ||
       (operation === 'ChannelUnreadPresence' && excludesMail(input))
     )
       return { items: [], nextCursor: null };
@@ -217,6 +220,11 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
             },
             workFeed: { entries: [], nextCursor: null, nextPosition: null },
             contacts: { nodes: [], nextCursor: null },
+            timeTracking: {
+              id: USER_ID,
+              runningTimer: null,
+              serverNow: new Date().toISOString(),
+            },
             favorites: ({ filter }: { filter?: FavoritesFilterInput | null }) =>
               (corpus ?? [])
                 .filter(

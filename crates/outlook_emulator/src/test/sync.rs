@@ -3,9 +3,10 @@ use email_api_client::domain::models::{
     StreamToken,
 };
 use email_api_client::domain::ports::{FolderChangeReader, MailboxContentReader};
+use models_email::email::service::message::RecentMailFolder;
 use uuid::Uuid;
 
-use super::{ADA, id, message_id, start, token};
+use super::{ADA, folders, id, message_id, start, token};
 use crate::{MessageChange, NewMessage, OutlookEmulator};
 
 fn seed_with_inbox(count: usize) -> String {
@@ -222,7 +223,7 @@ async fn folders_carry_their_roles_and_nested_children() {
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
 
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
 
     let role = |name: &str| folders.iter().find(|f| f.name == name).unwrap().role;
     assert_eq!(role("Inbox"), FolderRole::Inbox);
@@ -267,7 +268,7 @@ mailboxes:
     );
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
     let link_id = Uuid::now_v7();
 
     let numbers = message_id(&emulator, ADA, "Quarterly numbers");
@@ -336,7 +337,7 @@ mailboxes:
 }
 
 #[tokio::test]
-async fn recent_inbox_messages_are_newest_first_and_limited() {
+async fn recent_inbox_and_sent_messages_are_newest_first_and_limited() {
     let seed = format!(
         r#"
 mailboxes:
@@ -345,15 +346,24 @@ mailboxes:
       - {{ subject: Oldest, date: "2026-11-01T09:00:00Z" }}
       - {{ subject: Newest, date: "2026-11-03T09:00:00Z" }}
       - {{ subject: Middle, date: "2026-11-02T09:00:00Z" }}
-      - {{ subject: Sent, folder: sentitems, date: "2026-11-04T09:00:00Z" }}
+      - {{ subject: Sent before the window, folder: sentitems, date: "2026-10-31T09:00:00Z" }}
+      - {{ subject: Sent yesterday, folder: sentitems, date: "2026-11-02T10:00:00Z" }}
+      - {{ subject: Sent today, folder: sentitems, date: "2026-11-03T11:00:00Z" }}
 "#
     );
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
 
     let recent = api
-        .recent_inbox_messages(&token, Uuid::now_v7(), 2, &folders)
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            2,
+            None,
+            &folders,
+        )
         .await
         .unwrap();
 
@@ -362,4 +372,43 @@ mailboxes:
         .map(|m| m.content.message.subject.clone().unwrap())
         .collect();
     assert_eq!(subjects, vec!["Newest".to_string(), "Middle".to_string()]);
+
+    // From a start time: only what arrived since, still newest first.
+    let since = "2026-11-02T09:00:00Z".parse().unwrap();
+    let recent = api
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            10,
+            Some(since),
+            &folders,
+        )
+        .await
+        .unwrap();
+
+    let subjects: Vec<_> = recent
+        .iter()
+        .map(|m| m.content.message.subject.clone().unwrap())
+        .collect();
+    assert_eq!(subjects, vec!["Newest".to_string(), "Middle".to_string()]);
+
+    let sent = api
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Sent,
+            10,
+            Some(since),
+            &folders,
+        )
+        .await
+        .unwrap();
+
+    let subjects: Vec<_> = sent
+        .iter()
+        .map(|m| m.content.message.subject.as_deref().unwrap())
+        .collect();
+    assert_eq!(subjects, ["Sent today", "Sent yesterday"]);
+    assert!(sent.iter().all(|message| message.content.message.is_sent));
 }

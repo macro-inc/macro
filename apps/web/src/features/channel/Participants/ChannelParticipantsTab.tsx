@@ -58,7 +58,7 @@ export function ChannelParticipantsTab(props: {
     const pendingAutoJoin = pendingPatch()?.auto_join_team;
     return typeof pendingAutoJoin === 'boolean'
       ? pendingAutoJoin
-      : (channel()?.auto_join_team ?? false);
+      : (channel()?.autoJoinTeam ?? false);
   };
   const supportsTeamSettings = () =>
     channelType() === ChannelType.private ||

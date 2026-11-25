@@ -7,7 +7,13 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
-import { Routine, type RoutineOptions, routineBody } from './routine';
+import {
+  appsBody,
+  Routine,
+  type RoutineApp,
+  type RoutineOptions,
+  routineBody,
+} from './routine';
 import { RoutineSuggestion } from './suggestion';
 
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
@@ -31,13 +37,14 @@ export interface CreatedEntity {
  *
  * ### Writing one
  *
- * - Find each item the request names (a channel, person, folder, project, label, tag, agent, database or document) with SDK search, as the user would, paging and refining the search until you find the item itself. The item is the one whose name is exactly the name used, ignoring case and a leading # or @, not one whose name only contains it: "bug-reports" is the channel named bug-reports, never bug-reports-archive. When no item has that name, or several do, ask which one rather than guess.
+ * - Find each named item (channel, person, folder, project, label, tag, agent, database or document) with SDK search. Page and refine for an exact name, ignoring case and a leading # or @. Match "bug-reports" to bug-reports, never bug-reports-archive. Ask the user if zero or several items match exactly.
  * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key.
  * - A code step uses each item it names (the channel it posts in, a person, a task, an email thread, a folder, a database) through an `entity` knob holding the same kind of reference, `{ type: 'entity', name: 'bugsChannel', label: 'Channel to post in', entity_types: ['channel'], value: { type: 'channel', entity: channel } }`, and its code reads it as that handle (`await knobs.bugsChannel.send(text)`), so the user can pick another item later: never a text knob with its name, and never an id in the code. Its `entity_types` lists the fewest kinds the request allows, usually one; a task is `{ type: 'task', entity: task }`.
  * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and put its handle in the step's entity knob. Create nothing else.
  * - Never do the routine's own work while setting it up; it does its work each time it runs. "Every Monday make a task" makes no task today; "when an email arrives, reply" sends nothing; "post the weekly summary" posts nothing.
  * - In a cron `schedule` (six fields: second minute hour day-of-month month day-of-week), name weekdays MON to SUN: weekday numbers start at 1 = Sunday, so Monday to Friday is `MON-FRI`, never `1-5`.
  * - In code, check the whole routine with `macro.routines.check` before creating it, naming in `created` what you created for it, and fix what it reports until `ok` is true.
+ * - Only an Ask AI step reaches apps outside Macro (Linear, GitHub, Notion…); a code step never does. List in `apps` each one the step uses: a connected app from `macro.connectedApps.list(execution)` (`kind` `app`) as `{ slug: app.key, name: app.name }`. Saving refuses an app the user hasn't connected: tell them to connect it.
  *
  * Events an `events` trigger starts on (`EventName` lists every one):
  *
@@ -52,6 +59,11 @@ export interface CreatedEntity {
  * - `task.property_changed`: any property on a task changes, such as its assignees, due date, project or effort, including status and priority.
  * - `email.message_received`: new mail arrives in any of your inboxes, yours or one
  *   delegated to you. Excludes spam, trash, drafts and historical imports.
+ * - `email.labeled`: a thread in one of those inboxes gains a Gmail label or
+ *   Outlook category someone made, as mail arrives with it or later. Put the
+ *   labels from `macro.email.labels()` in the filter's `labels`, alone in its
+ *   filter, or leave them out for any label. Labels a routine or an agent adds
+ *   never start a routine.
  * - `call.started`: a call you start begins. The routine gets the call and who has joined so far.
  * - `call.ended`: a call you joined ends. The routine gets the call's participants and transcript.
  */
@@ -189,7 +201,10 @@ export class RoutineNamespace {
    * it would be stored. Check before creating, and fix what it reports.
    * `created` names what you created for the routine to use, such as the
    * database it writes to, so whoever reviews a drafted routine knows it
-   * exists.
+   * exists. `missingApps` names apps the routine's Ask AI step needs that
+   * the user hasn't connected (a connector's `slug` and `name` from
+   * `macro.connectedApps.discover`), which a drafted routine's review asks
+   * them to connect; the check returns them as `missingApps`.
    *
    * @example
    * const check = await macro.routines.check({
@@ -203,8 +218,12 @@ export class RoutineNamespace {
    */
   async check(
     options: RoutineOptions,
-    extra?: { created?: CreatedEntity[] },
+    extra?: {
+      created?: CreatedEntity[];
+      missingApps?: readonly RoutineApp[];
+    },
   ): Promise<RoutineCheck> {
+    const missingApps = appsBody(extra?.missingApps);
     return unwrap(
       await this.client.scheduledAction.checkScheduledAction({
         body: {
@@ -216,6 +235,8 @@ export class RoutineNamespace {
             entityType: item.entityType,
             entityId: item.id,
           })),
+          // Sent only when named, so a check reaches a server without it.
+          ...(missingApps?.length ? { missingApps } : {}),
         },
       }),
     );

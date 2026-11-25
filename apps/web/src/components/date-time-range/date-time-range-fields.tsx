@@ -18,8 +18,8 @@ import {
 } from 'solid-js';
 import { dateLabelFormatter, TimeInput } from './time-input';
 import {
-  DAY_TIME_OPTIONS,
   dayOffsetBetween,
+  dayTimeOptions,
   endTimeOptions,
   endValueFor,
   selectedTimeOptionId,
@@ -127,6 +127,8 @@ export interface DateTimeRangeProps {
   endDisabled?: boolean;
   invalid?: boolean;
   describedBy?: string;
+  /** Times on a 12-hour (`true`) or 24-hour (`false`) clock; the locale's when unset. */
+  hour12?: boolean;
 }
 
 const DateTimeRangeContext = createContext<DateTimeRangeProps>();
@@ -173,6 +175,7 @@ function Start() {
           id={`range-start-time-${fieldId}`}
           label={`${range.subject} start time`}
           value={parts().time}
+          hour12={range.hour12}
           onChange={(option) =>
             range.onStartChange(withLocalTime(range.start, option.value))
           }
@@ -204,8 +207,8 @@ function End() {
   const endOptions = () => {
     const start = endAnchor();
     return start
-      ? endTimeOptions(splitLocalDateTime(start).time)
-      : DAY_TIME_OPTIONS;
+      ? endTimeOptions(splitLocalDateTime(start).time, range.hour12)
+      : dayTimeOptions(range.hour12);
   };
   const endSelectedId = () => {
     const start = endAnchor();
@@ -245,6 +248,7 @@ function End() {
           label={`${range.subject} end time`}
           value={parts().time}
           options={endOptions()}
+          hour12={range.hour12}
           selectedId={endSelectedId()}
           onChange={changeEndTime}
           disabled={range.endDisabled}

@@ -49,16 +49,31 @@ read their code, and follow that pattern rather than inventing a new one.
 - Keep tooltips disabled on touch devices, including focus and controlled-open states.
 - Keep `@ui` Button's touch sizing (no `noTouchResize` without cause); rows
   are 44px on touch (`touch:min-h-[44px]`).
-- Long-press goes through the `touchHandler` directive. On scrollable rows,
+- A tappable list row marks the element that paints it `data-press-surface`
+  (or sits in a `data-soup-entity` row) and gets the shared press grey from
+  `components/app/mobile/rowPress.ts`, with UIKit timing; never add a per-row
+  `active:` tint. The grey holds 350ms after a tap; a row whose open can take
+  longer (it awaits a split or a load) calls `holdRowPress` from its click to
+  keep it until the open settles. A row that must paint its own pressed fill
+  marks it `data-press-surface="self"`.
+- Long-press goes through the `touchHandler` directive, which ends the row's
+  press grey when the long press fires (`clearRowPress`) and marks its element
+  `data-long-press`, as context menu triggers are. A `data-soup-entity` row,
+  and a long-press element holding a press surface, draw no WebKit tap
+  highlight: iOS flashes the long-pressed element's highlight again on later
+  taps. On scrollable rows,
   selecting or dragging starts only after a long press; dedicated reorder
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge
   (iOS back swipe).
-- Keep navigation, filter pills, and create-menu taps silent; keep haptics for
-  long press and use `hapticImpact('light')` for valid message/AI sends. Navigation
-  acts on click so held or cancelled touches do nothing. `glass` and `island`
-  controls and channel inputs get iOS-app-only press animation from
-  `installGlassPress`; reuse it and keep Android and web free of the effect.
+- Add no native-only press animation: the iOS and Android apps look and
+  respond like a mobile browser, with normal tap feedback. Haptics confirm only
+  gestures with no cue under the finger: `hapticImpact('medium')` when a long
+  press fires (`touchHandler`, the mobile canvas), and `hapticImpact('light')`
+  as a swipe row (`SwipableRow`) or pull to refresh crosses its threshold and
+  backs off it, as a dock reorder drag starts, and as each reorder (drag or
+  arrow key) moves a view. Taps and sends stay silent. Navigation acts on click so held or cancelled touches do
+  nothing. Touch `glass` and `island` surfaces draw a flat hairline edge.
 
 ## Sheets, menus, and dialogs
 
@@ -98,10 +113,12 @@ read their code, and follow that pattern rather than inventing a new one.
   per-sheet delays or click guards for it. A drag dismissal the owner refuses
   (to confirm a discard, or while an action is pending) snaps the sheet back
   open.
-- Sheets and touch dialogs close themselves when the app navigates to
-  another page; don't close them per sheet. Pass `keepOpenOnNavigation` only
-  when dismissing does something the user didn't choose (discards files
-  shared to the app, records a prompt as dismissed). A sheet that reopens
+- Sheets, touch dialogs and `Dropdown` menus close themselves when the app
+  navigates to another page; don't close them per sheet. An overlay built on
+  Kobalte's `Dialog` directly (a full-screen viewer) renders
+  `DialogClosesOnNavigation` inside its root instead. Pass
+  `keepOpenOnNavigation` only when dismissing does something the user didn't
+  choose (discards files shared to the app, records a prompt as dismissed). A sheet that reopens
   after a dialog closes checks `shownPage()` first: a navigation may have
   closed the dialog.
 - A sheet opened from another sheet stacks on it under its own scrim, which
@@ -162,6 +179,8 @@ read their code, and follow that pattern rather than inventing a new one.
 - Top edge fades (`MobileTopEdgeFade`) size from `--mobile-content-inset-top`
   and draw nothing when it is 0, so panes without a top safe area or floating
   chrome (the iPhone Duo) get no fade; place them where that inset is set.
+  They draw only on touch devices: desktop split panes set the inset to their
+  in-flow header's height, which would paint a band under the header.
 - Safe areas come from the `--safe-*` CSS variables (e.g.
   `bottom-[var(--safe-bottom,0px)]`); `getSafeAreaInset` only when JS needs
   the number. Never measure insets yourself.

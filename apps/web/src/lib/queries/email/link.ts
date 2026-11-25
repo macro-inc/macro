@@ -57,6 +57,10 @@ export function useInboxHealthProbeQuery() {
   return useQuery(() => inboxHealthQueryOptions(account()));
 }
 
+function copyLinksForReconcile(links: ListLinksResponse): ListLinksResponse {
+  return structuredClone(links);
+}
+
 export function emailLinksQueryOptions(
   account: QueryAccount | undefined,
   enabled: boolean
@@ -78,7 +82,16 @@ export function emailLinksQueryOptions(
 }
 export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
   const account = useQueryAccount();
-  return useQuery(() => emailLinksQueryOptions(account(), enabled()));
+  return useQuery(() => ({
+    ...emailLinksQueryOptions(account(), enabled()),
+    // Startup recovery and focus refreshes must preserve the open inbox editor.
+    // Reconciling mutates the observed data in place, and an observer keeps
+    // that data across an account switch, so it works on a private copy and
+    // never on another account's cached entry. Other readers of these options
+    // do not reconcile.
+    select: copyLinksForReconcile,
+    reconcile: 'id' as const,
+  }));
 }
 
 /**

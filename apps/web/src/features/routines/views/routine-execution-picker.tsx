@@ -1,4 +1,4 @@
-import { buttonClasses } from '@ui';
+import { currentModelId } from '@core/component/AI/constant/model';
 import {
   type Accessor,
   ErrorBoundary,
@@ -6,11 +6,12 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { isMacroHarness } from '../../agents-view/core/agent-kind';
 import {
   MACRO_PERSONA_ID,
   type RosterAgent,
 } from '../../agents-view/core/roster';
-import { AgentPicker } from '../../agents-view/views/AgentPicker';
+import { AgentModelPicker } from '../../agents-view/views/agent-model-picker';
 import type { RoutineTarget } from '../core/routine-target';
 
 export type RoutineExecutionPickerProps = {
@@ -34,7 +35,7 @@ type Props = RoutineExecutionPickerProps & {
 };
 
 function savedSelection(target: RoutineTarget): string {
-  if (target.kind === 'model') return `Model: ${target.model}`;
+  if (target.kind === 'model') return `Model: ${currentModelId(target.model)}`;
   const label = `Agent: ${target.agentId}`;
   return target.modelOverride ? `${label} · ${target.modelOverride}` : label;
 }
@@ -77,9 +78,14 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
     }
     return props.roster.find((agent) => agent.botId === target.agentId);
   };
+  // A routine saved on a retired Macro model runs on its replacement, so it
+  // shows as that replacement.
   const model = (): string | undefined => {
     const target = props.target;
-    return target.kind === 'model' ? target.model : target.modelOverride;
+    const saved = target.kind === 'model' ? target.model : target.modelOverride;
+    return saved && isMacroHarness(selected()?.harness)
+      ? currentModelId(saved)
+      : saved;
   };
   const catalog = props.createModels(selected);
   const warning = (): string | undefined => {
@@ -122,13 +128,7 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
       aria-label="Routine model or agent"
       class="min-w-0 max-w-full"
     >
-      <AgentPicker
-        showModelLabel
-        triggerClass={buttonClasses({
-          variant: 'secondary',
-          size: 'sm',
-          class: 'max-w-full',
-        })}
+      <AgentModelPicker
         agents={props.roster}
         selected={selected()}
         modelOverride={model()}

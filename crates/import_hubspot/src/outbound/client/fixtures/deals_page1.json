@@ -1,0 +1,5 @@
+{"results": [
+  {"id": "9001", "properties": {"dealname": "Acme renewal", "amount": "12500.50", "deal_currency_code": "EUR", "dealstage": "closedwon", "pipeline": "default", "closedate": "2026-03-01T00:00:00Z", "hubspot_owner_id": "101"},
+   "associations": {"companies": {"results": [{"id": "5002", "type": "deal_to_company_unlabeled"}, {"id": "5001", "type": "deal_to_company"}]}}},
+  {"id": "9002", "properties": {"dealname": "Orphan", "amount": "abc", "deal_currency_code": "", "dealstage": "1001", "pipeline": "75e28846-ad0d-4be2-a027-5e1da6590b98", "closedate": null, "hubspot_owner_id": "103"}}
+]}

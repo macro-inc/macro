@@ -94,6 +94,7 @@ fn computer_state(
         Kind::SettingUp => ComputerState::SettingUp,
         Kind::Ready if awaiting_agent => ComputerState::AwaitingAgent,
         Kind::Ready => ComputerState::Ready,
+        Kind::Unhealthy => ComputerState::Unhealthy,
         Kind::WaitingForCapacity | Kind::Starting | Kind::Stopping | Kind::Stopped => {
             ComputerState::Paused
         }
@@ -134,18 +135,16 @@ where
 
     #[tracing::instrument(skip_all, fields(team_id = %purchase.team_id), err)]
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
-        let purchase_key = models::PurchaseKey::try_new(purchase.purchase_key)
-            .map_err(|_| TeamAgentError::InvalidPurchaseKey)?;
         self.service
             .purchase_for_agent(
                 models::PurchaseRequest {
                     // The service picks Stripe or a comp by team policy.
                     billing: models::PurchaseBilling::Stripe,
-                    purchase_key,
+                    purchase_key: purchase.purchase_key,
                     team_id: purchase.team_id,
                     created_by: purchase.created_by,
                     size: purchase.size,
-                    name: Some(purchase.name),
+                    name: Some(purchase.name.into_string()),
                     extra_items: vec![],
                 },
                 purchase.agent,

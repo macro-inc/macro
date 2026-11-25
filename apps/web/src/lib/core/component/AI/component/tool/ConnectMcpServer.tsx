@@ -1,9 +1,20 @@
 import Plug from '@phosphor-icons/core/regular/plug.svg';
+import type { ConnectorStatus } from '@service-cognition/generated/tools/types';
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import { BaseTool } from './BaseTool';
 import { DetailPanel } from './Bots';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
+
+function statusLabel(status: ConnectorStatus): string {
+  return match(status)
+    .with('connected', () => 'Connected')
+    .with('disabled', () => 'Disabled')
+    .with('needsReauth', () => 'Needs reconnecting')
+    .with('notConnected', () => 'Not signed in')
+    .exhaustive(() => 'Unknown');
+}
 
 export const connectMcpServerHandler = createToolRenderer({
   name: 'ConnectMcpServer',
@@ -22,10 +33,7 @@ export const connectMcpServerHandler = createToolRenderer({
               summary={response()!.summary}
               details={[
                 { label: 'URL', value: response()!.url },
-                {
-                  label: 'Signed in',
-                  value: response()!.authenticated ? 'Yes' : 'No',
-                },
+                { label: 'Status', value: statusLabel(response()!.status) },
                 { label: 'Enabled', value: response()!.enabled ? 'Yes' : 'No' },
               ]}
             />

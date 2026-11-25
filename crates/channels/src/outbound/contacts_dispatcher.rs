@@ -1,7 +1,7 @@
 //! Contacts adapter for channel side effects.
 
 use crate::domain::ports::ChannelContactsDispatcher;
-use contacts::domain::ports::ContactsIngress;
+use contacts::domain::ports::{ContactListIngress, ContactsIngress};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{collections::HashSet, sync::Arc};
 
@@ -27,7 +27,7 @@ impl<I> ContactsChannelDispatcher<I> {
 
 impl<I> ChannelContactsDispatcher for ContactsChannelDispatcher<I>
 where
-    I: ContactsIngress,
+    I: ContactsIngress + ContactListIngress,
 {
     type Err = anyhow::Error;
 
@@ -37,6 +37,17 @@ where
     ) -> Result<(), Self::Err> {
         self.ingress
             .enqueue_contacts(users)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))
+    }
+
+    async fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        self.ingress
+            .record_interactions(users, peers)
             .await
             .map_err(|e| anyhow::anyhow!("{e:?}"))
     }

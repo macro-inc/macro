@@ -1,3 +1,4 @@
+use super::list::InboxSource;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -45,12 +46,63 @@ impl ContactConnections {
     }
 }
 
+/// A change to directed, list-aware directory membership. Each variant names
+/// bounded id lists; [`crate::domain::ports::ContactListIngress`] chunks them.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DirectoryChange {
+    /// Every user and every peer have interacted: each gains the other in
+    /// their `interacted` list. Self-pairs are skipped.
+    Interacted {
+        /// One side of every pair.
+        users: Vec<MacroUserIdStr<'static>>,
+        /// The other side of every pair.
+        peers: Vec<MacroUserIdStr<'static>>,
+    },
+    /// The inbox owner knows these contacts through that inbox. Owner to
+    /// contact only.
+    InboxContacts {
+        /// The inbox the contacts were found in.
+        inbox: InboxSource,
+        /// People known through the inbox.
+        contacts: Vec<MacroUserIdStr<'static>>,
+    },
+    /// Something outside the stored lists, such as a team roster, changed
+    /// these users' directories. Notify only; nothing is written.
+    Changed {
+        /// Users whose clients re-read their directory.
+        users: Vec<MacroUserIdStr<'static>>,
+        /// Contacts each user re-reads. Empty means unknown: the clients fall
+        /// back to their periodic scan.
+        changed: Vec<MacroUserIdStr<'static>>,
+    },
+    /// The account is gone: drop its directory and remove it from every other.
+    UserDeleted {
+        /// The deleted user.
+        user: MacroUserIdStr<'static>,
+    },
+}
+
 /// A message accepted by the contacts queue consumer.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum ContactsMessage {
+    /// A list-aware directory change. Tried first: legacy bodies have no
+    /// `type` and fall through to the shapes below.
+    Change(DirectoryChange),
     /// The existing complete-graph message.
     Nodes(ContactsNodes),
     /// A message containing explicit relationships.
     Connections(ContactConnections),
+}
+
+impl ContactsMessage {
+    /// The message's shape, safe to record on a span.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Change(_) => "change",
+            Self::Nodes(_) => "nodes",
+            Self::Connections(_) => "connections",
+        }
+    }
 }

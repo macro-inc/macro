@@ -1,7 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CrmSidebar } from './crm-sidebar';
 
@@ -58,7 +58,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderWorkspace() {
+function renderWorkspace(canAccess = () => true) {
   return render(() => (
     <SplitPanelControllerProvider
       controller={{
@@ -73,6 +73,7 @@ function renderWorkspace() {
       <ViewShell.Root asidePreferenceKey="crm">
         <ViewShell.Aside>
           <CrmSidebar
+            canAccess={canAccess()}
             active="active"
             lists={[]}
             listsEnabled={false}
@@ -127,4 +128,16 @@ it('offers the navigation as an overlay at narrow widths', () => {
   ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
   expect(values.get(COLLAPSED)).toBeUndefined();
+});
+
+it('removes record and activity navigation when member access is revoked', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  renderWorkspace(allowed);
+  expect(screen.getByRole('navigation', { name: 'CRM records' })).toBeTruthy();
+  setAllowed(false);
+  expect(screen.queryByRole('navigation', { name: 'CRM records' })).toBeNull();
+  expect(screen.queryByText('Sales tasks')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Import' })).toBeNull();
+  setAllowed(true);
+  expect(screen.getByRole('navigation', { name: 'CRM records' })).toBeTruthy();
 });

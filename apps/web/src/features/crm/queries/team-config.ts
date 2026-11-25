@@ -1,4 +1,15 @@
-import type { TeamCrmConfig, TeamCrmConfigPatch } from '../core/team-config';
+import {
+  assertQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+} from '@app/lib/queries/auth/account-scope';
+import { useQueryAccount } from '@app/lib/queries/auth/use-query-account';
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
+import type {
+  TeamCrmConfig,
+  TeamCrmConfigPatch,
+  TeamCrmSavedView,
+} from '../core/team-config';
 import type { CrmQueryDependencies } from './dependencies';
 import { parseTeamViews } from './team-view-codec';
 
@@ -24,7 +35,6 @@ export type {
  */
 
 import { throwOnErr } from '@core/util/result';
-import type { CrmTeamSettingsResponse } from '@service-storage/generated/schemas/crmTeamSettingsResponse';
 import type { UpdateCrmTeamSettingsRequest } from '@service-storage/generated/schemas/updateCrmTeamSettingsRequest';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
@@ -41,6 +51,7 @@ function teamCrmSettingsQueryOptions(deps: CrmQueryDependencies) {
 
 export function useTeamCrmConfig(deps: CrmQueryDependencies) {
   const queryClient = deps.client;
+  const account = useQueryAccount();
 
   const settingsQuery = useQuery(
     () => teamCrmSettingsQueryOptions(deps),
@@ -65,22 +76,26 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
 
   const updateMutation = useMutation(
     () => ({
+      meta: { queryAccount: account() },
+      onMutate: () => captureQueryAuthorization(),
       // Serialize updates: with whole-list team_views writes, concurrent
       // PUTs would clobber each other. Scoped mutations run one at a time,
-      // and updater-style teamViews patches read the cache only once the
-      // previous mutation's response has been written back.
+      // and updater-style patches fetch a fresh baseline after the previous
+      // mutation settles, even if its response could not enter the cache.
       scope: { id: 'crm-team-settings' },
-      mutationFn: async (patch: TeamCrmConfigPatch) => {
-        const teamViews =
-          typeof patch.teamViews === 'function'
-            ? patch.teamViews(
-                parseTeamViews(
-                  queryClient.getQueryData<CrmTeamSettingsResponse>(
-                    CRM_TEAM_SETTINGS_QUERY_KEY
-                  )?.team_views
-                )
-              )
-            : patch.teamViews;
+      mutationFn: async (patch: TeamCrmConfigPatch, context) => {
+        const owner = mutationQueryAccount(context);
+        assertQueryAccount(owner);
+        let teamViews: TeamCrmSavedView[] | undefined;
+        if (typeof patch.teamViews === 'function') {
+          const settings = await throwOnErr(() =>
+            deps.storage.getCrmTeamSettings()
+          );
+          assertQueryAccount(owner);
+          teamViews = patch.teamViews(parseTeamViews(settings.team_views));
+        } else {
+          teamViews = patch.teamViews;
+        }
         const body: UpdateCrmTeamSettingsRequest = {
           edit_stages_role: patch.permissions?.editStages,
           move_closed_deals_role: patch.permissions?.moveClosedDeals,
@@ -91,16 +106,24 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
             : {}),
           exclude_personal_emails: patch.excludePersonalEmails,
         };
+        assertQueryAccount(owner);
         return await throwOnErr(() => deps.storage.updateCrmTeamSettings(body));
       },
-      onSuccess: (settings) => {
+      onSuccess: (settings, _variables, canCache, context) => {
+        if (
+          !isCurrentQueryAccount(mutationQueryAccount(context)) ||
+          !canCache?.()
+        )
+          return;
         // The PUT returns the resulting row — seed the cache with it.
         queryClient.setQueryData(CRM_TEAM_SETTINGS_QUERY_KEY, settings);
       },
-      onSettled: () =>
-        queryClient.invalidateQueries({
+      onSettled: (_settings, _error, _variables, _result, context) => {
+        if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
+        return queryClient.invalidateQueries({
           queryKey: CRM_TEAM_SETTINGS_QUERY_KEY,
-        }),
+        });
+      },
     }),
     () => deps.client
   );

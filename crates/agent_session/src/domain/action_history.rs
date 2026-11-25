@@ -51,6 +51,9 @@ pub(super) fn recorded_action(
         if is_prompt(&entry, action) {
             prompt = Some(fold.inner().next_turn_id());
             actor = entry.user_id.clone();
+            // A prompt sent again after a disconnect is running again: only
+            // a disconnect after the latest send interrupts it.
+            disconnected = false;
         }
         let answers_action = matches!(&entry.content,
             Message::ToServer(ToServerMessage::Acp(AcpMessage(frame)))

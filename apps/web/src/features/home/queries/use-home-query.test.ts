@@ -139,6 +139,9 @@ function makeQuery(initial: EntityData[], hasMore = true) {
     get isLoading() {
       return loading();
     },
+    get hasPageData() {
+      return !loading();
+    },
     get hasNextPage() {
       return more();
     },

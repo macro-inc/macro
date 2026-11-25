@@ -72,7 +72,9 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
   // the hidden input so the whole component is one hit target.
   const handleRootClick = (event: MouseEvent) => {
     if (event.target !== event.currentTarget) return;
-    (event.currentTarget as HTMLElement).querySelector('input')?.click();
+    const input = (event.currentTarget as HTMLElement).querySelector('input');
+    input?.focus();
+    input?.click();
   };
 
   return (

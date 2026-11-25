@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n    SELECT 1 FROM email_links l\n    -- Resolve the mailbox first; stale plans must not walk its whole team.\n    JOIN LATERAL (\n        SELECT user_id FROM team_user\n        WHERE user_id = l.macro_id AND team_id = $1\n        OFFSET 0\n    ) member ON TRUE\n    JOIN LATERAL (\n        SELECT user_id, enabled, selected_enabled, consent_incarnation, mode, policy_version\n        FROM crm_email_consent\n        WHERE team_id = $1 AND user_id = l.macro_id AND link_id = l.id\n        OFFSET 0\n    ) c ON TRUE\n    WHERE l.id = $2 AND l.is_primary AND l.deleting_at IS NULL\n      AND l.disconnect_requested_at IS NULL AND NOT l.needs_reauth\n      AND (c.enabled OR c.selected_enabled)\n      AND (NOT $4::boolean OR (\n          c.consent_incarnation IS NOT DISTINCT FROM $5\n          AND (($5::uuid IS NULL AND c.mode = 'all' AND c.enabled)\n               OR c.policy_version = $6)\n      ))\n      AND NOT crm_email_domain_blocked($1, c.user_id, split_part($3, '@', 2))\n) AS \"admitted!\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "admitted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d2bfc16a9c14a1eabecc25d9116d6495c1dac1aff8a88ce60b49df5d4d720bb5"
+}
