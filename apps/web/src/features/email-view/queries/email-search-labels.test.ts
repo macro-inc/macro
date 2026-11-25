@@ -40,7 +40,7 @@ describe('a search with labels ticked', () => {
     ]);
   });
 
-  it('stops filtering by a label it cannot name yet', () => {
+  it('sends no label it cannot name', () => {
     expect(
       emailFiltersFor({ facets: { labels: [GONE] } })?.include_labels
     ).toBeUndefined();
@@ -48,7 +48,16 @@ describe('a search with labels ticked', () => {
 
   it('leaves labels to the service, since hits carry none to check', () => {
     expect(
-      facetsLeftToClient({ labels: [LARKSPUR], focus: ['focus-follow-up'] })
+      facetsLeftToClient(
+        { labels: [LARKSPUR, GONE], focus: ['focus-follow-up'] },
+        new Map([[LARKSPUR, 'Customers/Larkspur']])
+      )
     ).toEqual({ focus: ['focus-follow-up'] });
+  });
+
+  it('keeps labels it can name none of on the client, so no hit matches', () => {
+    expect(facetsLeftToClient({ labels: [GONE] }, new Map())).toEqual({
+      labels: [GONE],
+    });
   });
 });

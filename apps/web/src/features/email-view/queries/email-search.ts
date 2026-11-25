@@ -122,10 +122,37 @@ const SERVICE_FACET_GROUPS = [
   'labels',
 ] as const;
 
-/** The part of `facets` that service search leaves to the client. */
-export function facetsLeftToClient(facets: FacetSelection): FacetSelection {
+/** The stored names of the ticked labels that `labelNames` knows. */
+function searchedLabelNames(
+  facets: FacetSelection,
+  labelNames: ReadonlyMap<string, string> | undefined
+): string[] {
+  return [
+    ...new Set(
+      (facets.labels ?? []).flatMap((id) => {
+        const name = labelNames?.get(id);
+        return name ? [name] : [];
+      })
+    ),
+  ];
+}
+
+/**
+ * The part of `facets` that service search leaves to the client. Ticked
+ * labels none of which can be named stay, so they match no hit, as their ids
+ * match no row of the list.
+ */
+export function facetsLeftToClient(
+  facets: FacetSelection,
+  labelNames?: ReadonlyMap<string, string>
+): FacetSelection {
   const left: FacetSelection = { ...facets };
   for (const group of SERVICE_FACET_GROUPS) delete left[group];
+  if (
+    (facets.labels ?? []).length > 0 &&
+    searchedLabelNames(facets, labelNames).length === 0
+  )
+    left.labels = facets.labels;
   return left;
 }
 
@@ -176,16 +203,10 @@ export function buildEmailSearchRequest(
     context.facetContext.tagPropertyDefinitionByOptionId.has(id)
   );
   // Search hits carry no labels, so a label narrows by its stored name, as
-  // `label:` does, among the viewer's own inboxes; a label not yet known stops
-  // filtering, as a tag does.
-  const labelNames = [
-    ...new Set(
-      (context.facets.labels ?? []).flatMap((id) => {
-        const name = context.labelNames?.get(id);
-        return name ? [name] : [];
-      })
-    ),
-  ];
+  // `label:` does, among the viewer's own inboxes. A label it cannot name
+  // matches nothing, so it leaves the any-of; when none can be named,
+  // `facetsLeftToClient` drops every hit.
+  const labelNames = searchedLabelNames(context.facets, context.labelNames);
   if (labelNames.length > 0) emailFilters.include_labels = labelNames;
 
   return {

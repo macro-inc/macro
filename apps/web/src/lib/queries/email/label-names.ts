@@ -133,6 +133,14 @@ export function inboxLabelsOf(
  * The labels people made in the viewer's inboxes, in their inboxes' order,
  * from one read of their labels while `enabled`. Never suspends.
  */
+/** Whether the label list has loaded or failed, so a label can be named. */
+export function useEmailLabelsFetched(
+  enabled: Accessor<boolean> = () => true
+): Accessor<boolean> {
+  const catalog = useEmailUserLabelsQuery(enabled);
+  return () => catalog.isFetched;
+}
+
 export function useEmailInboxLabels(
   enabled: Accessor<boolean> = () => true
 ): Accessor<InboxLabelEntry[]> {

@@ -91,7 +91,9 @@ the Soup-backed thread list, and saved email views.
   both, except on Reminders, whose read has no label filter.
 - A search narrows by a selected label's stored name (`include_labels`), as
   `label:` does: hits carry no labels to check on the client, and a same-named
-  label in another of the viewer's inboxes matches too.
+  label in another of the viewer's inboxes matches too. It waits for the label
+  list while labels are ticked; a label it cannot name matches nothing, as its
+  id matches no row of the list.
 - A saveable tab is a built-in view: it starts from its own restrictions
   (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query
