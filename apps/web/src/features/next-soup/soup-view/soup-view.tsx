@@ -8,6 +8,7 @@ import {
   resolveEntityActionViewContext,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
+import type { SearchOperatorBinding } from '@app/features/next-soup/core/search-operators';
 import type {
   GroupHeaderProps,
   SoupRow,
@@ -218,6 +219,8 @@ interface SoupViewProps {
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Query;
   initialSearchText?: string;
+  /** What the opener's tokens in `initialSearchText` stand for, by id. */
+  initialSearchBindings?: SearchOperatorBinding[];
   /**
    * Initial group-by id (same format as `soup.grouping.setActiveGroupId`,
    * e.g. `property:<definition-id>`). Applied only when no persisted state
@@ -269,6 +272,9 @@ export const SoupView = (props: SoupViewProps) => {
     | undefined;
 
   const persistedSearchText = entryState?.['search.text'] as string | undefined;
+  const persistedSearchBindings = entryState?.['search.bindings'] as
+    | SearchOperatorBinding[]
+    | undefined;
 
   const persistedGroupBy = entryState?.['soup.groupBy'] as
     | string
@@ -303,6 +309,11 @@ export const SoupView = (props: SoupViewProps) => {
         initialQuery: persistedFilters ?? props.initialFilters,
         initialClientFilters: persistedPredicates ?? props.initialClientFilters,
         initialSearchText: persistedSearchText ?? props.initialSearchText,
+        // The bindings belong to the text they came with.
+        initialSearchBindings:
+          persistedSearchText !== undefined
+            ? persistedSearchBindings
+            : props.initialSearchBindings,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });

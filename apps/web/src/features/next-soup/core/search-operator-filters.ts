@@ -7,16 +7,19 @@ import {
   type SearchIndexId,
 } from './search-filters';
 import {
+  isPhraseQuote,
   SEARCH_OPERATOR_TYPES,
+  type SearchOperatorBinding,
   type SearchOperatorCallStatus,
   type SearchOperatorGroup,
   type SearchOperatorName,
   type SearchOperatorPriority,
   type SearchOperators,
+  type SearchOperatorTag,
   type SearchOperatorTaskStatus,
   searchOperatorIndexes,
 } from './search-operators';
-import { compileSearchQuery } from './search-query';
+import { compileSearchQuery, TAG_SEARCH_TYPES } from './search-query';
 
 /**
  * Turns the operators read out of a Search query into the filters the
@@ -48,9 +51,6 @@ const CALL_STATUSES: Record<
   attended: 'ATTENDED',
   unattended: 'UNATTENDED',
 };
-
-/** A tag option, by its tag set and its own id. */
-export type SearchOperatorTag = { propertyId: string; optionId: string };
 
 /** What the caller's names reach, from data the app already holds. */
 export type SearchOperatorLookup = {
@@ -94,6 +94,22 @@ function userIds(group: SearchOperatorGroup, userId: string): string[] {
 
 const names = (group: SearchOperatorGroup) =>
   group.values.flatMap((value) => (value.kind === 'name' ? [value.name] : []));
+
+/** The tags a group's bound tokens stand for. */
+const boundTags = (group: SearchOperatorGroup) =>
+  group.values.flatMap((value) => (value.kind === 'tags' ? value.tags : []));
+
+/** The channels a group's bound tokens stand for. */
+const boundChannels = (group: SearchOperatorGroup) =>
+  group.values.flatMap((value) =>
+    value.kind === 'channels' ? value.channelIds : []
+  );
+
+/** The inboxes a group's bound tokens stand for. */
+const boundInboxes = (group: SearchOperatorGroup) =>
+  group.values.flatMap((value) =>
+    value.kind === 'inboxes' ? value.inboxIds : []
+  );
 
 /**
  * The filters `read` sets. Values joined by `OR` widen a filter; repeated
@@ -149,17 +165,23 @@ export function searchOperatorFilters(
     groupsOf('from').map((group) => userIds(group, lookup.userId))
   );
   const channels = narrowed(
-    groupsOf('in').map((group) => unique(names(group).flatMap(lookup.channels)))
+    groupsOf('in').map((group) =>
+      unique([
+        ...names(group).flatMap(lookup.channels),
+        ...boundChannels(group),
+      ])
+    )
   );
   const inboxes = narrowed(
     groupsOf('inbox').map((group) =>
-      unique(names(group).flatMap(lookup.inboxes))
+      unique([...names(group).flatMap(lookup.inboxes), ...boundInboxes(group)])
     )
   );
 
-  const tagGroups = groupsOf('tag').map((group) =>
-    names(group).flatMap(lookup.tags)
-  );
+  const tagGroups = groupsOf('tag').map((group) => [
+    ...names(group).flatMap(lookup.tags),
+    ...boundTags(group),
+  ]);
   if (tagGroups.some((group) => group.length === 0)) matchesNothing = true;
   // The view applies one list of tags, any of them or all, so groups of
   // alternatives that must each hold can't be listed, as the service refuses.
@@ -264,6 +286,9 @@ export function withSearchOperatorQuery(
 }
 
 /** The `type:` value for each of the Search view's types. */
+/** `value` as an operator's value: quoted when it holds whitespace. */
+const asValue = (value: string) => (/\s/.test(value) ? `"${value}"` : value);
+
 const INDEX_TYPES: Record<SearchIndexId, string> = {
   'document-or-file': 'doc',
   task: 'task',
@@ -275,9 +300,38 @@ const INDEX_TYPES: Record<SearchIndexId, string> = {
   calendar: 'calendar',
 };
 
-/** The `tag:` operator that asks for the tag named `label`. */
-export const searchTagOperator = (label: string) =>
-  `tag:${/\s/.test(label) ? `"${label}"` : label}`;
+/**
+ * A name as the value of a token the field shows: without quotes, which no
+ * value can hold, and quoted when it holds whitespace.
+ */
+const shownValue = (name: string) =>
+  asValue([...name].filter((char) => !isPhraseQuote(char)).join(''));
+
+/** Operator text an opener writes, with the ids its bound tokens stand for. */
+export type SearchOperatorText = {
+  text: string;
+  bindings: SearchOperatorBinding[];
+};
+
+/**
+ * The `tag:` token Search opens on for `tag`, bound to it by id, so a name
+ * the field can't search by (an emoji-only tag, a teammate's tag) still
+ * reaches it.
+ */
+export function searchTagOperator(
+  tag: SearchOperatorTag & { label: string }
+): SearchOperatorText {
+  const token = `tag:${shownValue(tag.label)}`;
+  return {
+    text: token,
+    bindings: [
+      {
+        token,
+        tags: [{ propertyId: tag.propertyId, optionId: tag.optionId }],
+      },
+    ],
+  };
+}
 
 /** The `type:` operator that narrows a search to `index`. */
 export const searchTypeOperator = (index: SearchIndexId) =>
@@ -292,9 +346,6 @@ export type SearchFilterNames = {
   inbox: (linkId: string) => string | undefined;
 };
 
-/** `value` as an operator's value: quoted when it holds whitespace. */
-const asValue = (value: string) => (/\s/.test(value) ? `"${value}"` : value);
-
 const invert = (map: Record<string, string>) =>
   new Map(Object.entries(map).map(([name, id]) => [id, name]));
 const STATUS_NAMES = invert(TASK_STATUS_IDS);
@@ -302,74 +353,89 @@ const PRIORITY_NAMES = invert(PRIORITY_IDS);
 const CALL_STATUS_NAMES = invert(CALL_STATUSES);
 
 /** One operator per value, joined by `OR` so any of them matches. */
-const anyOf = (name: string, values: (string | undefined)[]) => {
-  const written = values.filter((value): value is string => Boolean(value));
-  return written.length
-    ? [written.map((value) => `${name}:${value}`).join(' OR ')]
-    : [];
-};
+/** Whole tokens, any of which may hold. */
+const joined = (tokens: string[]) =>
+  tokens.length ? [tokens.join(' OR ')] : [];
+
+const anyOf = (name: string, values: (string | undefined)[]) =>
+  joined(
+    values
+      .filter((value): value is string => Boolean(value))
+      .map((value) => `${name}:${value}`)
+  );
 
 /**
  * The operators that ask for what `state` filters, to write into the Search
- * field in place of picked filters, so the field shows the whole search. An
- * id with no name to write is written as it is: it names nothing, so the
- * search narrows rather than dropping the condition. A channel `in:#` can't
- * name (a DM) is left out instead: the search then reaches every channel,
- * that one among them, rather than finding nothing.
+ * field in place of picked filters, so the field shows the whole search. As
+ * when the filters are compiled, only the active type's facets are written.
+ * Tags, channels and inboxes are written by the name the person sees and
+ * bound to their ids, so one whose name the field can't search by (an
+ * emoji-only tag, a DM) still reaches what was picked; an id with no name
+ * is written as it is.
  */
 export function searchFiltersOperatorText(
   state: SearchFiltersState,
   names: SearchFilterNames
-): string {
+): SearchOperatorText {
   const person = (id: string) => {
     if (names.userId && id.toLowerCase() === names.userId.toLowerCase())
       return 'me';
     return id.startsWith('macro|') ? id.slice('macro|'.length) : id;
   };
+  const bindings: SearchOperatorBinding[] = [];
+  const boundTag = (tag: SearchFiltersState['tags'][number]) => {
+    const token = `tag:${shownValue(names.tag(tag.value) ?? tag.value)}`;
+    bindings.push({
+      token,
+      tags: [{ propertyId: tag.propertyId, optionId: tag.value }],
+    });
+    return token;
+  };
+  const boundChannel = (id: string) => {
+    const token = `in:#${shownValue(names.channel(id) ?? id)}`;
+    bindings.push({ token, channelIds: [id] });
+    return token;
+  };
+  const boundInbox = (id: string) => {
+    const token = `inbox:${names.inbox(id) ?? id}`;
+    bindings.push({ token, inboxIds: [id] });
+    return token;
+  };
+  const tasks = state.type === 'task';
+  const email = state.type === 'email';
   const scope = state.type === 'calls' ? state.calls : state.channels;
   const parts = [
     ...(state.type === 'all' ? [] : [searchTypeOperator(state.type)]),
-    ...anyOf(
-      'status',
-      state.task.status.map((id) => STATUS_NAMES.get(id))
-    ),
-    ...anyOf(
-      'priority',
-      state.task.priority.map((id) => PRIORITY_NAMES.get(id))
-    ),
-    ...anyOf('assignee', state.task.assignees.map(person)),
-    ...anyOf('author', state.task.createdBy.map(person)),
+    ...(tasks
+      ? [
+          ...anyOf(
+            'status',
+            state.task.status.map((id) => STATUS_NAMES.get(id))
+          ),
+          ...anyOf(
+            'priority',
+            state.task.priority.map((id) => PRIORITY_NAMES.get(id))
+          ),
+          ...anyOf('assignee', state.task.assignees.map(person)),
+          ...anyOf('author', state.task.createdBy.map(person)),
+        ]
+      : []),
     ...(state.type === 'calls' && state.calls.status
       ? [`status:${CALL_STATUS_NAMES.get(state.calls.status)}`]
       : []),
     ...(state.type === 'channels' || state.type === 'calls'
       ? [
-          ...anyOf(
-            'in',
-            scope.in.map((id) => {
-              const name = names.channel(id);
-              return name === undefined ? undefined : `#${asValue(name)}`;
-            })
-          ),
+          ...joined(scope.in.map(boundChannel)),
           ...anyOf('from', scope.from.map(person)),
         ]
       : []),
-    ...anyOf(
-      'inbox',
-      (state.email.inboxIds ?? []).map((id) => names.inbox(id) ?? id)
-    ),
+    ...(email ? joined((state.email.inboxIds ?? []).map(boundInbox)) : []),
     // Importance is Mail's Signal and Noise.
-    ...(state.type === 'email' && state.email.importance !== undefined
+    ...(email && state.email.importance !== undefined
       ? [state.email.importance ? 'in:signal' : 'in:noise']
       : []),
   ];
-  const tags = state.tags.map((tag) =>
-    asValue(names.tag(tag.value) ?? tag.value)
-  );
-  if (state.tagMode === 'all') {
-    for (const tag of tags) if (tag) parts.push(`tag:${tag}`);
-  } else {
-    parts.push(...anyOf('tag', tags));
-  }
-  return parts.join(' ');
+  const tags = TAG_SEARCH_TYPES.has(state.type) ? state.tags.map(boundTag) : [];
+  parts.push(...(state.tagMode === 'all' ? tags : joined(tags)));
+  return { text: parts.join(' '), bindings };
 }

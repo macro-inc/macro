@@ -7,7 +7,11 @@ import {
   searchOperatorQuery,
   withSearchOperatorQuery,
 } from './search-operator-filters';
-import { readSearchOperators, splitSearchTerms } from './search-operators';
+import {
+  readSearchOperators,
+  type SearchOperatorBinding,
+  splitSearchTerms,
+} from './search-operators';
 
 const LOOKUP: SearchOperatorLookup = {
   userId: 'macro|Me@Example.com',
@@ -24,8 +28,11 @@ const LOOKUP: SearchOperatorLookup = {
     name.toLowerCase() === 'launch' ? ['channel-launch'] : [],
 };
 
-const compile = (query: string) =>
-  searchOperatorFilters(readSearchOperators(splitSearchTerms(query)), LOOKUP);
+const compile = (query: string, bindings: SearchOperatorBinding[] = []) =>
+  searchOperatorFilters(
+    readSearchOperators(splitSearchTerms(query), true, bindings),
+    LOOKUP
+  );
 
 describe('searchOperatorFilters', () => {
   it('sets the task facets and narrows to tasks', () => {
@@ -86,6 +93,16 @@ describe('searchOperatorFilters', () => {
       'macro|ana@example.com',
     ]);
 
+    const bound = compile('tag:🔥 OR tag:legal in:#"Ana Lima"', [
+      { token: 'tag:🔥', tags: [{ propertyId: 'tags-2', optionId: 'fire-2' }] },
+      { token: 'in:#"Ana Lima"', channelIds: ['dm-ana'] },
+    ]);
+    expect(bound.state.tags.map((tag) => tag.value)).toEqual([
+      'legal-1',
+      'fire-2',
+    ]);
+    expect(bound.state.channels.in).toEqual(['dm-ana']);
+
     const calendar = searchOperatorQuery(compile('type:calendar tag:finance'));
     expect(calendar.include?.tagFilters).toEqual([
       { propertyId: 'tags-1', type: 'select', value: 'finance-1' },
@@ -125,7 +142,7 @@ describe('searchFiltersOperatorText', () => {
   };
 
   it('writes what picked filters ask for as operators', () => {
-    const text = searchFiltersOperatorText(
+    const { text, bindings } = searchFiltersOperatorText(
       {
         ...compile('').state,
         type: 'task',
@@ -147,6 +164,16 @@ describe('searchFiltersOperatorText', () => {
     expect(text).toBe(
       'type:task status:in_progress assignee:me OR assignee:bo@example.com tag:Finance OR tag:"Team offsite"'
     );
+    expect(bindings).toEqual([
+      {
+        token: 'tag:Finance',
+        tags: [{ propertyId: 'tags-1', optionId: 'finance-1' }],
+      },
+      {
+        token: 'tag:"Team offsite"',
+        tags: [{ propertyId: 'tags-1', optionId: 'offsite-1' }],
+      },
+    ]);
   });
 
   it('reads back as the same filters', () => {
@@ -155,20 +182,17 @@ describe('searchFiltersOperatorText', () => {
       type: 'channels' as const,
       channels: { in: ['channel-1'], from: ['macro|ana@example.com'] },
     };
-    const text = searchFiltersOperatorText(state, NAMES);
+    const { text, bindings } = searchFiltersOperatorText(state, NAMES);
     expect(text).toBe('type:channel in:#"Q3 launch" from:ana@example.com');
     const read = searchOperatorFilters(
-      readSearchOperators(splitSearchTerms(text)),
-      {
-        ...LOOKUP,
-        channels: (name) => (name === 'Q3 launch' ? ['channel-1'] : []),
-      }
+      readSearchOperators(splitSearchTerms(text), true, bindings),
+      LOOKUP
     );
     expect(read.state.channels).toEqual(state.channels);
   });
 
-  it('leaves out a channel it cannot name', () => {
-    const text = searchFiltersOperatorText(
+  it('writes a channel, tag or inbox it has no name for by id, still bound to it', () => {
+    const channel = searchFiltersOperatorText(
       {
         ...compile('').state,
         type: 'channels',
@@ -176,6 +200,58 @@ describe('searchFiltersOperatorText', () => {
       },
       NAMES
     );
-    expect(text).toBe('type:channel');
+    expect(channel).toEqual({
+      text: 'type:channel in:#dm-1',
+      bindings: [{ token: 'in:#dm-1', channelIds: ['dm-1'] }],
+    });
+
+    const email = searchFiltersOperatorText(
+      {
+        ...compile('').state,
+        type: 'email',
+        email: { inboxIds: ['link-2'] },
+        tags: [{ propertyId: 'tags-2', type: 'select', value: 'say-"hi"' }],
+      },
+      { ...NAMES, tag: () => 'say "hi"' }
+    );
+    expect(email).toEqual({
+      text: 'type:email inbox:link-2 tag:"say hi"',
+      bindings: [
+        { token: 'inbox:link-2', inboxIds: ['link-2'] },
+        {
+          token: 'tag:"say hi"',
+          tags: [{ propertyId: 'tags-2', optionId: 'say-"hi"' }],
+        },
+      ],
+    });
+  });
+
+  it('writes only the active type’s facets, as they are compiled', () => {
+    const { text } = searchFiltersOperatorText(
+      {
+        ...compile('').state,
+        type: 'email',
+        task: {
+          status: [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS],
+          priority: [],
+          assignees: ['macro|bo@example.com'],
+          createdBy: [],
+        },
+        channels: { in: ['channel-1'], from: [] },
+      },
+      NAMES
+    );
+    expect(text).toBe('type:email');
+
+    const channels = searchFiltersOperatorText(
+      {
+        ...compile('').state,
+        type: 'channels',
+        email: { inboxIds: ['link-1'] },
+        tags: [{ propertyId: 'tags-1', type: 'select', value: 'finance-1' }],
+      },
+      NAMES
+    );
+    expect(channels.text).toBe('type:channel');
   });
 });

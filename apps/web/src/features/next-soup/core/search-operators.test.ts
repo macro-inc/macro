@@ -127,6 +127,42 @@ describe('searchQueryParts', () => {
     );
   });
 
+  it('sends bound tokens with the request by id, not in the service’s text', () => {
+    const bindings = [
+      { token: 'tag:🔥', tags: [{ propertyId: 'tags-1', optionId: 'fire-1' }] },
+      { token: 'in:#"Ana Lima"', channelIds: ['dm-ana'] },
+    ];
+    const parts = searchQueryParts(
+      'type:channel in:#"Ana Lima" budget',
+      bindings
+    );
+    expect(parts.serviceText).toBe('type:channel budget');
+    expect(parts.bound.groups.map((group) => group.terms)).toEqual([
+      ['in:#Ana Lima'],
+    ]);
+
+    const alone = searchQueryParts('tag:🔥', bindings);
+    expect(alone.serviceText).toBe('');
+    expect(alone.read.operators).toBe(1);
+
+    // Edited, a token is read as typed.
+    expect(searchQueryParts('in:#"Ana Lim" budget', bindings).serviceText).toBe(
+      'in:#"Ana Lim" budget'
+    );
+  });
+
+  it('reads Mail’s operators as words where email isn’t searched', () => {
+    expect(searchQueryParts('type:task newer_than:2 roadmap').serviceText).toBe(
+      'type:task newer_than:2 roadmap'
+    );
+    expect(searchQueryParts('newer_than:2 roadmap').serviceText).toBe(
+      'roadmap'
+    );
+    expect(searchQueryParts('type:task subject:roadmap').nameText).toBe(
+      'subject:roadmap'
+    );
+  });
+
   it('keeps email operators for the service, which reads them alone', () => {
     expect(searchQueryParts('is:unread').serviceText).toBe('is:unread');
   });
@@ -173,6 +209,25 @@ describe('searchOperatorSpans', () => {
     expect(drawn('tag:finance OR tag:legal')).toEqual([
       'tag:finance',
       'tag:legal',
+    ]);
+  });
+
+  it('draws a bound token as an operator', () => {
+    const bindings = [
+      { token: 'tag:🔥', tags: [{ propertyId: 'tags-1', optionId: 'fire-1' }] },
+    ];
+    expect(
+      searchOperatorSpans('launch tag:🔥', bindings).map(({ start, end }) =>
+        'launch tag:🔥'.slice(start, end)
+      )
+    ).toEqual(['tag:🔥']);
+    expect(drawn('launch tag:🔥')).toEqual([]);
+  });
+
+  it('draws an operator the rest of the query lets it be', () => {
+    expect(drawn('type:channel from:me roadmap')).toEqual([
+      'type:channel',
+      'from:me',
     ]);
   });
 

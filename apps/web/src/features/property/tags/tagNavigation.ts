@@ -10,14 +10,22 @@ export type TagNavigationTarget = {
   label: string;
 };
 
-/** Search, opened on the items carrying `tag`, its query naming the tag. */
+/**
+ * Search, opened on the items carrying `tag`: its query names the tag, bound
+ * to the tag's id so any name reaches it.
+ */
 export function buildTaggedItemsSplitContent(
   tag: TagNavigationTarget
 ): SplitContent {
+  const { text, bindings } = searchTagOperator({
+    label: tag.label,
+    propertyId: tag.propertyDefinitionId,
+    optionId: tag.optionId,
+  });
   return {
     type: 'component',
     id: 'search',
-    state: { 'search.text': searchTagOperator(tag.label) },
+    state: { 'search.text': text, 'search.bindings': bindings },
   };
 }
 

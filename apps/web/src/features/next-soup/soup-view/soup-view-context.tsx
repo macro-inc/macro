@@ -11,7 +11,10 @@ import {
   searchTagOperator,
   withSearchOperatorQuery,
 } from '@app/features/next-soup/core/search-operator-filters';
-import { searchQueryParts } from '@app/features/next-soup/core/search-operators';
+import {
+  type SearchOperatorBinding,
+  searchQueryParts,
+} from '@app/features/next-soup/core/search-operators';
 import { SEARCH_INDEX_SEEDS } from '@app/features/next-soup/core/search-query';
 import {
   createSoupState,
@@ -162,6 +165,8 @@ type SoupViewInitializeOptions = {
   initialQuery?: Query;
   initialClientFilters?: SetPredicatesInput<string>;
   initialSearchText?: string;
+  /** What the opener's tokens in `initialSearchText` stand for, by id. */
+  initialSearchBindings?: SearchOperatorBinding[];
   /** Explicit navigation state (for example a shared view) wins over storage. */
   preferInitialFilters?: boolean;
   disableLocalSearch?: boolean;
@@ -189,6 +194,9 @@ export interface SoupViewContextValues {
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
+  /** What openers' tokens in the Search query stand for, by id. */
+  searchBindings: Accessor<SearchOperatorBinding[]>;
+  setSearchBindings: (bindings: SearchOperatorBinding[]) => void;
   searchPaused: Accessor<boolean>;
   setSearchPaused: Setter<boolean>;
   featuredIds: Accessor<string[]>;
@@ -520,16 +528,24 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const tagFilter = createTagFilter(queryFilters);
   const filterByTag = (optionId: string) => {
-    // The Search view's query holds its filters as typed operators.
-    const label = tagFilter.optionsById().get(optionId)?.label;
-    if (activeListView() === 'search' && label) {
-      const typed = searchText().trim();
-      setSearchText(
-        [typed, searchTagOperator(label)].filter(Boolean).join(' ')
-      );
+    if (activeListView() !== 'search') {
+      tagFilter.onChange([optionId]);
       return;
     }
-    tagFilter.onChange([optionId]);
+    // The Search view's query holds its filters as typed operators. A tag
+    // outside the person's tag sets can't be filtered by, as elsewhere.
+    const label = tagFilter.optionsById().get(optionId)?.label;
+    const propertyId = tagFilter.defByOption().get(optionId);
+    if (!label || !propertyId) return;
+    const { text, bindings } = searchTagOperator({
+      label,
+      propertyId,
+      optionId,
+    });
+    batch(() => {
+      setSearchBindings([...searchBindings(), ...bindings]);
+      setSearchText([searchText().trim(), text].filter(Boolean).join(' '));
+    });
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
@@ -835,8 +851,14 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   // The Search view's query holds its filters as typed operators. The search
   // service reads them beside a word; a query of operators alone, which it
   // refuses, lists through this view's feed with the filters they set.
+  // An opener's tokens the field can't search by name stand for ids.
+  const [searchBindings, setSearchBindings] = useEntryState<
+    SearchOperatorBinding[]
+  >('search.bindings', { default: [] });
   const searchParts = createMemo(() =>
-    activeListView() === 'search' ? searchQueryParts(searchText()) : undefined
+    activeListView() === 'search'
+      ? searchQueryParts(searchText(), searchBindings())
+      : undefined
   );
   const [operatorLookup, setOperatorLookup] = createSignal<
     Accessor<SearchOperatorLookup> | undefined
@@ -852,6 +874,14 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   });
   const listsOperators = () =>
     searchParts()?.serviceText === '' && operatorFilters() !== undefined;
+  // Bound tokens are left out of the service's text and go with the request
+  // as filters by id, which it joins with the operators it reads.
+  const boundFilters = createMemo(() => {
+    const parts = searchParts();
+    const lookup = operatorLookup();
+    if (!parts || parts.bound.groups.length === 0 || !lookup) return undefined;
+    return searchOperatorFilters(parts.bound, lookup());
+  });
 
   const soupBody = createMemo(() => {
     const operators = listsOperators() ? operatorFilters() : undefined;
@@ -870,7 +900,17 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const search = createSearchState({
     surface: () => activeListView() ?? 'soup',
     soup,
-    filters: () => applyViewFilters(queryFilters.state),
+    filters: () => {
+      const bound = boundFilters();
+      return applyViewFilters(
+        bound
+          ? withSearchOperatorQuery(
+              queryFilters.state,
+              searchOperatorQuery(bound)
+            )
+          : queryFilters.state
+      );
+    },
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
@@ -947,6 +987,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           preset ? (preset.clientFilters ?? {}) : (filters.predicates ?? {})
         );
         setSearchText(options.initialSearchText ?? '');
+        setSearchBindings(options.initialSearchBindings ?? []);
         setEnabled(true);
       });
     } finally {
@@ -1730,6 +1771,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     rows: soup.rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
+    searchBindings,
+    setSearchBindings,
     searchPaused: sourceSearchPaused,
     setSearchPaused,
     featuredIds,

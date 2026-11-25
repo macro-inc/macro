@@ -1,8 +1,10 @@
 import {
+  type SearchOperatorCompletion,
   searchOperatorBeingTyped,
   searchOperatorCompletions,
   searchTokenAtEnd,
 } from '@app/features/next-soup/core/search-operator-completions';
+import type { SearchOperatorBinding } from '@app/features/next-soup/core/search-operators';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { registerSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -19,6 +21,7 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $isTextNode,
   $selectAll,
   COMMAND_PRIORITY_HIGH,
   KEY_ARROW_DOWN_COMMAND,
@@ -71,6 +74,8 @@ export function SoupSearchbar(props: SoupSearchbarProps) {
   const {
     searchText,
     setSearchText,
+    searchBindings,
+    setSearchBindings,
     setSearchPaused,
     queryFilters,
     provideOperatorLookup,
@@ -105,8 +110,9 @@ export function SoupSearchbar(props: SoupSearchbarProps) {
     if (content.type !== 'component' || content.id !== 'search') return;
     onCleanup(
       registerSearchSplit(panel.handle.id, {
-        applyOverrides: ({ query, filters, clientFilters }) => {
+        applyOverrides: ({ query, bindings, filters, clientFilters }) => {
           batch(() => {
+            setSearchBindings(bindings ?? []);
             controls?.setMarkdown(query);
             controls?.getLexical().update(() => $getRoot().selectEnd());
             controls?.blur();
@@ -128,6 +134,7 @@ export function SoupSearchbar(props: SoupSearchbarProps) {
     <SearchbarInput
       {...props}
       operators
+      bindings={searchBindings()}
       value={searchText()}
       initialValue={initialValue}
       onChange={setSearchText}
@@ -149,6 +156,8 @@ export function SearchbarInput(
     onConnect?: (controls: EditorControls) => void;
     shortcut?: string;
     label?: string;
+    /** What openers' tokens in the field stand for, drawn as operators. */
+    bindings?: readonly SearchOperatorBinding[];
   }
 ) {
   // Keep rich editor markup separate from the plain query acknowledged by the host.
@@ -214,8 +223,9 @@ export function SearchbarInput(
     .onChange(publish)
     .onEnter(() => {
       if (editor.controls.isInlineMenuOpen()) return false;
-      if (activeIndex() >= 0) {
-        pickOperator(activeIndex());
+      const row = operatorRows()[activeIndex()];
+      if (row) {
+        pickOperator(row);
         return true;
       }
       editor.controls.blur();
@@ -224,6 +234,7 @@ export function SearchbarInput(
     .onEscape(() => {
       if (operatorRows().length > 0) {
         setDismissedFor(fieldText());
+        setActiveRow({ text: '', index: -1 });
         return true;
       }
       editor.controls.blur();
@@ -231,7 +242,7 @@ export function SearchbarInput(
       return true;
     })
     .onTab(() => false)
-    .use(searchOperatorHighlights)
+    .use(searchOperatorHighlights(() => props.bindings ?? []))
     .use((lex) =>
       lex.registerCommand(
         KEY_ARROW_DOWN_COMMAND,
@@ -259,16 +270,23 @@ export function SearchbarInput(
         COMMAND_PRIORITY_HIGH
       )
     );
-  const pickOperator = (index: number) => {
-    const row = operatorRows()[index];
-    if (!row) return;
+  const pickOperator = (row: SearchOperatorCompletion) => {
     const typed = searchTokenAtEnd(fieldText()) ?? '';
-    const lexical = editor.controls.getLexical();
-    lexical.update(() => {
+    editor.controls.getLexical().update(() => {
       $getRoot().selectEnd();
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) return;
-      for (const _ of typed) selection.deleteCharacter(true);
+      // The typed token ends the field's last text, so it is replaced as one
+      // range there: deleting it a character at a time miscounts a cluster
+      // such as an emoji with its skin tone.
+      const node = selection.anchor.getNode();
+      const end = selection.anchor.offset;
+      if (
+        $isTextNode(node) &&
+        node.getTextContent().slice(0, end).endsWith(typed)
+      ) {
+        selection.setTextNodeRange(node, end - typed.length, node, end);
+      }
       selection.insertText(row.insert);
     });
   };
@@ -347,7 +365,10 @@ export function SearchbarInput(
           rows={operatorRows()}
           active={activeIndex()}
           listId={listId}
-          onPick={pickOperator}
+          onPick={(index) => {
+            const row = operatorRows()[index];
+            if (row) pickOperator(row);
+          }}
         />
       </Show>
     </div>

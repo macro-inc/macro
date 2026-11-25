@@ -390,11 +390,14 @@ describe('destination adapters', () => {
         id: 'search',
         params: expect.objectContaining({
           initialQuery: 'type:channel in:#engineering budget',
+          initialBindings: [
+            { token: 'in:#engineering', channelIds: ['team-channel'] },
+          ],
         }),
       }),
     });
   });
-  it('opens global search with the sender, leaving out a DM in:# cannot name', async () => {
+  it('opens global search on a DM by its name, bound to its id', async () => {
     const searchFilters = JSON.stringify({
       type: 'channels',
       channels: { in: ['julia-dm'], from: ['John'] },
@@ -407,7 +410,14 @@ describe('destination adapters', () => {
       next: expect.objectContaining({
         id: 'search',
         params: expect.objectContaining({
-          initialQuery: 'type:channel from:john@example.com budget',
+          initialQuery:
+            'type:channel in:#"Julia direct message" from:john@example.com budget',
+          initialBindings: [
+            {
+              token: 'in:#"Julia direct message"',
+              channelIds: ['julia-dm'],
+            },
+          ],
         }),
       }),
     });

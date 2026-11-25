@@ -1,4 +1,7 @@
-import { searchOperatorSpans } from '@app/features/next-soup/core/search-operators';
+import {
+  type SearchOperatorBinding,
+  searchOperatorSpans,
+} from '@app/features/next-soup/core/search-operators';
 import type { LexicalEditor } from 'lexical';
 
 /**
@@ -57,9 +60,12 @@ function position(segments: Segment[], offset: number, atEnd: boolean) {
 }
 
 /** The ranges of the typed operators in a field's text. */
-export function operatorRanges(root: HTMLElement): Range[] {
+export function operatorRanges(
+  root: HTMLElement,
+  bindings: readonly SearchOperatorBinding[] = []
+): Range[] {
   const { text, segments } = fieldText(root);
-  return searchOperatorSpans(text).flatMap(({ start, end }) => {
+  return searchOperatorSpans(text, bindings).flatMap(({ start, end }) => {
     const from = position(segments, start, false);
     const to = position(segments, end, true);
     if (!from || !to) return [];
@@ -70,20 +76,25 @@ export function operatorRanges(root: HTMLElement): Range[] {
   });
 }
 
-/** Draws the typed operators in a Search field's editor, in the accent colour. */
-export function searchOperatorHighlights(editor: LexicalEditor): () => void {
-  const draw = () => {
-    const root = editor.getRootElement();
-    fieldRanges.set(editor, root ? operatorRanges(root) : []);
-    redraw();
+/**
+ * Draws the typed operators in a Search field's editor, in the accent colour,
+ * with the tokens `bindings` holds among them.
+ */
+export const searchOperatorHighlights =
+  (bindings: () => readonly SearchOperatorBinding[]) =>
+  (editor: LexicalEditor): (() => void) => {
+    const draw = () => {
+      const root = editor.getRootElement();
+      fieldRanges.set(editor, root ? operatorRanges(root, bindings()) : []);
+      redraw();
+    };
+    const unregisterUpdate = editor.registerUpdateListener(draw);
+    const unregisterRoot = editor.registerRootListener(draw);
+    draw();
+    return () => {
+      unregisterUpdate();
+      unregisterRoot();
+      fieldRanges.delete(editor);
+      redraw();
+    };
   };
-  const unregisterUpdate = editor.registerUpdateListener(draw);
-  const unregisterRoot = editor.registerRootListener(draw);
-  draw();
-  return () => {
-    unregisterUpdate();
-    unregisterRoot();
-    fieldRanges.delete(editor);
-    redraw();
-  };
-}

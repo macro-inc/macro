@@ -365,23 +365,21 @@ export function createInputActions(
           email.accounts.inboxes()
         );
         // The draft's filters become operators in the Search field, which
-        // shows the whole search.
+        // shows the whole search; its tags and channels stay bound to the
+        // ids picked, so a DM or an emoji-only tag still narrows it.
         const operators = searchFiltersOperatorText(state, {
           userId,
           tag: (id) => tagOptions.optionsById().get(id)?.label,
-          // `in:#` reaches named channels, not DMs.
           channel: (id) =>
-            searchableChannels
-              .items()
-              .find((channel) => channel.id === id && channel.bucket !== 'dm')
-              ?.data.name,
+            searchChannels().find((channel) => channel.id === id)?.label,
           inbox: (id) =>
             email.accounts.inboxes().find((inbox) => inbox.id === id)
               ?.email_address,
         });
         const preset = getViewPreset('search');
         const search = {
-          query: [operators, f.query.trim()].filter(Boolean).join(' '),
+          query: [operators.text, f.query.trim()].filter(Boolean).join(' '),
+          bindings: operators.bindings,
           filters: preset?.filters ?? {},
           clientFilters: preset?.clientFilters ?? {},
         };

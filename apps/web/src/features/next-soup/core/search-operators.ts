@@ -77,6 +77,20 @@ export type SearchOperatorName = (typeof SEARCH_OPERATOR_NAMES)[number];
 /** `me`, or the user an address names. */
 export type SearchOperatorPerson = { me: true } | { me: false; userId: string };
 
+/** A tag, by the ids of its option and of the tag set holding it. */
+export type SearchOperatorTag = { propertyId: string; optionId: string };
+
+/**
+ * What an opener wrote `token` into the field for, by id. It applies while
+ * the token stays as written, so a tag or channel whose name the person
+ * can't type as an operator that reaches it (an emoji-only tag, a
+ * teammate's tag, a DM) still searches as the opener meant.
+ */
+export type SearchOperatorBinding =
+  | { token: string; tags: SearchOperatorTag[] }
+  | { token: string; channelIds: string[] }
+  | { token: string; inboxIds: string[] };
+
 export type SearchOperatorValue =
   | { kind: 'type'; type: SearchOperatorType }
   | { kind: 'task-status'; status: SearchOperatorTaskStatus }
@@ -84,7 +98,45 @@ export type SearchOperatorValue =
   | { kind: 'priority'; priority: SearchOperatorPriority }
   | { kind: 'person'; person: SearchOperatorPerson }
   /** A tag name, an inbox address or a channel name. */
-  | { kind: 'name'; name: string };
+  | { kind: 'name'; name: string }
+  /** What a bound token stands for. */
+  | { kind: 'tags'; tags: SearchOperatorTag[] }
+  | { kind: 'channels'; channelIds: string[] }
+  | { kind: 'inboxes'; inboxIds: string[] };
+
+/** Whether `group` holds a bound token, which applies by id. */
+export const isBoundSearchOperatorGroup = (group: SearchOperatorGroup) =>
+  group.values.some(
+    (value) =>
+      value.kind === 'tags' ||
+      value.kind === 'channels' ||
+      value.kind === 'inboxes'
+  );
+
+/** The term each binding's token reads as, as the service splits it. */
+const boundTerms = (bindings: readonly SearchOperatorBinding[]) =>
+  new Map(
+    bindings.map((binding) => [
+      splitSearchTerms(binding.token)[0] ?? binding.token,
+      binding,
+    ])
+  );
+
+const boundOperator = (
+  binding: SearchOperatorBinding
+): { name: SearchOperatorName; value: SearchOperatorValue } => {
+  if ('tags' in binding)
+    return { name: 'tag', value: { kind: 'tags', tags: binding.tags } };
+  if ('channelIds' in binding)
+    return {
+      name: 'in',
+      value: { kind: 'channels', channelIds: binding.channelIds },
+    };
+  return {
+    name: 'inbox',
+    value: { kind: 'inboxes', inboxIds: binding.inboxIds },
+  };
+};
 
 /**
  * One operator, or several of the same name joined by `OR`, with the terms it
@@ -139,14 +191,6 @@ const PHRASE_QUOTES = /["“”„]/;
 
 /** Whether `char` opens or closes a phrase, as the service reads it. */
 export const isPhraseQuote = (char: string) => PHRASE_QUOTES.test(char);
-
-/**
- * The terms the service searches with: beside a term with a letter or digit,
- * one without either (`-`, `&`, an emoji) is dropped before operators are
- * read, so it doesn't count as the word operators need.
- */
-const withoutWordlessTerms = (terms: string[]) =>
-  terms.some(hasWord) ? terms.filter(hasWord) : terms;
 
 /**
  * The query's terms as the service splits them: by whitespace outside
@@ -245,10 +289,15 @@ const isOperatorEntry = (entry: Entry | undefined) =>
  * when `OR` stands between two of the same name, and dropping an `OR` beside
  * an operator that joins nothing.
  */
-function entries(terms: readonly string[]): Entry[] {
+function entries(
+  terms: readonly string[],
+  bindings: readonly SearchOperatorBinding[]
+): Entry[] {
+  const bound = boundTerms(bindings);
   const joined: Entry[] = [];
   for (const term of terms) {
-    const read = operator(term);
+    const binding = bound.get(term);
+    const read = binding ? boundOperator(binding) : operator(term);
     if (!read) {
       joined.push({ word: term });
       continue;
@@ -342,9 +391,10 @@ export type SearchOperators = {
  */
 export function readSearchOperators(
   terms: readonly string[],
-  reachesChannels = true
+  reachesChannels = true,
+  bindings: readonly SearchOperatorBinding[] = []
 ): SearchOperators {
-  const read = entries(terms);
+  const read = entries(terms, bindings);
   const typeKinds = read.flatMap((entry) =>
     'group' in entry && entry.group.name === 'type'
       ? [applies(entry.group)]
@@ -447,30 +497,12 @@ export function isUnfinishedSearchOperator(term: string): boolean {
   return name !== 'tag' && !/\s/.test(value);
 }
 
-/** The query's tokens as typed, quotes kept, split by whitespace outside them. */
-function typedTokens(text: string): string[] {
-  const tokens: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (const char of text) {
-    if (PHRASE_QUOTES.test(char)) inQuotes = !inQuotes;
-    if (/\s/.test(char) && !inQuotes) {
-      if (current) tokens.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  if (current) tokens.push(current);
-  return tokens;
-}
-
 /** What a Search query asks for. */
 export type SearchQueryParts = {
   /**
    * The text the search service is sent: the query without operators still
    * being typed, or empty when only operators are left, which the view lists
-   * itself.
+   * itself. Bound tokens are left out; they go with the request by id.
    */
   serviceText: string;
   /**
@@ -479,29 +511,150 @@ export type SearchQueryParts = {
    */
   nameText: string;
   read: SearchOperators;
+  /** The operators holding a bound token, which the request carries by id. */
+  bound: SearchOperators;
 };
 
-/** Reads a Search query, as typed in its field. */
-export function searchQueryParts(text: string): SearchQueryParts {
-  const searched = typedTokens(text)
-    .filter((token) => {
-      const term = splitSearchTerms(token)[0] ?? token;
-      return (
-        !isUnfinishedSearchOperator(term) &&
-        !isUnfinishedEmailSearchOperator(token)
-      );
-    })
-    .join(' ');
-  const read = readSearchOperators(
-    withoutWordlessTerms(splitSearchTerms(searched))
+/** A token where it sits in the query, with the term it reads as. */
+type QueryToken = { token: string; term: string; start: number; end: number };
+
+/**
+ * The query's whole tokens, quotes kept, split by whitespace outside them:
+ * the Search view's operators still being typed left out, bound tokens
+ * always kept.
+ */
+function finishedTokens(
+  text: string,
+  bindings: readonly SearchOperatorBinding[]
+): QueryToken[] {
+  const bound = boundTerms(bindings);
+  const tokens: QueryToken[] = [];
+  let start = -1;
+  let inQuotes = false;
+  const close = (end: number) => {
+    if (start < 0) return;
+    const token = text.slice(start, end);
+    const term = splitSearchTerms(token)[0];
+    if (
+      term !== undefined &&
+      (bound.has(term) || !isUnfinishedSearchOperator(term))
+    ) {
+      tokens.push({ token, term, start, end });
+    }
+    start = -1;
+  };
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index] ?? '';
+    if (PHRASE_QUOTES.test(char)) inQuotes = !inQuotes;
+    if (/\s/.test(char) && !inQuotes) close(index);
+    else if (start < 0) start = index;
+  }
+  close(text.length);
+  return tokens;
+}
+
+/**
+ * The tokens the search reads: beside a term with a letter or digit, one
+ * without either (`-`, `&`, an emoji) is dropped before operators are read,
+ * as the service drops it, so it doesn't count as the word operators need.
+ */
+const readTokens = (tokens: QueryToken[]) =>
+  tokens.some(({ term }) => hasWord(term))
+    ? tokens.filter(({ term }) => hasWord(term))
+    : tokens;
+
+/**
+ * Which of `terms` each of `groups` was read from: a group's terms stand
+ * together, in the order the groups were read.
+ */
+function groupTermIndexes(
+  terms: readonly string[],
+  groups: readonly SearchOperatorGroup[]
+): number[][] {
+  let from = 0;
+  return groups.map((group) => {
+    for (
+      let start = from;
+      start + group.terms.length <= terms.length;
+      start++
+    ) {
+      if (group.terms.every((term, offset) => terms[start + offset] === term)) {
+        from = start + group.terms.length;
+        return group.terms.map((_, offset) => start + offset);
+      }
+    }
+    return [];
+  });
+}
+
+/**
+ * A query's tokens as the search reads them, with the opener's bindings.
+ * Mail's operators still being typed are left out only where email is
+ * searched; elsewhere they are words, as on the service.
+ */
+function readQuery(text: string, bindings: readonly SearchOperatorBinding[]) {
+  const read = (tokens: QueryToken[]) => {
+    const readable = readTokens(tokens);
+    const terms = readable.map(({ term }) => term);
+    const operators = readSearchOperators(terms, true, bindings);
+    const searchesEmail = searchOperatorIndexes(operators).includes('email');
+    return { tokens, readable, terms, read: operators, searchesEmail };
+  };
+  const all = finishedTokens(text, bindings);
+  const first = read(all);
+  if (!first.searchesEmail) return first;
+  const bound = boundTerms(bindings);
+  const finished = all.filter(
+    ({ token, term }) =>
+      bound.has(term) || !isUnfinishedEmailSearchOperator(token)
   );
-  const words = read.terms.filter((term) => !readsAsEmailSearchOperator(term));
+  return finished.length === all.length ? first : read(finished);
+}
+
+/** Reads a Search query, as typed in its field, with the opener's bindings. */
+export function searchQueryParts(
+  text: string,
+  bindings: readonly SearchOperatorBinding[] = []
+): SearchQueryParts {
+  const { tokens, readable, terms, read, searchesEmail } = readQuery(
+    text,
+    bindings
+  );
+  const boundTokens = new Set(
+    groupTermIndexes(terms, read.groups)
+      .filter((_, index) => {
+        const group = read.groups[index];
+        return group !== undefined && isBoundSearchOperatorGroup(group);
+      })
+      .flat()
+      .map((index) => readable[index])
+  );
+  const boundGroups = read.groups.filter(isBoundSearchOperatorGroup);
+  // Mail's operators are conditions only where email is searched.
+  const words = searchesEmail
+    ? read.terms.filter((term) => !readsAsEmailSearchOperator(term))
+    : read.terms;
   const onlyTypes = read.groups.every((group) => group.name === 'type');
   return {
-    serviceText: read.terms.length > 0 ? searched : '',
+    serviceText:
+      read.terms.length > 0
+        ? tokens
+            .filter((token) => !boundTokens.has(token))
+            .map(({ token }) => token)
+            .join(' ')
+        : '',
     nameText:
       onlyTypes && words.length === read.terms.length ? words.join(' ') : '',
     read,
+    bound: {
+      terms: [],
+      operators: boundGroups.reduce(
+        (count, group) => count + group.values.length,
+        0
+      ),
+      groups: boundGroups,
+      types: undefined,
+    },
   };
 }
 
@@ -514,43 +667,19 @@ export type SearchOperatorSpan = { start: number; end: number };
  * Mail's draw only where email is searched, since elsewhere they are words.
  * One still being typed stays plain, as Mail draws it.
  */
-export function searchOperatorSpans(text: string): SearchOperatorSpan[] {
-  const tokens: { start: number; end: number; token: string; term: string }[] =
-    [];
-  let start = -1;
-  let inQuotes = false;
-  const close = (end: number) => {
-    if (start < 0) return;
-    const token = text.slice(start, end);
-    const term = splitSearchTerms(token)[0];
-    if (
-      term !== undefined &&
-      !isUnfinishedSearchOperator(term) &&
-      !isUnfinishedEmailSearchOperator(token)
-    ) {
-      tokens.push({ start, end, token, term });
-    }
-    start = -1;
-  };
-  for (let index = 0; index < text.length; index++) {
-    const char = text[index] ?? '';
-    if (PHRASE_QUOTES.test(char)) inQuotes = !inQuotes;
-    if (/\s/.test(char) && !inQuotes) close(index);
-    else if (start < 0) start = index;
-  }
-  close(text.length);
-
-  const read = readSearchOperators(
-    withoutWordlessTerms(tokens.map(({ term }) => term))
-  );
+export function searchOperatorSpans(
+  text: string,
+  bindings: readonly SearchOperatorBinding[] = []
+): SearchOperatorSpan[] {
+  const { readable, read, searchesEmail } = readQuery(text, bindings);
   // The words the operators leave, counted, so of two equal tokens only the
   // one read as an operator is drawn.
   const words = new Map<string, number>();
   for (const term of read.terms) words.set(term, (words.get(term) ?? 0) + 1);
-  const searchesEmail = searchOperatorIndexes(read).includes('email');
-  return tokens.flatMap(({ start, end, token, term }) => {
+  return readable.flatMap(({ start, end, token, term }) => {
     const left = words.get(term) ?? 0;
-    if (left === 0) return readsAsSearchOperator(token) ? [{ start, end }] : [];
+    // Read as an operator in its place; an `OR` joining two stays plain.
+    if (left === 0) return term === OR ? [] : [{ start, end }];
     words.set(term, left - 1);
     return searchesEmail && readsAsEmailSearchOperator(token)
       ? [{ start, end }]
