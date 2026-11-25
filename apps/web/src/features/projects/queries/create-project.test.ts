@@ -228,7 +228,7 @@ it('does not seed or refresh a create response after a storage reset', async () 
     properties: [],
   });
   await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
-  reset({ storage: 'reset' });
+  reset({ storage: 'reset', queue: 'reset' });
   finish();
   await pending;
   expect(write).not.toHaveBeenCalled();

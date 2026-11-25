@@ -1256,6 +1256,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   background work until a visible owner reopens storage, retaining accepted
   mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
+  A reset of storage (`openOutcome`) says nothing of the mutation queue, which a
+  recovery wipe carries over: end a mutation in flight or settle pending writes
+  as lost only on `queue: 'reset'`.
   A typed search held across an engine restart reaches the new engine first, and
   one already sent is not refused when the read budget expires; it has no
   network fallback. It still ends after the ordinary read timeout, Quick

@@ -399,7 +399,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },
@@ -441,7 +442,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },
@@ -511,7 +513,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },
@@ -595,7 +598,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },

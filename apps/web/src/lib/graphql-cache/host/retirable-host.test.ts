@@ -368,7 +368,7 @@ it('silences retired public subscriptions while retained storage still emits eve
   host.dispose();
   affected?.([2]);
   changed?.(INITIAL_CACHE_REVISION);
-  generation?.({ storage: 'preserved' });
+  generation?.({ storage: 'preserved', queue: 'preserved' });
   settled?.({ transactionId: 'draft', status: 'committed' });
   for (const callback of callbacks) expect(callback).not.toHaveBeenCalled();
   expect(inner.dispose).not.toHaveBeenCalled();
