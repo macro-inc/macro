@@ -119,10 +119,11 @@ const answeringCreates = new Set<string>();
 /** The server id each confirmed create replaced its local id with. */
 const landedCreates = new Map<string, string>();
 /**
- * The occurrences the server answered the latest creates with, by local id,
- * until the calendar's own reads catch up with them.
+ * The occurrence each of the latest creates' answers carried for the one
+ * drawn locally, by local id: open details move to it before the calendar's
+ * own reads draw it. Sign-out reloads the app, which drops them.
  */
-const landedReplies = new Map<string, readonly CalendarOccurrenceItem[]>();
+const landedReplies = new Map<string, CalendarOccurrenceItem>();
 const LANDED_REPLY_LIMIT = 16;
 const landedListeners = new Set<(localId: string, serverId: string) => void>();
 
@@ -137,13 +138,13 @@ export function createdCalendarEventId(eventId: string): string | undefined {
 }
 
 /**
- * The server's occurrences of an event created under the local id `eventId`,
- * from the create's own answer, when it carried them.
+ * The server's copy of the occurrence created under the local id `eventId`,
+ * from the create's own answer, when it carried one.
  */
-export function createdCalendarOccurrences(
+export function createdCalendarOccurrence(
   eventId: string
-): readonly CalendarOccurrenceItem[] {
-  return landedReplies.get(eventId) ?? [];
+): CalendarOccurrenceItem | undefined {
+  return landedReplies.get(eventId);
 }
 
 /** Calls `listener` when a create made here lands under its server id. */
@@ -157,13 +158,13 @@ export function onCalendarEventCreated(
 function landCreate(
   localId: string,
   serverId: string | undefined,
-  occurrences: readonly OccurrenceRecord[] = []
+  answered?: OccurrenceRecord
 ) {
   pendingCreates.delete(localId);
   if (!serverId || serverId === localId) return;
   landedCreates.set(localId, serverId);
-  if (occurrences.length > 0) {
-    landedReplies.set(localId, occurrences.map(mapCalendarOccurrence));
+  if (answered) {
+    landedReplies.set(localId, mapCalendarOccurrence(answered));
     const oldest = landedReplies.keys().next().value;
     if (landedReplies.size > LANDED_REPLY_LIMIT && oldest !== undefined)
       landedReplies.delete(oldest);
@@ -935,7 +936,13 @@ async function createThroughQueue(
     if (!serverId) return { outcome };
     return { outcome, event: mapCalendarEvent({ ...event, id: serverId }) };
   }
-  landCreate(clientId, outcome.payload.event.id, outcome.payload.occurrences);
+  const answered = outcome.payload.occurrences;
+  landCreate(
+    clientId,
+    outcome.payload.event.id,
+    answered.find((item) => item.occurrenceKey === occurrenceKey) ??
+      (answered.length === 1 ? answered[0] : undefined)
+  );
   return {
     outcome,
     event: mapCalendarEvent(outcome.payload.event),

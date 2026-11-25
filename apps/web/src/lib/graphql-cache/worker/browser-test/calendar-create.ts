@@ -11,7 +11,7 @@ import {
 import {
   CalendarMutationError,
   createdCalendarEventId,
-  createdCalendarOccurrences,
+  createdCalendarOccurrence,
   executeGraphqlCreate,
   isCalendarEventCreating,
   trackCalendarCreateSettlements,
@@ -271,9 +271,7 @@ async function run(next: Answer, options: RunOptions = {}) {
   const serverId = outcome.value.event?.id;
   // The details move to the server's copy from the answer, before the
   // calendar's own reads catch up with it.
-  const answered = createdCalendarOccurrences(localId).map(
-    (item) => item.occurrence.eventId
-  );
+  const answered = createdCalendarOccurrence(localId)?.occurrence.eventId;
   await until(async () => {
     const keys = await eventsOnTheDay();
     return !shows(keys, localId) && shows(keys, serverId ?? '');
@@ -281,7 +279,7 @@ async function run(next: Answer, options: RunOptions = {}) {
   return {
     beforeAnswer,
     landedUnder: createdCalendarEventId(localId) === serverId,
-    answeredWith: answered.every((id) => id === serverId) && answered.length,
+    answeredWithServerCopy: answered !== undefined && answered === serverId,
     creating: isCalendarEventCreating(localId),
   };
 }

@@ -3,7 +3,7 @@ import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import {
   createdCalendarEventId,
-  createdCalendarOccurrences,
+  createdCalendarOccurrence,
   isCalendarEventCreating,
 } from '@queries/calendar/graphql/mutations';
 import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
@@ -91,9 +91,13 @@ export function createCalendarEventSelection(
   // selection stays on its row, so a chip mounting late never moves it.
   const reanchor = (nextEvent: CalendarEvent, nextAnchor: HTMLElement) => {
     if (origin() !== 'grid') return;
+    const current = event();
     // The grid can still draw a landed create's local copy for the server's
     // copy the details already show.
-    if (createdCalendarEventId(nextEvent.eventId) === event()?.eventId)
+    if (
+      current &&
+      createdCalendarEventId(nextEvent.eventId) === current.eventId
+    )
       setAnchor(nextAnchor);
     else select(nextEvent, nextAnchor);
   };
@@ -106,11 +110,13 @@ function serverEventId(eventId: string): string {
   return createdCalendarEventId(eventId) ?? eventId;
 }
 
+type OccurrenceRef = Pick<CalendarEvent, 'id' | 'eventId' | 'occurrenceKey'>;
+
 /** The one of `events` that stands for `selected`'s occurrence. */
-function sameOccurrence(
-  selected: CalendarEvent,
-  events: readonly CalendarEvent[]
-): CalendarEvent | undefined {
+function sameOccurrence<Shown extends OccurrenceRef>(
+  selected: OccurrenceRef,
+  events: readonly Shown[]
+): Shown | undefined {
   return (
     events.find((event) => event.occurrenceKey === selected.occurrenceKey) ??
     (events.length === 1 ? events[0] : undefined)
@@ -125,7 +131,7 @@ function sameOccurrence(
 function landedEvent(
   selected: CalendarEvent,
   eventsById: ReadonlyMap<string, CalendarEvent>,
-  answered: (localId: string) => CalendarEvent[]
+  answered: (localId: string) => CalendarEvent | undefined
 ): CalendarEvent | undefined {
   const serverId = createdCalendarEventId(selected.eventId);
   if (!serverId) return undefined;
@@ -133,18 +139,18 @@ function landedEvent(
     sameOccurrence(
       selected,
       [...eventsById.values()].filter((event) => event.eventId === serverId)
-    ) ?? sameOccurrence(selected, answered(selected.eventId))
+    ) ?? answered(selected.eventId)
   );
 }
 
 /**
- * The page's event for the selection: its own, or the local copy of a
+ * The shown item for the selection, by id: its own, or the local copy of a
  * landed create whose details already show the server's.
  */
-export function selectionOnPage(
-  selected: CalendarEvent,
-  eventsById: ReadonlyMap<string, CalendarEvent>
-): CalendarEvent | undefined {
+export function selectionOnPage<Shown extends OccurrenceRef>(
+  selected: OccurrenceRef,
+  eventsById: ReadonlyMap<string, Shown>
+): Shown | undefined {
   return (
     eventsById.get(selected.id) ??
     sameOccurrence(
@@ -244,13 +250,16 @@ export const [CalendarViewContextProvider, useCalendarView] =
       };
 
       const closeEventDetails = () => selection.close();
-      const answeredEvents = (localId: string) =>
-        createdCalendarOccurrences(localId).map((item) =>
+      const answeredEvent = (localId: string) => {
+        const item = createdCalendarOccurrence(localId);
+        return (
+          item &&
           mapCalendarOccurrence(item, {
             sourceById: sourceById(),
             isSourceVisible,
           })
         );
+      };
 
       const refreshSelectedEventFromPage = (
         eventsById: ReadonlyMap<string, CalendarEvent>,
@@ -259,7 +268,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
       ) => {
         const selected = selection.event();
         if (!selected) return;
-        const landed = landedEvent(selected, eventsById, answeredEvents);
+        const landed = landedEvent(selected, eventsById, answeredEvent);
         const event = landed ? undefined : eventsById.get(selected.id);
         if (landed) {
           if (isCalendarEventVisible(landed, isSourceVisible))

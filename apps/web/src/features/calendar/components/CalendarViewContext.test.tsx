@@ -23,7 +23,7 @@ const teamReset = vi.hoisted(() => ({ fire: () => {} }));
 const creates = vi.hoisted(() => ({
   creating: new Set<string>(),
   landed: new Map<string, string>(),
-  answered: new Map<string, CalendarOccurrenceItem[]>(),
+  answered: new Map<string, CalendarOccurrenceItem>(),
 }));
 
 vi.mock('@queries/calendar/team-cache', () => ({
@@ -35,7 +35,7 @@ vi.mock('@queries/calendar/team-cache', () => ({
 vi.mock('@queries/calendar/graphql/mutations', () => ({
   isCalendarEventCreating: (id: string) => creates.creating.has(id),
   createdCalendarEventId: (id: string) => creates.landed.get(id),
-  createdCalendarOccurrences: (id: string) => creates.answered.get(id) ?? [],
+  createdCalendarOccurrence: (id: string) => creates.answered.get(id),
 }));
 vi.mock('../hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
@@ -99,6 +99,17 @@ describe('createCalendarEventSelection', () => {
 
       expect(selection.anchor()).toBe(row);
       expect(selection.origin()).toBe('agenda');
+    });
+  });
+
+  it('never leaves an anchor without an event when a chip mounts with nothing selected', () => {
+    withSelection((selection) => {
+      const chip = document.createElement('a');
+
+      selection.reanchor(EVENT, chip);
+
+      expect(selection.event()).toBe(EVENT);
+      expect(selection.anchor()).toBe(chip);
     });
   });
 
@@ -300,7 +311,7 @@ describe('details opened on an event whose create has not landed', () => {
     const land = () => {
       creates.creating.delete('local-1');
       creates.landed.set('local-1', 'server-1');
-      creates.answered.set('local-1', [answer]);
+      creates.answered.set('local-1', answer);
     };
 
     it('moves the details and the destination to it while the page still draws the local copy', () => {

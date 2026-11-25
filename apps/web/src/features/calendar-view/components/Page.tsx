@@ -256,12 +256,13 @@ export function Page(props: {
     () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
   // Details opened on a new event show the server's copy before the grid
-  // draws it, so its chip stays the selected one until then.
-  const selectedChipId = () => {
+  // draws it, so its chip stays the selected one until then. Every chip reads
+  // it, so it is worked out once per change.
+  const selectedChipId = createMemo(() => {
     const selected = calendarView.selectedEvent();
     if (!selected) return undefined;
     return (selectionOnPage(selected, eventsById()) ?? selected).id;
-  };
+  });
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;

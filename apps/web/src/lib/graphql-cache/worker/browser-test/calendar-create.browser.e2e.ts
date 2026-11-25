@@ -31,7 +31,7 @@ test.describe('a calendar create through the real cache and queue', () => {
         localTimeZone: null,
       },
       landedUnder: true,
-      answeredWith: 1,
+      answeredWithServerCopy: true,
       creating: false,
     });
   });
@@ -53,7 +53,7 @@ test.describe('a calendar create through the real cache and queue', () => {
           localTimeZone: null,
         },
         landedUnder: true,
-        answeredWith: 1,
+        answeredWithServerCopy: true,
         creating: false,
       });
     });

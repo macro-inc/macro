@@ -16,7 +16,7 @@ import {
   CalendarMutationError,
   committedEvent,
   createdCalendarEventId,
-  createdCalendarOccurrences,
+  createdCalendarOccurrence,
   executeGraphqlCreate,
   executeGraphqlDelete,
   executeGraphqlInviteGuests,
@@ -1039,24 +1039,30 @@ describe('executeGraphqlCreate', () => {
     });
   });
 
-  it('keeps the server’s occurrences from the create’s answer for the event it landed as', async () => {
-    const event = graphqlEvent({ id: 'server-8', title: 'Offsite' });
-    const occurrence = graphqlOccurrence({
-      id: 'server-8:2026-11-28',
-      eventId: 'server-8',
-      occurrenceKey: '2026-11-28',
-      event,
+  it('keeps the server’s copy of the occurrence drawn locally from the create’s answer', async () => {
+    const event = graphqlEvent({
+      id: 'server-8',
+      title: 'Offsite',
+      recurrenceLines: ['RRULE:FREQ=DAILY'],
     });
+    const occurrence = (day: string) =>
+      graphqlOccurrence({
+        id: `server-8:${day}`,
+        eventId: 'server-8',
+        occurrenceKey: day,
+        event,
+      });
     const landed = vi.fn();
     const stop = onCalendarEventCreated(landed);
     const { calls, client } = fakeClient('committed', {
       event,
-      occurrences: [occurrence],
+      occurrences: [occurrence('2026-11-28'), occurrence('2026-11-29')],
     });
 
     await executeGraphqlCreate(
       {
         title: 'Offsite',
+        recurrenceLines: ['RRULE:FREQ=DAILY'],
         time: {
           kind: 'allDay',
           startDate: '2026-11-28',
@@ -1068,15 +1074,15 @@ describe('executeGraphqlCreate', () => {
 
     const clientId = calls[0]?.optimistic.uuid ?? '';
     expect(landed).toHaveBeenCalledWith(clientId, 'server-8');
-    expect(createdCalendarOccurrences(clientId)).toEqual([
+    expect(createdCalendarOccurrence(clientId)).toEqual(
       expect.objectContaining({
         event: expect.objectContaining({ id: 'server-8', title: 'Offsite' }),
         occurrence: expect.objectContaining({
           eventId: 'server-8',
           occurrenceKey: '2026-11-28',
         }),
-      }),
-    ]);
+      })
+    );
     stop();
   });
 
