@@ -53,7 +53,11 @@ async fn an_old_id_previews_and_reads_the_contact_it_was_merged_into(pool: PgPoo
         for (old_id, contact, opens) in [
             (into_visible, visible, opens_visible),
             (into_hidden, hidden, opens_hidden),
-            (into_under_hidden_company, under_hidden_company, opens_hidden),
+            (
+                into_under_hidden_company,
+                under_hidden_company,
+                opens_hidden,
+            ),
         ] {
             let (status, read) = send(&app, user, &format!("/contacts/{old_id}"), None).await;
             let Some(preview) = answer(old_id) else {
