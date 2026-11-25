@@ -91,6 +91,72 @@ impl CompaniesRepositoryImpl {
             .collect()
     }
 
+    /// Members whose active rules name one of `contacts`, by user. With
+    /// `lock`, their consent rows are locked until commit.
+    pub(crate) async fn rules_naming_contacts(
+        conn: &mut PgConnection,
+        team: Uuid,
+        contacts: &[Uuid],
+        lock: bool,
+    ) -> Result<Vec<MemberRules>, MergeError> {
+        // Starts from the contacts' references (`crm_email_rule_contacts_source`),
+        // so the cost follows the rules that name them.
+        let rows: Vec<(String, i64, serde_json::Value)> = if lock {
+            sqlx::query!(
+                r#"SELECT c.user_id, c.active_rule_revision AS "revision!", r.definition
+                   FROM crm_email_consent c
+                   JOIN crm_email_rule_revisions r
+                     ON r.team_id = c.team_id AND r.user_id = c.user_id AND r.revision = c.active_rule_revision
+                   WHERE c.team_id = $1
+                     AND (c.user_id, c.active_rule_revision) IN (
+                         SELECT rc.user_id, rc.revision FROM crm_email_rule_contacts rc
+                         WHERE rc.contact_id = ANY($2) AND rc.team_id = $1
+                     )
+                   ORDER BY c.user_id
+                   FOR UPDATE OF c"#,
+                team,
+                contacts,
+            )
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(db)?
+            .into_iter()
+            .map(|row| (row.user_id, row.revision, row.definition))
+            .collect()
+        } else {
+            sqlx::query!(
+                r#"SELECT c.user_id, c.active_rule_revision AS "revision!", r.definition
+                   FROM crm_email_consent c
+                   JOIN crm_email_rule_revisions r
+                     ON r.team_id = c.team_id AND r.user_id = c.user_id AND r.revision = c.active_rule_revision
+                   WHERE c.team_id = $1
+                     AND (c.user_id, c.active_rule_revision) IN (
+                         SELECT rc.user_id, rc.revision FROM crm_email_rule_contacts rc
+                         WHERE rc.contact_id = ANY($2) AND rc.team_id = $1
+                     )
+                   ORDER BY c.user_id"#,
+                team,
+                contacts,
+            )
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(db)?
+            .into_iter()
+            .map(|row| (row.user_id, row.revision, row.definition))
+            .collect()
+        };
+        rows.into_iter()
+            .map(|(user_id, revision, definition)| {
+                Ok(MemberRules {
+                    user_id,
+                    revision,
+                    rules: serde_json::from_value(definition)
+                        .map_err(|error| CrmError::StorageLayerError(error.into()))?,
+                })
+            })
+            .collect()
+    }
+
     /// Activate each member's rewritten rules as their next revision and
     /// record the merge in their sharing history. Their sharing stays on or
     /// off as it was. The consent rows must be locked by

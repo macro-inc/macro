@@ -8,6 +8,8 @@ mod company_contacts;
 mod company_domains;
 mod contact_filing;
 mod contact_listing;
+#[cfg(feature = "merge")]
+pub(crate) mod contact_merge;
 mod contact_update;
 mod email_policy;
 mod email_privacy;

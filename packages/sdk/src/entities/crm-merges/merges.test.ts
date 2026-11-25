@@ -11,6 +11,10 @@ function recording() {
   const bodies: Array<Record<string, unknown>> = [];
   const client = {
     storage: {
+      previewCrmMerge: async ({ body }: { body: Record<string, unknown> }) => {
+        bodies.push(body);
+        return { data: { revision: REVISION } };
+      },
       commitCrmMerge: async ({ body }: { body: Record<string, unknown> }) => {
         bodies.push(body);
         return { data: { mergeId: 'merge-1' } };
@@ -48,5 +52,29 @@ describe('crm merges', () => {
     });
 
     expect(bodies[0]?.requestKey).toBe(requestKey);
+  });
+
+  test('reviews and merges people as contacts', async () => {
+    const { bodies, merges } = recording();
+
+    await merges.previewContacts({ survivorId: SURVIVOR, sourceIds: [SOURCE] });
+    await merges.mergeContacts({
+      survivorId: SURVIVOR,
+      sourceIds: [SOURCE],
+      revision: REVISION,
+      sharingRules: 'stop',
+    });
+
+    expect(bodies[0]).toEqual({
+      recordType: 'contact',
+      survivorId: SURVIVOR,
+      sourceIds: [SOURCE],
+    });
+    expect(bodies[1]).toMatchObject({
+      recordType: 'contact',
+      revision: REVISION,
+      requestKey: '9f86d081-884c-7d65-9a2f-eaa0c55ad015',
+      sharingRules: 'stop',
+    });
   });
 });
