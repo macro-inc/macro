@@ -115,7 +115,7 @@ pub(super) async fn wipe_keeping_queue(
 /// that the side file does not note goes with the copy, which then says writes
 /// were lost before it, as one behind a noted loss does: whoever imports it,
 /// this engine or one after it dies, tells the loss. A noted one the wipe
-/// cannot read is written over, so the wipe counts it with its own.
+/// cannot read goes into the loss note the wipe writes over it.
 pub(super) async fn wipe_keeping_queue_after(
     scope: &str,
     owner: OpfsOwner,
@@ -147,9 +147,6 @@ async fn wipe_keeping(
     if doubted {
         read.report.lose();
     }
-    if unread && earlier.noted {
-        read.report.dropped += earlier.dropped;
-    }
     read.write_queue(&sidecar).await;
     let queue = read.queue.take().map(|queue| match doubted {
         true => queue.after_loss(),
@@ -157,7 +154,14 @@ async fn wipe_keeping(
     });
     let mut unwritten = read.unwritten;
     if unwritten || read.report.lost() {
-        let frame = SalvageFile::loss(read.report.loss());
+        // A note the wipe could not read is gone once this is written over
+        // it, so this one counts it too. Not written, the count stays with
+        // that note if it is still there, and is lost with it if not.
+        let mut loss = read.report.loss();
+        if unread && earlier.noted {
+            loss.dropped += earlier.dropped;
+        }
+        let frame = SalvageFile::loss(loss);
         if sidecar.write_tail(read.end, &frame).await.is_ok() {
             read.end += frame.len() as u64;
             read.report.dropped = 0;
@@ -444,9 +448,10 @@ impl QueueReport {
     /// wipe is lost with it, as on any open that cannot read the side file,
     /// and the outcome still says writes were lost.
     pub(super) fn then(self, later: Self) -> Self {
-        // The later open counted what the side file notes, read back or, when
-        // its wipe could not read it, from this report. Only an import that
-        // could not read what the wipe left counts less.
+        // The later open counted what the side file notes: read back, or
+        // carried into the note its wipe wrote over one it could not read.
+        // Only an import that could not read what the wipe left, or a wipe
+        // whose note the side file refused, counts less.
         let (earlier, dropped) = match self.noted {
             true => (QueueOutcome::None, 0),
             false => (self.outcome, self.dropped),

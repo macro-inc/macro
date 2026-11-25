@@ -483,6 +483,58 @@ async fn a_copy_taken_when_the_side_file_could_not_be_read_tells_a_loss_to_whoev
     }
 }
 
+#[wasm_bindgen_test(async)]
+async fn a_noted_loss_the_wipe_could_not_read_is_counted_once_when_its_note_stays() {
+    const SCOPE: &str = "cache-wasm-salvage-unread-note-stays";
+    closed_with_queue(SCOPE).await;
+    let loss = QueueLoss {
+        abandoned: false,
+        dropped: 2,
+    };
+    write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+    let noted = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 2,
+        noted: true,
+        ..QueueReport::default()
+    };
+    // The wipe can neither read the side file nor change it, so the note
+    // stays for the import, which reads it once the side file reads again.
+    let files = "FileSystemFileHandle.prototype.createSyncAccessHandle";
+    run_js(
+        &format!("self.untouchedFiles = {files}; return Promise.resolve();"),
+        "",
+    )
+    .await;
+    break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+    break_side_files(
+        "truncate",
+        "throw new DOMException('full', 'QuotaExceededError');",
+    )
+    .await;
+    let owner = owner(SCOPE).await;
+    let Ok((owner, crossing)) = wipe_keeping_queue_after(SCOPE, owner, &noted).await else {
+        panic!("wipe keeps the queue")
+    };
+    run_js(
+        &format!("{files} = self.untouchedFiles; return Promise.resolve();"),
+        "",
+    )
+    .await;
+    let Ok(opened) = open_storage(SCOPE, owner, crossing).await else {
+        panic!("the next database opens")
+    };
+    let told = noted.then(opened.queue);
+    release_storage(opened.storage).await.expect("release");
+    assert_eq!(
+        (told.outcome, told.kept, told.dropped),
+        (QueueOutcome::Partial, 1, 2)
+    );
+    let (engine, _, _) = open(SCOPE, false).await;
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
 #[wasm_bindgen_test]
 fn a_noted_loss_keeps_its_count_when_the_later_open_could_not_read_it() {
     let earlier = QueueReport {
