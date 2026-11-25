@@ -966,7 +966,55 @@ Use one default per data shape:
 | Data shape | Default | Notes |
 | --- | --- | --- |
 | GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
-| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. One-shot reads (exports, previews) use `fetchGraphqlSoupPage` or `fetchGraphqlSoupEntities` from `lib/queries/soup/graphql/fetch-page.ts`, not the REST soup endpoints. |
+
+Every read that falls back to REST because the translator has no GraphQL
+form for it records a `soup.rest_fallback` span (attributes
+`soup.fallback.reason`, `.shape` and `.kind`) and logs one
+`soup.rest_fallback` warning per reason and shape
+(`lib/queries/soup/graphql/rest-fallback.ts`). The shape names only the sort,
+grouping, email view and targets, never ids or values (an unknown email view
+shows as `other`); the reason holds fixed text only: no filter value and no unrecognized literal key. A request made with
+`transport: 'rest'` is a choice, not a fallback, and is not recorded.
+
+Without the cache, writes read mounted Soup lists again
+(`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
+(`agent-session/list-sync.ts`), which otherwise only read the session's row
+into the cache. A row read while the engine is still opening is written only
+once it opens, in line with lists that loaded meanwhile, so list-sync reads the
+row again after the host's `whenReady()` (`isReady()` says whether it is
+open, and is false while the host is `paused`, when writes are refused); a host
+without them is always ready, and a retired host
+(`createRetirableCacheHost` after `dispose()`) is never ready, so nothing
+reads into it. The reread runs after its pass, so
+later events never wait for the engine, and gives up after 60 s. A list that never shows, filters or sorts
+by unread state (the Quick Access and menu feeds) passes
+`ignoresNotifications: true`, and notification and email read-state writes
+refresh with `notificationsOnly: true`, which skips it. Such a list also reads
+its rows with `SoupPreviewPage` (the `preview` projection), so the server does
+not look up notifications for rows it never shows.
+
+A list's `staleTime` works as it does in TanStack: within `staleTime` of the
+last network answer this client gave to the same query (projection and first
+page), a list that mounts again reads with `cache-first` instead of
+`cache-and-network`, decided once, when the list first starts to fetch (`soup/graphql/network-freshness.ts`), so menus and
+pickers that open often don't read the server each time. Writes, Soup updates
+and `refreshActiveGraphqlSoupQueries` still update it while it is mounted, and
+a write (any `refreshActiveGraphqlSoupQueries` or Soup revalidation call)
+forgets every recorded answer, as invalidating the REST lists marked them
+stale, so a list that mounts after it reads the server again. So does the cache
+serving again after an outage, since it stored none of the answers given
+meanwhile. A
+`graphqlCacheFirstEntities` lookup reads the cache only with a sort the cache
+can order (`created_at` or `updated_at`, `isLocallySortable`); any other sort
+goes to the network.
+
+A write whose answer carries no Soup row (CRM contact creates, company renames,
+domain and email sync edits, pipeline imports) reads again the mounted lists that
+can show it, narrowed by `where` (`features/crm/queries/list-refresh.ts`). A
+chat rename from another client reaches maintained lists through Soup updates,
+so it reads again only the lists the cache does not maintain
+(`unmaintainedOnly`; every list when the cache is off).
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
