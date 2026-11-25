@@ -38,7 +38,9 @@ const sends: readonly RegExp[] = [
   /\bagentMailbox\b/,
   /\bAgentMail[A-Z]\w*/,
   /\b(get|list|read|send|reply)AgentMailbox\w*/,
-  /\/agent-mailbox\b/i,
+  // The routes: under the email service, never a directory that happens to
+  // be named so.
+  /\/email\/agent-mailbox\b|\bagent-mailbox\/messages\b/i,
   /\bsdkMailbox\b|\bdraftStore\b/,
   /capabilities\/mailbox\/(macro|drafts|service)(\.ts)?\b/,
   /\/mailbox\/drafts\b/,

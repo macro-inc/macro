@@ -39,6 +39,7 @@ test("the agent's own mailbox sends only through its capability", () => {
     bash(
       'curl -X POST http://127.0.0.1:4000/email/email/agent-mailbox/messages -d @mail.json'
     ),
+    bash('curl -X POST "$RELAY/email/agent-mailbox/messages/m-1/reply"'),
     // The port and the drafts behind the capability.
     run(
       'import { sdkMailbox } from "/agent/behavior/capabilities/mailbox/macro.ts";\nexport async function main({ context }) { return sdkMailbox({ macro: context.macro, trace: context.trace }).send({}); }'
@@ -94,6 +95,11 @@ test("the mailbox capability, and reading the agent's own mail, go through", () 
       'import { listMyEmail } from "/agent/behavior/capabilities/mailbox/index.ts";\nexport async function main({ context }) { const page = await listMyEmail(context); await context.chat.send("c-1", String(page.messages.length) + " new"); }'
     ),
     bash('cargo test -p agent_mailbox'),
+    // A workspace whose path happens to say agent-mailbox is no mailbox route.
+    run(
+      'import { postMessage } from "/home/someone/agent-mailbox/behavior/capabilities/chat/index.ts";\nexport async function main({ context }) { return postMessage(context, { channelId: "c-1", text: "hi" }); }'
+    ),
+    bash('cd /work/agent-mailbox && bin/agent listMyEmail'),
     // Reading the capability's code sends nothing.
     call('Read', {
       file_path: '/agent/behavior/capabilities/mailbox/macro.ts',
