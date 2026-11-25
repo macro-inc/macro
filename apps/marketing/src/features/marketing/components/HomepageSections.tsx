@@ -54,7 +54,7 @@ const SECTIONS: readonly Section[] = [
     id: 'home',
     title: 'One inbox for everything.',
     description:
-      'Home pulls everything that needs your attention into one prioritized feed with keyboard triage, AI summaries, and instant workspace search.',
+      'Home pulls what needs your attention into one prioritized feed with keyboard triage, AI summaries, and instant workspace search.',
     caption: [
       'Catch up on Macro Mail, Macro Chat, Macro Tasks, Macro Docs, and Macro Agents in one list or jump straight into a Macro GitHub pull request.',
     ],
