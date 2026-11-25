@@ -21,6 +21,11 @@ pub struct UpsertChannelMessageArgs {
     pub imported_author: Option<String>,
     pub mentions: Vec<String>,
     pub content: String,
+    /// The web links the message shares, as written, each once: searched by
+    /// the words of their URLs, which `content` keeps whole or, behind a
+    /// label, leaves out.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<String>,
     pub created_at_millis: EpochMillis,
     pub updated_at_millis: EpochMillis,
 }

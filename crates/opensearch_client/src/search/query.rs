@@ -164,6 +164,51 @@ pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType
     )
 }
 
+/// Words every link URL holds, which a link query leaves out: a term of
+/// only these would match every message that shares a link.
+const LINK_BOILERPLATE_WORDS: [&str; 3] = ["http", "https", "www"];
+
+/// The query a content term runs against a field of link URLs, which the
+/// built-in `pattern` analyzer splits at every character that is not an ASCII
+/// letter, digit or `_`: `https://app.example.design/a` is `https`, `app`,
+/// `example`, `design`, `a`. The term is split the same way and every word
+/// must be in one URL: in order for an exact term, otherwise in any order
+/// with the last a prefix when it has [`MIN_PREFIX_LEN`] characters, so
+/// `example.design` finds `app.example.design`. `http`, `https` and `www` are
+/// left out of the term, and a term of only those, like a regexp term,
+/// matches no link.
+pub(crate) fn link_query<'a>(
+    query_key: QueryKey,
+    field: &str,
+    term: &str,
+) -> Option<QueryType<'a>> {
+    let words: Vec<&str> = term
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|word| {
+            !word.is_empty()
+                && !LINK_BOILERPLATE_WORDS
+                    .iter()
+                    .any(|boilerplate| word.eq_ignore_ascii_case(boilerplate))
+        })
+        .collect();
+    let last = words.last()?;
+    let last_is_prefix = last.chars().count() >= MIN_PREFIX_LEN;
+    let words = words.join(" ");
+    match query_key {
+        QueryKey::MatchPhrase => Some(QueryType::MatchPhrase(MatchPhraseQuery::new(
+            field.to_string(),
+            words,
+        ))),
+        QueryKey::MatchPhrasePrefix if last_is_prefix => Some(QueryType::MatchBoolPrefix(
+            MatchBoolPrefixQuery::new(field.to_string(), words).operator("and"),
+        )),
+        QueryKey::MatchPhrasePrefix => Some(QueryType::Match(
+            MatchQuery::new(field.to_string(), words).operator("and"),
+        )),
+        QueryKey::Regexp => None,
+    }
+}
+
 impl QueryKey {
     /// Creates a query key given a match type
     pub fn from_match_type(match_type: &str) -> Result<Self> {
@@ -193,13 +238,15 @@ pub(crate) fn generate_terms_must_query<'a>(
     terms: impl Into<Cow<'a, [&'a str]>>,
     combine: TermCombine,
 ) -> QueryType<'a> {
-    generate_terms_must_query_for_fields(query_key, &[field], terms, combine)
+    generate_terms_must_query_for_fields(query_key, &[field], None, terms, combine)
 }
 
-/// Each term must match at least one field on the same document.
+/// Each term must match at least one field on the same document, or a link
+/// URL in `link_field` ([`link_query`]).
 pub(crate) fn generate_terms_must_query_for_fields<'a>(
     query_key: QueryKey,
     fields: &[&'a str],
+    link_field: Option<&str>,
     terms: impl Into<Cow<'a, [&'a str]>>,
     combine: TermCombine,
 ) -> QueryType<'a> {
@@ -208,17 +255,25 @@ pub(crate) fn generate_terms_must_query_for_fields<'a>(
     let queries: Vec<_> = terms
         .iter()
         .map(|term| {
+            let mut queries: Vec<QueryType<'a>> = fields
+                .iter()
+                .map(|field| {
+                    create_query(CreateQueryParams {
+                        query_key,
+                        field,
+                        term,
+                    })
+                })
+                .collect();
+            queries.extend(link_field.and_then(|field| link_query(query_key, field, term)));
+            if queries.len() == 1
+                && let Some(query) = queries.pop()
+            {
+                return query;
+            }
             let mut alternatives = BoolQueryBuilder::new();
             alternatives.minimum_should_match(1);
-            for field in fields {
-                let query = create_query(CreateQueryParams {
-                    query_key,
-                    field,
-                    term,
-                });
-                if fields.len() == 1 {
-                    return query;
-                }
+            for query in queries {
                 alternatives.should(query);
             }
             alternatives.build().into()

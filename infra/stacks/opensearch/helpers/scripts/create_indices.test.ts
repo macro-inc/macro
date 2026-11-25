@@ -24,6 +24,25 @@ test('channel fallback authors preserve body highlights and sender identities', 
   });
 });
 
+test('the channels index gains link URLs in place', () => {
+  const spec = INDEX_SPECS.find((spec) => spec.aliasName === 'channels');
+  if (!spec) throw new Error('no channels index spec');
+  const { mappings, settings } = spec.body as {
+    mappings: { properties: Record<string, unknown> };
+    settings: { analysis: { analyzer: Record<string, unknown> } };
+  };
+  const { links: _, ...live } = mappings.properties;
+
+  const plan = planMappingConvergence({ desired: mappings.properties, live });
+
+  expect(plan.missingPaths).toEqual(['links']);
+  expect(plan.conflictPaths).toEqual([]);
+  expect(plan.updates).toEqual({ links: { type: 'text', analyzer: 'pattern' } });
+  // A built-in analyzer: adding one to the index's analysis settings would
+  // need the live index closed.
+  expect(Object.keys(settings.analysis.analyzer)).toEqual(['content_text']);
+});
+
 test('the documents index gains the email attachment flag in place', () => {
   const spec = INDEX_SPECS.find((spec) => spec.aliasName === 'documents');
   if (!spec) throw new Error('no documents index spec');

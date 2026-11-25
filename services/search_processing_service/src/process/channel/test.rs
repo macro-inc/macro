@@ -144,3 +144,44 @@ async fn a_missing_message_in_a_live_channel_stays_an_error(pool: sqlx::PgPool) 
         "{error:?}"
     );
 }
+
+fn indexed_links(content: &str) -> Vec<String> {
+    channel_message_upsert_args(ChannelMessageForSearch {
+        message: ChannelMessageInfo {
+            channel_id: Uuid::now_v7(),
+            name: Some("Design".into()),
+            channel_type: ChannelType::Private,
+            org_id: None,
+            message_id: Uuid::now_v7(),
+            thread_id: None,
+            sender_id: "macro|sender@example.com".into(),
+            imported_author: None,
+            content: content.into(),
+            created_at: chrono::DateTime::from_timestamp_millis(1_600_000_000_123).unwrap(),
+            updated_at: chrono::DateTime::from_timestamp_millis(1_600_000_000_456).unwrap(),
+            deleted_at: None,
+        },
+        mentions: vec![],
+    })
+    .unwrap()
+    .links
+}
+
+/// The text keeps a link's label, and the links keep its URL, which the
+/// label hides.
+#[test]
+fn a_message_indexes_the_links_it_shares_beside_its_text() {
+    let content = "Mostly the team's designs <m-link>{\"url\":\"https://app.sketchpad.design/file/0ABC\",\"text\":\"https://app.sketchpad.design/file/0ABC\",\"title\":\"\"}</m-link>, notes in <m-link>{\"url\":\"https://docs.example.com/d/1\",\"text\":\"the spec\",\"title\":\"\"}</m-link>";
+    assert_eq!(
+        indexed_content(content),
+        "Mostly the team's designs https://app.sketchpad.design/file/0ABC, notes in the spec"
+    );
+    assert_eq!(
+        indexed_links(content),
+        [
+            "https://app.sketchpad.design/file/0ABC",
+            "https://docs.example.com/d/1"
+        ]
+    );
+    assert!(indexed_links("no links").is_empty());
+}
