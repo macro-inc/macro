@@ -620,7 +620,7 @@ function DropdownRoot(props: ComponentProps<typeof KobalteDropdownMenu>) {
   );
   const open = () => local.open ?? uncontrolledOpen();
   const changeOpen = (next: boolean) => {
-    setUncontrolledOpen(next);
+    if (local.open === undefined) setUncontrolledOpen(next);
     local.onOpenChange?.(next);
   };
   createCloseOnNavigation({
