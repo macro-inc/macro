@@ -476,3 +476,75 @@ fn a_removed_send_stays_out_while_it_is_queued() {
         assert_eq!(timeline(&mut engine).await, ["m3", "m1"]);
     });
 }
+
+async fn reply_count(engine: &mut TestEngine) -> Value {
+    shown(engine, "m1").await["thread"]["replyCount"].take()
+}
+
+#[test]
+fn a_reset_that_drops_the_arrived_reply_counts_it_as_queued_again() {
+    block_on(async {
+        let mut engine = replying().await;
+        let both = replied(&[reply("r2", "~21", "m1"), reply(REPLY, "~22", "m1")]);
+        push(&mut engine, "14", &[both], &whole("14")).await;
+        assert_eq!(reply_count(&mut engine).await, 2);
+
+        let reset = ChannelTimelineCommit {
+            reset: true,
+            ..whole("20")
+        };
+        push(&mut engine, "20", &[replied(&[])], &reset).await;
+        assert_eq!(reply_count(&mut engine).await, 1);
+        engine.refresh_optimistic_queue().await.unwrap();
+        assert_eq!(reply_count(&mut engine).await, 1);
+    });
+}
+
+#[test]
+fn a_copy_of_a_reply_no_thread_can_place_does_not_prove_it_arrived() {
+    block_on(async {
+        let mut engine = replying().await;
+        let unplaced = reply(REPLY, "", "m1");
+        let entries = [replied(&[]), unplaced];
+        push(&mut engine, "14", &entries, &changes("c1", "11", "14")).await;
+        assert_eq!(reply_count(&mut engine).await, 1);
+        engine.refresh_optimistic_queue().await.unwrap();
+        assert_eq!(reply_count(&mut engine).await, 1);
+    });
+}
+
+#[test]
+fn an_arrived_reply_read_again_alone_leaves_the_servers_count() {
+    block_on(async {
+        let mut engine = replying().await;
+        let sent = reply(REPLY, "~22", "m1");
+        let both = replied(&[reply("r2", "~21", "m1"), sent.clone()]);
+        push(&mut engine, "14", &[both, sent.clone()], &whole("14")).await;
+        assert_eq!(reply_count(&mut engine).await, 2);
+
+        write_page(&mut engine, "c1", "15", &[sent], None)
+            .await
+            .unwrap();
+        assert_eq!(reply_count(&mut engine).await, 2);
+    });
+}
+
+#[test]
+fn a_dropped_thread_takes_the_arrived_reply_with_it() {
+    block_on(async {
+        let mut engine = replying().await;
+        let both = replied(&[reply("r2", "~21", "m1"), reply(REPLY, "~22", "m1")]);
+        push(&mut engine, "14", &[both], &whole("14")).await;
+        assert_eq!(reply_count(&mut engine).await, 2);
+
+        let dropped = ChannelTimelineCommit {
+            channel_id: "c1".into(),
+            dropped_thread_root_ids: vec!["m1".into()],
+            ..ChannelTimelineCommit::default()
+        };
+        engine.channel_timeline_commit(&dropped).await.unwrap();
+        let count = reply_count(&mut engine).await;
+        engine.refresh_optimistic_queue().await.unwrap();
+        assert_eq!(reply_count(&mut engine).await, count);
+    });
+}

@@ -1,7 +1,7 @@
 //! Admission of channel content, and the channel half of a record write.
 
 use super::channel_changes::{ChannelChangeKind, ChannelChanges};
-use super::pending_sends::{Known, sent_message};
+use super::pending_sends::sent_message;
 use super::{Engine, EngineError, Storage, layer_keys};
 use crate::channel_timeline::{
     ChannelCommitOutcome, ChannelCommitStatus, ChannelEntries, ChannelGuard, ChannelGuardQuery,
@@ -74,21 +74,16 @@ impl ChannelAdmission {
         }
     }
 
-    /// What the write leaves of an entry, if it stores it dated or removes it.
-    pub(super) fn written(&self, key: &EntityKey<'static>) -> Option<Known> {
+    /// The sequence the write stores `key` at, if it dates it.
+    pub(super) fn stamp(&self, key: &EntityKey<'static>) -> Option<i64> {
+        self.stamped.get(key).map(|admitted| admitted.seq)
+    }
+
+    /// The sequence of the tombstone the write leaves of `key`.
+    pub(super) fn tombstone(&self, key: &EntityKey<'static>) -> Option<i64> {
         let tombstones = &self.write.tombstones;
-        let tombstone = tombstones.iter().find(|stone| stone.record_key == *key);
-        let removed = tombstone.map(|stone| Known {
-            seq: stone.seq,
-            removed: true,
-        });
-        removed.or_else(|| {
-            let admitted = self.stamped.get(key)?;
-            Some(Known {
-                seq: admitted.seq,
-                removed: false,
-            })
-        })
+        let found = tombstones.iter().find(|stone| stone.record_key == *key);
+        found.map(|stone| stone.seq)
     }
 
     /// Whether `key` is written without merging into what is held.

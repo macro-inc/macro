@@ -445,6 +445,8 @@ struct OptimisticLayer {
     identity_keys: BTreeSet<EntityKey<'static>>,
     id: OptimisticTransactionId,
     uuid: Uuid,
+    /// The earliest sequence this engine knew its message arrived by.
+    arrived: Option<i64>,
     superseded: bool,
     updates: RecordUpdates,
     link_patches: Vec<OptimisticLinkPatch>,
@@ -773,7 +775,6 @@ impl<S: Storage> Engine<S> {
         admission: Option<&ChannelAdmission>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
         let mut layers = Vec::with_capacity(queued.len());
-        let arrived = self.arrived_sends(&queued, admission).await?;
         for queued in queued {
             let variables: Json = serde_json::from_str(&queued.mutation.request.variables_json)
                 .map_err(|error| EngineError::InvalidQueuedMutation {
@@ -837,7 +838,8 @@ impl<S: Storage> Engine<S> {
             let (candidates, bases) = self
                 .load_link_patch_bases(candidates, &layers, &updates, &patches, staged)
                 .await?;
-            self.yield_to_server(&arrived, queued.uuid, &mut updates, &bases, admission)
+            let arrived = self
+                .yield_to_server(queued.uuid, &mut updates, &bases, admission)
                 .await?;
             let composed = effective_records(&bases, &layers, &candidates);
             let mut effective = present_records(composed);
@@ -880,6 +882,7 @@ impl<S: Storage> Engine<S> {
                 identity_bindings: source.identity_bindings,
                 id: queued.id,
                 uuid: queued.uuid,
+                arrived,
                 superseded: queued.superseded,
                 updates,
                 link_patches: patches,
