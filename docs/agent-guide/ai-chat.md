@@ -1858,9 +1858,11 @@ transcript (and in the originating channel thread). An agent-session chip with
 latest turn. A date chip written for a moment (a timestamp whose label names a
 time, as agents write a busy block) shows that moment's day and time in the
 viewer's zone, such as "Today, 3:15 PM"; a day chip shows the day alone.
-`@mention` a person in a prompt and, if you can edit the session, they are granted edit
-access and get an `agent_session_mentioned` notification that opens the session; a viewer's
-mention only notifies people who could already open it.
+`@mention` a person in a prompt to tell the agent who you mean: the mention reaches the
+agent as a chip, but it notifies nobody and shares the session with nobody. The same holds
+in a private conversation with an agent (an agent DM): naming someone there, in your message
+or the agent's reply, does not notify them; only the DM's owner still hears a mention of
+themselves.
 
 In Home, a new Agents conversation, and an existing agent session, files can be
 attached to a prompt three ways: drop them anywhere on the composer (a

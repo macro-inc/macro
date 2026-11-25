@@ -7,7 +7,7 @@ import { lazy } from 'solid-js';
 import { render } from 'solid-js/web';
 import { analytics } from '../../app/utils/utilAnalytic';
 import { buildAppUrl } from '../../app/utils/utilBaseUrl';
-import { applyPalette, onPaletteChange, preferredPalette } from './sitePalette';
+import { applyPalette, preferredPalette } from './sitePalette';
 
 // The homepage does not need the account, integration, and team setup screens.
 const PublicOnboarding = lazy(async () => {
@@ -47,7 +47,6 @@ function Preview() {
 }
 // Apply the website palette policy before rendering; see sitePalette.ts.
 applyPalette(preferredPalette());
-onPaletteChange(applyPalette);
 
 const root = document.getElementById('root');
 if (window.location.pathname === '/') {

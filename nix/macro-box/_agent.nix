@@ -27,6 +27,10 @@ let
   failures = "${state}/failed-boots";
   bootHead = "${state}/boot-head";
   restartFile = "${home}/.restart";
+  # The volume is mounted at /home. This directory is outside the
+  # unprivileged user's home so the image can trust a selection after reboot.
+  runtimeBundles = "/home/.macro-agent-runtime";
+  runtimeControl = "/run/macro-agent-runtime";
   # The agent's browser profile: its logins survive restarts and image
   # updates on the data disk.
   browserProfile = "${home}/browser";
@@ -95,6 +99,8 @@ let
     boot_head=${bootHead}
     max_failed_boots=3
     runtime=${cfg.runtime}
+    runtime_bundles=${runtimeBundles}
+    runtime_control=${runtimeControl}
     helper=${lib.getExe credentialHelper}
     helper_credentials=/run/credentials/macro-agent.service/agent.env
     setup_traceparent=/run/macrod/agent-traceparent
@@ -131,12 +137,14 @@ let
   # computer-use-linux reads Chromium's AT-SPI tree only when that key, or
   # the AT-SPI bus's IsEnabled (which the bus launcher derives from it), says
   # accessibility is on. There is no dconf, so the default is the value.
-  accessibilitySettings = pkgs.runCommand "agent-accessibility-settings" { nativeBuildInputs = [ pkgs.glib ]; } ''
-    mkdir -p $out
-    cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.xml $out/
-    printf '[org.gnome.desktop.interface]\ntoolkit-accessibility=true\n' > $out/90_macro-agent.gschema.override
-    glib-compile-schemas --strict $out
-  '';
+  accessibilitySettings =
+    pkgs.runCommand "agent-accessibility-settings" { nativeBuildInputs = [ pkgs.glib ]; }
+      ''
+        mkdir -p $out
+        cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.xml $out/
+        printf '[org.gnome.desktop.interface]\ntoolkit-accessibility=true\n' > $out/90_macro-agent.gschema.override
+        glib-compile-schemas --strict $out
+      '';
 
   # Stdio MCP servers the runtime adds to its Claude Code query.
   mcpServers = {
@@ -226,7 +234,11 @@ let
   };
   hardening = sandbox // {
     # The token `claude` reads.
-    BindReadOnlyPaths = [ claudeSignIn ];
+    BindReadOnlyPaths = [
+      claudeSignIn
+      runtimeBundles
+    ];
+    ReadWritePaths = sandbox.ReadWritePaths ++ [ "${runtimeControl}/receipts" ];
     MemoryMax = "75%";
     TasksMax = 4096;
     LoadCredential = "agent.env:${agentEnvironment}";
@@ -265,21 +277,23 @@ let
     "macro-agent-browser.service"
   ];
   # A unit of the agent's desktop; all but the display join its /tmp.
-  desktopService = description: service: extra: {
-    inherit description;
-    wantedBy = [ "multi-user.target" ];
-    environment = desktopEnvironment // {
-      HOME = home;
-    };
-    unitConfig = {
-      StartLimitIntervalSec = 0;
+  desktopService =
+    description: service: extra:
+    {
+      inherit description;
+      wantedBy = [ "multi-user.target" ];
+      environment = desktopEnvironment // {
+        HOME = home;
+      };
+      unitConfig = {
+        StartLimitIntervalSec = 0;
+      }
+      // lib.optionalAttrs (description != displayDescription) {
+        JoinsNamespaceOf = "macro-agent-display.service";
+      };
+      serviceConfig = sandbox // service;
     }
-    // lib.optionalAttrs (description != displayDescription) {
-      JoinsNamespaceOf = "macro-agent-display.service";
-    };
-    serviceConfig = sandbox // service;
-  }
-  // extra;
+    // extra;
   displayDescription = "Agent teammate display (Xvnc ${display} on 127.0.0.1:${toString vncPort})";
   afterDisplay = {
     bindsTo = [ "macro-agent-display.service" ];
@@ -332,6 +346,57 @@ let
   restartAgent = pkgs.writeShellScript "macro-agent-restart" ''
     exec ${lib.getExe pauseAgent} restart -
   '';
+  # A sibling unit runs inspection as the agent with the same home and
+  # privilege boundaries. It starts in systemd's mount namespace.
+  inspectionSandbox = builtins.removeAttrs sandbox [ "RestartSec" ] // {
+    Restart = "no";
+    PrivateNetwork = true;
+    RestrictNamespaces = true;
+    WorkingDirectory = workspace;
+    RuntimeMaxSec = 800;
+  };
+  inspectionProperties = lib.mapAttrsToList (
+    name: value:
+    "--property=${name}=${
+      if builtins.isList value then
+        lib.concatStringsSep " " value
+      else if builtins.isBool value then
+        lib.boolToString value
+      else
+        toString value
+    }"
+  ) inspectionSandbox;
+  runtimeUpdate = pkgs.writeShellApplication {
+    name = "macro-agent-runtime-update";
+    runtimeInputs = [
+      config.systemd.package
+      pkgs.bash
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.findutils
+      pkgs.git
+      pkgs.jq
+      pkgs.python3
+      pkgs.util-linux
+      pkgs.zstd
+    ];
+    text = ''
+      self=$0
+      image_system=/run/current-system
+      file_helper=${./files/agent-runtime-files.py}
+      workspace=${workspace}
+      last_good=${lastGood}
+      boot_head=${bootHead}
+      restart_marker=${restartFile}
+      bundles=${runtimeBundles}
+      control=${runtimeControl}
+      pause=${pauseState}
+      image_runtime=${cfg.runtime}
+      agent_cgroup=/sys/fs/cgroup/macro.slice/${sandbox.Slice}/macro-agent.service
+      inspection_properties=( ${lib.escapeShellArgs inspectionProperties} )
+    ''
+    + builtins.readFile ./files/agent-runtime-update;
+  };
   waitForDisplay = pkgs.writeShellScript "wait-for-agent-display" ''
     until [ -S /tmp/.X11-unix/X${toString displayNumber} ]; do sleep 0.2; done
   '';
@@ -362,6 +427,7 @@ in
   config = lib.mkIf config.macro.box.agentMode {
     environment.systemPackages = [
       cfg.computerUse.package
+      runtimeUpdate
       # The harness reaches the agent's screen (Xvnc on 5901) with
       # `socat STDIO TCP:127.0.0.1:5901` over the fleet's exec, whose PATH is
       # the system profile.
@@ -370,14 +436,26 @@ in
     users.groups.${agentGroup} = { };
     # macro's own desktop and browser are for macro's sessions, not the
     # agent (its group), whose sandbox they would let it out of.
-    networking.firewall.extraCommands = lib.concatMapStrings (iptables: ''
-      ${iptables} -w -N macro-agent-out 2>/dev/null || ${iptables} -w -F macro-agent-out
-      ${iptables} -w -A macro-agent-out -p tcp -m multiport --dports 5900,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
-      ${iptables} -w -C OUTPUT -o lo -j macro-agent-out 2>/dev/null || ${iptables} -w -I OUTPUT -o lo -j macro-agent-out
-    '') [ "iptables" "ip6tables" ];
-    networking.firewall.extraStopCommands = lib.concatMapStrings (iptables: ''
-      ${iptables} -w -D OUTPUT -o lo -j macro-agent-out 2>/dev/null || true
-    '') [ "iptables" "ip6tables" ];
+    networking.firewall.extraCommands =
+      lib.concatMapStrings
+        (iptables: ''
+          ${iptables} -w -N macro-agent-out 2>/dev/null || ${iptables} -w -F macro-agent-out
+          ${iptables} -w -A macro-agent-out -p tcp -m multiport --dports 5900,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
+          ${iptables} -w -C OUTPUT -o lo -j macro-agent-out 2>/dev/null || ${iptables} -w -I OUTPUT -o lo -j macro-agent-out
+        '')
+        [
+          "iptables"
+          "ip6tables"
+        ];
+    networking.firewall.extraStopCommands =
+      lib.concatMapStrings
+        (iptables: ''
+          ${iptables} -w -D OUTPUT -o lo -j macro-agent-out 2>/dev/null || true
+        '')
+        [
+          "iptables"
+          "ip6tables"
+        ];
     fonts.packages = [
       pkgs.noto-fonts-cjk-sans
       pkgs.noto-fonts-color-emoji
@@ -387,6 +465,21 @@ in
       ${home}.d = {
         user = "macro";
         group = "macro";
+        mode = "0700";
+      };
+      ${runtimeBundles}.d = {
+        user = "root";
+        group = "root";
+        mode = "0755";
+      };
+      ${runtimeControl}.d = {
+        user = "root";
+        group = "root";
+        mode = "0755";
+      };
+      "${runtimeControl}/receipts".d = {
+        user = "macro";
+        group = agentGroup;
         mode = "0700";
       };
       ${pauseState}.d = {
@@ -430,6 +523,8 @@ in
 
     systemd.services.macro-agent = agentUnit // {
       description = "Macro agent teammate";
+      requires = (agentUnit.requires or [ ]) ++ [ "macro-agent-runtime-boot.service" ];
+      after = agentUnit.after ++ [ "macro-agent-runtime-boot.service" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = hardening // {
         WorkingDirectory = home;
@@ -441,6 +536,28 @@ in
         RestartPreventExitStatus = 79;
         # A call is a child process; a restart must not hang up on anyone.
         KillMode = "process";
+      };
+    };
+
+    systemd.services.macro-agent-runtime-boot = {
+      description = "Restore the previous agent runtime after an interrupted update";
+      unitConfig.RequiresMountsFor = "/home";
+      after = [ "systemd-tmpfiles-setup.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${lib.getExe runtimeUpdate} boot";
+      };
+    };
+    systemd.services.macro-agent-runtime-recover = {
+      description = "Recover a failed agent runtime update";
+      serviceConfig = {
+        Type = "oneshot";
+        TimeoutStartSec = 330;
+        Restart = "on-failure";
+        RestartSec = 2;
+        ExecStart = "${lib.getExe runtimeUpdate} recover";
+        ExecStopPost = "${lib.getExe runtimeUpdate} unfence";
       };
     };
 
@@ -503,14 +620,17 @@ in
     systemd.services.macro-agent-bus = desktopService "The agent teammate's session bus, with AT-SPI" {
       ExecStart = "${lib.getExe' pkgs.dbus "dbus-daemon"} --nofork --nopidfile --config-file=${busConfig}";
     } afterDisplay;
-    systemd.services.macro-agent-sound = desktopService "The agent teammate's sound server" {
-      ExecStart = "${lib.getExe' pkgs.pulseaudio "pulseaudio"} --daemonize=no --exit-idle-time=-1 --log-target=stderr -n --file=${soundConfig}";
-    } {
-      environment = desktopEnvironment // {
-        HOME = home;
-        PULSE_RUNTIME_PATH = "${desktopRuntime}/pulse";
-      };
-    };
+    systemd.services.macro-agent-sound =
+      desktopService "The agent teammate's sound server"
+        {
+          ExecStart = "${lib.getExe' pkgs.pulseaudio "pulseaudio"} --daemonize=no --exit-idle-time=-1 --log-target=stderr -n --file=${soundConfig}";
+        }
+        {
+          environment = desktopEnvironment // {
+            HOME = home;
+            PULSE_RUNTIME_PATH = "${desktopRuntime}/pulse";
+          };
+        };
     # The agent's browser, on its desktop (so a screen share shows it), with
     # DevTools on loopback only and AT-SPI on for computer use.
     systemd.services.macro-agent-browser =

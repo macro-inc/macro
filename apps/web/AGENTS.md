@@ -2071,6 +2071,12 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 ## Macro computers
 
+The VNC viewer's `computer.screen.connect` span ends once on the first decoded
+frame or an earlier terminal outcome. Its viewer journey id persists across
+reconnects, and the attempt number advances when each ticket request starts.
+Run the sandboxed noVNC regression with
+`bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts`.
+
 ### Claude access
 
 Computer rows show the Claude mode (`Signed in with Claude` on the computer's

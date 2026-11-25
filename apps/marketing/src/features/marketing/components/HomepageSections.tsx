@@ -13,15 +13,25 @@ import ChatIcon from '@phosphor/chats-circle.svg';
 import { For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import agentsScreen from '../../../assets/homepage/agents.webp';
+import agentsScreenLight from '../../../assets/homepage/agents-light.webp';
 import calendarScreen from '../../../assets/homepage/calendar.webp';
+import calendarScreenLight from '../../../assets/homepage/calendar-light.webp';
 import callsScreen from '../../../assets/homepage/calls.webp';
+import callsScreenLight from '../../../assets/homepage/calls-light.webp';
 import chatScreen from '../../../assets/homepage/chat-thread.webp';
+import chatScreenLight from '../../../assets/homepage/chat-thread-light.webp';
 import crmScreen from '../../../assets/homepage/crm.webp';
+import crmScreenLight from '../../../assets/homepage/crm-light.webp';
 import docsScreen from '../../../assets/homepage/docs-split.webp';
+import docsScreenLight from '../../../assets/homepage/docs-split-light.webp';
 import inboxScreen from '../../../assets/homepage/inbox.webp';
+import inboxScreenLight from '../../../assets/homepage/inbox-light.webp';
 import mailScreen from '../../../assets/homepage/mail-thread.webp';
+import mailScreenLight from '../../../assets/homepage/mail-thread-light.webp';
 import pullRequestScreen from '../../../assets/homepage/pull-request.webp';
+import pullRequestScreenLight from '../../../assets/homepage/pull-request-light.webp';
 import tasksScreen from '../../../assets/homepage/tasks-board.webp';
+import tasksScreenLight from '../../../assets/homepage/tasks-board-light.webp';
 import type { TutorialVideoId } from '../core/tutorial-videos';
 import { FeaturePageSection } from './FeaturePage';
 import { HomepageBlog } from './HomepageBlog';
@@ -43,6 +53,8 @@ type Section = {
   tutorial: TutorialVideoId;
   screen: string;
   alt: string;
+  /** The light palette's capture, from the website's sample workspace. */
+  light: { screen: string; alt: string };
   fit?: 'bleed' | 'full';
   page?: { title: string; path: ProductPagePath | '/docs/product/home' };
 };
@@ -61,6 +73,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'home',
     screen: inboxScreen,
     alt: 'Macro Home with a pull request open beside the list: its description, status and a review request',
+    light: {
+      screen: inboxScreenLight,
+      alt: 'Macro Home with an email open beside the list of chats, channels, emails and tasks',
+    },
     page: { title: 'Home', path: '/docs/product/home' },
   },
   {
@@ -75,6 +91,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'mail',
     screen: mailScreen,
     alt: 'An email open in Macro Mail, with a task just created from it',
+    light: {
+      screen: mailScreenLight,
+      alt: 'An email thread open in Macro Mail, with its participants and a reply box',
+    },
     page: { title: 'Email', path: '/email' },
   },
   {
@@ -89,6 +109,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'chat',
     screen: chatScreen,
     alt: 'The launch-team channel with a thread showing its first replies inline, and a task created from a message',
+    light: {
+      screen: chatScreenLight,
+      alt: 'The launch channel in Macro Chat with a thread’s replies inline and a reply being written',
+    },
     page: { title: 'Chat', path: '/channels' },
   },
   {
@@ -102,6 +126,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'tasks',
     screen: tasksScreen,
     alt: 'Tasks as a board grouped by priority',
+    light: {
+      screen: tasksScreenLight,
+      alt: 'Macro Tasks as a board grouped by priority, each card showing its project and assignee',
+    },
     page: { title: 'Tasks', path: '/tasks' },
   },
   {
@@ -115,6 +143,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'docs',
     screen: docsScreen,
     alt: 'A requirements doc on the left mentioning a task, with the task open in a split on the right',
+    light: {
+      screen: docsScreenLight,
+      alt: 'A rollout plan in Macro Docs with tags, next steps and a discussion below',
+    },
     fit: 'full',
     page: { title: 'Docs', path: '/documents' },
   },
@@ -129,6 +161,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'calendar',
     screen: calendarScreen,
     alt: 'A week view in Macro Calendar with upcoming events in the sidebar',
+    light: {
+      screen: calendarScreenLight,
+      alt: 'Macro Calendar: a week view with upcoming events in the sidebar',
+    },
     page: { title: 'Calendar', path: '/calendar' },
   },
   {
@@ -142,6 +178,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'calls',
     screen: callsScreen,
     alt: 'A list of recorded calls, each with a one-line summary',
+    light: {
+      screen: callsScreenLight,
+      alt: 'A channel’s Calls tab in Macro listing recorded calls with their summaries and attendees',
+    },
     page: { title: 'Calls', path: '/calls' },
   },
   {
@@ -155,6 +195,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'crm',
     screen: crmScreen,
     alt: 'Companies grouped into Lead, Demo, Customer and Churned, with owner and revenue',
+    light: {
+      screen: crmScreenLight,
+      alt: 'A company record in Macro CRM with its description and a team discussion',
+    },
     page: { title: 'CRM', path: '/crm' },
   },
   {
@@ -168,6 +212,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'agents',
     screen: agentsScreen,
     alt: 'A channel where a teammate mentions Cursor and the agent replies with the change it made',
+    light: {
+      screen: agentsScreenLight,
+      alt: 'A channel where a teammate mentions the Cursor agent and it replies in the thread',
+    },
     page: { title: 'Agents', path: '/agents' },
   },
   {
@@ -181,6 +229,10 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'github',
     screen: pullRequestScreen,
     alt: 'An engineering channel with a pull request open in a split: description, review comments and a Merge button',
+    light: {
+      screen: pullRequestScreenLight,
+      alt: 'A pull request in Macro with its description and discussion beside the changed files',
+    },
     page: { title: 'pull requests', path: '/github' },
   },
 ];
@@ -224,6 +276,7 @@ export function HomepageSections() {
               tutorial={section.tutorial}
               src={section.screen}
               alt={section.alt}
+              light={{ src: section.light.screen, alt: section.light.alt }}
               fit={section.fit}
               page={section.page}
             />

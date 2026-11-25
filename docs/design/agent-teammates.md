@@ -48,9 +48,9 @@ Team admins and owners can read the repo with their Macro credential.
 2. **The computer is created** from the agent image, because it has an agent.
 3. **Enrollment** writes `agent.env` as the agent service's systemd credential.
 4. **The launcher** clones the repo into the workspace, sets the agent's git
-   identity and credential helper, links the image's packages (muppet, the
+   identity and credential helper, links the selected runtime packages (muppet, the
    SDK and the template's locked dependencies), checks that the code needs no
-   higher muppet API than the image has (`muppetApi` against `apiLevel`; a new
+   higher muppet API than the runtime has (`muppetApi` against `apiLevel`; a new
    agent on too old an image stops with exit 79), and starts `bun cli.ts run`.
 5. **Claude Code** reaches Anthropic through the customer's Claude login
    (harnessd), or through the Macro-credits gateway when `agent.env` says so.
@@ -67,9 +67,10 @@ default coding agent only on computers without an agent teammate.
 The agent's process is the only one that holds its credentials.
 
 - **Code and image** ship separately: the code from the template (or the
-  agent's own lands), muppet from the image. The code declares the muppet API
-  it needs and muppet the level it has; muppet's API only grows, so any image
-  at or above the need runs it.
+  agent's own lands), Muppet from the image or a compatible runtime bundle.
+  The code declares its required API and the runtime declares its level.
+  A bundle changes SDK and Muppet without replacing the guest image.
+  See the [dev rollout procedure](../runbooks/firecracker-computers-rollout.md#service-only-runtime-updates-in-dev).
 - **Credentials** come from the systemd credential file
   (`MUPPET_CREDENTIALS_FILE`, read-only). A self-hosted agent can keep them in
   SOPS instead (`MUPPET_CREDENTIALS=sops`).

@@ -2,8 +2,9 @@
 
 use super::properties_pg_repo::PropertiesPgRepo;
 use crate::domain::model::{
-    PropertyDefinitionOwner, PropertyOptionInsert, PropertyOptionReplaceOutcome,
-    PropertyOptionReplacePlan, PropertyOptionRewrite, UpdatePropertyOptionOutcome,
+    CreatePropertyOptionWithIdOutcome, PropertyDefinitionOwner, PropertyOptionInsert,
+    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, PropertyOptionRewrite,
+    UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -453,7 +454,9 @@ async fn get_or_create_tag_definition_coexists_with_same_named_property(
 
     // Owner already has a non-tag property literally named "Tags".
     repo.create_property_definition(owner, "Tags", DataType::String, false, None, Vec::new())
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     // Provisioning the tag set still succeeds: tag definitions are exempt from the
     // display-name uniqueness that applies to user-created properties.
@@ -787,4 +790,66 @@ async fn get_or_create_option_propagates_non_duplicate_errors(pool: Pool<Postgre
             .unwrap()
             .is_foreign_key_violation()
     );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn create_property_option_with_id_writes_once(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let definition: Uuid = PRIORITY_PROPERTY_ID.parse().unwrap();
+    let id = Uuid::from_u128(0xC1);
+
+    let created = repo
+        .create_property_option_with_id(
+            id,
+            definition,
+            9,
+            PropertyOptionValue::String("Someday".to_string()),
+            Some("#00FF00".to_string()),
+        )
+        .await?;
+    let CreatePropertyOptionWithIdOutcome::Created(created) = created else {
+        panic!("first insert writes: {created:?}");
+    };
+    assert_eq!(created.id, id);
+
+    // A second insert under the same id writes nothing, even with new values.
+    let replay = repo
+        .create_property_option_with_id(
+            id,
+            definition,
+            1,
+            PropertyOptionValue::String("Other".to_string()),
+            None,
+        )
+        .await?;
+    assert!(matches!(replay, CreatePropertyOptionWithIdOutcome::IdTaken));
+    let stored = repo.get_property_option(id).await?.expect("stored");
+    assert_eq!(
+        stored.value,
+        PropertyOptionValue::String("Someday".to_string())
+    );
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM property_options WHERE id = $1")
+        .bind(id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(rows, 1);
+
+    // A value the definition already has still fails under a fresh id.
+    let duplicate = repo
+        .create_property_option_with_id(
+            Uuid::from_u128(0xC2),
+            definition,
+            4,
+            PropertyOptionValue::String("Low".to_string()),
+            None,
+        )
+        .await?;
+    assert!(matches!(
+        duplicate,
+        CreatePropertyOptionWithIdOutcome::DuplicateValue
+    ));
+    Ok(())
 }

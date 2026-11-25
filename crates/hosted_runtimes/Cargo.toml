@@ -36,6 +36,7 @@ outbound = [
 ports = []
 # The `image-upgrade` binary the image rollout workflow runs.
 image-upgrade-cli = ["outbound", "dep:clap", "tokio/macros"]
+runtime-update-cli = ["outbound", "dep:clap", "tokio/macros"]
 # OpenAPI schemas for the shared types other crates' routes return.
 schema = ["dep:utoipa"]
 
@@ -99,3 +100,8 @@ required-features = ["outbound"]
 name = "image-upgrade"
 path = "src/bin/image_upgrade.rs"
 required-features = ["image-upgrade-cli"]
+
+[[bin]]
+name = "agent-runtime-update"
+path = "src/bin/agent_runtime_update.rs"
+required-features = ["runtime-update-cli"]

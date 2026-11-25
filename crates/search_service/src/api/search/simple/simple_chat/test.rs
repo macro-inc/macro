@@ -24,7 +24,6 @@ async fn the_name_search_span_leaves_out_the_term() {
         "severance offer".to_string(),
         &["redundancy plan".to_string()],
         &[],
-        false,
         10,
         SearchCursorOption::Done,
     )

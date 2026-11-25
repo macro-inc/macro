@@ -27,6 +27,12 @@ pub enum PropertiesErr {
     #[error("Property option not found")]
     OptionNotFound,
 
+    /// The option exists under another definition than the one named, one the
+    /// caller can see (a promoted tag keeps its id) - maps to 404 like
+    /// [`Self::OptionNotFound`], but the option is not gone.
+    #[error("Property option not found")]
+    OptionInAnotherDefinition,
+
     /// Entity property not found - maps to 404
     #[error("Entity property not found")]
     EntityPropertyNotFound,
@@ -34,6 +40,10 @@ pub enum PropertiesErr {
     /// The property is required for the entity type - maps to 403
     #[error("This property is required and cannot be removed from this entity")]
     RequiredProperty,
+
+    /// The owner already has a property with the requested name - maps to 409
+    #[error("A property with that name already exists")]
+    DuplicateDefinitionName,
 
     /// An option with the requested value already exists - maps to 409
     #[error("An option with that value already exists")]

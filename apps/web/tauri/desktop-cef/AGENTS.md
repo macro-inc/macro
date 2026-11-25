@@ -46,7 +46,7 @@ against a Vite server and drive it with Playwright `connectOverCDP`:
 - `echo development > ../src-tauri/.macro-tauri-env` (gitignored). Without it
   `build.rs` needs a built `dist/`.
 - Build the CLI once from the `macro-cef` checkout cargo already fetched
-  (`~/.cargo/git/checkouts/tauri-*/4b8a46f`):
+  (`~/.cargo/git/checkouts/tauri-*/9284281`):
   `RUSTUP_TOOLCHAIN=1.95.0 cargo build --release -p tauri-cli`. Put `ninja` on
   `PATH` (`nix shell nixpkgs#ninja`) and point `CEF_PATH` at a disk with room.
 - From here:

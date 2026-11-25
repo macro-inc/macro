@@ -147,6 +147,17 @@ impl CreatePropertyDefinitionRequest {
     /// Validate all property definition constraints
     pub fn validate(&self) -> Result<(), PropertyDefinitionValidationError> {
         self.validate_display_name()?;
+        self.validate_seed_options()?;
+        Ok(())
+    }
+
+    /// Refuse a blank seed option, as adding one later is refused.
+    pub fn validate_seed_options(&self) -> Result<(), PropertyDefinitionValidationError> {
+        if let PropertyDataType::SelectString { options, .. } = &self.data_type
+            && options.iter().any(|option| option.value.trim().is_empty())
+        {
+            return Err(PropertyDefinitionValidationError::EmptyOptionValue);
+        }
         Ok(())
     }
 }

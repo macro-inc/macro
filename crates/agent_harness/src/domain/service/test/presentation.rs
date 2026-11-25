@@ -80,7 +80,6 @@ async fn presentation_forward_ack_waits_for_the_remote_durable_pair() {
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
-        crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
     );
     let presentation = SessionToolPresentation {

@@ -37,7 +37,8 @@ read it before changing behaviour.
   the operator drives: a `FirecrackerFleet` per host row with an endpoint,
   or the local Docker home host).
 - `src/domain/operator/`: `hosts.rs` (home registration, per-host fleets,
-  reconcile) and `effects.rs` (the effect pass: each host's effects in lease
+  reconcile, and the guest image from the same fleet lookup for tracing)
+  and `effects.rs` (the effect pass: each host's effects in lease
   order, `max_concurrent_starts` at a time).
 - `src/domain/overcommit.rs` (+ `overcommit/`): pure per-host capacity,
   admission (allocation + fresh memory report + pending starts), relief
@@ -71,6 +72,13 @@ read it before changing behaviour.
   replica; computers under way are held like a move's. Recorded by the
   `image-upgrade` binary (`src/bin/image_upgrade.rs`, feature
   `image-upgrade-cli`), which the Firecracker image rollout workflow runs.
+
+- `src/domain/runtime_update.rs` and `src/domain/operator/runtime_update.rs`:
+  the dev-only single-teammate runtime update, queued by the
+  `agent-runtime-update` CLI. The Postgres lease holds the computer against
+  moves and image upgrades while the host's fixed guest updater runs.
+  Repeated failed settlement probes past the deadline leave a recovery
+  hold that a successful image upgrade clears.
 
 ## Scope
 
