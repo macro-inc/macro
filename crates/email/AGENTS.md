@@ -301,14 +301,26 @@ tools — hexagonal, heavily feature-gated.
   to the next, so one slow inbox can't stop the sweep for all. `stale_threads` reads one
   inbox through its latest-inbound and latest-outbound indexes into a
   materialized `stale` CTE; keep it materialized, or the per-thread calendar
-  and contact checks run on every thread in the window. Whether a sender is a
+  and contact checks run on every thread in the window. The received mail of
+  those threads is read once (`inbound`) for both the calendar test and the
+  senders. Whether a sender is a
   recent contact is decided once per distinct sender, never per thread: one
   named on at most `ADDRESSED_PROBE_LIMIT` messages through those messages,
   stopping at the first the owner sent lately; one named on more, a list
   address being a recipient of all its mail, against the owner's recent
-  recipients, read only then. Reading the owner's sent mail on every page
+  recipients, read only then, through `idx_email_messages_link_id_sent_date`
+  (link and date, sent and not a draft; keep the predicate the index's).
+  Reading the owner's sent mail on every page
   costs thousands of cold pages in production, and probing a list per thread
-  costs its whole history.
+  costs its whole history. Unclassified threads stay in the window, so the
+  sweep reads each inbox in full only once a day (`FULL_READ_EVERY`, and in its
+  first sweep after a start, spread over the day by link id) and in between
+  passes `mail_since`, which reads only threads with mail in the last
+  `REREAD_MAIL` and signal threads. What a full read alone finds (a sender
+  newly a recent contact, a thread back in the inbox without new mail, mail
+  synced over a day late) waits for the next one. A full read that fails or
+  stops short records nothing, so the next sweep reads in full again, and only
+  a complete full read forgets the inbox's settled threads.
 - A Focus thread's days (`due_on` and the day of the meeting it is about) are read
   in one call when new mail is classified, only for a thread
   with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
