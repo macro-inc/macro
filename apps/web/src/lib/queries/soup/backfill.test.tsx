@@ -277,6 +277,36 @@ describe('streamed cache sync', () => {
     rendered.unmount();
   });
 
+  it('keeps paging when only the flag finishes loading', async () => {
+    // PostHog answers `loading` first and then the same `enabled` value.
+    const [flag, setFlag] = createSignal({
+      enabled: false,
+      payload: undefined,
+      loading: true,
+    });
+    featureFlagMocks.useFeatureFlag
+      .mockReset()
+      .mockImplementation((requested: { key: string }) =>
+        requested.key === 'enable-streamed-cache-sync'
+          ? flag
+          : () => ({ enabled: true, payload: undefined })
+      );
+    graphqlMocks.hydrateGraphqlSoup
+      .mockReset()
+      .mockReturnValue(new Promise(() => {}));
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+
+    await vi.waitFor(() =>
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
+    );
+    setFlag({ enabled: false, payload: undefined, loading: false });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // A restarted backfill would ask for the channel lane's first page again.
+    expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce();
+    expect(runSyncPass).not.toHaveBeenCalled();
+    rendered.unmount();
+  });
+
   it('falls back to paging when the host cannot stream', async () => {
     streamedSync(true);
     // An older native build answers that it has no sync.

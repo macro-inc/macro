@@ -28,7 +28,13 @@ import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { CHANNEL_DIRECTORY_LANE } from '../channel/directory-lane';
 import {
   ChannelDirectoryPassUnproven,
@@ -1100,7 +1106,9 @@ export function useSoupBackfills(
   directoryChannels: Accessor<readonly ContextChannel[] | undefined>
 ): void {
   const streamedSyncFlag = useFeatureFlag(enableStreamedCacheSync);
-  const streamedSync = () => streamedSyncFlag().enabled;
+  // Only `enabled` picks the sync: the flag's value also changes when
+  // PostHog finishes loading, which must not restart a running backfill.
+  const streamedSync = createMemo(() => streamedSyncFlag().enabled);
   const isLeader = createTabLeaderSignal(
     soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
   );
