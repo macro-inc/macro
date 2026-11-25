@@ -265,11 +265,12 @@ mod service {
 
     use super::super::service::{
         ChangedEntityProperty, MergeCommitted, MergeEffects, MergeGate, MergePipelineAccess,
-        RecordMergeRepository, RecordMergeService, RecordMerges,
+        MergeReferenceAccess, RecordMergeRepository, RecordMergeService, RecordMerges,
     };
     use super::super::*;
     use crate::domain::auth::{CrmMemberAccess, CrmTeamReceipt};
     use crate::domain::model::CrmError;
+    use models_properties::EntityType as PropertyEntityType;
 
     const USER: &str = "macro|merger@example.com";
 
@@ -353,6 +354,24 @@ mod service {
                 .iter()
                 .copied()
                 .filter(|pipeline| self.0.contains(pipeline))
+                .collect())
+        }
+    }
+
+    struct Entities(HashSet<String>);
+
+    #[async_trait::async_trait]
+    impl MergeReferenceAccess for Entities {
+        async fn readable(
+            &self,
+            user: &MacroUserIdStr<'static>,
+            entities: &[(PropertyEntityType, String)],
+        ) -> Result<HashSet<(PropertyEntityType, String)>, MergeError> {
+            assert_eq!(user.as_ref(), USER);
+            Ok(entities
+                .iter()
+                .filter(|(_, id)| self.0.contains(id))
+                .cloned()
                 .collect())
         }
     }
@@ -521,6 +540,7 @@ mod service {
                     entries: 3,
                 },
             ],
+            reference_holders: Vec::new(),
         }
     }
 
@@ -556,5 +576,47 @@ mod service {
             .unwrap();
         assert!(unchecked.shared_pipelines.is_empty());
         assert_eq!(unchecked.moves.pipeline_entries, 0);
+    }
+
+    #[tokio::test]
+    async fn a_review_counts_only_references_its_reader_could_see() {
+        let holder = |entity_id: &str, owner: Option<&str>| ReferenceHolder {
+            entity_type: PropertyEntityType::Task,
+            entity_id: entity_id.into(),
+            owner: owner.map(Into::into),
+        };
+        let mut preview = reviewed(Uuid::from_u128(10), Uuid::from_u128(11));
+        preview.moves.references = 5;
+        preview.reference_holders = vec![
+            holder("shared-task", None),
+            holder("private-task", None),
+            holder("shared-task", Some("macro|teammate@example.com")),
+            holder("shared-task", Some(USER)),
+            holder("other-shared-task", None),
+        ];
+        let repo = Arc::new(Repo {
+            preview: Some(preview),
+            ..Repo::default()
+        });
+        let effects = Arc::new(Effects::default());
+        let targets = command().targets;
+
+        let counted = service(&repo, true, &effects)
+            .with_reference_access(Arc::new(Entities(HashSet::from([
+                "shared-task".to_string(),
+                "other-shared-task".to_string(),
+            ]))))
+            .preview(&receipt(TeamRole::Admin), &targets)
+            .await
+            .unwrap();
+        // Not the private task, nor a teammate's personal property.
+        assert_eq!(counted.moves.references, 3);
+        assert_eq!(counted.revision, "r");
+
+        let unchecked = service(&repo, true, &effects)
+            .preview(&receipt(TeamRole::Admin), &targets)
+            .await
+            .unwrap();
+        assert_eq!(unchecked.moves.references, 0);
     }
 }

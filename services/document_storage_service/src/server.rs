@@ -2054,7 +2054,13 @@ async fn run_server() -> anyhow::Result<()> {
         )))
         .with_pipeline_access(Arc::new(crm::outbound::record_merge::PipelineGrants(
             entity_access_service.clone(),
-        ))),
+        )))
+        .with_reference_access(Arc::new(
+            crm::outbound::record_merge::ReferenceGrants::new(
+                db.clone(),
+                entity_access_service.clone(),
+            ),
+        )),
     );
 
     let database_webhooks_service = Arc::new(database_webhooks::wiring::build_service(

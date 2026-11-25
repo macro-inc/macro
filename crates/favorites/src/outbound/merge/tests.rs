@@ -63,7 +63,7 @@ async fn favorites_of_merged_records_follow_the_survivor_once_per_user(pool: PgP
     favorite(&pool, USER_B, "document", &first, 9.0).await;
 
     let mut tx = pool.begin().await.unwrap();
-    let moved = retarget_favorites_in(
+    let merged = retarget_favorites_in(
         &mut tx,
         EntityType::CrmCompany,
         &[first.clone(), second.clone()],
@@ -73,8 +73,18 @@ async fn favorites_of_merged_records_follow_the_survivor_once_per_user(pool: PgP
     .unwrap();
     tx.commit().await.unwrap();
 
-    assert_eq!(moved.len(), 3);
-    assert!(moved.iter().all(|favorite| favorite.entity_id != survivor));
+    assert_eq!(merged.moved.len(), 3);
+    assert!(
+        merged
+            .moved
+            .iter()
+            .all(|favorite| favorite.entity_id != survivor)
+    );
+    assert_eq!(
+        merged.created_for,
+        vec![USER_B.to_string()],
+        "only the favorite B gained is new; A already had the survivor"
+    );
     assert_eq!(
         favorites(&pool).await,
         vec![

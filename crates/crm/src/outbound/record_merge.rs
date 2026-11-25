@@ -37,8 +37,8 @@ use crate::domain::{
     model::CrmError,
     record_merge::{
         MergeCommand, MergeEmailSync, MergeError, MergeMoves, MergeOutcome, MergePreview,
-        MergeRecordType, MergeScope, MergeTargets, MergedRecord, PipelineMoves, SharedPipeline,
-        SharingRulesChoice, SharingRulesPreview,
+        MergeRecordType, MergeScope, MergeTargets, MergedRecord, PipelineMoves, ReferenceHolder,
+        SharedPipeline, SharingRulesChoice, SharingRulesPreview,
         plan::{self, RecordValue, ValuePlan, ValueVisibility},
         service::{ChangedEntityProperty, MergeCommitted, RecordMergeRepository},
     },
@@ -110,7 +110,7 @@ struct PipelineCell {
 struct CompanyFacts {
     state: CompanyMergeState,
     values: Vec<MergeEntityValue>,
-    references: usize,
+    references: Vec<ReferenceHolder>,
     cells: Vec<PipelineCell>,
     discussion_messages: i64,
     sharing: Vec<MemberRules>,
@@ -161,7 +161,13 @@ where
             property_merge::referencing_rows_in(conn, PropertyEntityType::Company, &source_text)
                 .await
                 .map_err(db)?
-                .len();
+                .into_iter()
+                .map(|row| ReferenceHolder {
+                    entity_type: row.entity_type,
+                    entity_id: row.entity_id,
+                    owner: row.owner,
+                })
+                .collect();
         let discussion_messages = messages::outbound::record_merge::count_discussion_messages_in(
             conn,
             messages::outbound::record_merge::MergedParent::CrmCompany,
@@ -280,7 +286,7 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
         moves: MergeMoves {
             contacts: u32::try_from(state.moving_people()).unwrap_or(u32::MAX),
             pipeline_entries,
-            references: u32::try_from(facts.references).unwrap_or(u32::MAX),
+            references: u32::try_from(facts.references.len()).unwrap_or(u32::MAX),
             discussion_messages: u32::try_from(facts.discussion_messages).unwrap_or(u32::MAX),
         },
         shared_pipelines,
@@ -292,6 +298,7 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
         sharing_rules,
         blocked: plan::same_address_block(&state.people),
         pipeline_moves,
+        reference_holders: facts.references.clone(),
     };
     // Whose rules change and at which revision, and which company holds each
     // domain, are not shown, but a change to any makes the commit write
@@ -805,12 +812,21 @@ where
         )
         .await
         .map_err(db)?;
-        changes.extend(favorites.into_iter().map(|favorite| {
+        changes.extend(favorites.moved.into_iter().map(|favorite| {
             MergeChange::new(
                 "favorites",
                 "favorite",
                 json!({ "user_id": favorite.user_id, "entity_type": "crm_company", "entity_id": favorite.entity_id }),
                 json!({ "sort_order": favorite.sort_order, "created_at": favorite.created_at, "updated_at": favorite.updated_at }),
+            )
+        }));
+        // A favorite the merge gave someone, so undoing it removes only that.
+        changes.extend(favorites.created_for.into_iter().map(|user_id| {
+            MergeChange::new(
+                "favorites",
+                "favorite",
+                json!({ "user_id": user_id, "entity_type": "crm_company", "entity_id": survivor }),
+                Value::Null,
             )
         }));
 
@@ -1054,6 +1070,52 @@ impl<A: entity_access::domain::ports::AccessiblePipelines>
             .await
             .map_err(|error| CrmError::StorageLayerError(anyhow::anyhow!(error)))?;
         Ok(grants.into_keys().collect())
+    }
+}
+
+/// Entity access as the properties API decides it before showing an
+/// entity's properties. A failed check counts as no access, so a review
+/// never counts what it couldn't confirm.
+pub struct ReferenceGrants<A>(
+    pub properties::outbound::permission_service::PermissionServiceImpl<A>,
+);
+
+impl<A: entity_access::domain::ports::EntityAccessService> ReferenceGrants<A> {
+    /// Check access through `access`, reading owners from `pool`.
+    pub fn new(pool: PgPool, access: Arc<A>) -> Self {
+        Self(properties::outbound::permission_service::PermissionServiceImpl::new(pool, access))
+    }
+}
+
+#[async_trait::async_trait]
+impl<A: entity_access::domain::ports::EntityAccessService>
+    crate::domain::record_merge::service::MergeReferenceAccess for ReferenceGrants<A>
+{
+    #[tracing::instrument(name = "crm.merge.reference_access", skip_all, fields(entities = entities.len(), readable = tracing::field::Empty))]
+    async fn readable(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        entities: &[(PropertyEntityType, String)],
+    ) -> Result<std::collections::HashSet<(PropertyEntityType, String)>, MergeError> {
+        use properties::domain::ports::PermissionService;
+        let mut readable = std::collections::HashSet::new();
+        for chunk in entities.chunks(8) {
+            let checks = futures::future::join_all(chunk.iter().map(|(entity_type, entity_id)| {
+                self.0.mint_view_receipt(
+                    Some(user),
+                    entity_id,
+                    properties::domain::model::canonical_entity_type(*entity_type),
+                )
+            }))
+            .await;
+            for ((entity_type, entity_id), check) in chunk.iter().zip(checks) {
+                if check.is_ok() {
+                    readable.insert((*entity_type, entity_id.clone()));
+                }
+            }
+        }
+        tracing::Span::current().record("readable", readable.len());
+        Ok(readable)
     }
 }
 

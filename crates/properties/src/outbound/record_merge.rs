@@ -302,19 +302,37 @@ pub async fn values_remain_in(
     .await
 }
 
+/// A row outside databases whose entity reference names a merged record.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReferencingRow {
+    /// The `entity_properties` row.
+    pub id: Uuid,
+    /// The entity holding the reference.
+    pub entity_type: EntityType,
+    /// Its id.
+    pub entity_id: String,
+    /// The user a personal property definition belongs to; `None` for a
+    /// team or system property.
+    pub owner: Option<String>,
+}
+
 /// The rows outside databases whose entity references name one of
-/// `sources`, found through the reference indexes; for a preview's count.
+/// `sources`, found through the reference indexes; for a preview's count,
+/// with what a reader needs to decide whether they could see each.
 #[tracing::instrument(name = "properties.merge.references", skip_all, fields(%referenced, sources = sources.len()), err)]
 pub async fn referencing_rows_in(
     conn: &mut PgConnection,
     referenced: EntityType,
     sources: &[String],
-) -> Result<Vec<Uuid>, sqlx::Error> {
+) -> Result<Vec<ReferencingRow>, sqlx::Error> {
     let (system, type_tag) = reference_property(referenced);
     // Each arm repeats its index's predicate literally and probes it once per
     // source, so the cost follows the references, not the table.
-    sqlx::query_scalar!(
-        r#"SELECT DISTINCT ep.id AS "id!"
+    sqlx::query_as!(
+        ReferencingRow,
+        r#"SELECT r.id AS "id!", e.entity_type AS "entity_type!: EntityType", e.entity_id AS "entity_id!",
+                  pd.user_id AS "owner?"
+           FROM (SELECT DISTINCT ep.id
            FROM UNNEST($1::text[]) AS source(id)
            CROSS JOIN LATERAL (
                SELECT ep.id FROM entity_properties ep
@@ -336,8 +354,10 @@ pub async fn referencing_rows_in(
                  AND (ep.values->'value' @> '[{"entity_type": "COMPANY"}]'
                       OR ep.values->'value' @> '[{"entity_type": "CONTACT"}]')
                  AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_type', $3::text, 'entity_id', source.id))
-           ) ep
-           ORDER BY 1"#,
+           ) ep) r
+           JOIN entity_properties e ON e.id = r.id
+           JOIN property_definitions pd ON pd.id = e.property_definition_id
+           ORDER BY r.id"#,
         sources,
         system,
         type_tag,
@@ -355,7 +375,11 @@ pub async fn retarget_references_in(
     sources: &[String],
     survivor: &str,
 ) -> Result<Vec<RetargetedReference>, sqlx::Error> {
-    let ids = referencing_rows_in(conn, referenced, sources).await?;
+    let ids: Vec<Uuid> = referencing_rows_in(conn, referenced, sources)
+        .await?
+        .into_iter()
+        .map(|row| row.id)
+        .collect();
     if ids.is_empty() {
         return Ok(Vec::new());
     }

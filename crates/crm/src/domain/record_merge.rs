@@ -295,6 +295,22 @@ pub struct MergePreview {
     /// only the pipelines its reader can open.
     #[serde(skip)]
     pub pipeline_moves: Vec<PipelineMoves>,
+    /// Each reference that moves, so the review counts only those its
+    /// reader could see.
+    #[serde(skip)]
+    pub reference_holders: Vec<ReferenceHolder>,
+}
+
+/// A reference to a merged record, held by a property of another entity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReferenceHolder {
+    /// The entity holding it.
+    pub entity_type: models_properties::EntityType,
+    /// Its id.
+    pub entity_id: String,
+    /// The user whose personal property holds it; `None` for a team or
+    /// system property.
+    pub owner: Option<String>,
 }
 
 /// The entries of merged records in one pipeline.

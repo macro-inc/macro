@@ -257,7 +257,16 @@ async fn references_name_the_survivor_once_and_leave_other_records_alone(pool: P
         .unwrap();
     let mut expected = vec![task, partner];
     expected.sort();
-    assert_eq!(found, expected);
+    assert_eq!(found.iter().map(|row| row.id).collect::<Vec<_>>(), expected);
+    let holder = found.iter().find(|row| row.id == task).unwrap();
+    assert_eq!(
+        (
+            holder.entity_type,
+            holder.entity_id.as_str(),
+            holder.owner.as_deref()
+        ),
+        (EntityType::Document, "task-1", None)
+    );
 
     let retargeted = retarget_references_in(&mut tx, EntityType::Company, &sources, &survivor)
         .await

@@ -86,6 +86,18 @@ pub trait MergePipelineAccess: Send + Sync {
     ) -> Result<HashSet<Uuid>, MergeError>;
 }
 
+/// The entities a user can open. A review counts only the references held
+/// by those; the commit still moves every reference.
+#[async_trait::async_trait]
+pub trait MergeReferenceAccess: Send + Sync {
+    /// Which of `entities` the user can open.
+    async fn readable(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        entities: &[(PropertyEntityType, String)],
+    ) -> Result<HashSet<(PropertyEntityType, String)>, MergeError>;
+}
+
 /// The merge operations inbound adapters call.
 pub trait RecordMerges: Send + Sync + 'static {
     /// Review a merge.
@@ -109,6 +121,7 @@ pub struct RecordMergeService<R> {
     gate: Option<Arc<dyn MergeGate>>,
     effects: Option<Arc<dyn MergeEffects>>,
     pipelines: Option<Arc<dyn MergePipelineAccess>>,
+    references: Option<Arc<dyn MergeReferenceAccess>>,
 }
 
 impl<R: RecordMergeRepository> RecordMergeService<R> {
@@ -119,6 +132,7 @@ impl<R: RecordMergeRepository> RecordMergeService<R> {
             gate: None,
             effects: None,
             pipelines: None,
+            references: None,
         }
     }
 
@@ -138,6 +152,48 @@ impl<R: RecordMergeRepository> RecordMergeService<R> {
     pub fn with_pipeline_access(mut self, pipelines: Arc<dyn MergePipelineAccess>) -> Self {
         self.pipelines = Some(pipelines);
         self
+    }
+
+    /// Attach entity access; without it a review counts no reference.
+    pub fn with_reference_access(mut self, references: Arc<dyn MergeReferenceAccess>) -> Self {
+        self.references = Some(references);
+        self
+    }
+
+    /// How many of the moving references `actor` could see: held by an
+    /// entity they can open, in a team or system property or their own.
+    async fn visible_references(
+        &self,
+        actor: &MacroUserIdStr<'static>,
+        holders: &[super::ReferenceHolder],
+    ) -> Result<u32, MergeError> {
+        let Some(access) = &self.references else {
+            return Ok(0);
+        };
+        let own = |holder: &super::ReferenceHolder| {
+            holder
+                .owner
+                .as_deref()
+                .is_none_or(|owner| owner.eq_ignore_ascii_case(actor.as_ref()))
+        };
+        let mut entities: Vec<(PropertyEntityType, String)> = holders
+            .iter()
+            .filter(|holder| own(holder))
+            .map(|holder| (holder.entity_type, holder.entity_id.clone()))
+            .collect();
+        entities.sort_by(|a, b| (a.0.to_string(), &a.1).cmp(&(b.0.to_string(), &b.1)));
+        entities.dedup();
+        if entities.is_empty() {
+            return Ok(0);
+        }
+        let readable = access.readable(actor, &entities).await?;
+        let visible = holders
+            .iter()
+            .filter(|holder| {
+                own(holder) && readable.contains(&(holder.entity_type, holder.entity_id.clone()))
+            })
+            .count();
+        Ok(u32::try_from(visible).unwrap_or(u32::MAX))
     }
 
     async fn scope(
@@ -212,6 +268,11 @@ impl<R: RecordMergeRepository> RecordMerges for RecordMergeService<R> {
             .filter(|moves| readable.contains(&moves.pipeline_id))
             .map(|moves| moves.entries)
             .fold(0u32, u32::saturating_add);
+        // Nor does it count teammates' private items or properties that
+        // point at a merged company.
+        preview.moves.references = self
+            .visible_references(&scope.actor, &preview.reference_holders)
+            .await?;
         Ok(preview)
     }
 

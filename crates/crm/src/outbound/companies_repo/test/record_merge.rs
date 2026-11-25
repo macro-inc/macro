@@ -726,6 +726,18 @@ async fn a_merge_moves_everything_that_names_the_merged_companies_to_the_one_tha
     }
     let private_logged: i64 = world.scalar("SELECT count(*) FROM crm_merge_changes WHERE merge_id = $1 AND previous::text LIKE '%private%'", merge_id).await;
     assert!(private_logged >= 1);
+    // The survivor favorite the merge created is logged as new, so undoing
+    // the merge can tell it from one the user already had.
+    let created_favorite: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM crm_merge_changes WHERE merge_id = $1 AND table_name = 'favorite'
+           AND row_key->>'entity_id' = $2 AND previous = 'null'::jsonb",
+    )
+    .bind(merge_id)
+    .bind(stays.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(created_favorite, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

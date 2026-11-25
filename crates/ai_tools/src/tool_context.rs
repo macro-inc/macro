@@ -715,12 +715,19 @@ pub fn build_merge_tool_context(
     event_broker: MaybeToolEventBroker,
 ) -> ToolMergeToolContext {
     let mut merges = crm::domain::record_merge::service::RecordMergeService::new(
-        crm::outbound::record_merge::PgRecordMergeRepository::new(pool, databases.service.clone()),
+        crm::outbound::record_merge::PgRecordMergeRepository::new(
+            pool.clone(),
+            databases.service.clone(),
+        ),
     )
     .with_effects(Arc::new(crm::outbound::record_merge::PropertyMergeEffects(
         event_broker,
     )))
     .with_pipeline_access(Arc::new(crm::outbound::record_merge::PipelineGrants(
+        databases.entity_access_service.clone(),
+    )))
+    .with_reference_access(Arc::new(crm::outbound::record_merge::ReferenceGrants::new(
+        pool,
         databases.entity_access_service.clone(),
     )));
     if let Some(flags) = feature_flags {
