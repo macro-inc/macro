@@ -185,8 +185,14 @@ async fn depth(engine: &CacheEngine) -> String {
         .expect("depth is text")
 }
 
+async fn tell(engine: &CacheEngine, scope: &str) {
+    resolved(engine.queue_loss_told()).await;
+    assert!(!opfs_file_exists(&side_file(scope)).await);
+}
+
 /// The whole queue is there, under its account, and can be sent.
 async fn assert_kept(engine: &CacheEngine, scope: &str) {
+    tell(engine, scope).await;
     assert_eq!(depth(engine).await, "1");
     assert!(!opfs_file_exists(&side_file(scope)).await);
     let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
@@ -340,7 +346,7 @@ async fn a_queue_that_keeps_ending_the_engine_is_given_up() {
             assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
             assert_eq!(depth(&engine).await, "0");
         }
-        assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+        tell(&engine, SCOPE).await;
         resolved(engine.close()).await;
 
         // Imports that never came back.
@@ -356,7 +362,7 @@ async fn a_queue_that_keeps_ending_the_engine_is_given_up() {
             assert_eq!(queue, serde_json::json!(["abandoned", 0, 1]));
             assert_eq!(depth(&engine).await, "0");
         }
-        assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+        tell(&engine, SCOPE).await;
         close_and_destroy(&engine, SCOPE).await;
     }
 }
@@ -411,7 +417,7 @@ async fn a_wipe_that_left_no_copy_at_all_says_so() {
         refuse_queue_frames(false).await;
         let (engine, _, queue) = open(SCOPE, recovery).await;
         assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
-        assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+        tell(&engine, SCOPE).await;
         close_and_destroy(&engine, SCOPE).await;
     }
 }
@@ -425,7 +431,7 @@ async fn a_queue_wiped_unread_says_so_after_a_death() {
     wipe_open_and_die(SCOPE).await;
     let (engine, _, queue) = open(SCOPE, false).await;
     assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
-    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    tell(&engine, SCOPE).await;
     resolved(engine.close()).await;
 
     // A write no build can read.
@@ -449,7 +455,7 @@ async fn a_queue_wiped_unread_says_so_after_a_death() {
     .await;
     let (engine, _, queue) = open(SCOPE, true).await;
     assert_eq!(queue, serde_json::json!(["unreadable", 0, 1]));
-    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    tell(&engine, SCOPE).await;
     close_and_destroy(&engine, SCOPE).await;
 }
 
@@ -493,6 +499,72 @@ async fn a_latched_reset_that_could_not_read_the_queue_tells_the_next_open() {
     let (engine, _, queue) = open(SCOPE, false).await;
     assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
     close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_that_could_not_be_told_is_told_by_every_open_until_it_was() {
+    const SCOPE: &str = "cache-wasm-salvage-untold";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    let doubted = [copy.clone(), SalvageFile::loss(QueueLoss::default())].concat();
+    let given_up = [copy, SalvageFile::import_attempt().repeat(3)].concat();
+    let unreadable = ("unreadable", 0);
+    let cases = [
+        // Reads that never came back.
+        (
+            Some(SalvageFile::read_attempt().repeat(3)),
+            true,
+            unreadable,
+            unreadable,
+        ),
+        (Some(doubted), false, ("partial", 0), unreadable),
+        (Some(given_up), false, ("abandoned", 1), ("abandoned", 1)),
+        // One of the database's files is gone.
+        (None, false, unreadable, unreadable),
+    ];
+    for (file, recovery, first, later) in cases {
+        if recovery || file.is_none() {
+            closed_with_queue(SCOPE).await;
+        }
+        match file {
+            Some(file) => write_side_file(SCOPE, &file).await,
+            None => remove_opfs_file(&database_identity(SCOPE)).await,
+        }
+        let mut recovery = recovery;
+        for (outcome, dropped) in [first, later, later, later, later] {
+            let (engine, _, queue) = open(SCOPE, recovery).await;
+            assert_eq!((&queue[0], &queue[2]), (&outcome.into(), &dropped.into()));
+            resolved(engine.close()).await;
+            recovery = false;
+        }
+        let (engine, _, _) = open(SCOPE, false).await;
+        tell(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_nobody_was_told_of_outlives_a_wipe_that_carries_newer_writes() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-wipe";
+    for (dies, recovery) in [(false, true), (true, false), (true, true)] {
+        closed_with_queue(SCOPE).await;
+        write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+        if dies {
+            wipe_and_die(SCOPE).await;
+        }
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["partial", 1, 0]),
+            "{dies} {recovery}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
 }
 
 #[wasm_bindgen_test(async)]

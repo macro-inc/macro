@@ -484,6 +484,11 @@ export class CacheWorkerCore {
     }
   }
 
+  /** Lets go of the lost writes the open reported, which pages now know of. */
+  async queueLossTold(): Promise<void> {
+    await this.engine?.queueLossTold?.();
+  }
+
   /**
    * The rows a typed search named rank with it, as the search is not answered
    * for the person waiting until they list. They may run before a network

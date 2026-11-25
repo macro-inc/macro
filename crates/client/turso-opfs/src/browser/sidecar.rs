@@ -59,6 +59,23 @@ impl Sidecar {
             .await
     }
 
+    /// Writes `bytes` over the start, ends the file behind them, and flushes it.
+    /// Cut short, the file starts with all of `bytes` or with what was there.
+    pub async fn replace(&self, bytes: &[u8]) -> Result<(), OpfsError> {
+        owner_binding(self.owner)?;
+        let root = worker_root()
+            .await
+            .map_err(|error| js_error(OpfsErrorKind::Open, "OPFS side file root", &error))?;
+        let (handle, _) = open_sync_handle(&root, &self.path, BusyDeadline::start())
+            .await
+            .map_err(|error| entry_error(OpfsErrorKind::Open, "OPFS side file open", &error))?;
+        let written = write_at(&handle, 0, bytes)
+            .and_then(|()| handle.truncate_with_f64(bytes.len() as f64))
+            .and_then(|()| handle.flush())
+            .map_err(|error| js_error(OpfsErrorKind::Write, "OPFS side file write", &error));
+        close(&handle, written)
+    }
+
     async fn write_tail_by(
         &self,
         deadline: BusyDeadline,
@@ -123,6 +140,11 @@ fn write_tail(
     bytes: &[u8],
 ) -> Result<(), JsValue> {
     handle.truncate_with_f64(offset as f64)?;
+    write_at(handle, offset, bytes)?;
+    handle.flush()
+}
+
+fn write_at(handle: &FileSystemSyncAccessHandle, offset: u64, bytes: &[u8]) -> Result<(), JsValue> {
     let mut written = 0;
     while written < bytes.len() {
         let options = FileSystemReadWriteOptions::new();
@@ -133,5 +155,5 @@ fn write_tail(
         }
         written += count;
     }
-    handle.flush()
+    Ok(())
 }

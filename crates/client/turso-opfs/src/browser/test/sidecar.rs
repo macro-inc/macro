@@ -37,6 +37,9 @@ async fn a_side_file_outlives_wipes_and_ends_with_its_database() {
     sidecar.write_tail(0, b"first").await.expect("write");
     sidecar.write_tail(5, b" second").await.expect("append");
     assert_eq!(sidecar.read().await.expect("read"), b"first second");
+    sidecar.replace(b"1st").await.expect("replace it all");
+    assert_eq!(sidecar.read().await.expect("read"), b"1st");
+    sidecar.replace(b"first second").await.expect("grow");
     sidecar.write_tail(5, b"!").await.expect("replace the tail");
 
     let owner = owner.recovery_wipe().await.expect("recovery wipe");
@@ -56,6 +59,7 @@ async fn a_side_file_outlives_wipes_and_ends_with_its_database() {
     for refused in [
         sidecar.read().await.map(drop),
         sidecar.write_tail(0, b"late").await,
+        sidecar.replace(b"late").await,
         sidecar.remove().await,
     ] {
         assert_eq!(refused.expect_err("lock").kind(), OpfsErrorKind::Lock);

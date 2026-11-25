@@ -514,6 +514,45 @@ describe('cache engine worker runtime', () => {
     });
   });
 
+  it.each([
+    ['reset', ['told after 1 engine-ready']],
+    ['preserved', []],
+  ] as const)(
+    'lets go of a lost queue only once the coordinator was told (%s)',
+    async (queue, expected) => {
+      const scope = new FakeWorkerScope();
+      const direct = new FakePort();
+      const told: string[] = [];
+      const emitted = vi.fn();
+      installCacheEngineWorker({
+        scope,
+        hooks: { onEvent: emitted },
+        ownerLockIsHeld: async () => true,
+        createCore: (options) => ({
+          addPort: vi.fn(),
+          handleRequest: async (port, request) => {
+            options.onInitializationOutcome?.('opened-existing', queue);
+            port.postMessage({ id: request.id, ok: true, result: null });
+          },
+          drain: vi.fn(),
+          queueLossTold: async () => {
+            const ready = messagesOfKind(direct, 'engine-ready');
+            told.push(`told after ${ready.length} engine-ready`);
+          },
+        }),
+      });
+
+      scope.activate(activation('open-existing'), direct);
+      await vi.waitFor(() =>
+        expect(emitted).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: 'ready' })
+        )
+      );
+
+      expect(told).toEqual(expected);
+    }
+  );
+
   it('throttles runtime linear memory, emits cached queue state, and drains high-water values', async () => {
     const scope = new FakeWorkerScope();
     const direct = new FakePort();

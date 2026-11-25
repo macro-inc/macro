@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
@@ -87,6 +88,7 @@ interface CacheWorkerCoreLike {
   ): Promise<void>;
   drain(): Promise<void>;
   recordCachedQueueDiagnostics?(): void;
+  queueLossTold?(): Promise<void>;
 }
 
 interface DedicatedWorkerScopeLike {
@@ -510,6 +512,9 @@ async function activate(
         queue: initializationQueue,
       })
     );
+    if (initializationQueue === 'reset' && core.queueLossTold) {
+      fireAndForget(core.queueLossTold(), 'graphql_cache.queue_loss_told');
+    }
     emitEvent({ kind: 'ready', activation });
     telemetry.record({
       name: 'graphql_cache.db_ready',

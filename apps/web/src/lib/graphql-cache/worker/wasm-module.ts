@@ -286,6 +286,8 @@ export interface CacheEngine {
   clear(): Promise<CacheRevisionResult>;
   /** Reset/recreate OPFS; concurrent calls wait for the fresh engine. */
   physicalReset(): Promise<void>;
+  /** Until it is called, every later open reports the loss again. */
+  queueLossTold?(): Promise<void>;
   /** Gracefully close Turso/OPFS and release the owner lock. */
   close(): Promise<void>;
 }

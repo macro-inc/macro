@@ -558,6 +558,8 @@ struct CacheState {
     selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
     sidecar: Sidecar,
+    /// Whether the side file holds the loss this open reported.
+    loss_to_tell: bool,
     mail_generation: String,
     scope: String,
     hot_capacity: Option<u32>,
@@ -1242,6 +1244,7 @@ async fn open_cache_inner(
                 selections: RecordSelectionCache::default(),
                 engine: Some(build_engine(storage, hot_capacity, schema)),
                 sidecar,
+                loss_to_tell: queue.lost(),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
@@ -3037,6 +3040,22 @@ impl CacheEngine {
         })
     }
 
+    /// Says that whoever may have queued writes was told what the open reported
+    /// lost. Until then every later open reports it again.
+    #[wasm_bindgen(js_name = queueLossTold)]
+    pub fn queue_loss_told(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            // Once closed, the side file is the next open's.
+            state.ensure_callable()?;
+            if std::mem::take(&mut state.loss_to_tell) {
+                salvage::told(&state.sidecar).await?;
+            }
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
     /// Drops all cached state, including the durable mutation queue and any
     /// copy of it kept beside the database. Rejects when that copy stays.
     pub fn clear(&self) -> js_sys::Promise {
@@ -3089,6 +3108,7 @@ impl CacheEngine {
                 }
             };
             state.sidecar = opened.sidecar;
+            state.loss_to_tell = opened.queue.lost();
             state.engine = Some(build_engine(opened.storage, hot_capacity, schema));
             state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;

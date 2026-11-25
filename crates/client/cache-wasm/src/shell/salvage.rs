@@ -108,24 +108,23 @@ pub(super) async fn wipe_keeping_queue(
     let started = query_telemetry::now_ms();
     let sidecar = owner.sidecar();
     let (owner, file) = or_release(owner, read_file(&sidecar).await).await?;
-    let unread = file.is_none();
+    // Either way the file cannot say what else is lost once a queue follows in it.
+    let doubted = file
+        .as_ref()
+        .is_none_or(|file| file.lost() && file.queue().is_none());
     let (owner, mut read) =
         read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default()).await?;
-    if unread {
+    if doubted {
         read.report.lose();
     }
     read.write_queue(&sidecar).await;
-    let queue = read.queue.take().map(|queue| match unread {
+    let queue = read.queue.take().map(|queue| match doubted {
         true => queue.after_loss(),
         false => queue,
     });
     let mut unwritten = read.unwritten;
     if unwritten || read.report.lost() {
-        let loss = QueueLoss {
-            abandoned: read.report.outcome == QueueOutcome::Abandoned,
-            dropped: read.report.dropped,
-        };
-        let frame = SalvageFile::loss(loss);
+        let frame = SalvageFile::loss(read.report.loss());
         if sidecar.write_tail(read.end, &frame).await.is_ok() {
             read.end += frame.len() as u64;
             read.report.dropped = 0;
@@ -153,11 +152,12 @@ pub(super) async fn wipe_keeping_queue(
     ))
 }
 
-/// Notes that the copy in `file` may be held by a database about to be reset
-/// for want of one of its files: a later engine would find only its successor.
-/// Returns how much longer the side file is.
+/// Notes that a database about to be reset for want of one of its files may
+/// have held the copy in `file`, or a queue that `file` has no copy of: a later
+/// engine would find only its successor. Returns how much longer the side file is.
 async fn doubt(sidecar: &Sidecar, end: u64, file: &SalvageFile) -> u64 {
-    if file.imports() == 0 {
+    // A copy nothing took is what a wipe cut short leaves.
+    if file.queue().is_some() && file.imports() == 0 {
         return 0;
     }
     let frame = SalvageFile::loss(QueueLoss::default());
@@ -375,8 +375,17 @@ fn report_of(found: &QueueRead) -> QueueReport {
 }
 
 impl QueueReport {
-    fn lost(&self) -> bool {
-        self.outcome != QueueOutcome::None || self.dropped > 0
+    /// Whether pages have a loss to be told of.
+    pub(super) fn lost(&self) -> bool {
+        !matches!(self.outcome, QueueOutcome::None | QueueOutcome::Kept) || self.dropped > 0
+    }
+
+    /// What a later open has to be told of this one.
+    fn loss(&self) -> QueueLoss {
+        QueueLoss {
+            abandoned: self.outcome == QueueOutcome::Abandoned,
+            dropped: self.dropped,
+        }
     }
 
     /// Writes were lost, nobody knows how many.
@@ -429,7 +438,7 @@ impl Crossing {
         let unread = read.is_none();
         let file = read.unwrap_or_default();
         if !unread && file.is_blank() && !self.unwritten {
-            return Ok(report);
+            return leave(sidecar, report).await;
         }
         if unread || (self.torn && file.imports() > 0) {
             report.lose();
@@ -448,14 +457,12 @@ impl Crossing {
             if lost {
                 report.lose();
             }
-            remove(sidecar).await?;
-            return Ok(report);
+            return leave(sidecar, report).await;
         };
         if imports >= MAX_ATTEMPTS {
             report.outcome = QueueOutcome::Abandoned;
             report.dropped += queue.len();
-            remove(sidecar).await?;
-            return Ok(report);
+            return leave(sidecar, report).await;
         }
         // Writing to one that could not be read would end what it holds.
         if !unread {
@@ -478,11 +485,10 @@ impl Crossing {
             }
             (_, 0, 0) => report.outcome,
         };
+        report.times.import_ms = Some(query_telemetry::now_ms() - started);
         // The database names the queue it holds, so a copy that stays for any
         // other reason is inert while the database can be read.
-        remove(sidecar).await?;
-        report.times.import_ms = Some(query_telemetry::now_ms() - started);
-        Ok(report)
+        leave(sidecar, report).await
     }
 }
 
@@ -496,7 +502,23 @@ fn unless_busy(result: Result<(), OpfsError>) -> Result<(), JsValue> {
     }
 }
 
-async fn remove(sidecar: &Sidecar) -> Result<(), JsValue> {
+/// Leaves nothing in the side file but the loss that `report` tells, so that
+/// the next open tells it when this engine dies before it could.
+async fn leave(sidecar: &Sidecar, report: QueueReport) -> Result<QueueReport, JsValue> {
+    if report.lost() {
+        let left = sidecar.replace(&SalvageFile::loss(report.loss())).await;
+        if left.is_ok() {
+            return Ok(report);
+        }
+        unless_busy(left)?;
+    }
+    unless_busy(sidecar.remove().await)?;
+    Ok(report)
+}
+
+/// Drops the loss that [`leave`] noted, once it was told. One that stays is
+/// told again.
+pub(super) async fn told(sidecar: &Sidecar) -> Result<(), JsValue> {
     unless_busy(sidecar.remove().await)
 }
 
