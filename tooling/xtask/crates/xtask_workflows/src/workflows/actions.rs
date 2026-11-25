@@ -4571,6 +4571,33 @@ impl From<CallCheckNodeModulesNix> for CallJob {
     }
 }
 
+/// Calls `./.github/workflows/check_deploy_nix_sources.yml` (check deploy nix sources), defined in `workflows/check_deploy_nix_sources.rs`.
+#[must_use]
+pub struct CallCheckDeployNixSources(CallJob);
+
+impl CallCheckDeployNixSources {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/check_deploy_nix_sources.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCheckDeployNixSources> for CallJob {
+    fn from(call: CallCheckDeployNixSources) -> Self {
+        call.0
+    }
+}
+
 /// Calls `./.github/workflows/check_tauri_lockfiles.yml` (check tauri lockfiles), defined in `workflows/check_tauri_lockfiles.rs`.
 #[must_use]
 pub struct CallCheckTauriLockfiles(CallJob);
