@@ -52,38 +52,54 @@ async fn setup_rows_record_states_backoff_and_count_as_team_data(pool: PgPool) {
     .expect("make due");
     assert_eq!(repository.vault_setup_due().await.expect("due"), vec![team]);
 
-    // A closed team, and a team whose row outlived the team, are never due.
+    // A closed team is never due, and a late outcome neither reopens nor
+    // recreates its request.
     repository.close_team(team).await.expect("close");
     assert!(repository.vault_setup_due().await.expect("due").is_empty());
-    let orphan = TeamId(Uuid::now_v7());
-    assert!(
+    repository.purge_team_metadata(team).await.expect("purge");
+    for state in [
+        VaultSetupState::Ready,
+        VaultSetupState::Failed,
+        VaultSetupState::NeedsRecovery,
+    ] {
         repository
-            .request_vault_setup(orphan)
+            .record_vault_setup(team, state)
             .await
-            .expect("orphan")
-    );
-    assert!(repository.vault_setup_due().await.expect("due").is_empty());
+            .expect("late outcome");
+        assert_eq!(repository.vault_setup(team).await.expect("state"), None);
+    }
+    // Deleting the team removes its request.
+    assert!(repository.request_vault_setup(team).await.expect("request"));
+    sqlx::query!("DELETE FROM team WHERE id=$1", team.0)
+        .execute(&repository.pool)
+        .await
+        .expect("delete team");
+    assert_eq!(repository.vault_setup(team).await.expect("state"), None);
+}
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn drift_is_recorded_without_a_request_and_outcomes_only_finish_open_requests(pool: PgPool) {
+    let (team, _) = another_team(&pool).await;
+    let repository = PgRepository::new(pool).expect("repository");
     repository
-        .record_vault_setup(orphan, VaultSetupState::NeedsRecovery)
+        .record_vault_setup(team, VaultSetupState::NeedsRecovery)
         .await
         .expect("drift");
     assert_eq!(
-        repository.vault_setup(orphan).await.expect("state"),
+        repository.vault_setup(team).await.expect("state"),
         Some(VaultSetupState::NeedsRecovery)
     );
-    // Final states ignore a late retry record.
-    repository
-        .record_vault_setup(orphan, VaultSetupState::SettingUp)
-        .await
-        .expect("late retry");
-    assert_eq!(
-        repository.vault_setup(orphan).await.expect("state"),
-        Some(VaultSetupState::NeedsRecovery)
-    );
-
-    repository.purge_team_metadata(team).await.expect("purge");
-    assert_eq!(repository.vault_setup(team).await.expect("state"), None);
+    // Neither a late retry nor a late success reopens it.
+    for state in [VaultSetupState::SettingUp, VaultSetupState::Ready] {
+        repository
+            .record_vault_setup(team, state)
+            .await
+            .expect("late");
+        assert_eq!(
+            repository.vault_setup(team).await.expect("state"),
+            Some(VaultSetupState::NeedsRecovery)
+        );
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

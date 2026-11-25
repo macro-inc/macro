@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_vault_setup SET state=$2, updated_at=now() WHERE team_id=$1 AND state='setting_up'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91fda6a6dca63f8799d0e498171456e2c5992b7575b40dddc2eb69352b232abe"
+}

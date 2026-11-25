@@ -1,9 +1,10 @@
 -- Automatic team vault setup. One row per team once a write first finds no
 -- namespace; it holds no item, request body, credential or token. Purging the
--- team's vault metadata deletes the row; the closed-team fence stays in
--- password_team_lifecycle, so a deleted team is never set up again.
+-- team's vault metadata deletes the row and deleting the team cascades; the
+-- closed-team fence stays in password_team_lifecycle, so a deleted team is
+-- never set up again.
 CREATE TABLE password_vault_setup (
-    team_id UUID PRIMARY KEY,
+    team_id UUID PRIMARY KEY REFERENCES team(id) ON DELETE CASCADE,
     state TEXT NOT NULL CHECK (state IN ('setting_up', 'ready', 'failed', 'needs_recovery')),
     attempts INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -198,9 +198,18 @@ impl Repository for FakeRepository {
                     *attempts += 1;
                 }
             }
+            VaultSetupState::NeedsRecovery => {
+                if !self.closed_teams.lock().unwrap().contains(&team.0) {
+                    let attempts = setups.get(&team.0).map_or(0, |(_, attempts)| *attempts);
+                    setups.insert(team.0, (VaultSetupState::NeedsRecovery, attempts));
+                }
+            }
             state => {
-                let attempts = setups.get(&team.0).map_or(0, |(_, attempts)| *attempts);
-                setups.insert(team.0, (state, attempts));
+                if let Some(row) = setups.get_mut(&team.0)
+                    && row.0 == VaultSetupState::SettingUp
+                {
+                    row.0 = state;
+                }
             }
         }
         Ok(())

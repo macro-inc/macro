@@ -294,8 +294,18 @@ impl Repository for PgRepository {
             )
             .execute(&self.pool)
             .await,
-            final_state => sqlx::query!(
-                "INSERT INTO password_vault_setup(team_id, state) VALUES($1, $2) ON CONFLICT(team_id) DO UPDATE SET state=EXCLUDED.state, updated_at=now()",
+            // Drift may have no row yet; never record one for a closed team,
+            // whose purge may already have removed it.
+            VaultSetupState::NeedsRecovery => sqlx::query!(
+                "INSERT INTO password_vault_setup(team_id, state) SELECT $1, 'needs_recovery' WHERE NOT EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) ON CONFLICT(team_id) DO UPDATE SET state='needs_recovery', updated_at=now()",
+                team.0
+            )
+            .execute(&self.pool)
+            .await,
+            // An attempt's outcome finishes only an open request: a purge that
+            // removed the row, or another outcome, wins.
+            final_state @ (VaultSetupState::Ready | VaultSetupState::Failed) => sqlx::query!(
+                "UPDATE password_vault_setup SET state=$2, updated_at=now() WHERE team_id=$1 AND state='setting_up'",
                 team.0,
                 setup_state_name(final_state)
             )
