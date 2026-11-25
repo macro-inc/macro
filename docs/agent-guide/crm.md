@@ -196,8 +196,13 @@ Customers too: `/app/company/<uuid>` and `/app/contact/<uuid>` links (which
 **Copy link** still copies), `@` mentions, search and Command-K results,
 favorites, and CRM discussion notifications. A contact opens under People, so its
 breadcrumb returns to People. A split already showing that record is brought
-forward instead. Touch devices keep the standalone record pages; a Customers
-record URL redirects there unless it opens a linked item inside Customers.
+forward instead. The old id of a company or contact merged into another (an
+old link, mention or bookmark) opens the record it went into under that
+record's own id, replacing the old entry so Back skips it, on desktop and touch;
+when another split already shows that record, the split with the old id steps
+back (or closes) and that one comes up. Touch devices keep the standalone
+record pages; a Customers record URL redirects there unless it opens a linked
+item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
 opening a person's company from its company pill gives `People > <contact> > <company>`. Opening a record
