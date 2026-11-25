@@ -6,6 +6,7 @@ import {
 } from '@app/features/soup';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import type { TutorialId } from '@app/features/video-tutorials';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
@@ -13,10 +14,12 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableDriveRedesign } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createOpenTracker } from '@core/internal/open-tracker';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
+  type EntityData,
   type KnownFolder,
   KnownFoldersProvider,
   ListEntityMetadataQueryProvider,
@@ -24,20 +27,28 @@ import {
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import {
+  type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   on,
   onCleanup,
   onMount,
+  Show,
   Suspense,
 } from 'solid-js';
 import { DriveProvider } from './context/drive-context';
+import { DriveRedesignProvider } from './context/drive-redesign-context';
 import { driveLocationLabel } from './core/location-label';
 import {
   DriveDetailNavigationProvider,
   useDriveDetailNavigation,
 } from './drive-detail-navigation';
 import { createDriveHostActions } from './drive-host-actions';
+import { DriveRedesignEntry } from './drive-redesign-entry';
+import { createDriveRedesignHost } from './drive-redesign-host';
+import { createDriveInlineEdit } from './primitives/drive-inline-edit';
+import { createDriveInspector } from './primitives/drive-inspector';
 import {
   createDriveList,
   parseDriveListSnapshot,
@@ -48,8 +59,11 @@ import {
   type DriveRouteState,
 } from './primitives/drive-route-state';
 import { createDriveState } from './primitives/drive-state';
+import { createDriveViewPreferences } from './primitives/drive-view-preferences';
 import { createDriveDataSource } from './queries/drive-data-source';
+import { createDriveFolderContentsSource } from './queries/drive-folder-contents';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
+import { createDriveTrashSource } from './queries/drive-trash';
 import { documentsTour } from './tour';
 import { DriveLoading, DriveWorkspace } from './views/drive-workspace';
 import { SignedOutDriveWorkspace } from './views/signed-out-drive-workspace';
@@ -204,6 +218,83 @@ function DriveComposition(props: { route: DriveRouteState }) {
   });
   onMount(() => panel.handle.setDisplayName('Drive'));
 
+  const redesignFlag = useFeatureFlag(enableDriveRedesign);
+
+  function DriveRedesignBoundary() {
+    const preferences = createDriveViewPreferences();
+    const inlineEdit = createDriveInlineEdit();
+    const inspector = createDriveInspector({
+      open: preferences.inspectorOpen,
+      setOpen: preferences.setInspectorOpen,
+    });
+    const trash = createDriveTrashSource(() => {
+      const loc = selection().location;
+      return loc.kind === 'tab' && loc.tab === 'trash';
+    });
+    const { host, undo } = createDriveRedesignHost({
+      userId,
+      projectId: () => state.projectId(),
+      folders: sidebar.folders,
+      baseActions: actions,
+    });
+    const [inspectedEntity, setInspectedEntity] = createSignal<
+      EntityData | undefined
+    >();
+    const [selectedEntities, setSelectedEntities] = createSignal<EntityData[]>(
+      []
+    );
+    let clearSelectionHandler: (() => void) | undefined;
+    let focusSearchHandler: (() => void) | undefined;
+
+    const createFolderContents = (folderId: Accessor<string | null>) =>
+      createDriveFolderContentsSource({
+        folderId,
+        sort: () => selection().sort,
+        userId,
+        tagSets,
+        tagSetsReady,
+        notificationSource,
+      });
+
+    return (
+      <DriveRedesignProvider
+        value={{
+          preferences,
+          inlineEdit,
+          inspector,
+          undo,
+          trash,
+          host,
+          createFolderContents,
+          inspectedEntity,
+          setInspectedEntity,
+          selectedEntities,
+          setSelectedEntities,
+          clearActiveSelection: () => clearSelectionHandler?.(),
+          registerClearSelection: (handler) => {
+            clearSelectionHandler = handler;
+            return () => {
+              if (clearSelectionHandler === handler) {
+                clearSelectionHandler = undefined;
+              }
+            };
+          },
+          focusSearch: () => focusSearchHandler?.(),
+          registerFocusSearch: (handler) => {
+            focusSearchHandler = handler;
+            return () => {
+              if (focusSearchHandler === handler) {
+                focusSearchHandler = undefined;
+              }
+            };
+          },
+        }}
+      >
+        <DriveRedesignEntry tour={<ViewTour tour={documentsTour} />} />
+      </DriveRedesignProvider>
+    );
+  }
+
   return (
     <DriveProvider
       value={{
@@ -216,7 +307,16 @@ function DriveComposition(props: { route: DriveRouteState }) {
       }}
     >
       <KnownFoldersProvider value={knownFolders}>
-        <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+        <Show when={!redesignFlag().loading} fallback={<DriveLoading />}>
+          <Show
+            when={redesignFlag().enabled}
+            fallback={
+              <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+            }
+          >
+            <DriveRedesignBoundary />
+          </Show>
+        </Show>
       </KnownFoldersProvider>
     </DriveProvider>
   );

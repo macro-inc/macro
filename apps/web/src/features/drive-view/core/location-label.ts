@@ -7,6 +7,8 @@ export function driveLocationLabel(
   if (location.kind === 'folder') {
     return folders.find((folder) => folder.id === location.id)?.name ?? 'Drive';
   }
+  if (location.tab === 'starred') return 'Starred';
+  if (location.tab === 'trash') return 'Trash';
   return DRIVE_TABS.find((tab) => tab.id === location.tab)?.label ?? 'My Files';
 }
 

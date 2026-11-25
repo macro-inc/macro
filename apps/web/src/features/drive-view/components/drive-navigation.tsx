@@ -1,12 +1,20 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import FilesIcon from '@icon/system/regular/files.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { For, type ParentComponent } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { DRIVE_TABS, type DriveLocation, type DriveTab } from '../core/types';
 
-const icons = { owned: FilesIcon, recent: ClockIcon, shared: UsersIcon };
+const icons = {
+  owned: FilesIcon,
+  recent: ClockIcon,
+  shared: UsersIcon,
+  starred: StarIcon,
+  trash: TrashIcon,
+} satisfies Record<DriveTab, typeof FilesIcon>;
 
 export type DriveLocationMenu = ParentComponent<{ location: DriveLocation }>;
 

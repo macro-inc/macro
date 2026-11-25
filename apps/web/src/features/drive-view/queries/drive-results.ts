@@ -61,6 +61,8 @@ export function driveEntityMatchesLocation(
     if (
       !userId ||
       location.tab === 'recent' ||
+      location.tab === 'starred' ||
+      location.tab === 'trash' ||
       selection.scope === 'attachments'
     )
       return false;

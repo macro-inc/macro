@@ -15,7 +15,13 @@ export function selectDriveDatabases(
 ): DatabaseEntity[] {
   const { location, scope } = selection;
   if (!userId || scope === 'attachments') return [];
-  if (location.kind === 'tab' && location.tab === 'recent') return [];
+  if (
+    location.kind === 'tab' &&
+    (location.tab === 'recent' ||
+      location.tab === 'starred' ||
+      location.tab === 'trash')
+  )
+    return [];
   if (location.kind === 'folder' && !location.id) return [];
 
   const search = selection.search.trim().toLocaleLowerCase();
