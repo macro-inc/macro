@@ -207,6 +207,10 @@ export function createGraphqlSoupAstItemsQuery(
         key: soupItemKey(record),
         pageNotifiedAt: notifiedAt,
         item: () => item,
+        // Mapped here, once per row: the Mail index below reads every row
+        // whenever one row maps again.
+        itemId:
+          entity?.id ?? (item ? mapApiSoupItemToEntity(item).id : undefined),
         entity,
         timestamp: fetchedItem
           ? soupEntityTimestamp(mapApiSoupItemToEntity(fetchedItem), sort)
@@ -242,7 +246,7 @@ export function createGraphqlSoupAstItemsQuery(
       ? Object.fromEntries(
           visible().flatMap((row) => {
             const item = row.item();
-            return item ? [[mapApiSoupItemToEntity(item).id, item]] : [];
+            return item && row.itemId ? [[row.itemId, item]] : [];
           })
         )
       : undefined

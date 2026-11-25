@@ -77,6 +77,7 @@ import {
   raiseNotifiedFloor,
   resolveNotifiedAt,
 } from '../normalized-cache/notified-floor';
+import { mapApiSoupItemToEntity } from '../transform-utils';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 import { createSoupLiveQuery } from './create-soup-live-query';
 import { createGraphqlSoupAstItemsQuery } from './items';
@@ -3858,6 +3859,87 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       });
     } finally {
       dispose();
+    }
+  });
+
+  it('indexes a cached Mail list without mapping every row again when one notification lands', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    const ids = ['one', 'two', 'three'];
+    entityFilterMock.mockResolvedValue({
+      kind: 'mail-page',
+      retainedKeys: [],
+      revision: REVISION_0,
+      keys: ids.map((id) => `GraphqlSoupEmailThread:${id}`),
+      sortTimestamps: ids.map(() => '2025-01-01T00:00:00.000001Z'),
+      nextCursor: null,
+      optimistic: false,
+    });
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, requested) => ({
+        revision: REVISION_0,
+        records: requested.map((key: string) => ({
+          recordKey: key,
+          record: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: key.split(':')[1],
+            name: key,
+            mailAllPreview: {
+              id: `${key}-preview`,
+              subject: key,
+              snippet: 'canonical',
+              isDraft: false,
+              senderEmail: null,
+              senderName: null,
+              senderPhotoUrl: null,
+            },
+            mailDraftPreview: null,
+            mailSentPreview: null,
+          },
+        })),
+      })
+    );
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { emailView: 'ALL', sortMethod: 'UPDATED_AT', limit: 20 },
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
+      await vi.waitFor(() =>
+        expect(Object.keys(query.data()?.itemsById ?? {})).toEqual(ids)
+      );
+      vi.mocked(mapApiSoupItemToEntity).mockClear();
+      mapGraphqlSoupItemMock.mockClear();
+      const before = query.data()?.itemsById;
+
+      // The delivery maps its own row again; the index reuses the others.
+      raiseNotifiedFloor('two', '2026-11-18T11:00:00Z');
+      // Only that row ran again, and the index was rebuilt from it.
+      expect(
+        mapGraphqlSoupItemMock.mock.calls.map(([record]) => record.id)
+      ).toEqual(['two']);
+      expect(query.data()?.itemsById).not.toBe(before);
+      expect(Object.keys(query.data()?.itemsById ?? {})).toEqual(ids);
+      expect(
+        vi.mocked(mapApiSoupItemToEntity).mock.calls.length
+      ).toBeLessThanOrEqual(1);
+    } finally {
+      dispose();
+      clearNotifiedFloors();
+      online.mockRestore();
     }
   });
 
