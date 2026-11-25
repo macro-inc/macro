@@ -2115,7 +2115,9 @@ after opening another item, Back returns to that default view.
 Within one tab (or the whole layout when desktop tabs are off), entity content
 can be open in only one split or inline preview/detail view at a time. Desktop
 tabs each hold their own instance. Shell components may have duplicate splits
-when `allowDuplicate` is enabled.
+when `allowDuplicate` is enabled. The split header's Duplicate split copies
+only shells: it is disabled while the split's route claims an entity, including
+one shown inside a shell (a Mail thread, a task, a CRM record).
 An Agents conversation route counts as the same entity as its agent or chat block.
 Following a mention or notification reuses the existing split or inline detail,
 activates its workspace, and navigates to any specified location without a toast.
