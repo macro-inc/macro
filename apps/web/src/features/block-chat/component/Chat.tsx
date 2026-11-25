@@ -13,6 +13,7 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { createMethodRegistration } from '@core/orchestrator';
 import {
   blockElementSignal,
@@ -156,7 +157,10 @@ function ChatInner(props: { data: ChatData }) {
           class="h-full min-h-0 overflow-auto scrollbar-hidden"
           ref={setScrollRef}
         >
-          <div class="mx-auto w-full max-w-3xl touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] touch:pb-(--mobile-content-inset-bottom)">
+          <div
+            ref={followContentInsetBottom}
+            class="mx-auto w-full max-w-3xl touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] touch:pb-(--mobile-content-inset-bottom)"
+          >
             <ChatMessages
               editDisabled
               pendingLocationParams={pendingLocationParamsSignal.get}

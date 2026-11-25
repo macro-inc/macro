@@ -1,6 +1,7 @@
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
@@ -171,7 +172,10 @@ export function ChannelParticipantsTab(props: {
     <Show
       when={isTouchDevice()}
       fallback={
-        <div class="h-full overflow-hidden flex justify-center p-2 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]">
+        <div
+          ref={followContentInsetBottom}
+          class="h-full overflow-hidden flex justify-center p-2 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]"
+        >
           <div class="max-w-200 size-full flex flex-col gap-2">
             <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
               <Panel.Header class="justify-between gap-2 px-6">

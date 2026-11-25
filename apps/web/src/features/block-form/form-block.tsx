@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 /**
  * App-facing entry for the `form` block. It reads the legacy block state once
  * (id, params, split) and hands identity, capabilities and host actions to
@@ -162,7 +163,10 @@ function FormBlockContent(props: {
         }
       >
         <div
-          ref={respondScroll}
+          ref={(element) => {
+            respondScroll = element;
+            followContentInsetBottom(element);
+          }}
           class="h-full min-h-0 overflow-y-auto bg-canvas-base touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
         >
           <Show when={source.detail()}>

@@ -494,6 +494,14 @@ The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+Its `insets.browser.e2e.ts` drives the real float host, keyboard handlers and
+a textarea standing in for a composer, in the iOS app's keyboard path
+(`insets.html?native=ios`): the app frame, composer, dock and fixed sheets move
+with the keyboard and composer growth, the content's padding follows the
+chrome, and `<html>`'s style is never written, since a custom property there
+restyles every element. `just test-mobile-insets-browser` runs it alone; CI's
+Browser Tests job runs it when the float host, the iOS keyboard handlers or
+`viewport-insets.ts` change.
 Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
 conversation and a pinned favorite), Home, a Soup list, the Notifications
 inbox, Agents (sidebar and phone list), Projects and Search on phone and

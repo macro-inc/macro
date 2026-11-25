@@ -6,8 +6,10 @@
  * redirect (`withFormRespondShell` in `routes/shells.tsx`). The form itself is the shared
  * `RespondView`.
  */
+
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Eye from '@icon/system/regular/eye.svg';
 import { useNavigate, useSearchParams } from '@solidjs/router';
@@ -51,7 +53,10 @@ function FormRespondContent(props: { formId: string }) {
   return (
     <FormProvider value={context}>
       <Layer depth={1}>
-        <main class="h-full min-h-0 overflow-y-auto bg-canvas-base text-ink touch:pt-(--safe-top) touch:pb-(--mobile-content-inset-bottom)">
+        <main
+          ref={followContentInsetBottom}
+          class="h-full min-h-0 overflow-y-auto bg-canvas-base text-ink touch:pt-(--safe-top) touch:pb-(--mobile-content-inset-bottom)"
+        >
           <Show
             when={source.detail()}
             fallback={

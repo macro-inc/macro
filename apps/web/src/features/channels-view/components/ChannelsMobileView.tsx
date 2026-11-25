@@ -9,6 +9,7 @@ import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { holdRowPress } from '@components/app/mobile/rowPress';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
@@ -250,6 +251,7 @@ export function ChannelsMobileView(props: {
                 icon: XIcon,
                 onClick: props.onClearSearch,
               }}
+              ref={followContentInsetBottom}
               class="h-auto touch:pt-0 touch:pb-(--mobile-content-inset-bottom)"
             />
           )}
@@ -386,6 +388,7 @@ export function ChannelsMobileView(props: {
         </div>
         {content}
         <div
+          ref={followContentInsetBottom}
           aria-hidden="true"
           class="h-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
         />

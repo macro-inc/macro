@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, type JSX, Suspense } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -71,6 +72,7 @@ export function ListViewport<T>(props: {
       </Suspense>
       {props.touchInset && !props.scrollContainer && (
         <div
+          ref={followContentInsetBottom}
           aria-hidden
           class="h-0 touch:h-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+16px)]"
         />

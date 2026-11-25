@@ -1,0 +1,23 @@
+id: css-viewport-inset-readers
+language: css
+severity: error
+message: A stylesheet reads or sets a mobile viewport value that is written only on the elements that follow it.
+note: |-
+  Rule in .agents/rules/web/mobile.md. `--mobile-content-inset-bottom`,
+  `--dvh` and `--virtual-keyboard-height` are never on <html>: each is written
+  on the elements that register (`followContentInsetBottom`,
+  `followKeyboardViewport`), and the inset doesn't inherit. A selector in a
+  stylesheet can't show which element that is, so the JSX rules can't check
+  it. Register the element the selector matches where it is created, then add
+  this file to `ignores` with that element.
+files:
+  - apps/web/src/**
+  - packages/**
+ignores:
+  # `.calendar-view-content` follows the inset in calendar-view Workspace.tsx.
+  - apps/web/src/features/calendar/calendar.css
+  # `.pdfViewerContainer` follows the inset in block-pdf Document.tsx.
+  - apps/web/src/features/block-pdf/component/block.css
+rule:
+  kind: declaration
+  regex: --(dvh|virtual-keyboard-height|mobile-content-inset-bottom)[^\w-]

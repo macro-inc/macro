@@ -1,4 +1,5 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Layer } from '@ui';
@@ -104,7 +105,10 @@ export function MessageList(props: MessageListProps) {
         props.underScrollsBottom &&
           'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
       )}
-      ref={context.registerMessagesList}
+      ref={(element) => {
+        context.registerMessagesList(element);
+        followContentInsetBottom(element);
+      }}
       onscroll={(e) => {
         const list = e.currentTarget;
         const scrollFromTop = list.scrollTop;

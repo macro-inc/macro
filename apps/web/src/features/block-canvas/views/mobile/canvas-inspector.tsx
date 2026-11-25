@@ -1,4 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { Layer } from '@ui';
 import { CanvasInspectorSections } from '../shared/canvas-inspector-parts';
 
@@ -43,6 +44,7 @@ export function MobileCanvasInspectorPanel() {
   return (
     <Layer depth={2}>
       <aside
+        ref={followContentInsetBottom}
         class="absolute right-4 z-30 flex w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg"
         style={{
           top: 'calc(var(--mobile-content-inset-top, 0px) + 0.5rem)',

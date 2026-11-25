@@ -1,4 +1,5 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { publishContentInsetBottom } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isPlatform } from '@core/util/platform';
 import { autoUpdate } from '@floating-ui/dom';
@@ -13,9 +14,11 @@ import { FLOAT_REGIONS, FloatRegions } from './float-region-state';
  * Positioned `absolute` (not `fixed`) so the --dvh squish from
  * useAppSquishHandlers lifts the whole stack above the virtual keyboard.
  *
- * Publishes its height as `--mobile-content-inset-bottom` on <html> for content that
- * needs bottom clearance. Empty regions collapse (`empty:hidden`), so the
- * variable tracks what is actually visible.
+ * Publishes its height as `--mobile-content-inset-bottom` to the content that
+ * needs bottom clearance (`followContentInsetBottom`), never on <html>: the
+ * height changes with the keyboard and every composer line, and a property
+ * on the root restyles every element. Empty regions collapse (`empty:hidden`),
+ * so the value tracks what is actually visible.
  */
 export function FloatRegionHost(props: {
   navigationEdge?: 'left' | 'right' | 'bottom';
@@ -66,16 +69,11 @@ export function FloatRegionHost(props: {
   createEffect(() => {
     const height = size.height ?? 0;
     FloatRegions.setHostHeight(height);
-    document.documentElement.style.setProperty(
-      '--mobile-content-inset-bottom',
-      `${height}px`
-    );
+    publishContentInsetBottom(height);
   });
   onCleanup(() => {
     FloatRegions.setHostHeight(0);
-    document.documentElement.style.removeProperty(
-      '--mobile-content-inset-bottom'
-    );
+    publishContentInsetBottom(undefined);
   });
 
   return (

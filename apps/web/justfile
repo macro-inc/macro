@@ -260,6 +260,12 @@ test-database-browser *ARGS:
 test-calendar-details-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts {{ARGS}}
 
+# The bottom chrome and the keyboard move the phone layout without writing to
+# <html>, in phone Chromium. Same LD_LIBRARY_PATH caveat as the sign-up browser
+# tests above.
+test-mobile-insets-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts insets.browser.e2e.ts {{ARGS}}
+
 # The agent screen viewer's layouts and the agent DM's top bar, in Chromium
 # over a stand-in transport and stubbed queries. Same LD_LIBRARY_PATH caveat as
 # the sign-up browser tests above.

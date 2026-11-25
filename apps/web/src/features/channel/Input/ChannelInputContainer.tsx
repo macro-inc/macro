@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 
@@ -19,7 +20,11 @@ export function ChannelInputContainer(props: {
         props.class
       )}
       data-holds-prompts={isTouchDevice() ? undefined : ''}
-      ref={props.ref}
+      ref={(element) => {
+        // Its editor's max height reads the keyboard's `--dvh`.
+        followKeyboardViewport(element);
+        props.ref?.(element);
+      }}
     >
       {props.children}
     </div>

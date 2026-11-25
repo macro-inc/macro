@@ -113,7 +113,7 @@ function createFloatRegionsState() {
       setMounts(region, el),
     mount: (region: FloatRegionName) => mounts[region],
     /** Measured height of the visible bottom-chrome stack, in px.
-     *  Same value as the `--mobile-content-inset-bottom` CSS variable. */
+     *  Same value as `--mobile-content-inset-bottom` (`followContentInsetBottom`). */
     hostHeight,
     setHostHeight,
   };

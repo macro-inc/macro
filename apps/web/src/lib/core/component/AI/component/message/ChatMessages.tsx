@@ -4,6 +4,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { Accessor, JSXElement } from 'solid-js';
@@ -243,6 +244,7 @@ export function ChatMessages(props: ChatMessagesProps) {
 
               <Show when={isStream() || chat.isWaiting() || lastPair()}>
                 <div
+                  ref={followContentInsetBottom}
                   class="shrink-0 flex flex-col gap-y-4"
                   style={{
                     // Sized so scrollToBottom rests the just-sent message at

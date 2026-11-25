@@ -8,6 +8,7 @@ import { createMobileToastSwipe } from '@core/component/Toast/create-mobile-toas
 import { ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
@@ -586,6 +587,7 @@ function AppPositionDemo() {
       </Switch>
       <Portal>
         <div
+          ref={followContentInsetBottom}
           on:pointerdown={{
             capture: true,
             handleEvent: mobileSwipe.onPointerDown,

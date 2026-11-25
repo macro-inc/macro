@@ -1,0 +1,56 @@
+id: tsx-keyboard-viewport-reader-follows
+language: tsx
+severity: warning
+message: An element that reads `--dvh` or `--virtual-keyboard-height` sits in a keyboard follower (`followKeyboardViewport`).
+note: |-
+  Rule in .agents/rules/web/mobile.md (Keyboard). The keyboard's values are
+  written only on the elements that follow them, never on <html>, so a reader
+  outside a follower gets its `var()` fallback and doesn't move with the
+  keyboard. Register the element (`ref={followKeyboardViewport}`) or an
+  ancestor (both inherit; an ancestor outside a composer's measured layout
+  keeps a keyboard publish from re-measuring it). The app frame takes its
+  height from `followViewportHeight`, which writes no variable, so it doesn't
+  count as a follower here.
+
+  Passes when the element or a JSX ancestor in the same file registers, or it
+  is inside `Dialog` or `MobileDrawer`, which register their own content. It
+  can't see a follower in another file (a component rendered inside a sheet),
+  class strings built outside JSX, or readers in CSS files
+  (`css-viewport-inset-readers`). Ignore a confirmed case with the reason.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/**/browser-test/**
+  # Each renders inside MobileFilterDrawer, whose MobileDrawer.Content
+  # follows the keyboard.
+  - apps/web/src/features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx
+  - apps/web/src/features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx
+utils:
+  follows:
+    has:
+      kind: jsx_attribute
+      regex: ^ref=[\s\S]*followKeyboardViewport
+  follows-own-content:
+    has:
+      field: name
+      regex: ^(Dialog|MobileDrawer(\.\w+)?)$
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - has:
+        kind: jsx_attribute
+        regex: ^(class|classList|style)=[\s\S]*--(dvh|virtual-keyboard-height)[^\w-]
+    - not:
+        any:
+          - matches: follows
+          - matches: follows-own-content
+          - inside:
+              stopBy: end
+              kind: jsx_element
+              has:
+                kind: jsx_opening_element
+                any:
+                  - matches: follows
+                  - matches: follows-own-content

@@ -86,6 +86,7 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -1190,7 +1191,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
               <Switch>
                 <Match when={showLoadError()}>
                   <div
-                    ref={setEmptyStateRef}
+                    ref={(element) => {
+                      setEmptyStateRef(element);
+                      followContentInsetBottom(element);
+                    }}
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     {props.errorContent ? (
@@ -1208,7 +1212,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                   {/* Non-list states pad the chrome top themselves — the
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
-                  <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                  <div
+                    ref={followContentInsetBottom}
+                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                  >
                     {props.loadingContent ?? <LoadingBlock />}
                   </div>
                 </Match>
@@ -1219,14 +1226,20 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     !isPullRefreshing()
                   }
                 >
-                  <div class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
+                  <div
+                    ref={followContentInsetBottom}
+                    class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)"
+                  >
                     <Spinner class="size-3 animate-spin" />
                     {t('searchResults.searching')}
                   </div>
                 </Match>
                 <Match when={showEmptyState()}>
                   <div
-                    ref={setEmptyStateRef}
+                    ref={(element) => {
+                      setEmptyStateRef(element);
+                      followContentInsetBottom(element);
+                    }}
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <Show
@@ -1683,7 +1696,11 @@ const SoupList = (props: SoupListProps) => {
           {(row, i) => props.children(row, i)}
         </StickyVirtualizer>
         <Show when={isTouchDevice()}>
-          <div aria-hidden class="h-(--mobile-content-inset-bottom)" />
+          <div
+            ref={followContentInsetBottom}
+            aria-hidden
+            class="h-(--mobile-content-inset-bottom)"
+          />
         </Show>
       </div>
     </div>

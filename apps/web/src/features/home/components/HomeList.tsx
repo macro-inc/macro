@@ -1,6 +1,7 @@
 import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
 import {
@@ -654,7 +655,10 @@ export function HomeList(props: HomeListProps) {
 
               <Match when={!forceEmptyState() && source.error()}>
                 <div
-                  ref={setEmptyViewport}
+                  ref={(element) => {
+                    setEmptyViewport(element);
+                    followContentInsetBottom(element);
+                  }}
                   class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] touch:pt-(--mobile-content-inset-top) text-sm text-ink-muted"
                 >
                   <span>Home couldn’t be loaded.</span>
@@ -670,7 +674,10 @@ export function HomeList(props: HomeListProps) {
 
               <Match when={forceEmptyState() || rows().length === 0}>
                 <div
-                  ref={setEmptyViewport}
+                  ref={(element) => {
+                    setEmptyViewport(element);
+                    followContentInsetBottom(element);
+                  }}
                   class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
                 >
                   {/* A new account's Home starts empty, when the tutorial
@@ -685,7 +692,10 @@ export function HomeList(props: HomeListProps) {
 
               <Match when={true}>
                 <div
-                  ref={setViewport}
+                  ref={(element) => {
+                    setViewport(element);
+                    followContentInsetBottom(element);
+                  }}
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
                   onScroll={checkNearEnd}
                 >

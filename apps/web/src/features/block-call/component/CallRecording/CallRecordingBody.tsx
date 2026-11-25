@@ -1,3 +1,4 @@
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import './recording-layout.css';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
@@ -212,7 +213,10 @@ export function CallRecordingBody(props: {
                     class="recording-page-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hidden @[1108px]/call-column:overflow-hidden"
                     ref={setPageScrollRef}
                   >
-                    <div class="recording-content mx-auto max-w-[800px] min-w-0 px-6 mobile:px-5 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom) @[1108px]/call-column:h-full @[1108px]/call-column:max-w-[1308px] @[1108px]/call-column:pb-4">
+                    <div
+                      ref={followContentInsetBottom}
+                      class="recording-content mx-auto max-w-[800px] min-w-0 px-6 mobile:px-5 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom) @[1108px]/call-column:h-full @[1108px]/call-column:max-w-[1308px] @[1108px]/call-column:pb-4"
+                    >
                       <div class="recording-columns flex flex-col gap-7 @[1108px]/call-column:grid @[1108px]/call-column:h-full @[1108px]/call-column:min-h-0 @[1108px]/call-column:grid-cols-[minmax(0,1fr)_480px] @[1108px]/call-column:grid-rows-[auto_minmax(0,1fr)]">
                         <div class="recording-identity flex flex-col gap-7 mobile:order-2 @[1108px]/call-column:col-span-2">
                           <CallRecordingTitle record={record()} />

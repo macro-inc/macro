@@ -5,6 +5,7 @@ import { activeElement } from '@app/signal/focus';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileCreateButton } from '@components/app/mobile/MobileCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -92,7 +93,10 @@ export function RecordSection(
           </FloatRegion>
         )}
       </Show>
-      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:[--mobile-content-inset-top:0px]">
+      <div
+        ref={followContentInsetBottom}
+        class="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:[--mobile-content-inset-top:0px]"
+      >
         {props.children}
       </div>
     </section>

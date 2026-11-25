@@ -13,6 +13,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Paperclip from '@icon/system/regular/paperclip.svg';
 import Trash from '@icon/system/regular/trash.svg';
@@ -678,7 +679,10 @@ function LoadedReplyInputView(
           <div
             data-composer-scroll={isMobileCompose() ? undefined : ''}
             ref={(el) => {
-              if (!isMobileCompose()) setScrollContainer(el);
+              // The mobile compose sheet doesn't cap this by the keyboard.
+              if (isMobileCompose()) return;
+              followKeyboardViewport(el);
+              setScrollContainer(el);
             }}
             class={cn(
               'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',

@@ -6,6 +6,7 @@ import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { useExternalChatListsSync } from '@queries/external-chats/sync';
@@ -110,6 +111,7 @@ export function ExternalView() {
         <h1 class="text-lg font-semibold text-ink">WhatsApp</h1>
       </ViewShell.Header>
       <ViewShell.Content
+        ref={followContentInsetBottom}
         class="overflow-y-auto pb-4 touch:pb-(--mobile-content-inset-bottom)"
         style={{ '--mobile-content-inset-top': '0px' }}
       >

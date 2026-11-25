@@ -8,6 +8,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -224,6 +225,7 @@ export function MyActivityView(props: {
             </Virtualizer>
           </div>
           <div
+            ref={followContentInsetBottom}
             aria-hidden
             class="h-0 touch:h-(--mobile-content-inset-bottom)"
           />

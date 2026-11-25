@@ -40,6 +40,7 @@ export interface EmptyStatePanelProps {
   centered?: boolean;
   children?: JSXElement;
   class?: string;
+  ref?: (element: HTMLDivElement) => void;
 }
 
 const DEFAULT_GRAPHIC_CLASS = 'h-48 w-48 text-ink-muted';
@@ -48,6 +49,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
   const primaryActionContent = children(() => props.primaryActionContent);
   return (
     <div
+      ref={props.ref}
       role="status"
       class={cn(
         // At wide widths the column aligns with the chat input bar (px-2 +

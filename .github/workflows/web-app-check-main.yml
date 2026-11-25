@@ -13,6 +13,7 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+      mobile_insets_changed: ${{ steps.filter.outputs.mobile_insets_changed }}
       agent_screen_changed: ${{ steps.filter.outputs.agent_screen_changed }}
     timeout-minutes: 10
     steps:
@@ -119,6 +120,12 @@ jobs:
               - 'apps/web/src/lib/core/user/displayName.ts'
               - 'apps/web/src/components/app/split-layout/**'
               - 'apps/web/src/components/ui/components/Dialog.tsx'
+            mobile_insets_changed:
+              - 'apps/web/src/lib/core/mobile/viewport-insets.ts'
+              - 'apps/web/src/lib/core/mobile/virtualKeyboard.ts'
+              - 'apps/web/src/components/app/useAppSquishHandlers.ts'
+              - 'apps/web/src/components/app/mobile/float-regions/**'
+              - 'apps/web/src/components/app/mobile/browser-test/insets*'
       - id: codegen
         name: Detect schema changes
         run: |
@@ -1533,6 +1540,12 @@ jobs:
         run: |-
           bunx playwright install-deps chromium
           just test-calendar-details-browser
+        working-directory: apps/web
+      - name: Mobile Insets Browser Tests
+        if: needs.path-check.outputs.mobile_insets_changed == 'true'
+        run: |-
+          bunx playwright install-deps chromium
+          just test-mobile-insets-browser
         working-directory: apps/web
       - name: Agent Screen Browser Tests
         if: needs.path-check.outputs.agent_screen_changed == 'true'

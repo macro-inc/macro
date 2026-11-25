@@ -1,3 +1,4 @@
+import { followViewportHeight } from '@core/mobile/viewport-insets';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '../../../index.css';
@@ -123,7 +124,10 @@ function Fixture() {
   });
 
   return (
-    <main class="h-[calc(var(--dvh,1dvh)*100)] w-screen overflow-hidden bg-page font-sans text-ink">
+    <main
+      ref={followViewportHeight}
+      class="h-dvh w-screen overflow-hidden bg-page font-sans text-ink"
+    >
       <SpreadsheetEditor
         mentions={
           params.has('mentions')

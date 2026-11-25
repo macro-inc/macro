@@ -1,4 +1,5 @@
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Button, Tabs } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
@@ -25,7 +26,10 @@ export function ParticipantsMobileLayout(props: {
       : selection().tab;
 
   return (
-    <div class="flex h-full min-h-0 flex-col gap-2 px-3 pt-2 pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]">
+    <div
+      ref={followContentInsetBottom}
+      class="flex h-full min-h-0 flex-col gap-2 px-3 pt-2 pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]"
+    >
       {/* Management screens reserve no space for the fallback AI composer. */}
       <FloatRegion region="accessory" />
       <div class="shrink-0 overflow-x-auto scrollbar-hidden">

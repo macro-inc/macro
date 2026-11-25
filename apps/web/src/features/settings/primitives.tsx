@@ -1,3 +1,4 @@
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import { Button, type ButtonProps, ComposerSurface, cn } from '@ui';
 import { children, createContext, type JSX, Show, useContext } from 'solid-js';
@@ -57,6 +58,7 @@ export function SettingsPage(props: {
           scroll content (plus the usual breathing room) so pages scroll under
           the floating header and bottom rows like every other block. */}
       <div
+        ref={followContentInsetBottom}
         class={cn(
           'mx-auto w-full max-w-[960px]',
           inSheet

@@ -78,6 +78,7 @@ export function ComposeLayout(props: {
   header?: JSX.Element;
   notice?: JSX.Element;
   class?: string;
+  ref?: (element: HTMLElement) => void;
   bodyDebugName?: string;
 }) {
   const ctx = useCompose();
@@ -218,7 +219,10 @@ export function ComposeLayout(props: {
   return (
     <Dynamic
       component={props.as ?? 'div'}
-      ref={registerRef('containerRef')}
+      ref={(element: HTMLElement) => {
+        registerRef('containerRef')(element);
+        props.ref?.(element);
+      }}
       class={cn(
         'touch:pt-[calc(var(--mobile-content-inset-top)+.5rem)]',
         props.class
