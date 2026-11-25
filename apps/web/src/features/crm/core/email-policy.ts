@@ -69,7 +69,8 @@ export type EmailPolicyAudit = {
       | 'all_mail_enabled'
       | 'withdrawn'
       | 'mailbox_revoked'
-      | 'live_targets_changed';
+      | 'live_targets_changed'
+      | 'records_merged';
     actor_kind: 'member' | 'agent' | 'api' | 'system';
     event_id: string;
     agent_id?: string | null;

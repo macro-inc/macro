@@ -387,7 +387,16 @@ The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
 real row: Minimalist unchanged, and Classic's shared line between rows (plus
 the one above each date group's first row), lifted unread fill, weights and
 always-visible checkbox on desktop and tablet, with phones kept on Minimalist,
-and the Settings → Email sample following the Row style tabs.
+and the Settings → Email sample following the Row style tabs. Its
+`row-labels.browser.e2e.ts` checks the labels people made on wide rows (each
+nested label by its own name, its whole name on hover, three items and then a
+count, none of Gmail's system or hidden labels) and none on narrow or phone
+rows; `ROW_LABELS_SCREENSHOT_DIR` saves its screenshots.
+`sidebar-labels.browser.e2e.ts` checks the sidebar's Labels section on desktop
+and phone (a row per inbox when all show, none for one picked inbox, a nested
+Gmail label under its parent, eight labels then `N more` holding the rest and
+Gmail's hidden ones, the open label marked); `SIDEBAR_LABELS_SCREENSHOT_DIR`
+saves its screenshots.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -460,6 +469,13 @@ service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It laun
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
 Members rows (owners, admins, members and agents) share one shape at every width, like a Machines row: picture, name, email, one summary line (role · plan, plus **Pro at renewal** or **No CRM access** when they apply; an agent's status), and a ⋯ that holds everything the viewer can change in the order plan, role, CRM access (named `CRM access for <name>`), Remove. The ⋯ is a `Dropdown` on desktop and a `MobileDrawer` sheet on touch, switched in `TeamMembers.tsx`. A setting the viewer can't change stays in place, disabled, with its reason written under it; don't use `disabledReason` there, whose tooltip takes the Escape that should close the menu. Names and emails wrap on rows under 480px, as Machines' names do, breaking an address before its `@`. Person rows are keyed by `user_id` (`Key`), so a refetch keeps each row and an open ⋯; don't give `useTeamQuery` `reconcile`, which writes into TanStack's cached object and so into the remove mutation's rollback snapshot. The same suite checks the rows at 1440, 820 (touch), 390, 360 and 320px, and each ⋯ item for owner, admin, member and agent rows. CRM settings' **Who can use CRM** (`views/crm-member-access.tsx`, which CRM receives as `CrmContext.MemberAccess`) lists the same person rows with `TeamMemberRow` and a CRM access switch, sharing Members' roster helpers in `primitives/team-roster.ts`; keep the two lists on those helpers. The suite's `?crm` page checks a change there seen in the ⋯ and back, a failed save and its retry, admins, and that members and flag-off owners see no list.
+
+A task's phone Time sheet (the real `TaskTimeSheet` over entries held in
+memory) has a backend-free light/dark regression: every entry, one's own
+swipeable rows and a teammate's, sits on the sheet's glass at rest with no
+swipe action showing, and a row fills only while it is swiped and still opens
+to edit:
+`bunx playwright test --config src/features/time-tracking/browser-test/playwright.config.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
@@ -784,7 +800,8 @@ Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a
 range, and checks their name labels above the header and under it once
 scrolled, and keyboard (Shift+Arrow) ranges whose moving corner stays in
-view: `just test-database-browser`. Keep the outline an overlay, never a
+view: `just test-database-browser`. The same CI suite measures import-plan row titles and controls at
+390px phone and desktop widths through its backend-free row fixture. Keep the outline an overlay, never a
 border on the cell. Virtual rows are transformed, so each is its own stacking
 context: a row carrying labels rises above the header only while its top edge
 is in view.
@@ -798,6 +815,32 @@ controls. CI runs it when
 `GanttCalendarClip`; without that the clip cuts it off at the bar's end. Only a
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
+
+The database page's toolbar (the real `DatabasePageToolbar` and
+`DatabasePageNoTables` over tables and views kept in memory, drawn again per
+table as the page does) has a phone/desktop regression in the same suite,
+`toolbar.browser.e2e.ts`: at 320, 390 and 430px every control stays on screen
+at 36px or taller, also with search open; the table menu switches tables and
+creates a named table, with focus following to the redrawn menu button (it
+also opens one that was created but not loaded, and a database's first); the
+selected view tab shows whole; and **View actions** creates, renames and
+deletes a view. Desktop keeps one row with **New view**. Both toolbars draw
+their view tabs from `createViewControls`;
+`block-database/database-page-controls.tsx` holds the page's device switches.
+`DatabasePageHeader` there switches the header: `MobileDatabaseHeader`
+(`MobileHeader` plus a `SplitFileMenu` title menu whose database rows come from
+`databaseTitleMenuRows`) on touch, `TopBar` on desktop; both read
+`createDatabaseHeader` and `createDatabaseTransfers`. `DatabasePageRecords`
+provides `ColumnMenuContext` on touch, so `DatabaseColumnHeader` draws its menu
+as `ColumnMenuDrawer`, where Change type opens in the same sheet; embedded
+grids provide none and keep the dropdown. `column-menu-drawer.test.tsx` drives
+the real header through that sheet.
+A touch menu item that opens a dialog, starts a rename or switches tables does
+so from the menu's `onCloseAutoFocus`: a Kobalte menu closing over an open
+dialog leaves `body` with `pointer-events: none`. The database block pads
+itself by `--mobile-content-inset-top` on touch (its toolbar is in flow) and
+resets that inset for its children; phones drop the header's table tabs for
+the toolbar's table menu.
 
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
@@ -868,6 +911,15 @@ or mention in it presses the row and opens nothing. The same suite's
 `preview-links.browser.e2e.ts` clicks, Cmd-clicks, middle-clicks and taps a
 link in a row and in an unfolded stack; the Signal suite's
 (`next-soup/soup-view/views/inbox/browser-test`) taps one in a Home card.
+Search snippets are a picture of the message too: `SearchContent`
+(`features/entity/extractors-search`), which every snippet renders through
+(channel message search rows, a result's Show more hits, the agent Search
+card), is `inert`, and so is a result's highlighted name (`EntityTitle`, and
+`CallRecordName` in call rows, which render markdown only for a search result
+with a name highlight), so pressing a link in either opens the result; a
+highlight splits a URL, so a live link opened only its first part. Run
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts search-snippet.browser.e2e.ts`,
+which presses a snippet's or title's link on desktop and taps it on phone.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
@@ -1088,6 +1140,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
   consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
   settings page that spans nearly the full width, for its list columns.
+  Settings sections shown outside a `SettingsPage`, such as in a dialog, go in
+  `SettingsSections` so they keep the page's spacing.
 - Preserve email signature HTML through import, preview, and source editing;
   mount Quill only for explicit Rich text editing and confirm custom-layout
   conversion. Keep the settings and composer preview on the same sanitized HTML
@@ -1155,6 +1209,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,
   cancelable waits; a missing startup frame is not proof of untouched storage.
+  A coordinator that ends without a word is noticed through the Web Lock it
+  holds, or an unanswered `ping`, and handled the same way.
+- Nothing but a newer build ends a browser cache for the page: bound retries in
+  rate, never in number, and never quarantine a scope over a handoff, drain,
+  timeout or transport failure. While nothing can open the database the host is
+  `paused` (`disabled` too): `getGraphqlSoupCacheHost()` changes reactively,
+  requests fail at once for the network, and the client, queue and subscribers
+  stay. Check `isCacheHostGone`/`paused` before dropping a disabled host.
   See `docs/graphql-normalized-cache-plan.md`.
 - Reject already-routed optimistic enqueues with missing replies as uncertain on
   every owner departure; never forward them through network fallback, because
@@ -1189,9 +1251,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `wasm_download` has no `bytes` and `wasm_compile` includes the body; a
   streamed compile that fails other than on an invalid binary is reported as a
   failed download and retried once from bytes.
-- Drain browser cache engines when their last visible consumer hides, then park
-  without retiring clients; queue background work until a visible owner reopens
-  storage, retaining accepted mutation settlements even if their caller leaves.
+- Drain browser cache engines once their last visible consumer has been hidden
+  for a second, then park without retiring clients; end a drain that takes 15 s
+  while a page is visible like a departed owner, keeping its files; queue
+  background work until a visible owner reopens storage, retaining accepted
+  mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
   A typed search held across an engine restart reaches the new engine first, and
   one already sent is not refused when the read budget expires; it has no
@@ -1200,7 +1264,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   (while still replaying it if the engine arrives), and a list aborts the
   search it has superseded.
   Bound foreground resume reads to one second without killing an owner, stealing
-  its lock, replaying writes, or treating intentional parking as a failure.
+  its lock, replaying writes, or treating intentional parking as a failure. Reads
+  waiting for an owner otherwise end after ten seconds; a cache-only reader asks
+  again on `onOwnerReady`. A write still queued after 30 s is refused with
+  `write-not-admitted`: return it as the mutation's error, never send it.
 - Snapshot cache generation subscribers before dispatch and skip removed listeners;
   reactive observers may resubscribe during notification and must not extend it.
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
@@ -1213,6 +1280,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Report cache operation failures through `createCacheErrorThrottle`: one owner
   loss rejects every queued operation, and each report reaches the console and
   session replay. The next report for that kind carries `cache.suppressed_count`.
+  Kinds differ by operation, response code (exported as `cache.error_code`) and
+  message, so an uncertain admitted enqueue is never hidden by a plain
+  rejection with the same text.
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.
@@ -1232,7 +1302,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
-- Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
+- Browser storage schema 12 enables covering-index search through a fresh versioned cache; native caches run registered storage upgrade steps in place, keeping queued writes; a native file still resets without a complete chain, when a step or the final schema check fails, or when another scope or an unmigratable format wrote it, and a browser build resets an older version it finds under its own name. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 or later (5 and 6 refuse them); the first search on a host goes without and is resent once it answers. On policy 8, among names that start with the query (exact and word-prefix) the list group decides first, then exact before word-prefix, then recency; contains-only and address matches follow, each by group. Policy 7 hosts (native builds before the release that brings 8) rank by name stage before group, and their windows are kept as they come. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
@@ -1283,11 +1353,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   first item" command, so a list on `useListInteractions` lands on its first
   row with no code in the view; when that command finds no row (a search with
   no results), the keys stay in the field. `wide` lets the open field take the rest of
-  the header (the view hides its other actions from `onOpenChange`), `open`
+  the header (the view hides its other actions from `onOpenChange`; left
+  empty, it closes once focus leaves the header), `open`
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
-  keyboard in the field); `operators` marks search operators (`in:sent`) in
+  keyboard in the field, and `commit` hears the Enter that runs the typed
+  search, which Email remembers); `operators` marks search operators (`in:sent`) in
   the text, which `search-operator-text.tsx` draws as tokens behind the input
   while the text stays ordinary editable text; future operators reuse it.
   Email's wide search uses all of them. It registers the
@@ -1407,7 +1479,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retain sender ownership, draft signal settings, and primary-inbox selection in the same viewer-scoped inbox snapshot used by the composer; pending catalog refreshes must not block saves or sends, and account changes must clear that snapshot.
-- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
+- Retry a failed browser cache on reconnect/foreground or draft Retry (`canRetryCacheFailure`); retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`) or an untyped native failure, and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`. A host that ends its outage is proved at once (`available()`), also offline or hidden.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
@@ -1428,8 +1500,21 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
-- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
-  bump its checkpoint version when changing the hydration input contract.
+- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill.
+- Soup backfill checkpoints are keyed by each lane's contract
+  (`queries/soup/backfill-contract.ts`): changing a lane's operation, input or
+  pass flags restarts that lane alone, and a tab runs a lane only while holding
+  its locks (`soupBackfillLaneLocks`), leaving a lane another tab holds until
+  its other lanes are done. The app runs lanes only in the tab that leads
+  backfill, and leading takes the browser's Locks API too; a direct
+  `runSoupBackfill` call without it runs the lane unlocked. Bump the lane's
+  `contractVersion` when it must refetch for a reason those do not show (a
+  projection that needs fields the cache lacks, a page size that must reach
+  scans in flight); bump
+  `BACKFILL_VERSION` only for a runner change every lane shares. Never edit
+  `V19_CONTRACTS`. Read and write a lane's checkpoint through
+  `queries/soup/backfill-checkpoint.ts` with the lane itself, never a
+  checkpoint id: the channel directory reads `CHANNEL_DIRECTORY_LANE`.
 - Refresh the channel list's bounded unread and mention edges when opening a
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to
@@ -1901,6 +1986,33 @@ stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
+Import review metadata decodes `plan.dependencyOf` into **Linked from** and
+`plan.inlineOn` into **Linked from** labels on existing rows. Readable sources
+inside the selection default to Copy. External dependencies start unticked as
+Link; ticking removes their id from the saved draft's excluded list. Including
+a parent must not opt in external children. Refresh the saved review when new
+dependencies arrive, keeping them excluded until its defaults are saved. Use
+ordinary inclusion and sharing controls;
+unavailable by-hand rows stay disabled and show their reason. Desktop and touch
+keep the same controls; phone rows let titles wrap, put counts and badges on a second line, and wrap
+**Linked from** onto its own full-width line below them. Keep editable per-row
+sharing controls available even when the current sharing choices are uniform. On phones, the counted notices disclosure starts collapsed
+before the tree in both the card and full review; expanding it preserves every
+warning. Desktop keeps its inline title/control layout and labels, and starts the same counted notices disclosure expanded.
+Use confirmed write counts for the completed Notion outcome. Open Needs
+attention on phone and desktop and show a count when items failed. Place a
+run-level error above the failed items when it adds separate context. Call out
+rows and tasks that survived an unfinished copy. Use typed totals
+for the outcome and disclosures so bounded samples don't change the counts.
+Show **Needs you** separately from review skips and retain each item's reason
+after approval, even when the ledger no longer schedules the item for writing.
+Group changes by source and view identity and label each tab choice with its
+placement. Omit the report when it has no details.
+The flat warning disclosure is the fallback for legacy reports and other phases.
+While any rows are undecided, the summary says
+**Deciding what to import…** rather than describing an empty import. Imported
+approximated views use a short **≈** suffix; never parse user-visible view names
+to infer typed view state.
 Desktop shows every import run in the corner's import tray
 (`features/import-jobs`, in `ToastRegion`), independent of the import dialog
 and never on phones. Its backend-free check is

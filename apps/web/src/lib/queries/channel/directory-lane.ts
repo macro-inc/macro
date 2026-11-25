@@ -1,4 +1,6 @@
+import { SoupChannelDirectoryBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlSoupInitialInput } from '@service-storage/graphql-soup';
+import type { SoupBackfillLane } from '../soup/backfill-contract';
 
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -36,3 +38,17 @@ export const CHANNEL_DIRECTORY_INPUT: GraphqlSoupInitialInput = {
     foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
   },
 };
+
+/** The channel backfill lane as its checkpoint is stored: the backfill runs
+ * it, and the directory reads its progress. */
+export const CHANNEL_DIRECTORY_LANE = {
+  checkpointId: CHANNEL_DIRECTORY_CHECKPOINT_ID,
+  operation: SoupChannelDirectoryBackfillDocument,
+  input: CHANNEL_DIRECTORY_INPUT,
+  // Every pass is a full one (the channel filter has no update-time literal),
+  // so a finished pass also removes the cached channels it proves stale.
+  refreshAll: true,
+  // A pass resumed from a cursor cannot tell which channels are stale, and
+  // the fetcher fails its last page, so a run always starts at the top.
+  restartOnRun: true,
+} satisfies SoupBackfillLane;

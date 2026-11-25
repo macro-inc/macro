@@ -88,6 +88,17 @@ fragment ActivityEventFields on GraphqlActivityEvent {
 			entryDate
 			source
 		}
+		... on GraphqlActivityRecordMerged {
+			merged {
+				id
+				name
+			}
+			dropped {
+				property
+				record
+				value
+			}
+		}
 		... on GraphqlActivityUnknownAction {
 			tag
 			payload

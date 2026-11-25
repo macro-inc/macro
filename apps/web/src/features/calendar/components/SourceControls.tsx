@@ -2,7 +2,7 @@ import { ViewSidebar } from '@app/components/view-shell';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import RssIcon from '@icon/system/regular/rss.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
-import { Checkbox, Tooltip } from '@ui';
+import { Checkbox, cn, Tooltip } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
@@ -148,18 +148,25 @@ export function CalendarSourceLabel(props: { source: CalendarSource }) {
         </Tooltip>
       </Show>
       <Show when={props.source.isSubscription}>
-        <Tooltip
-          as="span"
-          label="Subscription calendar"
-          class="flex shrink-0 text-ink-muted"
-        >
-          <RssIcon
-            aria-hidden={false}
-            class="size-3"
-            aria-label="Subscription calendar"
-          />
-        </Tooltip>
+        <SubscriptionMark />
       </Show>
     </>
+  );
+}
+
+/** The mark of a calendar the account subscribes to, so it reads as read-only. */
+export function SubscriptionMark(props: { class?: string }) {
+  return (
+    <Tooltip
+      as="span"
+      label="Subscription calendar"
+      class={cn('flex shrink-0 text-ink-muted', props.class)}
+    >
+      <RssIcon
+        aria-hidden={false}
+        class="size-3"
+        aria-label="Subscription calendar"
+      />
+    </Tooltip>
   );
 }

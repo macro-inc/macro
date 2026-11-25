@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_captcha_runs\n               SET model_calls_used = model_calls_used + 1,\n                   model_calls_in_flight = model_calls_in_flight + 1\n               WHERE id = $1 AND user_id = $2 AND expires_at > now() AND ended_at IS NULL\n                 AND model_calls_used < $3 AND model_calls_in_flight < $4\n               RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3df6c025881cb040536cda4e2fb9f0a1e0d12d6e623d9da0ed9b298001074d11"
+}

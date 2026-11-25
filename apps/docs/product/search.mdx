@@ -16,6 +16,41 @@ To further narrow search results, combine your keywords with an @mention of a sp
 
 Search covers more than titles: document bodies, email threads, channel messages, call transcripts, and file contents are all indexed. You can also ask an [agent](/product/agents) to find things for you; agents use the same index.
 
+## Search mail
+
+Macro Mail's search field reads search operators, as Gmail does: a name, a colon, and a value that narrows the search. Combine as many as you like with ordinary words, in any order. For example, `budget from:ana has:attachment newer_than:30d` finds mail from Ana with an attachment, sent in the last 30 days, that mentions "budget".
+
+| Operator | Finds mail |
+| --- | --- |
+| `from:ana` | From Ana, by the sender's name, or by a full address such as `from:ana@example.com` |
+| `to:ben` | Sent to Ben, in To, Cc or Bcc |
+| `cc:ben`, `bcc:ben` | With Ben in the Cc, or in the Bcc |
+| `subject:lunch` | With "lunch" in the subject |
+| `"team lunch"` | Containing the exact phrase "team lunch" |
+| `subject:"team lunch"` | Whose subject contains the exact phrase |
+| `label:travel` | With the mailbox label or Macro tag Travel |
+| `in:sent` | In a view: `inbox`, `signal`, `noise`, `favorites`, `sent`, `drafts`, `calendar`, `shared` or `archived` |
+| `in:travel` | With the label or tag Travel, when no view has that name |
+| `is:unread`, `is:read` | Unread, or read |
+| `is:starred` | Starred |
+| `is:shared` | In threads shared with you |
+| `has:attachment` | With an attachment |
+| `after:2026/06/01` | Sent on or after a date |
+| `before:2026/07/01` | Sent before a date |
+| `newer_than:7d` | Sent in the last 7 days |
+| `older_than:1m` | Sent more than a month ago |
+
+Put a minus before a word or an operator to leave matching mail out: `-newsletter` skips mail containing "newsletter", and `-from:ana` skips mail from Ana. Every view but Signal and Noise can be left out with `-in:`, such as `-in:archived`.
+
+A few details:
+
+- Words match from their start: `subject:lunch` also finds "lunchtime", and `from:ana` finds Ana and Anabel but not Diana. A full address matches only that address.
+- Quote a value that has a space in it: `subject:"team lunch"`, `label:"Q3 planning"`.
+- Write dates as `2026/06/01` or `2026-06-01`. They are read in your time zone.
+- `newer_than:` and `older_than:` take a number and a unit: `d` for days, `w` for weeks, `m` for months, `y` for years.
+- Operator names are not case sensitive, so `From:ana` works too.
+- An operator with a value it can't read, such as `is:important`, is searched as an ordinary word.
+
 ## Filtering by tags
 
 Open the filter menu and select the **Tags** chip to narrow results to items carrying specific [tags](/concepts/properties). Once you've selected two or more tags, a match-mode toggle appears on the chip:

@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import {
+  attachGlobalDOMScope,
+  registerHotkey,
+  useHotKeyRoot,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
+import { setActiveScope, setPressedKeys } from '@core/hotkey/state';
 import {
   cleanup,
   fireEvent,
@@ -15,6 +23,7 @@ import { EventComposerSplit } from './EventComposerSplit';
 const mocks = vi.hoisted(() => ({
   canForward: false,
   controllerEnabled: undefined as (() => boolean) | undefined,
+  close: vi.fn(),
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => false,
@@ -37,12 +46,10 @@ vi.mock('@app/features/calendar-view/components/EventGuests', () => ({
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
-    handle: { close: vi.fn(), setDisplayName: vi.fn() },
+    handle: { close: mocks.close, setDisplayName: vi.fn() },
   }),
 }));
-vi.mock('@core/hotkey/hotkeys', () => ({
-  useHotkeyDOMScope: () => [() => {}],
-}));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@app/features/calendar/hooks/use-synced-calendar-event', () => ({
   useSyncedCalendarEvent: () => () => undefined,
 }));
@@ -74,11 +81,17 @@ vi.mock(
       '@app/features/calendar/context/calendar-composer-context'
     );
     return {
-      CalendarDesktopPlacement: (props: { children?: JSX.Element }) => {
+      CalendarDesktopPlacement: (props: {
+        children?: JSX.Element;
+        onClose: () => void;
+      }) => {
         const { controller } = useCalendarComposer();
         return (
           <>
             {props.children}
+            <button type="button" onClick={props.onClose}>
+              Cancel
+            </button>
             <output aria-label="Conference">
               {controller.state().conference}
             </output>
@@ -97,7 +110,12 @@ vi.mock(
     };
   }
 );
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setActiveScope('global');
+  setPressedKeys(new Set<string>());
+  mocks.close.mockClear();
+});
 
 it('defaults a new event to a Macro call', () => {
   render(() => <EventComposerSplit />);
@@ -203,4 +221,51 @@ it('keeps what the user changed before suggestions arrived', async () => {
     'My title'
   );
   expect(screen.getByLabelText('Location').textContent).toBe('');
+});
+
+it('closes on cancel without calling the save callback', () => {
+  const onSaveSuccess = vi.fn();
+  render(() => <EventComposerSplit onSaveSuccess={onSaveSuccess} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(mocks.close).toHaveBeenCalledTimes(1);
+  expect(onSaveSuccess).not.toHaveBeenCalled();
+});
+
+// The composer opens in a popover split, under the app's global hotkeys. A
+// global shortcut such as Ctrl+; (toggle settings) must still run from its
+// fields and claim the key, or WebKitGTK's own Ctrl+; opens its emoji picker.
+it('runs global hotkeys from its fields', () => {
+  const toggleSettings = vi.fn(() => true);
+  render(() => {
+    useHotKeyRoot();
+    const [attachPopoverScope] = useHotkeyDOMScope('popover-split');
+    registerHotkey({
+      hotkey: 'cmd+;',
+      scopeId: 'global',
+      description: 'Toggle settings',
+      keyDownHandler: toggleSettings,
+      runWithInputFocused: true,
+    });
+    return (
+      <div ref={attachGlobalDOMScope}>
+        <div ref={attachPopoverScope}>
+          <EventComposerSplit />
+        </div>
+      </div>
+    );
+  });
+  const title = screen.getByRole('textbox');
+  title.focus();
+
+  const keydown = new KeyboardEvent('keydown', {
+    key: ';',
+    code: 'Semicolon',
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  title.dispatchEvent(keydown);
+
+  expect(toggleSettings).toHaveBeenCalledTimes(1);
+  expect(keydown.defaultPrevented).toBe(true);
 });

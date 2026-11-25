@@ -252,23 +252,42 @@ behind `enable-agent-teammates` (on in dev) and the Macro computers rollout,
 narrow page the two invite buttons wrap, together, onto their own line. The
 desktop settings sidebar lists **Invite agents** under **Invite your team** for
 the same viewers. Members, and everyone while a flag is off or still loading,
-see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
-agent's computer size; picture, voice and role come later, and the agent asks
-what to take on once it is online. While the name is empty, **Try** offers
-**Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
-letter. Sizes come from the same catalog and prices as Buy a computer
-(sold-out sizes are disabled and marked **Sold out**). The agent's seat is
-included, so the button reads **Add <name> · $X/month** (or **Add <name>**
-when included); while it is disabled, the line under it says why ("Give your
-agent a name to continue.", a name too long, no size for sale). Adding calls
+see only the people invite. Each entry opens its own form: **Invite Human** and
+**Invite your team** the people invite, **Invite Agent** and **Invite agents**
+the agent form, and neither has a People/Agent switch. **Invite an agent**
+asks only for a name and the agent's computer size: the field headed **Name
+it**, with the agent's avatar beside it, then **Give it a computer**. The
+avatar is the name's first character, upper-cased (`agentInitial`: one
+grapheme, after any invisible marks or punctuation, so "Ada Lovelace" is
+**A** and an emoji or CJK character stays whole; the example name's **M** while the field is
+cleared), redrawn as it is typed. A new invite starts named **Macronaught**,
+a real value the admin can keep (Add then adds Macronaught) or change; a
+cleared field still needs a name. The agent's Members row draws the same letter;
+people keep their two initials. Agents have no picture editor. Under the sizes, one line says
+what Add charges for: "Its own computer, always on. $X/month is added to your
+team subscription, prorated for the rest of this billing period. The agent's
+seat costs nothing extra." (for an included size, "Nothing is added to your
+team subscription…"). Voice and role come later, and the agent asks what to take
+on once it is online.
+
+Sizes come from the same catalog and prices as Buy a computer
+(sold-out sizes are disabled and marked **Sold out**; Add with every size sold
+out says so under the sizes and sends nothing). The agent's seat is
+included, so the button reads **Add <name> · $X/month** (or **Add Agent ·
+$X/month** before a name). A long name shortens with an ellipsis inside the Add label; the price stays whole.
+Add is always enabled: with no name it marks the name field invalid, says
+"Give your agent a name to continue.", and moves the caret there; a name too
+long is marked the same way; either sends nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
-in the dialog (**Adding <name>…**, "Starting <name>…") reading
+in the dialog (**Adding <name>…**) reading
 `GET /team_agents` every 500 ms until the agent reports itself online, and
 closes into the agent's DM, where it has said hi; no toast. Past five seconds
 it closes into the DM anyway, where the banner says it is still being set up
 and its Members row shows the setup step. Every failure stays in the dialog
 with the name and size kept: a declined card (402 `payment_declined`;
-nothing was bought) with **Update card** (Settings → Billing) and **Try again ·
+nothing was bought) with **Update card** (Settings → Billing; the name and size are kept in
+the tab's sessionStorage, so the next Invite an agent for that team starts
+from them until the agent is added or Cancel is pressed) and **Try again ·
 $X/month**, which sends a new purchase key; no room for the size (409
 `no_room`, checked before any charge), which marks the size sold out and picks
 the next one on sale; a computer that didn't start, whose **Retry** is the
@@ -437,10 +456,10 @@ The compact sidebar uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
 in a subtle accent circle that a glowing comet periodically circles) appears in
-the sidebar rail above the Downloads and settings icons. Its popover (a title,
-a short description, and one action) opens by itself once per update until
-dismissed (click outside or Escape); the button stays until the update is
-applied. Its wording and action depend on the update: **New version available**
+the sidebar rail above the Downloads (in a browser) and settings icons. Its
+popover (a title, a short description, and one action) opens by itself once
+per update until dismissed (click outside or Escape); the button stays until
+the update is applied. Its wording and action depend on the update: **New version available**
 / **Reload** for a newer web build, **Update ready** / **Update** for a
 downloaded bundle in the desktop app, and **Desktop app update ready** /
 **Restart and update** for a native desktop update. When part of the app fails
@@ -500,8 +519,13 @@ requirement under the row. On a computer with no installer (Windows, ChromeOS) b
 under "Available for macOS and Linux." The links are the website's stable
 installer links, `https://macro.com/download/mac` and `/download/linux`
 (the same ones as the marketing `/download` page), which redirect to the
-current release's installers. A click sends the PostHog event `desktop_download_clicked`
-with `platform` (`macos` or `linux`) and `source: 'app_settings'`. Its
+current release's installers. Once the website links to the Intel Mac installer
+(`/download/mac-intel` in `apps/marketing/seo/download-redirects.json`), a Mac
+gets **Download for Apple silicon** and **Download for Intel** side by side: the
+one Chromium's architecture hint names is primary, and otherwise Apple silicon
+is, with "Not sure? Apple menu → About This Mac shows your chip." under the row.
+A click sends the PostHog event `desktop_download_clicked` with `platform`
+(`macos`, `macos-intel` or `linux`) and `source: 'app_settings'`. Its
 **Mobile app** section has an **iPhone** / **Android** switch for the App
 Store or Google Play QR code, with **Copy link** for that store's URL. Inside
 the desktop app the page shows only the Mobile app section. Phones, tablets and
@@ -527,7 +551,8 @@ from `apps/web`.
 
 The sidebar rail's **Downloads** button (a download glyph in the same accent
 circle as the update button, without its comet) opens this page; Shift-click
-opens it in a new split. It shows wherever the page exists.
+opens it in a new split. It shows wherever the page exists, except in the
+desktop app, which is already installed and keeps the page in Settings only.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens

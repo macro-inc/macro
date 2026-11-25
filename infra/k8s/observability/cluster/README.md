@@ -217,7 +217,9 @@ notification route, so rules evaluate and show state here but nothing reaches
 GoAlert, SNS or anyone. The one exception is the watchdog: an always-firing
 rule that pings a GoAlert heartbeat monitor every two minutes, so GoAlert pages if
 this Grafana, its alerting or its path to GoAlert stops. The switch sets
-`notify = true`. Muting covers notification policies only: a contact point's
+`notify = true`. The cluster's own rules are the "Observability cluster"
+group in `modules/grafana.nix` (today: Tempo compaction stalled), routed to
+GoAlert notify. Muting covers notification policies only: a contact point's
 **Test** button in the UI sends for real even while muted; don't press it
 before the switch.
 

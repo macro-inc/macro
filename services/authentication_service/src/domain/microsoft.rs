@@ -7,6 +7,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
+use tracing::Instrument as _;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -38,7 +39,8 @@ impl OutlookFlag {
     }
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum MicrosoftAuthError {
     #[error("a professional subscription is required to link an additional inbox")]
     PaymentRequired,
@@ -98,6 +100,9 @@ pub struct StoredGrant {
     pub owner: String,
     pub email: String,
     pub envelope: EncryptedMicrosoftToken,
+    /// When Microsoft last refused this grant's refresh; `None` once a
+    /// refresh works again.
+    pub refresh_refused_at: Option<DateTime<Utc>>,
 }
 
 /// Verified, non-secret mailbox binding for the email domain's initializer.
@@ -191,6 +196,9 @@ pub trait MicrosoftGrantRepository: Send + Sync {
         generation: i64,
         sync_generation: i64,
     ) -> Result<StoredGrant, MicrosoftAuthError>;
+    /// Refuses a grant Microsoft refused less than `REFUSED_REFRESH_RETRY`
+    /// ago, as the lease's current row records it: a request that read the
+    /// grant before another's refusal must not ask Microsoft again.
     async fn acquire_refresh(
         &self,
         grant: &StoredGrant,
@@ -204,12 +212,16 @@ pub trait MicrosoftGrantRepository: Send + Sync {
         envelope: &EncryptedMicrosoftToken,
         scopes: &[String],
     ) -> Result<bool, MicrosoftAuthError>;
+    /// Gives the lease back. `refused` records that Microsoft refused the
+    /// refresh; the grant itself stays, so a later refresh can work again.
+    /// Answers whether the release matched the leased grant version: a lease
+    /// that expired, or a grant that moved on, changes nothing.
     async fn release_refresh(
         &self,
         grant: &StoredGrant,
         lease: Uuid,
-        revoke: bool,
-    ) -> Result<(), MicrosoftAuthError>;
+        refused: bool,
+    ) -> Result<bool, MicrosoftAuthError>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -294,6 +306,12 @@ pub trait MicrosoftAuth: Send + Sync {
         force_refresh: bool,
     ) -> Result<MicrosoftAccessGrant, MicrosoftAuthError>;
 }
+
+/// How long a grant whose refresh Microsoft refused is answered as needing a
+/// reconnect before Microsoft is asked again. A refusal can clear on its own
+/// (a sign-in policy, a consent an administrator grants later), so the grant
+/// is kept and retried at this pace rather than on every token request.
+pub(crate) const REFUSED_REFRESH_RETRY: Duration = Duration::hours(1);
 
 /// Credential retention must not depend on the owner signing in again.
 pub async fn collect_expired_grants(
@@ -580,6 +598,14 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
         grant: StoredGrant,
         force_refresh: bool,
     ) -> Result<MicrosoftAccessGrant, MicrosoftAuthError> {
+        // A refusal another replica recorded answers before this replica's
+        // cached token, so every replica gives the same answer for the grant.
+        if grant
+            .refresh_refused_at
+            .is_some_and(|refused| Utc::now() - refused < REFUSED_REFRESH_RETRY)
+        {
+            return Err(MicrosoftAuthError::ReauthorizationRequired);
+        }
         let key = (grant.id, grant.generation);
         if force_refresh {
             self.cache
@@ -604,6 +630,13 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
         if !self.repo.acquire_refresh(&grant, lease).await? {
             return Err(MicrosoftAuthError::Busy);
         }
+        let span = tracing::info_span!(
+            "microsoft.token.refresh",
+            microsoft.grant_id = %grant.id,
+            microsoft.grant_generation = grant.generation,
+            microsoft.outcome = tracing::field::Empty,
+            microsoft.refresh_refused = tracing::field::Empty,
+        );
         let result = async {
             let refresh = self
                 .cipher
@@ -657,19 +690,36 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
                 cached: false,
             })
         }
+        .instrument(span.clone())
         .await;
+        let outcome = match &result {
+            Ok(_) => "refreshed",
+            Err(error) => error.into(),
+        };
+        span.record("microsoft.outcome", outcome);
         if let Err(error) = &result {
-            self.repo
-                .release_refresh(
-                    &grant,
-                    lease,
-                    matches!(
-                        error,
-                        MicrosoftAuthError::ReauthorizationRequired
-                            | MicrosoftAuthError::MissingPermissions
-                    ),
-                )
+            let refused = matches!(
+                error,
+                MicrosoftAuthError::ReauthorizationRequired
+                    | MicrosoftAuthError::MissingPermissions
+            );
+            let released = self
+                .repo
+                .release_refresh(&grant, lease, refused)
+                .instrument(span.clone())
                 .await?;
+            let recorded = refused && released;
+            span.record("microsoft.refresh_refused", recorded);
+            if recorded {
+                tracing::warn!(
+                    parent: &span,
+                    grant_id = %grant.id,
+                    grant_generation = grant.generation,
+                    grant_revision = grant.revision,
+                    outcome,
+                    "microsoft refused a grant's refresh; it is kept and retried in an hour"
+                );
+            }
         }
         result
     }

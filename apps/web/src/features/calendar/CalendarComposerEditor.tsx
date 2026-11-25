@@ -31,7 +31,7 @@ export interface StandaloneComposerProps {
 /** One data owner beneath the readiness gate; layouts only compose its model. */
 export function CalendarComposerEditor(props: StandaloneComposerProps) {
   const resolveAppLink = useMacroMentionLinkResolver();
-  const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
+  const [attachHotkeys] = useHotkeyDOMScope('event-composer');
   const setup = createStandaloneComposerSetup(props);
   const extras = () => (
     <>

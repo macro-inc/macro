@@ -33,7 +33,8 @@ use model_notifications::{
     AgentSignInExpiryStage, AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
     ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
-    ComputerSetupMetadata, ComputerSetupOutcome, DocumentMentionMetadata, GithubPrCheckRun,
+    ComputerSetupMetadata, ComputerSetupOutcome, CrmEmailSharingChangeReason,
+    CrmEmailSharingChangedMetadata, DocumentMentionMetadata, GithubPrCheckRun,
     GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
     GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
     GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
@@ -755,6 +756,35 @@ impl GraphqlInboxReauthRequiredMetadata {
     /// Inbox email address.
     async fn email_address(&self) -> &str {
         &self.0.email_address
+    }
+}
+
+/// Why someone's CRM email sharing rules changed.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlCrmEmailSharingChangeReason {
+    /// Companies their rules named were merged.
+    CompaniesMerged,
+}
+
+/// GraphQL wrapper for CRM email sharing change metadata.
+pub struct GraphqlCrmEmailSharingChangedMetadata(CrmEmailSharingChangedMetadata);
+
+/// A teammate's action changed the viewer's CRM email sharing rules. It names
+/// no company, count or person.
+#[Object]
+impl GraphqlCrmEmailSharingChangedMetadata {
+    /// The team whose CRM the rules share mail with.
+    async fn team_id(&self) -> ID {
+        ID(self.0.team_id.to_string())
+    }
+
+    /// Why they changed.
+    async fn reason(&self) -> GraphqlCrmEmailSharingChangeReason {
+        match self.0.reason {
+            CrmEmailSharingChangeReason::CompaniesMerged => {
+                GraphqlCrmEmailSharingChangeReason::CompaniesMerged
+            }
+        }
     }
 }
 
@@ -1528,6 +1558,8 @@ pub enum GraphqlNotifEvent {
     NewEmail(GraphqlNewEmailMetadata),
     /// Inbox reauthentication metadata.
     InboxReauthRequired(GraphqlInboxReauthRequiredMetadata),
+    /// A teammate's action changed the viewer's CRM email sharing rules.
+    CrmEmailSharingChanged(GraphqlCrmEmailSharingChangedMetadata),
     /// Team invitation metadata.
     InviteToTeam(GraphqlInviteToTeamMetadata),
     /// Task assignment metadata.
@@ -1649,6 +1681,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             }
             NotifEvent::InboxReauthRequired(metadata) => {
                 Self::InboxReauthRequired(GraphqlInboxReauthRequiredMetadata(metadata))
+            }
+            NotifEvent::CrmEmailSharingChanged(metadata) => {
+                Self::CrmEmailSharingChanged(GraphqlCrmEmailSharingChangedMetadata(metadata))
             }
             NotifEvent::InviteToTeam(metadata) => {
                 Self::InviteToTeam(GraphqlInviteToTeamMetadata(metadata))

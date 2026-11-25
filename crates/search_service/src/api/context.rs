@@ -69,6 +69,19 @@ impl SearchHandlerState {
         )
     }
 
+    /// Assemble the lookup of the names typed into search operators.
+    pub(crate) fn operator_names(
+        &self,
+    ) -> crate::domain::operator_names::OperatorNamesService<
+        crate::outbound::operator_names::OperatorNamesPgSource,
+    > {
+        crate::domain::operator_names::OperatorNamesService(
+            crate::outbound::operator_names::OperatorNamesPgSource {
+                db: self.db.clone(),
+            },
+        )
+    }
+
     /// Assemble the agent-session search use case from read-only adapters.
     pub(crate) fn agent_session_search(
         &self,

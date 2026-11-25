@@ -63,6 +63,8 @@ export type CalendarDraftComposerProps = {
   previewKey: string;
   /** Show the calendar preview under the form. On by default. */
   showPreview?: boolean;
+  /** The Macro event this draft created, once the create is confirmed. */
+  createdEventId?: string;
 };
 
 function CalendarDraftComposerFallback() {
@@ -384,6 +386,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
               showNavigationControls
               timeZone={previewTimeZone()}
               class="h-96 shrink-0"
+              createdEventId={props.createdEventId}
             />
           </ErrorBoundary>
         </Show>

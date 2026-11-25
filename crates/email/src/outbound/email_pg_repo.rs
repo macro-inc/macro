@@ -269,6 +269,16 @@ impl EmailRepo for EmailPgRepo {
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<EmailThreadPreview>, EmailErr> {
+        self.previews_page_for_view_cursor(query, user_id)
+            .await
+            .map(|page| page.previews)
+    }
+
+    async fn previews_page_for_view_cursor(
+        &self,
+        query: PreviewCursorQuery,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<crate::domain::models::PreviewCursorPage, EmailErr> {
         preview::previews_for_view_cursor(
             &self.pool,
             query,

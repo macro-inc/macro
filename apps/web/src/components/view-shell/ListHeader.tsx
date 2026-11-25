@@ -58,7 +58,9 @@ export function ListHeaderSearch(props: {
   registerFocus: (focus: () => void) => void;
   /**
    * The open field takes the rest of the header, and closes again when it is
-   * left empty. The view hides its other header actions while it is open.
+   * left empty: once focus leaves the header, so a control beside the title
+   * (Email's search tips) can take focus. The view hides its other header
+   * actions while it is open.
    */
   wide?: boolean;
   /**
@@ -83,6 +85,9 @@ export function ListHeaderSearch(props: {
   };
   let input: HTMLInputElement | undefined;
   let trigger: HTMLButtonElement | undefined;
+  // Set while an empty wide field waits for focus to leave its header.
+  let stopWatchingHeader: (() => void) | undefined;
+  onCleanup(() => stopWatchingHeader?.());
   const focus = () => {
     setExpanded(true);
     queueMicrotask(() => {
@@ -184,9 +189,36 @@ export function ListHeaderSearch(props: {
           onClose={close}
           onKeyDown={keys.onKeyDown}
           onFocus={() => props.onFocusChange?.(true)}
-          onBlur={() => {
+          onBlur={(event) => {
             props.onFocusChange?.(false);
-            if (props.wide && !props.value.trim()) setExpanded(false);
+            if (!props.wide || props.value.trim()) return;
+            // Focus moving to another control in the header (Email's search
+            // tips) keeps the empty field open until it leaves the header.
+            const header = input?.closest<HTMLElement>(
+              '[data-view-shell-header]'
+            );
+            const next = event.relatedTarget;
+            if (!(header && next instanceof Node && header.contains(next))) {
+              setExpanded(false);
+              return;
+            }
+            stopWatchingHeader?.();
+            const closeOnLeave = (leave: FocusEvent) => {
+              const target = leave.relatedTarget;
+              if (
+                target !== input &&
+                target instanceof Node &&
+                header.contains(target)
+              )
+                return;
+              stopWatchingHeader?.();
+              if (target !== input && !props.value.trim()) setExpanded(false);
+            };
+            header.addEventListener('focusout', closeOnLeave);
+            stopWatchingHeader = () => {
+              header.removeEventListener('focusout', closeOnLeave);
+              stopWatchingHeader = undefined;
+            };
           }}
           onEscape={keys.onEscape}
         />

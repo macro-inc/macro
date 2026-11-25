@@ -46,6 +46,7 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Compose phone menus as inline choices or pages inside the same sheet, never stacked drawers.
 - Stage People and custom recurrence changes until Done; discard staged changes on Back or permission loss.
 - Keep unsaved Day-grid resizing bound to the mounted draft, not persisted-event mutations.
+- Keep standalone composer hotkey scopes attached to their host so app shortcuts still run from text fields.
 - Preserve native momentum until scrollend or observed stillness; complete controlled 140ms slides without relying on native events.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
 - Preload five page keys independently of render jobs after date anchors commit; retain stable slots and freeze phone axis measurements during paging.

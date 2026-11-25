@@ -751,6 +751,52 @@ impl NotificationTitle for InboxReauthRequiredMetadata {
     }
 }
 
+/// Why someone's CRM email sharing rules changed without them.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CrmEmailSharingChangeReason {
+    /// Companies their rules named were merged into another.
+    CompaniesMerged,
+}
+
+/// Metadata for a notice that the recipient's CRM email sharing rules
+/// changed because of a teammate's action. It names no company, count or
+/// person: the recipient may not be able to see them, and their rules show
+/// what changed.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CrmEmailSharingChangedMetadata {
+    /// The team whose CRM the rules share mail with.
+    pub team_id: Uuid,
+    /// Why they changed.
+    pub reason: CrmEmailSharingChangeReason,
+}
+
+impl notification::domain::models::Notification for CrmEmailSharingChangedMetadata {
+    const TYPE_NAME: &'static str = "crm_email_sharing_changed";
+}
+
+impl NotificationTitle for CrmEmailSharingChangedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok("Your CRM email sharing changed".to_string())
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.reason {
+            CrmEmailSharingChangeReason::CompaniesMerged => {
+                "Companies your sharing rules named were merged, so your rules were updated. Review them in CRM settings."
+            }
+        }
+        .to_string())
+    }
+}
+
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 }
@@ -2137,6 +2183,23 @@ pub struct RoutineRunFinishedMetadata {
     pub routine_name: String,
     /// How the run ended.
     pub outcome: RoutineRunOutcome,
+    /// The apps the routine needs connected, by name, when the run failed
+    /// because one of them is not. Empty for every other run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub apps_to_connect: Vec<String>,
+}
+
+impl RoutineRunFinishedMetadata {
+    /// `apps_to_connect` as a phrase: "Linear", "Linear and Slack",
+    /// "Linear, Notion and Slack".
+    fn apps_phrase(&self) -> Option<String> {
+        let (last, rest) = self.apps_to_connect.split_last()?;
+        Some(if rest.is_empty() {
+            last.clone()
+        } else {
+            format!("{} and {last}", rest.join(", "))
+        })
+    }
 }
 
 impl Notification for RoutineRunFinishedMetadata {
@@ -2160,9 +2223,13 @@ impl NotificationTitle for RoutineRunFinishedMetadata {
     ) -> Result<String, rootcause::Report> {
         Ok(match self.outcome {
             RoutineRunOutcome::Succeeded => "A routine run finished.".to_string(),
-            RoutineRunOutcome::Failed => {
-                "A routine run failed. Open its history to see why.".to_string()
-            }
+            RoutineRunOutcome::Failed => match self.apps_phrase() {
+                Some(apps) if self.apps_to_connect.len() == 1 => {
+                    format!("It needs {apps} connected to run. Reconnect it.")
+                }
+                Some(apps) => format!("It needs {apps} connected to run. Reconnect them."),
+                None => "A routine run failed. Open its history to see why.".to_string(),
+            },
         })
     }
 }

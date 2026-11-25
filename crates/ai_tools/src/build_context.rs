@@ -533,6 +533,10 @@ pub async fn build_tool_service_context_from_env(
             .unwrap_or(false),
     );
 
+    let merge_notice_queue = match &notification_queue {
+        ToolNotificationQueue::Sqs(queue) => Some(queue.clone()),
+        ToolNotificationQueue::NoOp => None,
+    };
     let notification_reader_service = NotificationReaderService {
         repository: DbNotificationRepository::new(pool.clone()),
         queue: notification_queue,
@@ -615,6 +619,17 @@ pub async fn build_tool_service_context_from_env(
         &databases_tool_context,
         &crm_tool_context,
     );
+    let merge_tool_context = crate::tool_context::build_merge_tool_context(
+        pool.clone(),
+        &databases_tool_context,
+        side_effect_clients.feature_flags.clone(),
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        merge_notice_queue.map(|queue| {
+            crate::tool_context::merge_sharing_notices(Arc::new(
+                notification::domain::service::SqsNotificationIngress { queue },
+            ))
+        }),
+    );
     let crm_transfer_tool_context = crate::tool_context::build_crm_transfer_tool_context(
         &pipeline_tool_context,
         &crm_tool_context,
@@ -643,6 +658,11 @@ pub async fn build_tool_service_context_from_env(
     let import_tool_context = if let Some(composed) = connectors {
         let connections = Arc::new(composed.connectors.clone());
         let entity_creator = Arc::new(crate::ToolEntityCreator {
+            notion_link_editor: Some(crate::NotionLinkEditor::new(
+                document_tool_context.lexical_client.clone(),
+                sync_client.as_ref().clone(),
+                document_tool_context.document_permission_jwt_secret.clone(),
+            )),
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
             channel_service: channel_tool_context.service.clone(),
@@ -780,6 +800,7 @@ pub async fn build_tool_service_context_from_env(
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,
+        merge_tool_context,
         crm_transfer_tool_context,
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
