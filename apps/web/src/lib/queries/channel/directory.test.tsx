@@ -96,6 +96,8 @@ import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
 import type { RemoveUnreadableResult } from './directory-departures';
 import { CHANNEL_DIRECTORY_LANE } from './directory-lane';
 import {
+  checkpointLaneProgress,
+  eitherLaneProgress,
   type LaneProgressSource,
   STREAMED_CHANNEL_LANE,
   streamedLaneProgress,
@@ -2080,6 +2082,27 @@ describe('cached channel directory', () => {
       expect(directory.complete()).toBe(true);
       expect(directory.viewsCurrent()).toBe(true);
       expect(ids(directory.channels())).toEqual(['a']);
+    });
+
+    it('completes from the paged lane when the streamed sync fell back to paging', async () => {
+      completeLane('g1');
+      const { directory, pageAll } = mountCachedDirectory([], {
+        laneProgress: eitherLaneProgress(
+          checkpointLaneProgress(VIEWER, 0),
+          streamedLaneProgress(
+            {
+              // The stream never ran: no lane state.
+              syncState: async () => [],
+              onCacheGenerationChanged: () => () => {},
+            },
+            0
+          )
+        ),
+      });
+      await vi.advanceTimersByTimeAsync(31_000);
+
+      expect(pageAll).not.toHaveBeenCalled();
+      expect(directory.complete()).toBe(true);
     });
 
     it('never pages the network for a finished lane while the cache is slow to list it', async () => {

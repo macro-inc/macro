@@ -98,23 +98,30 @@ export function checkpointLaneProgress(
  * (`crates/soup_sync_stream/src/catalog.rs`). */
 export const STREAMED_CHANNEL_LANE = 'channels';
 
-/** How often the streamed lane's state is read while it has not finished a
- * pass this session. */
+/** How often the streamed lane's state is read while it changes. */
 export const STREAMED_LANE_POLL_MS = 2_000;
+/** The longest wait between reads while the state stays the same and the
+ * lane has not completed: half the directory's stall window
+ * (`LANE_STALL_MS`), so a stream that moves is seen moving. The app may page
+ * instead of stream, and then this lane never moves. */
+export const STREAMED_LANE_POLL_MAX_MS = 15_000;
+/** The same once the lane completed: a stall no longer matters, only a later
+ * pass that makes views current. */
+export const STREAMED_LANE_POLL_COMPLETE_MAX_MS = 60_000;
 
 /**
  * The streamed sync's channel lane, read from the cache database, which
  * every tab shares and a storage reset wipes. A stream reports no failure of
- * its own: one that stops is seen as a stall. The state is polled until the
- * lane has finished a pass that started this session, and again after a
- * storage reset.
+ * its own: one that stops is seen as a stall. The state is read every 2 s
+ * while it changes, backing off while it does not (to every 15 s, or every
+ * minute once the lane completed), until the lane has finished a pass that
+ * started this session; a storage reset starts it over.
  */
 export function streamedLaneProgress(
   host: Pick<CacheHost, 'onCacheGenerationChanged'> & {
     syncState(): Promise<SyncLaneState[]>;
   },
-  sessionStartedAt: number,
-  pollMs = STREAMED_LANE_POLL_MS
+  sessionStartedAt: number
 ): LaneProgressSource {
   const lane = async () =>
     (await host.syncState()).find(({ id }) => id === STREAMED_CHANNEL_LANE);
@@ -130,50 +137,95 @@ export function streamedLaneProgress(
   return {
     read: async () => progress(await lane()),
     watch: (onProgress) => {
-      let timer: ReturnType<typeof setInterval> | undefined;
+      let disposed = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let delay = STREAMED_LANE_POLL_MS;
       let last: string | undefined;
-      const poll = async () => {
+      // Bumped by a storage reset, so a read of the old storage still in
+      // flight neither reports nor schedules.
+      let round = 0;
+      const schedule = (current: number) => {
+        timer = setTimeout(
+          () => fireAndForget(poll(current), 'channel-directory-sync-lane'),
+          delay
+        );
+      };
+      const poll = async (current: number) => {
+        timer = undefined;
         let state: SyncLaneState | undefined;
+        let answered = true;
         try {
           state = await lane();
         } catch {
           // A cache that cannot answer says nothing new.
-          return;
+          answered = false;
         }
+        if (disposed || current !== round) return;
         const seen = JSON.stringify([
           state?.pages,
           state?.items,
           state?.completedAt,
           state?.watermark,
         ]);
-        if (seen !== last) {
+        if (answered && seen !== last) {
           last = seen;
+          delay = STREAMED_LANE_POLL_MS;
           onProgress();
+          if (disposed) return;
+        } else {
+          const ceiling = progress(state).complete
+            ? STREAMED_LANE_POLL_COMPLETE_MAX_MS
+            : STREAMED_LANE_POLL_MAX_MS;
+          delay = Math.min(delay * 2, ceiling);
         }
-        if (progress(state).viewsCurrent) stop();
-      };
-      const stop = () => {
-        if (timer !== undefined) clearInterval(timer);
-        timer = undefined;
+        if (answered && progress(state).viewsCurrent) return;
+        schedule(current);
       };
       const start = () => {
-        if (timer !== undefined) return;
-        timer = setInterval(
-          () => fireAndForget(poll(), 'channel-directory-sync-lane'),
-          pollMs
-        );
+        if (timer !== undefined) clearTimeout(timer);
+        round += 1;
+        delay = STREAMED_LANE_POLL_MS;
+        last = undefined;
+        schedule(round);
       };
       start();
       const unsubscribe = host.onCacheGenerationChanged((change) => {
         // The lane starts over in the new storage.
-        if (change.storage === 'reset') {
-          last = undefined;
-          start();
-        }
+        if (change.storage === 'reset') start();
       });
       return () => {
-        stop();
+        disposed = true;
+        if (timer !== undefined) clearTimeout(timer);
         unsubscribe();
+      };
+    },
+  };
+}
+
+/**
+ * Progress as the furthest of `sources` has it: the app streams or pages,
+ * and falls back from the stream to paging, so whichever of them filled the
+ * cache answers.
+ */
+export function eitherLaneProgress(
+  ...sources: readonly LaneProgressSource[]
+): LaneProgressSource {
+  return {
+    read: async (scope) => {
+      const read = await Promise.all(
+        sources.map((source) => source.read(scope))
+      );
+      const complete = read.some((progress) => progress.complete);
+      return {
+        complete,
+        failed: !complete && read.some((progress) => progress.failed),
+        viewsCurrent: read.some((progress) => progress.viewsCurrent),
+      };
+    },
+    watch: (onProgress) => {
+      const stops = sources.map((source) => source.watch(onProgress));
+      return () => {
+        for (const stop of stops) stop();
       };
     },
   };

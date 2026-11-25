@@ -100,6 +100,7 @@ import {
 import { CHANNEL_DIRECTORY_INPUT } from './directory-lane';
 import {
   checkpointLaneProgress,
+  eitherLaneProgress,
   LANE_NOT_STARTED,
   type LaneProgress,
   type LaneProgressSource,
@@ -2384,7 +2385,8 @@ export function createCachedChannelDirectory(
     const scope = generation;
     if (scope === undefined) return;
     const next: LaneProgress = await laneProgress.read(scope);
-    if (scope === generation && !sameLaneProgress(next, lane)) refreshNow();
+    if (controller.signal.aborted || scope !== generation) return;
+    if (!sameLaneProgress(next, lane)) refreshNow();
   };
   onCleanup(
     laneProgress.watch(() => {
@@ -2660,7 +2662,10 @@ export function createAppChannelDirectory(): ChannelDirectory {
       session,
       laneProgress:
         streamed && isSyncHost(cache)
-          ? streamedLaneProgress(cache, performance.timeOrigin)
+          ? eitherLaneProgress(
+              checkpointLaneProgress(userId, performance.timeOrigin),
+              streamedLaneProgress(cache, performance.timeOrigin)
+            )
           : undefined,
       hydrate: (input, options) =>
         hydrateGraphqlSoup(
