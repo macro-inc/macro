@@ -21,7 +21,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { CombinedError } from '@urql/core';
-import type { ClaimedMutation } from '../protocol';
+import type { ClaimedMutation, EngineLockTiming } from '../protocol';
 
 export type MutationQueueEnvironment = {
   authenticated: boolean;
@@ -88,6 +88,10 @@ export type MutationAttemptDetails = {
   errorCode?: unknown;
   httpStatus?: number;
   retryDelayMs?: number;
+  /** The commit's time from the runner's call to its answer. */
+  commitMs?: number;
+  /** The native engine's wait and hold for the commit. */
+  commitEngine?: EngineLockTiming;
 };
 
 export interface MutationAttemptTelemetry {
@@ -110,6 +114,8 @@ export interface MutationEnqueueTelemetry {
     claimed: boolean;
     /** Persisted without its list patches after the engine rejected them. */
     linkPatchesDegraded: boolean;
+    /** The native engine's wait and hold for the enqueue. */
+    engine?: EngineLockTiming;
   }): void;
   failed(reason: MutationEnqueueFailure): void;
 }
@@ -298,7 +304,28 @@ function detailAttributes(
     attributes['http.response.status_code'] = details.httpStatus;
   if (details.retryDelayMs !== undefined)
     attributes['mutation_queue.retry_delay_ms'] = details.retryDelayMs;
+  if (details.commitMs !== undefined)
+    attributes['mutation_queue.commit_ms'] = details.commitMs;
+  Object.assign(
+    attributes,
+    engineAttributes('mutation_queue.commit', details.commitEngine)
+  );
   return attributes;
+}
+
+/**
+ * The native engine's wait and hold, beside the call's own time: the rest is
+ * IPC and runtime queueing.
+ */
+function engineAttributes(
+  prefix: string,
+  engine: EngineLockTiming | undefined
+): Record<string, number> {
+  if (!engine) return {};
+  return {
+    [`${prefix}.engine_lock_wait_ms`]: engine.lockWaitMs,
+    [`${prefix}.engine_lock_hold_ms`]: engine.lockHoldMs,
+  };
 }
 
 /** Classifies a failed attempt without retaining its message. */
@@ -688,7 +715,13 @@ export function createMutationQueueTelemetry({
       );
       if (uuid) span.setAttr('mutation_queue.item_id', uuid);
       return {
-        persisted({ transactionId, replaced, claimed, linkPatchesDegraded }) {
+        persisted({
+          transactionId,
+          replaced,
+          claimed,
+          linkPatchesDegraded,
+          engine,
+        }) {
           // A replacement inherits a durable time this tab learns at claim.
           if (uuid && !items.has(uuid))
             items.set(uuid, {
@@ -705,7 +738,10 @@ export function createMutationQueueTelemetry({
           );
           if (linkPatchesDegraded) count('enqueue.link-patches-degraded');
           span.setAttr('mutation_queue.enqueue_ms', now() - startedAt);
-          for (const [key, value] of Object.entries(queueAttributes()))
+          for (const [key, value] of Object.entries({
+            ...engineAttributes('mutation_queue.enqueue', engine),
+            ...queueAttributes(),
+          }))
             span.setAttr(key, value);
           count('enqueue.persisted');
           span.end();

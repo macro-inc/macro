@@ -367,15 +367,34 @@ function recordingTelemetry() {
 
 const savedDraft = { saveEmailDraft: { draftId: 'draft', subject: 'Draft' } };
 
-it('ends a live attempt once, as committed', async () => {
+it("ends a live attempt once, as committed, with the commit's engine timing", async () => {
   const { telemetry, attempts } = recordingTelemetry();
-  const { runner, forwarded } = fixture({ mutationQueueTelemetry: telemetry });
+  const { runner, forwarded, commit } = fixture({
+    mutationQueueTelemetry: telemetry,
+  });
+  const engine = { lockWaitMs: 2_250, lockHoldMs: 9 };
+  commit.mockResolvedValueOnce({
+    kind: 'committed',
+    revision: INITIAL_CACHE_REVISION,
+    revisionAdvanced: true,
+    changed: [],
+    affectedOps: [],
+    reset: false,
+    engine,
+  });
   await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
   await runner.settle(
     { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
     queueAttemptOf(forwarded[0])!
   );
-  expect(attempts).toEqual([{ sent: ['live'], finished: [['committed', {}]] }]);
+  expect(attempts).toEqual([
+    {
+      sent: ['live'],
+      finished: [
+        ['committed', { commitMs: expect.any(Number), commitEngine: engine }],
+      ],
+    },
+  ]);
 });
 
 it('sends a queued request inside its attempt span', async () => {

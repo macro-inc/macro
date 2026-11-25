@@ -229,6 +229,57 @@ describe('createMutationQueueTelemetry', () => {
     expect(telemetry.warn).not.toHaveBeenCalled();
   });
 
+  it("records the native engine's wait and hold for the enqueue and commit", () => {
+    const queue = create();
+    queue
+      .enqueue({ uuid: 'item-1', operationName: 'RenameEntities' })
+      .persisted({
+        transactionId: '7',
+        replaced: false,
+        claimed: true,
+        linkPatchesDegraded: false,
+        engine: { lockWaitMs: 4_100, lockHoldMs: 6 },
+      });
+    queue.attempt(claimed()).finish('committed', {
+      commitMs: 2_300,
+      commitEngine: { lockWaitMs: 2_250, lockHoldMs: 9 },
+    });
+
+    const enqueue = telemetry.spans.find(
+      (span) => span.name === 'graphql.mutation_queue.enqueue'
+    );
+    expect(enqueue?.attributes).toMatchObject({
+      'mutation_queue.enqueue.engine_lock_wait_ms': 4_100,
+      'mutation_queue.enqueue.engine_lock_hold_ms': 6,
+    });
+    const attempt = telemetry.spans.find(
+      (span) => span.name === 'graphql.mutation_queue.attempt'
+    );
+    expect(attempt?.attributes).toMatchObject({
+      'mutation_queue.commit_ms': 2_300,
+      'mutation_queue.commit.engine_lock_wait_ms': 2_250,
+      'mutation_queue.commit.engine_lock_hold_ms': 9,
+    });
+  });
+
+  it('records no engine timing where the engine sends none', () => {
+    const queue = create();
+    queue
+      .enqueue({ uuid: 'item-1', operationName: 'SaveEmailDraft' })
+      .persisted({
+        transactionId: '7',
+        replaced: false,
+        claimed: true,
+        linkPatchesDegraded: false,
+      });
+    queue.attempt(claimed()).finish('committed', { commitMs: 4 });
+
+    const keys = telemetry.spans.flatMap((span) =>
+      Object.keys(span.attributes)
+    );
+    expect(keys.filter((key) => key.includes('engine_lock'))).toEqual([]);
+  });
+
   it('replaces an operation name that is not an identifier', () => {
     create()
       .attempt(claimed({ operationName: 'mutation { secret }' }))

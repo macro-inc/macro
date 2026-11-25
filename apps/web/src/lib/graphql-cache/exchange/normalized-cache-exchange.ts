@@ -1413,6 +1413,7 @@ export function normalizedCacheExchange(
           replaced: enqueue.upsertKind.kind === 'replaced-pending',
           claimed: enqueue.initialClaim.kind === 'claimed',
           linkPatchesDegraded,
+          engine: enqueue.engine,
         });
         return await mutationQueue.admit(op, enqueue, epoch);
       }

@@ -1242,6 +1242,7 @@ export function createMutationQueueRunner(
           typeof op.context.cacheSessionGeneration === 'string'
             ? op.context.cacheSessionGeneration
             : UNKNOWN_CACHE_GENERATION;
+        const commitStartedAt = Date.now();
         const committed = await host.commitOptimisticWrite(
           attempt.transactionId,
           claim,
@@ -1251,6 +1252,11 @@ export function createMutationQueueRunner(
             generation: snapshotGeneration,
           }
         );
+        const commitTiming = {
+          commitMs: Date.now() - commitStartedAt,
+          commitEngine: committed.engine,
+        };
+        details = { ...details, ...commitTiming };
         if (!transition(attempt, forgetConfirmed)) return detachedResult();
         settled = true;
         for (const error of committed.identityErrors ?? []) {
@@ -1277,7 +1283,11 @@ export function createMutationQueueRunner(
             ? 'superseded'
             : 'permanently-failed';
           outcome = replacementTransactionId ? 'superseded' : 'rolled-back';
-          details = { failure: 'local', errorCode: 'LOCAL_COMMIT_FAILED' };
+          details = {
+            ...commitTiming,
+            failure: 'local',
+            errorCode: 'LOCAL_COMMIT_FAILED',
+          };
           if (!replacementTransactionId) {
             fireAndForget(
               deps.revalidate(committed.revalidations ?? [], op),
