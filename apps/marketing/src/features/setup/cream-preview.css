@@ -88,6 +88,24 @@ html[data-palette='cream'] .benefit-graphic {
    mat on the dark page but as grey fog on cream, so make it solid here. */
 html[data-palette='cream'] { --feature-screenshot-stage: #141414; }
 
+/* ---- Pills over the homepage's app windows -------------------------------
+   Light glass with ink text, an ink hairline and a soft shadow, so the pair
+   reads over both the pale window and the colored wallpaper. */
+html[data-palette='cream'] .homepage-screen {
+  --screen-action-fill: color-mix(in srgb, var(--color-surface-2) 90%, transparent);
+  --screen-action-fill-hover: var(--color-surface-4);
+  --screen-action-fill-solid: var(--color-surface-2);
+  --screen-action-edge: color-mix(in srgb, var(--color-ink) 12%, transparent);
+  --screen-action-edge-hover: color-mix(in srgb, var(--color-ink) 24%, transparent);
+  --screen-action-shadow:
+    inset 0 1px 0 var(--color-surface-4),
+    0 1px 2px color-mix(in srgb, var(--color-ink) 12%, transparent),
+    0 8px 24px color-mix(in srgb, var(--color-ink) 22%, transparent);
+  --screen-action-ink: var(--color-ink);
+  --screen-action-ink-muted: var(--color-ink-muted);
+  --screen-action-icon: var(--color-ink-muted);
+}
+
 /* ---- Wall of love ----------------------------------------------------- */
 html[data-palette='cream'] .wall-of-love {
   --love-accent: #a8506b;
