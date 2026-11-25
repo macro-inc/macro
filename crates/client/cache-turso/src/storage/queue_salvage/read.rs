@@ -3,7 +3,8 @@
 use super::{
     Db, IDENTITY_COLUMN, IDENTITY_META_KEY, ImportMarker, QueueRead, RecordKey,
     STORAGE_GENERATION_META_KEY, SalvagedQueue, Shadow, TursoStorage, driver, identity_of,
-    import_marker, invariant, metadata_record, record, required_i64, required_text, sequence,
+    import_marker, invariant, metadata_record, queues_any_of, record, required_i64, required_text,
+    sequence, text,
 };
 use crate::TursoStorageError;
 use crate::storage::{
@@ -78,14 +79,15 @@ fn read(connection: &Db, scope: &str, pending: Option<SalvagedQueue>, now_ms: i6
     };
     let held = match held {
         Held::Queue(held) => held,
-        Held::Unknown(dropped) => {
+        Held::Nothing => {
             return QueueRead {
                 queue: pending,
-                dropped,
-                complete: dropped == 0,
+                complete: true,
                 ..QueueRead::default()
-            }
-            .marked();
+            };
+        }
+        Held::Unknown { len, damaged } => {
+            return read_unknown(connection, pending, len, damaged).marked();
         }
     };
     let known = pending.as_ref().filter(|pending| held.holds(pending));
@@ -133,10 +135,67 @@ impl QueueRead {
     }
 }
 
+/// Settles what becomes of `pending` at a database whose own `dropped` queued
+/// writes this build cannot read.
+fn read_unknown(
+    connection: &Db,
+    pending: Option<SalvagedQueue>,
+    dropped: u64,
+    damaged: bool,
+) -> QueueRead {
+    let Some(pending) = pending else {
+        return QueueRead {
+            dropped,
+            complete: dropped == 0,
+            ..QueueRead::default()
+        };
+    };
+    let held = holds(connection, &pending);
+    let account = metadata_record(connection, IDENTITY_META_KEY).unwrap_or_default();
+    let foreign = account.is_some() && account.as_deref() != pending.account();
+    let complete = dropped == 0 && !damaged && held.is_ok();
+    match held {
+        Ok(true) => QueueRead {
+            dropped,
+            complete: complete && pending.complete,
+            forget_pending: true,
+            ..QueueRead::default()
+        },
+        _ if foreign => QueueRead {
+            dropped: dropped + pending.len(),
+            complete,
+            forget_pending: true,
+            ..QueueRead::default()
+        },
+        _ => QueueRead {
+            queue: Some(pending),
+            dropped,
+            complete,
+            ..QueueRead::default()
+        },
+    }
+}
+
+/// Whether this database holds, or has already settled, what `pending` does.
+fn holds(connection: &Db, pending: &SalvagedQueue) -> Result<bool, TursoStorageError> {
+    let imported = import_marker(connection)?.is_some_and(|marker| marker.id == pending.id);
+    let source = metadata_record(connection, STORAGE_GENERATION_META_KEY)?;
+    Ok(imported
+        || (source.is_some() && source == pending.source)
+        || queues_any_of(connection, pending)?)
+}
+
 enum Held {
     Queue(HeldQueue),
-    /// No queue this build can read, and how many writes it holds.
-    Unknown(u64),
+    /// No cache was made of this database since it was wiped or created.
+    Nothing,
+    /// No queue this build can read.
+    Unknown {
+        /// How many writes it holds.
+        len: u64,
+        /// Whether what it says of the queues it took may be gone as well.
+        damaged: bool,
+    },
 }
 
 struct HeldQueue {
@@ -165,15 +224,26 @@ impl HeldQueue {
 fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, TursoStorageError> {
     let tables = driver::query(
         connection,
-        "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'mutation_queue'",
+        "SELECT name FROM sqlite_schema WHERE type = 'table'",
         Vec::new(),
     )?;
     if tables.is_empty() {
-        return Ok(Held::Unknown(0));
+        return Ok(Held::Nothing);
     }
-    if !can_read_layers(connection, scope)? {
+    let queue = text("mutation_queue");
+    if !tables.iter().any(|row| row.first() == Some(&queue)) {
+        return Ok(Held::Unknown {
+            len: 0,
+            damaged: true,
+        });
+    }
+    let layers = layers(connection, scope)?;
+    if layers != Layers::Readable {
         let rows = driver::query(connection, "SELECT id FROM mutation_queue", Vec::new())?;
-        return Ok(Held::Unknown(rows.len() as u64));
+        return Ok(Held::Unknown {
+            len: rows.len() as u64,
+            damaged: layers == Layers::Damaged,
+        });
     }
     let marker = import_marker(connection)?;
     let mut held = HeldQueue {
@@ -256,23 +326,37 @@ fn account_name(record: &[u8]) -> Result<String, TursoStorageError> {
     }
 }
 
+#[derive(PartialEq)]
+enum Layers {
+    Readable,
+    /// Another build's, or another scope's.
+    Foreign,
+    /// The database no longer says whose they are.
+    Damaged,
+}
+
 /// Whether this build reads the optimistic layers this database holds.
-fn can_read_layers(connection: &Db, scope: &str) -> Result<bool, TursoStorageError> {
+fn layers(connection: &Db, scope: &str) -> Result<Layers, TursoStorageError> {
     let rows = driver::query(
         connection,
         "SELECT key, value FROM meta WHERE key IN ('scope', 'namespace', 'storage_schema_version') ORDER BY key ASC",
         Vec::new(),
     )?;
     let [namespace, stored_scope, version] = rows.as_slice() else {
-        return Ok(false);
+        return Ok(Layers::Damaged);
     };
     let namespace = required_text(namespace, 1)?;
-    Ok(required_text(stored_scope, 1)? == scope
+    let readable = required_text(stored_scope, 1)? == scope
         && required_text(version, 1)? == STORAGE_SCHEMA_VERSION.to_string()
         && (namespace == cache_namespace(scope)
             || MIGRATABLE_CACHE_FORMAT_VERSIONS
                 .iter()
-                .any(|version| namespace == cache_namespace_at(scope, *version))))
+                .any(|version| namespace == cache_namespace_at(scope, *version)));
+    Ok(if readable {
+        Layers::Readable
+    } else {
+        Layers::Foreign
+    })
 }
 
 /// The local keys a valid queued write binds; an invalid one is an error.
