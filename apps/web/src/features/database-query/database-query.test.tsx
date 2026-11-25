@@ -86,6 +86,7 @@ vi.mock('./components/query-database-picker', async () => {
 vi.mock('./views/query-editor', () => ({
   QueryEditor: (props: {
     initial: QueryDefinition;
+    autoFocus?: boolean;
     schema: QuerySchema;
     onSave?: (definition: QueryDefinition) => void;
     sourcePicker?:
@@ -104,6 +105,7 @@ vi.mock('./views/query-editor', () => ({
           onInput={(event) => setPrompt(event.currentTarget.value)}
         />
         <span aria-label="Initial SQL">{props.initial.sql}</span>
+        <span aria-label="Prompt takes focus">{String(!!props.autoFocus)}</span>
         <button
           type="button"
           onClick={() =>
@@ -399,5 +401,38 @@ describe('database question production wiring', () => {
     expect(onSave.mock.calls[0]?.[0]).not.toHaveProperty('sql');
     result.unmount();
     client.clear();
+  });
+
+  it("focuses a draft's prompt only on the page that inserted it", async () => {
+    adapters.useDatabasesQuery.mockReturnValue({ isPending: false, data: [] });
+    adapters.useDatabaseDetailQuery.mockReturnValue({
+      isPending: false,
+      data: detail,
+    });
+    adapters.createSavedQuestionSource.mockReturnValue(fakeSource().source);
+    const draft: SavedQuestion = {
+      queryId: '',
+      prompt: '',
+      displayMode: 'scalar',
+    };
+    for (const openDraft of [true, false]) {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const result = render(() => (
+        <QueryClientProvider client={client}>
+          <DatabaseLiveQuestion
+            source={draft}
+            openDraft={openDraft}
+            onSave={vi.fn()}
+          />
+        </QueryClientProvider>
+      ));
+      expect(
+        (await result.findByLabelText('Prompt takes focus')).textContent
+      ).toBe(String(openDraft));
+      result.unmount();
+      client.clear();
+    }
   });
 });

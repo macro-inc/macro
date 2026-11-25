@@ -31,6 +31,8 @@ import { QueryEditor } from './views/query-editor';
 /** Source selection for a question inserted from the document slash menu. */
 export function ChooseQuestionSource(props: {
   initial: QueryDefinition;
+  /** Focus the prompt on mount; only for a question the person just opened or inserted. */
+  autoFocus?: boolean;
   onSave: (definition: QueryDefinition) => void;
   saveOnGenerate?: boolean;
   saving?: boolean;
@@ -66,7 +68,7 @@ export function ChooseQuestionSource(props: {
   return (
     <AppAnswerDisplay>
       <QueryEditor
-        autoFocus
+        autoFocus={props.autoFocus}
         initial={{ ...props.initial, tableId: undefined }}
         schema={schema()}
         capabilities={capabilities}
@@ -120,6 +122,7 @@ function SavedQuestionSql(props: { queryId: string }) {
 function AskQuestion(props: {
   source: SavedQuestion;
   sql?: string;
+  autoFocus?: boolean;
   onSave: (source: SavedQuestion) => void;
 }) {
   const [saving, setSaving] = createSignal(false);
@@ -140,6 +143,7 @@ function AskQuestion(props: {
   return (
     <>
       <ChooseQuestionSource
+        autoFocus={props.autoFocus}
         initial={{ ...props.source, sql: props.sql ?? '' }}
         onSave={(next) => fireAndForget(save(next), 'database-query')}
         saveOnGenerate={!!props.source.queryId}
@@ -176,6 +180,7 @@ function EditSavedQuestion(props: {
       <Match when={definition.isSuccess && definition.data}>
         {(saved) => (
           <AskQuestion
+            autoFocus
             source={props.source}
             sql={saved().definition.query}
             onSave={props.onSave}
@@ -208,6 +213,11 @@ function TrackDatabase(props: { id: string; onChange: () => void }) {
 /** Production wiring is loaded only when a document query enters the viewport. */
 export function DatabaseLiveQuestion(props: {
   source: SavedQuestion;
+  /**
+   * Open a draft's editor, focusing its prompt: only on the page that just
+   * inserted it, never for a collaborator's draft or a reopened one.
+   */
+  openDraft?: boolean;
   onSave?: (source: SavedQuestion) => void;
   onDiscard?: () => void;
 }) {
@@ -235,6 +245,7 @@ export function DatabaseLiveQuestion(props: {
         )}
       </For>
       <LiveQuestion
+        openDraft={props.openDraft}
         source={props.source}
         answer={query.answer()}
         loading={query.loading()}
@@ -259,6 +270,7 @@ export function DatabaseLiveQuestion(props: {
                   when={props.source.queryId}
                   fallback={
                     <AskQuestion
+                      autoFocus={props.openDraft}
                       source={props.source}
                       onSave={(source) => {
                         props.onSave?.(source);

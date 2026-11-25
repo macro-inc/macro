@@ -25,6 +25,7 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { takeDraftQuestionOpen } from './draft-question-open';
 import { LazyDecorator } from './LazyDecorator';
 
 /** Presses on these do their own thing instead of selecting the block. */
@@ -105,6 +106,9 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
     selectBlock();
   };
   const [, source] = splitProps(props, ['key', 'theme']);
+  const openDraft = wrapper
+    ? takeDraftQuestionOpen(wrapper.editor, props.key)
+    : false;
   const save = (data: DatabaseQueryData) => {
     if (!canEdit() || !wrapper) return;
     wrapper.editor.update(() => {
@@ -154,6 +158,7 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
     <Suspense fallback={loading()}>
       <LiveQuestion
         source={source}
+        openDraft={openDraft}
         onSave={canEdit() ? save : undefined}
         onDiscard={canEdit() ? discard : undefined}
       />

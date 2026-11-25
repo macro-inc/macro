@@ -44,6 +44,7 @@ import GifIcon from '@phosphor/gif.svg';
 import type { LexicalEditor, NodeKey } from 'lexical';
 import { $getNodeByKey, $insertNodes } from 'lexical';
 import { nanoid } from 'nanoid';
+import { openDraftQuestionOnMount } from '../../component/decorator/draft-question-open';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
 import {
   INSERT_AWAIT_NODE_COMMAND,
@@ -368,13 +369,13 @@ export const ACTIONS: Action[] = [
     action: (editor) => {
       queueMicrotask(() =>
         editor.update(() => {
-          $insertNodes([
-            $createDatabaseQueryNode({
-              queryId: '',
-              prompt: '',
-              displayMode: 'scalar',
-            }),
-          ]);
+          const question = $createDatabaseQueryNode({
+            queryId: '',
+            prompt: '',
+            displayMode: 'scalar',
+          });
+          $insertNodes([question]);
+          openDraftQuestionOnMount(editor, question.getKey());
         })
       );
     },

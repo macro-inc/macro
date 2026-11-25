@@ -120,6 +120,7 @@ describe('answer titles', () => {
             <PlainAnswerDisplay>
               <LiveQuestion
                 source={{ queryId: '', prompt: '', displayMode: 'scalar' }}
+                openDraft
                 loading={false}
                 onRefresh={vi.fn()}
                 onDiscard={discard}
@@ -226,6 +227,7 @@ describe('answer titles', () => {
       <PlainAnswerDisplay>
         <LiveQuestion
           source={{ queryId: '', prompt: '', displayMode: 'table' }}
+          openDraft
           loading={false}
           onRefresh={vi.fn()}
           onDiscard={discard}
@@ -237,6 +239,30 @@ describe('answer titles', () => {
     await fireEvent.keyDown(field, { key: 'Escape' });
     expect(discard).toHaveBeenCalledOnce();
     rendered.unmount();
+  });
+
+  it("leaves a collaborator's draft closed, keeping focus and the draft", async () => {
+    const discard = vi.fn();
+    const outside = document.createElement('textarea');
+    document.body.append(outside);
+    outside.focus();
+    const rendered = render(() => (
+      <PlainAnswerDisplay>
+        <LiveQuestion
+          source={{ queryId: '', prompt: '', displayMode: 'table' }}
+          loading={false}
+          onRefresh={vi.fn()}
+          onDiscard={discard}
+          editor={() => <textarea aria-label="Ask your database" />}
+        />
+      </PlainAnswerDisplay>
+    ));
+    await Promise.resolve();
+    expect(screen.queryByLabelText('Ask your database')).toBeNull();
+    expect(document.activeElement).toBe(outside);
+    expect(discard).not.toHaveBeenCalled();
+    rendered.unmount();
+    outside.remove();
   });
 
   it('keeps a saved answer when its question editor is dismissed', async () => {
