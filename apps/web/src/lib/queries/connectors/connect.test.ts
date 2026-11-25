@@ -252,6 +252,30 @@ describe('polling a page that cannot report back', () => {
     expect(tab.close).not.toHaveBeenCalled();
   });
 
+  // Chromium throws a SecurityError when the app sets the location of a tab
+  // whose opener it severed, once that tab is on another origin. The vendor
+  // or callback page can still be up when the poll sees the connection.
+  it('reports a connection made while the tab is still on another origin', async () => {
+    const crossOrigin = {
+      closed: false,
+      close: vi.fn(),
+      location: {
+        set href(_: string) {
+          throw new DOMException(
+            'The current window does not have permission to navigate the target frame',
+            'SecurityError'
+          );
+        },
+      },
+    };
+    mocks.reservePopup.mockReturnValue(crossOrigin);
+    mocks.complete.mockResolvedValueOnce(linear);
+    const pending = connectConnector({ key: 'app/linear' });
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe('connected');
+    expect(mocks.setData).toHaveBeenCalledOnce();
+  });
+
   it('keeps polling through a failed poll', async () => {
     mocks.complete
       .mockResolvedValueOnce(NOT_FOUND)
