@@ -207,7 +207,8 @@ favorites, and CRM discussion notifications. A contact opens under People, so it
 breadcrumb returns to People. A split already showing that record is brought
 forward instead. The old id of a company or contact merged into another (an
 old link, mention or bookmark) opens the record it went into under that
-record's own id, replacing the old entry so Back skips it, on desktop and touch;
+record's own id, on the tab and Discussion message the link named, replacing
+the old entry so Back skips it, on desktop and touch;
 when another split already shows that record, the split with the old id steps
 back (or closes) and that one comes up. Touch devices keep the standalone
 record pages; a Customers record URL redirects there unless it opens a linked

@@ -293,6 +293,37 @@ it("shows the contact a merged one went into in the merged one's place", async (
   expect(canGo(-1)).toBe(false);
 });
 
+it('opens the record a merged one went into on the tab its link asked for', async () => {
+  const contact = renderCustomers('/companies/contact/merged/tasks');
+  await contact.shows('tab:active section:tasks records:contact:merged:');
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await contact.shows('tab:active section:tasks records:contact:maya:');
+  expect(contact.url()).toBe('/companies/contact/maya/tasks');
+  cleanup();
+
+  const company = renderCustomers('/companies/company/merged/team');
+  await company.shows('tab:active section:team records:company:merged:');
+  route.openMerged({ type: 'company', id: 'acme' });
+  await company.shows('tab:active section:team records:company:acme:');
+  expect(company.url()).toBe('/companies/company/acme/team');
+});
+
+it('shows the Discussion message a merged record was linked to on the one it went into', async () => {
+  const { url, shows } = renderCustomers(
+    '/companies/contact/merged?s0.crm-record.commentId=m1&s0.crm-record.seek=s1'
+  );
+  await shows('tab:active section:- records:contact:merged:');
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows('tab:active section:- records:contact:maya:');
+  expect(screen.getByTestId('comment').textContent).toBe('m1');
+  const search = new URLSearchParams(url().split('?')[1]);
+  expect(url().split('?')[0]).toBe('/companies/contact/maya');
+  expect(search.get('s0.crm-record.commentId')).toBe('m1');
+  // A new seek scrolls the Discussion of the record that stays to it.
+  expect(search.get('s0.crm-record.seek')).not.toBe('s1');
+});
+
 it('goes back to the contact that stays when the trail already passed it', async () => {
   const { url, shows } = renderCustomers('/companies');
   route.open([acme, maya, { type: 'contact', id: 'merged', name: '' }]);
