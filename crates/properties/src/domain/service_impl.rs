@@ -413,6 +413,31 @@ where
             .ok_or(PropertiesErr::NotFound)
     }
 
+    /// Why an option delete found nothing under the definition it named:
+    /// `gone` when the option no longer exists, or
+    /// [`PropertiesErr::OptionInAnotherDefinition`] when it lives on under
+    /// another definition (a promoted tag keeps its id), which a delete sent
+    /// again after a lost reply must not take for its own deletion.
+    async fn missing_option(
+        &self,
+        option_id: Uuid,
+        gone: PropertiesErr,
+    ) -> Result<PropertiesErr, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let found = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        Ok(if found.is_some() {
+            PropertiesErr::OptionInAnotherDefinition
+        } else {
+            gone
+        })
+    }
+
     /// Resolve the personal tag definition that owns `option_id`, rejecting
     /// options the caller does not own and options that are not labels.
     async fn owned_personal_tag_option(
@@ -1741,12 +1766,21 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
-        self.owned_modifiable_definition(
-            property_definition_id,
-            user_id,
-            team_id_from_receipt(team),
-        )
-        .await?;
+        match self
+            .owned_modifiable_definition(
+                property_definition_id,
+                user_id,
+                team_id_from_receipt(team),
+            )
+            .await
+        {
+            Err(PropertiesErr::NotFound) => {
+                return Err(self
+                    .missing_option(option_id, PropertiesErr::NotFound)
+                    .await?);
+            }
+            other => other?,
+        };
 
         let option = self
             .repository
@@ -1759,12 +1793,17 @@ where
             return Err(PropertiesErr::OptionInAnotherDefinition);
         }
 
-        let mutations = self
+        let Some(mutations) = self
             .repository
             .delete_property_option(property_definition_id, option_id)
             .await
             .map_err(anyhow::Error::from)?
-            .ok_or(PropertiesErr::OptionNotFound)?;
+        else {
+            // Moved (a promotion) or deleted since it was read.
+            return Err(self
+                .missing_option(option_id, PropertiesErr::OptionNotFound)
+                .await?);
+        };
 
         tracing::info!(
             entities_updated = mutations.len(),

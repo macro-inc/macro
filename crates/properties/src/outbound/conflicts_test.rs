@@ -229,3 +229,40 @@ async fn a_delete_naming_another_definition_is_told_the_option_lives_on(pool: Po
         "{err:?}"
     );
 }
+
+/// A delete sent again after its definition went still finds an option that
+/// lives on under another definition.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn a_delete_after_its_definition_went_is_told_the_option_lives_on(pool: Pool<Postgres>) {
+    let service = service(pool);
+    let priority: Uuid = PERSONAL_PRIORITY.parse().unwrap();
+    let option = Uuid::now_v7();
+    service
+        .add_property_option_with_id(&user_1(), None, priority, option, &add("Medium"))
+        .await
+        .unwrap();
+    let gone = service
+        .create_property_definition(&user_1(), None, &select("Phase", &["Lead"]))
+        .await
+        .unwrap();
+    service
+        .delete_property_definition(gone.id, &user_1(), None)
+        .await
+        .unwrap();
+    let err = service
+        .delete_property_option(&user_1(), None, gone.id, option)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, PropertiesErr::OptionInAnotherDefinition),
+        "{err:?}"
+    );
+    let err = service
+        .delete_property_option(&user_1(), None, gone.id, Uuid::now_v7())
+        .await
+        .unwrap_err();
+    assert!(matches!(err, PropertiesErr::NotFound), "{err:?}");
+}

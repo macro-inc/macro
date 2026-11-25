@@ -1130,8 +1130,12 @@ async fn property_option_event_delete_not_found_outcome_publishes_nothing() {
 
     let mut repo = MockPropertiesRepo::new();
     expect_owned_modifiable_definition(&mut repo, definition);
-    repo.expect_get_property_option()
-        .return_once(move |_| Box::pin(async move { Ok(Some(option)) }));
+    // Found, then gone by the time the delete runs.
+    let mut reads = vec![None, Some(option)];
+    repo.expect_get_property_option().returning(move |_| {
+        let read = reads.pop().flatten();
+        Box::pin(async move { Ok(read) })
+    });
     repo.expect_delete_property_option()
         .return_once(|_, _| Box::pin(async { Ok(None) }));
     let event_broker = RecordingEventBroker::default();
@@ -1142,6 +1146,52 @@ async fn property_option_event_delete_not_found_outcome_publishes_nothing() {
         .await;
 
     assert!(matches!(result, Err(PropertiesErr::OptionNotFound)));
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn a_delete_whose_option_moves_before_it_runs_is_told_it_lives_on() {
+    let property_definition_id = Uuid::from_u128(0xD5);
+    let option_id = Uuid::from_u128(0xD6);
+    let definition = property_definition_for_event(
+        property_definition_id,
+        "Tags",
+        DataType::SelectString,
+        false,
+    );
+    let option = property_option_for_event(
+        option_id,
+        property_definition_id,
+        0,
+        PropertyOptionValue::String("Shared".to_string()),
+        None,
+    );
+    // A promotion moves it to the team's definition between the read and the delete.
+    let moved = PropertyOption {
+        property_definition_id: Uuid::from_u128(0xD7),
+        ..option.clone()
+    };
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_owned_modifiable_definition(&mut repo, definition);
+    let mut reads = vec![moved, option];
+    repo.expect_get_property_option().returning(move |_| {
+        let read = reads.pop();
+        Box::pin(async move { Ok(read) })
+    });
+    repo.expect_delete_property_option()
+        .return_once(|_, _| Box::pin(async { Ok(None) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .delete_property_option(&caller_user_id(), None, property_definition_id, option_id)
+        .await;
+
+    assert!(
+        matches!(result, Err(PropertiesErr::OptionInAnotherDefinition)),
+        "{result:?}"
+    );
     assert!(event_broker.events().is_empty());
 }
 
