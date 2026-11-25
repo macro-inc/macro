@@ -186,6 +186,16 @@
               }
             }
           },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "",
             "content": {
@@ -1096,6 +1106,16 @@
               }
             }
           },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -1411,6 +1431,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
                 }
               }
             }
@@ -1900,6 +1930,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
                 }
               }
             }
@@ -2506,6 +2546,85 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/topics": {
+      "put": {
+        "tags": ["suggestions"],
+        "summary": "Name a topic suggestions may belong to, from a suggestions generation\nsession, or change the name and reason of the one with its key.",
+        "operationId": "name_suggestion_topic",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NameTopic"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the topic was named, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may name a topic",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
             "content": {
               "text/plain": {
                 "schema": {
@@ -4487,6 +4606,20 @@
               "type": "string"
             }
           },
+          "inboxes": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "The inboxes (email link ids) whose new or labeled mail starts the\nroutine. Absent: every inbox the owner reads, their own and those\ndelegated to them."
+          },
+          "labels": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Email labels, one of which the thread must gain: their row ids. Any\nlabel when absent. Only for `email.labeled`."
+          },
           "match": {
             "type": ["array", "null"],
             "items": {
@@ -4526,6 +4659,7 @@
           "task.priority_changed",
           "task.property_changed",
           "email.message_received",
+          "email.labeled",
           "channel.created",
           "channel.message_posted",
           "channel.mentioned",
@@ -4887,6 +5021,33 @@
           }
         }
       },
+      "NameTopic": {
+        "type": "object",
+        "description": "A topic a generation session names, or names again, through\n`macro.suggestions.nameTopic`.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights; the same key updates the same topic."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TopicReason",
+                "description": "Why it matters now; left out when no item says."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "NamedItemKind": {
         "type": "string",
         "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
@@ -4966,6 +5127,10 @@
           "title": {
             "type": "string",
             "description": "What to do, in a few words."
+          },
+          "topic": {
+            "type": ["string", "null"],
+            "description": "The key of the topic it belongs to, named with\n`macro.suggestions.nameTopic` first, or null for none; left out, a\nsuggestion that exists keeps the one it has."
           }
         },
         "additionalProperties": false
@@ -5036,6 +5201,11 @@
           }
         ],
         "description": "A JSON text, number, boolean or null that payload values are compared with."
+      },
+      "PlanTier": {
+        "type": "string",
+        "description": "The plans a user can be on, cheapest first.",
+        "enum": ["free", "premium", "business", "max"]
       },
       "PropertySelector": {
         "type": "object",
@@ -5208,6 +5378,10 @@
           "title": {
             "type": ["string", "null"],
             "description": "A new title."
+          },
+          "topic": {
+            "type": ["string", "null"],
+            "description": "The key of the topic it now belongs to, or null for none."
           }
         },
         "additionalProperties": false
@@ -5459,6 +5633,35 @@
           "crm_contact",
           "initiative"
         ]
+      },
+      "RoutineLimitCode": {
+        "type": "string",
+        "description": "Stable code clients match on, distinct from AI allowance codes.",
+        "enum": ["routine_limit_reached"]
+      },
+      "RoutineLimitErrorBody": {
+        "type": "object",
+        "description": "A write that would activate more routines than the owner's plan allows.",
+        "required": ["error", "code", "limit", "plan"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/RoutineLimitCode"
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many routines the plan allows to be active at once.",
+            "minimum": 0
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PlanTier",
+            "description": "The plan the limit comes from."
+          }
+        }
       },
       "RoutineModelId": {
         "type": "string",
@@ -6551,6 +6754,17 @@
                 "type": "string",
                 "description": "What to do, in a few words."
               },
+              "topic": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TopicName",
+                    "description": "The topic it belongs to, if any; never on a routine suggestion."
+                  }
+                ]
+              },
               "updatedAt": {
                 "type": "string",
                 "format": "date-time",
@@ -6616,6 +6830,13 @@
               "$ref": "#/components/schemas/Suggestion"
             },
             "description": "The open suggestions, at most `limit` of them."
+          },
+          "topics": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Topic"
+            },
+            "description": "The topics the open suggestions belong to, in the order they first\nappear among them; left out when the feed was read with a `limit`."
           }
         }
       },
@@ -6850,6 +7071,13 @@
               "$ref": "#/components/schemas/Suggestion"
             },
             "description": "Open suggestions first, best first, then closed ones newest first. A\ndismissed suggestion's `stateChangedAt` is when the person dismissed it."
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Topic"
+            },
+            "description": "The topics those suggestions belong to, in the order they first\nappear, each with how many of its suggestions are open. Absent from a\nserver that has none."
           }
         }
       },
@@ -6953,6 +7181,69 @@
           }
         ],
         "description": "A user-specific part of a shared routine."
+      },
+      "Topic": {
+        "type": "object",
+        "description": "One thing in the person's work that several suggestions may belong to,\nsuch as a customer, an event or a hire, as generation sessions named it.",
+        "required": ["key", "name", "open"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many of the listed suggestions are open and belong to it.",
+            "minimum": 0
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TopicReason",
+                "description": "Why it matters now, when an item says."
+              }
+            ]
+          }
+        }
+      },
+      "TopicName": {
+        "type": "object",
+        "description": "A topic, as a suggestion names it.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          }
+        }
+      },
+      "TopicReason": {
+        "type": "object",
+        "description": "Why a topic matters now: one fact, and the item it was read in.",
+        "required": ["text", "source"],
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/Target",
+            "description": "The item that states it: whoever can't open it isn't shown the fact."
+          },
+          "text": {
+            "type": "string",
+            "description": "The fact, in one line."
+          }
+        },
+        "additionalProperties": false
       },
       "UnusableKnob": {
         "type": "object",

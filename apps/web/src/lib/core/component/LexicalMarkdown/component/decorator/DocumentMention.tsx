@@ -62,7 +62,7 @@ import { useFormDetailQuery } from '@queries/storage/forms';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import {
   $createTextNode,
   $getNodeByKey,
@@ -116,9 +116,16 @@ function MentionContainer(props: {
   icon: JSX.Element;
   text: JSX.Element;
   collapsed?: boolean;
+  /** Cut the name to one line. An email's name is a whole subject. */
+  singleLine?: boolean;
 }) {
   return (
-    <span class="pointer-events-auto">
+    <span
+      class={cn(
+        'pointer-events-auto',
+        props.singleLine && 'inline-block max-w-full truncate align-bottom'
+      )}
+    >
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-[0.25em]">
         {props.icon}
       </span>
@@ -277,6 +284,7 @@ function InlinePreview(props: {
                 </span>
               }
               collapsed={props.collapsed}
+              singleLine={props.blockName === 'email'}
             />
           }
         >
@@ -324,6 +332,7 @@ function InlinePreview(props: {
                 </span>
               }
               collapsed={props.collapsed}
+              singleLine={props.blockName === 'email'}
             />
           }
         >
@@ -402,6 +411,7 @@ function InlinePreview(props: {
                   </span>
                 }
                 collapsed={props.collapsed}
+                singleLine={props.blockName === 'email'}
               />
             }
           >
@@ -971,6 +981,7 @@ export function DocumentMentionStatic(props: DocumentMentionProps) {
         </Show>
       }
       collapsed={props.collapsed}
+      singleLine={props.blockName === 'email'}
       text={
         <span
           data-document-mention="true"

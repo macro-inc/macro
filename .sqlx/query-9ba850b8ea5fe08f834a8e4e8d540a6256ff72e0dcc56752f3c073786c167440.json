@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH previous AS MATERIALIZED (\n                   SELECT retired_id, company_id, merge_id FROM crm_company_aliases\n                   WHERE company_id = ANY($2) FOR UPDATE\n               ), updated AS (\n                   UPDATE crm_company_aliases a SET company_id = $1\n                   FROM previous WHERE a.retired_id = previous.retired_id\n               )\n               SELECT retired_id, company_id, merge_id FROM previous ORDER BY retired_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "retired_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "merge_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9ba850b8ea5fe08f834a8e4e8d540a6256ff72e0dcc56752f3c073786c167440"
+}

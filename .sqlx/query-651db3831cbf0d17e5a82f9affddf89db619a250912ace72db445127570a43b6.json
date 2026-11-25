@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET base_version=$4,\n            base_content=CASE WHEN base_content->>'version'=$3 THEN jsonb_set(base_content,'{version}',to_jsonb($4::text)) ELSE base_content END,\n            checkpoint=CASE WHEN checkpoint->'draft'->>'version'=$3 THEN jsonb_set(checkpoint,'{draft,version}',to_jsonb($4::text)) ELSE checkpoint END\n            WHERE message_id=$1 AND link_id=$2 AND base_version=$3 AND NOT delete_requested\n                AND (lease_until IS NULL OR lease_until<now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "651db3831cbf0d17e5a82f9affddf89db619a250912ace72db445127570a43b6"
+}

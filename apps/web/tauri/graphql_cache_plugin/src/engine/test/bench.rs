@@ -20,19 +20,19 @@ const SCOPE: &str = "cache-bench";
 const NIL: &str = "00000000-0000-0000-0000-000000000000";
 
 #[derive(Clone)]
-struct Op {
-    lane: String,
-    write: bool,
-    doc: String,
-    operation_name: String,
-    variables: Variables,
-    data: serde_json::Value,
+pub(super) struct Op {
+    pub(super) lane: String,
+    pub(super) write: bool,
+    pub(super) doc: String,
+    pub(super) operation_name: String,
+    pub(super) variables: Variables,
+    pub(super) data: serde_json::Value,
     bytes: usize,
     /// Foreground ops come in variants; run `n` writes variant `n % count`.
     variant: u64,
 }
 
-fn ops(path: &Path) -> Vec<Op> {
+pub(super) fn ops(path: &Path) -> Vec<Op> {
     std::fs::read_to_string(path)
         .unwrap()
         .lines()
@@ -243,7 +243,7 @@ async fn contended_pass(
 
 /// Opens without resetting: a database a reused run cannot open (another
 /// build's format) fails the run instead of measuring an empty cache.
-fn open(path: &Path) -> EngineHandle {
+pub(super) fn open(path: &Path) -> EngineHandle {
     let storage = cache_turso::TursoFileDatabase::new(path)
         .unwrap()
         .open(SCOPE)
@@ -276,7 +276,7 @@ async fn idle(handle: &EngineHandle, samples: &mut Samples) {
 
 /// A handle stamped with the owner's current generation, as the app's
 /// requests are.
-async fn stamped(handle: &EngineHandle, identity: &str) -> EngineHandle {
+pub(super) async fn stamped(handle: &EngineHandle, identity: &str) -> EngineHandle {
     let authority = handle.current_authority(identity).await.unwrap();
     handle.clone().with_generation(Some(authority.generation))
 }
@@ -343,7 +343,11 @@ async fn apply(handle: &EngineHandle, docs: &BTreeMap<String, String>, op: &Op, 
     }
 }
 
-fn mail_args(limit: u16, view: &str, cursor: Option<&serde_json::Value>) -> EntityFilterRequest {
+pub(super) fn mail_args(
+    limit: u16,
+    view: &str,
+    cursor: Option<&serde_json::Value>,
+) -> EntityFilterRequest {
     serde_json::from_value(mail_json(limit, view, cursor)).unwrap()
 }
 
@@ -408,7 +412,7 @@ const SEARCH_PARITY_QUERIES: &[&str] = &[
     "x y z q",
 ];
 
-fn search(query: &str) -> SearchRequest {
+pub(super) fn search(query: &str) -> SearchRequest {
     serde_json::from_value(search_request(query, 20)).unwrap()
 }
 

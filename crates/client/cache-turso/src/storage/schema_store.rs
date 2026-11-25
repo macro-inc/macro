@@ -22,8 +22,9 @@
 //!
 //! Queued writes are always kept: their mutations are still sent. Their
 //! index shadows are composed again over what is left, under the keys
-//! settled creates gave the records they name, and the identity metadata of
-//! those records stays ([`QueueIdentity`]).
+//! settled creates gave the records they name ([`queue_aliases`]). The
+//! identity metadata of every record a tier drops stays
+//! ([`dropped_identity`]).
 
 use super::*;
 use cache_core::calendar::{CALENDAR_TYPENAME, EVENT_TYPENAME, OCCURRENCE_TYPENAME};
@@ -37,6 +38,7 @@ use cache_core::schema_change::{
     is_retired, overlay_fits, retire_overlay, unrecorded_schema,
 };
 use cache_core::value::ROOT_QUERY;
+use turso_core::Row;
 
 pub(super) const CREATE_TABLE: &str = "CREATE TABLE cache_schema (slot INTEGER PRIMARY KEY, hash TEXT NOT NULL, incoming_hash TEXT NOT NULL, artifact BLOB NOT NULL)";
 pub(super) const TABLE: &str = "cache_schema";
@@ -119,6 +121,11 @@ pub(super) const SHADOW_TABLES: [&str; 5] = [
 /// than data. The storage generation goes, so the backfill starts over.
 const KEPT_RECORDS: &str = "SELECT __typename, id, value FROM records WHERE __typename = '__meta' AND id IN ('identity', 'authority')";
 const RECORD_COUNT: &str = "SELECT COUNT(*) FROM records";
+/// Every record but the cache's own, with its value.
+const RECORD_VALUES: &str =
+    "SELECT __typename, id, value FROM records WHERE __typename <> '__meta'";
+/// One type's records, with their values.
+const TYPE_RECORD_VALUES: &str = "SELECT __typename, id, value FROM records WHERE __typename = ?1";
 /// Puts back a record a tier dropped, but never over one it kept.
 const RECORD_RESTORE: &str =
     "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING";
@@ -294,8 +301,9 @@ pub(super) fn adopt(
         )
     });
     match sorted {
-        // The tier rolled back. Dropping every record reads none of them,
-        // and frees the pages they held for what the cache writes next.
+        // The tier rolled back. Dropping every record reads each once,
+        // decoding only those that may hold identity metadata, and frees the
+        // pages they held for what the cache writes next.
         Err(error) if resets_after(error) => driver::write_transaction(connection, || {
             let reset = SchemaChange {
                 tier: Tier::Reset(ResetReason::Failed),
@@ -321,7 +329,7 @@ fn resets_after(error: TursoStorageError) -> bool {
 
 /// Whether the cache holds no record and no queued write: nothing a schema
 /// shaped.
-fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
+pub(super) fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
     Ok(
         driver::query(connection, ANY_RECORD, Vec::new())?.is_empty()
             && driver::query(connection, ANY_QUEUED, Vec::new())?.is_empty(),
@@ -343,7 +351,8 @@ fn apply(
             every_document,
         } => {
             let dropping = with_channel_entries(changed);
-            let identity = queue_identity(connection, decode_record)?;
+            let aliases = queue_aliases(connection, decode_record)?;
+            let kept = dropped_identity(connection, Some(&dropping))?;
             // Facts go before the documents, which would otherwise cascade
             // to them one document at a time.
             if *every_document {
@@ -352,7 +361,7 @@ fn apply(
                 drop_facts(connection, &dropping)?;
             }
             adoption.dropped_records = drop_types(connection, &dropping)?;
-            restore_identity(connection, &identity)?;
+            restore_identity(connection, &kept)?;
             if *every_document {
                 let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
                 adoption.incomplete_documents = u64::try_from(marked).map_err(|_| invariant())?;
@@ -367,7 +376,7 @@ fn apply(
                 connection,
                 |request, source| overlay_fits(&change.stored, changed, request, source),
                 dropped,
-                &identity.aliases,
+                &aliases,
             )?;
             // A shadow of a dropped record goes even when no queued write
             // names its key, as one an older build left may.
@@ -379,17 +388,18 @@ fn apply(
                 }
             }
             adoption.retired_overlays = queue.retired;
-            recompose_queued_shadows(connection, queue.projected, &identity.aliases)?;
+            recompose_queued_shadows(connection, queue.projected, &aliases)?;
             driver::execute(connection, STORAGE_GENERATION_DELETE, Vec::new())?;
         }
         Tier::Reset(_) => {
-            let identity = queue_identity(connection, decode_record)?;
+            let aliases = queue_aliases(connection, decode_record)?;
+            let kept = dropped_identity(connection, None)?;
             adoption.dropped_records = clear_records(connection)?;
-            restore_identity(connection, &identity)?;
+            restore_identity(connection, &kept)?;
             // No queued projection is left to compose a shadow from.
             recreate_tables(connection, &SHADOW_TABLES)?;
             adoption.retired_overlays =
-                conform_queue(connection, |_, _| false, |_| true, &identity.aliases)?.retired;
+                conform_queue(connection, |_, _| false, |_| true, &aliases)?.retired;
         }
     }
     store(connection, &change.stored, incoming.hash())?;
@@ -616,26 +626,15 @@ fn count(connection: &Db, sql: &str, parameters: Vec<Value>) -> Result<u64, Turs
     u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())
 }
 
-/// What the queued writes read of the records a tier drops, read before it
-/// drops them. Settling a write that created a record stores an alias from
-/// the local key later queued writes name to the key the server gave it, and
-/// moves their shadows to that key. The records they name hold the identity
-/// metadata later settlements and replays read, which the engine's own
-/// snapshot retirement keeps too.
-struct QueueIdentity {
-    /// Each aliased key the queue names, to the key its aliases end at.
-    aliases: IdentityMap,
-    /// The identity metadata of each record the queue names or an alias
-    /// leads to ([`identity::identity_metadata`]).
-    metadata: Vec<(RecordKey, Record)>,
-}
-
-/// Reads [`QueueIdentity`]: the keys each queued write binds, projects or
-/// overlays, and the keys their aliases lead to, from records `decode` reads.
-fn queue_identity(
+/// Each aliased key the queued writes bind, project or overlay, to the key
+/// its aliases end at, from records `decode` reads before a tier drops them.
+/// Settling a write that created a record stores an alias from the local key
+/// later queued writes name to the key the server gave it, and moves their
+/// shadows to that key.
+fn queue_aliases(
     connection: &Db,
     decode: record_batch::RecordDecoder,
-) -> Result<QueueIdentity, TursoStorageError> {
+) -> Result<IdentityMap, TursoStorageError> {
     let mut named = BTreeSet::new();
     let mut bindings = Vec::new();
     for row in driver::query(connection, QUEUE_SELECT, Vec::new())? {
@@ -658,7 +657,6 @@ fn queue_identity(
         named.extend(layer.normalized_updates.into_keys());
     }
     let mut targets = IdentityMap::new();
-    let mut metadata = Vec::new();
     let mut seen = named.clone();
     let mut next = named.into_iter().collect::<Vec<_>>();
     let aliases = loop {
@@ -676,19 +674,14 @@ fn queue_identity(
                 break;
             }
             let records = record_batch::read_with(connection, &keys, decode)?;
-            for ((entity, key), record) in entities.into_iter().zip(keys).zip(records) {
-                let Some(record) = record else {
+            for (entity, record) in entities.into_iter().zip(records) {
+                let Some(target) = record.as_ref().and_then(identity::alias_target) else {
                     continue;
                 };
-                if let Some(target) = identity::alias_target(&record) {
-                    if seen.insert(target.clone()) {
-                        next.push(target.clone());
-                    }
-                    targets.insert(entity, target.clone());
+                if seen.insert(target.clone()) {
+                    next.push(target.clone());
                 }
-                if let Some(kept) = identity::identity_metadata(record) {
-                    metadata.push((key, kept));
-                }
+                targets.insert(entity, target.clone());
             }
         }
         let mut aliases = chain_ends(&targets);
@@ -705,7 +698,93 @@ fn queue_identity(
             break aliases;
         }
     };
-    Ok(QueueIdentity { aliases, metadata })
+    Ok(aliases)
+}
+
+/// The identity metadata ([`identity::identity_metadata`]) of each record of
+/// `typenames`, or of every record but the cache's own for `None`, before a
+/// tier drops them. A write made later through a created record's local key,
+/// its settlement and a stale response read it whether or not a queued write
+/// names the record when the tier runs, so it stays for every record, as the
+/// engine's own snapshot retirement keeps it. Each record is read once, and
+/// most hold none, which their first key shows
+/// ([`identity::holds_no_identity_metadata`]); only the others are decoded. A
+/// record that does not decode holds nothing to keep.
+fn dropped_identity(
+    connection: &Db,
+    typenames: Option<&BTreeSet<String>>,
+) -> Result<Vec<(RecordKey, Record)>, TursoStorageError> {
+    let mut kept = Vec::new();
+    let mut visit = |row: &Row| {
+        let (typename, id, bytes) = record_row(row)?;
+        if let Some(record) = bytes
+            .filter(|bytes| !identity::holds_no_identity_metadata(bytes))
+            .and_then(|bytes| decode_record(bytes).ok())
+            .and_then(identity::identity_metadata)
+        {
+            kept.push((record_key(typename, id), record));
+        }
+        Ok(())
+    };
+    match typenames {
+        None => driver::query_each(connection, RECORD_VALUES, Vec::new(), &mut visit)?,
+        Some(typenames) => {
+            for typename in typenames {
+                driver::query_each(
+                    connection,
+                    TYPE_RECORD_VALUES,
+                    vec![text(typename)],
+                    &mut visit,
+                )?;
+            }
+        }
+    }
+    Ok(kept)
+}
+
+/// [`dropped_identity`] for a previous cache format's records, which `decode`
+/// reads: every record but the cache's own is read whole.
+fn previous_format_identity(
+    connection: &Db,
+    decode: record_batch::RecordDecoder,
+) -> Result<Vec<(RecordKey, Record)>, TursoStorageError> {
+    let mut kept = Vec::new();
+    driver::query_each(connection, RECORD_VALUES, Vec::new(), |row| {
+        let (typename, id, bytes) = record_row(row)?;
+        if let Some(record) = bytes
+            .and_then(|bytes| decode(bytes).ok())
+            .and_then(identity::identity_metadata)
+        {
+            kept.push((record_key(typename, id), record));
+        }
+        Ok(())
+    })?;
+    Ok(kept)
+}
+
+/// A `(typename, id, bytes)` row's values. A value stored as anything but
+/// bytes reads as none, like bytes that do not decode: a record no read
+/// can use, which holds nothing to keep.
+fn record_row(row: &Row) -> Result<(&str, &str, Option<&[u8]>), TursoStorageError> {
+    let mut values = row.get_values();
+    let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(value), None) =
+        (values.next(), values.next(), values.next(), values.next())
+    else {
+        return Err(invariant());
+    };
+    let bytes = match value {
+        Value::Blob(bytes) => Some(bytes.as_slice()),
+        _ => None,
+    };
+    Ok((typename.as_str(), id.as_str(), bytes))
+}
+
+/// The key of the record `typename` and `id` name.
+fn record_key(typename: &str, id: &str) -> RecordKey {
+    RecordKey {
+        typename: typename.to_owned(),
+        id: id.to_owned(),
+    }
 }
 
 /// Each key of `targets` to the end of its chain of aliases, as the engine
@@ -727,16 +806,18 @@ fn chain_ends(targets: &IdentityMap) -> IdentityMap {
 }
 
 /// What dropping every record of a previous cache format keeps: the
-/// records a reset keeps ([`KEPT_RECORDS`]) and the queue's identity
-/// ([`QueueIdentity`]), read in that format and written back in this one.
+/// records a reset keeps ([`KEPT_RECORDS`]) and every record's identity
+/// metadata ([`previous_format_identity`]), read in that format and written
+/// back in this one.
 pub(super) struct KeptIdentity {
     /// [`KEPT_RECORDS`]' rows, as `(typename, id, record)`.
     kept: Vec<(String, String, Record)>,
-    queue: QueueIdentity,
+    identity: Vec<(RecordKey, Record)>,
 }
 
-/// Reads [`KeptIdentity`] from records `decode` reads. A record it cannot
-/// read resets the file, as any read of it would.
+/// Reads [`KeptIdentity`] from records `decode` reads. A kept record, or one
+/// a queued write names, that it cannot read resets the file, as any read of
+/// it would; any other record holds nothing to keep.
 pub(super) fn keep_identity(
     connection: &Db,
     decode: record_batch::RecordDecoder,
@@ -750,9 +831,12 @@ pub(super) fn keep_identity(
             decode(bytes).map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
         kept.push((required_text(&row, 0)?, required_text(&row, 1)?, record));
     }
+    // Only the strict read of what the queue names matters here: the
+    // adoption after the open follows the aliases.
+    queue_aliases(connection, decode)?;
     Ok(KeptIdentity {
         kept,
-        queue: queue_identity(connection, decode)?,
+        identity: previous_format_identity(connection, decode)?,
     })
 }
 
@@ -773,13 +857,16 @@ pub(super) fn restore_kept_identity(
             ],
         )?;
     }
-    restore_identity(connection, &identity.queue)
+    restore_identity(connection, &identity.identity)
 }
 
-/// Puts back the identity metadata of each record the queue named that the
-/// tier dropped.
-fn restore_identity(connection: &Db, identity: &QueueIdentity) -> Result<(), TursoStorageError> {
-    for (key, record) in &identity.metadata {
+/// Puts back the identity metadata [`dropped_identity`] read, once the tier
+/// has dropped its records.
+fn restore_identity(
+    connection: &Db,
+    identity: &[(RecordKey, Record)],
+) -> Result<(), TursoStorageError> {
+    for (key, record) in identity {
         driver::execute(
             connection,
             RECORD_RESTORE,
@@ -935,10 +1022,63 @@ fn recreate_tables(connection: &Db, tables: &[&str]) -> Result<(), TursoStorageE
     Ok(())
 }
 
-struct StoredRow {
-    hash: String,
-    incoming_hash: String,
-    artifact: Vec<u8>,
+/// The `cache_schema` row, as a salvaged queue also carries it
+/// (`queue_salvage`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct StoredRow {
+    pub(super) hash: String,
+    pub(super) incoming_hash: String,
+    pub(super) artifact: Vec<u8>,
+}
+
+impl StoredRow {
+    /// A schema no build can read, which resets the cache that stores it.
+    pub(super) fn unreadable() -> Self {
+        Self {
+            hash: UNREADABLE.to_owned(),
+            incoming_hash: UNREADABLE.to_owned(),
+            artifact: vec![0],
+        }
+    }
+}
+
+/// The stored schema of a database whose queue is being salvaged, for the
+/// database that imports the queue. One that cannot be read is carried as
+/// [`StoredRow::unreadable`].
+pub(super) fn salvaged(connection: &Db) -> Option<StoredRow> {
+    load(connection).unwrap_or_else(|_| Some(StoredRow::unreadable()))
+}
+
+/// Gives a database the stored schema `carried` of the one whose queue it is
+/// importing, inside the import's transaction, so that the adoption after the
+/// open judges the queue's overlays by the schema they were made under, as it
+/// would have in that database. One that stores another schema already, or
+/// `held_nothing` false and no schema, is made unreadable instead: no one
+/// schema describes both, so the adoption resets it, keeping every queued
+/// write and none of their overlays. `held_nothing` is whether it held no
+/// records or queue before this import.
+pub(super) fn import(
+    connection: &Db,
+    carried: Option<&StoredRow>,
+    held_nothing: bool,
+) -> Result<(), TursoStorageError> {
+    match (load(connection)?, carried) {
+        (None, None) => Ok(()),
+        (None, Some(carried)) if held_nothing => require_changed(
+            driver::execute(
+                connection,
+                UPSERT,
+                vec![
+                    text(&carried.hash),
+                    text(&carried.incoming_hash),
+                    Value::from_blob(carried.artifact.clone()),
+                ],
+            )?,
+            1,
+        ),
+        (Some(own), Some(carried)) if own.hash == carried.hash => Ok(()),
+        _ => mark_unreadable(connection),
+    }
 }
 
 fn load(connection: &Db) -> Result<Option<StoredRow>, TursoStorageError> {

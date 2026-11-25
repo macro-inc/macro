@@ -151,7 +151,7 @@ where
     Installations: GithubSyncRepo,
     Client: GithubSyncClient,
 {
-    #[tracing::instrument(skip_all, err, fields(%owner, %repo))]
+    #[tracing::instrument(skip_all, err, fields(%repo))]
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,

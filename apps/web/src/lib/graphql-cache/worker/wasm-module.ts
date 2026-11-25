@@ -56,7 +56,11 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import type { CacheSchemaChange, CacheSchemaResetReason } from '../telemetry';
+import type {
+  CacheQueueOutcome,
+  CacheSchemaChange,
+  CacheSchemaResetReason,
+} from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
@@ -95,9 +99,24 @@ export type CacheQueueDiagnostics =
       oldestCreatedAtMs: null;
     };
 
+/** What became of the mutations a wiped database queued. */
+export type CacheQueueCrossing = {
+  outcome: CacheQueueOutcome;
+  /** Mutations now queued that a wiped database had queued. */
+  kept: number;
+  /** Mutations known to be lost. */
+  dropped: number;
+  /** How long each step of the crossing took, for those it had. */
+  readMs?: number;
+  wipeMs?: number;
+  importMs?: number;
+};
+
 export interface CacheOpenResult {
   engine: CacheEngine;
   outcome: CacheOpenOutcome;
+  /** Optional while older cached WASM artifacts are still in circulation. */
+  queue?: CacheQueueCrossing;
   /** What bringing the opened records to the worker's GraphQL schema did;
    * absent from WASM built before the cache stored its schema. */
   schemaChange?: CacheOpenSchemaChange;
@@ -308,6 +327,8 @@ export interface CacheEngine {
   clear(): Promise<CacheRevisionResult>;
   /** Reset/recreate OPFS; concurrent calls wait for the fresh engine. */
   physicalReset(): Promise<void>;
+  /** Until it is called, every later open reports the loss again. */
+  queueLossTold?(): Promise<void>;
   /** Gracefully close Turso/OPFS and release the owner lock. */
   close(): Promise<void>;
 }

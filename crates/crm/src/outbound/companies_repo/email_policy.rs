@@ -3,6 +3,8 @@
 mod authoring;
 mod envelopes;
 mod history;
+#[cfg(feature = "merge")]
+pub(crate) mod merge_rules;
 mod mutations;
 mod population;
 mod preview;

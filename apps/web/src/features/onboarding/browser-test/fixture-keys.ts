@@ -10,6 +10,8 @@ export const FIXTURE_KEYS = {
   landed: 'onboarding-fixture:landed',
   /** Analytics recorded across page loads. */
   events: 'onboarding-fixture:events',
+  /** Set by `?handoff` (`ios` or `android`): finishing shows the phone-browser last screen. */
+  handoff: 'onboarding-fixture:handoff',
   /** `cancel` makes the fake Stripe return on the cancel leg. */
   checkoutOutcome: 'onboarding-fixture:checkout-outcome',
 } as const;

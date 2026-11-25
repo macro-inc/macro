@@ -13,22 +13,34 @@ import ChatIcon from '@phosphor/chats-circle.svg';
 import { For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import agentsScreen from '../../../assets/homepage/agents.webp';
+import agentsScreenLight from '../../../assets/homepage/agents-light.webp';
 import calendarScreen from '../../../assets/homepage/calendar.webp';
+import calendarScreenLight from '../../../assets/homepage/calendar-light.webp';
 import callsScreen from '../../../assets/homepage/calls.webp';
+import callsScreenLight from '../../../assets/homepage/calls-light.webp';
 import chatScreen from '../../../assets/homepage/chat-thread.webp';
+import chatScreenLight from '../../../assets/homepage/chat-thread-light.webp';
 import crmScreen from '../../../assets/homepage/crm.webp';
+import crmScreenLight from '../../../assets/homepage/crm-light.webp';
 import docsScreen from '../../../assets/homepage/docs-split.webp';
+import docsScreenLight from '../../../assets/homepage/docs-split-light.webp';
 import inboxScreen from '../../../assets/homepage/inbox.webp';
+import inboxScreenLight from '../../../assets/homepage/inbox-light.webp';
 import mailScreen from '../../../assets/homepage/mail-thread.webp';
+import mailScreenLight from '../../../assets/homepage/mail-thread-light.webp';
 import pullRequestScreen from '../../../assets/homepage/pull-request.webp';
+import pullRequestScreenLight from '../../../assets/homepage/pull-request-light.webp';
 import tasksScreen from '../../../assets/homepage/tasks-board.webp';
+import tasksScreenLight from '../../../assets/homepage/tasks-board-light.webp';
 import type { TutorialVideoId } from '../core/tutorial-videos';
 import { FeaturePageSection } from './FeaturePage';
+import { HomepageBlog } from './HomepageBlog';
 import { HomepageClosing } from './HomepageClosing';
 import {
   HomepageFeatureDetails,
   type ProductPagePath,
 } from './HomepageFeatureDetails';
+import { HomepageTestimonials } from './HomepageTestimonials';
 import { HomepageScreen } from './homepage/HomepageScreen';
 import { ProductCopy } from './ProductMention';
 import './homepage/homepage-sections.css';
@@ -41,151 +53,186 @@ type Section = {
   tutorial: TutorialVideoId;
   screen: string;
   alt: string;
+  /** The light palette's capture, from the website's sample workspace. */
+  light: { screen: string; alt: string };
   fit?: 'bleed' | 'full';
-  page?: { title: string; path: ProductPagePath };
+  page?: { title: string; path: ProductPagePath | '/docs/product/home' };
 };
 
-// Use the product pages' hero copy above each capture. The captions explain
-// why we built each block and how it fits with the others.
+// Above each graphic: one simple sentence that fills nearly two lines on desktop.
+// Below each graphic: 1-2 sentences showing how the Block connects to other Blocks.
 const SECTIONS: readonly Section[] = [
   {
     id: 'home',
-    title: 'One inbox for your work.',
+    title: 'One inbox for everything.',
     description:
-      'Home puts the work that needs your attention in one place. Catch up on your email, team chat, tasks, and replies from an agent in the same list.',
+      'Home pulls what needs your attention into one prioritized feed with keyboard triage, AI summaries, and instant workspace search.',
     caption: [
-      'When our last startup grew to twenty people, engineering, sales, and marketing each had their own tools.',
-      'We wanted one place to catch up on a customer email, a doc we’d been editing, or a pull request waiting for review.',
+      'Catch up on Macro Mail, Macro Chat, Macro Tasks, Macro Docs, and Macro Agents in one list or jump straight into a Macro GitHub pull request.',
     ],
     tutorial: 'home',
     screen: inboxScreen,
     alt: 'Macro Home with a pull request open beside the list: its description, status and a review request',
+    light: {
+      screen: inboxScreenLight,
+      alt: 'Macro Home with an email open beside the list of chats, channels, emails and tasks',
+    },
+    page: { title: 'Home', path: '/docs/product/home' },
   },
   {
     id: 'email',
     title: 'Organized and prioritized email.',
     description:
-      'Macro Mail brings all your accounts into one inbox. Use the same keys you use in Superhuman and share a live email thread with your team in chat.',
+      'Mail brings your Google and Microsoft accounts into one inbox with Superhuman shortcuts, AI prioritization, autotagging, and team collaboration.',
     caption: [
-      'We wanted the speed of Superhuman, the multitasking of Outlook, and a single inbox for all our accounts.',
-      'When we share a customer’s email in chat, the next reply shows up there too.',
+      'Mail feeds into Macro CRM to keep records up to date.',
+      'And you can create Macro Tasks from any email in one click.',
     ],
     tutorial: 'mail',
     screen: mailScreen,
     alt: 'An email open in Macro Mail, with a task just created from it',
+    light: {
+      screen: mailScreenLight,
+      alt: 'An email thread open in Macro Mail, with its participants and a reply box',
+    },
     page: { title: 'Email', path: '/email' },
   },
   {
     id: 'chat',
     title: 'Chat for people and agents.',
     description:
-      'Macro Chat puts your team and its agents in the same channels. Tag an agent in a thread and it can read what led up to the task before it gets to work.',
+      'Chat puts your teammates and AI agents in the same channels and DMs with inline threads, Signal and Noise filtering, and workspace mentions.',
     caption: [
-      'Slack was where we talked about the work we did in other apps.',
-      'We wanted to share a customer email in a channel, talk it through, and turn the message into a task right there.',
+      'Unlike Slack, your chat isn’t isolated from your work.',
+      'Share a customer email from Macro Mail, talk it through, and create Macro Tasks right there.',
     ],
     tutorial: 'chat',
     screen: chatScreen,
     alt: 'The launch-team channel with a thread showing its first replies inline, and a task created from a message',
+    light: {
+      screen: chatScreenLight,
+      alt: 'The launch channel in Macro Chat with a thread’s replies inline and a reply being written',
+    },
     page: { title: 'Chat', path: '/channels' },
   },
   {
     id: 'tasks',
     title: 'Turn conversations into tasks.',
     description:
-      'Create a task from a team chat or a customer email. Pass the task to a teammate or an agent. The linked pull request keeps the task up to date.',
+      'Tasks gives your team fast boards, lists, priorities, and due dates without the manual overhead of keeping a separate issue tracker synced.',
     caption: [
-      'We used Linear and really tried to keep it up to date, but the conversation that moved the work forward was happening in chat.',
-      'Now we make the task from the message so whoever picks it up can read the original discussion.',
+      'Create tasks from Macro Chat or Macro Mail, link them inside Macro Docs, and hand them to Macro Agents while Macro GitHub keeps status synced.',
     ],
     tutorial: 'tasks',
     screen: tasksScreen,
     alt: 'Tasks as a board grouped by priority',
+    light: {
+      screen: tasksScreenLight,
+      alt: 'Macro Tasks as a board grouped by priority, each card showing its project and assignee',
+    },
     page: { title: 'Tasks', path: '/tasks' },
   },
   {
     id: 'docs',
     title: 'High speed agentic documents.',
     description:
-      'Docs keep a version history of your markdown and link back to the work you mention. Edit alongside an agent and see its cursor move as you work.',
+      'Docs gives you collaborative plain markdown with full version history, real-time multiplayer cursors, and live editing alongside AI agents.',
     caption: [
-      'We liked the simplicity of Obsidian, the mentions in Notion, and being able to edit a plain markdown file with our own agents.',
-      'We wanted all of that in the same editor with live collaboration.',
+      'Type @ to mention Macro Tasks, Macro Mail, and Macro Calls inline with bidirectional links and organize specs alongside Macro Spreadsheets in Macro Drive.',
     ],
     tutorial: 'docs',
     screen: docsScreen,
     alt: 'A requirements doc on the left mentioning a task, with the task open in a split on the right',
+    light: {
+      screen: docsScreenLight,
+      alt: 'A rollout plan in Macro Docs with tags, next steps and a discussion below',
+    },
     fit: 'full',
     page: { title: 'Docs', path: '/documents' },
   },
   {
     id: 'calendar',
-    title: 'A really fast calendar, with agents that do the scheduling.',
+    title: 'A really fast calendar with agents that do the scheduling.',
     description:
-      'See your calendars from Google and Microsoft together in one place. Ask an agent to find a time that works for your team and put it on the calendar.',
+      'Calendar unifies your Google and Microsoft schedules in one fast week view with instant keyboard navigation and built-in scheduling links.',
     caption: [
-      'We liked being able to send someone a Calendly link.',
-      'We wanted to see what they wrote on the booking form alongside their company record and the emails leading up to the call.',
+      'Ask Macro Agents to find a time and send invites or share Macro Booking Links that connect guest answers straight to Macro CRM and Macro Mail.',
     ],
     tutorial: 'calendar',
     screen: calendarScreen,
     alt: 'A week view in Macro Calendar with upcoming events in the sidebar',
+    light: {
+      screen: calendarScreenLight,
+      alt: 'Macro Calendar: a week view with upcoming events in the sidebar',
+    },
     page: { title: 'Calendar', path: '/calendar' },
   },
   {
     id: 'calls',
-    title: 'Calls that feed into team memory.',
+    title: 'Calls feed into team memory.',
     description:
-      'You can start a call in any channel or DM. Save both the recording and the transcript so you and your agents can find a detail that came up on the call.',
+      'Calls lets you start instant video meetings in any channel or invite external guests with a link—with recordings and transcripts included.',
     caption: [
-      'We wanted the ease of a Slack huddle and the option to send a guest a link, like Google Meet.',
-      'We run standups in our engineering channel so an agent can read the transcript afterward and write up the tasks we agreed on.',
+      'Launch a huddle from Macro Chat and let Macro Agents turn the transcript into Macro Tasks, update Macro CRM, and attach notes to Macro Docs.',
     ],
     tutorial: 'calls',
     screen: callsScreen,
     alt: 'A list of recorded calls, each with a one-line summary',
+    light: {
+      screen: callsScreenLight,
+      alt: 'A channel’s Calls tab in Macro listing recorded calls with their summaries and attendees',
+    },
     page: { title: 'Calls', path: '/calls' },
   },
   {
     id: 'crm',
     title: 'CRM that keeps itself up to date.',
     description:
-      'Macro CRM keeps up with the work your team does in email and chat. Open a company record to see who spoke to the customer last and what they said.',
+      'CRM automatically tracks your companies, contacts, owners, and deal stages so you never have to manually log updates in a separate tool.',
     caption: [
-      'We could open a deal in HubSpot or Salesforce and still have to ask the person working on it what was actually going on.',
-      'In Macro we can open the company record and read the emails and call notes ourselves.',
+      'Every company record pulls live threads from Macro Mail, transcripts from Macro Calls, and answers from Macro Booking Links while Macro Agents update stages.',
     ],
     tutorial: 'crm',
     screen: crmScreen,
     alt: 'Companies grouped into Lead, Demo, Customer and Churned, with owner and revenue',
+    light: {
+      screen: crmScreenLight,
+      alt: 'A company record in Macro CRM with its description and a team discussion',
+    },
     page: { title: 'CRM', path: '/crm' },
   },
   {
     id: 'agents',
     title: 'Agents with omniscient context.',
     description:
-      'Agents share one memory of your team’s email, chat, docs, and CRM. Start a chat with an agent, tag one in a thread, or ask it to take on a task.',
+      'Agents work inside your workspace with shared team memory, live editing tools, and your choice of built-in models or external coding agents.',
     caption: [
-      'We wanted to ask an agent about a customer and have it remember the conversations our teammates had with them, too.',
-      'It can read the earlier emails and call notes before it drafts a reply.',
+      'Tag an agent in Macro Chat to draft Macro Mail replies, edit Macro Docs, update Macro CRM, or ship fixes through Macro Tasks and Macro GitHub.',
     ],
     tutorial: 'agents',
     screen: agentsScreen,
     alt: 'A channel where a teammate mentions Cursor and the agent replies with the change it made',
+    light: {
+      screen: agentsScreenLight,
+      alt: 'A channel where a teammate mentions the Cursor agent and it replies in the thread',
+    },
     page: { title: 'Agents', path: '/agents' },
   },
   {
     id: 'coding',
-    title: 'From bug report to merged pull request.',
+    title: 'From bug report to merged PR.',
     description:
-      'Review the code beside the task and the thread that started it. Read the diff and merge the fix in the same thread. GitHub comments go to your inbox.',
+      'Review diffs, read review comments, and merge pull requests right inside Macro so engineering work stays beside the thread that started it.',
     caption: [
-      'We wanted to review a GitHub fix in the channel where someone reported the bug.',
-      'You can open the diff beside the original discussion and merge the pull request from there.',
+      'Link pull requests to Macro Tasks, discuss fixes in Macro Chat, and let Macro Agents open branches while Macro GitHub comments land in your inbox.',
     ],
     tutorial: 'github',
     screen: pullRequestScreen,
     alt: 'An engineering channel with a pull request open in a split: description, review comments and a Merge button',
+    light: {
+      screen: pullRequestScreenLight,
+      alt: 'A pull request in Macro with its description and discussion beside the changed files',
+    },
     page: { title: 'pull requests', path: '/github' },
   },
 ];
@@ -213,27 +260,6 @@ function SectionCaption(props: { sentences: readonly string[] }) {
   );
 }
 
-function Shortcuts() {
-  return (
-    <ul class="homepage-shortcuts" aria-label="Keyboard shortcuts">
-      <li>
-        <kbd>J</kbd>
-        <kbd>K</kbd>
-        Move
-      </li>
-      <li>
-        <kbd>E</kbd>
-        Done
-      </li>
-      <li>
-        <kbd>⌘</kbd>
-        <kbd>K</kbd>
-        Search
-      </li>
-    </ul>
-  );
-}
-
 /** Everything below the homepage introduction: one section per product. */
 export function HomepageSections() {
   return (
@@ -245,23 +271,16 @@ export function HomepageSections() {
             aura={section.tutorial}
             title={section.title}
             description={section.description}
-            more={
-              section.page && (
-                <HomepageFeatureDetails
-                  title={section.page.title}
-                  path={section.page.path}
-                />
-              )
-            }
           >
             <HomepageScreen
               tutorial={section.tutorial}
               src={section.screen}
               alt={section.alt}
+              light={{ src: section.light.screen, alt: section.light.alt }}
               fit={section.fit}
+              page={section.page}
             />
             <SectionCaption sentences={section.caption} />
-            {section.id === 'home' && <Shortcuts />}
           </FeaturePageSection>
         )}
       </For>
@@ -269,7 +288,7 @@ export function HomepageSections() {
         id="pricing"
         aura="home"
         title="One plan for all your work."
-        description="Start free and get more AI usage and storage on a paid plan."
+        description="Start free with every module included and upgrade anytime for higher AI usage and workspace storage."
         more={<HomepageFeatureDetails title="pricing" path="/pricing" />}
       >
         <ul class="homepage-modules" aria-label="Included modules">
@@ -286,11 +305,12 @@ export function HomepageSections() {
         </ul>
         <SectionCaption
           sentences={[
-            'At our last startup we paid for Slack, Linear, Notion, HubSpot, and Superhuman.',
-            'We liked those tools, but each new subscription came with another place for work to get stuck.',
+            'Replace Slack, Linear, Notion, HubSpot, and Superhuman with Macro Mail, Macro Chat, Macro Docs, Macro Tasks, and Macro CRM under one subscription.',
           ]}
         />
       </FeaturePageSection>
+      <HomepageTestimonials />
+      <HomepageBlog />
       <HomepageClosing />
     </>
   );

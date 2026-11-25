@@ -147,28 +147,40 @@
 
 .homepage-tour-screen img[data-active='true'] { opacity: 1; }
 
+/* A light window needs less shadow to lift off the wallpaper. */
+.homepage-tour-screen img.palette-light-only {
+  filter: drop-shadow(0 1px 3px #0003) drop-shadow(0 24px 48px #0005);
+}
+
 @media (max-width: 699px) {
   .homepage-tour {
-    width: calc(100% - 22px);
+    width: calc(100% - 16px);
     aspect-ratio: auto;
-    padding: 14px 0 0 22px;
-    border-radius: 20px;
+    margin: 0 0 0 16px;
+    padding: 12px 0 24px 16px;
+    border-radius: 20px 0 0 20px;
   }
 
   .homepage-tour-bar {
     justify-content: flex-start;
-    margin-bottom: 14px;
-    padding-right: 11px;
+    gap: 6px;
+    margin-bottom: 11px;
+    padding-right: 12px;
   }
 
-  .homepage-tour-tabs { padding: 4px; }
-  .homepage-tour .homepage-tour-tabs button { min-height: 29px; padding-inline: 14px; font-size: 12px; }
-  .homepage-tour .homepage-tour-next { width: 37px; height: 37px; }
+  .homepage-tour-tabs {
+    gap: 1px;
+    padding: 3px;
+  }
+  .homepage-tour-tabs[data-fade-start='true'] { --fade-start: 32px; }
+  .homepage-tour-tabs[data-fade-end='true'] { --fade-end: 32px; }
+  .homepage-tour .homepage-tour-tabs button { min-height: 29px; padding-inline: 11px; font-size: 12px; }
+  .homepage-tour .homepage-tour-next { width: 35px; height: 35px; }
 
   /* Keep the left side readable on phones without enlarging the window on tablets. */
   .homepage-tour-screen {
-    width: min(180%, 650px);
-    margin-bottom: -6%;
+    width: min(192%, 700px);
+    margin-bottom: 0;
   }
 }
 

@@ -28,7 +28,6 @@ documents = { path = "../documents", default-features = false, features = [
   "ports",
 ] }
 entity_access = { path = "../entity_access" }
-entity_access_db_utils = { path = "../entity_access_db_utils" }
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }

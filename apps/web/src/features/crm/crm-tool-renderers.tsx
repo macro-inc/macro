@@ -2,14 +2,17 @@ import { BaseTool } from '@core/component/AI/component/tool/BaseTool';
 import { createToolRenderer } from '@core/component/AI/component/tool/ToolRenderer';
 import { ItemPreview } from '@core/component/ItemPreview';
 import Buildings from '@icon/system/regular/buildings.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import Globe from '@icon/system/regular/globe.svg';
 import UserPlus from '@icon/system/regular/user-plus.svg';
+import { queryClient } from '@queries/client';
 import { Show, Suspense } from 'solid-js';
 import {
   GetCompanyToolResponse,
   ListCompaniesToolResponse,
   pluralize,
 } from './components/tool-companies';
+import { refreshAfterMerge } from './queries/merges';
 
 const listCompaniesHandler = createToolRenderer({
   name: 'ListCompanies',
@@ -160,6 +163,37 @@ const removeCompanyDomainHandler = createToolRenderer({
   ),
 });
 
+const previewMergeHandler = createToolRenderer({
+  name: 'PreviewMerge',
+  render: (ctx) => (
+    <BaseTool icon={GitMergeIcon} renderContext={ctx.renderContext} type="call">
+      <div class="min-w-0 flex-1">
+        {ctx.response ? 'Reviewed' : 'Review'} merging{' '}
+        {pluralize(ctx.tool.data.sourceIds.length, 'company', 'companies')} into{' '}
+        <CompanyPreview companyId={ctx.tool.data.survivorId} />
+      </div>
+    </BaseTool>
+  ),
+});
+
+const mergeRecordsHandler = createToolRenderer({
+  name: 'MergeRecords',
+  handleResponse: (ctx) =>
+    refreshAfterMerge(queryClient, {
+      companies: ctx.tool.data.mergedIds,
+      contacts: [],
+    }),
+  render: (ctx) => (
+    <BaseTool icon={GitMergeIcon} renderContext={ctx.renderContext} type="call">
+      <div class="min-w-0 flex-1">
+        {ctx.response ? 'Merged' : 'Merge'}{' '}
+        {pluralize(ctx.tool.data.sourceIds.length, 'company', 'companies')} into{' '}
+        <CompanyPreview companyId={ctx.tool.data.survivorId} />
+      </div>
+    </BaseTool>
+  ),
+});
+
 const createContactHandler = createToolRenderer({
   name: 'CreateContact',
   render: (ctx) => (
@@ -187,5 +221,7 @@ export {
   createContactHandler,
   getCompanyHandler,
   listCompaniesHandler,
+  mergeRecordsHandler,
+  previewMergeHandler,
   removeCompanyDomainHandler,
 };

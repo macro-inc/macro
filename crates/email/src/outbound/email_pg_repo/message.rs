@@ -6,6 +6,7 @@ use crate::domain::{
     ports::RecipientsByMessageId,
 };
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -105,10 +106,11 @@ pub(super) async fn recipients_by_message_ids(
     Ok(map)
 }
 
-#[tracing::instrument(err, skip(pool, message_ids))]
+#[tracing::instrument(err, skip_all)]
 pub(super) async fn labels_by_message_ids(
     pool: &PgPool,
     message_ids: &[Uuid],
+    reader: Option<&MacroUserIdStr<'_>>,
 ) -> Result<HashMap<Uuid, Vec<MessageLabel>>, sqlx::Error> {
     if message_ids.is_empty() {
         return Ok(HashMap::new());
@@ -118,21 +120,43 @@ pub(super) async fn labels_by_message_ids(
         DbMessageLabelRow,
         r#"
         SELECT
-            ml.message_id AS "message_id!",
-            l.id,
-            l.link_id,
-            l.provider_label_id,
-            l.name,
-            l.created_at,
-            l.message_list_visibility as "message_list_visibility: _",
-            l.label_list_visibility as "label_list_visibility: _",
-            l.type as "type_: _"
-        FROM email_effective_message_labels ml
-        JOIN email_labels l ON ml.label_id = l.id
-        WHERE ml.message_id = ANY($1)
-        ORDER BY ml.message_id, l.name
+            labels.message_id AS "message_id!",
+            labels.id,
+            labels.link_id,
+            labels.provider_label_id,
+            labels.name,
+            labels.created_at,
+            labels.message_list_visibility as "message_list_visibility: _",
+            labels.label_list_visibility as "label_list_visibility: _",
+            labels.type as "type_: _"
+        FROM (
+            SELECT
+                ml.message_id,
+                l.id,
+                l.link_id,
+                l.provider_label_id,
+                l.name,
+                l.created_at,
+                l.message_list_visibility,
+                l.label_list_visibility,
+                l.type
+            FROM email_effective_message_labels ml
+            JOIN email_labels l ON ml.label_id = l.id
+            WHERE ml.message_id = ANY($1)
+            -- Read before the reader's inboxes are checked: checked inside,
+            -- the planner reads every label to check it first.
+            OFFSET 0
+        ) labels
+        WHERE labels.type = 'System'
+            OR labels.link_id IN (
+                SELECT el.id FROM email_links el WHERE el.macro_id = $2
+                UNION ALL
+                SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $2
+            )
+        ORDER BY labels.message_id, labels.name
         "#,
         message_ids,
+        reader.map(|reader| reader.as_ref()),
     )
     .fetch_all(pool)
     .await?;

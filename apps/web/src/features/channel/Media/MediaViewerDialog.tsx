@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { FileDownloadButton } from '@core/component/FileDownload';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
 import { isMobile } from '@core/mobile/isMobile';
@@ -182,6 +183,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
         props.onOpenChange(open);
       }}
     >
+      <DialogClosesOnNavigation />
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Show when={currentItem()}>

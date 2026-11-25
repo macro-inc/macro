@@ -2,10 +2,21 @@
  * @vitest-environment jsdom
  */
 
-import type { CalendarEvent } from '@app/features/calendar/types';
+import {
+  type CalendarEvent,
+  mapCalendarOccurrence,
+} from '@app/features/calendar/types';
+import { mapCalendarOccurrence as mapGraphqlOccurrence } from '@queries/calendar/graphql/map';
+import { executeGraphqlCreate } from '@queries/calendar/graphql/mutations';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
+import type { CalendarOccurrenceItemFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import type { Client } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  buildEventTime,
+  defaultEditorInitialValues,
+} from './composer/event-form-model';
 import { EventAttendeesSection, EventDetails } from './EventDetails';
 
 vi.mock('@core/component/UserIcon', () => ({
@@ -141,4 +152,66 @@ describe('the organizer in event details', () => {
 
     expect(screen.getAllByText('organizer@outside.example')).toHaveLength(1);
   });
+});
+
+describe('the local copy of a new event', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** The event the calendar draws for a create before the server answers. */
+  async function localCopy(): Promise<CalendarEvent> {
+    let created: CalendarOccurrenceItemFieldsFragment | undefined;
+    const client = {
+      mutation: (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => {
+        const optimistic = context.normalizedCacheOptimistic as {
+          optimisticResponse: {
+            createCalendarEvent: {
+              occurrences: CalendarOccurrenceItemFieldsFragment[];
+            };
+          };
+        };
+        created =
+          optimistic.optimisticResponse.createCalendarEvent.occurrences[0];
+        return {
+          toPromise: async () => ({
+            operation: { context },
+            extensions: {
+              normalizedCacheMutationDisposition: {
+                kind: 'queued',
+                transactionId: 'tx-1',
+              },
+            },
+          }),
+        };
+      },
+      query: () => ({ toPromise: async () => ({ data: undefined }) }),
+    } as unknown as Client;
+    // The editor's own time, which names the browser's time zone.
+    const time = buildEventTime(
+      defaultEditorInitialValues(new Date('2026-11-28T09:30:00'))
+    );
+    if (!time) throw new Error('the editor built no time');
+    await executeGraphqlCreate({ title: 'Offsite', time }, client);
+    if (!created) throw new Error('the create drew no occurrence');
+    return mapCalendarOccurrence(mapGraphqlOccurrence(created));
+  }
+
+  it.each(['UTC', 'America/New_York'])(
+    'shows no original time to a viewer in %s',
+    async (timeZone) => {
+      vi.stubEnv('TZ', timeZone);
+      expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(timeZone);
+
+      const local = await localCopy();
+      render(() => <EventDetails event={local} timeFormat="12-hour" />);
+
+      expect(screen.getByText('Offsite')).toBeTruthy();
+      expect(screen.queryByText(/Original time/)).toBeNull();
+    }
+  );
 });

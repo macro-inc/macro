@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import type { RowLabel } from '@property/tags';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
@@ -70,6 +71,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   showCalendarAttendance?: boolean;
   /** Lets standalone collections own their tag-filter navigation. */
   onFilterByTag?: (optionId: string) => void;
+  /** An email's provider labels, after its tags, where the list shows them. */
+  labels?: readonly RowLabel[];
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -128,6 +131,7 @@ export interface LayoutProps {
   chars: number;
   showCalendarAttendance?: boolean;
   onFilterByTag?: (optionId: string) => void;
+  labels?: readonly RowLabel[];
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent

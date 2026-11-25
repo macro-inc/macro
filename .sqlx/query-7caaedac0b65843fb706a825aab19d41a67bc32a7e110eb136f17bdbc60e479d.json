@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"locked!\" FROM (\n               SELECT pg_advisory_xact_lock(hashtextextended(key, 0))\n               FROM (SELECT key FROM UNNEST($1::text[]) WITH ORDINALITY AS k(key, position)\n                     ORDER BY position) ordered\n           ) locked",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "locked!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7caaedac0b65843fb706a825aab19d41a67bc32a7e110eb136f17bdbc60e479d"
+}

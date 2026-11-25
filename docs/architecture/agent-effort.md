@@ -100,19 +100,29 @@ an external harness result.
 
 ## Model menu interaction
 
-The Agents new-chat and running-session composers use one model selector. Its desktop
-menu shows Reasoning effort as a submenu only when the selected runtime offers
-multiple values; its phone sheet pushes an effort view and returns to the list
-after a choice. The selected model and effort appear in the bounded trigger,
-with the full selection in a shared tooltip. Model selection remains available
-when capability discovery is pending or effort is unsupported. The separate
-effort control remains available to unrelated consumers.
+The Agents new-chat and running-session composers use one card-first selector.
+Model cards expose Thinking through the shared Slider, with pointer commits on
+release and immediate keyboard commits. Models with at most one effort option
+retain the no-thinking slot. Agent cards expose the same advertised controls,
+without a no-thinking slot, and a Model row opens that agent's runtime catalog.
+Auto retains the name row alone. The name opens in-place desktop selection pages
+or a phone sheet. Existing EffortSelector and legacy pickers remain unwired for
+reference.
+The trigger omits the advertised default Thinking level and shows only a
+non-default choice. A running session's confirmed current value is not a model
+default: supported preflight discovery supplies that default separately. Until a
+default is known, the trigger omits the level rather than guessing.
 
-The Speed submenu uses only the in-memory runtime's advertised values. The
-presentation maps `standard` to Standard, `priority` and `fast` to Fast, and
-`ultrafast` to Ultrafast without changing the selected wire value or the shared
-preference. A single offered choice hides the submenu; no model-name inference
-creates an Ultrafast option.
+Speed uses a small Dropdown menu on both platforms, not a phone page. Only
+advertised in-memory tiers are offered: Standard, Fast (`priority` or `fast`),
+and Ultrafast. One tier hides the button; model names never imply Ultrafast.
+New explicit model picks reset controls to defaults, while merely reopening the
+card retains settings. The hosts still own all preference and session mutations.
+Custom-agent overrides last one send unless kept with the Model row's pin.
+Kept choices are browser-local per account and agent; they survive sends without
+changing the agent's shared default. Returning to that default or a successful
+catalog response that removes the kept model clears the pin. Loading, failed,
+or unsupported discovery does not erase a kept choice.
 
 A combined running-session selection waits for the model's correlated ACP
 confirmation, validates effort against the new snapshot, then confirms effort.

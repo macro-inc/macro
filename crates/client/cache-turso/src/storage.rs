@@ -57,6 +57,10 @@ use turso_opfs::{
     ResetFailure,
 };
 
+#[cfg(target_arch = "wasm32")]
+pub use queue_salvage::read_queue;
+pub use queue_salvage::{QueueImport, QueueLoss, QueueRead, SalvageFile, SalvagedQueue};
+
 /// Frozen storage schema version, independent of cache postcard versions.
 pub const STORAGE_SCHEMA_VERSION: u32 = 14;
 
@@ -357,6 +361,9 @@ impl TursoStorage {
             connection,
             ..
         } = self;
+        if reason.is_none() {
+            connection.checkpoint_before_close();
+        }
         connection.release_statements();
         drop(connection);
         let closed = session.try_close().map_err(TursoStorageCloseFailure::new)?;
@@ -458,6 +465,12 @@ impl ResetRequiredTursoStorageClosed {
     /// Returns the first reset-required reason latched by this storage.
     pub fn reason(&self) -> PhysicalResetReason {
         self.reason
+    }
+
+    /// Returns the still-locked owner with the unhealthy main/WAL pair as it
+    /// is, to be wiped once its queue was read.
+    pub fn preserve_for_wipe(self) -> Result<OpfsOwner, OpfsError> {
+        self.closed.preserve()
     }
 
     /// Physically resets the unhealthy main/WAL pair.
@@ -587,10 +600,11 @@ impl TursoStorageOpenFailure {
         self.error
     }
 
-    /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
+    /// Consumes the failure, closes Turso, and preserves main and WAL.
     ///
-    /// This accessor must only be used when [`Self::error`] does not require a
-    /// physical reset. A close failure poisons the worker-local owner.
+    /// When [`Self::error`] requires a physical reset, the owner must be wiped
+    /// before anything but its queue is read. A close failure poisons the
+    /// worker-local owner.
     pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
         let closed = self
             .session
@@ -971,6 +985,9 @@ impl TursoStorage {
     /// Consumes and explicitly closes the native Turso connection.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
         let reason = self.latched_reason();
+        if reason.is_none() {
+            self.connection.checkpoint_before_close();
+        }
         self.connection.release_statements();
         self.connection.close().map_err(|_| {
             TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
@@ -1037,12 +1054,20 @@ impl TursoStorage {
     /// ran and how many frames it copied. A host that never calls it keeps
     /// Turso's own checkpoint.
     ///
+    /// On a connection with Turso's own checkpoint off (the browser's), the
+    /// storage copies the WAL itself: here from 4,000 frames, starting the
+    /// log over, and after any COMMIT that takes it to 10,000.
+    ///
     /// A failure is never a reset: like Turso's own checkpoint, it leaves the
     /// WAL whole, and the next call tries again.
     pub fn checkpoint_if_due(&self) -> Result<WalCheckpoint, TursoStorageError> {
         self.require_healthy()?;
-        self.connection
-            .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
+        let due = if self.connection.owns_checkpoints() {
+            driver::OWNED_CHECKPOINT_DUE_FRAMES
+        } else {
+            driver::CHECKPOINT_DUE_FRAMES
+        };
+        self.connection.checkpoint_over(due)
     }
 
     /// The end of the WAL. A caller that computed something from storage
@@ -3655,8 +3680,8 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 ///
 /// Records and the derived rows they feed are refetchable, so they are dropped
 /// as a reset drops them, table by table, except what a reset keeps: the
-/// identity and authority records and the identity metadata of the records
-/// queued writes name, read in that format and rewritten in this one. Queued mutations and their optimistic layers are kept,
+/// identity and authority records and the identity metadata of every
+/// record, read in that format and rewritten in this one. Queued mutations and their optimistic layers are kept,
 /// which is why this is not a physical reset. The stored schema is made
 /// unreadable, so the adoption after the open resets the cache in place and
 /// takes the projections the previous format composed. The namespace moves to
@@ -6181,6 +6206,7 @@ mod mutation_retry;
 mod name_search;
 mod page_retention;
 mod people_sql;
+mod queue_salvage;
 mod record_batch;
 mod schema_store;
 mod search;

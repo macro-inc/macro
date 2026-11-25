@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO import_entity_written (import_id, kind, object, macro_id)\n               SELECT $1, 'database_reservation_failure', fact.object, fact.macro_id\n               FROM UNNEST($2::text[], $3::uuid[]) AS fact(object, macro_id)\n               ON CONFLICT (import_id, kind, object) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "df5bb1e0a09271b89c0530c24483c637648f6081108052203d7a6f702f7bc1f0"
+}

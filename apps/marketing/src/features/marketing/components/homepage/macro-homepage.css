@@ -1,15 +1,15 @@
 html[data-homepage] { color-scheme: dark; }
 html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-homepage {
-  --color-surface: light-dark(#fff, #000);
-  --color-ink: light-dark(#1d1d1f, #fff);
-  --color-ink-muted: light-dark(#66666b, #aaa);
-  --color-ink-extra-muted: light-dark(#7d7d83, #888);
-  --color-edge-muted: light-dark(#e4e4e7, #ffffff14);
-  --color-hover: light-dark(#f3f3f4, #ffffff08);
+  --color-surface: light-dark(#f5f1e8, #000);
+  --color-ink: light-dark(#1d1c1a, #fff);
+  --color-ink-muted: light-dark(#54524f, #aaa);
+  --color-ink-extra-muted: light-dark(#6a6762, #888);
+  --color-edge-muted: light-dark(#e6e1d7, #ffffff14);
+  --color-hover: light-dark(#1d1c1a0a, #ffffff08);
   height: 100%;
-  background: light-dark(#fff, #000);
-  color: light-dark(#1d1d1f, #fff);
+  background: light-dark(#f5f1e8, #000);
+  color: light-dark(#1d1c1a, #fff);
   color-scheme: inherit;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Variable', sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -17,13 +17,13 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-homepage *, .macro-homepage *::before, .macro-homepage *::after { box-sizing: border-box; }
 .macro-home-scroll { height: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .macro-homepage .site-header {
-  --nav-ink: light-dark(#1d1d1f, #fff);
-  --nav-muted: light-dark(#6e6e73, #b8b8bd);
-  --nav-surface: light-dark(#f5f5f7, rgb(18 18 20 / 78%));
-  --nav-menu-surface: light-dark(#fff, rgb(21 21 23 / 96%));
-  --nav-mobile-surface: light-dark(#fff, #121214);
-  --nav-edge: light-dark(#e8e8ed, #ffffff14);
-  --nav-menu-shadow: 0 14px 50px light-dark(#00000012, #000a);
+  --nav-ink: light-dark(#1d1c1a, #fff);
+  --nav-muted: light-dark(#6a6762, #b8b8bd);
+  --nav-surface: light-dark(rgb(250 248 243 / 85%), rgb(18 18 20 / 78%));
+  --nav-menu-surface: light-dark(#fcfbf8, rgb(21 21 23 / 96%));
+  --nav-mobile-surface: light-dark(#f5f1e8, #121214);
+  --nav-edge: light-dark(#1d1c1a1a, #ffffff14);
+  --nav-menu-shadow: 0 14px 50px light-dark(#1d1c1a26, #000a);
   top: 0;
   left: 0;
   right: 0;
@@ -112,9 +112,8 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 /* The introduction follows the Email page: centered on desktop, left-aligned on phones. */
 .macro-homepage .macro-home-hero { padding: 132px 24px 56px; }
 .macro-homepage .macro-home-hero::before { display: none; }
-.macro-homepage .macro-home-hero h1 { margin: 0 0 24px; font-size: clamp(44px, 4vw, 53px); line-height: 1.1; }
+.macro-homepage .macro-home-hero h1 { margin: 0 0 24px; font-size: 40px; line-height: 1.1; white-space: nowrap; }
 .macro-homepage .macro-home-hero > .macro-home-tagline { width: min(640px, 100%); margin: 0; color: #a8a8a8; font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif; letter-spacing: normal; text-wrap: balance; }
-.macro-home-tagline-mobile { display: none; }
 .macro-home-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 32px; }
 .macro-home-actions .homepage-hero-cta { width: auto; min-width: 140px; padding-inline: 24px; }
 .macro-home-demo { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 140px; min-height: 40px; padding: 0 24px; border-radius: 999px; background: #141415; color: #fff; font: 500 14px/24px 'Inter Variable', Inter, sans-serif; text-decoration: none; white-space: nowrap; transition: opacity 150ms; }
@@ -123,10 +122,8 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 .macro-homepage .homepage-open-source-badges { margin-top: 40px; }
 @media (max-width: 699px) {
   .macro-homepage .macro-home-hero { padding: 100px 16px 32px; align-items: flex-start; text-align: left; }
-  .macro-homepage .macro-home-hero h1 { margin-bottom: 22px; font-size: clamp(26px, 8.6vw, 36px); line-height: 1.02; }
-  .macro-homepage .macro-home-hero > .macro-home-tagline { width: 100%; font-size: 14px; line-height: 1.6; text-wrap: wrap; }
-  .macro-home-tagline-desktop { display: none; }
-  .macro-home-tagline-mobile { display: inline; }
+  .macro-homepage .macro-home-hero h1 { margin-bottom: 22px; font-size: clamp(21px, 7.5vw, 40px); }
+  .macro-homepage .macro-home-hero > .macro-home-tagline { width: 100%; font-size: clamp(14px, 4.1vw, 15.4px); line-height: 1.55; text-wrap: wrap; }
   .macro-home-actions { justify-content: flex-start; gap: 8px; margin-top: 24px; }
   .macro-home-actions :is(.homepage-hero-cta, .macro-home-demo) { min-width: 0; min-height: 38px; height: 38px; padding-inline: 20px; font-size: 13px; }
 }

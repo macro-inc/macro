@@ -597,7 +597,6 @@ async fn creation_retries_repair_reservation_for_both_primary_key_and_thread_con
         }),
         RecordingLifecyclePublisher::new(),
         crate::domain::pending::PendingCommands::new(),
-        PromptMentionsMock::new(),
         NotifierMock::new(),
     )
     .with_external_replies(store.clone());

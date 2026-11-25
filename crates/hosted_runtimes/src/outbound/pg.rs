@@ -29,10 +29,12 @@ mod apply;
 mod effect_signals;
 pub use effect_signals::PgEffectSignals;
 mod hosts;
+mod image_upgrades;
 mod moves;
 mod records;
 mod reservations;
 mod row;
+mod runtime_updates;
 mod usage;
 use row::{ComputerRow, ReservationRow};
 

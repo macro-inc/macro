@@ -32,7 +32,7 @@ function TitleMenuMount(props: {
   ref: (element: HTMLElement | undefined) => void;
 }) {
   onCleanup(() => props.ref(undefined));
-  return <span ref={props.ref} class="ml-1.5 inline-flex align-middle" />;
+  return <span ref={props.ref} class="inline-flex" />;
 }
 
 /** The thread's title menu and header controls, which need the loaded thread. */

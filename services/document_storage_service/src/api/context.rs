@@ -243,6 +243,16 @@ pub(crate) type DssPipelineWorkflowState =
         AuthorizationService,
     >;
 
+/// Merging duplicate CRM records, across every owner of rows that name them.
+pub(crate) type DssMergeService = crm::domain::record_merge::service::RecordMergeService<
+    crm::outbound::record_merge::PgRecordMergeRepository<DatabasesServiceType>,
+>;
+pub(crate) type DssMergeState = crm::inbound::record_merge::MergeRouterState<
+    DssMergeService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -1145,6 +1155,7 @@ pub(crate) struct ApiContext {
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
     pub pipeline_workflow_state: DssPipelineWorkflowState,
+    pub merge_state: DssMergeState,
 }
 
 env_var! {
@@ -1159,10 +1170,14 @@ impl From<&ApiContext> for PropertiesHandlerState {
             ctx.entity_access_service.clone(),
             ctx.authorization_state.clone(),
         )
-        .with_managed_team_definitions([
-            crm::domain::stages::CRM_TEAM_STAGE_DEFINITION_NAME.to_string(),
-        ])
+        .with_managed_team_definitions(managed_team_property_definitions())
     }
+}
+
+/// Team property definitions another feature manages from its own settings,
+/// which the generic property writes (REST and GraphQL) refuse.
+pub(crate) fn managed_team_property_definitions() -> [String; 1] {
+    [crm::domain::stages::CRM_TEAM_STAGE_DEFINITION_NAME.to_string()]
 }
 
 impl FromRef<ApiContext> for PropertiesHandlerState {

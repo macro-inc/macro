@@ -204,6 +204,7 @@ describe('coordinator runtime protocol', () => {
       ...version,
       kind: 'cache-unavailable',
       reason: 'another app version holds the database',
+      unavailableReason: 'files-busy',
     };
     const superseded = {
       ...version,
@@ -218,7 +219,8 @@ describe('coordinator runtime protocol', () => {
     };
     for (const valid of [
       cacheUnavailable,
-      { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: 'recovery-failed' },
+      { ...version, kind: 'pong' },
       superseded,
       removeStale,
     ]) {
@@ -226,7 +228,10 @@ describe('coordinator runtime protocol', () => {
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
-      { ...cacheUnavailable, superseded: false },
+      { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: undefined },
+      { ...version, kind: 'pong', extra: true },
+      { ...cacheUnavailable, unavailableReason: 'disk on fire' },
       { ...superseded, reason: '' },
       { ...superseded, superseded: true },
       { ...superseded, buildTime: 1 },
@@ -739,6 +744,7 @@ describe('coordinator runtime protocol', () => {
   it.each([
     { ...version, kind: 'registered', tabId: 'tab' },
     { ...version, kind: 'registered', tabId: 'tab', ownerElsewhere: true },
+    { ...version, kind: 'registered', tabId: 'tab', coordinatorLockName: 'a' },
     {
       ...version,
       kind: 'become-owner',
@@ -771,9 +777,10 @@ describe('coordinator runtime protocol', () => {
       kind: 'engine-replaced',
       ownerEpoch: 2,
       openOutcome: 'opened-existing',
+      queue: 'preserved',
     },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
-    { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
+    { ...version, kind: 'connection-closed', reason: 'tab messageerror' },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });
@@ -787,6 +794,20 @@ describe('coordinator runtime protocol', () => {
           kind: 'registered',
           tabId: 'tab',
           ownerElsewhere,
+        }).ok
+      ).toBe(false);
+    }
+  );
+
+  it.each(['', 1, null])(
+    'rejects a registration whose coordinatorLockName is %s',
+    (coordinatorLockName) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'registered',
+          tabId: 'tab',
+          coordinatorLockName,
         }).ok
       ).toBe(false);
     }
@@ -806,11 +827,40 @@ describe('coordinator runtime protocol', () => {
         kind: 'engine-replaced',
         ownerEpoch: 2,
         openOutcome,
+        queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
       };
       expect(validateCoordinatorToTabEnvelope(message)).toEqual({
         ok: true,
         value: message,
       });
+    }
+  );
+
+  it.each([undefined, null, true, 'kept'])(
+    'rejects an engine whose queue state is %s',
+    (queue) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'engine-replaced',
+          ownerEpoch: 2,
+          openOutcome: 'reset-storage-uncertain',
+          queue,
+        }).ok
+      ).toBe(false);
+      expect(
+        validateEngineToCoordinatorEnvelope({
+          ...version,
+          kind: 'engine-ready',
+          tabId: 'tab',
+          ownerEpoch: 1,
+          ownerLockName: 'owner-lock',
+          ownerLockHeld: true,
+          databaseActionProof: 'wiped-before-open',
+          openOutcome: 'reset-storage-uncertain',
+          queue,
+        }).ok
+      ).toBe(false);
     }
   );
 
@@ -878,8 +928,30 @@ describe('coordinator runtime protocol', () => {
         ownerLockHeld: true,
         databaseActionProof: 'wiped-before-open',
         openOutcome: 'reset-storage-uncertain',
+        queue: 'preserved',
       }).ok
     ).toBe(true);
+    for (const [ownerLockClientId, ok] of [
+      ['client', true],
+      [undefined, true],
+      ['', false],
+      [1, false],
+    ] as const) {
+      expect(
+        validateEngineToCoordinatorEnvelope({
+          ...version,
+          kind: 'engine-ready',
+          tabId: 'tab',
+          ownerEpoch: 1,
+          ownerLockName: 'owner-lock',
+          ownerLockHeld: true,
+          ownerLockClientId,
+          databaseActionProof: 'opened-existing',
+          openOutcome: 'opened-existing',
+          queue: 'preserved',
+        }).ok
+      ).toBe(ok);
+    }
     expect(
       validateEngineToCoordinatorEnvelope({
         ...version,
@@ -890,6 +962,7 @@ describe('coordinator runtime protocol', () => {
         ownerLockHeld: false,
         databaseActionProof: 'wiped-before-open',
         openOutcome: 'reset-storage-uncertain',
+        queue: 'preserved',
       }).ok
     ).toBe(false);
     expect(

@@ -69,8 +69,8 @@ use crate::domain::model::{
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
     AgentPromptComposer, AgentSessionNotifier, CodingAgentSource, CommandForwarder,
-    ContainerManager, MessagePromptContext, PermissionPolicySource, PromptMentions,
-    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
+    ContainerManager, MessagePromptContext, PermissionPolicySource, RuntimeConnections,
+    SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -134,7 +134,6 @@ struct AgentHarnessInner<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > {
     sessions: Sessions,
@@ -192,8 +191,6 @@ struct AgentHarnessInner<
     busy: PendingCommands,
     /// Where lifecycle facts go.
     lifecycle_publisher: Lifecycle,
-    /// Who a prompt names.
-    mentions: Mentions,
     /// Where the notifications a fact warrants go.
     notifier: Notifier,
     /// How a running turn's reply was last reported, keyed by session: the
@@ -230,7 +227,6 @@ type SharedInner<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > = Arc<
     AgentHarnessInner<
@@ -242,7 +238,6 @@ type SharedInner<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >,
 >;
@@ -257,7 +252,6 @@ pub struct AgentHarnessService<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > {
     inner: SharedInner<
@@ -269,7 +263,6 @@ pub struct AgentHarnessService<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >,
     workers: Arc<SessionWorkers>,
@@ -292,7 +285,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > Clone
     for AgentHarnessService<
@@ -304,7 +296,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 {
@@ -329,7 +320,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessService<
@@ -341,7 +331,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -353,7 +342,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// Build the orchestrator from its ports.
@@ -376,7 +364,6 @@ where
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
-        mentions: Mentions,
         notifier: Notifier,
     ) -> Self {
         Self {
@@ -409,7 +396,6 @@ where
                 dials: DashMap::new(),
                 busy: pending,
                 lifecycle_publisher,
-                mentions,
                 notifier,
                 projections: DashMap::new(),
                 typing_phases: DashMap::new(),
@@ -825,7 +811,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > ForwardedCommands
     for AgentHarnessService<
@@ -837,7 +822,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -849,7 +833,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     async fn execute_forwarded(

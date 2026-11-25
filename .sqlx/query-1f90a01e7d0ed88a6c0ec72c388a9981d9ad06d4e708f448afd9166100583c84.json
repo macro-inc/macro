@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                requested.id AS \"id!\",\n                requested.merged_into AS \"merged_into?\",\n                ct.name,\n                ct.email,\n                ct.updated_at AS \"updated_at!\"\n            FROM (\n                SELECT\n                    ids.id,\n                    (\n                        SELECT a.contact_id\n                        FROM crm_contact_aliases a\n                        WHERE a.retired_id = ids.id\n                    ) AS merged_into\n                FROM (SELECT DISTINCT id FROM unnest($2::uuid[]) AS ids (id)) ids\n                OFFSET 0\n            ) requested\n            CROSS JOIN LATERAL (\n                SELECT id, team_id, company_id, name, email, hidden, updated_at\n                FROM crm_contacts\n                WHERE id = COALESCE(requested.merged_into, requested.id)\n                OFFSET 0\n            ) ct\n            JOIN team_user tu\n                ON tu.team_id = ct.team_id\n               AND tu.user_id = $1\n               AND (tu.crm_access OR tu.team_role <> 'member')\n            LEFT JOIN crm_companies co\n                ON co.id = ct.company_id\n            WHERE NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "merged_into?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "1f90a01e7d0ed88a6c0ec72c388a9981d9ad06d4e708f448afd9166100583c84"
+}

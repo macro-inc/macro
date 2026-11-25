@@ -61,7 +61,10 @@ async fn mark_unread_uses_the_threads_inbox_and_updates_authoritative_read_state
     assert!(!messages[0].is_read);
     let labels = service
         .email_repo
-        .labels_by_message_ids(&[messages[0].db_id])
+        .labels_by_message_ids(
+            &[messages[0].db_id],
+            Some(&inbox_owner(&service.email_repo.pool).await),
+        )
         .await?;
     let unread_labels: Vec<_> = labels[&messages[0].db_id]
         .iter()
@@ -94,7 +97,10 @@ async fn mark_unread_uses_the_threads_inbox_and_updates_authoritative_read_state
     assert!(messages.iter().all(|message| message.is_read));
     let labels = service
         .email_repo
-        .labels_by_message_ids(&[messages[0].db_id])
+        .labels_by_message_ids(
+            &[messages[0].db_id],
+            Some(&inbox_owner(&service.email_repo.pool).await),
+        )
         .await?;
     assert!(
         labels
@@ -206,7 +212,10 @@ async fn assert_failed_read_state_preserves_labels_and_flags(
         assert!(!messages.is_empty());
         assert!(messages.iter().all(|message| message.is_read == was_read));
         let ids: Vec<_> = messages.iter().map(|message| message.db_id).collect();
-        let labels = service.email_repo.labels_by_message_ids(&ids).await?;
+        let labels = service
+            .email_repo
+            .labels_by_message_ids(&ids, Some(&inbox_owner(&service.email_repo.pool).await))
+            .await?;
         for id in ids {
             let has_unread = labels
                 .get(&id)

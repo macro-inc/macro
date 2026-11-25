@@ -125,6 +125,7 @@ function ProjectTimeDesktopBody(props: ProjectTimeViewProps): JSX.Element {
                   groups={summary().groups}
                   grouping={shownGrouping()}
                   person={props.person}
+                  task={props.task}
                   onOpenTask={props.onOpenTask}
                 />
               )}

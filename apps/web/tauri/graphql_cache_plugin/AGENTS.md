@@ -14,7 +14,8 @@ one locked engine across webviews; cache policy belongs in `cache-core`.
 - `src/engine/soup.rs`: composition of Soup-specific projection adapters.
 - `src/engine/authority.rs`: durable CRM retirement and one blanket response-generation comparison under the owner lock. Reads do not require permission proof. Register `graphql_cache_current_authority` and `graphql_cache_transition_authority` with every native binary that receives this web bundle. Missing transition capability requires an app update. Queue inspection exposes authored command metadata without copied response snapshots. Claim, defer, rollback and inspection do not take a response generation; they act only on authored queue state.
 - `src/engine/channel_timeline.rs`: channel timeline pages, commits, eviction and stats over the shared index (`graphql_cache_channel_timeline*`). A binary without these commands makes the web host answer `unsupported`, and channels read over REST. `commands.rs` installs the engine's channel listener and emits `graphql-cache://channels-changed` after each transaction that changes a channel. `write_query`/`hydrate_query` take the response's `channelCommit`; a binary that predates it ignores the commit and answers no outcome.
-- `src/engine/test.rs` and `src/engine/test/`: native persistence and IPC contracts.
+- `src/engine/test.rs` and `src/engine/test/`: native persistence and IPC contracts. `test/contention.rs` (`native_contention_bench`, recipe in `crates/client/cache-bench/AGENTS.md`) measures a person's rename and reads against background sync lanes: each command's answer time, longest poll, and engine wait and hold (`access::probe`), plus runtime probes.
+- `src/engine/access.rs` times every guard: enqueue and commit of a queued mutation return `engine` (`lockWaitMs`, `lockHoldMs`), which the web records on `graphql.mutation_queue.enqueue` and `.attempt`.
 
 ## Scope
 

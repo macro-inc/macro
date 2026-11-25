@@ -260,6 +260,10 @@ in
     # makes on the computer's volume: before it they fail to start (seen as
     # a failed macro-agent-browser, whose start job doesn't retry).
     systemd.paths.macro-agent.wantedBy = lib.mkForce [ "macro-agent.target" ];
+    systemd.services.macro-agent-runtime-boot = {
+      requires = [ "macro-home-setup.service" ];
+      after = [ "macro-home-setup.service" ];
+    };
     systemd.services.macro-agent = {
       wantedBy = lib.mkForce [ "macro-agent.target" ];
       requires = [ "macro-home-setup.service" ];

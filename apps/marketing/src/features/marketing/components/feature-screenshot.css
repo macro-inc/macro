@@ -1,15 +1,82 @@
-/* Real app screens sit on a flat stage, darker than the page's raised cards and without an edge. */
+/* Real app screens sit on a feature-tinted wallpaper stage (or flat dark stage when neutral). */
 .feature-screenshot {
+  position: relative;
   margin: 0;
   padding: 16px;
   border-radius: 14px;
-  background: rgb(16 16 16 / 50%);
+  background: var(--feature-screenshot-stage, rgb(16 16 16 / 50%));
+}
+
+.feature-screenshot--wallpaper {
+  isolation: isolate;
+  overflow: hidden;
+  padding: 20px;
+  border-radius: 16px;
+  background: #101010;
+}
+
+.feature-screenshot-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.feature-screenshot-backdrop .tutorial-wallpaper {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: saturate(0.95) brightness(0.76);
+}
+
+.feature-screenshot[data-wallpaper-variant='1'] .feature-screenshot-backdrop .tutorial-wallpaper {
+  transform: scaleX(-1);
+}
+
+.feature-screenshot[data-wallpaper-variant='2'] .feature-screenshot-backdrop .tutorial-wallpaper {
+  transform: scaleY(-1);
+}
+
+.feature-screenshot[data-wallpaper-variant='3'] .feature-screenshot-backdrop .tutorial-wallpaper {
+  transform: scale(-1, -1);
+}
+
+.feature-screenshot-backdrop::before,
+.feature-screenshot-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.feature-screenshot-backdrop::before {
+  background:
+    radial-gradient(ellipse 90% 75% at 18% 12%, rgb(255 255 255 / 8%), transparent 60%),
+    linear-gradient(160deg, rgb(8 8 12 / 14%), rgb(6 6 10 / 40%));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 16%);
+}
+
+.feature-screenshot-backdrop::after {
+  opacity: 0.07;
+  background-size: 160px 160px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath filter='url(%23n)' opacity='.7' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
 }
 
 .feature-screenshot-frame {
+  position: relative;
+  z-index: 1;
   overflow: hidden;
   border-radius: 8px;
   box-shadow: 0 0 0 1px #ffffff1a;
+}
+
+.feature-screenshot--wallpaper .feature-screenshot-frame {
+  border-radius: 9px;
+  box-shadow:
+    0 12px 32px -12px rgb(0 0 0 / 68%),
+    0 0 0 1px rgb(255 255 255 / 14%);
 }
 
 .feature-screenshot-viewport {
@@ -70,11 +137,13 @@
   margin: 0;
   color: var(--feature-copy-color, var(--color-ink-muted));
   font: 370 14px/1.55 'Inter Variable', Inter, sans-serif;
+  text-wrap: pretty;
 }
 
 /* Phones: keep app text readable and scroll the screen sideways instead. */
 @media (max-width: 699px) {
   .feature-screenshot { padding: 10px; }
+  .feature-screenshot--wallpaper { padding: 10px; border-radius: 13px; }
   .feature-screenshot-canvas { width: var(--phone-canvas-width, 640px); }
   .feature-screenshot[data-narrow] .feature-screenshot-wide { display: none; }
   .feature-screenshot[data-narrow] .feature-screenshot-narrow { display: block; }

@@ -215,7 +215,6 @@ async fn committed_reply_recovery(pool: sqlx::PgPool, extra_passage: bool) {
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal.clone()),
     );

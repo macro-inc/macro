@@ -1,5 +1,6 @@
 //! Durable bindings between optimistic entity handles and server identities.
 
+use crate::codec;
 use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
 use serde::{Deserialize, Serialize};
@@ -185,20 +186,33 @@ pub fn alias_target(record: &Record) -> Option<&EntityKey<'static>> {
 /// read: an alias, a coalescing UUID and a deletion tombstone.
 const IDENTITY_METADATA_FIELDS: [&str; 3] = [ALIAS_FIELD, MUTATION_UUID_FIELD, DELETED_FIELD];
 
-/// `record` with only its identity metadata, its `id` and its `__typename`,
-/// or `None` when it holds no identity metadata: what a record whose copied
-/// content is retired keeps.
-pub fn identity_metadata(mut record: Record) -> Option<Record> {
+/// Drop everything from a record but its identity metadata, its `id` and its
+/// `__typename`. Returns false, and changes nothing, when it has none.
+pub fn retain_metadata(record: &mut Record) -> bool {
     if !IDENTITY_METADATA_FIELDS
         .iter()
         .any(|field| record.fields.contains_key(*field))
     {
-        return None;
+        return false;
     }
     record.fields.retain(|field, _| {
-        IDENTITY_METADATA_FIELDS.contains(&field.as_str()) || field == "id" || field == "__typename"
+        IDENTITY_METADATA_FIELDS.contains(&field.as_str())
+            || matches!(field.as_str(), "id" | "__typename")
     });
-    Some(record)
+    true
+}
+
+/// `record` as [`retain_metadata`] leaves it, or `None` when it holds no
+/// identity metadata: what a record whose copied content is retired keeps.
+pub fn identity_metadata(mut record: Record) -> Option<Record> {
+    retain_metadata(&mut record).then_some(record)
+}
+
+/// Whether the stored record `bytes` ([`codec::encode_record`]'s output)
+/// holds no identity metadata, read without decoding it; false when that
+/// cannot be told without decoding it.
+pub fn holds_no_identity_metadata(bytes: &[u8]) -> bool {
+    codec::record_keys_sort_after(bytes, &IDENTITY_METADATA_FIELDS)
 }
 
 /// Rebase normalized records and their links; arbitrary text is never rewritten.
@@ -608,5 +622,27 @@ mod tests {
                 ),
             ]))
         );
+    }
+
+    #[test]
+    fn a_records_first_bytes_tell_whether_it_holds_identity_metadata() {
+        let mut record = Record::default();
+        record
+            .fields
+            .insert("__typename".into(), CacheValue::String("Note".into()));
+        record
+            .fields
+            .insert("id".into(), CacheValue::String("1".into()));
+        record
+            .fields
+            .insert("body".into(), CacheValue::String("text ".repeat(400)));
+        let bytes = crate::codec::encode_record(&record);
+        assert!(holds_no_identity_metadata(&bytes));
+        for field in IDENTITY_METADATA_FIELDS {
+            let mut marked = record.clone();
+            marked.fields.insert(field.into(), CacheValue::Bool(true));
+            let bytes = crate::codec::encode_record(&marked);
+            assert!(!holds_no_identity_metadata(&bytes), "{field}");
+        }
     }
 }

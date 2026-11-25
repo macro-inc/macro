@@ -4,6 +4,8 @@ import {
   createContactHandler,
   getCompanyHandler,
   listCompaniesHandler,
+  mergeRecordsHandler,
+  previewMergeHandler,
   removeCompanyDomainHandler,
 } from '@app/features/crm/crm-tool-renderers';
 import { pipelineToolHandlers } from '@app/features/crm/pipeline-tool-renderers';
@@ -121,6 +123,7 @@ import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
   deleteImportEntityHandler,
+  importFromHubspotHandler,
   importFromJiraHandler,
   importFromLinearHandler,
   importFromNotionHandler,
@@ -272,6 +275,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ImportFromNotion: importFromNotionHandler,
   ImportFromLinear: importFromLinearHandler,
   ImportFromJira: importFromJiraHandler,
+  ImportFromHubspot: importFromHubspotHandler,
   ImportNotionPage: importNotionPageHandler,
   ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,
@@ -279,6 +283,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateContact: createContactHandler,
   AddCompanyDomain: addCompanyDomainHandler,
   RemoveCompanyDomain: removeCompanyDomainHandler,
+  PreviewMerge: previewMergeHandler,
+  MergeRecords: mergeRecordsHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
   ...pipelineToolHandlers,

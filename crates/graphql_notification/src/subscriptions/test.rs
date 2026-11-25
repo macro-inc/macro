@@ -179,6 +179,7 @@ async fn routine_run_notifications_stream_as_outside_soup() {
                     routine_id,
                     routine_name: "Daily digest".to_string(),
                     outcome: RoutineRunOutcome::Succeeded,
+                    apps_to_connect: Vec::new(),
                 }),
                 sender_id: None,
             },
