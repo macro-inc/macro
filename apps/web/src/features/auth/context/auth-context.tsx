@@ -54,8 +54,13 @@ export type AuthContext = {
     email: string;
     code: string;
   }): Promise<VerifyCodeResult>;
-  /** Exchanges the auth service's return-URL code for session cookies. */
-  redeemSessionToken(token: string): Promise<boolean>;
+  /**
+   * Exchanges the auth service's return-URL code for session cookies. A code
+   * from a sign-up this app started in the browser names that sign-up.
+   */
+  redeemSessionToken(token: string, appHandoffId?: string): Promise<boolean>;
+  /** Native apps: sends the person to sign up in the system browser. */
+  startAppSignup(): Promise<'opened' | 'failed'>;
   /** Refreshes everything that depends on who is signed in. */
   completeLogin(): Promise<void>;
   identify(user: { id: string; email: string | undefined }): void;

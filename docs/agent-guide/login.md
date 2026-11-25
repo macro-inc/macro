@@ -199,10 +199,44 @@ This browser flow must not open a native authentication session. Verify the
 redirect separately from provider completion; arbitrary development hostnames
 are not on the hosted OAuth redirect allowlist.
 
+## Native first screen and browser sign-up
+
+Signed out, the iOS and Android apps open on `/welcome`: `Welcome to Macro`
+with `Create new account` and `Log in` (`/login`; iOS keeps
+`Continue with Apple` there). Native `/signup` shows the same screen, and
+native `/onboarding` redirects to `/`.
+
+`Create new account` opens the web sign-up in the system browser at
+`https://www.macro.com/app/signup?app_challenge=…&app_handoff=…` (the
+development build uses `dev.macro.com`, which the app claims as its own link,
+so start the browser leg of a dev test from a browser). The app keeps the
+verifier of that challenge. The browser first ends any session it holds
+(only `/signup` takes a challenge, and the parameters leave the URL), so
+the account the app receives is the one signed in there; if it can't, the
+tab signs up without handing back. The browser tab then runs the normal sign-up and
+onboarding, plan step included; where it would enter the web app (onboarding
+finished, or an account that already existed), it shows `Your workspace is
+ready.` with `Open Macro`, a `macro:///login?token=…&app_handoff=…` link to a
+one-time code bound to the challenge (`POST /session`). `/login` redeems it
+with the verifier (`POST /session/login`) and enters the app. `Use a different
+account` signs the browser out in place and returns to sign-up. The code is
+minted ahead, again every four minutes, and a second after each tap, so
+tapping again works; a hidden tab mints only once it is shown again. The
+browser tab remembers the app in sessionStorage for a day; other tabs sign up
+normally.
+
+Check: tap `Create new account`, sign up in the browser, tap `Open Macro`,
+allow `Open in Macro?`, and land in the app signed in, both with the app still
+running and after force-quitting it. Tapping `Open Macro` a second time after
+a sign-in must not sign the app out. Traces: `auth.app_signup.start` (app),
+`auth.app_handoff.mint` (browser) and `auth.app_handoff.redeem` (app) share
+`auth.app_handoff.id`. The browser leg on its own: the onboarding fixture's
+`?app` and `?view=app`; the first screen: the auth fixture's `?page=welcome`.
+
 ## Native iOS 27
 
-The native welcome screen offers `Create new account` and `Log into existing
-account` before the login form. Startup and background/foreground resume work
+The native welcome screen offers `Create new account` and `Log in` before the
+login form. Startup and background/foreground resume work
 with the scene lifecycle enabled; Macro remains single-window on iPhone and
 iPad. The iPad welcome screen can show an `Optimized for iPhone` notice.
 Mobile resume is delivered per window, independently of ordinary focus changes.
@@ -240,8 +274,7 @@ If a signed-out page shows the bottom `Login` / `Sign Up` banner, both buttons
 must sit above Android's navigation bar. Verify that `Login` is tappable with
 three-button navigation as well as gesture navigation.
 
-The Android welcome screen also offers `Create new account` and `Log into existing
-account`. Google sign-in opens a system browser Auth Tab; completing or canceling
+The Android welcome screen also offers `Create new account` and `Log in`. Google sign-in opens a system browser Auth Tab; completing or canceling
 returns to Macro. Cancel and retry should open a fresh attempt. Enter provider
 passwords and verification codes only in that browser, never in agent messages.
 For browsers using the Custom Tabs fallback, verify that the callback returns to

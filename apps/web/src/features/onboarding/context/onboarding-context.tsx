@@ -8,6 +8,7 @@ import type {
   RoutineSuggestions,
 } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { AppHandoff } from '../core/app-handoff';
 import type { CheckoutTerms } from '../core/checkout';
 import type { EmailAccount } from '../core/email-accounts';
 import type {
@@ -197,6 +198,17 @@ export type OnboardingContext = {
    */
   startSuggestionGeneration(): void;
   createRoutinesStep(): RoutinesStepSource;
+  /**
+   * A one-time code that signs the native app into this session; it redeems
+   * only with the verifier behind the handoff's challenge. Undefined when it
+   * could not be minted.
+   */
+  mintAppSessionCode(handoff: AppHandoff): Promise<string | undefined>;
+  /**
+   * Signs this browser out in place and returns to sign-up, so another
+   * account can sign up or in. Reports its own failure.
+   */
+  signOut(): Promise<void>;
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;
   applyAccent(color: string, viewerId: string): void;

@@ -4,6 +4,7 @@ import {
 } from '@app/lib/analytics/metaClickIds';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
+import { Telemetry } from '@macro-inc/observability';
 import { authServiceClient } from '@service-auth/client';
 import type { SendCodeResult, VerifyCodeResult } from '../context/auth-context';
 
@@ -118,4 +119,30 @@ export async function exchangeSessionCode(token: string): Promise<boolean> {
   if (result.isErr())
     console.error('Failed to redeem session code', result.error);
   return result.isOk();
+}
+
+/**
+ * Redeems the session code a browser sign-up handed back to the app, with
+ * the verifier the app kept for it. The span carries the handoff id the
+ * browser's spans carry, never the code or the verifier.
+ */
+export function exchangeAppSignupCode(input: {
+  token: string;
+  handoffId: string;
+  verifier: string;
+}): Promise<boolean> {
+  return Telemetry.span('auth.app_handoff.redeem', async (span) => {
+    span.setAttr('auth.app_handoff.id', input.handoffId);
+    const result = await authServiceClient.sessionLoginVerified({
+      sessionCode: input.token,
+      verifier: input.verifier,
+    });
+    span.setAttr(
+      'auth.app_handoff.outcome',
+      result.isOk() ? 'redeemed' : 'failed'
+    );
+    if (result.isErr())
+      console.error('Failed to redeem the app sign-up code', result.error);
+    return result.isOk();
+  });
 }

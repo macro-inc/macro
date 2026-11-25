@@ -23,6 +23,11 @@ To click through by hand, run
 
 - `/?page=login` is sign-in. Use `returning@acme.com` with code `424242`; any
   other address signs up as a first-time user.
+- `/?page=welcome` is the native apps' first screen: Create new account (which
+  opens the web sign-up in the system browser) or Log in. Add `&apple` on
+  `/?page=login` for the iOS sign-in.
+- `/?page=login&token=<code>&app_handoff=<id>` is the app's return from a
+  browser sign-up, redeemed with that sign-up's verifier.
 - `/?page=signup` is the web sign-up through onboarding's opening slides.
   Add `&sso_error=admin_consent_required` (or `cancelled`, `failed`) for the
   email fallback after a Google or Microsoft sign-in comes back without a code.

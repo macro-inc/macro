@@ -107,12 +107,6 @@ export const settings = {
       viewports: BOTH_VIEWPORTS,
     },
     {
-      id: 'SX-15',
-      name: 'Mobile onboarding Connected Accounts',
-      opened: 'Native mobile onboarding',
-      viewports: [],
-    },
-    {
       id: 'SX-16',
       name: 'Sign-out "remove local drafts?" confirmation',
       opened: 'Sign out with unsynced drafts or queued sends',
@@ -694,14 +688,6 @@ export const settings = {
       action: 'Onboarding: skip the email step',
       trigger: 'button "Skip for now"',
       source: ['src/features/onboarding/components/google-accounts-step.tsx'],
-    },
-    {
-      id: 'AX-045',
-      surface: 'SX-15',
-      fn: ['F-010'],
-      action: 'Mobile onboarding: add inbox',
-      trigger: 'button "Connect Another Gmail"',
-      source: ['src/features/mobile-onboarding/OnboardingConnectAccounts.tsx'],
     },
     {
       id: 'AX-215',

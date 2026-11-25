@@ -78,6 +78,8 @@ import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLin
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
 import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
+import type { SessionCreationRequest } from './generated/schemas/sessionCreationRequest';
+import type { SessionCreationResponse } from './generated/schemas/sessionCreationResponse';
 import type { StatusUpdate } from './generated/schemas/statusUpdate';
 import type { SystemStatus } from './generated/schemas/systemStatus';
 import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
@@ -94,6 +96,7 @@ import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
+import type { VerifiedSessionLoginRequest } from './generated/schemas/verifiedSessionLoginRequest';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
@@ -377,6 +380,30 @@ export const authServiceClient = {
       userId: data.user_id,
       organizationId: data.organization_id ?? undefined,
     }));
+  },
+  /** A one-time code for the caller's session, redeemable only with the verifier behind `challenge`. */
+  async sessionCreation(args: SessionCreationRequest) {
+    return authApiFetch<SessionCreationResponse>(`/session`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  },
+  /** Redeems a code minted by `sessionCreation`, with its verifier. */
+  async sessionLoginVerified(args: VerifiedSessionLoginRequest) {
+    // Retried like sessionLogin: a server error leaves the code redeemable.
+    const result = await authApiFetch<UserTokensResponse>(`/session/login`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+      retry: { maxTries: 3, delay: 'exponential' },
+    });
+    if (result.isOk()) {
+      setAccessTokenData({
+        accessToken: result.value.access_token,
+        refreshToken: result.value.refresh_token,
+        expiresAt: getExpiresAt(result.value.access_token),
+      });
+    }
+    return result;
   },
   async sessionLogin(args: { session_code: string }) {
     // A session code redeems once. A server error leaves it redeemable (the

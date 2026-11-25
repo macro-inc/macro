@@ -24,6 +24,19 @@ function nativeAuthOutcome(result: NativeAuthResult) {
 export const DESKTOP_AUTH_CALLBACK_URL = 'macro:///login';
 
 /**
+ * Opens a URL in the system browser through the opener plugin, bypassing the
+ * app's own link routing. Resolves whether the browser was launched.
+ */
+export async function openSystemBrowser(url: string): Promise<boolean> {
+  try {
+    await invoke('plugin:opener|open_url', { url });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Hand the hosted flow to the system browser. Unlike the mobile sheet this
  * never resolves with a token: the desktop shell has no in-app browser, so
  * the session code comes back out-of-band through the `macro://` deep link.
@@ -32,14 +45,11 @@ export const DESKTOP_AUTH_CALLBACK_URL = 'macro:///login';
 export async function openDesktopAuthSession(
   authUrl: string
 ): Promise<NativeAuthResult> {
-  try {
-    await invoke('plugin:opener|open_url', { url: authUrl });
-    return { success: true };
-  } catch {
-    // Mirrors createNativeAuthSession: a bridge failure settles the caller
-    // instead of leaving the sign-in button spinning.
-    return { success: false, error: 'Unable to start authentication' };
-  }
+  // Mirrors createNativeAuthSession: a bridge failure settles the caller
+  // instead of leaving the sign-in button spinning.
+  return (await openSystemBrowser(authUrl))
+    ? { success: true }
+    : { success: false, error: 'Unable to start authentication' };
 }
 
 /** Create the callback before asking the backend to construct OAuth state. */

@@ -30,9 +30,11 @@ export type FakeAuthWorld = {
   autoCode: boolean;
   /** Session tokens the fake auth service will redeem, keyed to an email. */
   sessionTokens: Record<string, string>;
+  /** Browser sign-ups whose code the app redeemed, by handoff id. */
+  redeemedAppHandoffs: string[];
   /** Pending email login across a page reload. */
   pendingEmail: string | undefined;
-  failures: Partial<Record<'sendCode' | 'verify', string>>;
+  failures: Partial<Record<'sendCode' | 'verify' | 'openBrowser', string>>;
 };
 
 export type FakeAuthEvent = { event: string; data: unknown };
@@ -48,6 +50,7 @@ export function defaultFakeAuthWorld(): FakeAuthWorld {
     ssoDomains: [],
     autoCode: false,
     sessionTokens: {},
+    redeemedAppHandoffs: [],
     pendingEmail: undefined,
     failures: {},
   };
@@ -167,15 +170,25 @@ export function createFakeAuth(
       signIn(email);
       return { t: 'verified' };
     },
-    redeemSessionToken: async (token) => {
-      call(`redeem:${token}`);
+    redeemSessionToken: async (token, appHandoffId) => {
+      call(
+        appHandoffId ? `redeem:${token}:${appHandoffId}` : `redeem:${token}`
+      );
       const email = world.sessionTokens[token];
       if (!email) return false;
+      if (appHandoffId)
+        update((draft) => {
+          draft.redeemedAppHandoffs.push(appHandoffId);
+        });
       signIn(email);
       return true;
     },
     completeLogin: async () => {
       call('completeLogin');
+    },
+    startAppSignup: async () => {
+      call('startAppSignup');
+      return world.failures.openBrowser === undefined ? 'opened' : 'failed';
     },
     identify: (user) => {
       call(`identify:${user.id}`);

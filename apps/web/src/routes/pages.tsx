@@ -1,7 +1,5 @@
-import { Login } from '@app/features/auth/auth';
+import { Login, NativeWelcome } from '@app/features/auth/auth';
 import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
-import { MobileAuthWelcome } from '@app/features/mobile-onboarding/MobileAuthWelcome';
-import { MobileOnboarding } from '@app/features/mobile-onboarding/MobileOnboarding';
 import { Onboarding } from '@app/features/onboarding/onboarding';
 import {
   BookingReceiptPage,
@@ -11,7 +9,7 @@ import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { lazy } from '@core/util/lazy';
-import { useNavigate } from '@solidjs/router';
+import { Navigate, useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { onCleanup, onMount } from 'solid-js';
 import {
@@ -34,8 +32,9 @@ export function LoginPage() {
   return <Login />;
 }
 
+/** The native apps sign up in the system browser, from their first screen. */
 export function SignupPage() {
-  return <Login signupMode />;
+  return isNativeMobilePlatform() ? <NativeWelcome /> : <Login signupMode />;
 }
 
 /** The retired phone email capture forwards to signup, keeping attribution. */
@@ -48,11 +47,12 @@ export function MobileEmailSignupRedirect() {
 }
 
 export function WelcomePage() {
-  return isNativeMobilePlatform() ? <MobileAuthWelcome /> : <Login />;
+  return isNativeMobilePlatform() ? <NativeWelcome /> : <Login />;
 }
 
+/** The native apps onboard in the browser sign-up that made the account. */
 export function OnboardingPage() {
-  return isNativeMobilePlatform() ? <MobileOnboarding /> : <Onboarding />;
+  return isNativeMobilePlatform() ? <Navigate href="/" /> : <Onboarding />;
 }
 
 export function LoginPopupSuccess() {

@@ -1,4 +1,9 @@
 import {
+  type AppHandoff,
+  parseAppHandoff,
+  serializeAppHandoff,
+} from '../core/app-handoff';
+import {
   parseSignupDraft,
   type SignupDraft,
   serializeSignupDraft,
@@ -22,6 +27,11 @@ const KEYS = {
   pendingConnectors: 'onboarding-flow-pending-connectors',
   /** Presentation choices from the signed-out slides. */
   signupDraft: 'onboarding-signup-draft',
+  /**
+   * The native app that sent this tab to sign up and waits for its session.
+   * Per tab, so only the tab the app opened ends by handing back to it.
+   */
+  appHandoff: 'onboarding-app-handoff',
 } as const;
 
 // Storage is resolved inside the try: reading `window.localStorage` itself
@@ -161,3 +171,18 @@ export const saveSignupDraft = (draft: SignupDraft) =>
   writeSession(KEYS.signupDraft, serializeSignupDraft(draft));
 
 export const clearSignupDraft = () => writeSession(KEYS.signupDraft, undefined);
+
+/** This tab's handoff, including one still waiting for the old session to end. */
+export const readAnyAppHandoff = () =>
+  parseAppHandoff(readSession(KEYS.appHandoff), Date.now());
+
+/** This tab's handoff, once the session the browser held has ended. */
+export function readAppHandoff(): AppHandoff | undefined {
+  const handoff = readAnyAppHandoff();
+  return handoff?.signedOut ? handoff : undefined;
+}
+
+export const saveAppHandoff = (handoff: AppHandoff) =>
+  writeSession(KEYS.appHandoff, serializeAppHandoff(handoff));
+
+export const clearAppHandoff = () => writeSession(KEYS.appHandoff, undefined);

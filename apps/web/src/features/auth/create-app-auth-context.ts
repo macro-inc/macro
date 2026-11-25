@@ -3,6 +3,7 @@ import { GOOGLE_GMAIL_IDP, MICROSOFT_IDP } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
+import { syncLoginStorage } from '@core/util/cookies';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import {
   invalidateAllAfterLogin,
@@ -13,6 +14,12 @@ import { detect } from 'detect-browser';
 import { match } from 'ts-pattern';
 import type { AuthContext, AuthSession } from './context/auth-context';
 import {
+  appSignupVerifier,
+  finishAppSignups,
+  startAppSignup,
+} from './primitives/app-signup';
+import {
+  exchangeAppSignupCode,
   exchangeSessionCode,
   sendEmailCode,
   verifyEmailCode,
@@ -81,11 +88,32 @@ export function createAppAuthContext(): AuthContext {
     },
     sendEmailCode,
     verifyEmailCode,
-    redeemSessionToken: async (token) => {
-      if (!(await exchangeSessionCode(token))) return false;
+    redeemSessionToken: async (token, appHandoffId) => {
+      // A code a browser sign-up handed back redeems only with the verifier
+      // this app kept when it started that sign-up. Without it (another
+      // install, or the sign-up was forgotten) the code cannot sign in.
+      let redeemed: boolean;
+      if (appHandoffId) {
+        const verifier = appSignupVerifier(appHandoffId);
+        redeemed =
+          verifier !== undefined &&
+          (await exchangeAppSignupCode({
+            token,
+            handoffId: appHandoffId,
+            verifier,
+          }));
+      } else {
+        redeemed = await exchangeSessionCode(token);
+      }
+      if (!redeemed) return false;
+      if (appHandoffId) finishAppSignups();
+      // The cookies are HttpOnly or in the native jar: leave the hint now,
+      // or a reload before the identity refetch shows sign-in again.
+      syncLoginStorage(true);
       await completeLogin();
       return true;
     },
+    startAppSignup,
     completeLogin,
     identify: (user) =>
       analytics.identify(user.id, {

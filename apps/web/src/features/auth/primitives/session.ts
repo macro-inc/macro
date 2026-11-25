@@ -12,7 +12,8 @@ import type { AuthContext } from '../context/auth-context';
  */
 export function redeemSessionToken(
   context: Pick<AuthContext, 'redeemSessionToken' | 'notifyFailure'>,
-  token: Accessor<string | undefined>
+  token: Accessor<string | undefined>,
+  appHandoffId: Accessor<string | undefined> = () => undefined
 ) {
   const attempted = new Set<string>();
   createEffect(
@@ -24,7 +25,7 @@ export function redeemSessionToken(
       // and both have to say so.
       let redeemed = false;
       try {
-        redeemed = await context.redeemSessionToken(code);
+        redeemed = await context.redeemSessionToken(code, appHandoffId());
       } catch (error) {
         console.error('Failed to redeem session code', error);
       }

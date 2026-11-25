@@ -16,6 +16,17 @@ keep `step` when they send a first-run user into onboarding.
 Agent accounts never see this flow, including through a direct link; see
 [login](login.md#agent-accounts).
 
+## Sign-up started in the native app
+
+The iOS and Android apps send new accounts here in the system browser
+(`/app/signup?app_challenge=…&app_handoff=…`). The tab first ends any
+session the browser held (again after a reload that cut that short), then
+ends on `Your workspace is ready.` with `Open Macro` instead of entering the
+web app or showing `Macro is better on desktop.`, unless an invite or an
+agent's setup comes first. If the earlier session can't be ended, the tab
+forgets the app and finishes as an ordinary web sign-up, with no `Open
+Macro`; see [login](login.md#native-first-screen-and-browser-sign-up).
+
 ## Onboarding bypass — `/app/onboarding`
 
 In local development (`LOCAL_ONLY`), every account sees **Bypass** on every

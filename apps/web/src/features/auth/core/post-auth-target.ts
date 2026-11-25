@@ -2,6 +2,9 @@ import { sanitizeNext } from '@app/features/onboarding/core/next-target';
 
 export const AGENT_SETUP_PATH = '/agent-setup';
 
+/** Where a signed-in user with nowhere else to go lands. */
+export const DEFAULT_POST_AUTH_PATH = '/';
+
 /** Where a freshly signed-in user goes: into onboarding, or straight to a path. */
 export type PostAuthTarget =
   | { t: 'onboarding'; next: string | undefined }
@@ -38,7 +41,7 @@ export function postAuthTarget(input: {
   if (needsOnboarding && !(redirect && isInvitePath(redirect))) {
     return { t: 'onboarding', next: redirect };
   }
-  return { t: 'navigate', to: redirect ?? '/' };
+  return { t: 'navigate', to: redirect ?? DEFAULT_POST_AUTH_PATH };
 }
 
 /**
