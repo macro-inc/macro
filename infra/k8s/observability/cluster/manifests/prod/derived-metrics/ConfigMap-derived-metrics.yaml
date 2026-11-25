@@ -157,8 +157,7 @@ data:
         `set(attributes["tag.app_runtime"], String(attributes["app.runtime"])) where attributes["app.runtime"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
         `set(attributes["tag.typing_surface"], String(resource.attributes["typing.surface"])) where resource.attributes["typing.surface"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
         `set(attributes["tag.typing_surface"], String(attributes["typing.surface"])) where attributes["typing.surface"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `replace_pattern(attributes["tag.tool"], "(?s)^([A-Za-z][A-Za-z0-9_-]{0,63}): .*$", "$1") where attributes["tag.tool"] != nil`,
-        `set(attributes["tag.tool"], "other") where attributes["tag.tool"] != nil and not IsMatch(attributes["tag.tool"], "^[A-Za-z][A-Za-z0-9_-]{0,63}$")`,
+        `set(attributes["tag.tool"], "other") where attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service" and (attributes["tag.tool"] == nil or not IsMatch(attributes["tag.tool"], "^[A-Za-z][A-Za-z0-9_-]{0,63}$"))`,
       ]
       }
       output { traces = [otelcol.processor.batch.spans.input] }

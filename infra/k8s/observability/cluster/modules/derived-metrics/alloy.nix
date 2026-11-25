@@ -72,16 +72,15 @@ let
   );
 
   # A tag in `openTags` holds whatever its source says, up to whole commands:
-  # only a plain name is worth a series (and fit to store as a label).
+  # only a plain name is worth a series (and fit to store as a label). Ingest
+  # removes the name of a call that isn't one, so that is `other` too.
   openTagStatements =
-    label:
+    { select, label, ... }:
     let
       tag = attr "${prefix}${label}";
-      name = "[A-Za-z][A-Za-z0-9_-]{0,63}";
     in
     [
-      ''replace_pattern(${tag}, "(?s)^(${name}): .*$", "$1") where ${tag} != nil''
-      ''set(${tag}, "other") where ${tag} != nil and not IsMatch(${tag}, "^${name}$")''
+      ''set(${tag}, "other") where ${selected select} and (${tag} == nil or not IsMatch(${tag}, "^[A-Za-z][A-Za-z0-9_-]{0,63}$"))''
     ];
 
   metricBlock =
@@ -202,7 +201,7 @@ in
                 key: "set(${attr key}, Double(${attr key})) where ${attr key} != nil and not IsBool(${attr key})"
               ) values
               ++ lib.concatMap tagStatements tags
-              ++ lib.concatMap openTagStatements spans.openTags
+              ++ lib.concatMap openTagStatements (lib.filter (t: lib.elem t.label spans.openTags) tags)
             )
           }
         }

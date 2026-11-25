@@ -255,8 +255,8 @@ in
   inherit selections;
 
   # Tags (by label) whose value is free text: an agent harness may name a tool
-  # call by the command it runs. `name: arguments` becomes `name`, and what is
-  # no plain name becomes `other`. Datadog keeps the text.
+  # call by the command it runs. What is no plain name becomes `other`. Datadog
+  # keeps the text.
   openTags = [ "tool" ];
 
   metrics = lib.mapAttrsToList (
