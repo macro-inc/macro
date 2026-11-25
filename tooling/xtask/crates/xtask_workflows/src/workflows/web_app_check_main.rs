@@ -444,6 +444,7 @@ fn browser() -> Job {
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
         .add_step(run_agent_screen_browser_tests())
+        .add_step(run_captcha_vision_lab_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -797,6 +798,15 @@ fn run_agent_screen_browser_tests() -> Step<Run> {
         .run("bunx playwright install-deps chromium\njust test-agent-screen-browser")
         .if_condition(PATH_CHECK.outputs.agent_screen_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// The CAPTCHA vision lab is outside the root workspace: its own install, then
+/// its typecheck and tests in Playwright's Chromium, with the mock planner and
+/// the loopback provider stand-in only.
+fn run_captcha_vision_lab_tests() -> Step<Run> {
+    Step::new("CAPTCHA Vision Lab Tests")
+        .run("bun install --frozen-lockfile\nbunx playwright install-deps chromium\nbun run check")
+        .working_directory(xtask_paths::repo_dir!("packages/captcha-vision-lab"))
 }
 
 fn cycles_import_check() -> Step<Run> {
