@@ -2,7 +2,13 @@
 # (Tempo 2.x, no Kafka). Three ingesters, one per zone, every span on all
 # three (replication 3, quorum 2), each with its WAL on a gp3 volume; blocks
 # in S3. Two of each stateless part, so a rollout or a lost node keeps
-# ingest and queries up; one compactor, which only works in the background.
+# ingest and queries up, and two compactors, which share the blocks between
+# them.
+#
+# Compactors and queriers hold whole traces, so a few large ones set their
+# memory: at 1Gi both ran out on dev traffic alone, and the compactor never
+# finished a cycle, so blocks piled up unmerged and past retention. The
+# compactor also merges fewer traces per output block than Tempo's default.
 #
 # The metrics generator turns spans into span metrics and service graphs
 # and writes them to Mimir, and keeps recent blocks for TraceQL metrics.
@@ -67,7 +73,11 @@ in
           structuredConfig = {
             inherit (host.tempo) query_frontend;
             ingester.max_block_duration = host.tempo.ingester.max_block_duration;
-            compactor.compaction.block_retention = host.tempo.compactor.compaction.block_retention;
+            compactor.compaction = {
+              inherit (host.tempo.compactor.compaction) block_retention;
+              # Tempo's default is 6M.
+              max_compaction_objects = 1000000;
+            };
           };
         };
         serviceAccount.automountServiceAccountToken = false;
@@ -104,9 +114,9 @@ in
           resources = resources "1Gi" "2Gi";
         };
         distributor = stateless "distributor" 2 "128Mi" "512Mi";
-        querier = stateless "querier" 2 "256Mi" "1Gi";
+        querier = stateless "querier" 2 "512Mi" "2Gi";
         queryFrontend = stateless "query-frontend" 2 "128Mi" "512Mi";
-        compactor = stateless "compactor" 1 "256Mi" "1Gi";
+        compactor = stateless "compactor" 2 "1Gi" "3Gi";
 
         metricsGenerator = stateless "metrics-generator" 2 "256Mi" "1Gi" // {
           enabled = true;

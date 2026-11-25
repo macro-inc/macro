@@ -112,6 +112,76 @@ let
       ];
     };
   };
+  # The cluster's own health. Critical without `pages`: GoAlert notify.
+  clusterGroup = {
+    orgId = 1;
+    name = "Observability cluster";
+    folder = "Macro";
+    interval = "1m";
+    rules = [
+      {
+        uid = "cluster-tempo-compaction-stalled";
+        title = "Tempo compaction stalled (observability cluster)";
+        condition = "C";
+        data = [
+          {
+            refId = "A";
+            datasourceUid = "prometheus";
+            relativeTimeRange = {
+              from = 600;
+              to = 0;
+            };
+            model = {
+              refId = "A";
+              # The counter disappears while no compactor stays up long
+              # enough to be scraped; no series counts as zero.
+              expr = "sum(increase(tempodb_compaction_blocks_total[1h])) or vector(0)";
+              instant = true;
+            };
+          }
+          {
+            refId = "B";
+            datasourceUid = "__expr__";
+            relativeTimeRange = {
+              from = 0;
+              to = 0;
+            };
+            model = {
+              refId = "B";
+              type = "reduce";
+              expression = "A";
+              reducer = "last";
+            };
+          }
+          {
+            refId = "C";
+            datasourceUid = "__expr__";
+            relativeTimeRange = {
+              from = 0;
+              to = 0;
+            };
+            model = {
+              refId = "C";
+              type = "math";
+              expression = "$B < 1";
+            };
+          }
+        ];
+        for = "1h";
+        noDataState = "Alerting";
+        execErrState = "Error";
+        isPaused = false;
+        labels = {
+          severity = "critical";
+          pages = "false";
+        };
+        annotations = {
+          summary = "Tempo has compacted no blocks for two hours.";
+          description = "Unmerged blocks pile up, retention stops deleting, and trace queries slow down and fail. Check the tempo-compactor pods (kubectl -n observability get pods -l app.kubernetes.io/component=compactor): restarts with OOMKilled mean they need more memory (modules/backends/tempo.nix).";
+        };
+      }
+    ];
+  };
   muteAlways = "always";
   rootPolicy = builtins.head provisioning.alerting.policies.policies;
   alerting = {
@@ -162,7 +232,10 @@ let
       ];
     };
     "rules.yaml" = provisioning.alerting.rules // {
-      groups = provisioning.alerting.rules.groups ++ [ watchdog.group ];
+      groups = provisioning.alerting.rules.groups ++ [
+        watchdog.group
+        clusterGroup
+      ];
     };
   };
 
