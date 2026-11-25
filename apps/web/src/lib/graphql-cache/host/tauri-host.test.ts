@@ -1973,32 +1973,41 @@ describe('createTauriCacheHost', () => {
 
     it('opens its requests in the context it was called in', async () => {
       const host = createTauriCacheHost({ scope: 'channel-trace' });
-      let inCaller = false;
-      const openedInCaller: boolean[] = [];
+      // The caller's context lasts only until its first await, as in a
+      // browser; `active` is the context a span would open in.
+      let callerContext: string | undefined;
+      let active: string | undefined;
+      const openedIn: (string | undefined)[] = [];
       const span = Telemetry.span.bind(Telemetry);
       try {
         await host.readQuery({ query: '{ x }' });
         vi.spyOn(Telemetry, 'span').mockImplementation(((
           ...args: Parameters<typeof span>
         ) => {
-          openedInCaller.push(inCaller);
+          openedIn.push(active);
           return span(...args);
         }) as typeof Telemetry.span);
-        vi.spyOn(Telemetry, 'captureContext').mockReturnValue({
-          run: (work) => {
-            inCaller = true;
-            try {
-              return work();
-            } finally {
-              inCaller = false;
-            }
-          },
+        vi.spyOn(Telemetry, 'captureContext').mockImplementation(() => {
+          const captured = callerContext;
+          return {
+            run: (work) => {
+              active = captured;
+              try {
+                return work();
+              } finally {
+                active = undefined;
+              }
+            },
+          };
         });
         invokeMock.mockResolvedValue(page);
 
-        await host.channelTimeline(pageArgs);
+        callerContext = 'caller';
+        const answer = host.channelTimeline(pageArgs);
+        callerContext = undefined;
+        await answer;
 
-        expect(openedInCaller).toEqual([true]);
+        expect(openedIn).toEqual(['caller']);
       } finally {
         host.dispose();
       }
