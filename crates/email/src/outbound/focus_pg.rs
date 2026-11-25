@@ -509,16 +509,24 @@ impl FocusStore for FocusPgRepository {
                             LIMIT $9::bigint + 1
                         ) addressed
                     ) <= $9::bigint
-                    -- A scalar, not EXISTS: the planner turns an EXISTS into
-                    -- a hashed read of everyone's sent mail.
+                    -- Through the sender's few messages, each by its primary
+                    -- key: a scalar per message, which no plan can turn into a
+                    -- read of sent mail. As a join or an EXISTS, plans started
+                    -- from the inbox's or everyone's sent mail instead.
                     THEN COALESCE((
                         SELECT true
-                        FROM email_message_recipients r
-                        JOIN email_messages sent ON sent.id = r.message_id
-                        WHERE r.contact_id = c.contact_id
-                          AND sent.is_sent
-                          AND NOT sent.is_draft
-                          AND sent.internal_date_ts >= $5
+                        FROM (
+                            SELECT r.message_id FROM email_message_recipients r
+                            WHERE r.contact_id = c.contact_id
+                            LIMIT $9::bigint
+                        ) addressed
+                        WHERE (
+                            SELECT sent.is_sent
+                                   AND NOT sent.is_draft
+                                   AND sent.internal_date_ts >= $5
+                            FROM email_messages sent
+                            WHERE sent.id = addressed.message_id
+                        )
                         LIMIT 1
                     ), false)
                     ELSE c.contact_id IN (SELECT contact_id FROM sent_recipient)
