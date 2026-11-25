@@ -21,11 +21,9 @@ in production imports it, and it solves nothing but its own fixture. Design:
 
 ## Checks
 
-- Follow the README's Bun version instructions for `bun install --frozen-lockfile`
-  and `bun run check`. CI runs the package check in Browser Tests.
-- On NixOS, Playwright's downloaded Chromium can't load: set
-  `LAB_CHROMIUM_PATH=$(readlink -f $(which google-chrome-stable))` (or any
-  Chromium binary).
+- Follow the [runbook](README.md#runbook) to install with the dev shell's Bun
+  and run the package check with the hash-pinned lab Bun. CI runs the same
+  check in Browser Tests.
 
 ## Gotchas
 

@@ -27,6 +27,9 @@ change with the same rules.
 
 ## Flow
 
+Use the [lab runbook](../../packages/captcha-vision-lab/README.md#runbook) to
+select the pinned Bun runtime.
+
 ```text
 bun run lab:smoke -- --lab-run [--provider mock|kimi]
   └ lab service starts on 127.0.0.1:47831 (fresh HMAC secret)

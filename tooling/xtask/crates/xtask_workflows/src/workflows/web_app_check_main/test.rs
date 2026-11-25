@@ -493,6 +493,60 @@ fn browser_suites_build_the_wasm_they_load_first() {
     );
 }
 
+#[test]
+fn captcha_lab_check_uses_the_pinned_bun_in_a_clean_child_shell() {
+    let fixture = tempfile::tempdir().expect("lab runtime fixture");
+    let output = std::process::Command::new("bash")
+        .args([
+            "-ec",
+            r#"
+mkdir -p repo/bin pinned/bin node_modules/.bin
+export PINNED_BUN="$PWD/pinned"
+export BASH_ENV="$PWD/dev-env"
+cat > "$BASH_ENV" <<'EOF'
+export PATH="$PWD/repo/bin:$PATH"
+export LD_LIBRARY_PATH=/fixture/nix-libraries
+EOF
+cat > repo/bin/bun <<'EOF'
+#!/usr/bin/env bash
+test "$*" = 'install --frozen-lockfile'
+EOF
+cat > node_modules/.bin/playwright <<'EOF'
+#!/usr/bin/env bash
+test "$*" = 'install --with-deps chromium'
+EOF
+cat > repo/bin/nix <<'EOF'
+#!/usr/bin/env bash
+test "$*" = 'build --no-link --print-out-paths ../..#bun-captcha-lab' || exit 1
+printf '%s\n' "$PINNED_BUN"
+EOF
+cat > pinned/bin/bun <<'EOF'
+#!/usr/bin/env bash
+[[ -z ${BASH_ENV+x} && -z ${LD_LIBRARY_PATH+x} ]] || exit 1
+if [[ $* == 'run check' ]]; then
+  exec bash -ec 'bun probe'
+fi
+test "$*" = 'probe' && printf 'pinned Bun reached the nested script\n'
+EOF
+chmod +x repo/bin/* pinned/bin/bun node_modules/.bin/playwright
+exec bash -ec "$LAB_CHECK"
+"#,
+        ])
+        .current_dir(fixture.path())
+        .env_remove("BASH_ENV")
+        .env_remove("LD_LIBRARY_PATH")
+        .env("LAB_CHECK", CAPTCHA_LAB_CHECK)
+        .output()
+        .expect("run the lab workflow command");
+
+    assert!(
+        output.status.success(),
+        "lab workflow command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"pinned Bun reached the nested script\n");
+}
+
 /// The event details fixture replaces the calendar query modules with preview
 /// adapters, so a change to those modules runs the suite that would show a
 /// blank page when an adapter export goes missing.

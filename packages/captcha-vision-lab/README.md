@@ -16,23 +16,40 @@ stealth or evasion. The lab answers only its own quiz, only at
 
 ## Runbook
 
-Run from this directory. On NixOS, set `LAB_CHROMIUM_PATH` to a Nix-built
-Chromium or Chrome: Playwright's downloaded headless shell can't load there
-(it lacks `libgbm`). For example:
+From this directory, install with the repo dev shell's Bun 1.3.13 so the
+lockfile stays compatible with CI.
 
 ```sh
-export LAB_CHROMIUM_PATH=$(readlink -f $(which chromium || which google-chrome-stable))
-bun install --frozen-lockfile
+nix develop ../.. -c bun install --frozen-lockfile
 ```
 
-Use the repo dev shell's Bun for the install and Bun 1.4.2 for the test and
-smoke commands below. Bun 1.3.13 routes `node:http` through `HTTP_PROXY`,
-while the lab requires a direct connection to its loopback service.
+In each terminal running the lab, select the same hash-pinned Bun 1.4.2 that
+CI uses and put it first on `PATH` for child scripts. The lab's `node:http`
+client requires this version to bypass `HTTP_PROXY` on loopback requests.
+
+```sh
+lab_bun_dir=$(nix build --no-link --print-out-paths ../..#bun-captcha-lab)/bin
+export PATH="$lab_bun_dir:$PATH"
+unset BASH_ENV LD_LIBRARY_PATH
+"$lab_bun_dir/bun" --version  # 1.4.2
+```
+
+On NixOS, point `LAB_CHROMIUM_PATH` at a Nix-built Chromium or Chrome.
+
+```sh
+export LAB_CHROMIUM_PATH="$(command -v chromium || command -v google-chrome-stable)"
+```
+
+On Ubuntu, install Chromium from the locked Playwright package.
+
+```sh
+./node_modules/.bin/playwright install --with-deps chromium
+```
 
 Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
-bun run check
+"$lab_bun_dir/bun" run check
 # … 51 pass, 0 fail
 ```
 
@@ -41,7 +58,7 @@ is `solved`; the run passes when every challenge reaches a server-scored
 outcome:
 
 ```sh
-bun run lab:smoke -- --lab-run --challenges 3
+"$lab_bun_dir/bun" run lab:smoke -- --lab-run --challenges 3
 # incorrect  planner_calls=1  actions=1  planner_ms=0  tokens=-  lab-records/<run>.json
 ```
 
@@ -51,13 +68,13 @@ Kimi adapter against the loopback stand-in (no provider call). In one
 terminal:
 
 ```sh
-bun run lab:kimi-stand-in -- --port 47840 --choice B --log /tmp/stand-in.jsonl
+"$lab_bun_dir/bun" run lab:kimi-stand-in -- --port 47840 --choice B --log /tmp/stand-in.jsonl
 ```
 
 In another:
 
 ```sh
-bun run lab:smoke -- --lab-run --provider kimi \
+"$lab_bun_dir/bun" run lab:smoke -- --lab-run --provider kimi \
   --kimi-base-url http://127.0.0.1:47840/v1 --challenges 3
 wc -l /tmp/stand-in.jsonl   # 3: one request per challenge
 ```
@@ -68,7 +85,7 @@ the records:
 
 ```sh
 doppler run -p shared_ai -c lcl --only-secrets FIREWORK_API_KEY -- \
-  bun run lab:smoke -- --lab-run --provider kimi --allow-remote-provider --challenges 5
+  "$lab_bun_dir/bun" run lab:smoke -- --lab-run --provider kimi --allow-remote-provider --challenges 5
 # solved  planner_calls=1  actions=1  planner_ms=1019  tokens=734  lab-records/<run>.json
 ```
 
