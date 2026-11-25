@@ -34,16 +34,23 @@ export function createMobileFullTextSearch(
       ? searchOperatorFilters(parts().read, operatorLookup())
       : undefined
   );
-  const query = queryStateFrom(getViewPreset('search')?.filters ?? {});
+  // Read at each request: the preset follows flags that may load later.
+  const query = () => queryStateFrom(getViewPreset('search')?.filters ?? {});
   const search = createSearchState({
     surface: () => 'mobile_search',
     text: () => parts().serviceText,
     disableLocalSearch: () => true,
     enabled: () => !!parts().serviceText.trim(),
-    buildRequest: (search) => buildSoupSearchRequest(query, search),
+    buildRequest: (search) => buildSoupSearchRequest(query(), search),
   });
+  // The feed can't tell messages or calls by sender, so a sender alone, with
+  // no word for the service, lists nothing rather than every channel.
+  const needsWord = () =>
+    parts().read.groups.some((group) => group.name === 'from');
   const browsing = () =>
-    !parts().serviceText.trim() && operatorFilters() !== undefined;
+    !parts().serviceText.trim() &&
+    operatorFilters() !== undefined &&
+    !needsWord();
   const browse = useSoupAstItemsQuery(
     () => {
       const operators = operatorFilters();
@@ -51,8 +58,8 @@ export function createMobileFullTextSearch(
         params: { limit: 25, sort_method: 'updated_at' },
         body: compileToAst(
           operators
-            ? withSearchOperatorQuery(query, searchOperatorQuery(operators))
-            : query
+            ? withSearchOperatorQuery(query(), searchOperatorQuery(operators))
+            : query()
         ),
       };
     },
@@ -60,8 +67,9 @@ export function createMobileFullTextSearch(
   );
   // The types `type:` and the other operators leave are alternatives.
   const matches = createMemo(() => {
+    const preset = query();
     const inTypes = (operatorFilters()?.indexes ?? []).map((index) =>
-      createSearchResultFilter(index, query)
+      createSearchResultFilter(index, preset)
     );
     return (entity: EntityData) =>
       inTypes.length === 0 ||

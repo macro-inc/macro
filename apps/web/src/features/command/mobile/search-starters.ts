@@ -1,6 +1,12 @@
 import {
+  isUnfinishedEmailSearchOperator,
+  readsAsEmailSearchOperator,
+} from '@app/features/email-view/search/email-search-operators';
+import {
   isPhraseQuote,
+  isUnfinishedSearchOperator,
   readSearchOperators,
+  readsAsSearchOperator,
   searchOperatorIndexes,
   searchOperatorSpans,
   splitSearchTerms,
@@ -51,6 +57,17 @@ function starterOf(token: string): StarterToken | undefined {
   return undefined;
 }
 
+/** Whether the search reads `token` as an operator, or one still being typed. */
+function isOperatorToken(token: string): boolean {
+  const term = splitSearchTerms(token)[0] ?? token;
+  return (
+    readsAsSearchOperator(token) ||
+    readsAsEmailSearchOperator(token) ||
+    isUnfinishedSearchOperator(term) ||
+    isUnfinishedEmailSearchOperator(token)
+  );
+}
+
 /** The text's tokens, split by whitespace outside quotes, as typed. */
 function tokensOf(text: string): string[] {
   const tokens: string[] = [];
@@ -98,7 +115,11 @@ export function startSearchOperator(
   starter: SearchStarter
 ): string {
   const tokens = tokensOf(text);
-  const removed = tokens.map((token) => starterOf(token)?.starter === starter);
+  // Only what the search reads as the starter's operator, or one still being
+  // typed: `type:banana` is a word and stays.
+  const removed = tokens.map(
+    (token) => starterOf(token)?.starter === starter && isOperatorToken(token)
+  );
   // An `OR` that joined a removed operator goes with it.
   const joined = tokens.filter(
     (token, index) =>

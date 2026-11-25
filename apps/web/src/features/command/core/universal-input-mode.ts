@@ -33,15 +33,17 @@ export function shouldUseUniversalInputForSearch(
     at = end;
   }
   rest += text.slice(at);
+  // Whitespace stays as typed, so text without operators counts as before.
   const words = rest
-    .split(/\s+/)
-    .filter((token) => {
-      const term = splitSearchTerms(token)[0] ?? token;
+    .split(/(\s+)/)
+    .filter((part) => {
+      if (/^\s*$/.test(part)) return true;
+      const term = splitSearchTerms(part)[0] ?? part;
       return (
         !isUnfinishedSearchOperator(term) &&
-        !isUnfinishedEmailSearchOperator(token)
+        !isUnfinishedEmailSearchOperator(part)
       );
     })
-    .join(' ');
+    .join('');
   return shouldUseUniversalInput(words);
 }

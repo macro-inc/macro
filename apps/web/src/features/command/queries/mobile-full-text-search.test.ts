@@ -83,6 +83,11 @@ it('sends words with their operators, and lists operators alone through the feed
       'me@example.com'
     );
 
+    // The feed can't tell messages by sender, so a sender alone lists nothing.
+    setQuery('type:channel from:me');
+    expect(options.enabled?.()).toBe(false);
+    expect(capture.browse?.options().enabled).toBe(false);
+
     setQuery('  ');
     expect(options.enabled?.()).toBe(false);
     expect(capture.browse?.options().enabled).toBe(false);

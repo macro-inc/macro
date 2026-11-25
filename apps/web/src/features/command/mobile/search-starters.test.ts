@@ -44,6 +44,10 @@ describe('startSearchOperator', () => {
     expect(
       startSearchOperator('hello type:task OR type:doc world', 'type')
     ).toBe('hello world type:');
+    // A token the search reads as a word stays.
+    expect(startSearchOperator('type:banana launch', 'type')).toBe(
+      'type:banana launch type:'
+    );
     expect(startSearchOperator('“type:task” hello', 'type')).toBe(
       'hello type:'
     );

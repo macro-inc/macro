@@ -26,6 +26,11 @@ it('leaves typed search operators out of the phone Search length', () => {
     true
   );
   expect(shouldUseUniversalInputForSearch(operators, true)).toBe(true);
+  // Text without operators counts as typed, spaces included.
+  const spaced = `${'a'.repeat(16)}  ${'b'.repeat(16)}`;
+  expect(shouldUseUniversalInputForSearch(spaced)).toBe(
+    shouldUseUniversalInput(spaced)
+  );
   // An operator still being typed doesn't promote the search either.
   expect(
     shouldUseUniversalInputForSearch('quarterly financial planning type:')
