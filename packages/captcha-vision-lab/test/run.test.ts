@@ -4,8 +4,9 @@
  * negative case still holds a genuine, consumed capability where it can.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { relation } from '../src/families.ts';
 import { mockPlanner, type PlannerInput } from '../src/planner.ts';
-import { generateShapesQuiz, seededRandom } from '../src/quiz.ts';
+import { seededRandom } from '../src/random.ts';
 import { LAB_ORIGIN, LAB_PATH, LAB_URL } from '../src/registry.ts';
 import { runChallenge } from '../src/run.ts';
 import { createLab, type Lab, serveLab } from '../src/server.ts';
@@ -42,9 +43,10 @@ const run = (
   overrides: { capability?: string | undefined; targetUrl?: string } = {}
 ) => {
   const sessionNonce = crypto.randomUUID();
-  const issued = lab.issue(sessionNonce);
+  const issued = lab.issue('relation', sessionNonce);
   return runChallenge({
     lab,
+    family: 'relation',
     planner,
     runId: issued.runId,
     challengeId: issued.challengeId,
@@ -71,9 +73,7 @@ const injecting =
 
 const correctLabel = (seed: number): string =>
   LABELS[
-    generateShapesQuiz(seededRandom(seed)).options.findIndex(
-      (option) => option.correct
-    )
+    relation(seededRandom(seed)).options.findIndex((option) => option.correct)
   ]!;
 
 describe('a lab run with the mock planner', () => {
@@ -98,17 +98,15 @@ describe('a lab run with the mock planner', () => {
     ]);
     expect(record.gate.every((decision) => decision.allowed)).toBe(true);
     expect(inputs).toHaveLength(1);
-    expect(inputs[0]!.labels).toEqual(LABELS);
-    expect(inputs[0]!.prompt).toBe(
-      generateShapesQuiz(seededRandom(SEED)).prompt
-    );
+    expect(inputs[0]!.response).toEqual({ kind: 'choice', labels: LABELS });
+    expect(inputs[0]!.prompt).toBe(relation(seededRandom(SEED)).prompt);
     expect(lab.stats().submissions).toBe(1);
 
     // Neither the planner's input nor the record carries the seed or any
     // answer-bearing field; the record holds no option ids at all.
     const plannerText = JSON.stringify({
       prompt: inputs[0]!.prompt,
-      labels: inputs[0]!.labels,
+      response: inputs[0]!.response,
     });
     const recordText = JSON.stringify(record);
     for (const text of [plannerText, recordText]) {
@@ -134,9 +132,10 @@ describe('a lab run with the mock planner', () => {
     const lab = createLab();
     handler = lab.fetch;
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue(sessionNonce);
+    const issued = lab.issue('relation', sessionNonce);
     const input = {
       lab,
+      family: 'relation' as const,
       runId: issued.runId,
       challengeId: issued.challengeId,
       capabilityId: issued.capabilityId,
@@ -273,12 +272,13 @@ describe('the provenance gate fails closed', () => {
     const lab = createLab({ now: () => now });
     handler = lab.fetch;
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue(sessionNonce);
+    const issued = lab.issue('relation', sessionNonce);
     const { planner, inputs } = recordingPlanner('A');
     now += 30_001;
 
     const record = await runChallenge({
       lab,
+      family: 'relation',
       planner,
       ...issued,
       sessionNonce,
@@ -296,7 +296,7 @@ describe('the provenance gate fails closed', () => {
   test("another run's capability: zero planner calls and zero actions", async () => {
     const lab = createLab();
     handler = lab.fetch;
-    const other = lab.issue(crypto.randomUUID());
+    const other = lab.issue('relation', crypto.randomUUID());
     const { planner, inputs } = recordingPlanner('A');
 
     const record = await run(lab, planner, { capability: other.capability });

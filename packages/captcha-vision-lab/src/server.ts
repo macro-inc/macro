@@ -1,13 +1,15 @@
 /**
- * The lab challenge service. It generates a fresh shapes quiz per challenge,
- * keeps which option is right on the server, and scores one submission per
- * challenge. The browser sees only the prompt, opaque option ids and opaque
- * image URLs. Issuing, attesting and reading a challenge's status are
- * in-process calls for the runner, never HTTP routes.
+ * The lab challenge service. It generates a fresh challenge of the asked
+ * family, keeps the right response on the server, and scores one
+ * submission per challenge. The browser sees only the prompt, opaque option
+ * ids and opaque image URLs. Issuing, attesting and reading a challenge's
+ * status are in-process calls for the runner, never HTTP routes.
  */
 import { z } from 'zod';
 import { signCapability, verifyCapability } from './capability.ts';
-import { cryptoRandom, generateShapesQuiz, type Random } from './quiz.ts';
+import { type Challenge, FAMILIES, type FamilyName } from './families.ts';
+import { renderPage } from './page.ts';
+import { cryptoRandom, type Random } from './random.ts';
 import {
   CAPABILITY_HEADER,
   LAB_ASSET_PATH_PREFIX,
@@ -21,19 +23,16 @@ import {
 
 export type ChallengeStatus = 'pending' | 'solved' | 'incorrect' | 'expired';
 
-type Option = {
-  optionId: string;
-  label: string;
-  assetToken: string;
-  image: Uint8Array;
-  correct: boolean;
-};
-
-type Challenge = {
+type Stored = {
   runId: string;
   sessionNonce: string;
-  prompt: string;
-  options: Option[];
+  challenge: Challenge;
+  /** Opaque ids, one per option, in the challenge's option order. */
+  optionIds: string[];
+  /** Opaque image URLs' tokens and their images. */
+  assets: Map<string, Uint8Array>;
+  figureToken: string | undefined;
+  optionTokens: (string | undefined)[];
   expiresAt: number;
   opened: boolean;
   submissions: number;
@@ -56,41 +55,30 @@ export type LabStats = {
 };
 
 export type LabOptions = {
-  /** Quiz content randomness; tests pass a seeded source. */
+  /** Challenge content randomness; tests pass a seeded source. */
   random?: Random;
   now?: () => number;
   capabilityTtlMs?: number;
   challengeTtlMs?: number;
 };
 
-const LABELS = ['A', 'B', 'C', 'D'];
 const SUBMISSIONS_PER_CHALLENGE = 1;
 
 const SubmitBody = z.strictObject({
   challengeId: z.string(),
-  optionId: z.string(),
+  response: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('choice'), optionId: z.string() }),
+    z.strictObject({
+      kind: z.literal('order'),
+      optionIds: z.array(z.string()).max(8),
+    }),
+    z.strictObject({ kind: z.literal('text'), text: z.string().max(32) }),
+  ]),
 });
+type Submission = z.infer<typeof SubmitBody>['response'];
 
 const opaqueId = (): string =>
   Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString('base64url');
-
-const escapeHtml = (text: string): string =>
-  text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'none'",
-  "img-src 'self'",
-  "style-src 'unsafe-inline'",
-  "script-src 'unsafe-inline'",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "form-action 'none'",
-  "base-uri 'none'",
-].join('; ');
 
 const rejected = (): Response =>
   new Response('rejected', {
@@ -101,56 +89,86 @@ const rejected = (): Response =>
 const json = (body: { status: ChallengeStatus }, status = 200): Response =>
   Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 
-const page = (challengeId: string, challenge: Challenge): Response => {
-  const buttons = challenge.options
-    .map(
-      (option) =>
-        `<button type="button" data-lab-option="${option.optionId}">` +
-        `<span class="label">${option.label}</span>` +
-        `<img src="${LAB_ASSET_PATH_PREFIX}${option.assetToken}" alt="" width="200" height="200">` +
-        `</button>`
-    )
-    .join('');
+/**
+ * Scores a submission against the stored challenge: right, wrong, or not a
+ * well-formed response to this challenge at all (refused, no attempt used).
+ */
+const score = (
+  stored: Stored,
+  submission: Submission
+): 'solved' | 'incorrect' | 'malformed' => {
+  const { challenge, optionIds } = stored;
+  if (submission.kind === 'choice' && challenge.kind === 'choice') {
+    const index = optionIds.indexOf(submission.optionId);
+    if (index < 0) return 'malformed';
+    return challenge.options[index]!.correct ? 'solved' : 'incorrect';
+  }
 
-  // The script submits the clicked option once and shows the server's
-  // answer; it holds nothing about which option is right.
-  const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Shapes quiz</title>
-<style>
-body { font-family: sans-serif; margin: 24px; background: #fff; }
-#quiz { display: inline-block; padding: 16px; border: 1px solid #ccc; }
-#prompt { font-size: 18px; margin: 0 0 12px; }
-.options { display: grid; grid-template-columns: repeat(2, 220px); gap: 12px; }
-button { display: flex; flex-direction: column; align-items: center; padding: 6px; background: #fafafa; border: 1px solid #999; cursor: pointer; }
-.label { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
-</style></head>
-<body><main id="quiz"><p id="prompt">${escapeHtml(challenge.prompt)}</p>
-<div class="options">${buttons}</div></main>
-<p id="result" aria-live="polite"></p>
-<script>
-const challengeId = ${JSON.stringify(challengeId)};
-let sent = false;
-for (const button of document.querySelectorAll('[data-lab-option]')) {
-  button.addEventListener('click', async () => {
-    if (sent) return;
-    sent = true;
-    const response = await fetch(${JSON.stringify(LAB_SUBMIT_PATH)}, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ challengeId, optionId: button.dataset.labOption }),
-    });
-    const body = await response.json();
-    document.getElementById('result').textContent = body.status;
-  });
-}
-</script></body></html>`;
+  if (submission.kind === 'order' && challenge.kind === 'order') {
+    const indexes = submission.optionIds.map((id) => optionIds.indexOf(id));
+    const complete =
+      indexes.length === optionIds.length &&
+      new Set(indexes).size === indexes.length &&
+      indexes.every((index) => index >= 0);
+    if (!complete) return 'malformed';
+    const inOrder = indexes.every(
+      (index, position) => challenge.options[index]!.rank === position
+    );
+    return inOrder ? 'solved' : 'incorrect';
+  }
 
-  return new Response(html, {
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-store',
-      'content-security-policy': CONTENT_SECURITY_POLICY,
-    },
+  if (submission.kind === 'text' && challenge.kind === 'text') {
+    return submission.text === challenge.text ? 'solved' : 'incorrect';
+  }
+  return 'malformed';
+};
+
+/** Gives every image an opaque URL token. */
+const store = (
+  runId: string,
+  sessionNonce: string,
+  challenge: Challenge,
+  expiresAt: number
+): Stored => {
+  const assets = new Map<string, Uint8Array>();
+  const tokenFor = (image: Uint8Array | undefined): string | undefined => {
+    if (image === undefined) return undefined;
+    const token = opaqueId();
+    assets.set(token, image);
+    return token;
+  };
+  const options = challenge.kind === 'text' ? [] : challenge.options;
+  const figure = challenge.kind === 'order' ? undefined : challenge.figure;
+  return {
+    runId,
+    sessionNonce,
+    challenge,
+    optionIds: options.map(() => opaqueId()),
+    assets,
+    figureToken: tokenFor(figure),
+    optionTokens: options.map((option) => tokenFor(option.image)),
+    expiresAt,
+    opened: false,
+    submissions: 0,
+    scored: undefined,
+  };
+};
+
+const page = (challengeId: string, stored: Stored): Response => {
+  const { challenge } = stored;
+  const urlOf = (token: string | undefined) =>
+    token === undefined ? undefined : `${LAB_ASSET_PATH_PREFIX}${token}`;
+  const options = challenge.kind === 'text' ? [] : challenge.options;
+  return renderPage({
+    challengeId,
+    kind: challenge.kind,
+    prompt: challenge.prompt,
+    figureUrl: urlOf(stored.figureToken),
+    options: options.map((option, index) => ({
+      optionId: stored.optionIds[index]!,
+      label: option.label,
+      imageUrl: urlOf(stored.optionTokens[index]),
+    })),
   });
 };
 
@@ -162,39 +180,26 @@ export const createLab = ({
 }: LabOptions = {}) => {
   // A fresh signing secret per lab instance, i.e. per bench run.
   const secret = crypto.getRandomValues(new Uint8Array(32));
-  const challenges = new Map<string, Challenge>();
+  const challenges = new Map<string, Stored>();
   const consumedCapabilities = new Set<string>();
   const stats: LabStats = { pageLoads: 0, rejectedRequests: 0, submissions: 0 };
 
-  const statusOf = (challenge: Challenge): ChallengeStatus => {
+  const statusOf = (challenge: Stored): ChallengeStatus => {
     if (challenge.scored !== undefined) return challenge.scored;
     if (now() >= challenge.expiresAt) return 'expired';
     return 'pending';
   };
 
-  /** Creates a challenge for a run and the capability that opens it. */
-  const issue = (sessionNonce: string): IssuedChallenge => {
+  /** Creates a challenge of a family for a run, and the capability that opens it. */
+  const issue = (family: FamilyName, sessionNonce: string): IssuedChallenge => {
     const runId = crypto.randomUUID();
     const challengeId = opaqueId();
     const capabilityId = crypto.randomUUID();
-    const quiz = generateShapesQuiz(random);
-
-    challenges.set(challengeId, {
-      runId,
-      sessionNonce,
-      prompt: quiz.prompt,
-      options: quiz.options.map((option, index) => ({
-        optionId: opaqueId(),
-        label: LABELS[index]!,
-        assetToken: opaqueId(),
-        image: option.image,
-        correct: option.correct,
-      })),
-      expiresAt: now() + challengeTtlMs,
-      opened: false,
-      submissions: 0,
-      scored: undefined,
-    });
+    const challenge = FAMILIES[family].generate(random);
+    challenges.set(
+      challengeId,
+      store(runId, sessionNonce, challenge, now() + challengeTtlMs)
+    );
 
     const capability = signCapability(secret, {
       capabilityId,
@@ -274,13 +279,10 @@ export const createLab = ({
   };
 
   const asset = (request: Request, url: URL): Response => {
-    const challenge = sessionChallenge(request);
     const token = url.pathname.slice(LAB_ASSET_PATH_PREFIX.length);
-    const option = challenge?.options.find(
-      (candidate) => candidate.assetToken === token
-    );
-    if (option === undefined) return rejected();
-    return new Response(new Uint8Array(option.image), {
+    const image = sessionChallenge(request)?.assets.get(token);
+    if (image === undefined) return rejected();
+    return new Response(new Uint8Array(image), {
       headers: { 'content-type': 'image/png', 'cache-control': 'no-store' },
     });
   };
@@ -313,15 +315,13 @@ export const createLab = ({
       return json({ status: current }, 409);
     }
 
-    const option = challenge.options.find(
-      (candidate) => candidate.optionId === parsed.data.optionId
-    );
-    if (option === undefined) return rejected();
+    const verdict = score(challenge, parsed.data.response);
+    if (verdict === 'malformed') return rejected();
 
     challenge.submissions += 1;
     stats.submissions += 1;
-    challenge.scored = option.correct ? 'solved' : 'incorrect';
-    return json({ status: challenge.scored });
+    challenge.scored = verdict;
+    return json({ status: verdict });
   };
 
   const fetch = async (request: Request): Promise<Response> => {

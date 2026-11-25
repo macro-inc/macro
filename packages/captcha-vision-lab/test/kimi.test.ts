@@ -9,8 +9,9 @@ import {
   expect,
   test,
 } from 'bun:test';
+import { relation } from '../src/families.ts';
 import { kimiPlanner } from '../src/planner.ts';
-import { generateShapesQuiz, seededRandom } from '../src/quiz.ts';
+import { seededRandom } from '../src/random.ts';
 import { KIMI_MODEL, LAB_URL } from '../src/registry.ts';
 import { runChallenge } from '../src/run.ts';
 import { createLab, serveLab } from '../src/server.ts';
@@ -26,7 +27,7 @@ const SCREENSHOT = Uint8Array.of(137, 80, 78, 71, 1, 2, 3);
 const INPUT = {
   screenshot: SCREENSHOT,
   prompt: 'Pick the option where the red circle is above the blue square.',
-  labels: LABELS,
+  response: { kind: 'choice' as const, labels: LABELS },
 };
 
 let standIn: StandIn | undefined;
@@ -142,6 +143,117 @@ describe('the Kimi adapter', () => {
   });
 });
 
+describe('the Kimi adapter for ordered and typed responses', () => {
+  test('an order asks for every label exactly once', async () => {
+    standIn = startStandIn(() => completion('{"order":["C","A","D","B"]}'));
+    const planner = kimiPlanner({
+      baseUrl: standIn.baseUrl,
+      apiKey: 'stand-in-key',
+    });
+
+    const result = await planner.plan({
+      ...INPUT,
+      response: { kind: 'order', labels: LABELS },
+    });
+
+    expect(result.decision).toEqual({
+      kind: 'order',
+      labels: ['C', 'A', 'D', 'B'],
+    });
+    const request = standIn.requests[0] as {
+      response_format: { json_schema: { schema: { anyOf: unknown[] } } };
+    };
+    expect(request.response_format.json_schema.schema.anyOf[0]).toEqual({
+      type: 'object',
+      properties: {
+        order: {
+          type: 'array',
+          items: { type: 'string', enum: LABELS },
+          minItems: 4,
+          maxItems: 4,
+        },
+      },
+      required: ['order'],
+      additionalProperties: false,
+    });
+  });
+
+  test('text asks for exactly five digits', async () => {
+    standIn = startStandIn(() => completion('{"text":"40719"}'));
+    const planner = kimiPlanner({
+      baseUrl: standIn.baseUrl,
+      apiKey: 'stand-in-key',
+    });
+
+    const result = await planner.plan({ ...INPUT, response: { kind: 'text' } });
+
+    expect(result.decision).toEqual({ kind: 'text', text: '40719' });
+    const request = standIn.requests[0] as {
+      response_format: { json_schema: { schema: { anyOf: unknown[] } } };
+    };
+    expect(request.response_format.json_schema.schema.anyOf[0]).toEqual({
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          pattern: '^[0-9]{5}$',
+          minLength: 5,
+          maxLength: 5,
+        },
+      },
+      required: ['text'],
+      additionalProperties: false,
+    });
+  });
+
+  const outside: [string, string, 'order' | 'text'][] = [
+    ['a repeated label', '{"order":["A","A","B","C"]}', 'order'],
+    ['too few labels', '{"order":["A","B","C"]}', 'order'],
+    ['a choice for an order', '{"choice":"A"}', 'order'],
+    ['letters in the digits', '{"text":"4O719"}', 'text'],
+    ['too many digits', '{"text":"407190"}', 'text'],
+  ];
+
+  for (const [name, content, kind] of outside) {
+    test(`${name} is a closed failure`, async () => {
+      standIn = startStandIn(() => completion(content));
+      const planner = kimiPlanner({
+        baseUrl: standIn.baseUrl,
+        apiKey: 'stand-in-key',
+      });
+      const response =
+        kind === 'order'
+          ? { kind: 'order' as const, labels: LABELS }
+          : { kind: 'text' as const };
+
+      await expect(planner.plan({ ...INPUT, response })).rejects.toThrow(
+        'answer_outside_spec'
+      );
+    });
+  }
+
+  test('no content keeps the usage the provider reported', async () => {
+    standIn = startStandIn(() => ({
+      status: 200,
+      body: {
+        choices: [{ message: { content: null } }],
+        usage: { prompt_tokens: 650, completion_tokens: 64, total_tokens: 714 },
+      },
+    }));
+    const planner = kimiPlanner({
+      baseUrl: standIn.baseUrl,
+      apiKey: 'stand-in-key',
+    });
+
+    const failure = await planner.plan(INPUT).catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      code: 'no_content',
+      usage: { promptTokens: 650, completionTokens: 64, totalTokens: 714 },
+    });
+  });
+});
+
 describe('a lab run with the Kimi adapter on the stand-in', () => {
   let server: ReturnType<typeof serveLab>;
   let lab = createLab();
@@ -156,9 +268,10 @@ describe('a lab run with the Kimi adapter on the stand-in', () => {
 
   const run = (planner: ReturnType<typeof kimiPlanner>) => {
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue(sessionNonce);
+    const issued = lab.issue('relation', sessionNonce);
     return runChallenge({
       lab,
+      family: 'relation',
       planner,
       runId: issued.runId,
       challengeId: issued.challengeId,
@@ -172,7 +285,7 @@ describe('a lab run with the Kimi adapter on the stand-in', () => {
 
   test('a screenshot goes out, one choice comes back and the server scores it', async () => {
     lab = createLab({ random: seededRandom(SEED) });
-    const quiz = generateShapesQuiz(seededRandom(SEED));
+    const quiz = relation(seededRandom(SEED));
     const correct = LABELS[quiz.options.findIndex((option) => option.correct)]!;
     standIn = startStandIn(() => fixedChoiceReply(correct));
 

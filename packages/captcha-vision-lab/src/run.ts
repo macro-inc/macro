@@ -15,6 +15,8 @@ import {
   type Request,
   type Route,
 } from 'playwright';
+import { type Action, prepareAction, readSpec } from './executor.ts';
+import type { FamilyName } from './families.ts';
 import {
   checkObservations,
   checkPage,
@@ -24,6 +26,7 @@ import {
   type Observations,
 } from './gate.ts';
 import {
+  fitsSpec,
   type Planner,
   PlannerError,
   type PlannerResult,
@@ -51,6 +54,7 @@ export type Outcome =
 /** The per-challenge record. It never holds option ids, the answer or a seed. */
 export type RunRecord = {
   runId: string;
+  family: FamilyName;
   capabilityId: string | undefined;
   origin: string;
   targetUrl: string;
@@ -59,7 +63,7 @@ export type RunRecord = {
   responseModel: string | undefined;
   gate: GateDecision[];
   plannerCalls: number;
-  actions: { kind: 'choose'; label: string }[];
+  actions: Action[];
   outcome: Outcome;
   detail: string | undefined;
   usage: TokenUsage | undefined;
@@ -83,6 +87,7 @@ export type LabAuthority = {
 export type RunInput = {
   lab: LabAuthority;
   planner: Planner;
+  family: FamilyName;
   runId: string;
   challengeId: string;
   capabilityId: string | undefined;
@@ -95,8 +100,7 @@ export type RunInput = {
 
 const QUIZ_SELECTOR = '#quiz';
 const PROMPT_SELECTOR = '#prompt';
-const OPTION_SELECTOR = 'button[data-lab-option]';
-const CLICK_TIMEOUT_MS = 5_000;
+const SUBMIT_TIMEOUT_MS = 10_000;
 /**
  * Below the request allowlist, the network itself goes nowhere: every
  * connection but the lab's goes to a dead proxy (nothing listens on the
@@ -309,6 +313,7 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
   const started = performance.now();
   const record: RunRecord = {
     runId: input.runId,
+    family: input.family,
     capabilityId: input.capabilityId,
     origin: LAB_ORIGIN,
     targetUrl: input.targetUrl,
@@ -373,10 +378,10 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
 
     const quiz = page.locator(QUIZ_SELECTOR);
     const prompt = (await page.locator(PROMPT_SELECTOR).innerText()).trim();
-    const controls = page.locator(OPTION_SELECTOR).filter({ visible: true });
-    const labels = (await controls.locator('.label').allInnerTexts()).map(
-      (label) => label.trim()
-    );
+    const spec = await readSpec(page, input.family);
+    if (spec === undefined) {
+      return finish('action_error', 'page_lacks_family_controls');
+    }
     const screenshot = await quiz.screenshot({ type: 'png' });
 
     // Reading the page takes time too: check again that what the planner
@@ -391,28 +396,31 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     const plannerStarted = performance.now();
     let planned: PlannerResult;
     try {
-      planned = await input.planner.plan({ screenshot, prompt, labels });
+      planned = await input.planner.plan({
+        screenshot,
+        prompt,
+        response: spec,
+      });
     } catch (error) {
       record.timings.plannerMs = Math.round(performance.now() - plannerStarted);
+      if (error instanceof PlannerError) record.usage = error.usage;
       return finish('model_error', failureCode(error));
     }
     record.timings.plannerMs = Math.round(performance.now() - plannerStarted);
     record.usage = planned.usage;
     record.responseModel = planned.responseModel;
 
-    if (planned.decision.kind === 'abort') {
+    const { decision } = planned;
+    if (decision.kind === 'abort') {
       // The abort's reason is model output: record that it aborted, not why.
       return finish('aborted', 'model_aborted');
     }
-    const label = planned.decision.label;
-    if (!labels.includes(label)) {
-      return finish('model_error', 'choice is not a visible option label');
+    if (!fitsSpec(decision, spec)) {
+      return finish('model_error', 'answer_outside_spec');
     }
-    const control = controls.filter({
-      has: page.locator('.label').getByText(label, { exact: true }),
-    });
-    if ((await control.count()) !== 1) {
-      return finish('action_error', 'no single control for the chosen label');
+    const prepared = await prepareAction(page, decision);
+    if (prepared === undefined) {
+      return finish('action_error', 'no_single_control');
     }
 
     const actionRejection = rejectedBy(
@@ -420,15 +428,16 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     );
     if (actionRejection !== undefined) return actionRejection;
 
-    // Exactly one action: click the chosen option's registered control,
-    // which submits it once.
-    record.actions.push({ kind: 'choose', label });
+    // Exactly one action through the quiz's own controls, which submit
+    // once.
+    record.actions.push(prepared.action);
     try {
       await Promise.all([
         page.waitForResponse(
-          (response) => response.url() === `${LAB_ORIGIN}${LAB_SUBMIT_PATH}`
+          (response) => response.url() === `${LAB_ORIGIN}${LAB_SUBMIT_PATH}`,
+          { timeout: SUBMIT_TIMEOUT_MS }
         ),
-        control.click({ timeout: CLICK_TIMEOUT_MS }),
+        prepared.perform(),
       ]);
     } catch (error) {
       return finish('action_error', failureCode(error));

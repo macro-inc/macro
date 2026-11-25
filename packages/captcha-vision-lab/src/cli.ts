@@ -1,22 +1,31 @@
 /**
- * `bun run lab:smoke -- --lab-run [--provider mock|kimi] ...`: the only way to
- * run the lab. It starts the lab service on its registered loopback origin,
- * runs a few fresh challenges, writes one JSON record per challenge and exits
- * non-zero if any challenge did not reach a server-scored outcome.
+ * `bun run lab:smoke -- --lab-run [--family <name>|all] [--provider mock|kimi]
+ * ...`: the only way to run the lab. It starts the lab service on its
+ * registered loopback origin, runs a few fresh challenges of each asked
+ * family, writes one JSON record per challenge and exits non-zero if any
+ * challenge did not reach a server-scored outcome.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { kimiPlanner, mockPlanner, type Planner } from './planner.ts';
+import { FAMILY_NAMES, type FamilyName } from './families.ts';
+import {
+  kimiPlanner,
+  mockPlanner,
+  type Planner,
+  type PlannerInput,
+} from './planner.ts';
 import { FIREWORKS_BASE_URL, KIMI_MODEL, LAB_URL } from './registry.ts';
 import { runChallenge } from './run.ts';
 import { createLab, serveLab } from './server.ts';
 
-const MAX_CHALLENGES = 5;
+/** Per family, per run. */
+const MAX_CHALLENGES = 10;
 
 const { values } = parseArgs({
   options: {
     'lab-run': { type: 'boolean', default: false },
+    family: { type: 'string', default: 'relation' },
     provider: { type: 'string', default: 'mock' },
     'mock-choice': { type: 'string', default: 'A' },
     'kimi-base-url': { type: 'string', default: FIREWORKS_BASE_URL },
@@ -44,6 +53,33 @@ if (
   fail(`--challenges must be 1 to ${MAX_CHALLENGES}`);
 }
 
+const isFamily = (name: string): name is FamilyName =>
+  FAMILY_NAMES.some((family) => family === name);
+
+const familiesFor = (name: string): readonly FamilyName[] => {
+  if (name === 'all') return FAMILY_NAMES;
+  if (isFamily(name)) return [name];
+  return fail(`--family must be all or one of ${FAMILY_NAMES.join(', ')}`);
+};
+
+const families = familiesFor(values.family);
+
+/**
+ * The mock answers blindly: the given label (or the first) for a choice,
+ * the labels as shown for an order, zeros for text.
+ */
+const mockDecision = ({ response }: PlannerInput) => {
+  if (response.kind === 'text') {
+    return { kind: 'text' as const, text: '00000' };
+  }
+  if (response.kind === 'order') {
+    return { kind: 'order' as const, labels: response.labels };
+  }
+  const wanted = values['mock-choice'];
+  const label = response.labels.includes(wanted) ? wanted : response.labels[0]!;
+  return { kind: 'choice' as const, label };
+};
+
 const loopback = (baseUrl: string): boolean => {
   const host = new URL(baseUrl).hostname;
   return host === '127.0.0.1' || host === 'localhost' || host === '[::1]';
@@ -51,8 +87,7 @@ const loopback = (baseUrl: string): boolean => {
 
 const plannerFor = (provider: string): Planner => {
   if (provider === 'mock') {
-    const choice = values['mock-choice'];
-    return mockPlanner(() => ({ kind: 'choice', label: choice }));
+    return mockPlanner(mockDecision);
   }
   if (provider !== 'kimi') return fail(`unknown --provider ${provider}`);
 
@@ -85,12 +120,16 @@ const lab = createLab();
 const server = serveLab(lab.fetch);
 let unscored = 0;
 try {
-  for (let index = 0; index < challenges; index++) {
+  const runs = families.flatMap((family) =>
+    Array.from({ length: challenges }, () => family)
+  );
+  for (const family of runs) {
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue(sessionNonce);
+    const issued = lab.issue(family, sessionNonce);
     const record = await runChallenge({
       lab,
       planner,
+      family,
       runId: issued.runId,
       challengeId: issued.challengeId,
       capabilityId: issued.capabilityId,
@@ -104,7 +143,8 @@ try {
     writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
     console.log(
       `${record.outcome}\tplanner_calls=${record.plannerCalls}\tactions=${record.actions.length}` +
-        `\tplanner_ms=${record.timings.plannerMs ?? '-'}\ttokens=${record.usage?.totalTokens ?? '-'}\t${file}`
+        `\tplanner_ms=${record.timings.plannerMs ?? '-'}\ttokens=${record.usage?.totalTokens ?? '-'}` +
+        `\tfamily=${family}\t${file}`
     );
     if (record.outcome !== 'solved' && record.outcome !== 'incorrect') {
       unscored += 1;

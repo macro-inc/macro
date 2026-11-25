@@ -1,22 +1,31 @@
 /**
  * Planners see a PNG crop of the quiz and its visible prompt, and answer with
- * one of the visible option labels or an abort. Nothing else: no DOM, no
- * accessibility tree, no option ids, no answer.
+ * the family's own bounded response: one visible label, every visible label
+ * once in order, or a short string of digits; or an abort. Nothing else: no
+ * DOM, no accessibility tree, no option ids, no answer, no coordinates.
  */
 import { z } from 'zod';
+import { TEXT_LENGTH, TEXT_PATTERN } from './families.ts';
 import { KIMI_MODEL } from './registry.ts';
+
+/** What the planner may answer, from the family and the visible page. */
+export type ResponseSpec =
+  | { kind: 'choice'; labels: string[] }
+  | { kind: 'order'; labels: string[] }
+  | { kind: 'text' };
 
 export type PlannerInput = {
   /** PNG screenshot of the quiz region. */
   screenshot: Uint8Array;
   /** The quiz's visible prompt text. */
   prompt: string;
-  /** The visible option labels, e.g. A to D. */
-  labels: string[];
+  response: ResponseSpec;
 };
 
 export type PlannerDecision =
   | { kind: 'choice'; label: string }
+  | { kind: 'order'; labels: string[] }
+  | { kind: 'text'; text: string }
   | { kind: 'abort'; reason: string };
 
 export type TokenUsage = {
@@ -32,9 +41,15 @@ export type PlannerResult = {
   responseModel: string | undefined;
 };
 
-/** A planner failure, described by a fixed code so no model output is kept. */
+/**
+ * A planner failure, described by a fixed code so no model output is kept,
+ * with the call's token usage when the provider reported it.
+ */
 export class PlannerError extends Error {
-  constructor(readonly code: string) {
+  constructor(
+    readonly code: string,
+    readonly usage: TokenUsage | undefined = undefined
+  ) {
     super(code);
     this.name = 'PlannerError';
   }
@@ -44,6 +59,29 @@ export type Planner = {
   provider: 'mock' | 'kimi';
   model: string;
   plan: (input: PlannerInput) => Promise<PlannerResult>;
+};
+
+/** Whether a decision is one the spec allows. */
+export const fitsSpec = (
+  decision: PlannerDecision,
+  spec: ResponseSpec
+): boolean => {
+  if (decision.kind === 'abort') return true;
+  if (decision.kind === 'choice' && spec.kind === 'choice') {
+    return spec.labels.includes(decision.label);
+  }
+  if (decision.kind === 'order' && spec.kind === 'order') {
+    const { labels } = decision;
+    return (
+      labels.length === spec.labels.length &&
+      new Set(labels).size === labels.length &&
+      labels.every((label) => spec.labels.includes(label))
+    );
+  }
+  if (decision.kind === 'text' && spec.kind === 'text') {
+    return TEXT_PATTERN.test(decision.text);
+  }
+  return false;
 };
 
 /** A deterministic planner for CI and the mock smoke run. */
@@ -59,43 +97,74 @@ export const mockPlanner = (
   }),
 });
 
-const SYSTEM_PROMPT =
-  'You answer a visual shapes quiz from a lab test fixture. The image shows ' +
-  'a prompt and four options, each labelled with a letter. Reply with JSON ' +
-  'only: {"choice": "<label>"} for the option that matches the prompt, or ' +
-  '{"abort": "<short reason>"} if you cannot tell.';
+const strictObject = (property: string, schema: object) => ({
+  type: 'object',
+  properties: { [property]: schema },
+  required: [property],
+  additionalProperties: false,
+});
 
-/** The strict schema the model must answer with. */
-export const answerSchema = (labels: string[]) => ({
+/** The response itself, per kind, as JSON Schema. */
+const responseSchema = (spec: ResponseSpec) => {
+  if (spec.kind === 'text') {
+    return strictObject('text', {
+      type: 'string',
+      pattern: TEXT_PATTERN.source,
+      minLength: TEXT_LENGTH,
+      maxLength: TEXT_LENGTH,
+    });
+  }
+  if (spec.kind === 'order') {
+    return strictObject('order', {
+      type: 'array',
+      items: { type: 'string', enum: spec.labels },
+      minItems: spec.labels.length,
+      maxItems: spec.labels.length,
+    });
+  }
+  return strictObject('choice', { type: 'string', enum: spec.labels });
+};
+
+/** The strict schema the model must answer with: the response or an abort. */
+export const answerSchema = (spec: ResponseSpec) => ({
   name: 'lab_quiz_answer',
   strict: true,
   schema: {
     anyOf: [
-      {
-        type: 'object',
-        properties: { choice: { type: 'string', enum: labels } },
-        required: ['choice'],
-        additionalProperties: false,
-      },
-      {
-        type: 'object',
-        properties: { abort: { type: 'string', maxLength: 200 } },
-        required: ['abort'],
-        additionalProperties: false,
-      },
+      responseSchema(spec),
+      strictObject('abort', { type: 'string', maxLength: 200 }),
     ],
   },
 });
 
+const INSTRUCTIONS: Record<ResponseSpec['kind'], string> = {
+  choice:
+    'Reply with JSON only: {"choice": "<label>"} for the option that ' +
+    'matches the prompt.',
+  order:
+    'Reply with JSON only: {"order": ["<label>", ...]} listing every ' +
+    'option label exactly once, in the order the prompt asks for.',
+  text:
+    'Reply with JSON only: {"text": "<digits>"} with exactly the digits ' +
+    'shown, left to right.',
+};
+
+const systemPrompt = (spec: ResponseSpec): string =>
+  'You answer a visual quiz from a lab test fixture. The image shows the ' +
+  `prompt and the quiz. ${INSTRUCTIONS[spec.kind]} If you cannot tell, ` +
+  'reply {"abort": "<short reason>"}.';
+
 const Answer = z.union([
   z.strictObject({ choice: z.string() }),
+  z.strictObject({ order: z.array(z.string()).max(8) }),
+  z.strictObject({ text: z.string().max(32) }),
   z.strictObject({ abort: z.string().max(200) }),
 ]);
 
 const Completion = z.object({
   model: z.string().optional(),
   choices: z
-    .array(z.object({ message: z.object({ content: z.string() }) }))
+    .array(z.object({ message: z.object({ content: z.string().nullable() }) }))
     .min(1),
   usage: z
     .object({
@@ -105,6 +174,13 @@ const Completion = z.object({
     })
     .optional(),
 });
+
+const toDecision = (answer: z.infer<typeof Answer>): PlannerDecision => {
+  if ('choice' in answer) return { kind: 'choice', label: answer.choice };
+  if ('order' in answer) return { kind: 'order', labels: answer.order };
+  if ('text' in answer) return { kind: 'text', text: answer.text };
+  return { kind: 'abort', reason: answer.abort };
+};
 
 export type KimiPlannerOptions = {
   /** An OpenAI-compatible base URL, e.g. Fireworks or a loopback stand-in. */
@@ -127,7 +203,7 @@ export const kimiPlanner = ({
 }: KimiPlannerOptions): Planner => ({
   provider: 'kimi',
   model,
-  plan: async ({ screenshot, prompt, labels }) => {
+  plan: async ({ screenshot, prompt, response: spec }) => {
     const image = Buffer.from(screenshot).toString('base64');
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -145,10 +221,10 @@ export const kimiPlanner = ({
         max_tokens: 64,
         response_format: {
           type: 'json_schema',
-          json_schema: answerSchema(labels),
+          json_schema: answerSchema(spec),
         },
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt(spec) },
           {
             role: 'user',
             content: [
@@ -168,34 +244,31 @@ export const kimiPlanner = ({
 
     const completion = Completion.safeParse(await response.json());
     if (!completion.success) throw new PlannerError('malformed_completion');
-    let content: unknown;
+    const reported = completion.data.usage;
+    const usage =
+      reported === undefined
+        ? undefined
+        : {
+            promptTokens: reported.prompt_tokens,
+            completionTokens: reported.completion_tokens,
+            totalTokens: reported.total_tokens,
+          };
+
+    const content = completion.data.choices[0]!.message.content;
+    if (content === null) throw new PlannerError('no_content', usage);
+    let parsed: unknown;
     try {
-      content = JSON.parse(completion.data.choices[0]!.message.content);
+      parsed = JSON.parse(content);
     } catch {
-      throw new PlannerError('answer_not_json');
+      throw new PlannerError('answer_not_json', usage);
     }
-    const answer = Answer.safeParse(content);
-    if (!answer.success) throw new PlannerError('answer_off_schema');
-    const decision: PlannerDecision =
-      'choice' in answer.data
-        ? { kind: 'choice', label: answer.data.choice }
-        : { kind: 'abort', reason: answer.data.abort };
-    if (decision.kind === 'choice' && !labels.includes(decision.label)) {
-      throw new PlannerError('label_not_on_page');
+    const answer = Answer.safeParse(parsed);
+    if (!answer.success) throw new PlannerError('answer_off_schema', usage);
+    const decision = toDecision(answer.data);
+    if (!fitsSpec(decision, spec)) {
+      throw new PlannerError('answer_outside_spec', usage);
     }
 
-    const { usage } = completion.data;
-    return {
-      decision,
-      responseModel: completion.data.model,
-      usage:
-        usage === undefined
-          ? undefined
-          : {
-              promptTokens: usage.prompt_tokens,
-              completionTokens: usage.completion_tokens,
-              totalTokens: usage.total_tokens,
-            },
-    };
+    return { decision, responseModel: completion.data.model, usage };
   },
 });
