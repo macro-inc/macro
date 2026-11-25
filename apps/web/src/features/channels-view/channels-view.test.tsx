@@ -165,6 +165,7 @@ vi.mock('@components/app/PreviewPanel', () => ({
   ),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitPanel: () => undefined,
   useSplitPanelOrThrow: () => ({
     handle: {
       setDisplayName: vi.fn(),

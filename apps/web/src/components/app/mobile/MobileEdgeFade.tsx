@@ -86,9 +86,10 @@ function SafeAreaColumnFades(props: {
     // area appearing, a pane sliding back into place after a swipe, or the
     // frame's padding swapping sides when the phone turns over.
     onCleanup(
+      // Its defaults watch resizes and moves (layout shift) wherever the
+      // observers exist.
       autoUpdate(fade, fade, () => setPlacement(columnPlacement(fade)), {
         ancestorScroll: false,
-        layoutShift: true,
       })
     );
   });

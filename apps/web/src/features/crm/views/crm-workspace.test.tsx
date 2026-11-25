@@ -80,6 +80,7 @@ vi.mock('@components/app/split-layout/context', async () => {
   return {
     SplitLayoutContext: createContext(),
     SplitPanelContext: createContext({
+      isPanelActive: () => true,
       panelSize: {
         get width() {
           return fixture.width;
