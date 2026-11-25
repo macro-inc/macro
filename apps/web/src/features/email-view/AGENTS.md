@@ -130,8 +130,8 @@ the Soup-backed thread list, and saved email views.
   attachment flags are not indexed for, and the Focus, Reminders and CRM email
   lists only refine the rows they loaded with the facet's own predicate, which
   applies the same MIME prefixes as the flags. A list with that clause is server
-  membership, so it refetches when a pushed thread carries attachments
-  (`mail-list-revalidation.ts`).
+  membership, so it refetches when a pushed thread carries attachments and
+  after the Soup socket reconnects (`mail-list-revalidation.ts`).
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - The data source keeps the previous rows while a search loads only when

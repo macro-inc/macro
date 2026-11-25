@@ -55,14 +55,19 @@ function carriesAttachment(patch: SoupPatch): boolean {
 /**
  * The local Mail projection has no attachment facts, so a list filtered by
  * attachment kind reads the server and the cache cannot place an arriving
- * thread in it. Mounted lists with that filter refetch when one arrives.
+ * thread in it. Mounted lists with that filter refetch when one arrives, and
+ * after the Soup socket reconnects, since what it pushed meanwhile is lost.
  */
+export function revalidateMailAttachmentLists(): Promise<void> {
+  return refreshActiveGraphqlSoupQueries({
+    where: filtersByAttachment,
+    unmaintainedOnly: true,
+  });
+}
+
 export async function revalidateMailAttachmentListsForSoupUpdates(
   patches: readonly SoupPatch[]
 ): Promise<void> {
   if (!patches.some(carriesAttachment)) return;
-  await refreshActiveGraphqlSoupQueries({
-    where: filtersByAttachment,
-    unmaintainedOnly: true,
-  });
+  await revalidateMailAttachmentLists();
 }
