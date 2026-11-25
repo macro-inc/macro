@@ -354,6 +354,7 @@ pub(super) fn snapshot(
         folder_id: Some(ProviderId::new("folder").unwrap()),
         tags: vec!["TRASH".into()],
         version: Some(version.into()),
+        draft_content: None,
     }
 }
 
