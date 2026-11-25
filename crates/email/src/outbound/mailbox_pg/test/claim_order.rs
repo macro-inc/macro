@@ -112,6 +112,7 @@ async fn a_new_import_reads_its_inbox_then_sent_before_folders_listed_ahead_of_t
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     // Graph lists folders alphabetically.
     let folder = |id: &str, role: FolderRole| MailFolder {
@@ -121,6 +122,7 @@ async fn a_new_import_reads_its_inbox_then_sent_before_folders_listed_ahead_of_t
         role,
         has_children: false,
         total_items: Some(100),
+        sync_enabled: true,
     };
     repo.commit_catalog(
         &discovery,
