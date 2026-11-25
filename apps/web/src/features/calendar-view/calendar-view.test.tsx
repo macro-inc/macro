@@ -331,3 +331,71 @@ describe('bounded calendar preload window', () => {
     }
   );
 });
+
+describe('hidden viewport unlock recovery', () => {
+  it.each(['hidden', 'held', 'queued', 'queued-multi', 'mid-slide', 'reduced'])(
+    'resumes the committed page without losing navigation (%s)',
+    async (mode) => {
+      vi.useFakeTimers();
+      vi.stubGlobal('matchMedia', () => ({ matches: mode === 'reduced' }));
+      let width = 100;
+      const viewport = document.createElement('div');
+      Object.defineProperty(viewport, 'clientWidth', { get: () => width });
+      const pager = createSnapPager();
+      const detach = pager.attachViewport(viewport);
+      try {
+        await vi.advanceTimersByTimeAsync(20);
+        viewport.scrollLeft = 270;
+        const queued = mode === 'queued' || mode === 'queued-multi';
+        const held = mode === 'held' || queued;
+        if (held) viewport.dispatchEvent(new Event('touchstart'));
+        pager.setLocked(true);
+        if (mode !== 'mid-slide') width = 0;
+        pager.setLocked(false);
+        if (queued) pager.goTo(5);
+        if (mode === 'mid-slide') {
+          await vi.advanceTimersByTimeAsync(32);
+          width = 0;
+        }
+        viewport.scrollLeft = 0;
+        pager.resize();
+        if (mode !== 'hidden' && mode !== 'reduced') {
+          viewport.dispatchEvent(new Event('scroll'));
+          viewport.dispatchEvent(new Event('scrollend'));
+        }
+        if (mode === 'held')
+          window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+        await vi.advanceTimersByTimeAsync(500);
+        expect(pager.position()).toBe(0);
+        expect(viewport.scrollLeft).toBe(0);
+        width = 100;
+        if (mode !== 'hidden' && mode !== 'reduced') {
+          viewport.dispatchEvent(new Event('scroll'));
+          viewport.dispatchEvent(new Event('scrollend'));
+        }
+        pager.resize();
+        if (queued) {
+          if (mode === 'queued-multi')
+            viewport.dispatchEvent(new Event('touchstart'));
+          expect(viewport.scrollLeft).toBe(0);
+          window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+        }
+        await vi.advanceTimersByTimeAsync(800);
+        const position = queued ? 5 : 0;
+        expect(pager.position()).toBe(position);
+        expect(pager.phase()).toBe('idle');
+        expect(viewport.scrollLeft).toBe(200);
+        expect(viewport.style.scrollSnapType).toBe('');
+        viewport.dispatchEvent(new Event('touchstart'));
+        viewport.scrollLeft = 270;
+        viewport.dispatchEvent(new Event('scroll'));
+        window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+        viewport.dispatchEvent(new Event('scrollend'));
+        await vi.advanceTimersByTimeAsync(200);
+        expect(pager.position()).toBe(position + 1);
+      } finally {
+        detach();
+      }
+    }
+  );
+});

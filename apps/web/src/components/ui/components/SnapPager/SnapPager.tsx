@@ -150,6 +150,8 @@ export function createSnapPager(
   let rapidNavigation = false;
   let unreportedMovement = 0;
   let alignmentTarget: number | undefined;
+  // Unlock targets the committed page, not a hidden viewport's clamped offset.
+  let unlockAlignmentPending = false;
   let releaseVelocity = 0;
   let scrollObserved = false;
   let sample = { left: 0, at: 0, velocity: 0 };
@@ -266,6 +268,8 @@ export function createSnapPager(
   // These passive lifecycle listeners never drive scrolling. They only prevent
   // a fallback timer from recycling pages beneath a finger that stopped moving.
   const touchStart = () => {
+    // Additional fingers belong to the held gesture, not a new navigation.
+    if (touchHeld) return;
     touchHeld = true;
     beginNativeScroll();
     clearTimer();
@@ -361,6 +365,7 @@ export function createSnapPager(
   const animateTo = (element: HTMLDivElement, target: number) => {
     cancelAnimation();
     clearNativeWatch();
+    if (!element.clientWidth) return;
     const start = element.scrollLeft;
     const reduced = window.matchMedia?.(
       '(prefers-reduced-motion: reduce)'
@@ -374,6 +379,11 @@ export function createSnapPager(
     const startedAt = Date.now();
     programmaticAnimating = true;
     const advance = () => {
+      if (!element.clientWidth) {
+        animationFrame = undefined;
+        programmaticAnimating = false;
+        return;
+      }
       const progress = Math.min(
         1,
         (Date.now() - startedAt) / SNAP_ANIMATION_MS
@@ -409,6 +419,7 @@ export function createSnapPager(
     nativeScroll = false;
     alignmentTarget = undefined;
     releaseVelocity = 0;
+    unlockAlignmentPending = false;
     scrollObserved = false;
     sample = { left: 0, at: 0, velocity: 0 };
   };
@@ -505,6 +516,7 @@ export function createSnapPager(
       return;
     }
     alignmentTarget = undefined;
+    unlockAlignmentPending = false;
     releaseVelocity = 0;
     nativeScroll = false;
     if (moved === 0) {
@@ -526,7 +538,13 @@ export function createSnapPager(
   };
 
   const realignAfterResize = (width: number) => {
-    if (!attached || gestureHeld() || nativeScroll) return false;
+    if (!attached || !width || gestureHeld()) return false;
+    if (unlockAlignmentPending) {
+      if (nativeScroll) watchNativeEnd();
+      else animateTo(attached, middle * width);
+      return true;
+    }
+    if (nativeScroll) return false;
     if (pending !== 0) {
       // Keep the logical destination even if the old smooth scroll ends late.
       alignmentTarget = Math.max(-middle, Math.min(middle, pending));
@@ -542,7 +560,9 @@ export function createSnapPager(
     const width = attached.clientWidth;
     if (!measuredWidth) {
       measuredWidth = width;
-      return false;
+      return unlockAlignmentPending && width > 0
+        ? realignAfterResize(width)
+        : false;
     }
     if (width === measuredWidth) return false;
     measuredWidth = width;
@@ -571,7 +591,7 @@ export function createSnapPager(
       return;
     if (phase() === 'idle' && pending === 0) beginNativeScroll();
     scrollObserved = true;
-    if (nativeScroll && gestureHeld()) {
+    if (nativeScroll && gestureHeld() && !unlockAlignmentPending) {
       const now = Date.now();
       const left = attached?.scrollLeft ?? 0;
       const elapsed = now - sample.at;
@@ -583,6 +603,7 @@ export function createSnapPager(
     }
     if (
       gestureHeld() &&
+      !unlockAlignmentPending &&
       queuedJump !== undefined &&
       attached?.scrollLeft !== queuedAtScrollLeft
     )
@@ -629,6 +650,7 @@ export function createSnapPager(
     const animating =
       options.discrete?.() && phase() !== 'idle' && pending !== 0;
     pending = target - position();
+    unlockAlignmentPending = false;
     alignmentTarget = undefined;
     if (rapid || animating || Math.abs(pending) > middle) {
       clearTimer();
@@ -740,6 +762,7 @@ export function createSnapPager(
           attached.scrollLeft = left;
         } else {
           // The lock cancelled the request, not committed the partial viewport.
+          unlockAlignmentPending = true;
           alignmentTarget = 0;
           setPhase('scrolling');
           nativeScroll = gestureHeld();

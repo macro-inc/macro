@@ -40,4 +40,8 @@ stable `key`, `position`, and relative `offset`.
 - Discrete desktop mode turns horizontal wheel gestures into one step.
 - `onSettle` reports total movement after recycling, including zero-move cancellation.
 - Lock paging during child drag/resize; unlocking realigns the current page after
-  contact ends. No recovery writes the viewport while contact or momentum moves it.
+  contact ends. Unlock alignment retains its committed target through zero width
+  and ignores layout clamping until recovery finishes. It resumes on reveal, after
+  contact and momentum end, without cancelling a queued date jump.
+  The cancelled contact cannot restart period navigation; a fresh contact can
+  supersede recovery normally.
