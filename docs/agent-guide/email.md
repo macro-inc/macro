@@ -83,10 +83,16 @@ flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
 Signal; selecting it while in Focus or Noise keeps that tab.
 By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
 `Scheduled`, and `Reminders` (when enabled), followed by **Library** (`All mail`,
-`Archived`, `Shared`, `Spam`, and `Trash`) and **Saved views** (flagged, see
-[Saved email views](#saved-email-views)). Drag the Library or Saved views
-heading before or after the unnamed Inbox/Favorites/Drafts/Sent group to change
-their shared local order. The unnamed group has no grip or keyboard move control.
+`Archived`, `Shared`, `Spam`, and `Trash`), **Labels** and **Saved views**
+(flagged, see [Saved email views](#saved-email-views)). Labels lists the labels
+people made in the inboxes the account picker shows, a row per inbox when it
+shows all of them, nested Gmail labels as a tree; each inbox shows eight, then
+`N more`, which also holds the labels Gmail hides from its own list. It shows no
+counts and is missing while there are no labels. A label opens `All mail`
+filtered to it alone, and the header names it; choosing the open label again
+shows `All mail` without it. On phone the section comes last in the sheet. Drag
+the Library, Labels or Saved views heading before or after the unnamed
+Inbox/Favorites/Drafts/Sent group to change their shared local order. The unnamed group has no grip or keyboard move control.
 Accounts stays pinned at the top and is not a drop target. Section order is per
 account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
 tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or

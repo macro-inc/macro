@@ -63,7 +63,7 @@ export function EmailViewBreadcrumbItem() {
   const {
     shownTab,
     showsInboxTabs,
-    tagViewTitle,
+    filterViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
@@ -72,7 +72,7 @@ export function EmailViewBreadcrumbItem() {
   const inboxSelected = () => !isTouchDevice() && showsInboxTabs();
   const tabTitle = () =>
     savedViewTitle() ??
-    tagViewTitle() ??
+    filterViewTitle() ??
     emailShownViewTitle(inboxSelected() ? 'inbox' : shownTab());
   const appearance = () => {
     const view = savedViews?.view();
@@ -133,7 +133,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     shownTab,
     showsInboxTabs,
     registerSearchField,
-    tagViewTitle,
+    filterViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
@@ -176,7 +176,7 @@ export function EmailHeader(props: EmailHeaderProps) {
   });
   const selectedTabLabel = () =>
     savedViewTitle() ??
-    tagViewTitle() ??
+    filterViewTitle() ??
     emailShownViewTitle(showsInboxTabs() ? 'inbox' : shownTab());
 
   const canSearch = () => canSearchEmailTab(state.tab);

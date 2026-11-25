@@ -53,6 +53,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { listTagOptions } from '@property/tags/list-tag-options';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { useEmailInboxLabels } from '@queries/email/label-names';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
@@ -199,8 +200,18 @@ export type EmailViewContext = {
    * "filter by tag" button on entity rows.
    */
   filterByTag: (optionId: string) => void;
-  /** The selected tags' names on All, where they alone scope the list. */
-  tagViewTitle: Accessor<string | undefined>;
+  /**
+   * Opens All mail filtered to one label, as a sidebar destination; for the
+   * label already open, shows All mail without it.
+   */
+  openLabel: (labelId: string) => void;
+  /** The labels All mail is filtered to, outside a saved view. */
+  activeLabelIds: Accessor<readonly string[]>;
+  /**
+   * The selected tags' and labels' names on All, where they alone scope the
+   * list.
+   */
+  filterViewTitle: Accessor<string | undefined>;
   source: EmailDataSource;
   /**
    * The search on screen: its words and the view an `in:` filter narrows them
@@ -936,14 +947,47 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     );
   };
 
-  const tagViewTitle = () => {
+  const activeLabelIds = () =>
+    state.tab === 'all' && !savedViewActive()
+      ? (state.facets.labels ?? [])
+      : [];
+
+  const openLabel = (labelId: string) =>
+    runTabSelection(() => {
+      const open = activeLabelIds().includes(labelId);
+      const labels = open
+        ? activeLabelIds().filter((id) => id !== labelId)
+        : [labelId];
+      batch(() => {
+        selectTab('all');
+        setState(
+          'facets',
+          reconcile(
+            normalizeFacetSelection({ ...filterBaseline().facets, labels })
+          )
+        );
+      });
+    });
+
+  const inboxLabels = useEmailInboxLabels();
+  const filterViewTitle = () => {
     const tagIds = state.facets.tags ?? [];
-    if (state.tab !== 'all' || tagIds.length === 0 || savedViewActive())
+    const labelIds = state.facets.labels ?? [];
+    if (
+      state.tab !== 'all' ||
+      (tagIds.length === 0 && labelIds.length === 0) ||
+      savedViewActive()
+    )
       return undefined;
-    const labels = listTagOptions(tagSets())
-      .filter((tag) => tagIds.includes(tag.id))
-      .map((tag) => tag.label);
-    return labels.length > 0 ? labels.join(', ') : undefined;
+    const names = [
+      ...listTagOptions(tagSets())
+        .filter((tag) => tagIds.includes(tag.id))
+        .map((tag) => tag.label),
+      ...inboxLabels()
+        .filter((label) => labelIds.includes(label.id))
+        .map((label) => label.fullName),
+    ];
+    return names.length > 0 ? names.join(', ') : undefined;
   };
 
   const [readingPane, setReadingPane] = usePreference(
@@ -986,7 +1030,9 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     clearFilters,
     setFocusSort,
     filterByTag,
-    tagViewTitle,
+    openLabel,
+    activeLabelIds,
+    filterViewTitle,
     source,
     parsedSearch,
     list,

@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   tab: (): string => 'important',
   savedView: (): string | undefined => undefined,
   tagSets: (): TagSetResponse[] => [],
+  inboxLabels: (): { id: string; fullName: string }[] => [],
   /** What the view hands its list: the tab or definition it queries. */
   list: undefined as
     | {
@@ -101,6 +102,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@property/tags/tag-sets-context', () => ({
   useTagSets: () => () => mocks.tagSets(),
   useTagSetsReady: () => () => true,
+}));
+vi.mock('@queries/email/label-names', () => ({
+  useEmailInboxLabels: () => () => mocks.inboxLabels(),
 }));
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => mocks.useEmailLinksQuery(),
@@ -375,7 +379,7 @@ describe('tag view title', () => {
     const { view } = mount();
     view.setTab('all');
     view.setFilters({ facets: { tags: [qaTag] } });
-    expect(view.tagViewTitle()).toBe('QA test tag');
+    expect(view.filterViewTitle()).toBe('QA test tag');
   });
 
   it('keeps the tab name when a tag only filters a tab', () => {
@@ -383,7 +387,45 @@ describe('tag view title', () => {
     const { view } = mount();
     view.filterByTag(qaTag);
     expect(view.state.tab).toBe('important');
-    expect(view.tagViewTitle()).toBeUndefined();
+    expect(view.filterViewTitle()).toBeUndefined();
+  });
+});
+
+describe('opening a label', () => {
+  const larkspur = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e41';
+  const acme = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e42';
+
+  it('shows All mail filtered to the label alone, named after it', () => {
+    mocks.inboxLabels = () => [
+      { id: larkspur, fullName: 'Customers / Larkspur' },
+      { id: acme, fullName: 'Customers / Acme' },
+    ];
+    const { view } = mount();
+    view.setFilters({ facets: { read: ['unread'] } });
+
+    view.openLabel(larkspur);
+    expect(view.state.tab).toBe('all');
+    expect(view.state.facets.labels).toEqual([larkspur]);
+    expect(view.state.facets.read ?? []).toEqual([]);
+    expect(view.activeLabelIds()).toEqual([larkspur]);
+    expect(view.filterViewTitle()).toBe('Customers / Larkspur');
+
+    view.openLabel(acme);
+    expect(view.state.facets.labels).toEqual([acme]);
+
+    // The open label again shows All mail without it.
+    view.openLabel(acme);
+    expect(view.state.tab).toBe('all');
+    expect(view.state.facets.labels ?? []).toEqual([]);
+    expect(view.filterViewTitle()).toBeUndefined();
+    mocks.inboxLabels = () => [];
+  });
+
+  it('counts a label as open only on All', () => {
+    const { view } = mount();
+    view.openLabel(larkspur);
+    view.setTab('sent');
+    expect(view.activeLabelIds()).toEqual([]);
   });
 });
 

@@ -33,6 +33,7 @@ export default {
   peoplePlaceholder: 'Add people, companies, or domains',
   labels: 'Labels',
   labelsPlaceholder: 'Filter by label...',
+  moreLabels: { other: '{{count}} more' },
   addEntry: 'Add “{{entry}}”',
   removeEntry: 'Remove {{entry}}',
   domainContacts: {

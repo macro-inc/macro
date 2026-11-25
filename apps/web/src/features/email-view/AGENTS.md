@@ -74,11 +74,15 @@ the Soup-backed thread list, and saved email views.
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
+- `views/email-labels-section.tsx`: the sidebar's Labels section, from
+  `core/sidebar-labels.ts` (each inbox's tree, eight rows, then `N more`). A
+  row calls `openLabel`, which opens All filtered to that label alone;
+  `activeLabelIds` and `filterViewTitle` read the labels All is filtered to.
 - `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
   header actions, unavailable and skipped-setting states. Saved-view rows use
   the shell's sidebar layout to choose drag or, in the navigation sheet,
-  Move up and Move down. The unnamed mail-folder group, Library, and Saved views
-  use shared `ViewSidebar` ordering with per-account local preferences; Accounts
+  Move up and Move down. The unnamed mail-folder group, Library, Labels, and
+  Saved views use shared `ViewSidebar` ordering with per-account local preferences; Accounts
   is explicitly pinned above those sections.
 - Saved-view creation uses the shared `create-saved-view-creation` lifecycle and route-owned `SavedViewDraftHost` leave protection.
 

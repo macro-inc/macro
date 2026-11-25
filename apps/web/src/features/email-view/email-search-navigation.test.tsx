@@ -238,6 +238,10 @@ vi.mock('@property/tags/tag-sets-context', () => ({
   useTagSets: () => () => [],
   useTagSetsReady: () => () => true,
 }));
+vi.mock('@queries/email/label-names', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/email/label-names')>()),
+  useEmailInboxLabels: () => () => [],
+}));
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({ isSuccess: false, data: { links: [] } }),
 }));
