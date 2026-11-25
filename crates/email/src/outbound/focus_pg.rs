@@ -442,11 +442,18 @@ impl FocusStore for FocusPgRepository {
                       AND w.latest_inbound_message_ts >= $2
                       AND w.latest_inbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
                 ) t
-                LEFT JOIN email_thread_focus f ON f.thread_id = t.id
+                -- One primary-key lookup per thread: the fence keeps the
+                -- planner from hashing the whole table instead.
+                LEFT JOIN LATERAL (
+                    SELECT f.rule_version, f.classified_message_ts
+                    FROM email_thread_focus f
+                    WHERE f.thread_id = t.id
+                    OFFSET 0
+                ) f ON true
                 WHERE t.inbox_visible
                   AND t.latest_inbound_message_ts IS NOT NULL
                   AND (
-                      f.thread_id IS NULL
+                      f.classified_message_ts IS NULL
                       OR f.rule_version < $4
                       OR f.classified_message_ts < t.latest_at
                   )
@@ -520,14 +527,17 @@ impl FocusStore for FocusPgRepository {
             SELECT s.id AS "id!", s.latest_at AS "latest_at!"
             FROM stale s
             WHERE s.kept
-               OR s.id IN (SELECT thread_id FROM inbound WHERE is_change)
-               -- A sender the owner has written to lately. The service judges
-               -- whether it really is a recent contact; mail no event covers,
-               -- such as an initial sync, only arrives this way.
+               -- A calendar change, or a sender the owner has written to
+               -- lately. The service judges whether it really is a recent
+               -- contact; mail no event covers, such as an initial sync, only
+               -- arrives this way. Each `IN` sits under an `OR`, so it stays
+               -- one hashed set: as a join, a generic plan rescanned `inbound`
+               -- once per recent contact.
                OR s.id IN (
                    SELECT i.thread_id
                    FROM inbound i
-                   JOIN recent_contact c ON c.contact_id = i.from_contact_id
+                   WHERE i.is_change
+                      OR i.from_contact_id IN (SELECT contact_id FROM recent_contact)
                )
             ORDER BY s.latest_at DESC, s.id DESC
             LIMIT $3
