@@ -7,7 +7,8 @@ declare global {
   }
 }
 
-/** Each search row, the link its snippet shows, and what pressing it opens. */
+/** Each search row, the link its snippet or highlighted title shows, and what
+ * pressing it opens. */
 const ROWS = [
   { section: 'list-narrow', href: 'https://app', opens: 'row-narrow' },
   {
@@ -16,7 +17,14 @@ const ROWS = [
     opens: 'row-single-line',
   },
   { section: 'list-wide', href: 'https://app', opens: 'row-wide' },
+  { section: 'list-phone', href: 'https://app', opens: 'row-phone' },
   { section: 'content-hit', href: 'https://docs', opens: 'content-hit' },
+  {
+    section: 'list-title-single-line',
+    href: 'https://app',
+    opens: 'row-title-single-line',
+  },
+  { section: 'list-title-wide', href: 'https://app', opens: 'row-title-wide' },
 ];
 
 async function openFixture(page: Page) {
@@ -52,22 +60,28 @@ function snippetLink(page: Page, row: (typeof ROWS)[number]) {
 }
 
 /** Where a user would press a row's snippet link: the middle of the part of
- * its text the row shows. Fails unless that point presses the link or the
- * snippet around it, not something laid over the row. */
+ * it the row shows, inside every box that clips it. Fails unless that point
+ * reaches the link or, when the link is inert, the snippet holding it, rather
+ * than something laid over the row. */
 async function pressPoint(page: Page, row: (typeof ROWS)[number]) {
-  const link = snippetLink(page, row);
-  const box = await link.boundingBox();
-  const shown = await page.getByTestId(row.section).boundingBox();
-  if (!box || !shown) throw new Error('link not laid out');
-  const left = Math.max(box.x, shown.x);
-  const right = Math.min(box.x + box.width, shown.x + shown.width);
-  if (right <= left) throw new Error('link not shown');
-  const point = { x: (left + right) / 2, y: box.y + box.height / 2 };
-  const pressesSnippet = await link.evaluate((anchor, { x, y }) => {
+  const point = await snippetLink(page, row).evaluate((anchor) => {
+    const box = anchor.getBoundingClientRect();
+    let left = Math.max(box.left, 0);
+    let right = Math.min(box.right, window.innerWidth);
+    for (let el = anchor.parentElement; el; el = el.parentElement) {
+      if (getComputedStyle(el).overflowX === 'visible') continue;
+      const clip = el.getBoundingClientRect();
+      left = Math.max(left, clip.left);
+      right = Math.min(right, clip.right);
+    }
+    if (right - left < 4) return null;
+    const x = (left + right) / 2;
+    const y = (box.top + box.bottom) / 2;
     const target = document.elementFromPoint(x, y);
-    return !!target && (target === anchor || target.contains(anchor));
-  }, point);
-  if (!pressesSnippet) throw new Error('the press point misses the snippet');
+    if (!target) return null;
+    return anchor.contains(target) || target.contains(anchor) ? { x, y } : null;
+  });
+  if (!point) throw new Error('no shown part of the link takes the press');
   return point;
 }
 
@@ -128,6 +142,12 @@ test.describe('phone', () => {
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     isMobile: true,
+  });
+
+  test('the phone row is as wide as the screen', async ({ page }) => {
+    await openFixture(page);
+    const row = await page.getByTestId('list-phone').boundingBox();
+    expect(row?.width).toBe(390);
   });
 
   for (const row of ROWS) {

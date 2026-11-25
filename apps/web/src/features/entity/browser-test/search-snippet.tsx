@@ -15,7 +15,7 @@ import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ListEntity, ListLayoutProvider } from '../composed/ListEntity';
 import { SearchContentHitRow } from '../extractors-search/search-content-hit-row';
-import type { ChannelMessageEntity } from '../types/entity';
+import type { ChannelMessageEntity, DocumentEntity } from '../types/entity';
 import type { ContentHitData, WithSearch } from '../types/search';
 
 const SENT_AT = '2026-11-01T10:00:00Z';
@@ -51,21 +51,62 @@ const message: WithSearch<ChannelMessageEntity> = {
   },
 };
 
+/** A document found by a word inside the link its name holds. */
+const documentResult: WithSearch<DocumentEntity> = {
+  id: 'document-1',
+  type: 'document',
+  name: 'Roadmap https://app.planbook.example/roadmap',
+  ownerId: 'macro|viewer@example.com',
+  fileType: 'md',
+  updatedAt: SENT_AT,
+  search: {
+    nameHighlight:
+      'Roadmap https://app.<macro_em>planbook</macro_em>.example/roadmap',
+    senderHighlightTerms: null,
+    source: 'service',
+    contentHitData: null,
+  },
+};
+
 /** A further match listed under a result's Show more. */
 const contentHit: ContentHitData = {
   content: 'notes in https://docs.<macro_em>planbook</macro_em>.example/d/1',
 };
 
-/** Channel message search rows (the wide list and the narrow one) and a
- * content hit row, each recording what a press opened. */
+/** Search rows for the message and the document, wide, narrow and single
+ * line, and a content hit row, each recording what a press opened. */
 function Fixture() {
   const [opened, setOpened] = createSignal<string[]>([]);
   const record = (what: string) => setOpened((all) => [...all, what]);
-  // Under 512px rows are narrow; phone search lists single-line rows.
+  // Under 512px rows are narrow; phone search lists single-line rows edge to
+  // edge.
   const lists = [
-    { name: 'narrow', width: 'w-[480px]', layout: 'inbox' },
-    { name: 'single-line', width: 'w-[480px]', layout: 'single-line' },
-    { name: 'wide', width: 'w-[900px]', layout: 'inbox' },
+    { name: 'narrow', width: 'w-[480px]', layout: 'inbox', entity: message },
+    {
+      name: 'single-line',
+      width: 'w-[480px]',
+      layout: 'single-line',
+      entity: message,
+    },
+    { name: 'wide', width: 'w-[900px]', layout: 'inbox', entity: message },
+    {
+      name: 'phone',
+      width: '-mx-8 w-screen',
+      layout: 'single-line',
+      entity: message,
+    },
+    {
+      name: 'title-single-line',
+      width: 'w-[480px]',
+      layout: 'single-line',
+      entity: documentResult,
+    },
+    {
+      name: 'title-wide',
+      width: 'w-[900px]',
+      layout: 'inbox',
+      entity: documentResult,
+    },
   ] as const;
 
   return (
@@ -81,7 +122,7 @@ function Fixture() {
             >
               <ListLayoutProvider ref={ref} narrowLayout={list.layout}>
                 <ListEntity
-                  entity={message}
+                  entity={list.entity}
                   onClick={() => record(`row-${list.name}`)}
                 />
               </ListLayoutProvider>
