@@ -137,8 +137,10 @@ not shared across `zfs send`.
   inputs: the immutable version, the `main` commit it is built from, the
   computer ids, batch size, idle wait and reconnect timeout). It builds
   `.#macro-box-firecracker`, publishes the files with their SHA-256 to the Nix
-  cache bucket, and records the upgrade from the in-VPC migrator runner. The
-  harness's upgrade pass stages the image on each host (checked by hash),
+  cache bucket, and records the upgrade from the in-VPC migrator runner.
+  Subsequent rollouts of the same version and source commit reuse its
+  published manifest. The harness's upgrade pass stages the image on each
+  host (checked by hash),
   then gives each idle computer (no agent turn under way or queued, no screen
   open; terminal shells are not seen) a fresh
   system disk of it with its own `/home` and identity, a batch at a time. A

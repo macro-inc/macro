@@ -38,38 +38,42 @@ fn fixture(kernel: &str) -> Fixture {
         std::fs::create_dir_all(directory).expect("fixture directory");
     }
     std::fs::write(temp.path().join("kvm"), "").expect("kvm stand-in");
-    stub(&bin, "git", &format!("echo {SOURCE_SHA}"));
+    stub(&bin, "git", r#"echo "$SOURCE_SHA""#);
     stub(
         &bin,
         "nix",
         &format!(
             r#"case "$1" in
-  build) mkdir -p result-image; printf '%s' '{kernel}' > result-image/vmlinux
+  build) mkdir -p result-image; printf '%s' '{kernel}' > result-image/kernel
+         ln -sf kernel result-image/vmlinux
          printf 'rootfs' > result-image/rootfs.ext4; printf 'console=ttyS0' > result-image/boot_args ;;
   shell) while [ "$1" != -c ]; do shift; done; shift; exec "$@" ;;
 esac"#
         ),
     );
-    // zstd -q -T0 -10 --sparse <in> -o <out>
     stub(
         &bin,
         "zstd",
-        r#"{ printf '%s' 'compressed:'; cat "$5"; } > "$7""#,
+        r#"if [[ "$#" != 4 || "$4" != '-c' ]]; then exit 1; fi
+printf '%s' 'compressed:'; cat"#,
     );
     stub(
         &bin,
         "aws",
         r#"printf '%s\n' "$*" >> "$STUB_AWS_LOG"
 key() { local url=$1; url=${url#s3://}; echo "$STUB_BUCKET/${url#*/}"; }
-if [ "$1 $2 $3" = "s3 cp --only-show-errors" ]; then
-  if [[ $4 == s3://* ]]; then
-    [ -z "${STUB_READBACK_FORBIDDEN:-}" ] || { echo "An error occurred (AccessDenied) when calling the GetObject operation: Access Denied" >&2; exit 254; }
-    [ -f "$(key "$4")" ] || { echo "An error occurred (403) when calling the HeadObject operation: Forbidden" >&2; exit 1; }
-    cp "$(key "$4")" "$5"
-  else
-    [ -z "${STUB_UPLOAD_FORBIDDEN:-}" ] || { echo "An error occurred (AccessDenied) when calling the UploadPart operation: Access Denied" >&2; exit 1; }
-    mkdir -p "$(dirname "$(key "$5")")"; cp "$4" "$(key "$5")"
+if [ "$1 $2" = 's3api get-object' ]; then
+  target="$STUB_BUCKET/$6"
+  reads=$(grep -c '^s3api get-object ' "$STUB_AWS_LOG")
+  if [ ! -f "$target" ] || { [ "${STUB_INITIAL_GET_MISSING:-}" = 1 ] && [ "$reads" -eq 1 ]; }; then
+    echo 'An error occurred (AccessDenied) when calling the GetObject operation: Forbidden' >&2; exit 254
   fi
+  [ -z "${STUB_READBACK_FORBIDDEN:-}" ] || { echo "An error occurred (AccessDenied) when calling the GetObject operation: Access Denied" >&2; exit 254; }
+  cp "$target" "$7"; exit 0
+fi
+if [ "$1 $2 $3" = "s3 cp --only-show-errors" ]; then
+  [ -z "${STUB_UPLOAD_FORBIDDEN:-}" ] || { echo "An error occurred (AccessDenied) when calling the UploadPart operation: Access Denied" >&2; exit 1; }
+  mkdir -p "$(dirname "$(key "$5")")"; cp "$4" "$(key "$5")"
   exit 0
 fi
 if [ "$1 $2" = "s3api put-object" ]; then
@@ -91,6 +95,7 @@ exit 3"#,
 }
 
 fn run(fixture: &Fixture, extra: &[(&str, &str)]) -> std::process::Output {
+    std::fs::write(&fixture.log, "").expect("clear aws log");
     let mut command = std::process::Command::new("bash");
     command
         .args([
@@ -158,7 +163,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 #[test]
-fn a_new_version_uploads_files_by_content_then_creates_its_manifest() {
+fn a_new_version_compresses_symlinked_input_then_creates_its_manifest() {
     let fixture = fixture("kernel-1");
     let output = run(&fixture, &[]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -175,6 +180,12 @@ fn a_new_version_uploads_files_by_content_then_creates_its_manifest() {
     ];
     expected.sort();
     assert_eq!(published(&fixture), expected);
+    let directory = fixture.bucket.join("firecracker-images").join(VERSION);
+    let kernel = directory.join(format!("{}-vmlinux.zst", sha256_hex(b"kernel-1")));
+    assert_eq!(
+        std::fs::read(kernel).expect("published kernel"),
+        b"compressed:kernel-1"
+    );
     let log = std::fs::read_to_string(&fixture.log).expect("aws log");
     assert!(log.contains("--if-none-match *"), "{log}");
     // The manifest is created after every file.
@@ -188,7 +199,7 @@ fn a_new_version_uploads_files_by_content_then_creates_its_manifest() {
 fn the_same_build_again_finds_its_version_published_with_these_files() {
     let fixture = fixture("kernel-1");
     assert!(run(&fixture, &[]).status.success());
-    let output = run(&fixture, &[]);
+    let output = run(&fixture, &[("STUB_INITIAL_GET_MISSING", "1")]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{output:?}");
     assert!(
@@ -218,7 +229,7 @@ fn a_different_build_of_a_published_version_is_refused() {
 esac"#,
     );
 
-    let output = run(&fixture, &[]);
+    let output = run(&fixture, &[("STUB_INITIAL_GET_MISSING", "1")]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!output.status.success(), "{stdout}");
     assert!(
@@ -245,7 +256,13 @@ fn a_published_manifest_that_cannot_be_read_fails_the_retry() {
     let fixture = fixture("kernel-1");
     assert!(run(&fixture, &[]).status.success());
 
-    let output = run(&fixture, &[("STUB_READBACK_FORBIDDEN", "1")]);
+    let output = run(
+        &fixture,
+        &[
+            ("STUB_INITIAL_GET_MISSING", "1"),
+            ("STUB_READBACK_FORBIDDEN", "1"),
+        ],
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!output.status.success(), "{stdout}");
     assert!(
@@ -271,4 +288,78 @@ fn a_failed_object_upload_does_not_publish_a_manifest() {
     assert!(stdout.contains("uploading vmlinux failed"), "{stdout}");
     let log = std::fs::read_to_string(&fixture.log).expect("aws log");
     assert!(!log.contains("put-object"), "{log}");
+}
+
+#[test]
+fn reuses_the_published_manifest_without_building_or_uploading() {
+    let fixture = fixture("kernel-1");
+    assert!(run(&fixture, &[]).status.success());
+    std::fs::remove_dir_all(fixture.root.join("result-image")).expect("clean build");
+    let manifest = fixture.root.join("files/files.json");
+    let before = std::fs::read(&manifest).expect("first manifest");
+    std::fs::remove_file(&manifest).expect("clean manifest");
+
+    let output = run(&fixture, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert!(stdout.contains("reusing macro-box/2026-11-25a"), "{stdout}");
+    assert!(!fixture.root.join("result-image").exists());
+    assert_eq!(std::fs::read(manifest).expect("reused manifest"), before);
+    let log = std::fs::read_to_string(&fixture.log).expect("aws log");
+    assert_eq!(log.lines().count(), 1, "{log}");
+    assert!(log.starts_with("s3api get-object "), "{log}");
+}
+
+#[test]
+fn rejects_a_published_version_from_another_commit() {
+    let fixture = fixture("kernel-1");
+    assert!(run(&fixture, &[]).status.success());
+    std::fs::remove_dir_all(fixture.root.join("result-image")).expect("clean build");
+
+    let output = run(
+        &fixture,
+        &[("SOURCE_SHA", "0000000000000000000000000000000000000001")],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{stdout}");
+    assert!(
+        stdout.contains("has a different published source commit"),
+        "{stdout}"
+    );
+    assert!(!fixture.root.join("result-image").exists());
+}
+
+#[test]
+fn rejects_invalid_file_metadata_in_a_published_manifest() {
+    let fixture = fixture("kernel-1");
+    assert!(run(&fixture, &[]).status.success());
+    let path = fixture
+        .bucket
+        .join("firecracker-images")
+        .join(VERSION)
+        .join("files.json");
+    let valid: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).expect("manifest")).expect("parse manifest");
+
+    for (field, value) in [
+        ("name", serde_json::json!("unexpected")),
+        ("sha256", serde_json::json!("1234")),
+        ("bytes", serde_json::json!(0)),
+    ] {
+        let mut invalid = valid.clone();
+        invalid["files"][0][field] = value;
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&invalid).expect("serialize manifest"),
+        )
+        .expect("write manifest");
+
+        let output = run(&fixture, &[]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(!output.status.success(), "{field}: {stdout}");
+        assert!(
+            stdout.contains("has an invalid published manifest"),
+            "{field}: {stdout}"
+        );
+    }
 }
