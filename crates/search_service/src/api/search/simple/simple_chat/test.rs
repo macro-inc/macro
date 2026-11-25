@@ -39,6 +39,7 @@ async fn the_name_search_span_leaves_out_the_term() {
 /// folder with no chats) returns Done without calling the database.
 #[tokio::test]
 async fn empty_ids_only_returns_empty_without_querying_db() {
+    let (_fields, _guard) = SpanFields::install();
     let db = sqlx::postgres::PgPoolOptions::new()
         .connect_lazy("postgres://localhost/unused")
         .expect("a lazy pool never connects");

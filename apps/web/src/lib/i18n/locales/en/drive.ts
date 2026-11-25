@@ -155,6 +155,17 @@ export default {
     other:
       'Permanently delete {{count}} items in Trash? This cannot be undone.',
   },
+  emptyTrashLoadedLabel: 'Delete loaded items',
+  emptyTrashLoadedConfirmTitle: 'Delete loaded Trash items?',
+  emptyTrashLoadedConfirmDescription: {
+    one: 'Permanently delete the {{count}} loaded item? Additional unloaded Trash pages will remain.',
+    other:
+      'Permanently delete the {{count}} loaded items? Additional unloaded Trash pages will remain.',
+  },
+  trashFolderCascadeWarning:
+    'Deleting a folder permanently removes all files and subfolders inside it.',
+  loadMoreTrashMatches: 'Load more from Trash',
+  toastUndoSkipped: 'Item changed since this action; nothing was overwritten.',
   openFullView: 'Open',
   openInNewSplit: 'Open in split',
   openFolder: 'Open folder',

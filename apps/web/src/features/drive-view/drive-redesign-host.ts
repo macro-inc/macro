@@ -87,6 +87,7 @@ export function createDriveRedesignHost(options: {
   userId: Accessor<string | undefined>;
   projectId: Accessor<string | undefined>;
   folders: Accessor<DriveFolderMetadata[]>;
+  items?: Accessor<readonly { entity: EntityData }[]>;
   baseActions: DriveHostActions;
   onFolderCreated?: (folderId: string, parentId: string | null) => void;
   onTrashCompleted?: (ids: readonly string[]) => void;
@@ -135,18 +136,48 @@ export function createDriveRedesignHost(options: {
     });
   };
 
+  const currentObservedState = (
+    entity: Pick<UndoableEntityRef, 'id' | 'type'>
+  ): { name: string; projectId: string | null } | undefined => {
+    if (entity.type === 'project') {
+      const folder = options.folders().find((f) => f.id === entity.id);
+      if (folder) {
+        return { name: folder.name, projectId: folder.parentId ?? null };
+      }
+    }
+    const row = options.items?.().find((item) => item.entity.id === entity.id);
+    if (row) {
+      return {
+        name: row.entity.name,
+        projectId: getEntityProjectId(row.entity) || null,
+      };
+    }
+    return undefined;
+  };
+
   const undo = createDriveUndoManager({
-    undoMove: async (items: readonly MoveUndoItem[]) => {
-      let allSucceeded = true;
+    undoMove: async (
+      items: readonly MoveUndoItem[],
+      destinationFolderId: string | null
+    ) => {
+      const failedItems: MoveUndoItem[] = [];
+      let movedAny = false;
+      let skippedAny = false;
       let touchedFolders = false;
       for (const item of items) {
+        const observed = currentObservedState(item.entity);
+        if (observed && observed.projectId !== destinationFolderId) {
+          skippedAny = true;
+          continue;
+        }
         if (item.entity.type === 'project') touchedFolders = true;
         const ref = toGraphqlMoveRef(item.entity);
         if (ref) {
           try {
             await moveEntity(ref, item.previousProjectId);
+            movedAny = true;
           } catch {
-            allSucceeded = false;
+            failedItems.push(item);
           }
           continue;
         }
@@ -171,32 +202,53 @@ export function createDriveRedesignHost(options: {
               entities: [{ ...stub, name: stub.name || stub.id }],
             });
           }
+          movedAny = true;
         } catch {
-          allSucceeded = false;
+          failedItems.push(item);
         }
       }
-      await refreshDriveQueries(touchedFolders);
-      return allSucceeded;
+      if (movedAny) {
+        await refreshDriveQueries(touchedFolders);
+      }
+      return {
+        failedItems,
+        skipped: !movedAny && skippedAny && failedItems.length === 0,
+      };
     },
 
     undoTrash: async (items: readonly UndoableEntityRef[]) => {
-      const refs = items.flatMap((item) => {
+      const pairs = items.flatMap((item) => {
         const ref = toGraphqlTrashRef(item);
-        return ref ? [ref] : [];
+        return ref ? [{ item, ref }] : [];
       });
-      if (refs.length === 0) return false;
+      if (pairs.length === 0) return false;
       const outcomes = await Promise.allSettled(
-        refs.map((ref) => restoreEntity(ref))
+        pairs.map(({ ref }) => restoreEntity(ref))
       );
-      const ok = outcomes.every((outcome) => outcome.status === 'fulfilled');
-      await Promise.allSettled([
-        invalidateDeletedItems(),
-        refreshDriveQueries(items.some((item) => item.type === 'project')),
-      ]);
-      return ok;
+      const failedItems: UndoableEntityRef[] = [];
+      let restoredAny = false;
+      outcomes.forEach((outcome, index) => {
+        if (outcome.status === 'fulfilled') restoredAny = true;
+        else failedItems.push(pairs[index].item);
+      });
+      if (restoredAny) {
+        await Promise.allSettled([
+          invalidateDeletedItems(),
+          refreshDriveQueries(items.some((item) => item.type === 'project')),
+        ]);
+      }
+      return { failedItems };
     },
 
-    undoRename: async (entity: UndoableEntityRef, previousName: string) => {
+    undoRename: async (
+      entity: UndoableEntityRef,
+      previousName: string,
+      expectedCurrentName: string
+    ) => {
+      const observed = currentObservedState(entity);
+      if (observed && observed.name !== expectedCurrentName) {
+        return 'skipped';
+      }
       try {
         const result = await renameMutation.mutateAsync({
           entity: {
@@ -217,6 +269,10 @@ export function createDriveRedesignHost(options: {
   const reportUndoOutcome = (
     result: Awaited<ReturnType<DriveUndoManager['undoLatest']>>
   ) => {
+    if (result.status === 'skipped') {
+      toast.alert(t('drive.toastUndoSkipped'));
+      return;
+    }
     if (result.status === 'failed') {
       toast.failure(t('drive.toastUndoFailed'));
       return;
@@ -325,9 +381,11 @@ export function createDriveRedesignHost(options: {
     for (const entity of mutable) {
       const undoType = toUndoableType(entity.type);
       if (!undoType) continue;
+      const previousProjectId = getEntityProjectId(entity) || null;
+      if (previousProjectId === destinationFolderId) continue;
       undoItems.push({
         entity: { id: entity.id, type: undoType, name: entity.name },
-        previousProjectId: getEntityProjectId(entity) || null,
+        previousProjectId,
       });
     }
 
@@ -397,13 +455,16 @@ export function createDriveRedesignHost(options: {
         );
       },
       onMoved: (folder) => {
+        const changedUndoItems = undoItems.filter(
+          (item) => item.previousProjectId !== folder.id
+        );
         const message = t('drive.toastMoved', {
-          count: snapshot.length,
+          count: changedUndoItems.length || snapshot.length,
           destination: folder.name,
         });
-        if (undoItems.length > 0) {
+        if (changedUndoItems.length > 0) {
           const undoId = undo.recordMove({
-            items: undoItems,
+            items: changedUndoItems,
             destinationFolderId: folder.id,
             destinationName: folder.name,
           });

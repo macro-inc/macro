@@ -7,14 +7,12 @@ import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
-import {
-  favoriteDisplayName,
-  useFavoriteDisplayName,
-} from '@app/util/favorites';
+import { useFavoriteDisplayName } from '@app/util/favorites';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { SplitPanel } from '@components/app/split-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
@@ -38,11 +36,13 @@ import CloseIcon from '@icon/system/regular/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button, cn, confirmDialog, Tabs } from '@ui';
 import {
+  type Accessor,
   createMemo,
   createSignal,
   For,
   type JSX,
   Match,
+  mapArray,
   Show,
   Suspense,
   Switch,
@@ -97,10 +97,12 @@ function mobileTrashIconTarget(item: DriveTrashItem): string {
   return item.fileType || 'md';
 }
 
-function MobileStarredRow(props: { favorite: Favorite }) {
+function MobileStarredRow(props: {
+  favorite: Favorite;
+  name: Accessor<string>;
+}) {
   const { actions } = useDriveView();
   const { host } = useDriveRedesign();
-  const name = useFavoriteDisplayName(props.favorite);
   const kind = () =>
     driveItemKind({
       type: props.favorite.entityType,
@@ -114,11 +116,15 @@ function MobileStarredRow(props: { favorite: Favorite }) {
     <div
       data-press-surface
       class="flex min-h-13 min-w-0 items-center gap-3 border-b border-edge-muted/60 px-4 py-2"
-      onClick={(event) => actions.openFavorite(props.favorite, name(), event)}
+      onClick={(event) =>
+        actions.openFavorite(props.favorite, props.name(), event)
+      }
     >
       <FavoriteIcon favorite={props.favorite} class="size-6 shrink-0" />
       <div class="flex min-w-0 flex-1 flex-col">
-        <span class="truncate text-sm font-medium text-ink">{name()}</span>
+        <span class="truncate text-sm font-medium text-ink">
+          {props.name()}
+        </span>
         <span class="text-xs text-ink-muted">{driveKindLabel(kind())}</span>
       </div>
       <Button
@@ -193,13 +199,30 @@ function MobileTrashView() {
     }
   };
 
+  const unfilteredHierarchy = createMemo(() =>
+    summarizeTrashHierarchy(trash.items())
+  );
+  const isSearching = () => state.value().search.trim().length > 0;
+
   const emptyTrash = async () => {
-    const all = visibleItems();
-    if (all.length === 0 || busy()) return;
+    const all = unfilteredHierarchy().topLevel;
+    if (all.length === 0 || busy() || isSearching()) return;
+    const hasMore = trash.hasMore();
+    const hasFolders = all.some((item) => item.itemType === 'project');
+    const baseBody = hasMore
+      ? t('drive.emptyTrashLoadedConfirmDescription', { count: all.length })
+      : t('drive.emptyTrashConfirmDescription', { count: all.length });
+    const body = hasFolders
+      ? `${baseBody} ${t('drive.trashFolderCascadeWarning')}`
+      : baseBody;
     const confirmed = await confirmDialog({
-      title: t('drive.emptyTrashConfirmTitle'),
-      body: t('drive.emptyTrashConfirmDescription', { count: all.length }),
-      confirmLabel: t('drive.emptyTrash'),
+      title: hasMore
+        ? t('drive.emptyTrashLoadedConfirmTitle')
+        : t('drive.emptyTrashConfirmTitle'),
+      body,
+      confirmLabel: hasMore
+        ? t('drive.emptyTrashLoadedLabel')
+        : t('drive.emptyTrash'),
       tone: 'danger',
     });
     if (!confirmed) return;
@@ -219,16 +242,43 @@ function MobileTrashView() {
 
   return (
     <Switch>
+      <Match when={trash.error() && trash.items().length === 0}>
+        <DriveRedesignEmptyState
+          reason="error"
+          onRetry={() =>
+            fireAndForget(trash.refresh(), 'drive-mobile-trash-retry')
+          }
+        />
+      </Match>
       <Match when={trash.isLoading() && trash.items().length === 0}>
         <div class="pt-(--mobile-content-inset-top)">
           <DriveContentSkeleton mode="list" label={t('drive.loadingTrash')} />
         </div>
       </Match>
       <Match when={visibleItems().length === 0}>
-        <DriveRedesignEmptyState
-          reason={state.value().search.trim() ? 'search' : 'trash'}
-          onClearSearch={() => state.setSearch('')}
-        />
+        <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+          <DriveRedesignEmptyState
+            reason={isSearching() ? 'search' : 'trash'}
+            onClearSearch={() => state.setSearch('')}
+          />
+          <Show when={isSearching() && trash.hasMore()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={trash.isLoadingMore()}
+              onClick={() =>
+                fireAndForget(
+                  trash.loadMore(),
+                  'drive-mobile-trash-search-more'
+                )
+              }
+            >
+              {trash.isLoadingMore()
+                ? t('drive.loadingMore')
+                : t('drive.loadMoreTrashMatches')}
+            </Button>
+          </Show>
+        </div>
       </Match>
       <Match when={true}>
         <div class="min-h-0 flex-1 overflow-y-auto overscroll-none pt-(--mobile-content-inset-top) pb-[calc(var(--safe-bottom,0px)+5rem)]">
@@ -236,16 +286,24 @@ function MobileTrashView() {
             <span>
               {t('drive.itemCount', { count: visibleItems().length })}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy()}
-              class="text-failure-ink"
-              onClick={() => fireAndForget(emptyTrash(), 'drive-mobile-empty')}
-            >
-              <TrashIcon class="size-4" aria-hidden="true" />
-              <span>{t('drive.emptyTrash')}</span>
-            </Button>
+            <Show when={!isSearching()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy()}
+                class="text-failure-ink"
+                onClick={() =>
+                  fireAndForget(emptyTrash(), 'drive-mobile-empty')
+                }
+              >
+                <TrashIcon class="size-4" aria-hidden="true" />
+                <span>
+                  {trash.hasMore()
+                    ? t('drive.emptyTrashLoadedLabel')
+                    : t('drive.emptyTrash')}
+                </span>
+              </Button>
+            </Show>
           </div>
           <For each={visibleItems()}>
             {(item) => {
@@ -305,6 +363,31 @@ function MobileTrashView() {
               );
             }}
           </For>
+          <Show when={trash.isLoadingMore()}>
+            <div
+              role="status"
+              class="flex items-center justify-center gap-2 py-4 text-xs text-ink-muted"
+            >
+              <SpinnerIcon class="size-3.5 animate-spin" aria-hidden="true" />
+              <span>{t('drive.loadingMore')}</span>
+            </div>
+          </Show>
+          <Show when={trash.hasMore() && !trash.isLoadingMore()}>
+            <div class="flex justify-center py-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  fireAndForget(
+                    trash.loadMore(),
+                    'drive-mobile-trash-load-more'
+                  )
+                }
+              >
+                {t('drive.loadMore')}
+              </Button>
+            </div>
+          </Show>
         </div>
       </Match>
     </Switch>
@@ -312,23 +395,20 @@ function MobileTrashView() {
 }
 
 function MobileStarredView() {
-  const { state, sidebar, source } = useDriveView();
+  const { state, sidebar } = useDriveView();
 
-  const knownNames = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const folder of sidebar.folders()) map.set(folder.id, folder.name);
-    for (const item of source.items()) map.set(item.id, item.entity.name);
-    return map;
-  });
+  const resolvedFavorites = createMemo(
+    mapArray(sidebar.favorites, (favorite) => ({
+      favorite,
+      name: useFavoriteDisplayName(favorite),
+    }))
+  );
 
   const filtered = createMemo(() => {
     const term = state.value().search.trim().toLocaleLowerCase();
-    if (!term) return sidebar.favorites();
-    return sidebar.favorites().filter((fav) => {
-      const candidate =
-        knownNames().get(fav.entityId) ?? favoriteDisplayName(fav);
-      return candidate.toLocaleLowerCase().includes(term);
-    });
+    const list = resolvedFavorites();
+    if (!term) return list;
+    return list.filter(({ name }) => name().toLocaleLowerCase().includes(term));
   });
 
   return (
@@ -344,7 +424,9 @@ function MobileStarredView() {
     >
       <div class="min-h-0 flex-1 overflow-y-auto overscroll-none pt-(--mobile-content-inset-top) pb-[calc(var(--safe-bottom,0px)+5rem)]">
         <For each={filtered()}>
-          {(favorite) => <MobileStarredRow favorite={favorite} />}
+          {(entry) => (
+            <MobileStarredRow favorite={entry.favorite} name={entry.name} />
+          )}
         </For>
       </div>
     </Show>
@@ -708,7 +790,13 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                             size="icon-md"
                             aria-label={t('drive.searchDrivePlaceholder')}
                             class="island h-10 w-10 shrink-0 rounded-full bg-chrome"
-                            onClick={() => setSearchOpen(true)}
+                            onClick={() => {
+                              setSearchOpen(true);
+                              triggerFocusNewElement(
+                                '[data-drive-mobile-search-input]',
+                                { touchOnly: false }
+                              );
+                            }}
                           >
                             <SearchIcon class="size-5" aria-hidden="true" />
                           </Button>
@@ -757,6 +845,7 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                         />
                         <input
                           type="search"
+                          data-drive-mobile-search-input
                           aria-label={t('drive.searchDrivePlaceholder')}
                           placeholder={
                             activeFolder()
@@ -1016,6 +1105,37 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                                 </For>
                               </div>
                             </section>
+                          </Show>
+
+                          <Show when={source.isLoadingMore()}>
+                            <div
+                              role="status"
+                              class="flex items-center justify-center gap-2 py-4 text-xs text-ink-muted"
+                            >
+                              <SpinnerIcon
+                                class="size-3.5 animate-spin"
+                                aria-hidden="true"
+                              />
+                              <span>{t('drive.loadingMore')}</span>
+                            </div>
+                          </Show>
+                          <Show
+                            when={source.hasMore() && !source.isLoadingMore()}
+                          >
+                            <div class="flex justify-center py-4">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() =>
+                                  fireAndForget(
+                                    source.loadMore(),
+                                    'drive-mobile-grid-more'
+                                  )
+                                }
+                              >
+                                {t('drive.loadMore')}
+                              </Button>
+                            </div>
                           </Show>
                         </div>
                       </Match>

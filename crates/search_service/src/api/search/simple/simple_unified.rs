@@ -882,6 +882,9 @@ async fn search_unified_sources(
     let crm_cursor_for_search = crm_cursor.clone();
     let channel_name_cursor_for_search = channel_name_cursor.clone();
 
+    let has_searchable_chats = should_include_chats
+        && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty());
+
     let mut unified_search_args = UnifiedSearchArgs {
         agent_session_search_args: AgentSessionSearchArgs {
             terms: search_terms.clone(),
@@ -912,9 +915,7 @@ async fn search_unified_sources(
             {
                 indices.insert(models_opensearch::OpenSearchEntityType::Documents);
             }
-            if should_include_chats
-                && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty())
-            {
+            if has_searchable_chats {
                 indices.insert(models_opensearch::OpenSearchEntityType::Chats);
             }
             if email_searchable {
@@ -986,8 +987,6 @@ async fn search_unified_sources(
                 .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
         }
     }
-    let has_searchable_chats = should_include_chats
-        && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty());
     let searches_names = matches!(search_on, SearchOn::Name | SearchOn::NameContent);
     tracing::Span::current().record(
         "search.entity_types",

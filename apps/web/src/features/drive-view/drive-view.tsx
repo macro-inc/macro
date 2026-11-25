@@ -84,9 +84,26 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
+  const redesignFlag = useFeatureFlag(enableDriveRedesign);
+  const isRedesignEnabled = () =>
+    !redesignFlag().loading && redesignFlag().enabled;
   const view = createDriveViewState(props.route, () => list.reset());
-  const viewState = view.value;
-  const searchText = () => view.value().search;
+  const isDedicatedRedesignTab = (
+    location: ReturnType<typeof view.value>['location']
+  ) =>
+    location.kind === 'tab' &&
+    (location.tab === 'starred' || location.tab === 'trash');
+  const viewState = () => {
+    const current = view.value();
+    if (!isRedesignEnabled() && isDedicatedRedesignTab(current.location)) {
+      return {
+        ...current,
+        location: { kind: 'tab' as const, tab: 'owned' as const },
+      };
+    }
+    return current;
+  };
+  const searchText = () => viewState().search;
   const selection = () => ({ ...viewState(), search: searchText() });
   const sidebar = createDriveSidebarSource({
     databasesEnabled: () => true,
@@ -218,7 +235,22 @@ function DriveComposition(props: { route: DriveRouteState }) {
   });
   onMount(() => panel.handle.setDisplayName('Drive'));
 
-  const redesignFlag = useFeatureFlag(enableDriveRedesign);
+  // If the redesign flag is explicitly off (e.g. rollback or shared bookmark),
+  // rewrite dedicated /drive/starred or /drive/trash URLs to My Files while
+  // preserving any open file detail in the split.
+  createEffect(() => {
+    const flag = redesignFlag();
+    if (flag.loading || flag.enabled) return;
+    const current = view.value();
+    if (!isDedicatedRedesignTab(current.location)) return;
+    view.update(
+      {
+        ...current,
+        location: { kind: 'tab', tab: 'owned' },
+      },
+      { replace: true }
+    );
+  });
 
   function DriveRedesignBoundary() {
     const preferences = createDriveViewPreferences();
@@ -235,6 +267,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
       userId,
       projectId: () => state.projectId(),
       folders: sidebar.folders,
+      items: source.items,
       baseActions: actions,
     });
     const [inspectedEntity, setInspectedEntity] = createSignal<
@@ -307,9 +340,15 @@ function DriveComposition(props: { route: DriveRouteState }) {
       }}
     >
       <KnownFoldersProvider value={knownFolders}>
-        <Show when={!redesignFlag().loading} fallback={<DriveLoading />}>
+        <Show
+          when={
+            !redesignFlag().loading ||
+            !isDedicatedRedesignTab(view.value().location)
+          }
+          fallback={<DriveLoading />}
+        >
           <Show
-            when={redesignFlag().enabled}
+            when={isRedesignEnabled()}
             fallback={
               <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
             }

@@ -3,6 +3,7 @@ import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
@@ -53,9 +54,13 @@ export function DriveRedesignMobileItemSheet(props: {
     if (!current) return;
     setDraftName(current.name);
     setRenaming(true);
+    // Focus synchronously inside the tap gesture on iOS so the software
+    // keyboard rises cleanly, then apply extension-preserving stem selection.
+    triggerFocusNewElement('[data-drive-mobile-rename-input]', {
+      touchOnly: false,
+    });
     requestAnimationFrame(() => {
       if (!renameInputRef) return;
-      renameInputRef.focus();
       const range = renameSelectionRange(
         current.name,
         current.type === 'project'
@@ -313,6 +318,7 @@ export function DriveRedesignMobileItemSheet(props: {
                           ref={renameInputRef}
                           type="text"
                           data-rename-field
+                          data-drive-mobile-rename-input
                           aria-label={t('drive.renameInputLabel', {
                             name: entity().name,
                           })}

@@ -8,19 +8,36 @@ import {
   type UndoableEntityRef,
 } from '../core/drive-undo';
 
+export type DriveMoveUndoOutcome =
+  | boolean
+  | { failedItems: MoveUndoItem[]; skipped?: boolean };
+
+export type DriveTrashUndoOutcome =
+  | boolean
+  | { failedItems: UndoableEntityRef[] };
+
+export type DriveRenameUndoOutcome = boolean | 'skipped';
+
 export type DriveUndoExecutors = {
-  undoMove: (items: readonly MoveUndoItem[]) => Promise<boolean>;
-  undoTrash: (items: readonly UndoableEntityRef[]) => Promise<boolean>;
+  undoMove: (
+    items: readonly MoveUndoItem[],
+    destinationFolderId: string | null
+  ) => Promise<DriveMoveUndoOutcome>;
+  undoTrash: (
+    items: readonly UndoableEntityRef[]
+  ) => Promise<DriveTrashUndoOutcome>;
   undoRename: (
     entity: UndoableEntityRef,
-    previousName: string
-  ) => Promise<boolean>;
+    previousName: string,
+    expectedCurrentName: string
+  ) => Promise<DriveRenameUndoOutcome>;
 };
 
 export type DriveUndoResult =
   | { status: 'empty' }
   | { status: 'busy' }
   | { status: 'undone'; action: DriveUndoAction }
+  | { status: 'skipped'; action: DriveUndoAction }
   | { status: 'failed'; action: DriveUndoAction };
 
 export type DriveUndoManager = {
@@ -66,16 +83,61 @@ export function createDriveUndoManager(
   ): Promise<DriveUndoResult> => {
     setIsUndoing(true);
     try {
-      let ok = false;
       if (action.kind === 'move') {
-        ok = await executors.undoMove(action.items);
-      } else if (action.kind === 'trash') {
-        ok = await executors.undoTrash(action.items);
-      } else {
-        ok = await executors.undoRename(action.entity, action.previousName);
+        const outcome = await executors.undoMove(
+          action.items,
+          action.destinationFolderId
+        );
+        if (typeof outcome === 'boolean') {
+          if (!outcome) {
+            setStack((current) => pushUndoAction(current, action));
+            return { status: 'failed', action };
+          }
+          return { status: 'undone', action };
+        }
+        if (outcome.skipped && outcome.failedItems.length === 0) {
+          return { status: 'skipped', action };
+        }
+        if (outcome.failedItems.length > 0) {
+          const retryAction: DriveUndoAction = {
+            ...action,
+            items: outcome.failedItems,
+          };
+          setStack((current) => pushUndoAction(current, retryAction));
+          return { status: 'failed', action: retryAction };
+        }
+        return { status: 'undone', action };
       }
-      if (!ok) {
-        // Put the entry back on top so the user can retry.
+
+      if (action.kind === 'trash') {
+        const outcome = await executors.undoTrash(action.items);
+        if (typeof outcome === 'boolean') {
+          if (!outcome) {
+            setStack((current) => pushUndoAction(current, action));
+            return { status: 'failed', action };
+          }
+          return { status: 'undone', action };
+        }
+        if (outcome.failedItems.length > 0) {
+          const retryAction: DriveUndoAction = {
+            ...action,
+            items: outcome.failedItems,
+          };
+          setStack((current) => pushUndoAction(current, retryAction));
+          return { status: 'failed', action: retryAction };
+        }
+        return { status: 'undone', action };
+      }
+
+      const outcome = await executors.undoRename(
+        action.entity,
+        action.previousName,
+        action.nextName
+      );
+      if (outcome === 'skipped') {
+        return { status: 'skipped', action };
+      }
+      if (!outcome) {
         setStack((current) => pushUndoAction(current, action));
         return { status: 'failed', action };
       }

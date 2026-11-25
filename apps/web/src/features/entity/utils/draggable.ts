@@ -21,14 +21,22 @@ export const EntityDragSelectionContext = createContext<EntityDragSelection>();
 export function createEntityDraggable(options: {
   entity: EntityData;
   splitId?: string;
+  /** Disambiguates duplicate renderings of the same entity inside one split (e.g. sidebar tree vs. main list). */
+  instanceKey?: string;
+  /** Optional explicit drag selection bound to this specific row/card. */
+  selection?: EntityDragSelection;
   /** Opt-in by the owning view; legacy rows register eagerly. */
   deferUntilInteraction?: Accessor<boolean>;
 }): (element: HTMLElement) => void {
   const operation = useOptionalDragOperation();
   if (!operation) return () => {};
   const { isAltKey } = operation;
-  const selection = useContext(EntityDragSelectionContext);
-  const draggableId = `${options.entity.id}-${options.splitId ?? createUniqueId()}`;
+  const contextSelection = useContext(EntityDragSelectionContext);
+  const selection =
+    options.selection !== undefined ? options.selection : contextSelection;
+  const draggableId = options.instanceKey
+    ? `${options.entity.id}-${options.splitId ?? createUniqueId()}-${options.instanceKey}`
+    : `${options.entity.id}-${options.splitId ?? createUniqueId()}`;
 
   const create = () => {
     // Rows now survive entity updates. Keep the payload reactive without

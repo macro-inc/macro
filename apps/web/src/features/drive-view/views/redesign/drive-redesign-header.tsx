@@ -50,7 +50,9 @@ export function DriveRedesignHeader(props: {
     useDriveRedesign();
   const display = useDriveDisplayItems();
   const panel = useSplitPanelOrThrow();
-  const createDropTarget = createFolderDropTargets();
+  const createDropTarget = createFolderDropTargets({
+    onMove: host.moveEntitiesWithUndo,
+  });
 
   let focusSearchFn: (() => void) | undefined;
 
@@ -75,6 +77,14 @@ export function DriveRedesignHeader(props: {
   const isRecent = () => {
     const loc = location();
     return loc.kind === 'tab' && loc.tab === 'recent';
+  };
+
+  const showColumnsToggle = () => {
+    if (isStarred() || isRecent() || isTrash()) return false;
+    if (display.isSearching() || display.hasFilters()) return false;
+    const loc = location();
+    if (loc.kind === 'folder') return true;
+    return loc.tab === 'owned' && preferences.rootMode() === 'browse';
   };
 
   const activeFolderId = () => state.projectId();
@@ -342,7 +352,7 @@ export function DriveRedesignHeader(props: {
             >
               <SquaresFourIcon class="size-4" aria-hidden="true" />
             </ButtonGroup.Button>
-            <Show when={!isStarred() && !isRecent()}>
+            <Show when={showColumnsToggle()}>
               <ButtonGroup.Button
                 size="icon-md"
                 aria-label={t('drive.viewColumns')}

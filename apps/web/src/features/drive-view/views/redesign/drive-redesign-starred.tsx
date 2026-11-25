@@ -1,24 +1,25 @@
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { t } from '@app/lib/i18n';
-import {
-  favoriteDisplayName,
-  useFavoriteDisplayName,
-} from '@app/util/favorites';
+import { useFavoriteDisplayName } from '@app/util/favorites';
 import { fireAndForget } from '@core/util/fireAndForget';
 import StarFillIcon from '@icon/system/fill/star-fill.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button, Tooltip } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { type Accessor, createMemo, For, mapArray, Show } from 'solid-js';
 import { DriveRedesignEmptyState } from '../../components/redesign/drive-empty-state';
 import { driveKindLabel } from '../../components/redesign/kind-label';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import { driveItemKind } from '../../core/drive-items';
 
-function StarredRow(props: { favorite: Favorite }) {
+type ResolvedFavorite = {
+  favorite: Favorite;
+  name: Accessor<string>;
+};
+
+function StarredRow(props: ResolvedFavorite) {
   const { actions } = useDriveView();
   const { host } = useDriveRedesign();
-  const name = useFavoriteDisplayName(props.favorite);
   const kind = () =>
     driveItemKind({
       type: props.favorite.entityType,
@@ -31,12 +32,14 @@ function StarredRow(props: { favorite: Favorite }) {
   return (
     <div
       class="group/star-row flex h-11 min-w-0 items-center gap-3 border-b border-edge-muted/60 px-4 text-sm transition-colors hover:bg-hover/60"
-      onClick={(event) => actions.openFavorite(props.favorite, name(), event)}
+      onClick={(event) =>
+        actions.openFavorite(props.favorite, props.name(), event)
+      }
     >
       <FavoriteIcon favorite={props.favorite} class="size-5 shrink-0" />
-      <Tooltip label={name()} class="min-w-0 flex-1">
+      <Tooltip label={props.name()} class="min-w-0 flex-1">
         <span class="min-w-0 flex-1 truncate font-medium text-ink">
-          {name()}
+          {props.name()}
         </span>
       </Tooltip>
       <span class="hidden w-28 shrink-0 text-xs text-ink-muted sm:block">
@@ -61,10 +64,9 @@ function StarredRow(props: { favorite: Favorite }) {
   );
 }
 
-function StarredGridCard(props: { favorite: Favorite }) {
+function StarredGridCard(props: ResolvedFavorite) {
   const { actions } = useDriveView();
   const { host } = useDriveRedesign();
-  const name = useFavoriteDisplayName(props.favorite);
   const kind = () =>
     driveItemKind({
       type: props.favorite.entityType,
@@ -77,7 +79,9 @@ function StarredGridCard(props: { favorite: Favorite }) {
   return (
     <div
       class="group/star-card relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel transition-colors hover:border-edge"
-      onClick={(event) => actions.openFavorite(props.favorite, name(), event)}
+      onClick={(event) =>
+        actions.openFavorite(props.favorite, props.name(), event)
+      }
     >
       <div class="relative flex h-24 items-center justify-center border-b border-edge-muted/70 bg-inset/60">
         <div class="flex size-12 items-center justify-center rounded-xl border border-edge-muted bg-surface shadow-xs">
@@ -101,9 +105,9 @@ function StarredGridCard(props: { favorite: Favorite }) {
         </Button>
       </div>
       <div class="flex flex-col gap-1 p-3">
-        <Tooltip label={name()} class="min-w-0 max-w-full">
+        <Tooltip label={props.name()} class="min-w-0 max-w-full">
           <div class="line-clamp-2 min-h-[2.25rem] text-sm leading-snug font-medium text-ink">
-            {name()}
+            {props.name()}
           </div>
         </Tooltip>
         <span class="text-[11px] text-ink-muted">{driveKindLabel(kind())}</span>
@@ -113,24 +117,21 @@ function StarredGridCard(props: { favorite: Favorite }) {
 }
 
 export function DriveRedesignStarred() {
-  const { state, sidebar, source } = useDriveView();
+  const { state, sidebar } = useDriveView();
   const { preferences } = useDriveRedesign();
 
-  const knownNames = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const folder of sidebar.folders()) map.set(folder.id, folder.name);
-    for (const item of source.items()) map.set(item.id, item.entity.name);
-    return map;
-  });
+  const resolvedFavorites = createMemo(
+    mapArray(sidebar.favorites, (favorite) => ({
+      favorite,
+      name: useFavoriteDisplayName(favorite),
+    }))
+  );
 
   const filtered = createMemo(() => {
     const term = state.value().search.trim().toLocaleLowerCase();
-    if (!term) return sidebar.favorites();
-    return sidebar.favorites().filter((fav) => {
-      const candidate =
-        knownNames().get(fav.entityId) ?? favoriteDisplayName(fav);
-      return candidate.toLocaleLowerCase().includes(term);
-    });
+    const list = resolvedFavorites();
+    if (!term) return list;
+    return list.filter(({ name }) => name().toLocaleLowerCase().includes(term));
   });
 
   return (
@@ -149,7 +150,9 @@ export function DriveRedesignStarred() {
         fallback={
           <div class="min-h-0 flex-1 overflow-y-auto overscroll-none">
             <For each={filtered()}>
-              {(favorite) => <StarredRow favorite={favorite} />}
+              {(entry) => (
+                <StarredRow favorite={entry.favorite} name={entry.name} />
+              )}
             </For>
           </div>
         }
@@ -157,7 +160,9 @@ export function DriveRedesignStarred() {
         <div class="min-h-0 flex-1 overflow-y-auto overscroll-none p-4">
           <div class="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-3">
             <For each={filtered()}>
-              {(favorite) => <StarredGridCard favorite={favorite} />}
+              {(entry) => (
+                <StarredGridCard favorite={entry.favorite} name={entry.name} />
+              )}
             </For>
           </div>
         </div>

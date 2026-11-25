@@ -3,6 +3,9 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  account: { userId: 'u1', session: 1 } as
+    | { userId: string; session: number }
+    | undefined,
   invalidateDeletedItems: vi.fn(async () => {}),
   restoreEntity: vi.fn(async () => {}),
   permanentlyDeleteEntity: vi.fn(async () => {}),
@@ -17,6 +20,20 @@ const mocks = vi.hoisted(() => ({
     fetchNextPage: vi.fn(async () => {}),
     refetch: vi.fn(async () => {}),
   },
+}));
+
+vi.mock('@queries/auth/use-query-account', () => ({
+  useQueryAccount: () => () => mocks.account,
+}));
+
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => mocks.account,
+  isCurrentQueryAccount: (captured: { userId: string; session: number }) =>
+    Boolean(
+      mocks.account &&
+        mocks.account.userId === captured.userId &&
+        mocks.account.session === captured.session
+    ),
 }));
 
 vi.mock('@queries/storage/deleted', () => ({
@@ -134,6 +151,16 @@ describe('drive-trash query adapter', () => {
         type: 'CHAT',
         id: 'c1',
       });
+
+      // Account pending hides items and blocks mutations cleanly.
+      mocks.account = undefined;
+      expect(source.items()).toEqual([]);
+      expect(source.isLoading()).toBe(true);
+      const blocked = await source.restoreItems([
+        { id: 'd1', itemType: 'document' },
+      ]);
+      expect(blocked).toEqual({ restored: 0, failed: 1 });
+      mocks.account = { userId: 'u1', session: 1 };
 
       dispose();
     });

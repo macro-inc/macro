@@ -98,7 +98,8 @@ describe('drive-undo manager', () => {
       expect(latest.status).toBe('undone');
       expect(undoRename).toHaveBeenCalledWith(
         { id: 'd3', type: 'document', name: 'Final.md' },
-        'WIP.md'
+        'WIP.md',
+        'Final.md'
       );
 
       // Undo remaining move by id
@@ -107,6 +108,63 @@ describe('drive-undo manager', () => {
       expect(undoMove).toHaveBeenCalledTimes(1);
       expect(manager.canUndo()).toBe(false);
       expect((await manager.undoLatest()).status).toBe('empty');
+
+      dispose();
+    });
+  });
+
+  it('retains only failed items on partial move undo and reports skipped stale renames', async () => {
+    await createRoot(async (dispose) => {
+      const undoMove = vi.fn().mockResolvedValueOnce({
+        failedItems: [
+          {
+            entity: { id: 'd2', type: 'document', name: 'B.md' },
+            previousProjectId: 'f0',
+          },
+        ],
+      });
+      const undoTrash = vi.fn().mockResolvedValue(true);
+      const undoRename = vi.fn().mockResolvedValue('skipped');
+
+      const manager = createDriveUndoManager({
+        undoMove,
+        undoTrash,
+        undoRename,
+      });
+
+      const moveId = manager.recordMove({
+        items: [
+          {
+            entity: { id: 'd1', type: 'document', name: 'A.md' },
+            previousProjectId: null,
+          },
+          {
+            entity: { id: 'd2', type: 'document', name: 'B.md' },
+            previousProjectId: 'f0',
+          },
+        ],
+        destinationFolderId: 'f1',
+        destinationName: 'Specs',
+      });
+      const renameId = manager.recordRename({
+        entity: { id: 'd3', type: 'document', name: 'B.md' },
+        previousName: 'A.md',
+        nextName: 'B.md',
+      });
+
+      const skipped = await manager.undoById(renameId);
+      expect(skipped.status).toBe('skipped');
+      expect(manager.size()).toBe(1);
+
+      const partial = await manager.undoById(moveId);
+      expect(partial.status).toBe('failed');
+      expect(manager.size()).toBe(1);
+      const retained = manager.latest();
+      expect(retained?.kind).toBe('move');
+      if (retained?.kind === 'move') {
+        expect(retained.items).toHaveLength(1);
+        expect(retained.items[0].entity.id).toBe('d2');
+      }
 
       dispose();
     });

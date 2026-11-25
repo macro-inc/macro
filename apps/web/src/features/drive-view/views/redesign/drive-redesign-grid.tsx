@@ -7,6 +7,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isEditableInput } from '@core/util/isEditableInput';
 import {
   createEntityDraggable,
+  type EntityData,
   EntityDragSelectionContext,
   EntityRowIcon,
   formatRelativeTimestamp,
@@ -140,6 +141,8 @@ function FolderGridCard(props: {
   row: DriveDisplayRow;
   focused: boolean;
   selected: boolean;
+  selectedEntities: () => EntityData[];
+  onClearSelection: () => void;
   splitId: string;
   createDropTarget?: ReturnType<typeof createFolderDropTargets>;
   onFocus: () => void;
@@ -162,6 +165,13 @@ function FolderGridCard(props: {
       return props.row.entity;
     },
     splitId: props.splitId,
+    instanceKey: 'grid-folder',
+    selection: {
+      entities: () =>
+        props.selected ? props.selectedEntities() : [props.row.entity],
+      selected: props.selectedEntities,
+      clear: props.onClearSelection,
+    },
   });
 
   const isRenamingHere = () => {
@@ -297,6 +307,8 @@ function FileGridCard(props: {
   row: DriveDisplayRow;
   focused: boolean;
   selected: boolean;
+  selectedEntities: () => EntityData[];
+  onClearSelection: () => void;
   splitId: string;
   onFocus: () => void;
   onToggleSelect: (shiftKey: boolean) => void;
@@ -326,6 +338,13 @@ function FileGridCard(props: {
       return props.row.entity;
     },
     splitId: props.splitId,
+    instanceKey: 'grid-file',
+    selection: {
+      entities: () =>
+        props.selected ? props.selectedEntities() : [props.row.entity],
+      selected: props.selectedEntities,
+      clear: props.onClearSelection,
+    },
   });
 
   const isRenamingHere = () => {
@@ -514,7 +533,9 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
   } = useDriveRedesign();
   const display = useDriveDisplayItems();
   const panel = useSplitPanelOrThrow();
-  const createDropTarget = createFolderDropTargets();
+  const createDropTarget = createFolderDropTargets({
+    onMove: host.moveEntitiesWithUndo,
+  });
 
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [viewportRef, setViewportRef] = createSignal<HTMLDivElement>();
@@ -583,6 +604,9 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
   });
 
   const clearSelection = () => setSelectedIds(new Set<string>());
+  onCleanup(() => {
+    setSelectedEntities([]);
+  });
   onCleanup(registerClearSelection(clearSelection));
 
   const toggleSelect = (id: string, shiftKey: boolean) => {
@@ -657,13 +681,18 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
     focusedRow: DriveDisplayRow | undefined
   ) => {
     if (!focusedRow) return;
+    const nestedControl = (event.target as HTMLElement | null)?.closest(
+      'button, a, [role="checkbox"], [role="radio"], [role="menuitem"]'
+    );
     if (event.key === ' ') {
+      if (nestedControl) return;
       event.preventDefault();
       setInspectedEntity(focusedRow.entity);
       inspector.toggle();
       return;
     }
     if (event.key === 'Enter') {
+      if (nestedControl) return;
       event.preventDefault();
       actions.openEntity(
         focusedRow.entity,
@@ -709,7 +738,11 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (inlineEdit.isEditing() || isEditableInput(event.target as Element)) {
+    if (
+      event.defaultPrevented ||
+      inlineEdit.isEditing() ||
+      isEditableInput(event.target as Element)
+    ) {
       return;
     }
     const list = visualRows();
@@ -856,6 +889,8 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
                           row={row}
                           focused={focusedId() === row.id}
                           selected={selectedIds().has(row.id)}
+                          selectedEntities={selectedRowEntities}
+                          onClearSelection={clearSelection}
                           splitId={panel.handle.id}
                           createDropTarget={createDropTarget}
                           onFocus={() => {
@@ -896,6 +931,8 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
                             row={row}
                             focused={focusedId() === row.id}
                             selected={selectedIds().has(row.id)}
+                            selectedEntities={selectedRowEntities}
+                            onClearSelection={clearSelection}
                             splitId={panel.handle.id}
                             createDropTarget={createDropTarget}
                             onFocus={() => {
@@ -914,6 +951,8 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
                             row={row}
                             focused={focusedId() === row.id}
                             selected={selectedIds().has(row.id)}
+                            selectedEntities={selectedRowEntities}
+                            onClearSelection={clearSelection}
                             splitId={panel.handle.id}
                             onFocus={() => {
                               setFocusedId(row.id);

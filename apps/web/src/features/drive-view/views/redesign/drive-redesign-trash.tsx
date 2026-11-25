@@ -111,15 +111,31 @@ export function DriveRedesignTrash() {
     }
   };
 
+  const unfilteredHierarchy = createMemo(() =>
+    summarizeTrashHierarchy(trash.items())
+  );
+
+  const isSearching = () => state.value().search.trim().length > 0;
+
   const emptyTrash = async () => {
-    const all = visibleItems();
-    if (all.length === 0 || busy()) return;
+    const all = unfilteredHierarchy().topLevel;
+    if (all.length === 0 || busy() || isSearching()) return;
+    const hasMore = trash.hasMore();
+    const hasFolders = all.some((item) => item.itemType === 'project');
+    const baseBody = hasMore
+      ? t('drive.emptyTrashLoadedConfirmDescription', { count: all.length })
+      : t('drive.emptyTrashConfirmDescription', { count: all.length });
+    const body = hasFolders
+      ? `${baseBody} ${t('drive.trashFolderCascadeWarning')}`
+      : baseBody;
     const confirmed = await confirmDialog({
-      title: t('drive.emptyTrashConfirmTitle'),
-      body: t('drive.emptyTrashConfirmDescription', {
-        count: all.length,
-      }),
-      confirmLabel: t('drive.emptyTrash'),
+      title: hasMore
+        ? t('drive.emptyTrashLoadedConfirmTitle')
+        : t('drive.emptyTrashConfirmTitle'),
+      body,
+      confirmLabel: hasMore
+        ? t('drive.emptyTrashLoadedLabel')
+        : t('drive.emptyTrash'),
       tone: 'danger',
     });
     if (!confirmed) return;
@@ -193,16 +209,24 @@ export function DriveRedesignTrash() {
             </div>
           </Show>
 
-          <Button
-            variant="ghost"
-            size="xs"
-            disabled={busy()}
-            class="text-failure-ink hover:text-failure-ink"
-            onClick={() => fireAndForget(emptyTrash(), 'drive-trash-empty-all')}
-          >
-            <TrashIcon class="size-3.5" aria-hidden="true" />
-            <span>{t('drive.emptyTrash')}</span>
-          </Button>
+          <Show when={!isSearching()}>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={busy()}
+              class="text-failure-ink hover:text-failure-ink"
+              onClick={() =>
+                fireAndForget(emptyTrash(), 'drive-trash-empty-all')
+              }
+            >
+              <TrashIcon class="size-3.5" aria-hidden="true" />
+              <span>
+                {trash.hasMore()
+                  ? t('drive.emptyTrashLoadedLabel')
+                  : t('drive.emptyTrash')}
+              </span>
+            </Button>
+          </Show>
         </div>
       </Show>
 
@@ -217,10 +241,26 @@ export function DriveRedesignTrash() {
           <DriveContentSkeleton mode="list" label={t('drive.loadingTrash')} />
         </Match>
         <Match when={visibleItems().length === 0}>
-          <DriveRedesignEmptyState
-            reason={state.value().search.trim() ? 'search' : 'trash'}
-            onClearSearch={() => state.setSearch('')}
-          />
+          <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+            <DriveRedesignEmptyState
+              reason={isSearching() ? 'search' : 'trash'}
+              onClearSearch={() => state.setSearch('')}
+            />
+            <Show when={isSearching() && trash.hasMore()}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={trash.isLoadingMore()}
+                onClick={() =>
+                  fireAndForget(trash.loadMore(), 'drive-trash-search-more')
+                }
+              >
+                {trash.isLoadingMore()
+                  ? t('drive.loadingMore')
+                  : t('drive.loadMoreTrashMatches')}
+              </Button>
+            </Show>
+          </div>
         </Match>
         <Match when={true}>
           <div class="flex min-h-0 flex-1 flex-col overflow-hidden">

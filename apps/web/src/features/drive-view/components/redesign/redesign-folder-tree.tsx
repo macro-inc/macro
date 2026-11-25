@@ -82,6 +82,7 @@ function FolderTreeNodeRow(props: {
       return dragEntity();
     },
     splitId: props.tree.splitId,
+    instanceKey: 'sidebar-tree',
   });
 
   const isSelected = () => props.tree.selectedId === props.node.id;
