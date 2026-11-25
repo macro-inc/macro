@@ -2,13 +2,14 @@ import type { Guard, ToolCall } from '../guard.ts';
 
 /**
  * Denies any tool call that would send email: Gmail compose and send,
- * AgentMail sends, mail programs, mailto links, and the send tools of mail
- * MCP servers. Reading mail stays allowed. The one way out is the
- * replyToMail capability, which holds the send credential and its own rules
- * about whom it answers; nothing here matches it.
+ * AgentMail sends, mail programs, mailto links, the send tools of mail MCP
+ * servers, and the agent's own mailbox reached around its capability.
+ * Reading mail stays allowed. The one way out is the mailbox capability:
+ * sendMyEmail and replyToMyEmail send only a draft the owner approved, from
+ * the agent's own address; nothing here matches them.
  */
 export const noEmailReason =
-  "You don't send email, except with replyToMail, which decides on its own whom it may answer. If only an email would move this, tell your owner.";
+  "You don't send email, except from your own address with sendMyEmail or replyToMyEmail, after your owner approves the draft. If only an email would move this, tell your owner.";
 
 const sends: readonly RegExp[] = [
   // Gmail's compose URL.
@@ -24,6 +25,12 @@ const sends: readonly RegExp[] = [
   /\bsmtp\.gmail\.com\b/i,
   // The send credential is the capability's alone.
   /\bMAIL_(REFRESH_TOKEN|CLIENT_SECRET|CLIENT_ID)\b/,
+  // The agent's own mailbox, around the mailbox capability: the SDK's send
+  // and reply, its message handles, its raw client calls, and its routes.
+  /\bagentMailbox\b.*\.(send|reply)\(/is,
+  /\bAgentMailMessage\b/,
+  /\b(send|reply)AgentMailboxMessage\b/,
+  /\/agent-mailbox\b/i,
 ];
 
 /** Why this call is refused, or undefined if it doesn't send email. */
