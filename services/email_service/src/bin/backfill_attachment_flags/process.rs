@@ -88,7 +88,10 @@ pub async fn run_pass(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()
 
     println!("\n=== {updates} thread updates, {skips} skipped as locked ===");
     if end < table_end {
-        println!("Stopped at END_BLOCK; continue with START_BLOCK={end}");
+        println!(
+            "Stopped at END_BLOCK; continue with START_BLOCK={end} and END_BLOCK unset \
+             (to the table's end) or raised (for another bounded run)"
+        );
     }
     if skips > 0 {
         println!(
