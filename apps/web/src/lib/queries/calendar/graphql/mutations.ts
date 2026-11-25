@@ -243,6 +243,31 @@ function answeredMove(
   };
 }
 
+/**
+ * Holds `moved` while the queue holds its move, and announces where the
+ * move's answer put it. Without a moved occurrence it does nothing.
+ */
+function trackMove(moved: OccurrenceRecord | undefined) {
+  const ref = moved && occurrenceRef(moved.eventId, moved.occurrenceKey);
+  let held = false;
+  return {
+    enqueued() {
+      if (!ref) return;
+      held = true;
+      holdMoving(ref, 1);
+    },
+    answered(result: OperationResult<UpdateCalendarEventMutation>) {
+      const move = moved && answeredMove(moved, replacingOccurrence(result));
+      if (move) announceMove(move);
+    },
+    settled() {
+      if (!ref || !held) return;
+      holdMoving(ref, -1);
+      announceMove();
+    },
+  };
+}
+
 /** Whether `eventId` is a local event the server has not confirmed yet. */
 export function isCalendarEventCreating(eventId: string): boolean {
   return pendingCreates.has(eventId);
@@ -641,9 +666,7 @@ export async function executeGraphqlUpdate(
     !oneOccurrence &&
     recurring &&
     (patch.time != null || patch.recurrenceLines != null);
-  const moved = movedOccurrence(event, occurrences, patch, recurring);
-  const movedRef = moved && occurrenceRef(moved.eventId, moved.occurrenceKey);
-  let held = false;
+  const move = trackMove(movedOccurrence(event, occurrences, patch, recurring));
   const sent = executeOptimisticMutation(
     client,
     UpdateCalendarEventDocument,
@@ -720,10 +743,7 @@ export async function executeGraphqlUpdate(
     {
       uuid: uuidv4(),
       onEnqueued: () => {
-        if (movedRef) {
-          held = true;
-          holdMoving(movedRef, 1);
-        }
+        move.enqueued();
         args.onAccepted?.();
       },
       ...(uncertain
@@ -733,20 +753,16 @@ export async function executeGraphqlUpdate(
   ).toPromise();
   try {
     const result = await sent;
-    const move = moved && answeredMove(moved, replacingOccurrence(result));
     // Announced before the answer replaces the event's occurrences, so open
     // details know where to go before the moved occurrence leaves.
-    if (move) announceMove(move);
+    move.answered(result);
     return await settle(
       host,
       result,
       result.data?.updateCalendarEvent ?? undefined
     );
   } finally {
-    if (movedRef && held) {
-      holdMoving(movedRef, -1);
-      announceMove();
-    }
+    move.settled();
   }
 }
 
