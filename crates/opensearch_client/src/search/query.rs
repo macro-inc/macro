@@ -42,7 +42,7 @@ pub(crate) struct CreateQueryParams<'a> {
 /// ([`single_word_prefix`]); any other partial term, a shorter word or several
 /// words, stays a `match_phrase_prefix` that expands to only the first
 /// `max_expansions` terms of a shard.
-pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
+pub(crate) fn create_query<'a>(params: CreateQueryParams<'_>) -> QueryType<'a> {
     let CreateQueryParams {
         query_key,
         field,
@@ -164,24 +164,31 @@ pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType
     )
 }
 
-/// Words every link URL holds, which a link query leaves out: a term of
-/// only these would match every message that shares a link.
+/// Words nearly every link URL holds, which a link query leaves out: a term
+/// of only these would match nearly every message that shares a link.
 const LINK_BOILERPLATE_WORDS: [&str; 3] = ["http", "https", "www"];
+
+/// Endings most hosts share, which name no site on their own; beside other
+/// words (`example.com`) they still narrow a link query.
+const GENERIC_TLDS: [&str; 3] = ["com", "org", "net"];
 
 /// The query a content term runs against a field of link URLs, which the
 /// built-in `pattern` analyzer splits at every character that is not an ASCII
 /// letter, digit or `_`: `https://app.example.design/a` is `https`, `app`,
-/// `example`, `design`, `a`. The term is split the same way and every word
-/// must be in one URL: in order for an exact term, otherwise in any order
-/// with the last a prefix when it has [`MIN_PREFIX_LEN`] characters, so
-/// `example.design` finds `app.example.design`. `http`, `https` and `www` are
-/// left out of the term, and a term of only those, like a regexp term,
-/// matches no link.
+/// `example`, `design`, `a`. The term is split the same way and matched by
+/// [`create_query`]'s rules for those words, as message text is: one word as
+/// a prefix, several in order with the last a prefix (`example.design` finds
+/// `app.example.design`, `example.com` no `github.com/example`). `http`,
+/// `https` and `www` are left out of the term; a term of only those, of only
+/// `com`, `org` or `net`, or a regexp term matches no link.
 pub(crate) fn link_query<'a>(
     query_key: QueryKey,
     field: &str,
     term: &str,
 ) -> Option<QueryType<'a>> {
+    if query_key == QueryKey::Regexp {
+        return None;
+    }
     let words: Vec<&str> = term
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         .filter(|word| {
@@ -191,22 +198,19 @@ pub(crate) fn link_query<'a>(
                     .any(|boilerplate| word.eq_ignore_ascii_case(boilerplate))
         })
         .collect();
-    let last = words.last()?;
-    let last_is_prefix = last.chars().count() >= MIN_PREFIX_LEN;
-    let words = words.join(" ");
-    match query_key {
-        QueryKey::MatchPhrase => Some(QueryType::MatchPhrase(MatchPhraseQuery::new(
-            field.to_string(),
-            words,
-        ))),
-        QueryKey::MatchPhrasePrefix if last_is_prefix => Some(QueryType::MatchBoolPrefix(
-            MatchBoolPrefixQuery::new(field.to_string(), words).operator("and"),
-        )),
-        QueryKey::MatchPhrasePrefix => Some(QueryType::Match(
-            MatchQuery::new(field.to_string(), words).operator("and"),
-        )),
-        QueryKey::Regexp => None,
+    let names_no_site = words.iter().all(|word| {
+        GENERIC_TLDS
+            .iter()
+            .any(|tld| word.eq_ignore_ascii_case(tld))
+    });
+    if names_no_site {
+        return None;
     }
+    Some(create_query(CreateQueryParams {
+        query_key,
+        field,
+        term: &words.join(" "),
+    }))
 }
 
 impl QueryKey {

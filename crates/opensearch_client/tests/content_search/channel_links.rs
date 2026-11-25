@@ -68,7 +68,7 @@ struct Case {
     expected: &'static [u128],
 }
 
-const CASES: [Case; 10] = [
+const CASES: [Case; 12] = [
     // The site's name inside the host, which `content` keeps as one token.
     Case {
         terms: &["sketchpad"],
@@ -97,6 +97,11 @@ const CASES: [Case; 10] = [
         expected: &[2],
     },
     Case {
+        terms: &["example.com"],
+        match_type: "partial",
+        expected: &[2],
+    },
+    Case {
         terms: &["docs.example.com", "spec"],
         match_type: "partial",
         expected: &[2],
@@ -120,6 +125,12 @@ const CASES: [Case; 10] = [
     },
     Case {
         terms: &["www"],
+        match_type: "partial",
+        expected: &[],
+    },
+    // A host ending alone names no site; beside its domain it narrows.
+    Case {
+        terms: &["com"],
         match_type: "partial",
         expected: &[],
     },

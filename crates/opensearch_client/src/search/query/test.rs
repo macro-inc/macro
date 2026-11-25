@@ -188,43 +188,46 @@ fn a_field_prefix_expands_in_full_only_for_one_word_of_three_or_more_characters(
     );
 }
 
-/// A term matches a link by the words of its URL, every word in one link,
-/// whatever punctuation joins them; `http`, `https` and `www`, which every
-/// link holds, are left out.
+/// A term matches a link by the words of its URL, whatever punctuation joins
+/// them, with the rules message text has for words; `http`, `https` and
+/// `www`, which nearly every link holds, are left out, and a host ending
+/// alone matches no link.
 #[test]
 fn a_link_term_matches_every_word_of_its_url() {
+    let prefix = |query: &str| {
+        Some(
+            serde_json::json!({"match_phrase_prefix": {"links": {"query": query, "max_expansions": 256}}}),
+        )
+    };
     let cases = [
         (
             QueryKey::MatchPhrasePrefix,
             "sketchpad",
-            Some(
-                serde_json::json!({"match_bool_prefix": {"links": {"query": "sketchpad", "operator": "and"}}}),
-            ),
+            Some(serde_json::json!({"match_bool_prefix": {"links": {"query": "sketchpad"}}})),
         ),
         (
             QueryKey::MatchPhrasePrefix,
             "sketchpad.design",
-            Some(
-                serde_json::json!({"match_bool_prefix": {"links": {"query": "sketchpad design", "operator": "and"}}}),
-            ),
+            prefix("sketchpad design"),
         ),
         (
             QueryKey::MatchPhrasePrefix,
             "HTTPS://www.Sketchpad.design/Files",
-            Some(
-                serde_json::json!({"match_bool_prefix": {"links": {"query": "Sketchpad design Files", "operator": "and"}}}),
-            ),
+            prefix("Sketchpad design Files"),
         ),
         (
             QueryKey::MatchPhrasePrefix,
-            "notes.io",
-            Some(serde_json::json!({"match": {"links": {"query": "notes io", "operator": "and"}}})),
+            "example.com",
+            prefix("example com"),
         ),
+        (QueryKey::MatchPhrasePrefix, "io", prefix("io")),
         (
             QueryKey::MatchPhrase,
             "www.sketchpad.design",
             Some(serde_json::json!({"match_phrase": {"links": "sketchpad design"}})),
         ),
+        (QueryKey::MatchPhrasePrefix, "com", None),
+        (QueryKey::MatchPhrasePrefix, "www.Org", None),
         (QueryKey::MatchPhrasePrefix, "https", None),
         (QueryKey::MatchPhrasePrefix, "https://www.", None),
         (QueryKey::MatchPhrase, "www", None),
@@ -255,7 +258,7 @@ fn a_term_matches_its_fields_or_a_link() {
         with_links.to_json(),
         serde_json::json!({"bool": {"minimum_should_match": 1, "should": [
             {"match_bool_prefix": {"content": {"query": "sketchpad"}}},
-            {"match_bool_prefix": {"links": {"query": "sketchpad", "operator": "and"}}}
+            {"match_bool_prefix": {"links": {"query": "sketchpad"}}}
         ]}})
     );
     let only_boilerplate = generate_terms_must_query_for_fields(

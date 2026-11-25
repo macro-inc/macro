@@ -209,8 +209,10 @@ projects.
   needs no analysis settings, so the field was added to the live index in
   place; a change to `content_text` would need a new index version and a full
   reindex. Each content term also matches `links` (`query::link_query`): its
-  words split the same way, all in one URL, `http`, `https` and `www` left
-  out. A hit matched only there takes its `links` highlight as its content
+  words split the same way and matched by `create_query`'s rules (several
+  words in order, as a capped phrase prefix), `http`, `https` and `www` left
+  out, and a term of only `com`, `org` or `net` matches no link (on dev
+  `com` alone was in 182 of 228 messages' links). A hit matched only there takes its `links` highlight as its content
   snippet (`parse_highlight_hit`), as `source_names` stands in for a calendar
   name. `tests/content_search/channel_links.rs` checks it against a real index.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`

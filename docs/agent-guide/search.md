@@ -103,8 +103,8 @@ A channel or DM message also matches the words of the web links it shares,
 whether its text shows the URL or a label: the names in the host
 (`sketchpad` finds `app.sketchpad.design`), the domain (`sketchpad.design`) and
 the words of the path. A message found only through a link shows that link as
-its snippet, with the match highlighted. `http`, `https` and `www` alone find
-only messages whose text holds them.
+its snippet, with the match highlighted. `http`, `https`, `www`, `com`, `org`
+and `net` alone find only messages whose text holds them.
 
 Contacts, agent sessions and commands list before the local cache answers a
 typed query. While it has not, Command-K and phone name search show
