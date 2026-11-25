@@ -944,3 +944,45 @@ async fn keeping_a_rule_set_past_the_limit_is_refused_but_stopping_works(pool: P
     ));
     world.merge(&merge, SharingRulesChoice::Stop).await.unwrap();
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn opposing_merges_at_once_commit_one_and_refuse_the_other(pool: PgPool) {
+    let world = Arc::new(World::new(pool.clone()).await);
+    let first = world.company("First", true, &["first.example.com"]).await;
+    let second = world.company("Second", true, &["second.example.com"]).await;
+
+    let commands = [targets(first, &[second]), targets(second, &[first])];
+    let mut reviewed = Vec::new();
+    for merge in &commands {
+        let preview = world.merges.preview(&world.scope(), merge).await.unwrap();
+        reviewed.push(MergeCommand {
+            targets: merge.clone(),
+            revision: preview.revision,
+            request_key: Uuid::now_v7(),
+            sharing_rules: SharingRulesChoice::Keep,
+        });
+    }
+    let runs = reviewed.into_iter().map(|command| {
+        let world = world.clone();
+        tokio::spawn(async move { world.merges.commit(&world.scope(), &command).await })
+    });
+    let results: Vec<_> = futures::future::join_all(runs)
+        .await
+        .into_iter()
+        .map(|joined| joined.unwrap())
+        .collect();
+
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert!(results.iter().any(|result| matches!(
+        result,
+        Err(MergeError::AlreadyMerged { .. } | MergeError::RecordUnavailable)
+    )));
+    let companies: i64 = sqlx::query_scalar("SELECT count(*) FROM crm_companies WHERE id = ANY($1)")
+        .bind(vec![first, second])
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(companies, 1, "exactly one company stays");
+    let aliases: i64 = world.scalar("SELECT count(*) FROM crm_company_aliases WHERE company_id = $1 OR retired_id = $1", first).await;
+    assert_eq!(aliases, 1, "no alias points both ways");
+}
