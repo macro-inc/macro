@@ -346,10 +346,12 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
             UPDATE microsoft_oauth_grant_versions g SET refresh_lease_id = $4, refresh_lease_until = now() + interval '3 minutes'
             WHERE grant_id = $1 AND generation = $2 AND revision = $3 AND revoked_at IS NULL
                 AND (refresh_lease_until IS NULL OR refresh_lease_until < now())
+                AND (refresh_refused_at IS NULL OR refresh_refused_at <= now() - $5::interval)
                 AND EXISTS(SELECT 1 FROM email_links l WHERE l.grant_id=g.grant_id AND l.grant_generation=g.generation
                     AND l.fusionauth_user_id=g.fusionauth_user_id AND lower(l.email_address)=g.email_address
                     AND l.provider='OUTLOOK' AND (l.is_sync_active OR l.disconnect_requested_at IS NOT NULL))
-        "#, grant.id, grant.generation, grant.revision, lease).execute(&self.db).await.map_err(database_error)?;
+        "#, grant.id, grant.generation, grant.revision, lease,
+            sqlx::postgres::types::PgInterval::try_from(REFUSED_REFRESH_RETRY).map_err(|_| MicrosoftAuthError::Unavailable)?).execute(&self.db).await.map_err(database_error)?;
         Ok(result.rows_affected() == 1)
     }
 

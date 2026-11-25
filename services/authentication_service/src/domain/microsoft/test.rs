@@ -625,3 +625,49 @@ async fn a_grant_refused_over_an_hour_ago_refreshes_again_and_works() {
         .unwrap();
     assert_eq!(token.as_str(), "working-again");
 }
+
+#[tokio::test]
+async fn a_refusal_another_replica_recorded_answers_before_a_cached_token() {
+    let grant_id = macro_uuid::generate_uuid_v7();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mut repo = MockMicrosoftGrantRepository::new();
+    let counted = reads.clone();
+    repo.expect_active_grant()
+        .times(2)
+        .returning(move |_, _, _| {
+            let refused = (counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) > 0)
+                .then(|| Utc::now() - Duration::minutes(5));
+            Ok(StoredGrant {
+                id: grant_id,
+                ..grant_refused(refused)
+            })
+        });
+    repo.expect_acquire_refresh()
+        .once()
+        .returning(|_, _| Ok(true));
+    repo.expect_finish_refresh()
+        .once()
+        .returning(|_, _, _, _| Ok(true));
+    let mut provider = MockMicrosoftIdentityProvider::new();
+    provider.expect_refresh().once().returning(|_| {
+        Ok(RefreshedGrant {
+            access_token: Zeroizing::new("cached-here".into()),
+            refresh_token: None,
+            expires_in: 3600,
+            scopes: scopes(),
+        })
+    });
+    let mut cipher = MockMicrosoftTokenCipher::new();
+    cipher
+        .expect_decrypt()
+        .once()
+        .returning(|_, _, _| Ok(MicrosoftRefreshToken::new("refresh".into())));
+    let service = Service::new(repo, provider, Arc::new(cipher));
+    let link = macro_uuid::generate_uuid_v7();
+
+    assert!(service.access_token(link, 1, 1, false).await.is_ok());
+    assert!(matches!(
+        service.access_token(link, 1, 1, false).await,
+        Err(MicrosoftAuthError::ReauthorizationRequired)
+    ));
+}

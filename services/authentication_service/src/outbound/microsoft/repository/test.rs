@@ -429,10 +429,28 @@ async fn a_refused_refresh_keeps_the_grant_until_a_refresh_works(db: PgPool) {
 
     let refused = repo.active_grant(link, 1, 1).await.unwrap();
     assert!(refused.refresh_refused_at.is_some());
+    // A request that read the grant before the refusal, or after it, asks
+    // Microsoft again only once the hour is over.
+    for snapshot in [&stored, &refused] {
+        assert!(
+            !repo
+                .acquire_refresh(snapshot, macro_uuid::generate_uuid_v7())
+                .await
+                .unwrap()
+        );
+    }
+    sqlx::query!(
+        "UPDATE microsoft_oauth_grant_versions SET refresh_refused_at = now() - interval '61 minutes' WHERE grant_id = $1",
+        grant
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let refused = repo.active_grant(link, 1, 1).await.unwrap();
     let lease = macro_uuid::generate_uuid_v7();
     assert!(
         repo.acquire_refresh(&refused, lease).await.unwrap(),
-        "a refused grant can still be refreshed"
+        "a grant refused over an hour ago is refreshed again"
     );
     assert!(
         repo.finish_refresh(&refused, lease, &envelope(2), &["Mail.ReadWrite".into()])

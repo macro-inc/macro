@@ -196,6 +196,9 @@ pub trait MicrosoftGrantRepository: Send + Sync {
         generation: i64,
         sync_generation: i64,
     ) -> Result<StoredGrant, MicrosoftAuthError>;
+    /// Refuses a grant Microsoft refused less than `REFUSED_REFRESH_RETRY`
+    /// ago, as the lease's current row records it: a request that read the
+    /// grant before another's refusal must not ask Microsoft again.
     async fn acquire_refresh(
         &self,
         grant: &StoredGrant,
@@ -308,7 +311,7 @@ pub trait MicrosoftAuth: Send + Sync {
 /// reconnect before Microsoft is asked again. A refusal can clear on its own
 /// (a sign-in policy, a consent an administrator grants later), so the grant
 /// is kept and retried at this pace rather than on every token request.
-const REFUSED_REFRESH_RETRY: Duration = Duration::hours(1);
+pub(crate) const REFUSED_REFRESH_RETRY: Duration = Duration::hours(1);
 
 /// Credential retention must not depend on the owner signing in again.
 pub async fn collect_expired_grants(
@@ -595,6 +598,14 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
         grant: StoredGrant,
         force_refresh: bool,
     ) -> Result<MicrosoftAccessGrant, MicrosoftAuthError> {
+        // A refusal another replica recorded answers before this replica's
+        // cached token, so every replica gives the same answer for the grant.
+        if grant
+            .refresh_refused_at
+            .is_some_and(|refused| Utc::now() - refused < REFUSED_REFRESH_RETRY)
+        {
+            return Err(MicrosoftAuthError::ReauthorizationRequired);
+        }
         let key = (grant.id, grant.generation);
         if force_refresh {
             self.cache
@@ -614,12 +625,6 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
                 scopes: cached.scopes.clone(),
                 cached: true,
             });
-        }
-        if grant
-            .refresh_refused_at
-            .is_some_and(|refused| Utc::now() - refused < REFUSED_REFRESH_RETRY)
-        {
-            return Err(MicrosoftAuthError::ReauthorizationRequired);
         }
         let lease = macro_uuid::generate_uuid_v7();
         if !self.repo.acquire_refresh(&grant, lease).await? {
