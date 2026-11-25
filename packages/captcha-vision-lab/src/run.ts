@@ -216,7 +216,7 @@ const openSession = async (
 };
 
 /** Loads the target and lets the page's network settle before the gate. */
-const load = async ({ page, observed }: Session, targetUrl: string) => {
+const load = async ({ page }: Session, targetUrl: string) => {
   const response = await page.goto(targetUrl, { waitUntil: 'load' });
   await page.waitForLoadState('networkidle');
   if (response === null || response.status() !== 200) {
