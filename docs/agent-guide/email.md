@@ -582,7 +582,11 @@ default All selections are not marked.
 Email Read status and Done are single choices that close the menu; Has
 (Starred, Calendar invite) and Attachments (PDFs, Images, Documents) take
 several and stay open while you tick them. Ticked Has items all apply;
-attachment kinds match any one. Tags supports search, pins selected tags first
+attachment kinds match any one. In Inbox,
+All mail, Archived, Calendar, Favorites, Shared and saved views the server selects
+matching threads first, so a page is full even when matches are rare; Sent, Drafts,
+Spam and Trash still refine the rows they loaded. An inline image counts as an
+image, and plain text and CSV files as documents. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 **Calendar invite** matches meetings carried as attachments or as calendar
 parts of a message, including Outlook invitations.
@@ -868,7 +872,8 @@ must still refresh affected lists after commit. Scroll across a retained row and
 check that the next page remains ordered; a baseline beyond 5,000 rows returns to
 the live server list instead of freezing local membership.
 Tag selections use cached property postings;
-attachment chips refine the cached rows on the client. Sender/recipient filters and
+attachment filters list from the server, which has the thread flags this local
+profile lacks. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
