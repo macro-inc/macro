@@ -1,10 +1,6 @@
-import type {
-  CacheRevision,
-  ChannelTimelineEvictCacheResult,
-} from '@graphql-cache/protocol';
+import type { ChannelTimelineEvictCacheResult } from '@graphql-cache/protocol';
 import * as Effect from 'effect/Effect';
-import * as Fiber from 'effect/Fiber';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LoadedChannelPage } from '../channel-pages';
 import { loadChannelPage } from '../channel-pages';
 import {
@@ -17,12 +13,6 @@ import {
   PREWARM_PAGE_SIZE,
   runChannelPrewarmPass,
 } from '../channel-prewarm';
-import {
-  channelResetMark,
-  holdAgainstDeletes,
-  unchangedSince,
-} from '../channel-resets';
-import { fakeLocks } from './fake-locks';
 
 vi.mock('@macro-inc/observability', async (importOriginal) => {
   const span = {
@@ -71,7 +61,6 @@ function deps(
     noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
-    forget: vi.fn(),
   };
   const value: ChannelPrewarmDeps = {
     host: { channelTimelineEvict: evict } as never,
@@ -110,7 +99,11 @@ describe('runChannelPrewarmPass', () => {
       { channelId: 'fresh', limit: PREWARM_PAGE_SIZE },
       { channelId: 'held', limit: PREWARM_PAGE_SIZE },
     ]);
-    expect(runtime.noteServerRead).toHaveBeenCalledWith('fresh', '9', 3, '9');
+    expect(runtime.noteServerRead).toHaveBeenCalledWith('fresh', {
+      seq: '9',
+      readSeq: '9',
+      epoch: 3,
+    });
     expect(runtime.noteStoredSeq).toHaveBeenCalledWith('held', '4');
     expect(runtime.ensureCurrent).toHaveBeenCalledTimes(1);
     expect(runtime.ensureCurrent).toHaveBeenCalledWith('held');
@@ -216,51 +209,12 @@ describe('evictIdleChannels', () => {
       });
 
     const host = { channelTimelineEvict: evict };
-    const mark = channelResetMark(host, 'a');
-    const runtime = { forget: vi.fn() };
     const evicted = await Effect.runPromise(
-      evictIdleChannels({ host, runtime, now: () => 0 })
+      evictIdleChannels({ host, now: () => 0 })
     );
 
     expect(evicted).toBe(3);
     expect(evict).toHaveBeenCalledTimes(2);
-    // Their sync rows went with them: the runtime reads them again.
-    expect(runtime.forget.mock.calls).toEqual([[['a', 'b']], [['c']]]);
-    // A fill already in flight will not cover what this removed.
-    expect(unchangedSince(host, 'a', mark)).toBe(false);
-  });
-
-  // This tab stops leading while the device removes channels.
-  it('forgets what the device removed when the pass is interrupted meanwhile', async () => {
-    let finish: (result: ChannelTimelineEvictCacheResult) => void = () =>
-      undefined;
-    const evict = vi.fn(
-      () =>
-        new Promise<ChannelTimelineEvictCacheResult>((resolve) => {
-          finish = resolve;
-        })
-    );
-    const runtime = { forget: vi.fn() };
-    const fiber = Effect.runFork(
-      evictIdleChannels({
-        host: { channelTimelineEvict: evict as never },
-        runtime,
-        now: () => 0,
-      })
-    );
-    await vi.waitFor(() => expect(evict).toHaveBeenCalled());
-    await Effect.runPromise(Fiber.interrupt(fiber));
-
-    finish({
-      kind: 'evicted',
-      revision: '1' as CacheRevision,
-      changed: [],
-      channelIds: ['a'],
-      hasMore: true,
-    });
-    await vi.waitFor(() => expect(runtime.forget).toHaveBeenCalledWith(['a']));
-    // Interrupted: no further pass.
-    expect(evict).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -338,56 +292,5 @@ describe('createUserQuiet', () => {
 
     expect(performance.now() - start).toBeLessThan(50);
     quiet.dispose();
-  });
-});
-
-describe('evictIdleChannels across tabs', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('waits for a fill in another tab to send its coverage before it evicts', async () => {
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
-    const order: string[] = [];
-    const evict = vi.fn(async () => {
-      order.push('evict');
-      return { kind: 'evicted', changed: [], channelIds: [], hasMore: false };
-    });
-    const fill = await holdAgainstDeletes();
-    expect(fill).not.toBeNull();
-
-    const evicting = Effect.runPromise(
-      evictIdleChannels({
-        host: { channelTimelineEvict: evict as never },
-        runtime: { forget: vi.fn() },
-      })
-    );
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(evict).not.toHaveBeenCalled();
-    // A fill that starts while the eviction waits commits no coverage.
-    expect(await holdAgainstDeletes()).toBeNull();
-
-    order.push('coverage');
-    fill?.release();
-    await evicting;
-    expect(order).toEqual(['coverage', 'evict']);
-  });
-
-  it('leaves eviction for the next round when fills hold the fence too long', async () => {
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
-    const evict = vi.fn();
-    const fill = await holdAgainstDeletes();
-
-    const evicted = await Effect.runPromise(
-      evictIdleChannels({
-        host: { channelTimelineEvict: evict },
-        runtime: { forget: vi.fn() },
-        fenceWaitMs: 5,
-      })
-    );
-
-    expect(evicted).toBe(0);
-    expect(evict).not.toHaveBeenCalled();
-    fill?.release();
   });
 });

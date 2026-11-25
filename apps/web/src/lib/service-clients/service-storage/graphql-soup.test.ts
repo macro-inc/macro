@@ -371,6 +371,7 @@ const mocks = vi.hoisted(() => {
     onCacheGenerationChanged: vi.fn<CacheHost['onCacheGenerationChanged']>(
       () => () => {}
     ),
+    onChannelChanged: vi.fn<CacheHost['onChannelChanged']>(() => () => {}),
     inspectMutations: vi.fn(async () => []),
     dispose: vi.fn(() => cleanupOrder.push('host')),
     enqueueOptimisticMutation: vi.fn(async () => {

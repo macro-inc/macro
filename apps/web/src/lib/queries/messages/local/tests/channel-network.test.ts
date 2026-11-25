@@ -1,17 +1,23 @@
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import type { ChannelCommitOutcome } from '@graphql-cache/index';
 import { onlineManager } from '@tanstack/solid-query';
-import { gql } from '@urql/core';
+import { gql, type OperationContext } from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import { fromValue } from 'wonka';
 import {
   cacheSessionChanged,
   queryChannelNetwork,
+  storeResult,
   watchReconnect,
 } from '../channel-network';
 
 const session = vi.hoisted(() => ({ generation: 'generation-1' }));
 const answer = vi.hoisted(() => ({
   persistence: undefined as Promise<string | undefined> | undefined,
+  channelCommit: undefined as Promise<ChannelCommitOutcome> | undefined,
+}));
+const sent = vi.hoisted(() => ({
+  context: undefined as Partial<OperationContext> | undefined,
 }));
 
 vi.mock('@graphql-cache/session-generation', async (importOriginal) => {
@@ -30,13 +36,20 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheResultMetadata: () => ({
     source: 'live-network',
     persistence: answer.persistence,
+    channelCommit: answer.channelCommit,
   }),
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({
-    query: () =>
-      fromValue({ data: { ok: true }, stale: false, hasNext: false }),
+    query: (
+      _document: unknown,
+      _variables: unknown,
+      context: Partial<OperationContext>
+    ) => {
+      sent.context = context;
+      return fromValue({ data: { ok: true }, stale: false, hasNext: false });
+    },
   }),
 }));
 
@@ -75,6 +88,36 @@ describe('queryChannelNetwork', () => {
     const { cached } = await queryChannelNetwork(QUERY, {});
 
     await expect(cached).rejects.toThrow('channel query could not be cached');
+  });
+});
+
+describe('queryChannelNetwork with a commit', () => {
+  it('sends what the answer proves beside it, and says what came of it', async () => {
+    session.generation = 'generation-1';
+    answer.persistence = Promise.resolve('revision-1');
+    const outcome: ChannelCommitOutcome = {
+      channelId: 'channel',
+      seq: '7',
+      outcome: 'applied',
+    };
+    answer.channelCommit = Promise.resolve(outcome);
+    const commit = vi.fn(() => ({ channelId: 'channel', seq: '9' }));
+    const { cached } = await queryChannelNetwork(QUERY, {}, { commit });
+
+    expect(sent.context?.channelCommit?.({ ok: true })).toEqual({
+      channelId: 'channel',
+      seq: '9',
+    });
+    expect(commit).toHaveBeenCalledWith({ ok: true });
+    expect(await storeResult(cached)).toEqual({ stored: true, outcome });
+  });
+
+  it('settles a failed store into a value', async () => {
+    const error = new Error('write lost');
+    expect(await storeResult(Promise.reject(error))).toEqual({
+      stored: false,
+      error,
+    });
   });
 });
 

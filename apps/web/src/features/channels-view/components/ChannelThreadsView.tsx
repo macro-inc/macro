@@ -88,7 +88,15 @@ function ThreadCardBody(props: { query: ThreadQuery; canWrite: boolean }) {
     return data && !data.state.deleted_at ? threadListItem(data) : undefined;
   });
   return (
-    <Show when={item()}>
+    <Show
+      when={item()}
+      fallback={
+        // A thread read from the device is pending without suspending.
+        <Show when={props.query.isPending}>
+          <ThreadSkeleton />
+        </Show>
+      }
+    >
       {(data) => (
         <MessageThread
           data={data()}

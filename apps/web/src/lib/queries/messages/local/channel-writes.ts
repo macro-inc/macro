@@ -30,7 +30,6 @@ import {
   type SendChannelMessageMutation,
 } from '@service-storage/graphql/generated/graphql';
 import type { Message, PostMessage } from '@service-storage/messages';
-import { onlineManager } from '@tanstack/solid-query';
 import type {
   AnyVariables,
   Client,
@@ -53,7 +52,6 @@ import { queryChannelNetwork } from './channel-network';
 import type { ChannelPageEntry } from './channel-pages';
 import { readStoredMessage, readTimelineRecords } from './channel-pages';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
-import { announceWritten } from './channel-tab-writes';
 
 const WRITE_TYPENAME = 'GraphqlChannelMessageWrite';
 const SEND_OPERATION = 'channel.write.send';
@@ -99,7 +97,7 @@ export type FetchChannelMessage = (
 ) => Promise<ChannelMessageFieldsFragment | null>;
 
 /** Whether the device stored a read; a failure is reported, not thrown. */
-async function storeOutcome(cached: Promise<void>): Promise<boolean> {
+async function storeOutcome(cached: Promise<unknown>): Promise<boolean> {
   try {
     await cached;
     return true;
@@ -142,7 +140,7 @@ const fetchServerMessage: FetchChannelMessage = async (
           queryChannelNetwork(
             ChannelMessageDocument,
             { channelId, messageId },
-            anyAbortSignal([signal, request.signal])
+            { signal: anyAbortSignal([signal, request.signal]) }
           )
         )
       ),
@@ -159,6 +157,7 @@ const fetchServerMessage: FetchChannelMessage = async (
   if (!answer) throw new Error('the server did not answer in time');
   if (!answer.ok) throw answer.error;
   const { data, cached } = answer.value;
+  const { message } = data.user.channelMessage;
   // The views reread when the write ends, so the device should hold it then;
   // a copy that could not be stored, or is still storing after
   // `SERVER_COPY_STORE_BUDGET_MS`, is still the answer; one stored after that
@@ -174,35 +173,10 @@ const fetchServerMessage: FetchChannelMessage = async (
     )
   );
   // Only a copy found: an empty answer stores nothing the views would show.
-  if (inTime === undefined && data.user.channelMessage)
+  if (inTime === undefined && message)
     fireAndForget(whenStoredLate(storing, storedLate), 'channel-writes');
-  return data.user.channelMessage;
+  return message;
 };
-
-/**
- * Writes through the device queue run offline too: the queue holds them until
- * the connection returns. Writes over REST wait for a connection.
- */
-export function channelWriteNetworkMode(
-  host: CacheHost | undefined
-): 'always' | 'online' {
-  return host ? 'always' : 'online';
-}
-
-/**
- * Waits for a connection, as a paused mutation would: a REST write from a hook
- * running in `always` mode keeps waiting out an outage.
- */
-export async function whenOnline(): Promise<void> {
-  if (onlineManager.isOnline()) return;
-  await new Promise<void>((resolve) => {
-    const stop = onlineManager.subscribe((online) => {
-      if (!online) return;
-      stop();
-      resolve();
-    });
-  });
-}
 
 export type ChannelWriteHost = Pick<
   CacheHost,
@@ -235,13 +209,11 @@ export interface ChannelEdit {
   mentions: readonly Mention[];
   removeAttachmentIds: readonly string[];
   addAttachments: readonly Attachment[];
-  nonce: string;
 }
 
 export interface ChannelDelete {
   channelId: string;
   id: string;
-  nonce: string;
 }
 
 export interface ChannelReaction {
@@ -253,7 +225,6 @@ export interface ChannelReaction {
   userId: string;
   /** The message's reactions with this change applied, when the caller knows them. */
   reactions?: readonly Reaction[];
-  nonce: string;
 }
 
 export interface ChannelWritesDeps {
@@ -313,6 +284,8 @@ export interface ChannelWrites {
   edit(edit: ChannelEdit): Written;
   remove(deletion: ChannelDelete): Written;
   react(reaction: ChannelReaction): Written;
+  /** Whether this page is still sending the message. */
+  sending(messageId: string): boolean;
   /** Writes this page made to the channel that have not reached the server. */
   pendingCount(channelId: string): number;
   /**
@@ -762,6 +735,10 @@ interface Write<TData, TVariables extends AnyVariables> {
  */
 export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   const [pending, setPending] = createStore<Record<string, PendingWrite[]>>({});
+  // By message id, so a row follows only its own send.
+  const [sends, setSends] = createStore<
+    Record<string, Pick<PendingWrite, 'key' | 'signIn'> | undefined>
+  >({});
   const retired: Lost = Deferred.makeUnsafe();
   let isRetired = false;
   /** While the host's database is away: done once it serves again. */
@@ -830,6 +807,18 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         else delete state[channelId];
       })
     );
+  /** Marks a message as being sent until the returned call. */
+  function markSending(
+    messageId: string,
+    send: Pick<PendingWrite, 'key' | 'signIn'>
+  ): () => void {
+    setSends(messageId, send);
+    return () => {
+      // A resend of the same message marks it anew.
+      if (unwrap(sends)[messageId]?.key === send.key)
+        setSends(messageId, undefined);
+    };
+  }
 
   /** The device's copy of a message; undefined when it cannot be read. */
   async function readMessage(
@@ -922,10 +911,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         write.channelId,
         write.messageId,
         signal,
-        () => {
-          deps.runtime.notifyChanged(write.channelId);
-          announceWritten(write.channelId);
-        }
+        () => deps.runtime.notifyChanged(write.channelId)
       );
       return message && mapChannelMessage(message);
     } catch (error) {
@@ -1265,6 +1251,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       reply: write.reply,
       deletes: write.deletes,
     });
+    const sent =
+      write.operation === SEND_OPERATION
+        ? markSending(write.messageId, { key, signIn })
+        : undefined;
     deps.runtime.notifyChanged(write.channelId);
     const handOff: HandOff = {
       key,
@@ -1276,7 +1266,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       onEnqueued() {
         turn.pass();
         deps.runtime.notifyChanged(write.channelId);
-        announceWritten(write.channelId);
       },
     };
     try {
@@ -1353,9 +1342,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       turn.pass();
       settlements.stop();
       removePending(write.channelId, key);
+      sent?.();
       // Committed or rolled back, the device's copy changed.
       deps.runtime.notifyChanged(write.channelId);
-      announceWritten(write.channelId);
     }
   }
 
@@ -1461,7 +1450,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
                 mentions: edit.mentions.map(mentionInput),
                 removeAttachmentIds: [...edit.removeAttachmentIds],
                 addAttachments: edit.addAttachments.map(attachmentInput),
-                nonce: edit.nonce,
               },
             },
             // Attachments change only once the server answers with their ids.
@@ -1506,7 +1494,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
               input: {
                 channelId: deletion.channelId,
                 id: deletion.id,
-                nonce: deletion.nonce,
               },
             },
             {
@@ -1550,7 +1537,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
                 id: reaction.id,
                 emoji: reaction.emoji,
                 add: reaction.add,
-                nonce: reaction.nonce,
               },
             },
             {
@@ -1574,6 +1560,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       });
     },
 
+    sending(messageId) {
+      const send = sends[messageId];
+      return send !== undefined && send.signIn === deps.signIn?.();
+    },
     pendingCount: (channelId) => pendingIn(channelId).length,
     // A message deleted while its send waits stays hidden: the device hides
     // a deleted root and a deleted reply, and this row would bring it back.

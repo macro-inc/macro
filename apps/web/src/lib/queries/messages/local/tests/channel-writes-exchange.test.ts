@@ -35,7 +35,6 @@ const edit = (message: ChannelMessageFieldsFragment, content = 'edited') => ({
   mentions: [],
   removeAttachmentIds: [],
   addAttachments: [],
-  nonce: 'e',
 });
 
 const TRANSACTION_ID = '1';

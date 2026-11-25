@@ -1,25 +1,35 @@
 import type { CacheHost } from '@graphql-cache/index';
-import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   maySignedInUserWrite,
   queryAccountSession,
 } from '@queries/auth/account-session';
-import { ChannelChangesDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  ChannelChangesDocument,
+  ChannelTimelineDocument,
+} from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { channelCacheHost } from './channel-flag';
-import { queryChannelNetwork } from './channel-network';
-import { type ChannelTouches, createChannelTouches } from './channel-pages';
+import { queryChannelNetwork, storeResult } from './channel-network';
+import {
+  type ChannelTouches,
+  createChannelTouches,
+  serverPageCoverage,
+} from './channel-pages';
 import { type ChannelStream, createChannelStream } from './channel-stream';
 import {
-  type ChannelChangesPage,
+  type ChannelSyncDeps,
   type ChannelSyncRuntime,
   createChannelSyncRuntime,
 } from './channel-sync-runtime';
-import { type ChannelWindows, createChannelWindows } from './channel-timeline';
+import {
+  CHANNEL_PAGE_LIMIT,
+  type ChannelWindows,
+  createChannelWindows,
+} from './channel-timeline';
 import { type ChannelWrites, createChannelWrites } from './channel-writes';
 
 const runtimes = new WeakMap<CacheHost, ChannelSyncRuntime>();
@@ -27,20 +37,52 @@ const touches = new WeakMap<CacheHost, ChannelTouches>();
 const writes = new WeakMap<CacheHost, ChannelWrites>();
 const windows = new WeakMap<CacheHost, ChannelWindows>();
 
-/** Reads a page of changes and resolves once its records are cached. */
-async function fetchChannelChanges(
-  channelId: string,
-  after: string,
-  signal: AbortSignal
-): Promise<ChannelChangesPage> {
+const fetchChanges: ChannelSyncDeps['fetchChanges'] = async (
+  channelId,
+  after,
+  signal
+) => {
   const { data, cached } = await queryChannelNetwork(
     ChannelChangesDocument,
     { input: { channelId, after } },
-    signal
+    {
+      signal,
+      commit: ({ user: { channelChanges: page } }) =>
+        page.resetRequired
+          ? undefined
+          : {
+              channelId,
+              seq: page.seq,
+              watermark: { kind: 'advance', from: after },
+              removedIds: page.removedIds,
+            },
+    }
   );
-  await cached;
-  return data.user.channelChanges;
-}
+  return { page: data.user.channelChanges, stored: storeResult(cached) };
+};
+
+const replaceWithLatest: ChannelSyncDeps['replaceWithLatest'] = async (
+  channelId,
+  signal
+) => {
+  const { cached } = await queryChannelNetwork(
+    ChannelTimelineDocument,
+    { input: { channelId, limit: CHANNEL_PAGE_LIMIT } },
+    {
+      signal,
+      commit: ({ user: { channelTimeline: page } }) => {
+        const coverage = serverPageCoverage({}, page);
+        return {
+          channelId,
+          seq: page.seq,
+          reset: true,
+          coverage: coverage && [coverage],
+        };
+      },
+    }
+  );
+  return { stored: storeResult(cached) };
+};
 
 /**
  * The sync runtime of a cache host, made on first use. A storage reset or a
@@ -54,8 +96,8 @@ export function channelSyncRuntime(host: CacheHost): ChannelSyncRuntime {
   if (existing) return existing;
   const runtime = createChannelSyncRuntime({
     host,
-    fetchChanges: fetchChannelChanges,
-    generation: () => cacheSessionGeneration.capture(),
+    fetchChanges,
+    replaceWithLatest,
   });
   host.onCacheGenerationChanged(({ storage }) => {
     runtime.forgetAll();

@@ -3,6 +3,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type {
   CacheRevision,
+  ChannelCommitOutcome,
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
 } from '@graphql-cache/index';
@@ -24,8 +25,7 @@ import type {
   FetchChannelServerPage,
 } from '../channel-pages';
 import { createChannelTouches } from '../channel-pages';
-import { whileNoFills } from '../channel-resets';
-import type { ChannelChange } from '../channel-sync-runtime';
+import type { ChannelViewChange } from '../channel-sync-runtime';
 import {
   type ChannelTimelineRuntime,
   type ChannelWindows,
@@ -34,8 +34,8 @@ import {
   type LocalChannelTimeline,
   PAGE_RETRY_MS,
 } from '../channel-timeline';
-import { fakeLocks } from './fake-locks';
 import {
+  applied,
   CHANNEL_ID,
   devicePage,
   fakeHost,
@@ -138,14 +138,14 @@ function windowOver(rows: () => Row[], held: () => boolean) {
 }
 
 function fakeRuntime() {
-  const listeners = new Set<(change: ChannelChange) => void>();
+  const listeners = new Set<(change: ChannelViewChange) => void>();
   const runtime: ChannelTimelineRuntime & {
     changed(): void;
     resumed(): void;
   } = {
     open: vi.fn(() => () => {}),
     onChanged: vi.fn(
-      (_channelId: string, listener: (change: ChannelChange) => void) => {
+      (_channelId: string, listener: (change: ChannelViewChange) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       }
@@ -408,7 +408,7 @@ describe('createLocalChannelTimeline', () => {
           newerCursor: null,
           seq: '9',
         } as never,
-        cached: Promise.resolve(),
+        cached: Promise.resolve(applied('9')),
       };
     });
     const mounted = mount({ rows, fetchPage });
@@ -435,7 +435,7 @@ describe('createLocalChannelTimeline', () => {
     const rows = messages(70);
     let sent: AbortSignal | undefined;
     const fetchPage = vi.fn<FetchChannelServerPage>(
-      (_input, signal) =>
+      (_input, { signal }) =>
         new Promise((_resolve, reject) => {
           sent = signal;
           signal?.addEventListener('abort', () => reject(signal.reason));
@@ -458,11 +458,13 @@ describe('createLocalChannelTimeline', () => {
     const rows = messages(70);
     let failStore!: (error: unknown) => void;
     let olderSignal: AbortSignal | undefined;
-    const firstStored = new Promise<void>((_resolve, reject) => {
-      failStore = reject;
-    });
+    const firstStored = new Promise<ChannelCommitOutcome>(
+      (_resolve, reject) => {
+        failStore = reject;
+      }
+    );
     let windowReads = 0;
-    const fetchPage = vi.fn<FetchChannelServerPage>((input, signal) => {
+    const fetchPage = vi.fn<FetchChannelServerPage>((input, { signal }) => {
       if (input.before) {
         olderSignal = signal;
         return new Promise((_resolve, reject) => {
@@ -480,7 +482,7 @@ describe('createLocalChannelTimeline', () => {
           newerCursor: null,
           seq: '9',
         } as never,
-        cached: windowReads === 1 ? firstStored : Promise.resolve(),
+        cached: windowReads === 1 ? firstStored : Promise.resolve(applied('9')),
       });
     });
     const { timeline, dispose } = mount({ rows, held: false, fetchPage });
@@ -502,7 +504,7 @@ describe('createLocalChannelTimeline', () => {
 
   it('pages from the new window, not the old one, once a window is read again', async () => {
     const rows = messages(71);
-    const firstStore = Promise.withResolvers<void>();
+    const firstStore = Promise.withResolvers<ChannelCommitOutcome>();
     const oldPageStarted = Promise.withResolvers<void>();
     const reloadStarted = Promise.withResolvers<void>();
     const reload =
@@ -511,7 +513,7 @@ describe('createLocalChannelTimeline', () => {
     const page = (
       entries: Row[],
       olderCursor: string | null,
-      cached: Promise<void>
+      cached: Promise<ChannelCommitOutcome>
     ) => ({
       page: {
         __typename: 'GraphqlChannelTimelinePage',
@@ -524,28 +526,34 @@ describe('createLocalChannelTimeline', () => {
     });
     let olderReads = 0;
     let windowReads = 0;
-    const fetchPage = vi.fn<FetchChannelServerPage>(async (input, signal) => {
-      if (input.before) {
-        olderReads++;
-        if (olderReads === 1) {
-          oldPageStarted.resolve();
-          return new Promise((_resolve, reject) =>
-            signal?.addEventListener('abort', () => reject(signal.reason), {
-              once: true,
-            })
+    const fetchPage = vi.fn<FetchChannelServerPage>(
+      async (input, { signal }) => {
+        if (input.before) {
+          olderReads++;
+          if (olderReads === 1) {
+            oldPageStarted.resolve();
+            return new Promise((_resolve, reject) =>
+              signal?.addEventListener('abort', () => reject(signal.reason), {
+                once: true,
+              })
+            );
+          }
+          const older = rows.filter((row) => row.sortKey < input.before!);
+          await secondPage.promise;
+          return page(older, null, Promise.resolve(applied('9')));
+        }
+        windowReads++;
+        if (windowReads === 1) {
+          return page(
+            rows.slice(20, 70),
+            rows[20]!.sortKey,
+            firstStore.promise
           );
         }
-        const older = rows.filter((row) => row.sortKey < input.before!);
-        await secondPage.promise;
-        return page(older, null, Promise.resolve());
+        reloadStarted.resolve();
+        return reload.promise;
       }
-      windowReads++;
-      if (windowReads === 1) {
-        return page(rows.slice(20, 70), rows[20]!.sortKey, firstStore.promise);
-      }
-      reloadStarted.resolve();
-      return reload.promise;
-    });
+    );
     const { timeline, dispose } = mount({ rows, held: false, fetchPage });
     try {
       await waitFor(() => timeline.hasOlder());
@@ -556,7 +564,7 @@ describe('createLocalChannelTimeline', () => {
       await oldLoad;
       const newLoad = timeline.loadOlder();
       reload.resolve(
-        page(rows.slice(21), rows[21]!.sortKey, Promise.resolve())
+        page(rows.slice(21), rows[21]!.sortKey, Promise.resolve(applied('9')))
       );
       // The window replaces what it showed once it reaches as far back.
       secondPage.resolve();
@@ -630,6 +638,7 @@ describe('createLocalChannelTimeline', () => {
       } as never,
       cached: (async () => {
         held = true;
+        return applied('9');
       })(),
     }));
     const mounted = mount({ rows, held: false, fetchPage });
@@ -640,16 +649,10 @@ describe('createLocalChannelTimeline', () => {
     await waitFor(
       () => vi.mocked(runtime.noteServerRead).mock.calls.length > 0
     );
-    expect(runtime.noteServerRead).toHaveBeenCalledWith(
-      CHANNEL_ID,
-      '9',
-      3,
-      '9'
-    );
-    expect(mounted.host.commits.at(-1)).toMatchObject({
-      channelId: CHANNEL_ID,
-      coverage: [{ start: '', end: '\u{10FFFF}' }],
-      seq: { kind: 'lower', seq: '9' },
+    expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
+      seq: '9',
+      readSeq: '9',
+      epoch: 3,
     });
 
     mounted.addRow(graphqlMessage(3));
@@ -676,6 +679,7 @@ describe('createLocalChannelTimeline', () => {
         cached: (async () => {
           if (first) throw new StaleCacheAuthorityError();
           held = true;
+          return applied('9');
         })(),
       };
     });
@@ -687,12 +691,11 @@ describe('createLocalChannelTimeline', () => {
       return vi.mocked(runtime.noteServerRead).mock.calls.length > 0;
     });
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(runtime.noteServerRead).toHaveBeenCalledWith(
-      CHANNEL_ID,
-      '9',
-      3,
-      '9'
-    );
+    expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
+      seq: '9',
+      readSeq: '9',
+      epoch: 3,
+    });
     // The reload never blanks the window it shows.
     expect(shown.slice(shown.indexOf(2))).not.toContain(0);
 
@@ -716,7 +719,7 @@ describe('createLocalChannelTimeline', () => {
       } as never,
       cached: away
         ? Promise.reject(new Error('cache is away'))
-        : Promise.resolve(),
+        : Promise.resolve(applied('9')),
     }));
     const mounted = mount({ rows, held: false, fetchPage });
     const { timeline, runtime } = mounted;
@@ -745,7 +748,7 @@ describe('createLocalChannelTimeline', () => {
 
   it('holds a window still loading when the cache serves again', async () => {
     const rows = messages(2);
-    const page = (cached: Promise<void>) => ({
+    const page = (cached: Promise<ChannelCommitOutcome>) => ({
       page: {
         __typename: 'GraphqlChannelTimelinePage',
         entries: [...rows].reverse(),
@@ -759,7 +762,7 @@ describe('createLocalChannelTimeline', () => {
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockReturnValueOnce(unstored.promise)
-      .mockResolvedValue(page(Promise.resolve()));
+      .mockResolvedValue(page(Promise.resolve(applied('9'))));
     const mounted = mount({ rows, held: false, fetchPage });
     const { timeline, runtime } = mounted;
     await waitFor(() => fetchPage.mock.calls.length === 1);
@@ -790,7 +793,7 @@ describe('createLocalChannelTimeline', () => {
       },
       { records: [first, latest, added] }
     );
-    const stored = Promise.withResolvers<void>();
+    const stored = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
       page: {
         __typename: 'GraphqlChannelTimelinePage',
@@ -853,7 +856,7 @@ describe('createLocalChannelTimeline', () => {
         newerCursor: older.sortKey,
         seq: '7',
       } as never,
-      cached: Promise.resolve(),
+      cached: Promise.resolve(applied('9')),
     }));
     const runtime = fakeRuntime();
     const { timeline, dispose } = createRoot((dispose) => ({
@@ -901,7 +904,7 @@ describe('createLocalChannelTimeline', () => {
         } as never,
         cached: away
           ? Promise.reject(new Error('cache is away'))
-          : Promise.resolve(),
+          : Promise.resolve(applied('9')),
       };
     });
     const mounted = mount({ rows, held: false, fetchPage });
@@ -952,6 +955,41 @@ describe('createLocalChannelTimeline', () => {
     mounted.dispose();
   });
 
+  it('stops asking the server for a window whose device keeps losing what it stores', async () => {
+    const rows = messages(2);
+    // Stored, then missing again, as with another tab evicting at once.
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [...rows].reverse(),
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      } as never,
+      cached: Promise.resolve(applied('9')),
+    }));
+    const { timeline, runtime, dispose } = mount({
+      rows,
+      held: false,
+      fetchPage,
+    });
+    // The device reports a change for every store, the view's own included.
+    vi.mocked(runtime.noteServerRead).mockImplementation(() =>
+      runtime.changed()
+    );
+    await waitFor(() => timeline.entries().length === 2);
+    runtime.changed();
+    for (let turn = 0; turn < 50; turn += 1) await settle();
+    const asked = fetchPage.mock.calls.length;
+    expect(asked).toBeLessThan(10);
+
+    runtime.changed();
+    for (let turn = 0; turn < 10; turn += 1) await settle();
+    expect(fetchPage.mock.calls.length).toBe(asked);
+    expect(timeline.entries()).toHaveLength(2);
+    dispose();
+  });
+
   it('reads the pages around its place when far more arrived than it showed', async () => {
     const rows = messages(50);
     const { fetchPage, requests } = serverOver(() => rows);
@@ -978,9 +1016,9 @@ describe('createLocalChannelTimeline', () => {
     const rows = messages(120);
     const server = serverOver(() => rows);
     let failing = true;
-    const fetchPage = vi.fn<FetchChannelServerPage>(async (input, signal) => {
+    const fetchPage = vi.fn<FetchChannelServerPage>(async (input, options) => {
       if (failing && input.around != null) throw new Error('connection lost');
-      return server.fetchPage(input, signal);
+      return server.fetchPage(input, options);
     });
     const mounted = mount({ rows, held: false, fetchPage });
     const { timeline, runtime } = mounted;
@@ -1118,105 +1156,6 @@ describe('createLocalChannelTimeline', () => {
     dispose();
   });
 
-  it('reads a page again once a delete in another tab is done, holding it then', async () => {
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
-    try {
-      let finishDelete!: () => void;
-      const deleting = whileNoFills(
-        () =>
-          new Promise<void>((resolve) => {
-            finishDelete = resolve;
-          }),
-        { waitMs: 60_000 }
-      );
-      const rows = messages(2);
-      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-        page: {
-          __typename: 'GraphqlChannelTimelinePage',
-          entries: [...rows].reverse(),
-          olderCursor: null,
-          newerCursor: null,
-          seq: '9',
-        } as never,
-        cached: Promise.resolve(),
-      }));
-      const mounted = mount({ rows, held: false, fetchPage });
-      await waitFor(() => mounted.timeline.entries().length === 2);
-      await settle();
-      // Shown, but neither covered nor followed while the delete may take it.
-      expect(fetchPage).toHaveBeenCalledTimes(1);
-      expect(mounted.host.commits).toEqual([]);
-      expect(mounted.runtime.noteServerRead).not.toHaveBeenCalled();
-
-      finishDelete();
-      await deleting;
-      await waitFor(
-        () => vi.mocked(mounted.runtime.noteServerRead).mock.calls.length > 0
-      );
-      expect(fetchPage).toHaveBeenCalledTimes(2);
-      expect(mounted.host.commits).toHaveLength(1);
-      expect(mounted.timeline.entries()).toHaveLength(2);
-      mounted.dispose();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it('reads an older page again once a delete in another tab is done, holding it then', async () => {
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
-    try {
-      const rows = messages(70);
-      const older = rows.slice(0, 20).reverse();
-      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-        page: {
-          __typename: 'GraphqlChannelTimelinePage',
-          entries: older,
-          olderCursor: 'past-the-page',
-          newerCursor: null,
-          seq: '9',
-        } as never,
-        cached: Promise.resolve(),
-      }));
-      const mounted = mount({ rows, fetchPage });
-      await waitFor(() => !mounted.timeline.isLoading());
-      // The device no longer holds the older entries.
-      mounted.setHeld(false);
-      let finishDelete!: () => void;
-      const deleting = whileNoFills(
-        () =>
-          new Promise<void>((resolve) => {
-            finishDelete = resolve;
-          }),
-        { waitMs: 60_000 }
-      );
-
-      const loading = mounted.timeline.loadOlder();
-      // Shown, but not covered while the delete may take it.
-      await waitFor(() => mounted.timeline.entries().length === 70);
-      const covered = () =>
-        mounted.host.commits.filter((commit) => commit.coverage);
-      expect(covered()).toEqual([]);
-      // A second scroll waits for the page still to be read again, rather
-      // than reading past it unheld.
-      expect(mounted.timeline.isLoadingOlder()).toBe(true);
-      await mounted.timeline.loadOlder();
-      expect(fetchPage).toHaveBeenCalledTimes(1);
-
-      finishDelete();
-      await deleting;
-      await loading;
-      await waitFor(() => covered().length > 0);
-      // The same older page, read again and covered this time.
-      expect(fetchPage.mock.calls[1]?.[0]).toEqual(
-        fetchPage.mock.calls[0]?.[0]
-      );
-      expect(fetchPage.mock.calls[0]?.[0]).toHaveProperty('before');
-      mounted.dispose();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
   it('reports a missing target from the server', async () => {
     const fetchPage = vi.fn<FetchChannelServerPage>(async () => {
       throw new CombinedError({
@@ -1254,7 +1193,7 @@ describe('createLocalChannelTimeline', () => {
           newerCursor: null,
           seq: '9',
         } as never,
-        cached: Promise.resolve(),
+        cached: Promise.resolve(applied('9')),
       };
     });
     onlineManager.setOnline(false);
@@ -1394,7 +1333,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     rows: Row[],
     from: number,
     to: number,
-    cached: Promise<void> = Promise.resolve()
+    cached: Promise<ChannelCommitOutcome> = Promise.resolve(applied('9'))
   ): ServerPage => ({
     page: {
       __typename: 'GraphqlChannelTimelinePage',
@@ -1579,7 +1518,6 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
         return serverPage(rows, 20, 70);
       });
     mounted = mount({ rows, fetchPage });
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
     try {
       await settledOnDevice(mounted.runtime);
       mounted.setHeld(false);
@@ -1597,7 +1535,6 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       ]);
     } finally {
       mounted.dispose();
-      vi.unstubAllGlobals();
       onlineManager.setOnline(true);
     }
   });
@@ -1650,7 +1587,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('reads a window again once the connection is back after its reload failed with none', async () => {
     const rows = messages(2);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 2, cached.promise))
@@ -1867,7 +1804,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('goes to the live end only once a window read again at once after its reload failed has loaded', async () => {
     const rows = messages(2);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const reloading = Promise.withResolvers<void>();
     const reload = Promise.withResolvers<ServerPage>();
     const retrying = Promise.withResolvers<void>();
@@ -1966,7 +1903,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('reads the window from the device only once a page it shows is stored', async () => {
     const rows = messages(70);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
@@ -1983,12 +1920,12 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await settle();
       expect(mounted.host.reads.length).toBe(reads);
 
-      cached.resolve();
+      cached.resolve(applied('9'));
       await loading;
       await until(() => mounted.host.reads.length > reads);
       expect(mounted.timeline.entries()).toHaveLength(70);
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       mounted.dispose();
     }
   });
@@ -1996,7 +1933,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
   it('keeps no window for the next mount while a page it shows is storing', async () => {
     const rows = messages(70);
     const windows = createChannelWindows();
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
@@ -2011,14 +1948,14 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await loading;
       expect(windows.take(CHANNEL_ID)).toBeUndefined();
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       mounted.dispose();
     }
   });
 
   it('keeps no window for the next mount when a page was given up while the window stored', async () => {
     const rows = messages(70);
-    const opening = Promise.withResolvers<void>();
+    const opening = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 20, 70, opening.promise))
@@ -2031,19 +1968,19 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await until(() => mounted.timeline.entries().length === 50);
       await mounted.timeline.loadOlder();
       expect(mounted.timeline.entries()).toHaveLength(70);
-      opening.resolve();
+      opening.resolve(applied('9'));
       await settle();
       mounted.dispose();
       expect(windows.take(CHANNEL_ID)).toBeUndefined();
     } finally {
-      opening.resolve();
+      opening.resolve(applied('9'));
       mounted.dispose();
     }
   });
 
   it('goes to the live end from a window around a message only once its retry on reconnect has loaded', async () => {
     const rows = messages(2);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const reloading = Promise.withResolvers<void>();
     const reload = Promise.withResolvers<ServerPage>();
     const retrying = Promise.withResolvers<void>();
@@ -2138,7 +2075,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('reads a change into a window loaded again while a page of the old one stores', async () => {
     const rows = messages(70);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
@@ -2156,17 +2093,17 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       mounted.addRow(latest);
       mounted.runtime.changed();
       await until(() => ids(mounted.timeline)[0] === latest.id);
-      cached.resolve();
+      cached.resolve(applied('9'));
       await oldPage;
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       mounted.dispose();
     }
   });
 
   it('keeps for the next mount a window loaded again while a page of the old one stores', async () => {
     const rows = messages(70);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
@@ -2181,10 +2118,10 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await mounted.timeline.retry();
       mounted.dispose();
       expect(windows.take(CHANNEL_ID)?.entries).toHaveLength(50);
-      cached.resolve();
+      cached.resolve(applied('9'));
       await oldPage;
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       mounted.dispose();
     }
   });
@@ -2225,8 +2162,8 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     const rows = messages(250);
     const readTooEarly: number[] = [];
     for (let turns = 0; turns <= 20; turns += 1) {
-      const older = Promise.withResolvers<void>();
-      const newer = Promise.withResolvers<void>();
+      const older = Promise.withResolvers<ChannelCommitOutcome>();
+      const newer = Promise.withResolvers<ChannelCommitOutcome>();
       const fetchPage = vi
         .fn<FetchChannelServerPage>()
         .mockImplementation(async ({ before }) =>
@@ -2244,15 +2181,15 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
         mounted.runtime.changed();
         const reads = mounted.host.reads.length;
 
-        newer.resolve();
+        newer.resolve(applied('9'));
         for (let turn = 0; turn < turns; turn += 1) await Promise.resolve();
         older.reject(new Error('device write failed'));
         await Promise.all([loadOlder, loadNewer]);
         await settle();
         if (mounted.host.reads.length > reads) readTooEarly.push(turns);
       } finally {
-        older.resolve();
-        newer.resolve();
+        older.resolve(applied('9'));
+        newer.resolve(applied('9'));
         mounted.dispose();
       }
     }
@@ -2261,7 +2198,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('goes to the live end once a window loaded since is shown, not once the old one stores', async () => {
     const rows = messages(70);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 20, 70, cached.promise));
@@ -2279,7 +2216,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await latest;
       expect(ids(mounted.timeline)[0]).toBe(graphqlMessage(71).id);
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       mounted.dispose();
     }
   });
@@ -2343,7 +2280,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('keeps following a replacement window started by an observer of the page merge', async () => {
     const rows = messages(70);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
@@ -2369,7 +2306,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       const oldPage = mounted.timeline.loadOlder();
       await replacement.promise;
       expect(mounted.timeline.entries()).toHaveLength(50);
-      cached.resolve();
+      cached.resolve(applied('9'));
       await oldPage;
       const latest = graphqlMessage(71);
       mounted.addRow(latest);
@@ -2378,7 +2315,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       expect(mounted.host.reads.length).toBe(reads + 1);
       await until(() => ids(mounted.timeline)[0] === latest.id);
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       stopObserving();
       mounted.dispose();
     }
@@ -2386,7 +2323,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('does not start a reread when an observer reports a change as the page is merged', async () => {
     const rows = messages(70);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
@@ -2413,10 +2350,10 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       const oldPage = mounted.timeline.loadOlder();
       expect(await observedReadCount.promise).toBe(0);
       mounted.setHeld(true);
-      cached.resolve();
+      cached.resolve(applied('9'));
       await oldPage;
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       stopObserving();
       mounted.dispose();
     }
@@ -2456,8 +2393,8 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('replays changes after the old page settles during a replacement page store', async () => {
     const rows = messages(70);
-    const cached = Promise.withResolvers<void>();
-    const replacementCached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
+    const replacementCached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise))
@@ -2482,17 +2419,17 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       mounted.runtime.changed();
       mounted.setHeld(true);
       const reads = mounted.host.reads.length;
-      cached.resolve();
+      cached.resolve(applied('9'));
       await oldPage;
       expect(mounted.host.reads.length).toBe(reads);
       expect(ids(mounted.timeline)[0]).not.toBe(latest.id);
 
-      replacementCached.resolve();
+      replacementCached.resolve(applied('9'));
       await currentPage;
       await until(() => ids(mounted.timeline)[0] === latest.id);
     } finally {
-      cached.resolve();
-      replacementCached.resolve();
+      cached.resolve(applied('9'));
+      replacementCached.resolve(applied('9'));
       mounted.dispose();
     }
   });
@@ -2571,7 +2508,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('starts pagination in the replacement window while the old page store is pending', async () => {
     const rows = messages(150);
-    const cached = Promise.withResolvers<void>();
+    const cached = Promise.withResolvers<ChannelCommitOutcome>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       .mockResolvedValueOnce(serverPage(rows, 50, 100, cached.promise))
@@ -2602,7 +2539,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(fetchPage).toHaveBeenCalledTimes(2);
     } finally {
-      cached.resolve();
+      cached.resolve(applied('9'));
       if (oldScroll) await oldScroll;
       dispose();
       mounted.dispose();

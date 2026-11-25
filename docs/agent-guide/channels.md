@@ -2156,10 +2156,13 @@ device's database was replaced over its stored data, it asks the server only for
 the changes since the device last heard). Sends, edits, deletes and reactions go through the
 durable cache mutation queue as `SendChannelMessage`, `EditChannelMessage`,
 `DeleteChannelMessage` and `ReactToChannelMessage`, and go out when the
-connection returns. Five seconds after start, while you leave the app alone,
-the 40 newest unread and 20 most recently viewed channels are fetched ahead;
-channels unopened for 30 days are dropped. Verify a change both ways: flag off
-must behave as REST always has. The code and its gotchas are in
+connection returns. Every tab shows a change another tab made. Only a channel's own
+messages go this way: discussion on documents, tasks, projects and calls stays on
+REST, as does a channel a view opened over REST before the flag turned on. Five
+seconds after start, while you leave the app alone, the 40 newest unread and 20 most
+recently viewed channels are fetched ahead; channels unopened for 30 days are
+dropped. Verify a change both ways: flag off must behave as REST always has. The
+code and its gotchas are in
 `apps/web/src/lib/queries/messages/local/AGENTS.md`; the end-to-end suite is
 `apps/web/tests/channels-e2e/README.md`.
 

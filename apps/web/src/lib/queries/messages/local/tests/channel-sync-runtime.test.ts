@@ -1,69 +1,19 @@
-import type {
-  CacheRevision,
-  ChannelTimelineCommitArgs,
-  ChannelTimelineCommitCacheResult,
-} from '@graphql-cache/index';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  announceEvicted,
-  channelResetMark,
-  holdAgainstDeletes,
-  unchangedSince,
-} from '../channel-resets';
+import type { ChannelCommitOutcome } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChannelStoreResult } from '../channel-network';
 import {
   CATCH_UP_DEBOUNCE_MS,
+  CATCH_UP_PAGE_BUDGET_MS,
+  CATCH_UP_RETRY_MAX_MS,
+  CATCH_UP_RETRY_MS,
   type ChannelChangesPage,
   type ChannelSyncRuntime,
   createChannelSyncRuntime,
   MAX_CHANGE_PAGES,
 } from '../channel-sync-runtime';
-import { announceWritten } from '../channel-tab-writes';
-import { fakeLocks } from './fake-locks';
-import { CHANNEL_ID, devicePage } from './fixtures';
-
-/**
- * A device holding the channel at `seq` (null: not held), applying commits
- * as the engine does: `lower` takes the minimum, `advance` applies only from
- * the stored value.
- */
-function syncHost(initial: bigint | null) {
-  const host = {
-    seq: initial,
-    commits: [] as ChannelTimelineCommitArgs[],
-    generations: [] as string[],
-    heads: 0,
-    async channelTimeline() {
-      host.heads += 1;
-      return devicePage([], {
-        covered: host.seq !== null,
-        seq: host.seq === null ? null : host.seq.toString(),
-      });
-    },
-    async channelTimelineCommit(
-      args: ChannelTimelineCommitArgs,
-      generation: string
-    ): Promise<ChannelTimelineCommitCacheResult> {
-      host.commits.push(args);
-      host.generations.push(generation);
-      if (args.reset) host.seq = null;
-      const seq = args.seq;
-      if (seq?.kind === 'advance' && host.seq?.toString() === seq.from) {
-        host.seq = BigInt(seq.to);
-      }
-      if (seq?.kind === 'lower' && host.seq !== null) {
-        const lowered = BigInt(seq.seq);
-        if (lowered < host.seq) host.seq = lowered;
-      }
-      return {
-        kind: 'committed' as const,
-        revision: '1' as CacheRevision,
-        changed: [],
-        channelSeq: host.seq === null ? null : host.seq.toString(),
-      };
-    },
-  };
-  return host;
-}
+import { channelEngine } from './channel-engine';
+import { CHANNEL_ID } from './fixtures';
 
 const changes = (
   seq: number,
@@ -78,505 +28,641 @@ const changes = (
   ...overrides,
 });
 
-const frame = (seq: number, removedIds: string[] = []) => ({
-  channelId: CHANNEL_ID,
-  seq: String(seq),
-  removedIds,
-});
-
 const runtimes: ChannelSyncRuntime[] = [];
 
+/**
+ * A runtime over one channel of an engine. `fetchChanges` is the server's
+ * answer; `latest` the sequence its latest page is read at.
+ */
 function setup(
-  initial: bigint | null,
-  fetchChanges: (after: string) => ChannelChangesPage = (after) =>
-    changes(Number(after))
+  initial: string | null,
+  fetchChanges: (
+    after: string,
+    signal: AbortSignal
+  ) => ChannelChangesPage | Promise<ChannelChangesPage> = (after) =>
+    changes(Number(after)),
+  { latest = '900' }: { latest?: string } = {}
 ) {
-  const host = syncHost(initial);
-  const fetch = vi.fn(async (_channelId: string, after: string) =>
-    fetchChanges(after)
+  const engine = channelEngine(initial);
+  // Answers the device refuses to store, each taken once.
+  const refusals: unknown[] = [];
+  const store = async (
+    apply: () => ChannelCommitOutcome
+  ): Promise<ChannelStoreResult> => {
+    const error = refusals.shift();
+    if (error !== undefined) return { stored: false, error };
+    return { stored: true, outcome: apply() };
+  };
+  const fetch = vi.fn(
+    async (_channelId: string, after: string, signal: AbortSignal) => {
+      const page = await fetchChanges(after, signal);
+      signal.throwIfAborted();
+      const stored = page.resetRequired
+        ? Promise.resolve<ChannelStoreResult>({
+            stored: true,
+            outcome: undefined,
+          })
+        : store(() =>
+            engine.apply(
+              {
+                channelId: CHANNEL_ID,
+                seq: page.seq,
+                watermark: { kind: 'advance', from: after },
+                removedIds: page.removedIds,
+              },
+              page.messages
+            )
+          );
+      return { page, stored };
+    }
   );
+  const replaceWithLatest = vi.fn(async () => ({
+    stored: store(() =>
+      engine.apply({ channelId: CHANNEL_ID, seq: latest, reset: true })
+    ),
+  }));
   const runtime = createChannelSyncRuntime({
-    host,
-    fetchChanges: (channelId, after) => fetch(channelId, after),
-    generation: () => 'generation-1',
+    host: engine.host,
+    fetchChanges: fetch,
+    replaceWithLatest,
     random: () => 0,
   });
   runtimes.push(runtime);
   const changed = vi.fn();
   runtime.onChanged(CHANNEL_ID, changed);
-  return { host, fetch, runtime, changed };
+  /** The change sequences the server was asked after. */
+  const asked = () => fetch.mock.calls.map(([, after]) => after);
+  /** A pushed frame, stored by the device as it arrives. */
+  const frame = (seq: number, removedIds: string[] = []) => {
+    const outcome = engine.apply({
+      channelId: CHANNEL_ID,
+      seq: String(seq),
+      watermark: { kind: 'advance', from: String(seq - 1) },
+      removedIds,
+    });
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: String(seq) }, outcome);
+    return outcome;
+  };
+  /** A page the server read at `readSeq`, stored by the device. */
+  const read = (readSeq: string, epoch = runtime.epoch()) => {
+    const { seq } = engine.apply({
+      channelId: CHANNEL_ID,
+      seq: readSeq,
+      watermark: { kind: 'lower' },
+    });
+    runtime.noteServerRead(CHANNEL_ID, { seq, readSeq, epoch });
+  };
+  return {
+    engine,
+    runtime,
+    fetch,
+    asked,
+    replaceWithLatest,
+    refusals,
+    changed,
+    frame,
+    read,
+  };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+/** Past the debounce of a scheduled catch-up. */
+const debounced = () => vi.advanceTimersByTimeAsync(CATCH_UP_DEBOUNCE_MS + 1);
+const settled = () => vi.advanceTimersByTimeAsync(0);
+const quiet = () => vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
 
-async function waitFor(check: () => boolean, ms = 2_000) {
-  const deadline = Date.now() + ms;
-  while (!check()) {
-    if (Date.now() > deadline) throw new Error('condition never held');
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
+beforeEach(() => {
+  vi.useFakeTimers();
+});
 
 afterEach(() => {
   for (const runtime of runtimes.splice(0)) runtime.dispose();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
-describe('createChannelSyncRuntime', () => {
-  it('advances the stored sequence from a frame that continues it, with no request', async () => {
-    const { host, fetch, runtime, changed } = setup(5n);
+describe('frames', () => {
+  it('follows frames that continue the watermark with no request', async () => {
+    const { engine, runtime, fetch, frame } = setup('5');
     runtime.onConnected();
-
-    runtime.onFrame(frame(6, ['gone']), true);
-    await waitFor(() => host.seq === 6n);
-
-    expect(fetch).not.toHaveBeenCalled();
-    expect(host.commits).toEqual([
-      {
-        channelId: CHANNEL_ID,
-        removedKeys: [
-          'GraphqlChannelMessage:gone',
-          'GraphqlChannelTimelineActivity:gone',
-        ],
-        seq: { kind: 'advance', from: '5', to: '6' },
-      },
-    ]);
-    await waitFor(() => changed.mock.calls.length > 0);
-  });
-
-  it('catches up the channels on screen and tells their views once the cache serves again', async () => {
-    const { host, fetch, runtime, changed } = setup(5n, () => changes(6));
-    runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
+    runtime.open(CHANNEL_ID);
     await runtime.ensureCurrent(CHANNEL_ID);
-    fetch.mockClear();
-    changed.mockClear();
+    expect(fetch).toHaveBeenCalledTimes(1);
 
-    runtime.resumed();
-    expect(changed).toHaveBeenCalledWith('resumed');
-    await waitFor(() => fetch.mock.calls.length > 0);
-    // Its sequence is read again: another tab may have moved it.
-    expect(host.heads).toBe(2);
-    release();
-  });
+    frame(6);
+    frame(7);
+    await debounced();
 
-  it('commits a frame in the cache session that stored its records', async () => {
-    const { host, runtime } = setup(5n);
-    runtime.onConnected();
-    runtime.onFrame(frame(6), true, 'generation-0');
-    await waitFor(() => host.commits.length > 0);
-    expect(host.generations).toEqual(['generation-0']);
-  });
-
-  it('replays from before a frame that arrived after a newer one', async () => {
-    // Frame 11 stored its records after frame 12 stored newer ones.
-    const { host, fetch, runtime } = setup(10n);
-    runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
-    runtime.onFrame(frame(12), true);
-    runtime.onFrame(frame(11), true);
-    await waitFor(() => host.seq === 12n);
-    await waitFor(() => fetch.mock.calls.some(([, after]) => after === '10'));
-    expect(fetch).not.toHaveBeenCalledWith(CHANNEL_ID, '12');
-    release();
-  });
-
-  it('replays from before a frame the device had already moved past', async () => {
-    const { fetch, runtime } = setup(12n);
-    runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
-    runtime.onFrame(frame(11), true);
-    await waitFor(() => fetch.mock.calls.length > 0);
-    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '10');
-    // Replayed: an open asks nothing more.
+    expect(engine.seq()).toBe('7');
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
     expect(fetch).toHaveBeenCalledTimes(1);
-    release();
   });
 
-  it('reads the stored sequence once, however many frames arrive', async () => {
-    const { host, runtime } = setup(5n);
+  it('catches up a channel on screen past a gap', async () => {
+    const { engine, runtime, asked, frame } = setup('5', () => changes(9));
     runtime.onConnected();
-    for (const seq of [6, 7, 8]) runtime.onFrame(frame(seq), true);
-    await waitFor(() => host.seq === 8n);
-    expect(host.heads).toBe(1);
-  });
+    runtime.open(CHANNEL_ID);
+    runtime.noteStoredSeq(CHANNEL_ID, '5');
 
-  it('ignores frames for a channel the device does not hold', async () => {
-    const { host, fetch, runtime } = setup(null);
-    runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
-    runtime.onFrame(frame(6), true);
-    await new Promise((resolve) =>
-      setTimeout(resolve, CATCH_UP_DEBOUNCE_MS * 2)
-    );
-    // One empty commit: a sync row the eviction sweep can find.
-    expect(host.commits).toEqual([{ channelId: CHANNEL_ID }]);
-    expect(fetch).not.toHaveBeenCalled();
-    release();
-  });
+    expect(frame(9).outcome).toBe('gap');
+    await debounced();
 
-  it('gives an unheld channel one sync row however many frames store records', async () => {
-    const { host, runtime } = setup(null);
-    runtime.onConnected();
-    runtime.onFrame(frame(6), true);
-    runtime.onFrame(frame(7), true);
-    runtime.onFrame(frame(8), false);
-    await waitFor(() => host.commits.length > 0);
-    await settle();
-
-    expect(host.commits).toEqual([{ channelId: CHANNEL_ID }]);
-    expect(host.heads).toBe(1);
-    expect(host.seq).toBeNull();
-  });
-
-  it('gives an unheld channel its row again when eviction lands while the row is written', async () => {
-    const { host, runtime } = setup(null);
-    const write = host.channelTimelineCommit;
-    const waiting: (() => void)[] = [];
-    host.channelTimelineCommit = (args, generation) =>
-      new Promise((resolve) => {
-        waiting.push(() => resolve(write(args, generation)));
-      });
-    runtime.onConnected();
-    runtime.onFrame(frame(6), true);
-    await waitFor(() => waiting.length === 1);
-
-    // Eviction removed the channel's row before the write was acknowledged.
-    runtime.forget([CHANNEL_ID]);
-    waiting[0]();
-    await settle();
-    runtime.onFrame(frame(7), true);
-
-    await waitFor(() => waiting.length === 2);
-    waiting[1]();
-    await waitFor(() => host.commits.length === 2);
-    expect(host.commits).toEqual([
-      { channelId: CHANNEL_ID },
-      { channelId: CHANNEL_ID },
-    ]);
-  });
-
-  it('holds a frame past a gap and catches up a channel on screen', async () => {
-    const { host, fetch, runtime } = setup(5n, () => changes(7));
-    runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
-
-    runtime.onFrame(frame(8), true);
-    await waitFor(() => host.seq === 8n);
-
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '5');
-    // The catch-up reached 7, and the held frame took it to 8.
-    expect(host.commits.map((commit) => commit.seq)).toEqual([
-      { kind: 'advance', from: '5', to: '7' },
-      { kind: 'advance', from: '7', to: '8' },
-    ]);
+    expect(asked()).toEqual(['5']);
+    expect(engine.seq()).toBe('9');
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
-    expect(fetch).toHaveBeenCalledTimes(1);
-    release();
   });
 
   it('leaves a gap in a channel off screen until it is opened', async () => {
-    const { fetch, runtime } = setup(5n, () => changes(7));
+    const { runtime, asked, frame } = setup('5', () => changes(9));
     runtime.onConnected();
-    runtime.onFrame(frame(8), true);
-    await new Promise((resolve) =>
-      setTimeout(resolve, CATCH_UP_DEBOUNCE_MS * 2)
-    );
-    expect(fetch).not.toHaveBeenCalled();
+    frame(9);
+    await debounced();
+    expect(asked()).toEqual([]);
 
+    runtime.open(CHANNEL_ID);
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('applied');
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(asked()).toEqual(['5']);
   });
 
   it('shares one catch-up among frames that closely follow each other', async () => {
-    const { fetch, runtime } = setup(5n, () => changes(12));
+    const { runtime, asked, frame } = setup('5', () => changes(12));
     runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
-    for (const seq of [8, 10, 12]) runtime.onFrame(frame(seq), false);
-    await waitFor(() => fetch.mock.calls.length > 0);
-    await new Promise((resolve) =>
-      setTimeout(resolve, CATCH_UP_DEBOUNCE_MS * 2)
-    );
-    expect(fetch).toHaveBeenCalledTimes(1);
-    release();
+    runtime.open(CHANNEL_ID);
+    for (const seq of [8, 10, 12]) frame(seq);
+    await debounced();
+    expect(asked()).toEqual(['5']);
   });
 
-  it('asks nothing when opening a channel proven current by a server read', async () => {
-    const { fetch, runtime } = setup(null);
+  it('asks nothing for frames of a channel the device does not hold', async () => {
+    const { engine, runtime, fetch, frame } = setup(null);
     runtime.onConnected();
-    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch(), '9');
+    runtime.open(CHANNEL_ID);
+    frame(8);
+    frame(9);
+    await debounced();
+    expect(fetch).not.toHaveBeenCalled();
+    // What the frames answered says it: the device is not asked for it.
+    expect(engine.heads()).toBe(0);
+  });
 
+  it('catches up when a read set the watermark before an unheld frame was told', async () => {
+    const { runtime, asked, frame, engine, read } = setup(null, () =>
+      changes(8)
+    );
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    // The frame found nothing held; the page stored next was read before it.
+    const outcome = engine.apply({
+      channelId: CHANNEL_ID,
+      seq: '8',
+      watermark: { kind: 'advance', from: '7' },
+    });
+    expect(outcome.outcome).toBe('unheld');
+    read('7');
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '8' }, outcome);
+    await debounced();
+    expect(asked()).toEqual(['7']);
+    frame(9);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+
+  it('catches up a channel on screen when a frame was not stored', async () => {
+    const { runtime, asked } = setup('5', () => changes(6));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '6' }, undefined);
+    await debounced();
+    expect(asked()).toEqual(['5']);
+  });
+
+  it('does not trust a channel whose frames were acknowledged out of order', async () => {
+    const { runtime, asked, engine } = setup('5');
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+
+    const [first, second] = [6, 7].map((seq) =>
+      engine.apply({
+        channelId: CHANNEL_ID,
+        seq: String(seq),
+        watermark: { kind: 'advance', from: String(seq - 1) },
+      })
+    );
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '7' }, second);
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '6' }, first);
+    await debounced();
+    expect(asked()).toEqual(['5', '7']);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+});
+
+describe('server reads', () => {
+  it('asks nothing when opening a channel a server read proved current', async () => {
+    const { runtime, fetch, read } = setup(null);
+    runtime.onConnected();
+    read('8');
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('catches up from the stored sequence when the server read a newer one', async () => {
-    // The device kept sequence 9 and its rows; the page was read at 12. A
-    // row deleted at 10 is still on the device until changes after 9 replay.
-    const { fetch, runtime } = setup(9n);
+  it('catches up when the device kept an older sequence than the read', async () => {
+    const { runtime, asked, read } = setup('5', () => changes(8));
     runtime.onConnected();
-    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch(), '12');
-
-    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
-    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '9');
+    runtime.open(CHANNEL_ID);
+    read('8');
+    await debounced();
+    expect(asked()).toEqual(['5']);
   });
 
-  it('does not trust a server read across a disconnect', async () => {
-    const { host, fetch, runtime } = setup(9n);
+  it('does not trust a read sent before the connection', async () => {
+    const { runtime, asked, read } = setup(null, () => changes(8));
     runtime.onConnected();
     const epoch = runtime.epoch();
     runtime.onDisconnected();
     runtime.onConnected();
-    runtime.noteServerRead(CHANNEL_ID, '9', epoch, '9');
-
-    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
-    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '9');
-    expect(host.commits).toEqual([]);
+    read('8', epoch);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    expect(asked()).toEqual(['8']);
   });
 
-  it('catches up a server read that a frame already went past', async () => {
-    const { fetch, runtime } = setup(null, () => changes(11));
+  it('does not trust a read a frame had already gone past', async () => {
+    const { runtime, asked, frame, read } = setup(null, () => changes(9));
     runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
-    runtime.onFrame(frame(11), true);
-    await settle();
-    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch(), '9');
-    await waitFor(() => fetch.mock.calls.length > 0);
-    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '9');
-    release();
-  });
-
-  it('catches up the channels on screen after a reconnect', async () => {
-    const { fetch, runtime } = setup(5n);
-    runtime.onConnected();
-    runtime.noteStoredSeq(CHANNEL_ID, '5');
-    const release = runtime.open(CHANNEL_ID);
-    runtime.onDisconnected();
-    runtime.onConnected();
-    await waitFor(() => fetch.mock.calls.length > 0);
-    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '5');
-    release();
-  });
-
-  it('ends the request of a catch-up when the runtime is disposed', async () => {
-    const signals: AbortSignal[] = [];
-    const runtime = createChannelSyncRuntime({
-      host: syncHost(5n),
-      fetchChanges: (_channelId, _after, signal) => {
-        signals.push(signal);
-        return new Promise<never>(() => {});
-      },
-      generation: () => 'generation-1',
-      random: () => 0,
-    });
-    runtime.onConnected();
-    runtime.noteStoredSeq(CHANNEL_ID, '5');
     runtime.open(CHANNEL_ID);
+    frame(9);
+    read('8');
+    await debounced();
+    expect(asked()).toEqual(['8']);
+  });
+
+  it('catches up what an older read lowered, and stays current after one that did not', async () => {
+    const { runtime, asked, read, engine } = setup('5', () => changes(8));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    expect(engine.seq()).toBe('8');
+
+    read('8');
+    await debounced();
+    expect(asked()).toEqual(['5']);
+
+    read('6');
+    await debounced();
+    expect(asked()).toEqual(['5', '6']);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+
+  it("catches up when a device read finds another tab's page lowered it", async () => {
+    const { runtime, asked, engine } = setup('8', () => changes(8));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+
+    // Ahead is a frame stored but not yet told: still current.
+    runtime.noteStoredSeq(CHANNEL_ID, '9');
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+
+    engine.setSeq('6');
+    runtime.noteStoredSeq(CHANNEL_ID, '6');
+    await debounced();
+    expect(asked()).toEqual(['8', '6']);
+  });
+});
+
+describe('catch-up', () => {
+  it('reads page after page from what the device holds', async () => {
+    const { engine, runtime, asked } = setup('5', (after) =>
+      after === '9'
+        ? changes(12)
+        : changes(Number(after) + 2, { hasMore: true })
+    );
+    runtime.onConnected();
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('applied');
+    expect(asked()).toEqual(['5', '7', '9']);
+    expect(engine.seq()).toBe('12');
+  });
+
+  it('says nothing changed when nothing did', async () => {
+    const { runtime } = setup('5');
+    runtime.onConnected();
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+
+  it('asks nothing for a channel the device does not hold', async () => {
+    const { runtime, fetch } = setup(null);
+    runtime.onConnected();
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('not-held');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('reads on from the device when a page lowered it under the request', async () => {
+    const { engine, runtime, asked } = setup('5', (after) => {
+      // Another tab's older page lands while the first request is out.
+      if (after === '5') engine.setSeq('3');
+      return changes(8);
+    });
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('applied');
+    expect(asked()).toEqual(['5', '3']);
+    expect(engine.seq()).toBe('8');
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+
+  it('stops when the channel is dropped under the request', async () => {
+    const { engine, runtime, asked } = setup('5', () => {
+      engine.setSeq(null);
+      return changes(8);
+    });
+    runtime.onConnected();
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('not-held');
+    expect(asked()).toEqual(['5']);
+  });
+
+  it('runs again when a frame went past what it read', async () => {
+    const { runtime, asked, frame } = setup('5', (after) => {
+      if (after !== '5') return changes(9);
+      frame(9);
+      return changes(6);
+    });
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    await debounced();
+    expect(asked()).toEqual(['5', '6']);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+
+  it.each([
+    ['the server says to', () => changes(5, { resetRequired: true }), 1],
+    [
+      'it is too far behind to replay',
+      (after: string) => changes(Number(after) + 1, { hasMore: true }),
+      MAX_CHANGE_PAGES,
+    ],
+  ])(
+    'replaces the channel with its latest page when %s',
+    async (_why, answer, asks) => {
+      const { engine, runtime, fetch, replaceWithLatest, changed } = setup(
+        '5',
+        answer
+      );
+      runtime.onConnected();
+      runtime.open(CHANNEL_ID);
+      await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('reset');
+      expect(fetch).toHaveBeenCalledTimes(asks);
+      expect(replaceWithLatest).toHaveBeenCalledTimes(1);
+      expect(engine.seq()).toBe('900');
+      expect(changed).toHaveBeenLastCalledWith('reset');
+      // Replaced in one step, so it is current at once.
+      await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+    }
+  );
+
+  it('runs one at a time, and the one that waited finds the channel current', async () => {
+    const answer = Promise.withResolvers<ChannelChangesPage>();
+    const { runtime, fetch } = setup('5', () => answer.promise);
+    runtime.onConnected();
+    const opens = [
+      runtime.ensureCurrent(CHANNEL_ID),
+      runtime.ensureCurrent(CHANNEL_ID),
+    ];
+    await settled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    answer.resolve(changes(6));
+    await expect(Promise.all(opens)).resolves.toEqual(['applied', 'current']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('frees the channel when a page goes unanswered', async () => {
+    quiet();
+    let answered = false;
+    const { runtime, asked, engine } = setup('5', () =>
+      answered ? changes(6) : new Promise<ChannelChangesPage>(() => {})
+    );
+    runtime.onConnected();
+    const first = runtime.ensureCurrent(CHANNEL_ID);
+    const failed = expect(first).rejects.toThrow();
+    await settled();
+    answered = true;
+    const second = runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(CATCH_UP_PAGE_BUDGET_MS + 1);
+    await failed;
+    await expect(second).resolves.toBe('applied');
+    expect(asked()).toEqual(['5', '5']);
+    expect(engine.seq()).toBe('6');
+  });
+
+  it('fails when the device does not store the page, and leaves it to a retry', async () => {
+    quiet();
+    const { engine, runtime, asked, refusals } = setup('5', () => changes(6));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    refusals.push(new Error('disk full'));
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).rejects.toThrow(
+      'disk full'
+    );
+    expect(engine.seq()).toBe('5');
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 1);
+    expect(asked()).toEqual(['5', '5']);
+    expect(engine.seq()).toBe('6');
+  });
+
+  it('waits twice as long after each failure in a row, up to the maximum', async () => {
+    quiet();
+    const { runtime, fetch } = setup('5', () => {
+      throw new Error('service unavailable');
+    });
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).rejects.toThrow();
+    let asks = 1;
+    for (let wait = CATCH_UP_RETRY_MS; wait < 1e6; wait *= 2) {
+      const due = Math.min(wait, CATCH_UP_RETRY_MAX_MS);
+      await vi.advanceTimersByTimeAsync(due - 1);
+      expect(fetch).toHaveBeenCalledTimes(asks);
+      await vi.advanceTimersByTimeAsync(1);
+      asks += 1;
+      expect(fetch).toHaveBeenCalledTimes(asks);
+    }
+  });
+
+  it('backs off from the first wait again once the channel was current', async () => {
+    quiet();
+    let up = false;
+    const { runtime, fetch, frame } = setup('5', (after) => {
+      if (!up) throw new Error('service unavailable');
+      return changes(Number(after));
+    });
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    up = true;
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+
+    up = false;
+    frame(9);
+    await debounced();
+    const asks = fetch.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS);
+    expect(fetch).toHaveBeenCalledTimes(asks + 1);
+  });
+
+  it('lets a frame bring a backed-off retry forward', async () => {
+    quiet();
+    const { runtime, fetch, frame } = setup('5', () => {
+      throw new Error('service unavailable');
+    });
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).rejects.toThrow();
+    frame(9);
+    await debounced();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts no retry once the last view closes', async () => {
+    quiet();
+    const { runtime, fetch } = setup('5', () => {
+      throw new Error('service unavailable');
+    });
+    runtime.onConnected();
+    const close = runtime.open(CHANNEL_ID);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).rejects.toThrow();
+    close();
+    close();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MAX_MS);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('connections', () => {
+  it('catches up the channels on screen after a reconnect', async () => {
+    const { runtime, asked } = setup('5', () => changes(8));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    runtime.noteStoredSeq(CHANNEL_ID, '5');
     runtime.onDisconnected();
     runtime.onConnected();
-    await waitFor(() => signals.length > 0);
-    expect(signals[0]?.aborted).toBe(false);
-    runtime.dispose();
-    await waitFor(() => signals[0]?.aborted === true);
+    await debounced();
+    expect(asked()).toEqual(['5']);
   });
 
-  it('drops the channel when it is too far behind to replay', async () => {
-    let after = 5;
-    const { host, fetch, runtime, changed } = setup(5n, () => {
-      after += 200;
-      return changes(after, { hasMore: true });
+  it('ends a catch-up of the old connection and reads again in the new one', async () => {
+    const signals: AbortSignal[] = [];
+    const { runtime, asked } = setup('5', (_after, signal) => {
+      signals.push(signal);
+      if (signals.length > 1) return changes(8);
+      return new Promise<ChannelChangesPage>(() => {});
     });
-
-    const mark = channelResetMark(host, CHANNEL_ID);
-    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('reset');
-    expect(fetch).toHaveBeenCalledTimes(MAX_CHANGE_PAGES);
-    expect(unchangedSince(host, CHANNEL_ID, mark)).toBe(false);
-    expect(host.commits.at(-1)).toEqual({
-      channelId: CHANNEL_ID,
-      reset: true,
-    });
-    expect(host.seq).toBeNull();
-    expect(changed).toHaveBeenCalled();
-  });
-
-  it('drops the channel when the server says to', async () => {
-    const { host, runtime } = setup(5n, () =>
-      changes(5, { resetRequired: true })
-    );
-    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('reset');
-    expect(host.seq).toBeNull();
-  });
-
-  it('tries the sync row again when its first commit fails', async () => {
-    const { host, runtime } = setup(null);
-    const commit = host.channelTimelineCommit;
-    let failures = 1;
-    host.channelTimelineCommit = async (args, generation) => {
-      if (failures > 0) {
-        failures -= 1;
-        host.commits.push(args);
-        throw new Error('commit timed out');
-      }
-      return commit(args, generation);
-    };
-    runtime.onFrame(frame(6), true);
-    await waitFor(() => host.commits.length === 1);
-    await settle();
-
-    runtime.onFrame(frame(7), true);
-    await waitFor(() => host.commits.length === 2);
-    await settle();
-    runtime.onFrame(frame(8), true);
-    await settle();
-
-    expect(host.commits).toEqual([
-      { channelId: CHANNEL_ID },
-      { channelId: CHANNEL_ID },
-    ]);
-  });
-
-  it('tries the sync row again when the device does not write it', async () => {
-    const { host, runtime } = setup(null);
-    const commit = host.channelTimelineCommit;
-    let refusals = 1;
-    host.channelTimelineCommit = async (args, generation) => {
-      if (refusals > 0) {
-        refusals -= 1;
-        host.commits.push(args);
-        return { kind: 'unsupported' as const };
-      }
-      return commit(args, generation);
-    };
-    runtime.onFrame(frame(6), true);
-    await waitFor(() => host.commits.length === 1);
-    await settle();
-
-    runtime.onFrame(frame(7), true);
-    await waitFor(() => host.commits.length === 2);
-    await settle();
-    runtime.onFrame(frame(8), true);
-    await settle();
-
-    expect(host.commits).toEqual([
-      { channelId: CHANNEL_ID },
-      { channelId: CHANNEL_ID },
-    ]);
-  });
-
-  it("rereads a channel another tab's write changed", async () => {
-    const { changed } = setup(5n);
-
-    // With no connection no frame tells this tab: the other tab says so.
-    const other = new BroadcastChannel('macro.channel-timeline.writes');
-    other.postMessage({ channelIds: [CHANNEL_ID] });
-    other.close();
-    await waitFor(() => changed.mock.calls.length === 1);
-  });
-
-  it('does not reread for a write this tab announced itself', async () => {
-    const { runtime, changed } = setup(5n);
-    const otherChanged = vi.fn();
-    runtime.onChanged('other-channel', otherChanged);
-
-    announceWritten(CHANNEL_ID);
-    // Another tab's announcement, sent after, arrives after it.
-    const other = new BroadcastChannel('macro.channel-timeline.writes');
-    other.postMessage({ channelIds: ['other-channel'] });
-    other.close();
-    await waitFor(() => otherChanged.mock.calls.length === 1);
-    await settle();
-    expect(changed).not.toHaveBeenCalled();
-  });
-
-  it('gives a channel evicted in another tab a sync row again', async () => {
-    const { host, runtime } = setup(null);
-    runtime.onFrame(frame(6), true);
-    await waitFor(() => host.commits.length === 1);
-    await settle();
-
-    // Another tab's prewarm removed the row with the records.
-    announceEvicted([CHANNEL_ID]);
-    await waitFor(() => {
-      runtime.onFrame(frame(7), true);
-      return host.commits.length === 2;
-    });
-
-    expect(host.commits).toEqual([
-      { channelId: CHANNEL_ID },
-      { channelId: CHANNEL_ID },
-    ]);
-  });
-
-  it('gives an evicted channel a sync row again', async () => {
-    const { host, runtime } = setup(null);
-    runtime.onFrame(frame(6), true);
-    await waitFor(() => host.commits.length === 1);
-    await settle();
-
-    // Eviction removed the row with the records.
-    runtime.forget([CHANNEL_ID]);
-    runtime.onFrame(frame(7), true);
-    await waitFor(() => host.commits.length === 2);
-
-    expect(host.commits).toEqual([
-      { channelId: CHANNEL_ID },
-      { channelId: CHANNEL_ID },
-    ]);
-    expect(host.heads).toBe(2);
-  });
-
-  it('catches up a channel on screen when a frame fails to commit', async () => {
-    const { host, fetch, runtime, changed } = setup(5n, () => changes(6));
     runtime.onConnected();
-    const release = runtime.open(CHANNEL_ID);
-    const commit = host.channelTimelineCommit;
-    let failures = 1;
-    host.channelTimelineCommit = async (args, generation) => {
-      if (failures > 0) {
-        failures -= 1;
-        throw new Error('commit timed out');
-      }
-      return commit(args, generation);
-    };
-
-    runtime.onFrame(frame(6), true);
-    await waitFor(() => host.seq === 6n);
-
-    // The records were stored: views reread, and a catch-up moved the
-    // sequence the frame could not.
-    expect(changed).toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '5');
-    release();
+    runtime.open(CHANNEL_ID);
+    const open = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    runtime.onDisconnected();
+    runtime.onConnected();
+    await expect(open).resolves.toBe('skipped');
+    expect(signals[0].aborted).toBe(true);
+    await debounced();
+    expect(asked()).toEqual(['5', '5']);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
   });
 
-  it('resets a channel only once no fill in another tab is mid-store', async () => {
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
-    const { host, runtime } = setup(5n, () =>
-      changes(5, { resetRequired: true })
+  it('does not mark current what a catch-up read across a connection', async () => {
+    const answer = Promise.withResolvers<ChannelChangesPage>();
+    const { runtime, asked } = setup('5', (after) =>
+      after === '5' ? answer.promise : changes(8)
     );
-    const fill = await holdAgainstDeletes();
-
-    const reset = runtime.ensureCurrent(CHANNEL_ID);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(host.commits).toEqual([]);
-
-    fill?.release();
-    await expect(reset).resolves.toBe('reset');
-    expect(host.commits).toEqual([{ channelId: CHANNEL_ID, reset: true }]);
-    vi.unstubAllGlobals();
+    runtime.onConnected();
+    const open = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    runtime.onDisconnected();
+    answer.resolve(changes(6));
+    await expect(open).resolves.toBe('applied');
+    runtime.onConnected();
+    await runtime.ensureCurrent(CHANNEL_ID);
+    expect(asked()).toEqual(['5', '6']);
   });
 
   it('forgets every channel after a storage reset', async () => {
-    const { host, runtime } = setup(5n);
+    const { engine, runtime } = setup('5');
     runtime.onConnected();
-    runtime.onFrame(frame(6), true);
-    await waitFor(() => host.seq === 6n);
-
+    await runtime.ensureCurrent(CHANNEL_ID);
+    engine.setSeq(null);
     runtime.forgetAll();
-    host.seq = 2n;
-    runtime.onFrame(frame(3), true);
-    await waitFor(() => host.seq === 3n);
-    expect(host.heads).toBe(2);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('not-held');
+  });
+
+  it('catches up the channels on screen and tells their views once the device is back', async () => {
+    const { runtime, asked, changed } = setup('5', () => changes(8));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    changed.mockClear();
+    runtime.resumed();
+    expect(changed.mock.calls).toEqual([['resumed']]);
+    await debounced();
+    expect(asked()).toEqual(['5', '8']);
+  });
+
+  it('ends its requests, and starts none, once disposed', async () => {
+    let signal: AbortSignal | undefined;
+    const { engine, runtime, fetch, frame } = setup('5', (_after, given) => {
+      signal = given;
+      return new Promise<ChannelChangesPage>(() => {});
+    });
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    const open = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    runtime.dispose();
+    await expect(open).resolves.toBe('skipped');
+    expect(signal?.aborted).toBe(true);
+    expect(engine.listeners()).toBe(0);
+    frame(9);
+    runtime.resumed();
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('skipped');
+    await debounced();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('changes of the device', () => {
+  it('tells the views of a channel what any tab changed', () => {
+    const { engine, changed } = setup('5');
+    engine.push('changed');
+    engine.push('reset');
+    engine.push('evicted');
+    expect(changed.mock.calls).toEqual([['changed'], ['reset'], ['reset']]);
+  });
+
+  it.each(['reset', 'evicted'] as const)(
+    'reads the watermark again after the channel was %s',
+    async (kind) => {
+      const { engine, runtime } = setup('5');
+      runtime.onConnected();
+      await runtime.ensureCurrent(CHANNEL_ID);
+      engine.setSeq(null);
+      engine.push(kind);
+      await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('not-held');
+    }
+  );
+
+  it('keeps telling the other views when one throws', () => {
+    const error = quiet();
+    const { engine, runtime, changed } = setup('5');
+    runtime.onChanged(CHANNEL_ID, () => {
+      throw new Error('view failed');
+    });
+    const last = vi.fn();
+    const stop = runtime.onChanged(CHANNEL_ID, last);
+    engine.push('changed');
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(last).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledTimes(1);
+    stop();
+    engine.push('changed');
+    expect(last).toHaveBeenCalledTimes(1);
   });
 });

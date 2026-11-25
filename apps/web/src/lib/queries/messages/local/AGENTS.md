@@ -10,166 +10,85 @@ host without the channel commands, and for non-channel parents, the REST and
 TanStack path in `../` runs untouched. A host whose database is away for now
 (`paused`) stays the channels' host: never read or write around its queue.
 
+## Who decides what
+
+The engine decides what is stored. Every answer carries a `seq`, a floor: its
+records are at least that new. The engine stamps each record with it, keeps a
+tombstone for what was removed, and stores a response's records, coverage and
+watermark in one transaction, so answers may arrive in any order and from any
+tab. This code never repairs the device, orders acknowledgements, or locks tabs
+out of each other. It decides only when to ask the server, and what a view shows.
+
+| Answer | Commit (`ChannelCommitArgs`) |
+| --- | --- |
+| Timeline or thread page | `watermark: lower`, the coverage it proves |
+| `channelChanges` page | `watermark: advance` from the cursor asked, `removedIds` |
+| Pushed frame | `watermark: advance`, `removedIds` |
+| Too far behind (`resetRequired`) | the latest page with `reset: true` |
+| Mutation, `channelMessage` | none: the stamp alone |
+
+A query passes its commit as urql's `channelCommit` context
+(`queryChannelNetwork`); the outcome is `applied`, `stale`, `gap` or `unheld`,
+with the watermark after it.
+
 ## How it works
 
-- Read: `channel-pages.ts` asks the host for a page (`channelTimeline`); a
-  covered page is read by key (`readRecordsByKeys`), a miss fetches
-  `ChannelTimeline` and commits its coverage and a lower sequence bound once the
-  normalized cache holds the records. Threads do the same per root
-  (`channel-thread.ts`, `ChannelThread`, coverage with `threadRootId`).
-- Follow: one runtime per host (`channel-sync-runtime.ts`) tracks the sequence
-  the device holds per channel, applies subscription frames
-  (`channel-stream.ts`), catches up open channels on reconnect, and tells open
-  timelines and threads to reread (`onChanged`). A drop ends every scheduled
-  catch-up still out: a changes page read before can land after a frame of the
-  next connection and write older records over it. On one connection one
-  catch-up waits at a time: a later ask leaves it in place unless it would
-  start sooner, so a busy channel's frames cannot postpone it, and one already
-  running finishes with the waiting one after it. A catch-up or read begun
-  under an earlier connection never marks a channel current (`epoch`, which
-  moves on every drop and connect); one that moved the device, storing an
-  older snapshot over what a later catch-up applied, makes it not current and
-  catches it up again, as does a read that finds the device below what it
-  read (unless one waits already, a retry included); a page out when a read
-  lowers the device below its cursor is read
-  again from there, outside the page budget. Each catch-up commit runs in a
-  `channel.catch_up.commit` span. A last page out while a newer frame stored records is
-  read again (`MAX_PAGE_REREADS`); the repair is left in place until a reread
-  holds (for an earlier page, until a later page reaches the frames that
-  overtook it, rising to each page before then), so a drop or a
-  failure on the way repairs from it; a channel with a repair left is not
-  current, a server read included. A page is watched for frames until its
-  commit is answered, and a commit that finds the sequence moved by a read
-  replays from it (a commit of removals only that finds it at or past the
-  page goes on from the page), the channel not current until
-  then; this assumes the device answers commits in the order it applies
-  them. A frame past a page's cursor that stored while it or an earlier
-  page was out is covered by the first later page that lands through it
-  (the server reads the log before the records), and asks for no repair. Only the request
-  can be interrupted: a commit the device takes always records its sequence
-  and tells the views, and one it leaves unanswered past `COMMIT_BUDGET_MS`,
-  a reset's included, frees the channel and makes the runtime read the
-  sequence from the device again; a page commit that fails after a newer
-  frame stored records leaves a repair from the page (none once the channel is forgotten). A failed catch-up of a
-  channel on screen is tried again after a wait that doubles from
-  `CATCH_UP_RETRY_MS` to `CATCH_UP_RETRY_MAX_MS` (reset by any success), unless another is already
-  scheduled or the channel closed meanwhile. `ensureCurrent`'s catch-up runs in the runtime's scope and goes
-  on over HTTP while the socket is down; the next connection or dispose ends
-  its request (`skipped`), and prewarm then asks once more, unless its pass was replaced, since a reconnect
-  catches up only the channels on screen. A window or a thread that
-  failed to load, and an older or newer page that failed, load again when the
-  connection comes back (`watchReconnect`, started before each request, so a
-  request that fails after the connection is already back loads again at
-  once): nothing else retries them on its own (a failed window still shows
-  Retry), nor a window read again after a session change, except the wait
-  after a failed page below. A page the device
-  failed to store is read again from its own cursor, by the next page in that
-  direction or the connection's return, and given up if refused again: the
-  window then follows the device only once it is loaded again. From a page's
-  merge until its outcome is recorded, the window is neither read from the
-  device nor kept for the next mount; a change that came meanwhile, or while
-  the window loaded, is read once it holds. A window loaded again forgets the
-  old window's pages, and nothing waits for a replaced window's reads or
-  stores, nor for its pages'. A failed page sets `pageFailed` (`olderFailed`)
-  until a scroll, the connection, or a wait that doubles from `PAGE_RETRY_MS`
-  to `PAGE_RETRY_MAX_MS`, so the call panel, which pages whenever paging is
-  idle, asks at a bounded rate.
-  Tabs share the device but hear only their own writes and the server's
-  frames, so a write announces its channel to the other tabs once the queue
-  stores it and once it settles (`channel-tab-writes.ts`, the
-  `macro.channel-timeline.writes` BroadcastChannel; a tab ignores its own),
-  and their runtimes tell the channel's views to reread.
+- Read: `channel-pages.ts` asks the host for a page (`channelTimeline`). A
+  covered page is read by key (`readRecordsByKeys`); a miss fetches
+  `ChannelTimeline`. Threads do the same per root (`channel-thread.ts`,
+  `ChannelThread`, coverage with `threadRootId`).
+- Follow: one runtime per host (`channel-sync-runtime.ts`). It knows each
+  channel's watermark and whether the channel is `current`: the device holds
+  every change announced while the socket stayed connected. A gap or a
+  reconnect makes a channel not current; one on screen then catches up through
+  `channelChanges` after a jittered debounce, one off screen when it is opened.
+  A failed catch-up, or one that keeps ending behind, is tried again after a
+  wait that doubles (`CATCH_UP_RETRY_MS` to `CATCH_UP_RETRY_MAX_MS`). Only an
+  acknowledgement that fits what was known may set `current`; a watermark known
+  too high costs one request, which the engine answers `gap` with its own.
+- Views read again when the host reports a change of the channel
+  (`onChannelChanged`, every tab's, through the runtime's `onChanged`). A view's
+  own store is reported to it too, so a device that keeps losing what a view
+  stores is asked `SESSION_CHANGE_RELOADS` times, then left.
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
-  durable cache mutation queue and waits for their settlement; a retired host
-  (`graphql-soup.ts` cleanup, or recovery given up until a reload) ends the
-  writes still waiting, `CACHE_RETIRED`, and the one being handed over, after
-  `RETIRED_ANSWER_BUDGET_MS` once it was acknowledged. A write goes out only
-  under the sign-in it was asked for under (`signIn`): one still waiting its
-  turn as another replaces it on the same host ends `CACHE_RETIRED`, as
-  does one asked for before a sign-in said who it is, or for someone else
-  (`mayWrite`: a composer can still act for the person before). The rows of
-  pending writes (`unstoredRoots`, `unstoredReplies`) are the current
-  sign-in's alone. When the
-  cache session changes (the
-  engine returned from the back/forward cache, or reset), a waiting write asks
-  the queue whether it still holds the write: if not, an
-  edit, delete or reaction resolves only when the device copy shows it
-  (`applied`; another tab may have rolled it back, `NOT_APPLIED`), and a send
-  answers from the device copy, else the server copy (`ChannelMessage`), else
-  `DELIVERY_UNKNOWN`: a request the server has not answered can still
-  commit, so an absent copy proves nothing. It asks three times, reading the
-  device again between questions (another tab may store the send meanwhile);
-  a request unanswered within `SERVER_LOOKUP_BUDGET_MS` is cancelled, so the
-  next question sends a new one rather than joining it, and an answer waits
-  at most `SERVER_COPY_STORE_BUDGET_MS` for the device to store it (one stored
-  later tells the views again, since their reread came first). The composers
-  send a restored draft of that message again, from the same person to the
-  same place and from any view of it, under the same id
-  (`features/channel/Input/utils/uncertain-sends.ts`, which ignores mention
-  order), until another message is sent there; the ids live in memory, so a
-  reload forgets them, and so does the end of a session. The
-  reply composer awaits its send, since it unmounts as it sends, and puts a
-  failed reply back through the thread's stored draft, which every open reply
-  input holds (`features/channel/Thread/reply-drafts.ts`): a view opened later
-  shows it, a newer draft in any view is kept (a quote builds on it too), and
-  a reply sent before or during a sign-out, or before a sign-in replaced its
-  session, is not written back (`composerStorageWritable`). A queue that
-  cannot be read is asked again with backoff, except after a reset, which ends
-  the write with `CACHE_RESET`. A reset and a retired host fail only edits,
-  deletes and reactions: a send already handed to the queue may have left it, so
-  it is `DELIVERY_UNKNOWN`. A write is its transaction id and its
-  mutation id: transaction ids restart when the queue is rebuilt. The queue
-  replays only sends and deletes the server answered `SERVICE_UNAVAILABLE`
-  (`graphql-mutation-retry.ts`): the server dedupes them by message id, while a
-  replayed edit or reaction could undo a newer one; every write is still sent
-  again after a transport failure. A send the queue stops retrying, or whose
-  answer the device could not store (`LOCAL_COMMIT_FAILED`), answers the same
-  way, from the device copy first; an edit, delete or reaction it could not
-  store is on the server and resolves with the server's copy
-  (`LocalCommitFailedError.confirmed`, else asked for), never the device's older
-  one, and with none when neither can be read: what is confirmed never rejects. An answer the queue
-  holds while its commit to the device is in doubt (`disposition.confirmed`)
-  is the write's at once. A write the queue settled before its host retired keeps that answer. One
-  that never reached the queue (`write-not-admitted`) is a refusal, and so is
-  one the queue did not take (`MutationNotQueuedError`, `NOT_QUEUED`).
-  A write whose enqueue lost its
-  answer (`ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE`) looks for its mutation id in
-  the queue: it waits for the one it finds, answers as a write that left the
-  queue when there is none, and a queue that cannot be read makes a send
-  `DELIVERY_UNKNOWN`, since a device copy may be the queue's own optimistic
-  record. A send whose answer was lost asks the server, then is
-  `DELIVERY_UNKNOWN`. Recovery runs as
-  `channel.write.recover` in the write's trace, every lookup included. A page
-  and each read of it again run in one `channel.load_page` span.
+  durable cache mutation queue and waits for their settlement. The hooks in
+  `../mutations.ts` and `../reactions.ts` pick the path for each write
+  (`../device-writes.ts`): one the device takes runs no TanStack mutation and
+  writes no TanStack cache, and a REST one keeps the app's defaults. A channel a
+  view on screen reads over REST keeps its writes on REST (`keepChannelOnRest`),
+  as does a message with an anchor.
 - Outage: while the host is `paused` (or being proven readable again after it
   answered, or was away, before: `sessionChannelHost` in `channel-flag.ts`),
   open channels keep what they show, new ones load from the server unheld, and
-  writes wait (`channel.write.await_cache`) for the queue. A channel's writes
-  reach it in the order they were asked for, each once the one before has been
-  handed over (`takeTurn`, one lane per sign-in), and only a host the session
-  serves from takes them (`serving`). A write never goes past the queue
-  (`onlyQueued`): straight out it would overtake the writes the queue keeps. One
-  the queue refused is handed over again when the database was away by then,
-  fails with `CACHE_RETIRED` when its sign-in ended, and otherwise fails as not
-  sent, its draft restored. `restartCache` in `graphql-soup.ts` ends the outage by
-  calling `resumed()` on the host's runtime, which catches up the channels on
-  screen and reloads what they could not hold, and on its writes. An engine
-  replaced over its storage without a pause resumes them too
-  (`channel-sync.ts`). A window that was still loading or storing a page then,
-  or that the device no longer holds, is loaded again as far as the reader had
-  paged and replaced only once all of it is read (`channel.reload_window`): at
-  most `RELOAD_EXTRA_PAGES` more pages than it showed, and around its middle
-  message when more than that arrived. An older or newer page that was being
-  asked for and failed is asked for again. A host the
-  page stops trying to prove (`recovery-required`) is retired, and channels go
-  over REST until a reload.
+  writes wait (`channel.write.await_cache`). `restartCache` in
+  `graphql-soup.ts` ends it by calling `resumed()` on the host's runtime and
+  writes; an engine replaced over its storage without a pause resumes them too
+  (`channel-sync.ts`). A host the page stops trying to prove
+  (`recovery-required`) is retired, and channels go over REST until a reload.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
-  person is idle, and evicts channels untouched for 30 days. A pushed frame
-  for a channel the device does not hold gives it an empty sync row once the
-  device writes it, so eviction finds the records the frame stored. Eviction,
-  here or in another tab (the `macro.channel-timeline.evictions`
-  BroadcastChannel), makes the runtime forget the channels it removed
-  (`forget`), so a later frame adds the row again.
+  person is idle, and evicts channels untouched for 30 days.
+
+### How a write ends
+
+A write goes out only through the queue (`onlyQueued`), in the order it was
+asked for in its channel (`takeTurn`), under the sign-in it was asked for under.
+
+| What happened | Send | Edit, delete, reaction |
+| --- | --- | --- |
+| Never reached the queue, or the queue refused it (`NOT_QUEUED`) | fails as not sent, draft restored | fails |
+| Its sign-in ended before its turn, or no sign-in said who it is | `CACHE_RETIRED` | `CACHE_RETIRED` |
+| The host retired, or its storage was reset, with the write in the queue | `DELIVERY_UNKNOWN` | `CACHE_RETIRED`, `CACHE_RESET` |
+| The answer was lost, or the enqueue's acknowledgement was | device copy, then the server's (`ChannelMessage`), else `DELIVERY_UNKNOWN` | applied if the device shows it, else `NOT_APPLIED` |
+| The server answered, the device could not store it | the server's copy | the server's copy; never rejects |
+
+An absent server copy proves nothing while a request may still commit, so a
+send is never called failed on it. The composers send a restored draft of an
+uncertain send again under the same id
+(`features/channel/Input/utils/uncertain-sends.ts`), in memory only and until
+the session ends. Recovery runs as `channel.write.recover` in the write's
+trace. A write is its transaction id and its mutation id: transaction ids
+restart when the queue is rebuilt. The queue replays only sends and deletes the
+server answered `SERVICE_UNAVAILABLE` (`graphql-mutation-retry.ts`).
 
 ## Start here
 
@@ -177,43 +96,35 @@ TanStack path in `../` runs untouched. A host whose database is away for now
 - `../channel-timeline-source.ts`: `useChannelReadPath`, the once-per-mount
   choice between device and REST; `../thread-replies.ts` uses the same choice.
   A flag PostHog has not answered yet reads as off: REST never waits for it.
-  A link to a message learns whether it is a reply from the device copy on the
-  device path (`useChannelMessageResolver`), and from the server only when the
-  device lacks it, so a link opens with no connection.
-- `channel-resets.ts`: counts deletes and evictions per host, so a page
-  fetched across one commits no coverage. Tabs share the device, so a fill
-  also holds the `macro.channel-timeline.deletes` Web Lock shared from before
-  its fetch until its coverage is sent (`holdAgainstDeletes`), and eviction and
-  resets take it exclusive (`whileNoFills`): eviction gives up after 5 s and
-  tries next round, a reset runs anyway after 30 s. A fill holds the lock at
-  most 20 s (`FILL_HOLD_LIMIT_MS`), and a delete too (`DELETE_HOLD_LIMIT_MS`): one
-  the device has not answered by then lets fills back in, and is counted
-  again once it answers. A fill that finds a delete waiting, or
-  outlived its hold, commits no coverage and reports `yielded`: the open
-  timeline or thread shows what it read, waits for the delete
-  (`afterDeletes`) and reads again, at most twice.
+- `../device-writes.ts`: what the write hooks do with a device write (toasts,
+  analytics, list bumps).
 
 ## Checks
 
 - `bun run test -- src/lib/queries/messages` (from `apps/web`).
+  `tests/channel-engine.ts` is the engine's commit rules in memory; keep it in
+  step with the engine's.
 - `bunx oxlint --type-aware apps/web/src/lib/queries/messages` (repository root).
 - End to end: `apps/web/tests/channels-e2e/README.md`, with `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`.
 
 ## Gotchas
 
-- Never commit coverage or a sequence before the records are stored:
-  `queryChannelNetwork`'s `cached` settles only then. When the cache refuses
-  a read because the session changed after it was sent, `cached` fails as a
-  session change (`cacheSessionChanged`) and the view reads again.
-- Capture `cacheSessionGeneration` before a fetch and pass it to the commit; a
-  later session must not store what an earlier one read.
+- Every selection of a message under a `seq` uses `ChannelMessageFields`: a
+  partial one would raise the record's stamp over fields it left old. Read a
+  page and a thread in separate operations.
+- A query's answer is shown before the device stores it. `cached`, `stored` and
+  thread stores say how that ended; `stored` never rejects, since a loader that
+  moved on leaves it unawaited.
+- When the cache refuses a read because the session changed after it was sent,
+  the view reads again under the new one (`cacheSessionChanged`). A bare commit
+  (`channelTimelineCommit`, the touch) takes the `cacheSessionGeneration`
+  captured before its read.
 - A read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),
   and a prewarm counts as a touch: `touched_at_ms` defaults to 0, which the
   30-day eviction would take at once. A touch counts only once the device
-  stored it (`settled`), and only in the cache session it was sent in: a
-  refused one, or one from an earlier session, is sent again with the next
-  read. A read from a session that is no longer current marks nothing; one
-  in the session whose cleanup still runs marks (`touchSessionAccepts`).
+  stored it (`settled`), and only in the cache session it was sent in.
+- Never import `account-scope` or `queries/client` here: `graphql-soup.ts`
+  imports `channel-sync.ts`, and its tests mount neither.
 - `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts`,
   `channel-prewarm.ts` and the tests that run their effects (FE-46).
 - Channel queries abort through `firstOrAborted`: urql replaces
@@ -223,17 +134,21 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   and the cache sends a read again when a write lands while it is out.
 - Start a request that follows an await inside its span with `span.run`, and
   capture a write's trace (`Telemetry.captureContext`) before any await.
-- A page's `stored` and a thread's store acknowledgements never reject: a
-  loader that moved on leaves them unawaited. The store runs in a
-  `channel.page.store` child span of the page.
+- What failed with no connection loads again when it returns
+  (`watchReconnect`, started before each request); nothing else retries a
+  window. A failed page waits for a scroll, the connection, or a wait that
+  doubles from `PAGE_RETRY_MS` (`olderFailed`), so the call panel, which pages
+  whenever paging is idle, asks at a bounded rate.
+- A window is replaced only once all of it is read again
+  (`channel.reload_window`): at most `RELOAD_EXTRA_PAGES` more pages than it
+  showed, around its middle message when more than that arrived.
 - Keep the prewarm pace under the engine's idle checkpoint quiet period, or
   every channel forces a checkpoint.
 - A pushed message reaches an open timeline only once the device has reread
   it, and its unread notification often gets there first. Code that fetches
-  what the timeline lacks waits for it to settle on the device path, as the
-  unread navigation's parent lookup does (`followsPushes`, each parent on
-  its own monotonic clock, `createRipeIds`), or every push fetches its own
-  message again.
+  what the timeline lacks waits for it to settle on the device path
+  (`followsPushes`, `createRipeIds`), or every push fetches its own message
+  again.
 
 ## Related
 

@@ -192,7 +192,12 @@ export const written = (
   message: ChannelMessageFieldsFragment,
   root: ChannelMessageFieldsFragment | null = null
 ) => ({
-  [field]: { __typename: 'GraphqlChannelMessageWrite', message, root },
+  [field]: {
+    __typename: 'GraphqlChannelMessageWrite',
+    seq: '9',
+    message,
+    root,
+  },
 });
 
 export const send = (

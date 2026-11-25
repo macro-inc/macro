@@ -75,6 +75,7 @@ export type {
   CalendarSpanKind,
   CalendarSpanWire,
   CalendarWatermarkUpdateWire,
+  ChannelChange,
   ChannelCommitArgs,
   ChannelCommitOutcome,
   ChannelCoverageWire,

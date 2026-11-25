@@ -1,6 +1,5 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
-import type { CacheRevision } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import { StackContextManager } from '@macro-inc/observability/web';
 import { context, trace } from '@opentelemetry/api';
@@ -28,6 +27,7 @@ import {
 } from '../channel-timeline';
 import { createChannelWrites } from '../channel-writes';
 import {
+  applied,
   CHANNEL_ID,
   devicePage,
   fakeHost,
@@ -71,7 +71,7 @@ it('keeps a cold page, its request and its store in one trace', async () => {
         newerCursor: null,
         seq: '9',
       },
-      cached: Promise.resolve(),
+      cached: Promise.resolve(applied('9')),
     };
   });
 
@@ -118,7 +118,7 @@ it('keeps every page of a thread fill in the thread load trace', async () => {
         newerCursor: null,
         seq: '9',
       },
-      cached: Promise.resolve(),
+      cached: Promise.resolve(applied('9')),
     };
   });
 
@@ -153,7 +153,7 @@ it('says when the device could not be read for a thread', async () => {
         newerCursor: null,
         seq: '9',
       },
-      cached: Promise.resolve(),
+      cached: Promise.resolve(applied('9')),
     }),
   });
   const load = exporter
@@ -184,31 +184,26 @@ it('keeps a reply send in the trace of the composer that sent it', async () => {
   expect(write?.parentSpanContext?.spanId).toBe(parent?.spanContext().spanId);
 });
 
-it('runs a catch-up and its requests in a span under the open that asked for it', async () => {
-  const host = {
-    channelTimeline: async () => devicePage([], { covered: true, seq: '9' }),
-    channelTimelineCommit: async () => ({
-      kind: 'committed' as const,
-      revision: '1' as CacheRevision,
-      changed: [],
-      channelSeq: '9',
-    }),
-  };
+it('runs a catch-up, its requests and its stores in a span under the open that asked for it', async () => {
   let requestSpan: string | undefined;
+  const page = {
+    resetRequired: false,
+    seq: '9',
+    hasMore: false,
+    removedIds: [],
+    messages: [],
+    activities: [],
+  };
   const runtime = createChannelSyncRuntime({
-    host,
+    host: fakeHost(() => devicePage([], { covered: true, seq: '5' })),
     fetchChanges: async () => {
       requestSpan = trace.getActiveSpan()?.spanContext().spanId;
       return {
-        resetRequired: false,
-        seq: '9',
-        hasMore: false,
-        removedIds: [],
-        messages: [],
-        activities: [],
+        page,
+        stored: Promise.resolve({ stored: true, outcome: applied('9') }),
       };
     },
-    generation: () => 'generation-1',
+    replaceWithLatest: () => Promise.reject(new Error('unexpected')),
     random: () => 0,
   });
   runtime.onConnected();
@@ -223,59 +218,19 @@ it('runs a catch-up and its requests in a span under the open that asked for it'
   const spans = exporter.getFinishedSpans();
   const view = spans.find((span) => span.name === 'view.channel');
   const catchUp = spans.find((span) => span.name === 'channel.catch_up');
+  const store = spans.find((span) => span.name === 'channel.catch_up.store');
   expect(catchUp?.parentSpanContext?.spanId).toBe(view?.spanContext().spanId);
   expect(requestSpan).toBe(catchUp?.spanContext().spanId);
+  expect(store?.parentSpanContext?.spanId).toBe(catchUp?.spanContext().spanId);
+  expect(store?.attributes).toMatchObject({
+    'store.kind': 'page',
+    'store.outcome': 'applied',
+  });
   expect(catchUp?.attributes).toMatchObject({
     'channel.id': CHANNEL_ID,
     'catch_up.reason': 'open',
+    'catch_up.outcome': 'applied',
     'catch_up.pages': 1,
-  });
-});
-
-it('times each catch-up commit in a child span the device call runs in', async () => {
-  let commitSpan: string | undefined;
-  const host = {
-    channelTimeline: async () => devicePage([], { covered: true, seq: '5' }),
-    channelTimelineCommit: async () => {
-      commitSpan = trace.getActiveSpan()?.spanContext().spanId;
-      return {
-        kind: 'committed' as const,
-        revision: '1' as CacheRevision,
-        changed: [],
-        channelSeq: '9',
-      };
-    },
-  };
-  const runtime = createChannelSyncRuntime({
-    host,
-    fetchChanges: async () => ({
-      resetRequired: false,
-      seq: '9',
-      hasMore: false,
-      removedIds: [],
-      messages: [],
-      activities: [],
-    }),
-    generation: () => 'generation-1',
-    random: () => 0,
-  });
-  runtime.onConnected();
-  try {
-    await runtime.ensureCurrent(CHANNEL_ID);
-  } finally {
-    runtime.dispose();
-  }
-
-  const spans = exporter.getFinishedSpans();
-  const catchUp = spans.findLast((span) => span.name === 'channel.catch_up');
-  const commit = spans.findLast(
-    (span) => span.name === 'channel.catch_up.commit'
-  );
-  expect(commit?.parentSpanContext?.spanId).toBe(catchUp?.spanContext().spanId);
-  expect(commitSpan).toBe(commit?.spanContext().spanId);
-  expect(commit?.attributes).toMatchObject({
-    'commit.kind': 'page',
-    'catch_up.page': 0,
   });
 });
 
@@ -324,6 +279,7 @@ async function readPageAgain(
       },
       cached: (async () => {
         if (first) throw new StaleCacheAuthorityError();
+        return applied('9');
       })(),
     };
   });

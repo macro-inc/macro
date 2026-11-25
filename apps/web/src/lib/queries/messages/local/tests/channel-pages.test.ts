@@ -1,4 +1,8 @@
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import type {
+  ChannelCommitArgs,
+  ChannelCommitOutcome,
+} from '@graphql-cache/index';
 import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
@@ -7,7 +11,7 @@ import {
   cacheSessionGeneration,
   createSessionGeneration,
 } from '@graphql-cache/session-generation';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type * as ChannelNetwork from '../channel-network';
 import {
   CHANNEL_TOUCH_INTERVAL_MS,
@@ -19,15 +23,7 @@ import {
   touchSessionAccepts,
 } from '../channel-pages';
 import {
-  DELETE_HOLD_LIMIT_MS,
-  FILL_HOLD_LIMIT_MS,
-  holdAgainstDeletes,
-  noteChannelReset,
-  noteChannelsEvicted,
-  whileNoFills,
-} from '../channel-resets';
-import { fakeLocks } from './fake-locks';
-import {
+  applied,
   CHANNEL_ID,
   devicePage,
   fakeHost,
@@ -55,6 +51,28 @@ function serverPage(
     seq: '9',
     ...overrides,
   };
+}
+
+/**
+ * A server that answers each ask with `page`, recording the commit sent
+ * beside it, whose store comes to `stored(ask)`.
+ */
+function server(
+  stored: (
+    ask: number
+  ) =>
+    | ChannelCommitOutcome
+    | undefined
+    | Promise<ChannelCommitOutcome | undefined> = () => applied('9'),
+  page = serverPage()
+) {
+  const commits: (ChannelCommitArgs | undefined)[] = [];
+  const fetchPage = vi.fn<FetchChannelServerPage>(async (_input, options) => {
+    commits.push(options.commit?.(page));
+    const ask = commits.length;
+    return { page, cached: (async () => stored(ask))() };
+  });
+  return { fetchPage, commits };
 }
 
 /** A commit the device refuses once, as after a session change, then stores. */
@@ -194,17 +212,13 @@ describe('loadChannelPage', () => {
   });
 
   it('marks a channel again after a fill whose commit the device refused', async () => {
-    const { host } = countingHost(
-      [
-        devicePage([], { covered: false, seq: null }),
-        devicePage([], { covered: false, seq: null }),
-      ],
-      { commit: refuseFirstCommit() }
+    const { host } = countingHost([
+      devicePage([], { covered: false, seq: null }),
+      devicePage([], { covered: false, seq: null }),
+    ]);
+    const { fetchPage, commits } = server((ask) =>
+      ask === 1 ? undefined : applied('9')
     );
-    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      page: serverPage(),
-      cached: Promise.resolve(),
-    }));
     let now = 1_000;
     const deps = {
       host,
@@ -225,23 +239,17 @@ describe('loadChannelPage', () => {
     now += 1;
     await fill();
 
-    expect(host.commits.map((commit) => commit.touchedAtMs)).toEqual([
+    expect(commits.map((commit) => commit?.touchedAtMs)).toEqual([
       1_000, 1_001,
     ]);
   });
 
-  it('fetches a page the device lacks and commits it once the cache stores it', async () => {
+  it('fetches a page the device lacks, to be stored with what it proves', async () => {
     const { host } = countingHost([
       devicePage([], { covered: false, seq: null }),
     ]);
-    let storeRecords!: () => void;
-    const cached = new Promise<void>((resolve) => {
-      storeRecords = resolve;
-    });
-    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      page: serverPage(),
-      cached,
-    }));
+    const stored = Promise.withResolvers<ChannelCommitOutcome>();
+    const { fetchPage, commits } = server(() => stored.promise);
 
     const loaded = await loadChannelPage(
       { host, touches: { due: () => 5, settled: () => {} }, fetchPage },
@@ -251,64 +259,30 @@ describe('loadChannelPage', () => {
     if (loaded === 'unsupported') throw new Error('unexpected');
     expect(loaded.source).toBe('server');
     expect(loaded.page.entries).toHaveLength(2);
-    expect(host.commits).toHaveLength(0);
+    if (loaded.source === 'server') expect(loaded.readSeq).toBe('9');
 
-    storeRecords();
-    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '9' });
-    expect(host.commits).toEqual([
+    // Another read left the device behind this page.
+    stored.resolve(applied('8'));
+    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '8' });
+    expect(host.commits).toEqual([]);
+    expect(commits).toEqual([
       {
         channelId: CHANNEL_ID,
         coverage: [
           { start: CHANNEL_TIMELINE_START, end: CHANNEL_TIMELINE_HEAD },
         ],
-        seq: { kind: 'lower', seq: '9' },
+        seq: '9',
+        watermark: { kind: 'lower' },
         touchedAtMs: 5,
       },
     ]);
   });
 
-  it.each([
-    ['the channel was reset', () => noteChannelReset],
-    ['channels were evicted', () => noteChannelsEvicted],
-  ] as const)(
-    'commits no coverage when %s while the page was fetched',
-    async (_, note) => {
-      const { host } = countingHost([
-        devicePage([], { covered: false, seq: null }),
-      ]);
-      let storeRecords!: () => void;
-      const cached = new Promise<void>((resolve) => {
-        storeRecords = resolve;
-      });
-      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-        page: serverPage(),
-        cached,
-      }));
-
-      const loaded = await loadChannelPage(
-        { host, touches: { due: () => 5, settled: () => {} }, fetchPage },
-        { channelId: CHANNEL_ID, limit: 50 }
-      );
-      if (loaded === 'unsupported') throw new Error('unexpected');
-      // The delete lands after the records were stored, before the coverage.
-      note()(host, CHANNEL_ID);
-      storeRecords();
-
-      expect(await loaded.stored).toEqual({ kind: 'stored', seq: null });
-      expect(host.commits).toEqual([]);
-      // The page itself still shows.
-      expect(loaded.page.entries).toHaveLength(2);
-    }
-  );
-
   it('asks the server when the device read fails, never showing an empty channel', async () => {
     const { host } = countingHost(() => {
       throw new Error('host timed out');
     });
-    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      page: serverPage(),
-      cached: Promise.resolve(),
-    }));
+    const { fetchPage, commits } = server(() => undefined);
 
     const loaded = await loadChannelPage(
       { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
@@ -318,9 +292,8 @@ describe('loadChannelPage', () => {
     if (loaded === 'unsupported') throw new Error('unexpected');
     expect(loaded.source).toBe('server');
     expect(loaded.page.entries).toHaveLength(2);
-    // Nothing proves what the device holds, so nothing is committed.
+    expect(commits).toHaveLength(1);
     expect(await loaded.stored).toEqual({ kind: 'stored', seq: null });
-    expect(host.commits).toHaveLength(0);
   });
 
   it.each([
@@ -334,10 +307,7 @@ describe('loadChannelPage', () => {
     'settles a page whose store %s without rejecting',
     async (_, error, outcome) => {
       const { host } = countingHost([devicePage([], { covered: false })]);
-      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-        page: serverPage(),
-        cached: Promise.reject(error),
-      }));
+      const { fetchPage } = server(() => Promise.reject(error));
 
       const loaded = await loadChannelPage(
         {
@@ -352,7 +322,6 @@ describe('loadChannelPage', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(await loaded.stored).toEqual(outcome);
-      expect(host.commits).toHaveLength(0);
     }
   );
 
@@ -371,141 +340,6 @@ describe('loadChannelPage', () => {
       )
     ).toBe('unsupported');
     expect(fetchPage).not.toHaveBeenCalled();
-  });
-});
-
-describe('loadChannelPage across tabs', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  const fill = () => {
-    const { host } = countingHost([
-      devicePage([], { covered: false, seq: null }),
-    ]);
-    let storeRecords!: () => void;
-    const cached = new Promise<void>((resolve) => {
-      storeRecords = resolve;
-    });
-    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      page: serverPage(),
-      cached,
-    }));
-    return { host, fetchPage, storeRecords };
-  };
-
-  it('holds off an eviction in another tab until its coverage is sent', async () => {
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
-    const { host, fetchPage, storeRecords } = fill();
-    const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
-      { channelId: CHANNEL_ID, limit: 50 }
-    );
-    if (loaded === 'unsupported') throw new Error('unexpected');
-
-    // Another tab evicts once the records are stored, before the coverage.
-    const order: string[] = [];
-    const evicted = whileNoFills(async () => {
-      order.push(`evict after ${host.commits.length} commits`);
-    });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(order).toEqual([]);
-    storeRecords();
-    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '9' });
-    await evicted;
-
-    expect(order).toEqual(['evict after 1 commits']);
-  });
-
-  it('commits no coverage when a delete in another tab waits as the fetch starts', async () => {
-    vi.stubGlobal('navigator', { locks: fakeLocks() });
-    let finishDelete!: () => void;
-    const deleting = whileNoFills(
-      () =>
-        new Promise<void>((resolve) => {
-          finishDelete = resolve;
-        })
-    );
-    const { host, fetchPage, storeRecords } = fill();
-
-    const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
-      { channelId: CHANNEL_ID, limit: 50 }
-    );
-    if (loaded === 'unsupported') throw new Error('unexpected');
-    storeRecords();
-
-    // The view reads again once the delete is done.
-    expect(await loaded.stored).toEqual({ kind: 'yielded' });
-    expect(host.commits).toEqual([]);
-    finishDelete();
-    await deleting;
-  });
-
-  it('lets a reset through once a fill has held the fence too long, and commits nothing after', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-    try {
-      vi.stubGlobal('navigator', { locks: fakeLocks() });
-      const { host, fetchPage, storeRecords } = fill();
-      const loaded = await loadChannelPage(
-        {
-          host,
-          touches: { due: () => undefined, settled: () => {} },
-          fetchPage,
-        },
-        { channelId: CHANNEL_ID, limit: 50 }
-      );
-      if (loaded === 'unsupported') throw new Error('unexpected');
-
-      // A reset in another tab waits longer than any fill may hold.
-      const order: string[] = [];
-      const resetting = whileNoFills(
-        async () => {
-          order.push('reset');
-        },
-        { waitMs: 60_000 }
-      );
-      await vi.advanceTimersByTimeAsync(FILL_HOLD_LIMIT_MS - 1);
-      expect(order).toEqual([]);
-      await vi.advanceTimersByTimeAsync(1);
-      await resetting;
-      expect(order).toEqual(['reset']);
-
-      // The records land after the reset erased the channel: no coverage.
-      storeRecords();
-      expect(await loaded.stored).toEqual({ kind: 'yielded' });
-      expect(host.commits).toEqual([]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('lets fills back in once a delete has held the fence too long', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-    try {
-      vi.stubGlobal('navigator', { locks: fakeLocks() });
-      // The device never answers the delete, as a parked engine may not.
-      let finishDelete!: (value: string) => void;
-      const deleting = whileNoFills(
-        () =>
-          new Promise<string>((resolve) => {
-            finishDelete = resolve;
-          })
-      );
-      await vi.advanceTimersByTimeAsync(DELETE_HOLD_LIMIT_MS - 1);
-      expect(await holdAgainstDeletes()).toBeNull();
-
-      await vi.advanceTimersByTimeAsync(1);
-      const hold = await holdAgainstDeletes();
-      expect(hold).not.toBeNull();
-      hold?.release();
-
-      // The delete still answers its caller.
-      finishDelete('done');
-      expect(await deleting).toBe('done');
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });
 

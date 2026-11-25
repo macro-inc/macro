@@ -2,6 +2,10 @@ import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-excha
 import { firstOrAborted } from '@core/util/abort-signal';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import type {
+  ChannelCommitArgs,
+  ChannelCommitOutcome,
+} from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
@@ -13,11 +17,32 @@ import {
 } from '@urql/core';
 import { filter, pipe } from 'wonka';
 
+/** What storing an answer came to; a failure is a value, never a rejection. */
+export type ChannelStoreResult =
+  | { stored: true; outcome: ChannelCommitOutcome | undefined }
+  | { stored: false; error: unknown };
+
+export interface ChannelQueryOptions<TData> {
+  signal?: AbortSignal;
+  /**
+   * What the answer proves about its channel, stored in the transaction that
+   * stores the answer's records.
+   */
+  commit?: (data: TData) => ChannelCommitArgs | undefined;
+}
+
+export interface ChannelAnswer<TData> {
+  data: TData;
+  /**
+   * Settles once the cache has stored the answer, with what its commit did.
+   * Rejects when nothing of it will be stored.
+   */
+  cached: Promise<ChannelCommitOutcome | undefined>;
+}
+
 /**
  * Runs a query over the cached client. Resolves with the data as soon as it
- * arrives; `cached` settles once the normalized cache has stored its records,
- * and rejects when it never will, so nothing commits coverage or a sequence
- * for records the device does not hold. An abort leaves the query, which ends
+ * arrives, before the device has stored it. An abort leaves the query, which ends
  * its request (urql replaces a `fetchOptions.signal` with its own), and
  * rejects with the signal's reason. Every request sent for it while it is
  * awaited, one the cache sends again after a write included, runs in the
@@ -29,8 +54,8 @@ export async function queryChannelNetwork<
 >(
   document: DocumentInput<TData, TVariables>,
   variables: TVariables,
-  signal?: AbortSignal
-): Promise<{ data: TData; cached: Promise<void> }> {
+  { signal, commit }: ChannelQueryOptions<TData> = {}
+): Promise<ChannelAnswer<TData>> {
   signal?.throwIfAborted();
   // The session the read is sent under, to tell a refusal it caused.
   const sentUnder = cacheSessionGeneration.capture();
@@ -48,6 +73,8 @@ export async function queryChannelNetwork<
           getGraphqlSoupClient().query(document, variables, {
             requestPolicy: 'network-only',
             [TRACE_PARENT_CONTEXT_KEY]: flow,
+            // The client's own data type is not known to the operation context.
+            channelCommit: commit && ((data) => commit(data as TData)),
           }),
           // The answer, as urql's own toPromise takes it.
           filter((result) => !result.stale && !result.hasNext)
@@ -69,7 +96,7 @@ export async function queryChannelNetwork<
   if (result.error) throw result.error;
   if (!result.data) throw new Error('channel query returned no data');
   const metadata = normalizedCacheResultMetadata(result);
-  const cached = async () => {
+  const stored = async () => {
     if (metadata?.source !== 'live-network') {
       throw new Error('channel query was not cached');
     }
@@ -83,8 +110,9 @@ export async function queryChannelNetwork<
         throw new StaleCacheAuthorityError();
       throw new Error('channel query could not be cached');
     }
+    return await metadata.channelCommit;
   };
-  return { data: result.data, cached: cached() };
+  return { data: result.data, cached: stored() };
 }
 
 /**
@@ -101,25 +129,24 @@ export function cacheSessionChanged(error: unknown): boolean {
 }
 
 /**
- * Times a view reads again because the cache session changed before the
- * device stored what it read, as startup's first owner proof does, or
- * because a delete in some tab came first and the view was left unheld.
+ * Times in a row a view reads again because the cache session changed before
+ * the device stored what it read, as startup's first owner proof does, or
+ * because the device does not hold what it stored.
  */
 export const SESSION_CHANGE_RELOADS = 2;
 
 /**
  * A store acknowledgement settled into a value as soon as it is made: one a
  * loader leaves unawaited (it failed on a later page, or moved on) then never
- * rejects unhandled. Undefined once stored.
+ * rejects unhandled.
  */
-export async function storeFailure(
-  cached: Promise<void>
-): Promise<{ error: unknown } | undefined> {
+export async function storeResult(
+  cached: ChannelAnswer<unknown>['cached']
+): Promise<ChannelStoreResult> {
   try {
-    await cached;
-    return undefined;
+    return { stored: true, outcome: await cached };
   } catch (error) {
-    return { error };
+    return { stored: false, error };
   }
 }
 

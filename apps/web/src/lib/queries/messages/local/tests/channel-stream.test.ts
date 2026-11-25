@@ -1,4 +1,5 @@
-import type { OperationResult } from '@urql/core';
+import type { ChannelCommitOutcome } from '@graphql-cache/index';
+import type { OperationContext, OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHANNEL_STREAM_RETRY_MS,
@@ -15,23 +16,34 @@ type Listener = (result: OperationResult) => void;
 function fakeClient() {
   const subscriptions: { listener: Listener; closed: boolean }[] = [];
   const client = {
-    subscription: vi.fn(() => ({
-      subscribe(listener: Listener) {
-        const entry = { listener, closed: false };
-        subscriptions.push(entry);
-        return {
-          unsubscribe: () => {
-            entry.closed = true;
-          },
-        };
-      },
-    })),
+    subscription: vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        _context: Partial<OperationContext>
+      ) => ({
+        subscribe(listener: Listener) {
+          const entry = { listener, closed: false };
+          subscriptions.push(entry);
+          return {
+            unsubscribe: () => {
+              entry.closed = true;
+            },
+          };
+        },
+      })
+    ),
   };
+  /** What the subscription says a frame proves about its channel. */
+  const commitOf = (frame: typeof update) =>
+    client.subscription.mock.calls[0]?.[2].channelCommit?.({
+      channelTimelineUpdates: frame,
+    });
   const live = () => subscriptions.filter((entry) => !entry.closed);
   const emit = (result: Partial<OperationResult>) => {
     for (const entry of live()) entry.listener(result as OperationResult);
   };
-  return { client, live, emit };
+  return { client, live, emit, commitOf };
 }
 
 function fakeRuntime() {
@@ -47,7 +59,8 @@ const update = {
   seq: '8',
   messages: [],
   activities: [],
-  removedIds: [],
+  removedIds: ['removed'],
+  truncated: false,
 };
 
 beforeEach(() => {
@@ -58,7 +71,36 @@ afterEach(() => {
 });
 
 describe('createChannelStream', () => {
-  it('hands each frame to the runtime, stored only once the cache wrote it', () => {
+  it('hands each frame to the runtime once the cache has answered its commit', async () => {
+    const { client, emit } = fakeClient();
+    const runtime = fakeRuntime();
+    createChannelStream(client as never, runtime);
+    const stored = Promise.withResolvers<ChannelCommitOutcome>();
+    const outcome: ChannelCommitOutcome = {
+      channelId: CHANNEL_ID,
+      seq: '8',
+      outcome: 'applied',
+    };
+
+    emit({
+      data: { channelTimelineUpdates: update },
+      hasNext: true,
+      extensions: {
+        __macroNormalizedCache: {
+          source: 'live-network',
+          channelCommit: stored.promise,
+        },
+      },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runtime.onFrame).not.toHaveBeenCalled();
+
+    stored.resolve(outcome);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runtime.onFrame).toHaveBeenCalledWith(update, outcome);
+  });
+
+  it('hands on a frame the cache did not store, without an outcome', async () => {
     const { client, emit } = fakeClient();
     const runtime = fakeRuntime();
     createChannelStream(client as never, runtime);
@@ -68,23 +110,30 @@ describe('createChannelStream', () => {
       hasNext: true,
       extensions: {},
     });
+    await vi.advanceTimersByTimeAsync(0);
 
-    expect(runtime.onFrame).toHaveBeenCalledWith(update, false, undefined);
+    expect(runtime.onFrame).toHaveBeenCalledWith(update, undefined);
   });
 
-  it('hands on the cache session the frame was stored in', () => {
-    const { client, emit } = fakeClient();
-    const runtime = fakeRuntime();
-    createChannelStream(client as never, runtime);
+  it('continues the channel from the change before a frame', () => {
+    const { client, commitOf } = fakeClient();
+    createChannelStream(client as never, fakeRuntime());
 
-    emit({
-      data: { channelTimelineUpdates: update },
-      hasNext: true,
-      extensions: {},
-      operation: { context: { cacheSessionGeneration: 'generation-1' } },
-    } as never);
+    expect(commitOf(update)).toEqual({
+      channelId: CHANNEL_ID,
+      seq: '8',
+      watermark: { kind: 'advance', from: '7' },
+      removedIds: ['removed'],
+    });
+  });
 
-    expect(runtime.onFrame).toHaveBeenCalledWith(update, false, 'generation-1');
+  it('leaves a gap where a frame carries nothing of its change', () => {
+    const { client, commitOf } = fakeClient();
+    createChannelStream(client as never, fakeRuntime());
+
+    expect(
+      commitOf({ ...update, removedIds: [], truncated: true })
+    ).toMatchObject({ seq: '8', watermark: { kind: 'advance', from: '8' } });
   });
 
   it('reports the socket connecting and closing', () => {

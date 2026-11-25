@@ -1,4 +1,6 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import type { ChannelCommitArgs } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import {
   ChannelTimelineUpdatesDocument,
@@ -22,6 +24,24 @@ export interface ChannelStream {
   /** The socket closed: frames stop until it connects again. */
   disconnected(): void;
   dispose(): void;
+}
+
+/**
+ * What a frame proves: the change at its sequence. One too large to carry
+ * lists nothing, so it continues from itself: a device that holds the channel
+ * answers a gap and reads the change from the server.
+ */
+function frameCommit(
+  data: ChannelTimelineUpdatesSubscription
+): ChannelCommitArgs {
+  const { channelId, seq, removedIds, truncated } = data.channelTimelineUpdates;
+  const from = truncated ? seq : (BigInt(seq) - 1n).toString();
+  return {
+    channelId,
+    seq,
+    watermark: { kind: 'advance', from },
+    removedIds,
+  };
 }
 
 /**
@@ -56,21 +76,25 @@ export function createChannelStream(
     }, wait);
   };
 
+  const deliver = async (
+    frame: ChannelTimelineUpdatesSubscription['channelTimelineUpdates'],
+    result: OperationResult<ChannelTimelineUpdatesSubscription>
+  ) => {
+    const metadata = normalizedCacheResultMetadata(result);
+    const outcome =
+      metadata?.source === 'live-network'
+        ? await metadata.channelCommit
+        : undefined;
+    runtime.onFrame(frame, outcome);
+  };
+
   const onResult = (
     result: OperationResult<ChannelTimelineUpdatesSubscription>
   ) => {
     const frame = result.data?.channelTimelineUpdates;
     if (frame) {
       retryMs = CHANNEL_STREAM_RETRY_MS;
-      const metadata = normalizedCacheResultMetadata(result);
-      // The session its records were stored in; its sequence commits there.
-      const generation = result.operation?.context.cacheSessionGeneration;
-      runtime.onFrame(
-        frame,
-        metadata?.source === 'live-network' &&
-          metadata.cacheEffectsApplied === true,
-        typeof generation === 'string' ? generation : undefined
-      );
+      fireAndForget(deliver(frame, result), 'channel-stream');
     }
     if (result.error) {
       Telemetry.error(result.error, { surface: 'channel-stream' });
@@ -85,7 +109,14 @@ export function createChannelStream(
     if (disposed) return;
     let ended = false;
     const subscription = client
-      .subscription(ChannelTimelineUpdatesDocument, {})
+      .subscription(
+        ChannelTimelineUpdatesDocument,
+        {},
+        {
+          channelCommit: (data) =>
+            frameCommit(data as ChannelTimelineUpdatesSubscription),
+        }
+      )
       .subscribe((result) => {
         if (ended) return;
         if (result.error || result.hasNext === false) ended = true;

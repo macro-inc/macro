@@ -29,7 +29,6 @@ import {
   loadChannelPage,
   readDeviceChannelPage,
 } from './channel-pages';
-import { afterDeletes } from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 /** Entries a page asks for, as the REST timeline does. */
@@ -335,6 +334,8 @@ export function createLocalChannelTimeline(
   let loadToken = 0;
   // The device holds the window it loaded and every page stored since.
   let held = false;
+  // Rereads in a row that missed a window the device was said to hold.
+  let losses = 0;
   // Pages of this window merged in whose outcome is not recorded yet: the
   // store has not answered, or a refusal is not yet marked unstored.
   let storing = 0;
@@ -433,7 +434,7 @@ export function createLocalChannelTimeline(
     loaded: LoadedChannelPage,
     epoch: number,
     token: number
-  ): Promise<'held' | 'unheld' | 'session-changed' | 'yielded'> => {
+  ): Promise<'held' | 'unheld' | 'session-changed'> => {
     const stored = await loaded.stored;
     if (stored.kind !== 'stored') return stored.kind;
     const seq = stored.seq;
@@ -442,7 +443,11 @@ export function createLocalChannelTimeline(
       deps.runtime.noteStoredSeq(channelId, seq);
       return 'held';
     }
-    deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
+    deps.runtime.noteServerRead(channelId, {
+      seq,
+      readSeq: loaded.readSeq,
+      epoch,
+    });
     return seq === null ? 'unheld' : 'held';
   };
 
@@ -465,6 +470,7 @@ export function createLocalChannelTimeline(
   };
 
   const load = (around: string | undefined): Promise<void> => {
+    losses = 0;
     currentLoad = loadWindow(around, 0);
     return currentLoad;
   };
@@ -589,8 +595,8 @@ export function createLocalChannelTimeline(
     const outcomes: Awaited<ReturnType<typeof settleUnlessAborted>>[] = [];
     for (const page of pages)
       outcomes.push(await settleUnlessAborted(page, epoch, token, signal));
-    const ended = (['aborted', 'yielded', 'session-changed'] as const).find(
-      (outcome) => outcomes.includes(outcome)
+    const ended = (['aborted', 'session-changed'] as const).find((outcome) =>
+      outcomes.includes(outcome)
     );
     return ended ?? (outcomes.includes('unheld') ? 'unheld' : 'held');
   };
@@ -697,12 +703,9 @@ export function createLocalChannelTimeline(
     // Going to the live end waits for the window that replaced this one.
     const settled = await settleWindow(loaded, epoch, token, signal);
     if (settled === 'aborted' || token !== loadToken) return;
-    if (settled === 'session-changed' || settled === 'yielded') {
-      // The new session can store what the old one could not, and a read
-      // after the delete can hold what it reads.
+    if (settled === 'session-changed') {
+      // The new session can store what the old one could not.
       if (reloads < SESSION_CHANGE_RELOADS) {
-        if (settled === 'yielded' && !(await afterDeletes(signal))) return;
-        if (token !== loadToken) return;
         currentLoad = loadWindow(around, reloads + 1);
         await currentLoad;
       }
@@ -748,7 +751,14 @@ export function createLocalChannelTimeline(
       return;
     }
     if (result.kind === 'lost') {
-      // Reset or evicted meanwhile: load the window again, from the server.
+      // Reset or evicted meanwhile: load the window again, from the server. A
+      // device that keeps missing what it stored is not asked for ever: every
+      // load's own store reports a change.
+      losses += 1;
+      if (losses > SESSION_CHANGE_RELOADS) {
+        held = false;
+        return;
+      }
       currentLoad = loadWindow(
         live ? undefined : (anchorId ?? middleMessageId(state.entries)),
         1
@@ -756,6 +766,7 @@ export function createLocalChannelTimeline(
       await currentLoad;
       return;
     }
+    losses = 0;
     setState('olderCursor', result.olderCursor);
     setState('entries', reconcile(result.entries, { key: 'key' }));
   };
@@ -780,6 +791,7 @@ export function createLocalChannelTimeline(
   };
   /** A window the device could not store or read during an outage is read again. */
   const resume = () => {
+    losses = 0;
     if (held) {
       if (!holds() || state.loadingOlder || state.loadingNewer)
         missedResume = true;
@@ -850,9 +862,8 @@ export function createLocalChannelTimeline(
 
   /**
    * Reads a page of a held window again that the device did not take, as a
-   * window load does: the new session can store what the old one could not,
-   * and a read after the delete can hold what it reads. `unstored` when every
-   * read again was refused too.
+   * window load does: the new session can store what the old one could not.
+   * `unstored` when every read again was refused too.
    */
   const fetchMoreAgain = async (
     direction: PageDirection,
@@ -860,20 +871,15 @@ export function createLocalChannelTimeline(
     token: number,
     signal: AbortSignal,
     merged: () => void,
-    first: 'session-changed' | 'yielded',
     trace: TraceContext
   ): Promise<'held' | 'unheld' | 'unstored' | 'stale'> => {
-    let settled: Awaited<ReturnType<typeof fetchMore>> = first;
     for (let reloads = 0; reloads < SESSION_CHANGE_RELOADS; reloads += 1) {
-      if (settled === 'yielded' && !(await afterDeletes(signal)))
-        return 'stale';
       if (token !== loadToken) return 'stale';
       // After an await: the read again joins the scroll's trace.
-      settled = await trace.run(() =>
+      const settled = await trace.run(() =>
         fetchMore(direction, cursor, token, signal, merged)
       );
-      if (settled !== 'yielded' && settled !== 'session-changed')
-        return settled;
+      if (settled !== 'session-changed') return settled;
     }
     return 'unstored';
   };
@@ -917,7 +923,6 @@ export function createLocalChannelTimeline(
         token,
         signal,
         merged,
-        'session-changed',
         trace
       );
     } else {
@@ -937,7 +942,6 @@ export function createLocalChannelTimeline(
         token,
         signal,
         merged,
-        first,
         trace
       );
       if (settled === 'unstored') return 'unstored';

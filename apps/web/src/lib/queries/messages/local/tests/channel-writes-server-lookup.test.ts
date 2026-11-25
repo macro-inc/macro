@@ -27,11 +27,14 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
 
 const message = graphqlMessage(7);
 
-const serverHasIt = () =>
+const serverAnswer = (found: typeof message | null) =>
   new Response(
-    JSON.stringify({ data: { user: { channelMessage: message } } }),
+    JSON.stringify({
+      data: { user: { channelMessage: { seq: '9', message: found } } },
+    }),
     { headers: { 'content-type': 'application/json' } }
   );
+const serverHasIt = () => serverAnswer(message);
 
 function lostSend(fetcher: typeof fetch) {
   network.client = createClient({
@@ -128,13 +131,7 @@ describe('asking the server about a lost send', () => {
 
   it('asks again after the server had none, since a request in flight can still commit', async () => {
     vi.useFakeTimers();
-    const none = () =>
-      new Response(
-        JSON.stringify({ data: { user: { channelMessage: null } } }),
-        {
-          headers: { 'content-type': 'application/json' },
-        }
-      );
+    const none = () => serverAnswer(null);
     const firstAnswer = Promise.withResolvers<Response>();
     let committed = false;
     const fetcher = vi

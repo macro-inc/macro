@@ -41,7 +41,6 @@ const edit = (message: ChannelMessageFieldsFragment) => ({
   mentions: [],
   removeAttachmentIds: [],
   addAttachments: [],
-  nonce: 'e',
 });
 
 afterEach(() => vi.useRealTimers());
@@ -147,7 +146,6 @@ describe('a sign-in that replaces the session', () => {
         emoji: 'up',
         add: true,
         userId: SENDER,
-        nonce: 'r',
       })
     );
     expect(thrownResultErrorHasCode(await reacting, 'CACHE_RETIRED')).toBe(

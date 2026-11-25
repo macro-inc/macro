@@ -74,11 +74,44 @@ function selectThreadReplies(thread: MessageThread) {
   return thread.replies;
 }
 
-/** A thread's replies, whichever path reads them; never suspends a reader that checks `isPending` first. */
-export interface ThreadRepliesRead {
-  readonly data: EntityMessage[] | undefined;
+/** A thread read, whichever path makes it; never suspends a reader that checks `isPending` first. */
+export interface ThreadRead<TData> {
+  readonly data: TData | undefined;
   readonly isPending: boolean;
   readonly error: unknown;
+}
+
+/** A whole thread, and whether it may be asked for again. */
+export interface MessageThreadRead extends ThreadRead<MessageThread> {
+  readonly isSuccess: boolean;
+  readonly isError: boolean;
+  readonly isFetching: boolean;
+  refetch(): Promise<unknown>;
+}
+
+/** The thread read from the device, while its channel reads from there. */
+function useDeviceThread(
+  parent: Accessor<MessageParent>,
+  rootId: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  const { host, mode, setUnsupported } = useChannelReadPath(parent);
+  const thread = createMemo(() => {
+    const current = host();
+    if (mode() !== 'local' || !current) return undefined;
+    return createLocalChannelThread(
+      {
+        host: current,
+        runtime: channelSyncRuntime(current),
+        unstored: channelWrites(current).unstoredReplies,
+      },
+      parent().id,
+      rootId,
+      enabled,
+      setUnsupported
+    );
+  });
+  return { thread, isRest: () => mode() === 'rest' };
 }
 
 /**
@@ -89,46 +122,30 @@ export function useThreadRepliesQuery(
   parent: Accessor<MessageParent>,
   messageId: Accessor<string>,
   enabled: Accessor<boolean>
-): ThreadRepliesRead {
-  const { host, mode, setUnsupported } = useChannelReadPath(parent);
+): ThreadRead<EntityMessage[]> {
+  const device = useDeviceThread(parent, messageId, enabled);
   useMessageSubscription(parent);
   const rest = useQuery(() => {
     seedThreadRepliesFromMessageTimeline(parent(), messageId());
     return {
       ...threadRepliesQueryOptions(parent(), messageId()),
-      enabled: enabled() && mode() === 'rest',
+      enabled: enabled() && device.isRest(),
       select: selectThreadReplies,
     };
   });
-  const local = createMemo(() => {
-    const current = host();
-    if (mode() !== 'local' || !current) return undefined;
-    return createLocalChannelThread(
-      {
-        host: current,
-        runtime: channelSyncRuntime(current),
-        unstored: channelWrites(current).unstoredReplies,
-      },
-      parent().id,
-      messageId,
-      enabled,
-      setUnsupported
-    );
-  });
   return {
     get data() {
-      const thread = local();
+      const thread = device.thread();
       if (thread) return thread.replies();
       // REST readers keep their own pending handling.
-      return mode() === 'rest' ? rest.data : undefined;
+      return device.isRest() ? rest.data : undefined;
     },
     get isPending() {
-      const thread = local();
-      if (thread) return thread.isPending();
-      return rest.isPending;
+      const thread = device.thread();
+      return thread ? thread.isPending() : rest.isPending;
     },
     get error() {
-      const thread = local();
+      const thread = device.thread();
       return thread ? thread.error() : rest.error;
     },
   };
@@ -243,14 +260,51 @@ export function getThreadRepliesData(parent: MessageParent, root: string) {
   )?.replies;
 }
 
-/** The same thread cache backs linked drawers, anchor overlays, and expanded timelines. */
+/**
+ * A whole thread: from the device for a channel that reads from it, otherwise
+ * the REST cache that also backs linked drawers, anchor overlays, and expanded
+ * timelines.
+ */
 export function useMessageThreadQuery(
   parent: Accessor<MessageParent>,
   rootId: Accessor<string>
-) {
+): MessageThreadRead {
+  const device = useDeviceThread(parent, rootId, () => true);
   useMessageSubscription(parent);
-  return useQuery(() => {
+  const rest = useQuery(() => {
     seedThreadRepliesFromMessageTimeline(parent(), rootId());
-    return threadRepliesQueryOptions(parent(), rootId());
+    return {
+      ...threadRepliesQueryOptions(parent(), rootId()),
+      enabled: device.isRest(),
+    };
   });
+  return {
+    get data() {
+      const thread = device.thread();
+      if (thread) return thread.thread();
+      return device.isRest() ? rest.data : undefined;
+    },
+    get isPending() {
+      const thread = device.thread();
+      return thread ? thread.isPending() : rest.isPending;
+    },
+    get isSuccess() {
+      const thread = device.thread();
+      return thread ? thread.thread() !== undefined : rest.isSuccess;
+    },
+    get isError() {
+      const thread = device.thread();
+      if (!thread) return rest.isError;
+      return thread.thread() === undefined && thread.error() !== undefined;
+    },
+    get isFetching() {
+      const thread = device.thread();
+      return thread ? thread.isPending() : rest.isFetching;
+    },
+    get error() {
+      const thread = device.thread();
+      return thread ? thread.error() : rest.error;
+    },
+    refetch: () => device.thread()?.retry() ?? rest.refetch(),
+  };
 }

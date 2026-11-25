@@ -24,14 +24,6 @@ function recoveringSend(hasMessage: boolean) {
       throw new Error('probe forbids external fetch');
     })
   );
-  const postMessage = vi.fn();
-  vi.stubGlobal(
-    'BroadcastChannel',
-    class {
-      postMessage = postMessage;
-      close() {}
-    }
-  );
   const notifyChanged = vi.fn();
   const message = graphqlMessage(7);
   const queued = writeHost();
@@ -41,7 +33,14 @@ function recoveringSend(hasMessage: boolean) {
     async () =>
       new Response(
         JSON.stringify({
-          data: { user: { channelMessage: hasMessage ? message : null } },
+          data: {
+            user: {
+              channelMessage: {
+                seq: '9',
+                message: hasMessage ? message : null,
+              },
+            },
+          },
         }),
         { headers: { 'content-type': 'application/json' } }
       )
@@ -86,7 +85,6 @@ function recoveringSend(hasMessage: boolean) {
     stores,
     fetch,
     notifyChanged,
-    postMessage,
     exhaust() {
       queued.settle({
         transactionId: '4',
@@ -98,7 +96,7 @@ function recoveringSend(hasMessage: boolean) {
   };
 }
 
-it('does not notify local views or other tabs for three late stores of empty lookup responses', async () => {
+it('does not notify the views for three late stores of empty lookup responses', async () => {
   vi.useFakeTimers();
   const send = recoveringSend(false);
   await vi.advanceTimersByTimeAsync(0);
@@ -108,21 +106,17 @@ it('does not notify local views or other tabs for three late stores of empty loo
   expect(send.fetch).toHaveBeenCalledTimes(3);
 
   send.notifyChanged.mockClear();
-  send.postMessage.mockClear();
   for (let index = 0; index < 3; index += 1) {
     // The normalized exchange serializes stores for the lookup key.
     expect(send.stores).toHaveLength(index + 1);
     send.stores[index]();
     await vi.advanceTimersByTimeAsync(0);
   }
-  expect({
-    local: send.notifyChanged.mock.calls.length,
-    broadcasts: send.postMessage.mock.calls.length,
-  }).toEqual({ local: 0, broadcasts: 0 });
+  expect(send.notifyChanged).not.toHaveBeenCalled();
 });
 
 it.each([true, false])(
-  'notifies exactly once per tab only when a late copy stores successfully (%s)',
+  'notifies exactly once only when a late copy stores successfully (%s)',
   async (stored) => {
     vi.useFakeTimers();
     const send = recoveringSend(true);
@@ -132,11 +126,9 @@ it.each([true, false])(
     expect(await send.outcome).toBe(send.message.id);
 
     send.notifyChanged.mockClear();
-    send.postMessage.mockClear();
     expect(send.stores).toHaveLength(1);
     send.stores[0](stored);
     await vi.advanceTimersByTimeAsync(0);
     expect(send.notifyChanged).toHaveBeenCalledTimes(stored ? 1 : 0);
-    expect(send.postMessage).toHaveBeenCalledTimes(stored ? 1 : 0);
   }
 );

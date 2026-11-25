@@ -3,6 +3,7 @@ import type {
   CacheHost,
 } from '@graphql-cache/host/types';
 import { afterEach, expect, it, vi } from 'vitest';
+import type * as ChannelNetwork from '../channel-network';
 import { channelSyncRuntime } from '../channel-sync';
 import { CHANNEL_ID, devicePage, fakeHost } from './fixtures';
 
@@ -14,7 +15,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () => undefined,
   graphqlCacheEnabled: () => true,
 }));
-vi.mock('../channel-network', () => ({ queryChannelNetwork: network.query }));
+vi.mock('../channel-network', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChannelNetwork>()),
+  queryChannelNetwork: network.query,
+}));
 
 /** A host whose engine is replaced when the test says so. */
 function replaceableHost() {

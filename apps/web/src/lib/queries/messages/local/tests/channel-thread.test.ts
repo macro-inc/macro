@@ -9,15 +9,19 @@ import { onlineManager } from '@tanstack/solid-query';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
-import { noteChannelReset, whileNoFills } from '../channel-resets';
-import type { ChannelChange } from '../channel-sync-runtime';
+import type { ChannelViewChange } from '../channel-sync-runtime';
 import {
   createLocalChannelThread,
   type FetchChannelThreadPage,
   loadChannelThread,
 } from '../channel-thread';
-import { fakeLocks } from './fake-locks';
-import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
+import {
+  applied,
+  CHANNEL_ID,
+  devicePage,
+  fakeHost,
+  graphqlMessage,
+} from './fixtures';
 
 const trace = vi.hoisted(() => ({ depth: 0 }));
 
@@ -40,18 +44,6 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
       run({ setAttr: () => undefined, run: <T>(op: () => T) => op() }),
   },
 }));
-
-vi.mock('@graphql-cache/session-generation', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@graphql-cache/session-generation')>();
-  return {
-    ...actual,
-    cacheSessionGeneration: Object.assign(
-      Object.create(actual.cacheSessionGeneration),
-      { capture: () => 'generation-1' }
-    ),
-  };
-});
 
 const root = graphqlMessage(1, {
   thread: {
@@ -78,17 +70,28 @@ function serverThread(): FetchChannelThreadPage {
       newerCursor: null,
       seq: '12',
     },
-    cached: Promise.resolve(),
+    cached: Promise.resolve(applied('12')),
   }));
+}
+
+/** What each page the server sent proved, as it was sent to the cache. */
+async function commitsOf(fetchPage: FetchChannelThreadPage) {
+  const { calls, results } = vi.mocked(fetchPage).mock;
+  return Promise.all(
+    calls.map(async ([, { commit }], at) => {
+      const { page } = await results[at]!.value;
+      return commit?.(page);
+    })
+  );
 }
 
 function runtime() {
   const inTrace: boolean[] = [];
-  const listeners = new Set<(change: ChannelChange) => void>();
+  const listeners = new Set<(change: ChannelViewChange) => void>();
   return {
     open: vi.fn(() => () => undefined),
     onChanged: vi.fn(
-      (_channelId: string, listener: (change: ChannelChange) => void) => {
+      (_channelId: string, listener: (change: ChannelViewChange) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       }
@@ -136,12 +139,17 @@ describe('loadChannelThread', () => {
   it('fetches a thread the device lacks and stores it as held', async () => {
     const host = fakeHost([devicePage([], { covered: false })]);
 
+    const fetchPage = serverThread();
     const loaded = await loadChannelThread(host, CHANNEL_ID, ROOT_ID, {
-      fetchPage: serverThread(),
+      fetchPage,
     });
 
-    expect(loaded).toMatchObject({ source: 'server', seq: '12' });
-    expect(host.commits).toEqual([
+    expect(loaded).toMatchObject({
+      source: 'server',
+      seq: '12',
+      readSeq: '12',
+    });
+    expect(await commitsOf(fetchPage)).toEqual([
       {
         channelId: CHANNEL_ID,
         coverage: [
@@ -151,7 +159,8 @@ describe('loadChannelThread', () => {
             end: CHANNEL_TIMELINE_HEAD,
           },
         ],
-        seq: { kind: 'lower', seq: '12' },
+        seq: '12',
+        watermark: { kind: 'lower' },
       },
     ]);
   });
@@ -178,31 +187,6 @@ describe('loadChannelThread', () => {
       seq: null,
       sessionChanged: true,
     });
-    expect(host.commits).toEqual([]);
-  });
-
-  it('commits no coverage when the channel was reset while the thread was fetched', async () => {
-    const host = fakeHost([devicePage([], { covered: false })]);
-    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => {
-      noteChannelReset(host, CHANNEL_ID);
-      return {
-        page: {
-          root,
-          replies: [first, second],
-          olderCursor: null,
-          newerCursor: null,
-          seq: '12',
-        },
-        cached: Promise.resolve(),
-      };
-    });
-
-    const loaded = await loadChannelThread(host, CHANNEL_ID, ROOT_ID, {
-      fetchPage,
-    });
-
-    expect(loaded).toMatchObject({ source: 'server', seq: null });
-    expect(host.commits).toEqual([]);
   });
 
   it('leaves no store rejection unhandled when a later page fails', async () => {
@@ -225,7 +209,6 @@ describe('loadChannelThread', () => {
       loadChannelThread(host, CHANNEL_ID, ROOT_ID, { fetchPage })
     ).rejects.toThrow('offline');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(host.commits).toEqual([]);
   });
 
   it('stops asking for pages once the load is aborted', async () => {
@@ -242,7 +225,7 @@ describe('loadChannelThread', () => {
           newerCursor: null,
           seq: '9',
         },
-        cached: Promise.resolve(),
+        cached: Promise.resolve(applied('9')),
       };
     });
 
@@ -253,37 +236,6 @@ describe('loadChannelThread', () => {
       })
     ).rejects.toThrow();
     expect(fetchPage).toHaveBeenCalledTimes(1);
-    expect(host.commits).toEqual([]);
-  });
-
-  it('commits no coverage when the load is aborted while its pages are stored', async () => {
-    const host = fakeHost([devicePage([], { covered: false })]);
-    const abort = new AbortController();
-    let store: () => void = () => undefined;
-    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => ({
-      page: {
-        root,
-        replies: [first],
-        olderCursor: null,
-        newerCursor: null,
-        seq: '9',
-      },
-      cached: new Promise<void>((resolve) => {
-        store = resolve;
-      }),
-    }));
-
-    const loading = loadChannelThread(host, CHANNEL_ID, ROOT_ID, {
-      fetchPage,
-      signal: abort.signal,
-    });
-    await vi.waitFor(() => expect(fetchPage).toHaveBeenCalled());
-    // The person closes the thread before the cache has stored the page.
-    abort.abort();
-    store();
-
-    await expect(loading).resolves.toMatchObject({ seq: null });
-    expect(host.commits).toEqual([]);
   });
 
   it('reads over REST on a host that cannot serve channels', async () => {
@@ -393,85 +345,52 @@ describe('createLocalChannelThread', () => {
     sync.change();
 
     await vi.waitFor(() => expect(fetchPage).toHaveBeenCalled());
-    await vi.waitFor(() => expect(host.commits).toHaveLength(1));
+    await vi.waitFor(() =>
+      expect(sync.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
+        seq: '12',
+        readSeq: '12',
+        epoch: 0,
+      })
+    );
     expect(thread.replies()).toHaveLength(2);
   });
 
-  describe('with a delete in another tab', () => {
-    const deleting = () => {
-      let finish!: () => void;
-      const done = whileNoFills(
-        () =>
-          new Promise<void>((resolve) => {
-            finish = resolve;
-          }),
-        { waitMs: 60_000 }
-      );
-      return { finish: () => finish(), done };
-    };
-    const open = () => {
-      const host = fakeHost(() => devicePage([], { covered: false }));
-      const fetchPage = serverThread();
-      let dispose = () => {};
-      const thread = createRoot((disposeRoot) => {
-        dispose = disposeRoot;
-        return createLocalChannelThread(
-          { host, runtime: runtime(), fetchPage },
-          CHANNEL_ID,
-          () => ROOT_ID,
-          () => true,
-          () => undefined
-        );
-      });
-      return { host, fetchPage, thread, dispose: () => dispose() };
-    };
+  it('stops asking the server for a thread whose device keeps losing what it stores', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const sync = runtime();
+    // The device reports a change for every store, the view's own included.
+    sync.noteServerRead.mockImplementation(sync.change);
+    const fetchPage = serverThread();
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: sync, fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
+    sync.change();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const asked = vi.mocked(fetchPage).mock.calls.length;
+    expect(asked).toBeLessThan(10);
 
-    it('reads the thread again once the delete is done, holding it then', async () => {
-      vi.stubGlobal('navigator', { locks: fakeLocks() });
-      try {
-        const deletion = deleting();
-        const { host, fetchPage, thread, dispose } = open();
-        await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        expect(fetchPage).toHaveBeenCalledTimes(1);
-        expect(host.commits).toEqual([]);
-
-        deletion.finish();
-        await deletion.done;
-        await vi.waitFor(() => expect(host.commits).toHaveLength(1));
-        expect(fetchPage).toHaveBeenCalledTimes(2);
-        dispose();
-      } finally {
-        vi.unstubAllGlobals();
-      }
-    });
-
-    it('reads nothing more once the thread closes while it waits', async () => {
-      vi.stubGlobal('navigator', { locks: fakeLocks() });
-      try {
-        const deletion = deleting();
-        const { host, fetchPage, thread, dispose } = open();
-        await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
-        dispose();
-
-        deletion.finish();
-        await deletion.done;
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        expect(fetchPage).toHaveBeenCalledTimes(1);
-        expect(host.commits).toEqual([]);
-      } finally {
-        vi.unstubAllGlobals();
-      }
-    });
+    sync.change();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchPage).toHaveBeenCalledTimes(asked);
+    expect(thread.replies()).toHaveLength(2);
+    dispose();
   });
 
   it('loads a thread that failed with no connection again once it is back', async () => {
     const host = fakeHost(() => devicePage([], { covered: false }));
     let connected = false;
     const server = serverThread();
-    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, signal) => {
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, options) => {
       if (!connected) throw new TypeError('Failed to fetch');
-      return server(input, signal);
+      return server(input, options);
     });
     onlineManager.setOnline(false);
     try {
@@ -508,9 +427,9 @@ describe('createLocalChannelThread', () => {
     const host = fakeHost(() => devicePage([], { covered: false }));
     let connected = false;
     const server = serverThread();
-    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, signal) => {
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, options) => {
       if (!connected) throw new TypeError('Failed to fetch');
-      return server(input, signal);
+      return server(input, options);
     });
     const open = () => {
       let dispose = () => {};
@@ -633,7 +552,7 @@ describe('createLocalChannelThread', () => {
     const host = fakeHost([devicePage([], { covered: false })]);
     const signals: AbortSignal[] = [];
     const fetchPage = vi.fn<FetchChannelThreadPage>(
-      (_input, signal) =>
+      (_input, { signal }) =>
         new Promise(() => {
           if (signal) signals.push(signal);
         })
@@ -657,21 +576,23 @@ describe('createLocalChannelThread', () => {
   it('aborts a reload started after an await when the thread closes', async () => {
     const host = fakeHost(() => devicePage([], { covered: false }));
     const signals: AbortSignal[] = [];
-    const fetchPage = vi.fn<FetchChannelThreadPage>(async (_input, signal) => {
-      if (signal) signals.push(signal);
-      if (signals.length > 1) return new Promise(() => {});
-      // The first read lands as the cache session changes: read again.
-      return {
-        page: {
-          root,
-          replies: [first, second],
-          olderCursor: null,
-          newerCursor: null,
-          seq: '12',
-        },
-        cached: Promise.reject(new StaleCacheAuthorityError()),
-      };
-    });
+    const fetchPage = vi.fn<FetchChannelThreadPage>(
+      async (_input, { signal }) => {
+        if (signal) signals.push(signal);
+        if (signals.length > 1) return new Promise(() => {});
+        // The first read lands as the cache session changes: read again.
+        return {
+          page: {
+            root,
+            replies: [first, second],
+            olderCursor: null,
+            newerCursor: null,
+            seq: '12',
+          },
+          cached: Promise.reject(new StaleCacheAuthorityError()),
+        };
+      }
+    );
     let dispose = () => {};
     createRoot((disposeRoot) => {
       dispose = disposeRoot;
@@ -769,7 +690,7 @@ describe('createLocalChannelThread after the cache was away', () => {
       },
       cached: away
         ? Promise.reject(new Error('cache is away'))
-        : Promise.resolve(),
+        : Promise.resolve(applied('12')),
     }));
     const thread = createRoot(() =>
       createLocalChannelThread(

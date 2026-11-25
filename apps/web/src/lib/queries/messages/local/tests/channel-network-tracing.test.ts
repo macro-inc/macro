@@ -48,7 +48,17 @@ it('keeps a lookup the cache sends again, after another tab commits a write, in 
   const parents: (string | undefined)[] = [];
   const serverHasIt = () =>
     new Response(
-      JSON.stringify({ data: { user: { channelMessage: message } } }),
+      JSON.stringify({
+        data: {
+          user: {
+            channelMessage: {
+              __typename: 'GraphqlChannelMessageRead',
+              seq: '9',
+              message,
+            },
+          },
+        },
+      }),
       { headers: { 'content-type': 'application/json' } }
     );
   network.client = createClient({

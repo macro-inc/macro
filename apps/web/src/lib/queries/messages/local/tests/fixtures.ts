@@ -1,9 +1,11 @@
 import type {
   CacheHost,
   CacheRevision,
+  ChannelChange,
+  ChannelCommitArgs,
+  ChannelCommitOutcome,
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
-  ChannelTimelineCommitArgs,
   ChannelTimelineCommitCacheResult,
 } from '@graphql-cache/index';
 import type {
@@ -93,12 +95,26 @@ export const keyOf = (
 
 export type FakeHost = Pick<
   CacheHost,
-  'channelTimeline' | 'channelTimelineCommit' | 'readRecordsByKeys'
+  | 'channelTimeline'
+  | 'channelTimelineCommit'
+  | 'onChannelChanged'
+  | 'readRecordsByKeys'
 > & {
   reads: ChannelTimelineCacheArgs[];
-  commits: ChannelTimelineCommitArgs[];
+  commits: ChannelCommitArgs[];
   records: Map<string, unknown>;
+  /** Tells every listener a change of the device. */
+  changed: (change: ChannelChange) => void;
 };
+
+/** What the engine answers a commit it took as it came. */
+export const applied = (
+  seq: string | null | undefined
+): ChannelCommitOutcome => ({
+  channelId: CHANNEL_ID,
+  seq: seq ?? null,
+  outcome: 'applied',
+});
 
 /**
  * A host answering timeline reads from a script, or from a function of the
@@ -114,14 +130,24 @@ export function fakeHost(
     >;
     /** A commit's answer; undefined answers as committed. */
     commit?: (
-      args: ChannelTimelineCommitArgs
+      args: ChannelCommitArgs
     ) => ChannelTimelineCommitCacheResult | undefined;
   } = {}
 ): FakeHost {
   const script = Array.isArray(timeline) ? [...timeline] : undefined;
+  const listeners = new Set<(change: ChannelChange) => void>();
   const host: FakeHost = {
     reads: [],
     commits: [],
+    changed(change) {
+      for (const listener of [...listeners]) listener(change);
+    },
+    onChannelChanged(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     records: new Map(
       (options.records ?? []).map((record) => [keyOf(record), record])
     ),
@@ -142,12 +168,7 @@ export function fakeHost(
           kind: 'committed',
           revision: '1' as CacheRevision,
           changed: [],
-          channelSeq:
-            args.seq?.kind === 'lower'
-              ? args.seq.seq
-              : args.seq?.kind === 'advance'
-                ? args.seq.to
-                : null,
+          channel: applied(args.seq),
         }
       );
     },

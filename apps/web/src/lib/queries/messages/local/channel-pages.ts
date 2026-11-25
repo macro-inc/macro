@@ -3,9 +3,9 @@ import {
   type CacheHost,
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
+  type ChannelCommitArgs,
   type ChannelCoverageWire,
   type ChannelTimelineCacheArgs,
-  type ChannelTimelineCommitCacheResult,
   type RecordSelection,
   readRecordsByKeys,
   selectRecords,
@@ -35,12 +35,14 @@ import {
   channelMessageKey,
   mapChannelTimelineEntry,
 } from './channel-map';
-import { cacheSessionChanged, queryChannelNetwork } from './channel-network';
 import {
-  channelResetMark,
-  holdAgainstDeletes,
-  unchangedSince,
-} from './channel-resets';
+  type ChannelAnswer,
+  type ChannelQueryOptions,
+  type ChannelStoreResult,
+  cacheSessionChanged,
+  queryChannelNetwork,
+  storeResult,
+} from './channel-network';
 
 export type ChannelPageHost = Pick<
   CacheHost,
@@ -77,21 +79,17 @@ export interface ChannelPage {
 
 /**
  * What storing a page left on the device: the sequence it holds for the
- * channel (null when it does not hold the page), that the cache session
- * changed first and the page must be read again, or that a delete in some tab
- * came first (`yielded`): the page was shown but not held, and is read again
- * once no delete is pending (`afterDeletes`).
+ * channel (null when it does not hold the page), or that the cache session
+ * changed first and the page must be read again.
  */
 export type PageStored =
   | { kind: 'stored'; seq: string | null }
-  | { kind: 'session-changed' }
-  | { kind: 'yielded' };
+  | { kind: 'session-changed' };
 export type LoadedChannelPage = {
   page: ChannelPage;
   /**
    * The change sequence the device holds for the channel once the page is
-   * stored: at once for a device page, after the commit for a server page.
-   * Never rejects.
+   * stored: at once for a device page. Never rejects.
    */
   stored: Promise<PageStored>;
 } & (
@@ -105,11 +103,17 @@ export type LoadedChannelPage = {
 
 export type ChannelServerPage = ChannelTimelineQuery['user']['channelTimeline'];
 
-/** Fetches one page; resolves on arrival, before the cache holds it. */
+/**
+ * Fetches one page; resolves on arrival, before the cache holds it. The cache
+ * stores what `commit` makes of the page with the page's records.
+ */
 export type FetchChannelServerPage = (
   input: ChannelTimelineInput,
-  signal?: AbortSignal
-) => Promise<{ page: ChannelServerPage; cached: Promise<void> }>;
+  options: ChannelQueryOptions<ChannelServerPage>
+) => Promise<{
+  page: ChannelServerPage;
+  cached: ChannelAnswer<unknown>['cached'];
+}>;
 
 /** A store of when each channel was last marked opened. */
 export interface ChannelTouches {
@@ -186,42 +190,22 @@ export function createChannelTouches(
   };
 }
 
-/** Commits a page or a mark, and settles the mark it carries. */
-async function commitTouch(
-  touches: ChannelTouches,
-  mark: { channelId: string; touchedAtMs?: number; generation: string },
-  commit: () => Promise<ChannelTimelineCommitCacheResult>
-): Promise<ChannelTimelineCommitCacheResult> {
-  let stored = false;
-  try {
-    const committed = await commit();
-    stored = committed.kind === 'committed';
-    return committed;
-  } finally {
-    const { channelId, touchedAtMs, generation } = mark;
-    if (touchedAtMs !== undefined)
-      touches.settled(channelId, touchedAtMs, generation, stored);
-  }
-}
-
 // Compiled on first read: the app shell imports this module before the cache.
 let entrySelection: ReturnType<typeof selectRecords> | undefined;
 const timelineEntrySelection = () =>
   (entrySelection ??= selectRecords(ChannelTimelineEntryRecordFragmentDoc));
 
-/**
- * Fetches a page over the cached client: the normalized cache writes its
- * records, and `cached` settles once they are stored, so a coverage commit
- * never precedes the records it describes.
- */
 export const fetchChannelServerPage: FetchChannelServerPage = async (
   input,
-  signal
+  { signal, commit }
 ) => {
   const { data, cached } = await queryChannelNetwork(
     ChannelTimelineDocument,
     { input },
-    signal
+    {
+      signal,
+      commit: commit && ((data) => commit(data.user.channelTimeline)),
+    }
   );
   return { page: data.user.channelTimeline, cached };
 };
@@ -393,9 +377,9 @@ function anchorOf(request: ChannelPageRequest): string {
 }
 
 /**
- * Marks the channel opened when its clock is due. Rides on a commit the page
- * makes anyway; otherwise it is the one write an open makes, at most once per
- * channel every six hours.
+ * Marks a channel the device answered as opened, when its clock is due: the
+ * one write such an open makes, at most once per channel every six hours. A
+ * server page carries the mark in its own commit.
  */
 export function touchChannel(
   deps: ChannelPageDeps,
@@ -408,17 +392,24 @@ export function touchChannel(
     generation
   );
   if (touchedAtMs === undefined) return;
-  fireAndForget(
-    commitTouch(deps.touches, { channelId, touchedAtMs, generation }, () =>
-      deps.host.channelTimelineCommit({ channelId, touchedAtMs }, generation)
-    ),
-    'channel-local-sync'
-  );
+  const mark = async () => {
+    let stored = false;
+    try {
+      const committed = await deps.host.channelTimelineCommit(
+        { channelId, touchedAtMs },
+        generation
+      );
+      stored = committed.kind === 'committed';
+    } finally {
+      deps.touches.settled(channelId, touchedAtMs, generation, stored);
+    }
+  };
+  fireAndForget(mark(), 'channel-local-sync');
 }
 
 /**
  * Loads one page: from the device when it holds the stretch, otherwise from
- * the server, whose page is then committed as held. A host that has not
+ * the server, whose page the device then holds. A host that has not
  * answered a channel read yet may still be starting, so it gets a short head
  * start before the server is asked instead. Resolves to `unsupported` when the
  * host cannot serve channels, so the caller reads over REST.
@@ -445,8 +436,6 @@ async function loadPage(
   const host = deps.host;
   // The session the page is read under: a later one must not store it.
   const generation = cacheSessionGeneration.capture();
-  // A reset or eviction after this must not be followed by its coverage.
-  const resets = channelResetMark(host, request.channelId);
   const read = readDeviceOrFail(host, request);
   const answered = channelCacheAnswered(host as CacheHost);
   const device = answered
@@ -474,10 +463,25 @@ async function loadPage(
     'page.source',
     device === 'not-ready' ? 'server-cold' : 'server'
   );
-  // Held from before the fetch until its coverage is sent: no other tab's
-  // delete lands between them. Null when one is pending: no coverage then.
-  const hold = await holdAgainstDeletes();
-  const release = () => hold?.release();
+  const touchedAtMs = deps.touches.due(
+    request.channelId,
+    (deps.now ?? Date.now)(),
+    generation
+  );
+  const touchSettled = (stored: boolean) => {
+    if (touchedAtMs !== undefined)
+      deps.touches.settled(request.channelId, touchedAtMs, generation, stored);
+  };
+  const commit = (page: ChannelServerPage): ChannelCommitArgs => {
+    const coverage = serverPageCoverage(request, page);
+    return {
+      channelId: request.channelId,
+      seq: page.seq,
+      watermark: { kind: 'lower' },
+      ...(coverage && { coverage: [coverage] }),
+      ...(touchedAtMs !== undefined && { touchedAtMs }),
+    };
+  };
   // The device read was awaited: the request joins the page's trace again.
   let fetched: Awaited<ReturnType<typeof fetchOrDevice>>;
   try {
@@ -491,17 +495,17 @@ async function loadPage(
             after: request.after,
             around: request.aroundMessageId,
           },
-          signal
+          { signal, commit }
         )
       ),
       device === 'not-ready' ? read : undefined
     );
   } catch (error) {
-    release();
+    touchSettled(false);
     throw error;
   }
   if (fetched.from === 'device') {
-    release();
+    touchSettled(false);
     span.setAttr('page.source', 'device-offline');
     touchChannel(deps, request.channelId, generation);
     return {
@@ -512,55 +516,20 @@ async function loadPage(
   }
   const { page, cached } = fetched;
   span.setAttr('page.entries', page.entries.length);
-  const coverage = serverPageCoverage(request, page);
-  const commit = async (): Promise<string | null | 'yielded'> => {
-    try {
-      return await commitPage();
-    } finally {
-      release();
+  const result = storeResult(cached);
+  const store = async (): Promise<ChannelStoreResult> => {
+    const stored = await result;
+    touchSettled(stored.stored && stored.outcome !== undefined);
+    // A cold host only now says whether it serves channels.
+    if (device === 'not-ready') {
+      const held = await read;
+      if (held.kind === 'unsupported')
+        markChannelCacheUnsupported(host as CacheHost);
+      else if (held.kind !== 'failed')
+        markChannelCacheAnswered(host as CacheHost);
     }
+    return stored;
   };
-  const commitPage = async (): Promise<string | null | 'yielded'> => {
-    await cached;
-    // A cold host is asked again once it can answer.
-    const held = device === 'not-ready' ? await read : device;
-    if (held.kind === 'unsupported') {
-      markChannelCacheUnsupported(host as CacheHost);
-      return null;
-    }
-    if (held.kind === 'failed') return null;
-    markChannelCacheAnswered(host as CacheHost);
-    // A delete in another tab came first, or the hold ran past its limit,
-    // which a reset stops waiting for: the records the page stored may be
-    // gone. Nothing tells this view when that delete is done, so it reads
-    // again after it. Nothing awaits from here to the send.
-    if (!hold?.current()) return 'yielded';
-    // Deleted here meanwhile: the reset or eviction rereads the views itself.
-    if (!unchangedSince(host, request.channelId, resets)) return null;
-    const touchedAtMs = deps.touches.due(
-      request.channelId,
-      (deps.now ?? Date.now)(),
-      generation
-    );
-    const committed = await commitTouch(
-      deps.touches,
-      { channelId: request.channelId, touchedAtMs, generation },
-      () =>
-        host.channelTimelineCommit(
-          {
-            channelId: request.channelId,
-            ...(coverage && { coverage: [coverage] }),
-            seq: { kind: 'lower', seq: page.seq },
-            ...(touchedAtMs !== undefined && { touchedAtMs }),
-          },
-          generation
-        )
-    );
-    return committed.kind === 'committed' ? committed.channelSeq : held.seq;
-  };
-  // A child of the page's span: the page answers before the device stores it.
-  const store = (child: Span): Promise<PageStored> =>
-    storedOutcome(commit(), child);
   return {
     page: {
       entries: pageEntries(page.entries),
@@ -569,37 +538,28 @@ async function loadPage(
     },
     source: 'server',
     readSeq: page.seq,
-    stored: span.span('channel.page.store', store),
+    // A child of the page's span: the page answers before the device stores it.
+    stored: span.span('channel.page.store', async (child) =>
+      pageStored(await store(), child)
+    ),
   };
 }
 
-/**
- * How a store step ended, as a value: a loader that moved on leaves the
- * promise unawaited, so it must not reject. Failures other than a session
- * change are reported here.
- */
-async function storedOutcome(
-  commit: Promise<string | null | 'yielded'>,
-  span: Span
-): Promise<PageStored> {
-  try {
-    const seq = await commit;
-    if (seq === 'yielded') {
-      span.setAttr('page.stored', 'yielded');
-      return { kind: 'yielded' };
-    }
+/** How a store ended. Failures other than a session change are reported here. */
+function pageStored(result: ChannelStoreResult, span: Span): PageStored {
+  if (result.stored) {
+    const seq = result.outcome?.seq ?? null;
     span.setAttr('page.stored', seq === null ? 'unheld' : 'held');
     return { kind: 'stored', seq };
-  } catch (error) {
-    if (cacheSessionChanged(error)) {
-      span.setAttr('page.stored', 'session-changed');
-      return { kind: 'session-changed' };
-    }
-    span.setAttr('page.stored', 'failed');
-    span.error(error);
-    Telemetry.error(error, { surface: 'channel-local-sync' });
-    return { kind: 'stored', seq: null };
   }
+  if (cacheSessionChanged(result.error)) {
+    span.setAttr('page.stored', 'session-changed');
+    return { kind: 'session-changed' };
+  }
+  span.setAttr('page.stored', 'failed');
+  span.error(result.error);
+  Telemetry.error(result.error, { surface: 'channel-local-sync' });
+  return { kind: 'stored', seq: null };
 }
 
 // A message's own fields, without its thread and call: a reply the device

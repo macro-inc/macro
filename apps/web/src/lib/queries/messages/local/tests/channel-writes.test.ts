@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import { ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE } from '@graphql-cache/protocol';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
@@ -59,7 +60,6 @@ const edited = (id: string) => ({
   mentions: [],
   removeAttachmentIds: [],
   addAttachments: [],
-  nonce: 'n',
 });
 
 // A test that times out under fake timers would leave them on for the next.
@@ -122,23 +122,34 @@ describe('createChannelWrites', () => {
     });
   });
 
-  it('tells the other tabs once a write changed the device', async () => {
+  it('names the message as being sent until the send ends', async () => {
     const stored = graphqlMessage(7);
-    const { writes } = setup(() => ({
-      data: written('sendChannelMessage', stored),
-      disposition: { kind: 'committed' },
-    }));
-    const heard: unknown[] = [];
-    const other = new BroadcastChannel('macro.channel-timeline.writes');
-    other.onmessage = (event) => heard.push(event.data);
+    const answer = Promise.withResolvers<void>();
+    const { writes } = setup(async () => {
+      await answer.promise;
+      return {
+        data: written('sendChannelMessage', stored),
+        disposition: { kind: 'committed' },
+      };
+    });
+    const sending = writes.send(send(stored.id));
+    expect(writes.sending(stored.id)).toBe(true);
+    expect(writes.sending('another')).toBe(false);
+    answer.resolve();
+    await sending;
+    expect(writes.sending(stored.id)).toBe(false);
+  });
 
-    await writes.send(send(stored.id));
-    await vi.waitFor(() =>
-      expect(heard).toContainEqual(
-        expect.objectContaining({ channelIds: [CHANNEL_ID] })
-      )
-    );
-    other.close();
+  it('names no message as being sent under a sign-in that did not send it', async () => {
+    const stored = graphqlMessage(7);
+    let signIn = 1;
+    const { writes } = setup(() => new Promise<never>(() => {}), [], [], {
+      signIn: () => signIn,
+    });
+    fireAndForget(writes.send(send(stored.id)), 'test');
+    expect(writes.sending(stored.id)).toBe(true);
+    signIn = 2;
+    expect(writes.sending(stored.id)).toBe(false);
   });
 
   it('predicts a reply after its thread and counts it on the root the device holds', async () => {
@@ -232,7 +243,7 @@ describe('createChannelWrites', () => {
       () => ({ disposition: { kind: 'committed' } }),
       [root, ...replies, gone, top]
     );
-    const removal = (id: string) => ({ channelId: CHANNEL_ID, id, nonce: 'd' });
+    const removal = (id: string) => ({ channelId: CHANNEL_ID, id });
 
     // A collapsed thread shows the preview, and with no connection the
     // server's root does not come until the delete is sent.
@@ -279,7 +290,7 @@ describe('createChannelWrites', () => {
         [root, ...replies]
       );
       await writes
-        .remove({ channelId: CHANNEL_ID, id: replies[2]!.id, nonce: 'd' })
+        .remove({ channelId: CHANNEL_ID, id: replies[2]!.id })
         .catch(() => undefined);
       return (
         calls[0]!.context.optimisticResponse as {
@@ -310,7 +321,7 @@ describe('createChannelWrites', () => {
     host.readRecordsByKeys = () => new Promise(() => undefined);
 
     const removing = settled(
-      writes.remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
+      writes.remove({ channelId: CHANNEL_ID, id: reply.id })
     );
     await vi.advanceTimersByTimeAsync(400);
     expect(calls).toHaveLength(0);
@@ -344,7 +355,7 @@ describe('createChannelWrites', () => {
     };
 
     const removing = settled(
-      writes.remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
+      writes.remove({ channelId: CHANNEL_ID, id: reply.id })
     );
     await vi.advanceTimersByTimeAsync(500);
     expect(calls).toHaveLength(1);
@@ -376,7 +387,7 @@ describe('createChannelWrites', () => {
         [root, ...preview]
       );
       await writes
-        .remove({ channelId: CHANNEL_ID, id: preview[0]!.id, nonce: 'd' })
+        .remove({ channelId: CHANNEL_ID, id: preview[0]!.id })
         .catch(() => undefined);
       return (
         calls[0]!.context.optimisticResponse as {
@@ -449,12 +460,10 @@ describe('createChannelWrites', () => {
     const removing = writes.remove({
       channelId: CHANNEL_ID,
       id: sent.id,
-      nonce: 'd1',
     });
     const removingReply = writes.remove({
       channelId: CHANNEL_ID,
       id: reply.id,
-      nonce: 'd2',
     });
     expect(writes.unstoredRoots(CHANNEL_ID)).toEqual([]);
     expect(writes.unstoredReplies(CHANNEL_ID, root.id)).toEqual([]);
@@ -877,7 +886,7 @@ describe('createChannelWrites', () => {
     };
     const remove =
       (id: string) => (writes: ReturnType<typeof setup>['writes']) =>
-        writes.remove({ channelId: CHANNEL_ID, id, nonce: 'd' });
+        writes.remove({ channelId: CHANNEL_ID, id });
     const edit = (id: string) => (writes: ReturnType<typeof setup>['writes']) =>
       writes.edit({
         channelId: CHANNEL_ID,
@@ -886,7 +895,6 @@ describe('createChannelWrites', () => {
         mentions: [],
         removeAttachmentIds: [],
         addAttachments: [],
-        nonce: 'e',
       });
     const react =
       (id: string) => (writes: ReturnType<typeof setup>['writes']) =>
@@ -896,7 +904,6 @@ describe('createChannelWrites', () => {
           emoji: '👍',
           add: true,
           userId: SENDER,
-          nonce: 'r',
         });
     const rolledBack = (outcome: unknown) =>
       thrownResultErrorHasCode(outcome, 'NOT_APPLIED');
@@ -941,7 +948,6 @@ describe('createChannelWrites', () => {
           mentions: [],
           removeAttachmentIds: change.removeAttachmentIds ?? [],
           addAttachments: change.addAttachments ?? [],
-          nonce: 'e',
         });
     const attachment = (attachmentId: string, entityId: string) => ({
       attachmentId,
@@ -1349,7 +1355,7 @@ describe('createChannelWrites', () => {
       disposition: { kind: 'permanently-failed' },
     }));
     const error = await writes
-      .remove({ channelId: CHANNEL_ID, id: 'gone', nonce: 'n' })
+      .remove({ channelId: CHANNEL_ID, id: 'gone' })
       .catch((thrown: unknown) => thrown);
     expect(thrownResultErrorHasCode(error, 'NOT_FOUND')).toBe(true);
   });
@@ -1377,9 +1383,8 @@ describe('createChannelWrites', () => {
       mentions: [],
       removeAttachmentIds: ['a-1'],
       addAttachments: [],
-      nonce: 'edit-nonce',
     });
-    await writes.remove({ channelId: CHANNEL_ID, id: stored.id, nonce: 'd' });
+    await writes.remove({ channelId: CHANNEL_ID, id: stored.id });
     await writes.react({
       channelId: CHANNEL_ID,
       id: stored.id,
@@ -1387,13 +1392,11 @@ describe('createChannelWrites', () => {
       add: true,
       userId: SENDER,
       reactions: [{ emoji: '👍', users: [SENDER] }],
-      nonce: 'r',
     });
 
     const [edit, remove, react] = calls;
     expect(edit.variables.input).toMatchObject({
       removeAttachmentIds: ['a-1'],
-      nonce: 'edit-nonce',
     });
     expect(edit.context.optimisticResponse).toEqual({
       editChannelMessage: {
