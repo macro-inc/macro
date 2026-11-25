@@ -53,6 +53,8 @@ calendar account metadata and other conferencing providers keep their original U
   loading skeleton immediately. Phone Month skeletons appear in its visible card.
   Query failures appear inside the destination with Retry. Event links with no date
   still resolve their locator first; selecting the precise occurrence waits for its chip.
+  A wide Agenda locator first shows its range start, then moves to the resolved
+  occurrence's day so the target row enters the mounted windows.
 
 ## Cached saves
 

@@ -9,6 +9,7 @@ import {
   CalendarPagerContextProvider,
   useCalendarPager,
 } from '../calendar/components/CalendarPagerContext';
+import { useCalendarNavigation } from '../calendar/context/calendar-navigation-context';
 import {
   CalendarFocusContextProvider,
   type CalendarFocusTarget,
@@ -16,7 +17,16 @@ import {
   useCalendarFocus,
 } from './calendar-focus-target';
 import { CalendarViewportProvider } from './context/calendar-viewport-context';
+import { AgendaNavigation } from './views/agenda/AgendaNavigation';
 import { CalendarGridNavigation } from './views/CalendarGridNavigation';
+
+vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
+  useCalendarView: () => ({
+    displaySettings: { weekStartsOn: 0 },
+    closeEventDetails: vi.fn(),
+    setPeriodView: vi.fn(),
+  }),
+}));
 
 const OCCURRENCE = {
   eventId: 'ooo-1',
@@ -201,5 +211,54 @@ describe('CalendarFocusContext occurrence requests', () => {
     expect(focus.pendingTarget()?.eventId).toBe('meeting');
     focus.consume(next.requestId);
     expect(focus.pendingNavigationTarget()).toBeUndefined();
+  });
+
+  it('moves Agenda from a wide locator start to the resolved occurrence without jumping back after selection', () => {
+    const [resolved, setResolved] = createSignal<CalendarFocusTarget>();
+    const locator = {
+      date: new Date(2026, 0, 1),
+      requestId: 1,
+      requestedAt: Date.now(),
+    };
+    let navigation!: ReturnType<typeof useCalendarNavigation>;
+    let focus!: ReturnType<typeof useCalendarFocus>;
+    function Probe() {
+      navigation = useCalendarNavigation();
+      focus = useCalendarFocus();
+      return null;
+    }
+    render(() => (
+      <CalendarFocusContextProvider
+        target={resolved}
+        navigationTarget={() => locator}
+      >
+        <AgendaNavigation date={new Date(2025, 11, 1)} onDateChange={() => {}}>
+          <Probe />
+        </AgendaNavigation>
+      </CalendarFocusContextProvider>
+    ));
+    expect(navigation.navigationDate()?.toDateString()).toBe(
+      locator.date.toDateString()
+    );
+    expect(focus.pendingTarget()).toBeUndefined();
+    const occurrence = {
+      ...locator,
+      eventId: 'meeting',
+      occurrenceKey: '2026-03-15',
+      date: new Date(2026, 2, 15),
+    };
+    setResolved(occurrence);
+    expect(navigation.navigationDate()?.toDateString()).toBe(
+      occurrence.date.toDateString()
+    );
+    const range = navigation.visibleRange();
+    expect(range?.start.getTime()).toBeLessThanOrEqual(
+      occurrence.date.getTime()
+    );
+    expect(range?.end.getTime()).toBeGreaterThan(occurrence.date.getTime());
+    focus.consume(occurrence.requestId);
+    expect(navigation.navigationDate()?.toDateString()).toBe(
+      occurrence.date.toDateString()
+    );
   });
 });

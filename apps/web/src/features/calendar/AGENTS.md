@@ -49,7 +49,7 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Keep standalone composer hotkey scopes attached to their host so app shortcuts still run from text fields.
 - Preserve native momentum until scrollend or observed stillness; complete controlled 140ms slides without relying on native events.
 - Complete an active controlled slide on each new period press, commit the extra step immediately, and rearm animation after 300ms without presses.
-- Navigate from known locator dates before loading occurrences; show the existing grid skeleton immediately and keep errors inside the destination page.
+- Navigate from known locator dates before loading occurrences, refine Agenda to the resolved occurrence day, and keep skeletons/errors inside the destination page.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
 - Prepare all five stable slots before swiping, retarget recycled grids synchronously at settlement, and prefetch two ranges past each edge plus near-edge lookahead; freeze phone axis measurements during paging.
 - Reserve the full two-row all-day envelope in phone Week; use 64px hours only in phone three-day view, leaving Day/Week spacing unchanged.

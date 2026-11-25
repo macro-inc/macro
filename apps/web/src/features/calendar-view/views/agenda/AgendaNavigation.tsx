@@ -20,8 +20,11 @@ export function AgendaNavigation(
     onDateChange: props.onDateChange,
     onViewChange: view.setPeriodView,
   });
+  // A wide locator only provides an initial date. Once the occurrence resolves,
+  // bring its actual day into the mounted Agenda windows before selecting it.
+  const target = () => focus.pendingTarget() ?? focus.pendingNavigationTarget();
   createEffect(
-    on(focus.pendingNavigationTarget, (target) => {
+    on(target, (target) => {
       if (target) navigation.navigateToDate(target.date);
     })
   );
