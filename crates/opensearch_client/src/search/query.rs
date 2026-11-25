@@ -164,7 +164,9 @@ pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType
     )
 }
 
-/// Words nearly every link URL holds, which a link query leaves out.
+/// Words nearly every link URL starts with, which a link query leaves out
+/// where they start the term; inside a path (`/http/guide`) they stay, or a
+/// phrase would miss the words around them.
 const LINK_BOILERPLATE_WORDS: [&str; 3] = ["http", "https", "www"];
 
 /// Words that name no site on their own: the link boilerplate and the
@@ -180,7 +182,7 @@ const NO_SITE_WORDS: [&str; 6] = ["http", "https", "www", "com", "org", "net"];
 /// [`create_query`]'s rules for those words, as message text is: one word as
 /// a prefix, several in order with the last a prefix (`sketchpad.example`
 /// finds `app.sketchpad.example`, `example.com` no `github.com/example`).
-/// `http`, `https` and `www` are left out of the term. A term that names no
+/// `http`, `https` and `www` that start the term are left out. A term that names no
 /// site ([`NO_SITE_WORDS`]), one with a letter or digit outside ASCII, which
 /// the analyzer would split into looser ASCII pieces (`über` into `ber`), and
 /// a regexp term match no link.
@@ -195,11 +197,11 @@ pub(crate) fn link_query<'a>(
     }
     let words: Vec<&str> = term
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        .filter(|word| {
-            !word.is_empty()
-                && !LINK_BOILERPLATE_WORDS
-                    .iter()
-                    .any(|boilerplate| word.eq_ignore_ascii_case(boilerplate))
+        .filter(|word| !word.is_empty())
+        .skip_while(|word| {
+            LINK_BOILERPLATE_WORDS
+                .iter()
+                .any(|boilerplate| word.eq_ignore_ascii_case(boilerplate))
         })
         .collect();
     let names_no_site = words.iter().all(|word| {

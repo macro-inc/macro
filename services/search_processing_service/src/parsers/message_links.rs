@@ -9,10 +9,11 @@ use mention_utils::parse::{ParsedXmlText, TextSegment, XmlTag};
 use nom::{
     IResult, Parser,
     branch::alt,
-    bytes::complete::{tag_no_case, take_while1},
-    character::complete::anychar,
+    bytes::complete::{tag_no_case, take_while, take_while1},
+    character::complete::{anychar, char},
     combinator::recognize,
     multi::fold_many0,
+    sequence::delimited,
 };
 
 use super::message_text::with_pastes_as_content;
@@ -109,15 +110,26 @@ fn piece(input: &str) -> IResult<&str, Option<&str>> {
 }
 
 /// `http://`, `https://` or `www.` and the characters after it up to the
-/// first that text puts around a URL rather than in one.
+/// first that text puts around a URL rather than in one. A host written as
+/// an IPv6 address keeps its brackets (`https://[2001:db8::1]/a`).
 fn url(input: &str) -> IResult<&str, &str> {
-    recognize((
-        alt((
-            tag_no_case("https://"),
-            tag_no_case("http://"),
-            tag_no_case("www."),
-        )),
-        take_while1(is_url_char),
+    let scheme = || alt((tag_no_case("https://"), tag_no_case("http://")));
+    recognize(alt((
+        (scheme(), ipv6_host, take_while(is_url_char)).map(|_| ()),
+        (
+            alt((scheme(), tag_no_case("www."))),
+            take_while1(is_url_char),
+        )
+            .map(|_| ()),
+    )))
+    .parse(input)
+}
+
+fn ipv6_host(input: &str) -> IResult<&str, &str> {
+    recognize(delimited(
+        char('['),
+        take_while1(|c: char| c.is_ascii_hexdigit() || c == ':' || c == '.'),
+        char(']'),
     ))
     .parse(input)
 }

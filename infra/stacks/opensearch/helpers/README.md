@@ -61,12 +61,22 @@ for future imports. Running `create_indices.ts` alone does not clear an existing
 ## Channel message links
 
 `links` on the channels index holds each message's link URLs, analyzed by the
-built-in `pattern` analyzer, so `create_indices.ts` adds it to the live index
-in place (no close, no new index version). Apply it with
-`DRY_RUN=false bun scripts/create_indices.ts` and check it with
-`verify_mappings.ts` before search-processing deploys the code that writes
-it: the index has `dynamic: false`, so a message written before the mapping
-keeps `links` in its source unindexed until it is written again. Search
+built-in `pattern` analyzer, so it is added to the live index in place (no
+close, no new index version). Apply it before search-processing deploys the
+code that writes it: the index has `dynamic: false`, so a message written
+before the mapping keeps `links` in its source unindexed until it is written
+again.
+
+1. Find the index the `channels` alias resolves to (`GET _alias/channels`,
+   or `verify_aliases.ts`, which fails when it is not `channels_v2`). Apply
+   the mapping to that index; if the alias is mid-migration, finish the
+   migration first.
+2. Add only `links`: `PUT <index>/_mapping` with
+   `{"properties":{"links":{"type":"text","analyzer":"pattern"}}}`.
+   `create_indices.ts` would add it too, but it also adds every other field
+   an index lacks (production and dev lack `imported_author`).
+3. Check it: `GET channels/_mapping` shows `links` with `analyzer: pattern`.
+ Search
 code that queries the field is safe either side of the mapping; an unmapped
 field matches nothing. From the mapping on, new and edited messages are found
 by their links; earlier ones gain them when search-processing backfills their

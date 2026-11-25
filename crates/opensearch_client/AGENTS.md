@@ -213,7 +213,7 @@ projects.
   term would fail its whole document: keep the cap. Each content term also
   matches `links` (`query::link_query`): its words split the same way and
   matched by `create_query`'s rules (several words in order, as a capped
-  phrase prefix), with `http`, `https` and `www` left out. A term of only
+  phrase prefix), with a leading `http`, `https` or `www` left out. A term of only
   those, `com`, `org`, `net` or the start of one, matches no link (on dev
   `com` alone was in 182 of 228 messages' links), and neither does one with a
   non-ASCII letter, which `pattern` would split into looser ASCII pieces. A

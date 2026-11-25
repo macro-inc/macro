@@ -220,6 +220,11 @@ fn a_link_term_matches_every_word_of_its_url() {
             "example.com",
             prefix("example com"),
         ),
+        (
+            QueryKey::MatchPhrasePrefix,
+            "https://docs.example.com/http/guide",
+            prefix("docs example com http guide"),
+        ),
         (QueryKey::MatchPhrasePrefix, "io", prefix("io")),
         (
             QueryKey::MatchPhrase,

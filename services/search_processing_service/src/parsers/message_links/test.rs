@@ -69,6 +69,11 @@ fn the_punctuation_around_a_url_is_not_part_of_it() {
             "https://hi.wikipedia.org/wiki/हिन्दी",
         ),
         ("«https://example.com/a»", "https://example.com/a"),
+        (
+            "https://[2001:db8::1]/roadmap",
+            "https://[2001:db8::1]/roadmap",
+        ),
+        ("(http://[::1]:8080/a)", "http://[::1]:8080/a"),
     ] {
         assert_eq!(message_links(text), [link], "{text}");
     }
