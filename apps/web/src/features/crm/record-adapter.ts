@@ -131,14 +131,19 @@ export function useCrmContactSearch(search: Accessor<string>) {
       query().length > 0,
     query
   );
+  // Until typing settles, the pages answer an earlier search: list none of
+  // them, and count the wait as loading.
+  const settling = () => search().trim() !== query();
   return {
     contacts: () =>
-      queryReadyGate(server)
+      !settling() && queryReadyGate(server)
         ? server.data.pages.flatMap((page) =>
             page.contacts.map(toCrmContactEntity)
           )
         : [],
-    isLoading: () => query().length > 0 && server.isLoading,
+    isLoading: () =>
+      search().trim().length > 0 &&
+      (settling() || (query().length > 0 && server.isLoading)),
     hasMore: () => !!server.hasNextPage && !server.isFetchNextPageError,
     isLoadingMore: () => server.isFetchingNextPage,
     loadMore: async () => {

@@ -59,9 +59,14 @@ export function useCrmCompanyPickerSearch(search: Accessor<string>) {
     query().length > 0 &&
     validateSearchServiceText(query());
   const source = useCrmCompanySearchSource(query, enabled);
+  // Until typing settles, the pages answer an earlier search: list none of
+  // them, and count the wait as loading.
+  const settling = () => search().trim() !== query();
   return {
-    companies: source.companies,
-    isLoading: () => enabled() && source.isLoading(),
+    companies: () => (settling() ? [] : source.companies()),
+    isLoading: () =>
+      search().trim().length > 0 &&
+      (settling() || (enabled() && source.isLoading())),
     hasMore: source.hasMore,
     isLoadingMore: source.isLoadingMore,
     loadMore: source.loadMore,

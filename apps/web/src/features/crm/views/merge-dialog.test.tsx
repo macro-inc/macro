@@ -43,6 +43,8 @@ const fixture = vi.hoisted(() => ({
   loadMore: vi.fn(async () => {}),
   searchError: undefined as unknown,
   retry: vi.fn(async () => {}),
+  teamFailed: false,
+  teamRefetch: vi.fn(async () => {}),
 }));
 
 // Records belong to the viewer's current team unless a test names another.
@@ -52,12 +54,17 @@ const inTeam = <T extends { teamId?: string }>(records: T[]) =>
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     createTeamSource: () => ({
-      data: { team: { id: 'team-1', crm_enabled: true }, members: [] },
+      data: fixture.teamFailed
+        ? undefined
+        : { team: { id: 'team-1', crm_enabled: true }, members: [] },
       isPending: false,
+      isError: fixture.teamFailed,
+      refetch: fixture.teamRefetch,
     }),
-    createCompanySearch: (search: () => string) => ({
-      companies: () =>
-        search().trim() === '' ? [] : inTeam(fixture.companiesSearched),
+    // The searches answer whatever the field holds, empty too: listing them
+    // only while a search is typed is the dialog's job.
+    createCompanySearch: () => ({
+      companies: () => inTeam(fixture.companiesSearched),
       isLoading: () => false,
       hasMore: () => false,
       isLoadingMore: () => false,
@@ -82,7 +89,7 @@ vi.mock('../context/crm-context', () => ({
     createContactSearch: (search: () => string) => ({
       contacts: () => {
         fixture.searches.push(search());
-        return search().trim() === '' ? [] : inTeam(fixture.searched);
+        return inTeam(fixture.searched);
       },
       isLoading: () => false,
       hasMore: () => fixture.hasMore,
@@ -252,6 +259,8 @@ beforeEach(() => {
   fixture.loadMore.mockClear();
   fixture.searchError = undefined;
   fixture.retry.mockClear();
+  fixture.teamFailed = false;
+  fixture.teamRefetch.mockClear();
   fixture.commandsFor = undefined;
 });
 afterEach(cleanup);
@@ -905,4 +914,19 @@ it('lists only the current team’s companies and people to merge with', async (
   expect(screen.getByText('Pat Lee')).toBeTruthy();
   expect(screen.queryByText('Pat Lane')).toBeNull();
   expect(screen.queryByText('Pat Long')).toBeNull();
+});
+
+it('without the current team, lists no one and offers Retry for the team', async () => {
+  fixture.teamFailed = true;
+  fixture.suggestions = [
+    { id: 'kept', name: 'Kept Co', domains: [{ domain: 'kept.example.com' }] },
+  ];
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([OLD]);
+
+  expect(screen.queryByText('Kept Co')).toBeNull();
+  expect(screen.getByText('Couldn’t search companies.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(fixture.teamRefetch).toHaveBeenCalled();
+  expect(fixture.retry).not.toHaveBeenCalled();
 });

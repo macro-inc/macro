@@ -73,6 +73,7 @@ type MergeCopy = {
   searchLabel: () => string;
   searchPlaceholder: () => string;
   noMatches: () => string;
+  searchFailed: () => string;
   tooMany: (count: number) => string;
   keepTitle: () => string;
   keepDescription: () => string;
@@ -100,6 +101,7 @@ const COPY: Record<MergeRecordType, MergeCopy> = {
     searchLabel: () => t('crm.mergeSearchLabel'),
     searchPlaceholder: () => t('crm.mergeSearchPlaceholder'),
     noMatches: () => t('crm.mergeNoMatches'),
+    searchFailed: () => t('crm.mergeSearchFailed'),
     tooMany: (count) => t('crm.mergeTooMany', { count }),
     keepTitle: () => t('crm.mergeKeepTitle'),
     keepDescription: () => t('crm.mergeKeepDescription'),
@@ -126,6 +128,7 @@ const COPY: Record<MergeRecordType, MergeCopy> = {
     searchLabel: () => t('crm.mergePeopleSearchLabel'),
     searchPlaceholder: () => t('crm.mergePeopleSearchPlaceholder'),
     noMatches: () => t('crm.mergePeopleNoMatches'),
+    searchFailed: () => t('crm.mergePeopleSearchFailed'),
     tooMany: (count) => t('crm.mergePeopleTooMany', { count }),
     keepTitle: () => t('crm.mergePeopleKeepTitle'),
     keepDescription: () => t('crm.mergePeopleKeepDescription'),
@@ -544,11 +547,6 @@ function quickAccessMatches(
     .slice(0, 50);
 }
 
-/**
- * The records a merge can pick from. Companies come from Quick Access. People
- * do too, and while a search is typed, the server's matches beyond it follow:
- * a team can hold far more people than Quick Access keeps.
- */
 type PickRecord = { id: string; teamId?: string | null };
 
 /**
@@ -558,8 +556,12 @@ type PickRecord = { id: string; teamId?: string | null };
  */
 function combinedSource<T extends PickRecord>(options: {
   search: Accessor<string>;
-  teamId: () => string | undefined;
-  teamPending: () => boolean;
+  team: {
+    id: () => string | undefined;
+    pending: () => boolean;
+    failed: () => boolean;
+    retry: () => Promise<void>;
+  };
   suggestions: () => readonly T[];
   suggestionsLoading: () => boolean;
   server: {
@@ -575,7 +577,7 @@ function combinedSource<T extends PickRecord>(options: {
 }): PickSource {
   const searching = () => options.search().trim() !== '';
   const ours = (record: T) =>
-    options.teamId() !== undefined && record.teamId === options.teamId();
+    options.team.id() !== undefined && record.teamId === options.team.id();
   return {
     matches: () => {
       const local = quickAccessMatches(
@@ -593,14 +595,18 @@ function combinedSource<T extends PickRecord>(options: {
       ];
     },
     loading: () =>
-      options.teamPending() ||
+      options.team.pending() ||
       options.suggestionsLoading() ||
       (searching() && options.server.isLoading()),
     hasMore: () => searching() && options.server.hasMore(),
     loadingMore: () => options.server.isLoadingMore(),
     loadMore: options.server.loadMore,
-    failed: () => searching() && options.server.error() !== undefined,
-    retry: options.server.retry,
+    // Without the team nothing can be listed, searching or not.
+    failed: () =>
+      options.team.failed() ||
+      (searching() && options.server.error() !== undefined),
+    retry: () =>
+      options.team.failed() ? options.team.retry() : options.server.retry(),
   };
 }
 
@@ -614,17 +620,23 @@ function usePickSource(
   search: Accessor<string>
 ): PickSource {
   const context = useCrmContext();
-  const team = context.createTeamSource();
-  const teamId = () => team.data?.team.id;
-  const teamPending = () => team.isPending;
+  const teamSource = context.createTeamSource();
+  const team = {
+    // Reading the data of a pending query suspends the dialog; wait it out.
+    id: () => (teamSource.isPending ? undefined : teamSource.data?.team.id),
+    pending: () => teamSource.isPending,
+    failed: () => teamSource.isError,
+    retry: async () => {
+      await teamSource.refetch();
+    },
+  };
   return match(recordType)
     .with('company', (): PickSource => {
       const suggestions = context.createCompanySuggestions();
       const server = context.createCompanySearch(search);
       return combinedSource({
         search,
-        teamId,
-        teamPending,
+        team,
         suggestions: suggestions.companies,
         suggestionsLoading: () => suggestions.query.isLoading,
         server: { ...server, results: server.companies },
@@ -640,8 +652,7 @@ function usePickSource(
       const server = context.createContactSearch(search);
       return combinedSource({
         search,
-        teamId,
-        teamPending,
+        team,
         suggestions: suggestions.contacts,
         suggestionsLoading: () => suggestions.query.isLoading,
         server: { ...server, results: server.contacts },
@@ -723,7 +734,7 @@ function PickStep(props: {
           class="flex items-center gap-2 text-sm text-ink-muted"
           role="alert"
         >
-          <span>{t('crm.mergeSearchFailed')}</span>
+          <span>{props.copy.searchFailed()}</span>
           <Button
             variant="ghost"
             size="sm"

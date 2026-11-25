@@ -393,6 +393,7 @@ export default {
   mergeSearchLabel: 'Search companies',
   mergeSearchPlaceholder: 'Search by name or domain',
   mergeNoMatches: 'No other companies match.',
+  mergeSearchFailed: 'Couldn’t search companies.',
   mergeTooMany: { other: 'A merge takes at most {{count}} companies.' },
   mergeKeepTitle: 'Merge companies',
   mergeKeepDescription:
@@ -482,7 +483,7 @@ export default {
   mergePeopleSearchLabel: 'Search people',
   mergePeopleSearchPlaceholder: 'Search by name or email',
   mergePeopleNoMatches: 'No other people match.',
-  mergeSearchFailed: 'Couldn’t search people.',
+  mergePeopleSearchFailed: 'Couldn’t search people.',
   mergePeopleTooMany: { other: 'A merge takes at most {{count}} people.' },
   mergePeopleKeepTitle: 'Merge people',
   mergePeopleKeepDescription:
