@@ -53,6 +53,7 @@ import {
 } from '@urql/core';
 import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
+import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheHost } from '../host/types';
 import type {
@@ -658,7 +659,7 @@ export function createMutationQueueRunner(
       liveQueuedOps.delete(claimed.transactionId);
       live.resolveRoute(undefined);
       markSent();
-      attemptTelemetry.sent('live');
+      attemptTelemetry.sent('live', mutationTraceParentOf(live.operation));
       forward(
         withQueueRequestTimeout(withQueueAttempt(live.operation, attempt))
       );

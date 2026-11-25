@@ -1,3 +1,4 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   MoveEntitiesDocument,
   SaveEmailDraftDocument,
@@ -36,6 +37,7 @@ import {
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
+import { TRACE_PARENT_CONTEXT_KEY } from '../../urql-solid/trace-parent-exchange';
 import { StaleCacheAuthorityError } from '../authority';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
@@ -6408,6 +6410,177 @@ describe('normalizedCacheExchange', () => {
         expect(results[0]?.data).toBe(data);
       }
     );
+
+    describe('a traced mutation without optimism', () => {
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      const deletion = {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: 'document-1',
+      };
+      const update = {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'document-1',
+          displayName: 'Renamed',
+        },
+      };
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [deletion, update],
+            },
+          ],
+        },
+      };
+
+      /** Spans by name, each with its parent, attributes and work done in it. */
+      function recordSpans() {
+        const active: string[] = [];
+        const within = <T>(name: string, work: () => T): T => {
+          active.push(name);
+          try {
+            return work();
+          } finally {
+            active.pop();
+          }
+        };
+        const spans: Array<{
+          name: string;
+          parent: string | undefined;
+          attributes: Record<string, unknown>;
+        }> = [];
+        const open = (name: string, parent: string | undefined): Span => {
+          const attributes: Record<string, unknown> = {};
+          spans.push({ name, parent, attributes });
+          return {
+            setAttr: (key: string, value: unknown) => {
+              attributes[key] = value;
+            },
+            span: (child: string) => open(child, name),
+            run: <T>(work: () => T) => within(name, work),
+            event: () => undefined,
+            error: () => undefined,
+            end: () => undefined,
+            traceparent: () => undefined,
+            injectTraceHeaders: () => undefined,
+          } as unknown as Span;
+        };
+        vi.spyOn(Telemetry, 'span').mockImplementation(((
+          name: string,
+          operation?: (span: Span) => Promise<unknown>
+        ) => {
+          const span = open(name, active.at(-1));
+          return operation ? operation(span) : span;
+        }) as never);
+        const parent = {
+          run: <T>(work: () => T) => within('entity.trash', work),
+        };
+        return { spans, parent, active };
+      }
+
+      it('applies its cache writes as one phase of the caller’s trace', async () => {
+        const { spans, parent, active } = recordSpans();
+        const writtenIn: Array<string | undefined> = [];
+        const write = host.writeQuery.bind(host);
+        vi.spyOn(host, 'writeQuery').mockImplementation(async (args) => {
+          writtenIn.push(active.at(-1));
+          return await write(args);
+        });
+        const remove = host.deleteRecords.bind(host);
+        vi.spyOn(host, 'deleteRecords').mockImplementation(async (...args) => {
+          writtenIn.push(active.at(-1));
+          return await remove(...args);
+        });
+        const base = makeRenameMutationOp(20);
+        const { ops, results } = harness(
+          host,
+          (op) => (op.kind === 'mutation' ? { data } : {}),
+          { deletedRecordKeys: () => ['GraphqlSoupDocument:document-2'] }
+        );
+
+        ops.next(
+          makeOperation(base.kind, base, {
+            ...base.context,
+            [TRACE_PARENT_CONTEXT_KEY]: parent,
+          })
+        );
+        await tick();
+
+        expect(results[0]?.data).toBe(data);
+        expect(spans).toEqual([
+          {
+            name: 'graphql.mutation.cache_effects',
+            parent: 'entity.trash',
+            attributes: {
+              'graphql.operation.name': 'RenameEntities',
+              'cache.effect_count': 2,
+              'cache.deleted_record_count': 1,
+              'cache.effects_applied': true,
+            },
+          },
+          {
+            name: 'graphql.mutation.cache_delete',
+            parent: 'graphql.mutation.cache_effects',
+            attributes: {},
+          },
+          {
+            name: 'graphql.mutation.cache_write',
+            parent: 'graphql.mutation.cache_effects',
+            attributes: {},
+          },
+        ]);
+        // Each host call starts in its phase, so its own spans nest there.
+        expect(writtenIn).toEqual([
+          'graphql.mutation.cache_delete',
+          'graphql.mutation.cache_write',
+          'graphql.mutation.cache_effects',
+        ]);
+      });
+
+      it('marks the phase when a cache write fails, and still answers', async () => {
+        const { spans, parent } = recordSpans();
+        vi.spyOn(host, 'writeQuery').mockRejectedValue(new Error('engine'));
+        const base = makeRenameMutationOp(21);
+        const { ops, results } = harness(host, (op) =>
+          op.kind === 'mutation' ? { data } : {}
+        );
+
+        ops.next(
+          makeOperation(base.kind, base, {
+            ...base.context,
+            [TRACE_PARENT_CONTEXT_KEY]: parent,
+          })
+        );
+        await tick();
+
+        expect(results[0]?.data).toBe(data);
+        expect(spans[0]?.attributes).toMatchObject({
+          'cache.effects_applied': false,
+          'cache.failure': expect.any(String),
+        });
+      });
+
+      it('opens no span for a mutation whose caller named no trace', async () => {
+        const { spans } = recordSpans();
+        const { ops, results } = harness(host, (op) =>
+          op.kind === 'mutation' ? { data } : {}
+        );
+
+        ops.next(makeRenameMutationOp(22));
+        await tick();
+
+        expect(results[0]?.data).toBe(data);
+        expect(host.cacheActions).toHaveLength(2);
+        expect(spans).toEqual([]);
+      });
+    });
 
     it('skips stale explicit effects and revalidations for a superseded commit', async () => {
       const deletion = {

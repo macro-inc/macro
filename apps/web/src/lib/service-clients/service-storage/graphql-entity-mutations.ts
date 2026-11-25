@@ -1,3 +1,4 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { ThrownResultError } from '@core/util/result';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Telemetry } from '@macro-inc/observability';
@@ -35,8 +36,9 @@ async function mutateEntity<Data, Variables extends AnyVariables>(
   return Telemetry.span(`entity.${operation}`, async (span) => {
     span.setAttr('entity.id', entity.id);
     span.setAttr('entity.type', entity.type);
+    // Its request, queue attempt and cache writes join this span's trace.
     const result = await getEntityGraphqlClient()
-      .mutation(document, variables)
+      .mutation(document, variables, { [TRACE_PARENT_CONTEXT_KEY]: span })
       .toPromise();
     // A result's effects are its cache patches, resolved after the write
     // committed: failing to render them does not undo the mutation.

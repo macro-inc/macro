@@ -15,15 +15,19 @@ import {
 const telemetry = vi.hoisted(() => {
   type Recorded = {
     name: string;
+    /** The trace context the span was opened in. */
+    parent: string | undefined;
     attributes: Record<string, unknown>;
     events: string[];
     errors: unknown[];
     ended: boolean;
   };
   const spans: Recorded[] = [];
+  const active: string[] = [];
   const makeSpan = (name: string) => {
     const recorded: Recorded = {
       name,
+      parent: active.at(-1),
       attributes: {},
       events: [],
       errors: [],
@@ -45,6 +49,7 @@ const telemetry = vi.hoisted(() => {
   };
   return {
     spans,
+    active,
     warn: vi.fn(),
     info: vi.fn(),
     span: vi.fn(
@@ -185,6 +190,37 @@ describe('recoverySkipReason', () => {
 });
 
 describe('createMutationQueueTelemetry', () => {
+  it('opens a live attempt and its enqueue in the trace the caller named', () => {
+    const parent = {
+      run: <T>(work: () => T): T => {
+        telemetry.active.push('entity.move');
+        try {
+          return work();
+        } finally {
+          telemetry.active.pop();
+        }
+      },
+    };
+    const queue = create();
+    queue.enqueue({ uuid: 'item-1', operationName: 'MoveEntities', parent });
+    const live = queue.attempt(claimed());
+    live.sent('live', parent);
+    live.finish('committed');
+    const replay = queue.attempt(claimed({ transactionId: '8' }));
+    replay.sent('replay');
+    replay.finish('committed');
+
+    expect(
+      telemetry.spans
+        .filter((span) => span.name !== 'graphql.mutation_queue.loaded')
+        .map(({ name, parent }) => ({ name, parent }))
+    ).toEqual([
+      { name: 'graphql.mutation_queue.enqueue', parent: 'entity.move' },
+      { name: 'graphql.mutation_queue.attempt', parent: 'entity.move' },
+      { name: 'graphql.mutation_queue.attempt', parent: undefined },
+    ]);
+  });
+
   it('records one attempt span with ids, counts, and outcome only', () => {
     const queue = create();
     queue

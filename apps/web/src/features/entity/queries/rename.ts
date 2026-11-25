@@ -1,7 +1,9 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { renameDatabase } from '@block-database/queries/rename-database';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { renameAgentSession } from '@queries/agent-session/entity-mutations';
 import {
   assertQueryAccount,
@@ -180,6 +182,16 @@ function graphqlRenameType(
 async function performGraphqlRenames(
   operations: EntityRenameOperation[]
 ): Promise<RenameDssEntityMutationData[]> {
+  return await Telemetry.span('entity.rename', (span) =>
+    sendGraphqlRenames(span, operations)
+  );
+}
+
+/** Its enqueue, queue attempt and request join `span`'s trace. */
+async function sendGraphqlRenames(
+  span: Span,
+  operations: EntityRenameOperation[]
+): Promise<RenameDssEntityMutationData[]> {
   const inputs = operations.map(({ entity, newName }) => {
     const type = graphqlRenameType(entity);
     if (!type) throw new Error(`Unsupported GraphQL rename: ${entity.type}`);
@@ -188,7 +200,14 @@ async function performGraphqlRenames(
       displayName: newName,
     };
   });
+  span.setAttr('entity.count', inputs.length);
+  const [first] = inputs;
+  if (inputs.length === 1 && first) {
+    span.setAttr('entity.id', first.entity.id);
+    span.setAttr('entity.type', first.entity.type);
+  }
   const uuid = crypto.randomUUID();
+  span.setAttr('mutation_queue.item_id', uuid);
   const settlement = observeRenameSettlement(uuid, operations);
   let queued = false;
   try {
@@ -196,10 +215,11 @@ async function performGraphqlRenames(
       .mutation<RenameEntitiesMutation, RenameEntitiesMutationVariables>(
         RenameEntitiesDocument,
         { inputs },
-        { optimisticMutation: { uuid } }
+        { optimisticMutation: { uuid }, [TRACE_PARENT_CONTEXT_KEY]: span }
       )
       .toPromise();
     const disposition = optimisticMutationDispositionOf(result);
+    span.setAttr('entity.disposition', disposition?.kind ?? 'none');
     if (disposition?.kind === 'queued') {
       queued = true;
       return operations.map(() => ({ success: true, queued: true }));
