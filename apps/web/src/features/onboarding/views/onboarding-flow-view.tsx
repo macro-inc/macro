@@ -43,6 +43,11 @@ export function OnboardingFlowView(props: {
   step?: string;
   checkoutReturn: CheckoutReturn | undefined;
   onNavigate: (target: string) => void;
+  /**
+   * Called instead of `onNavigate` once onboarding completes, with where the
+   * app would go; the host shows something first. Defaults to `onNavigate`.
+   */
+  onFinished?: (target: string) => void;
   /** Leaves the app for hosted checkout. */
   onRedirect: (url: string) => void;
   onSignedOut: () => void;
@@ -63,7 +68,7 @@ export function OnboardingFlowView(props: {
 
   const finish = createFlowFinish(context, {
     next: () => props.next,
-    onNavigate: props.onNavigate,
+    onNavigate: (target) => (props.onFinished ?? props.onNavigate)(target),
     onRedirect: props.onRedirect,
     completionRollup: () => {
       const accounts = emailAccounts.accounts();
@@ -220,9 +225,9 @@ export function OnboardingFlowView(props: {
             disabled={finish.finishing()}
             onContinueFree={() => choosePlan(() => finish.finishFree())}
             onBackToPro={() => focusStepHeading(content, true)}
-            onStartMax={() =>
+            onStartPlan={(plan, interval) =>
               fireAndForget(
-                finish.startPremiumCheckout('max', 'standard'),
+                finish.startPremiumCheckout(plan, 'standard', interval),
                 'onboarding'
               )
             }

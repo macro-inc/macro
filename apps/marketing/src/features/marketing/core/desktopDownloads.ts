@@ -1,3 +1,5 @@
+import downloadRedirects from '../../../../seo/download-redirects.json';
+
 export const DESKTOP_RELEASE_URL =
   'https://github.com/macro-inc/macro/releases';
 
@@ -6,22 +8,26 @@ export const IOS_APP_STORE_URL =
 export const ANDROID_PLAY_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile';
 
-/** Desktop platforms with published installers, in default display order. */
+/** Desktop systems with published installers, in default display order. */
 export const DESKTOP_PLATFORMS = ['macos', 'linux'] as const;
 
 export type DesktopPlatform = (typeof DESKTOP_PLATFORMS)[number];
 
+/** A desktop installer: one per system, and one per Mac architecture. */
+export type DesktopInstaller = DesktopPlatform | 'macos-intel';
+
 /**
- * Each platform's installer link. The edge redirects these to the current
- * installer (`seo/download-redirects.json`), so the page never names a version.
+ * Each installer's link. The edge redirects these to the current installer
+ * (`seo/download-redirects.json`), so the page never names a version.
  */
-export const DESKTOP_DOWNLOAD_URLS: Record<DesktopPlatform, string> = {
+export const DESKTOP_DOWNLOAD_URLS: Record<DesktopInstaller, string> = {
   macos: '/download/mac',
+  'macos-intel': '/download/mac-intel',
   linux: '/download/linux',
 };
 
 export const DESKTOP_PLATFORM_DETAILS: Record<
-  DesktopPlatform,
+  DesktopInstaller,
   { label: string; requirement: string }
 > = {
   macos: {
@@ -29,8 +35,87 @@ export const DESKTOP_PLATFORM_DETAILS: Record<
     requirement:
       'Requires macOS 14 (Sonoma) or later on a Mac with Apple silicon.',
   },
+  'macos-intel': {
+    label: 'Intel',
+    requirement:
+      'Requires macOS 14 (Sonoma) or later on a Mac with an Intel processor.',
+  },
   linux: { label: 'Linux', requirement: 'x86_64 AppImage' },
 };
+
+export const MAC_CHIP_HINT =
+  'Not sure? Apple menu → About This Mac shows your chip.';
+
+/**
+ * Whether the edge links to the Intel Mac installer. Releases publish it only
+ * when they built it, so its redirect is added once one has; until then an
+ * Intel link would lead nowhere.
+ */
+export function intelMacPublished(
+  redirects: Record<string, string> = downloadRedirects
+): boolean {
+  return DESKTOP_DOWNLOAD_URLS['macos-intel'] in redirects;
+}
+
+export type MacArchitecture = 'arm' | 'x86';
+
+/** `navigator.userAgentData`, which only Chromium browsers have. */
+export interface UserAgentData {
+  getHighEntropyValues(hints: string[]): Promise<{ architecture?: string }>;
+}
+
+/**
+ * The Mac's processor, when the browser says. Every Mac browser's user agent
+ * names Intel, so only Chromium's architecture hint tells the two apart;
+ * Safari and Firefox leave it unknown.
+ */
+export async function readMacArchitecture(
+  data: UserAgentData | undefined
+): Promise<MacArchitecture | undefined> {
+  if (!data) return undefined;
+  try {
+    const { architecture } = await data.getHighEntropyValues(['architecture']);
+    return architecture === 'arm' || architecture === 'x86'
+      ? architecture
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Every installer Macro publishes, Intel Mac's once its link exists. */
+export function publishedInstallers(intel: boolean): DesktopInstaller[] {
+  return intel ? ['macos', 'macos-intel', 'linux'] : [...DESKTOP_PLATFORMS];
+}
+
+/**
+ * The installer for the visitor's own computer. A Mac gets the one for the
+ * chip its browser reports, and Apple silicon when it reports none.
+ */
+export function visitorInstaller(
+  platform: DesktopPlatform,
+  architecture: MacArchitecture | undefined,
+  intel: boolean
+): DesktopInstaller {
+  if (platform === 'macos' && intel && architecture === 'x86')
+    return 'macos-intel';
+  return platform;
+}
+
+/**
+ * What a button or link calls an installer. Beside Intel the Mac installer
+ * names its chip, and off a Mac both also say they are for a Mac.
+ */
+export function installerLabel(
+  installer: DesktopInstaller,
+  intel: boolean,
+  onMac: boolean
+): string {
+  if (installer === 'linux' || !intel)
+    return DESKTOP_PLATFORM_DETAILS[installer].label;
+  const chip = installer === 'macos' ? 'Apple silicon' : 'Intel';
+  return onMac ? chip : `Mac (${chip})`;
+}
 
 export type VisitorPlatform = DesktopPlatform | 'windows';
 

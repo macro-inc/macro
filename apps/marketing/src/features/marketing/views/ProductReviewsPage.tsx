@@ -67,33 +67,33 @@ export function RouteGithub() {
       <div class="github-page">
         <ProductHero
           product="GitHub"
-          title={'From bug report\nto merged pull request.'}
-          description="Track a fix as a task, review and merge the linked pull request from chat, and get GitHub comments and @mentions in your inbox."
+          title="From bug report to merged PR."
+          description="Review diffs, read comments, and merge PRs inside Macro so engineering stays right beside the thread."
           cta="github_hero_get_started"
           tutorial="github"
         />
         <FeaturePageSection
           id="pr-links"
           title={'Link the task, the chat,\nand the pull request.'}
-          description="Paste a GitHub link in chat or a document and hover to see its live status. When a linked pull request opens or merges, the task in Macro updates automatically."
+          description="Paste a GitHub URL in Macro Chat or Macro Docs for live PR status on hover. The linked Macro Tasks item updates itself when the PR opens or merges."
           screen={featureScreens['pr-links']}
         />
         <FeaturePageSection
           id="coding-agents"
           title="@mention Cursor, merge from Macro Chat."
-          description="Coding agents like Cursor live right in your channels. @mention one and ask it to fix something, and when the pull request is ready, merge it right from the channel. The task and the pull request link back to each other."
+          description="Tag Cursor or another coding agent right inside Macro Chat to investigate and open a branch. Review the diff and merge the PR without leaving the channel."
           screen={featureScreens['coding-agents']}
         />
         <FeaturePageSection
           id="pr-tasks"
           title="Macro Tasks move as the pull request moves."
-          description="As you create, review, and merge a pull request, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to go right to the pull request from the task, or vice versa. It opens in a split screen, so you don’t have to leave Macro."
+          description="The linked task moves through In Progress, In Review, and Completed as you create, review, and merge a pull request. Click the GitHub pill to jump between the task and PR in split screen without leaving Macro."
           screen={featureScreens['pr-tasks']}
         />
         <FeaturePageSection
           id="review-inbox"
           title="Pull requests in your inbox."
-          description="GitHub’s own notifications are not very good. When you get a comment on a pull request you authored, or you’re mentioned in one, it appears in your unified inbox alongside your messages, tasks, and important emails, so you never miss a pull request."
+          description="GitHub’s notification inbox is easy to miss. PR comments and @mentions land straight in Macro Home beside your team chat, Macro Tasks, and priority Macro Mail."
           screen={featureScreens['review-inbox']}
         />
         <FeaturePhoneScreens

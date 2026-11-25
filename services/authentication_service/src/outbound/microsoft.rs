@@ -131,11 +131,21 @@ impl MicrosoftIdentityProvider for MicrosoftOAuthProvider {
             .client
             .refresh_microsoft_tokens(token.as_str())
             .await
-            .map_err(|error| match error {
-                MicrosoftRuntimeError::ReauthorizationRequired => {
-                    MicrosoftAuthError::ReauthorizationRequired
+            .map_err(|error| {
+                if let Some(refusal) = error.refusal() {
+                    tracing::warn!(
+                        http.response.status_code = refusal.status,
+                        oauth.error = refusal.error.as_deref(),
+                        microsoft.aadsts = refusal.aadsts,
+                        "microsoft refused a token refresh"
+                    );
                 }
-                _ => MicrosoftAuthError::Unavailable,
+                match error {
+                    MicrosoftRuntimeError::ReauthorizationRequired(_) => {
+                        MicrosoftAuthError::ReauthorizationRequired
+                    }
+                    _ => MicrosoftAuthError::Unavailable,
+                }
             })?;
         Ok(RefreshedGrant {
             access_token: Zeroizing::new(refreshed.access_token),

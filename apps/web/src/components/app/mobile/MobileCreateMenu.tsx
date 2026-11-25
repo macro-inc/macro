@@ -14,6 +14,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { DialogClosesOnNavigation } from './close-on-navigation';
 import { MobileDockIsland } from './MobileDockIsland';
 
 export type MobileCreateMenuItem = {
@@ -83,6 +84,7 @@ export function MobileCreateMenu(props: {
 
   return (
     <Dialog open={open()} onOpenChange={changeOpen} modal>
+      <DialogClosesOnNavigation />
       <MobileDockIsland class="shrink-0">
         <Dialog.Trigger
           ref={triggerRef}

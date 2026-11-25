@@ -1,5 +1,5 @@
-import { PLANS } from '@app/features/paywall/plans';
-import { formatLocale, t } from '@app/lib/i18n';
+import { PLAN_BY_TIER, PLANS, soldAt } from '@app/features/paywall/plans';
+import { t } from '@app/lib/i18n';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { match } from 'ts-pattern';
@@ -20,7 +20,9 @@ export type TeamMemberMenuProps = {
   email?: string;
   /** The seat plan, when the team bills per seat. */
   plan?: PaidPlan;
-  /** A Max seat that moves to Pro at renewal; Keep Max cancels that. */
+  /** The team bills annually, where Pro isn't sold. */
+  annual: boolean;
+  /** A seat that moves to a cheaper plan at renewal; Keep cancels that. */
   pendingDowngrade: boolean;
   planPending: boolean;
   onPlanChange: (plan: PaidPlan) => void;
@@ -49,31 +51,29 @@ type SeatPlanOption = {
   description: string;
 };
 
-/** Every paid plan a seat can be moved to, cheapest first. */
-export function seatPlanOptions(): SeatPlanOption[] {
-  const money = new Intl.NumberFormat(formatLocale(), {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  });
+/** Every paid plan a seat can be moved to, cheapest first, described by its
+ * AI usage: a seat's price depends on whether the team bills monthly or
+ * annually. */
+export function seatPlanOptions(annual: boolean): SeatPlanOption[] {
   return PLANS.flatMap((plan) => {
     if (plan.tier === 'free') return [];
-    const price = money.format(plan.price);
+    if (!soldAt(plan.tier, annual ? 'year' : 'month')) return [];
     return [
       {
         value: plan.tier,
         label: plan.name,
-        description:
-          plan.tier === 'max' ? t('teamMembers.maxPrice', { price }) : price,
+        description: match(plan.tier)
+          .with('premium', () => t('teamMembers.usagePremium'))
+          .with('business', () => t('teamMembers.usageBusiness'))
+          .with('max', () => t('teamMembers.usageMax'))
+          .exhaustive(),
       },
     ];
   });
 }
 
 export function seatPlanName(plan: PaidPlan): string {
-  return (
-    seatPlanOptions().find((option) => option.value === plan)?.label ?? plan
-  );
+  return PLAN_BY_TIER[plan].name;
 }
 
 /** The roles an owner can give a member or admin. */

@@ -23,7 +23,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: e65db8750e500c37d513919b059b04353457aa94b2add4b204f372ce614d0d35
+        checksum/config: 374336de0b98c02e5327ff9a8cec293c9538816ccd381a4453ce012c82844dd0
         storage/size: 10Gi
       labels:
         app.kubernetes.io/component: ingester

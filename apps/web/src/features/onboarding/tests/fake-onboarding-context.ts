@@ -139,8 +139,16 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
           purchasable: true,
         },
         {
+          tier: 'business',
+          monthly_price_cents: 9000,
+          annual_price_per_month_cents: 8000,
+          included_ai_cents_per_seat: 6000,
+          purchasable: true,
+        },
+        {
           tier: 'max',
-          monthly_price_cents: 20000,
+          monthly_price_cents: 22000,
+          annual_price_per_month_cents: 20000,
           included_ai_cents_per_seat: 10000,
           purchasable: true,
         },

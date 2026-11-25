@@ -7,9 +7,15 @@ import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { PeriodPicker } from '../../components/period-picker';
-import type { OpenReportTask } from '../../components/time-breakdown';
-import { BreakdownList } from '../../components/time-breakdown';
-import { TimeKeyLabel } from '../../components/time-key-label';
+import {
+  BreakdownList,
+  type OpenReportTask,
+  OpenTaskRow,
+} from '../../components/time-breakdown';
+import {
+  type TaskLabelParts,
+  TimeKeyLabel,
+} from '../../components/time-key-label';
 import type { TimeSummaryTotal } from '../../components/time-summary-types';
 import { formatLength } from '../../core/format-length';
 import { createProjectTime } from '../../primitives/create-project-time';
@@ -25,6 +31,7 @@ import type { ProjectTimeViewProps } from '../shared/project-time-props';
 /** The tasks with the most time, each opening its task. */
 function MostTime(props: {
   totals: readonly TimeSummaryTotal[];
+  task: TaskLabelParts;
   onOpenTask: OpenReportTask;
 }): JSX.Element {
   return (
@@ -32,23 +39,26 @@ function MostTime(props: {
       <For each={props.totals}>
         {(total) => (
           <li>
-            <button
-              type="button"
-              data-press-surface
-              disabled={!total.key.taskId}
-              class="flex min-h-[44px] w-full items-center gap-2 rounded-md px-2 text-left text-sm"
-              onClick={(event) => {
+            <OpenTaskRow
+              timeKey={total.key}
+              task={props.task}
+              onOpen={(event) => {
                 if (total.key.taskId)
                   props.onOpenTask(total.key.taskId, { event });
               }}
+              class="min-h-[44px] rounded-md px-2 text-sm"
             >
               <span class="flex min-w-0 flex-1 items-center">
-                <TimeKeyLabel timeKey={total.key} person={() => null} />
+                <TimeKeyLabel
+                  timeKey={total.key}
+                  person={() => null}
+                  task={props.task}
+                />
               </span>
               <span class="shrink-0 tabular-nums">
                 {formatLength(total.minutes)}
               </span>
-            </button>
+            </OpenTaskRow>
           </li>
         )}
       </For>
@@ -153,6 +163,7 @@ function MobileProjectTimeBody(
                         <BreakdownList
                           groups={summary().groups}
                           person={props.person}
+                          task={props.task}
                           onOpenTask={props.onOpenTask}
                         />
                       </section>
@@ -163,6 +174,7 @@ function MobileProjectTimeBody(
                           </h3>
                           <MostTime
                             totals={tasks()}
+                            task={props.task}
                             onOpenTask={props.onOpenTask}
                           />
                         </section>

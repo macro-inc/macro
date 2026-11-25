@@ -3,11 +3,48 @@ use super::*;
 #[test]
 fn disabled_and_busy_states_never_start_another_download() {
     assert!(!State::<()>::new(false).begin_check());
-    let mut state = State::new(true);
+    let mut state = State::<()>::new(true);
     assert!(state.begin_check());
     assert!(!state.begin_check());
-    state.downloaded("2.5.1".into(), ());
-    assert!(!state.begin_check());
+}
+
+#[test]
+fn a_ready_update_stays_installable_while_the_feed_is_checked_again() {
+    let mut state = State::new(true);
+    state.begin_check();
+    state.downloaded("2.5.1".into(), 1);
+    assert!(state.begin_check());
+    assert_eq!(state.ready_version(), Some("2.5.1"));
+    // A failed check leaves the ready update as it was.
+    assert!(!state.fail("offline".into()));
+    assert_eq!(
+        state.status,
+        Status::Ready {
+            version: "2.5.1".into()
+        }
+    );
+    assert_eq!(state.begin_install(), Some(1));
+}
+
+#[test]
+fn a_newer_download_replaces_the_ready_update() {
+    let mut state = State::new(true);
+    state.downloaded("2.5.1".into(), 1);
+    assert!(state.begin_check());
+    state.downloaded("2.5.2".into(), 2);
+    assert_eq!(state.ready_version(), Some("2.5.2"));
+    assert_eq!(state.begin_install(), Some(2));
+}
+
+#[test]
+fn an_install_started_during_a_check_keeps_its_status() {
+    let mut state = State::new(true);
+    state.downloaded("2.5.1".into(), 1);
+    state.begin_check();
+    assert_eq!(state.begin_install(), Some(1));
+    assert_eq!(state.ready_version(), None);
+    assert!(!state.fail("offline".into()));
+    assert!(state.is_installing());
 }
 
 #[test]
@@ -42,4 +79,50 @@ fn failed_checks_can_retry() {
         message: "offline".into(),
     };
     assert!(state.begin_check());
+}
+
+#[test]
+fn snapshots_serialize_to_the_frontend_contract() {
+    let mut state = State::new(true);
+    state.failed_install_version = Some("2026.1119.1".into());
+    state.downloaded("2026.1119.1".into(), ());
+    assert_eq!(
+        serde_json::to_value(state.snapshot()).unwrap(),
+        serde_json::json!({
+            "status": "Ready",
+            "data": { "version": "2026.1119.1" },
+            "failedInstallVersion": "2026.1119.1",
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(Snapshot::disabled()).unwrap(),
+        serde_json::json!({ "status": "Disabled", "failedInstallVersion": null })
+    );
+}
+
+/// UPDATE_NATIVE_UPDATE_STATUS_TYPES=1 cargo test ... native_update_status_wire_types
+#[test]
+fn native_update_status_wire_types() {
+    let generated = specta_typescript::Typescript::default()
+        .export(
+            &specta::Types::default().register::<Snapshot>(),
+            specta_serde::Format,
+        )
+        .expect("export native update status types");
+    let generated = generated
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../src/lib/tauri/generated/native-update-status.ts");
+    if std::env::var_os("UPDATE_NATIVE_UPDATE_STATUS_TYPES").is_some() {
+        std::fs::create_dir_all(output.parent().unwrap()).expect("create generated directory");
+        std::fs::write(&output, &generated).expect("write types");
+    }
+    assert_eq!(
+        std::fs::read_to_string(output).expect("generated types"),
+        generated
+    );
 }

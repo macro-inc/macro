@@ -993,7 +993,6 @@ export function ChannelInput(props: ChannelInputProps) {
       </Show>
       <Dynamic
         component={props.flat ? 'div' : ComposerSurface}
-        data-glass-input={props.flat ? undefined : ''}
         onFocusOut={(e: FocusEvent & { currentTarget: HTMLElement }) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;

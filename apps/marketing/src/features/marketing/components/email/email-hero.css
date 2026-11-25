@@ -45,13 +45,13 @@
 
 .feature-page .email-page-hero > .email-page-hero-description {
   contain: inline-size;
-  width: calc(100% - 10px);
+  width: calc(100% - 24px);
   max-width: 100%;
   white-space: normal;
   color: var(--feature-copy-color, var(--color-ink-muted));
   font-size: 17.5px;
   line-height: 1.65;
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 .email-page-hero .feature-page-cta {

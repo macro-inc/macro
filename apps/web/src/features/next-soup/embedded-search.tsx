@@ -11,6 +11,7 @@ import { SearchFilterControls } from './soup-view/filters-bar/search/search-filt
 import { createSearchFiltersController } from './soup-view/filters-bar/search/search-filters-state';
 import { SearchbarInput } from './soup-view/filters-bar/soup-view-search-bar';
 import { createTagOptions } from './soup-view/filters-bar/tag-filter-state';
+import { createSearchOperatorLookup } from './soup-view/search-operator-lookup';
 
 /** Global Search's editor, facets, and results with a transient host-owned draft. */
 export function EmbeddedSearch(props: {
@@ -37,6 +38,7 @@ export function EmbeddedSearch(props: {
     text: () => props.query,
     filters: () => props.filters,
     enabled: () => props.enabled && !paused(),
+    operatorLookup: createSearchOperatorLookup(tags),
   });
   const revision = createMemo(() =>
     JSON.stringify([props.query, props.filters])
@@ -45,6 +47,7 @@ export function EmbeddedSearch(props: {
   return (
     <div class="space-y-3" aria-label="Global search">
       <SearchbarInput
+        operators
         value={props.query}
         onChange={props.onQueryChange}
         label="Search for"

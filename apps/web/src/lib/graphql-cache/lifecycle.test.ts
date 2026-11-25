@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNoopCacheHost } from './host/noop-host';
 import { createRetirableCacheHost } from './host/retirable-host';
 import type { CacheHost } from './host/types';
+import { INITIAL_CACHE_REVISION } from './protocol';
 
 function hostWithClear(clear: () => Promise<unknown>): CacheHost {
   return { clear } as unknown as CacheHost;
@@ -168,6 +169,231 @@ describe('clearRegisteredCaches', () => {
       '00000000-0000-4000-8000-000000000001'
     );
   });
+
+  it('rotates the scope when a cache is not wiped within ten seconds, and lets the wipe end', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    const wipes: (() => void)[] = [];
+    const dispose = vi.fn();
+    const {
+      clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
+      recordSessionCacheWrite,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    // The same module instance the lifecycle uses.
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    const host = createRetirableCacheHost({
+      ...createNoopCacheHost(),
+      disabled: false,
+      clear: () =>
+        new Promise((resolve) =>
+          wipes.push(() => resolve(INITIAL_CACHE_REVISION))
+        ),
+      dispose,
+    });
+    registerCacheHost(host, undefined, LOGOUT_CLEAR_TIMEOUT_MS);
+    recordSessionCacheWrite(host, 'Contact:1');
+    let ended = false;
+    const clearing = clearRegisteredCaches().then(() => {
+      ended = true;
+    });
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(ended).toBe(false);
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('current-scope');
+
+    await vi.advanceTimersByTimeAsync(1);
+    await clearing;
+    expect(localStorage.getItem('graphql-cache:scope')).not.toBe(
+      'current-scope'
+    );
+    // The old storage stays open until its wipe ends.
+    host.dispose();
+    expect(dispose).not.toHaveBeenCalled();
+    expect(wipes).toHaveLength(1);
+    wipes[0]?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispose).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it('lets go of a wipe that never ends, long after its logout', async () => {
+    vi.useFakeTimers();
+    const dispose = vi.fn();
+    const {
+      clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
+      recordSessionCacheWrite,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    const host = createRetirableCacheHost({
+      ...createNoopCacheHost(),
+      disabled: false,
+      clear: () => new Promise(() => undefined),
+      dispose,
+    });
+    const recover = vi.fn();
+    registerCacheHost(host, recover, LOGOUT_CLEAR_TIMEOUT_MS);
+    recordSessionCacheWrite(host, 'Contact:1');
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(LOGOUT_CLEAR_TIMEOUT_MS);
+    await clearing;
+    host.dispose();
+    expect(dispose).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(recover).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('starts another host for a wipe that failed only while the first is not given up', async () => {
+    vi.useFakeTimers();
+    const {
+      clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    const wipes: ((error: Error) => void)[] = [];
+    const failing = () => new Promise<never>((_, reject) => wipes.push(reject));
+    const recoveredDispose = vi.fn();
+    const recover = vi.fn(() =>
+      createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: failing,
+        dispose: recoveredDispose,
+      })
+    );
+    registerCacheHost(
+      createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: failing,
+      }),
+      recover,
+      LOGOUT_CLEAR_TIMEOUT_MS
+    );
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(LOGOUT_CLEAR_TIMEOUT_MS);
+    await clearing;
+
+    // What the account left on the device is still to be wiped.
+    wipes[0]?.(new Error('owner lost'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(recover).toHaveBeenCalledOnce();
+    expect(wipes).toHaveLength(2);
+    expect(recoveredDispose).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(recoveredDispose).toHaveBeenCalledOnce();
+    // Nothing is left that could reject unseen.
+    wipes[1]?.(new Error('owner lost'));
+    await vi.advanceTimersByTimeAsync(0);
+    vi.useRealTimers();
+  });
+
+  it('leaves no rejection unhandled when a wipe fails after its logout', async () => {
+    vi.useFakeTimers();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const {
+      clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    const wipes: ((error: Error) => void)[] = [];
+    const recover = vi.fn();
+    registerCacheHost(
+      {
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: () => new Promise<never>((_, reject) => wipes.push(reject)),
+      },
+      recover,
+      LOGOUT_CLEAR_TIMEOUT_MS
+    );
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(LOGOUT_CLEAR_TIMEOUT_MS);
+    await clearing;
+    vi.useRealTimers();
+
+    wipes[0]?.(new Error('owner lost'));
+    // Node reports one a turn after the rejection.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    process.off('unhandledRejection', unhandled);
+    expect(recover).toHaveBeenCalledOnce();
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it('waits for a cache registered without a limit, and keeps its scope', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    const { clearRegisteredCaches, registerCacheHost } = await import(
+      './lifecycle'
+    );
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    let wiped: () => void = () => undefined;
+    registerCacheHost(
+      createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: () =>
+          new Promise((resolve) => {
+            wiped = () => resolve(INITIAL_CACHE_REVISION);
+          }),
+      })
+    );
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(60_000);
+    wiped();
+    await clearing;
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('current-scope');
+    vi.useRealTimers();
+  });
+
+  it.each(['logout', 'login'] as const)(
+    'starts no other host for a paused one at %s: it would meet the same outage',
+    async (event) => {
+      localStorage.setItem('graphql-cache:scope', 'current-scope');
+      const {
+        clearRegisteredCaches,
+        LOGOUT_CLEAR_TIMEOUT_MS,
+        recordSessionCacheWrite,
+        registerCacheHost,
+        replaceCacheWriteSession,
+      } = await import('./lifecycle');
+      const { createRetirableCacheHost } = await import(
+        './host/retirable-host'
+      );
+      const outage = async () => {
+        throw new Error('the database is held by another context');
+      };
+      const host = createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: true,
+        paused: true,
+        clear: outage,
+        deleteRecords: outage,
+      });
+      const recover = vi.fn(() =>
+        createRetirableCacheHost({ ...createNoopCacheHost(), disabled: false })
+      );
+      registerCacheHost(host, recover, LOGOUT_CLEAR_TIMEOUT_MS);
+      recordSessionCacheWrite(host, 'Contact:1');
+      if (event === 'login')
+        await expect(replaceCacheWriteSession().ready).rejects.toThrow(
+          'held by another context'
+        );
+      else await clearRegisteredCaches();
+      expect(recover).not.toHaveBeenCalled();
+      // What could not be wiped is not opened again.
+      expect(
+        localStorage.getItem('graphql-cache:scope') === 'current-scope'
+      ).toBe(event === 'login');
+    }
+  );
 
   it('preserves a persisted scope on login without session-written records or a mounted host', async () => {
     localStorage.setItem('graphql-cache:scope', 'pending-drafts-scope');

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_captcha_solves SET finished_at = now(), outcome = $2, task_id = $3\n               WHERE solve_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d91a6645e72c82c8dd6c86bd008cffc98e14b85addd7a53963b26ff54f3ef411"
+}

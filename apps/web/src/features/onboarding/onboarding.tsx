@@ -1,12 +1,17 @@
 import { InviteOfferPanel } from '@app/features/gtm-invite/InviteOfferPanel';
+import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { storeListingUrl } from '@core/mobile/native-update-link';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { createEffect, onMount } from 'solid-js';
+import { createEffect, createSignal, onMount, Show } from 'solid-js';
 import { OnboardingProvider } from './context/onboarding-context';
 import { parseCheckoutReturn } from './core/checkout';
+import { phoneStorePlatform } from './core/desktop-handoff';
 import { parseOnboardingStepParam } from './core/steps';
 import { createAppOnboardingContext } from './create-app-onboarding-context';
+import { DesktopHandoffView } from './views/desktop-handoff-view';
 import { OnboardingFlowView } from './views/onboarding-flow-view';
 import { SignupJourneyView } from './views/signup-journey-view';
 
@@ -31,29 +36,51 @@ export function Onboarding(props: { next?: string }) {
     if (params.step === undefined) return;
     setParams({ step: undefined }, { replace: true });
   });
+  // Phone browsers end on "Macro is better on desktop" before entering the
+  // app; computers and the native apps go straight in. Decided as onboarding
+  // finishes, so a rotation mid-flow counts. A phone held sideways is wider
+  // than `isMobile()`'s 640px and goes straight in, like a tablet.
+  const storePlatform = phoneStorePlatform(navigator.userAgent);
+  const [handoffTarget, setHandoffTarget] = createSignal<string>();
+  const finished = (target: string) => {
+    if (isMobile() && !isNativeMobilePlatform()) setHandoffTarget(target);
+    else navigate(target, { replace: true });
+  };
+  const flow = () => (
+    <OnboardingFlowView
+      next={
+        props.next ??
+        (typeof params.next === 'string' ? params.next : undefined)
+      }
+      step={requestedStep}
+      checkoutReturn={parseCheckoutReturn(params)}
+      onNavigate={(target) => navigate(target, { replace: true })}
+      onFinished={finished}
+      onRedirect={(url) => {
+        window.location.href = url;
+      }}
+      onSignedOut={() => navigate('/login', { replace: true })}
+      renderInviteOffer={(offer, actions) => (
+        <InviteOfferPanel
+          offer={offer}
+          finishing={actions.finishing()}
+          onStartCheckout={actions.onClaim}
+          onContinueFree={actions.onContinueFree}
+        />
+      )}
+    />
+  );
   return (
     <OnboardingProvider value={context}>
-      <OnboardingFlowView
-        next={
-          props.next ??
-          (typeof params.next === 'string' ? params.next : undefined)
-        }
-        step={requestedStep}
-        checkoutReturn={parseCheckoutReturn(params)}
-        onNavigate={(target) => navigate(target, { replace: true })}
-        onRedirect={(url) => {
-          window.location.href = url;
-        }}
-        onSignedOut={() => navigate('/login', { replace: true })}
-        renderInviteOffer={(offer, actions) => (
-          <InviteOfferPanel
-            offer={offer}
-            finishing={actions.finishing()}
-            onStartCheckout={actions.onClaim}
-            onContinueFree={actions.onContinueFree}
+      <Show when={handoffTarget()} keyed fallback={flow()}>
+        {(target) => (
+          <DesktopHandoffView
+            storeUrl={storeListingUrl(storePlatform)}
+            platform={storePlatform}
+            onContinue={() => navigate(target, { replace: true })}
           />
         )}
-      />
+      </Show>
     </OnboardingProvider>
   );
 }

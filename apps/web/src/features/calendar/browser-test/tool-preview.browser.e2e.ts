@@ -1,8 +1,18 @@
-import { expect, type Page, test } from '@playwright/test';
-import { answerCalendar } from './calendar-routes';
+import { expect, type Locator, type Page, test } from '@playwright/test';
+import {
+  answerCalendar,
+  organizedEvent,
+  outlookCalendar,
+  type WireItem,
+  weeklyReview,
+} from './calendar-routes';
 import { openFixture } from './serve-from-node';
 
-async function openPreview(page: Page, timeFormat: '12-hour' | '24-hour') {
+async function openPreview(
+  page: Page,
+  timeFormat: '12-hour' | '24-hour',
+  options: { events?: WireItem[]; created?: string } = {}
+) {
   // The calendar only reads ranges near today.
   await page.clock.setFixedTime(new Date('2030-01-02T15:00:00Z'));
   await page.addInitScript(
@@ -13,9 +23,39 @@ async function openPreview(page: Page, timeFormat: '12-hour' | '24-hour') {
       ),
     timeFormat
   );
-  await answerCalendar(page, { events: [] });
-  await openFixture(page, '/tool-preview.html');
-  await expect(page.getByText('Drafted review')).toBeVisible();
+  await answerCalendar(page, {
+    events: options.events ?? [],
+    // The draft's calendar, in the color the fixture's form gives it.
+    calendars: [{ ...outlookCalendar(), color: '#609fe2' }],
+  });
+  await openFixture(
+    page,
+    options.created
+      ? `/tool-preview.html?created=${options.created}`
+      : '/tool-preview.html'
+  );
+  await expect(page.getByText('Drafted review').first()).toBeVisible();
+}
+
+/** The event the draft became: the same hour, on the same calendar. */
+const createdReview = () =>
+  organizedEvent({
+    id: 'event-created',
+    title: 'Drafted review',
+    startsAt: '2030-01-02T19:00:00Z',
+    endsAt: '2030-01-02T20:00:00Z',
+    calendarIds: ['calendar-1'],
+  });
+
+function chip(page: Page, title: string): Locator {
+  return page.locator('.fc-event').filter({ hasText: title });
+}
+
+async function look(chip: Locator) {
+  return chip.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { fill: style.backgroundColor, opacity: style.opacity };
+  });
 }
 
 async function capture(page: Page, name: string) {
@@ -45,5 +85,35 @@ test.describe("the agent card's preview of a drafted event", () => {
     await openPreview(page, '12-hour');
     await expect(page.getByText('2pm', { exact: true }).first()).toBeVisible();
     await capture(page, 'tool-preview-12-hour');
+  });
+
+  // Class web-cal-grid-rendering: when this fails, a card whose event was
+  // created shows the dark draft and the created event side by side.
+  test('shows the created event in the draft’s place, in its calendar’s color', async ({
+    page,
+  }) => {
+    await openPreview(page, '12-hour', {
+      events: [weeklyReview(), createdReview()],
+      created: 'event-created',
+    });
+    await expect(chip(page, 'Weekly review')).toHaveCount(1);
+    await expect(chip(page, 'Drafted review')).toHaveCount(1);
+    const created = await look(chip(page, 'Drafted review'));
+    const other = await look(chip(page, 'Weekly review'));
+    expect(created.fill).toBe(other.fill);
+    expect(created.opacity).toBe('1');
+    expect(Number(other.opacity)).toBeLessThan(1);
+    await capture(page, 'tool-preview-created');
+  });
+
+  test('keeps the draft on a card that created nothing', async ({ page }) => {
+    await openPreview(page, '12-hour', { events: [weeklyReview()] });
+    await expect(chip(page, 'Weekly review')).toHaveCount(1);
+    await expect(chip(page, 'Drafted review')).toHaveCount(1);
+    const draft = await look(chip(page, 'Drafted review'));
+    const other = await look(chip(page, 'Weekly review'));
+    expect(draft.fill).not.toBe(other.fill);
+    expect(draft.opacity).toBe('1');
+    await capture(page, 'tool-preview-draft');
   });
 });

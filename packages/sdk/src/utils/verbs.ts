@@ -94,7 +94,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     checked: 'checkScheduledAction',
     listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
     read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
-    created: 'createScheduledAction addSuggestion',
+    created: 'createScheduledAction addSuggestion nameSuggestionTopic',
     deleted: 'deleteScheduledAction',
     edited:
       'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
@@ -272,7 +272,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       findCrmPipelineEntries searchCrmPipelineEntries
     `,
     queried: `
-      previewCrmEmailRules validateCrmEmailRules
+      previewCrmEmailRules validateCrmEmailRules previewCrmMerge
       queryCrmPipelineRows queryDatabases postItemsSoupAst
       calculateSpreadsheet
     `,
@@ -307,7 +307,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
       applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail addCrmCompanyDomain removeCrmCompanyDomain updateCrmPipelineEntries updateSavedViewDefinition setSavedViewAppearance writeDocumentMarkdown
-      updateTaskTemplate updateTimeEntry
+      updateTaskTemplate updateTimeEntry commitCrmMerge
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `

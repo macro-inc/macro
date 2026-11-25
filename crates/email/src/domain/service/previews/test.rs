@@ -85,3 +85,50 @@ fn ored_thread_ids(expr: &Expr<EmailLiteral>) -> Vec<Uuid> {
         }
     }
 }
+
+#[test]
+fn a_short_page_that_goes_on_gets_a_cursor_below_where_the_read_walked() {
+    use models_pagination::{Base64Str, Cursor, CursorVal, Paginated};
+
+    let walked_to = (
+        chrono::DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc),
+        uuid::Uuid::from_u128(7),
+    );
+    let short: PaginatedCursor<u8, uuid::Uuid, SimpleSortMethod, ()> =
+        Paginated::from_parts(vec![], None);
+    let page = continued(short, Some(walked_to), 50, SimpleSortMethod::UpdatedAt);
+    let cursor = page
+        .next_cursor
+        .expect("the list goes on")
+        .decode_json()
+        .unwrap();
+    assert_eq!((cursor.val.last_val, cursor.id), walked_to);
+    assert_eq!(cursor.limit, 50);
+
+    // The end of the mail, and a full page's own cursor, are left as they are.
+    let end: PaginatedCursor<u8, uuid::Uuid, SimpleSortMethod, ()> =
+        Paginated::from_parts(vec![1], None);
+    assert!(
+        continued(end, None, 50, SimpleSortMethod::UpdatedAt)
+            .next_cursor
+            .is_none()
+    );
+    let own = Base64Str::encode_json(Cursor {
+        id: uuid::Uuid::from_u128(1),
+        limit: 1,
+        val: CursorVal {
+            sort_type: SimpleSortMethod::UpdatedAt,
+            last_val: walked_to.0,
+        },
+        filter: (),
+    });
+    let full: PaginatedCursor<u8, uuid::Uuid, SimpleSortMethod, ()> =
+        Paginated::from_parts(vec![1], Some(own));
+    let kept = continued(full, Some(walked_to), 1, SimpleSortMethod::UpdatedAt);
+    assert_eq!(
+        kept.next_cursor.unwrap().decode_json().unwrap().id,
+        uuid::Uuid::from_u128(1)
+    );
+}

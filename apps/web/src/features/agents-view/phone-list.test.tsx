@@ -78,11 +78,6 @@ vi.mock(
       props.children,
   })
 );
-vi.mock('./views/shared/phone-conversation-row/phone-conversation-row', () => ({
-  PhoneConversationRow: (props: { conversation: AgentConversationEntity }) => (
-    <div>{props.conversation.name}</div>
-  ),
-}));
 vi.mock('./views/mobile/filters/filters', () => ({
   ConversationFiltersDrawer: () => <button>Filter conversations</button>,
 }));
@@ -272,10 +267,26 @@ describe('phone Agents list', () => {
     expect(heading.className).toContain('text-[20px]/[26px]');
     const conversations = screen.getByRole('region', { name: 'Conversations' });
     expect(header?.parentElement).toBe(conversations);
+    expect(waiting.parentElement).toBe(conversations.parentElement);
+    expect(favorites.parentElement).toBe(conversations.parentElement);
+    expect(conversations.parentElement?.classList.contains('px-3')).toBe(true);
     expect(row.closest('section')).toBe(conversations);
     for (const section of [waiting, favorites, conversations]) {
       const header = section.querySelector('header')!;
       expect(header.parentElement).toBe(section);
+      const row = section.querySelector<HTMLElement>('[data-press-surface]')!;
+      const rowButton = row.querySelector('button')!;
+      const leading = rowButton.firstElementChild!;
+      // One shared 12px outer gutter plus the common 12px inner inset gives 24px.
+      expect(header.classList.contains('px-3')).toBe(true);
+      expect(row.classList.contains('px-3')).toBe(true);
+      expect(rowButton.classList.contains('gap-2')).toBe(true);
+      expect(leading.classList.contains('size-5')).toBe(true);
+      expect(leading.classList.contains('shrink-0')).toBe(true);
+      if (section !== conversations) {
+        expect(header.firstElementChild?.className).toBe(leading.className);
+        expect(header.classList.contains('gap-2')).toBe(true);
+      }
       expect(
         [...header.classList].filter((name) =>
           /^(sticky|fixed|absolute|relative|top-|inset-|z-|bg-)/.test(name)
@@ -332,6 +343,23 @@ describe('phone Agents list', () => {
       },
     ]);
     render(() => <Harness archived rows={rows()} />);
+    const heading = screen.getByRole('heading', { name: 'Archived' });
+    const section = heading.closest('section')!;
+    const header = heading.closest('header')!;
+    const row = screen
+      .getByText('Archived session')
+      .closest('[data-press-surface]')!;
+    const rowButton = row.querySelector('button')!;
+    expect(section.parentElement?.classList.contains('px-3')).toBe(true);
+    expect(header.classList.contains('px-3')).toBe(true);
+    expect(row.classList.contains('px-3')).toBe(true);
+    expect(rowButton.classList.contains('gap-2')).toBe(true);
+    expect(rowButton.firstElementChild?.classList.contains('size-5')).toBe(
+      true
+    );
+    expect(rowButton.firstElementChild?.classList.contains('shrink-0')).toBe(
+      true
+    );
     fireEvent.click(
       screen.getByRole('button', { name: 'Search conversations' })
     );

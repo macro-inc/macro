@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -10,6 +10,10 @@ const state = vi.hoisted(() => ({
   enabled: false,
   mailboxEmail: null as string | null,
   mailboxLinkId: null as string | null,
+  openWithSplit: vi.fn(),
+  teamDomains: [] as string[],
+  archivedTeamDomains: {} as Record<string, string>,
+  canRemoveTeamDomains: false,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -19,6 +23,7 @@ vi.mock('@app/observability/flow', () => ({ usePending: () => {} }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     connectMailbox: state.connectMailbox,
+    createNavigation: () => ({ openWithSplit: state.openWithSplit }),
     createEmailPolicy: () => ({
       scope: () => 'team-1',
       query: {
@@ -42,9 +47,10 @@ vi.mock('../context/crm-context', () => ({
               enabled: state.enabled,
               mailboxEmail: state.mailboxEmail,
               mailboxLinkId: state.mailboxLinkId,
-              teamDomains: [],
+              teamDomains: state.teamDomains,
               personalDomains: [],
-              canRemoveTeamDomains: false,
+              archivedTeamDomains: state.archivedTeamDomains,
+              canRemoveTeamDomains: state.canRemoveTeamDomains,
             },
         refetch: vi.fn(),
       },
@@ -65,6 +71,37 @@ afterEach(() => {
   state.policyFailed = false;
   state.mailboxEmail = null;
   state.mailboxLinkId = null;
+  state.openWithSplit.mockReset();
+  state.teamDomains = [];
+  state.archivedTeamDomains = {};
+  state.canRemoveTeamDomains = false;
+});
+
+it('opens an archived company in this split, or beside it on shift-click, without taking focus', async () => {
+  state.canRemoveTeamDomains = true;
+  state.teamDomains = ['archived.example.com'];
+  state.archivedTeamDomains = { 'archived.example.com': 'company-1' };
+  const user = userEvent.setup();
+  render(() => <CrmEmailPrivacySettings />);
+  const open = screen.getByRole('button', {
+    name: 'Open the archived company for archived.example.com',
+  });
+
+  await user.click(open);
+  expect(state.openWithSplit).toHaveBeenLastCalledWith(
+    { type: 'company', id: 'company-1' },
+    { activate: true, preferNewSplit: false }
+  );
+  // Focus moving to the button would let this split take activation back.
+  expect(document.activeElement).not.toBe(open);
+
+  await user.keyboard('{Shift>}');
+  await user.click(open);
+  await user.keyboard('{/Shift}');
+  expect(state.openWithSplit).toHaveBeenLastCalledWith(
+    { type: 'company', id: 'company-1' },
+    { activate: true, preferNewSplit: true }
+  );
 });
 
 it('offers a keyboard-operable Connect email that starts the mailbox connection without opting in', async () => {
@@ -101,6 +138,29 @@ it('leaves a connected mailbox with sharing off and no Connect email', () => {
   expect(state.mutate).not.toHaveBeenCalled();
 });
 
+it('puts the opt-in beside the sharing status, before the blacklists', async () => {
+  const user = userEvent.setup();
+  state.mailboxEmail = 'member@example.com';
+  state.mailboxLinkId = '00000000-0000-4000-8000-000000000045';
+  render(() => <CrmEmailPrivacySettings />);
+
+  const contribution = within(
+    screen
+      .getByRole('heading', { name: 'Your email contribution' })
+      .closest('section') as HTMLElement
+  );
+  contribution.getByText('Sharing off');
+  const share = contribution.getByRole('button', {
+    name: 'Share my emails with CRM',
+  });
+  await user.tab();
+  expect(document.activeElement).toBe(share);
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole('textbox', { name: 'Domain to block for the team' })
+  );
+});
+
 it('keys Connect email on the linked mailbox, not its address', () => {
   state.mailboxLinkId = '00000000-0000-4000-8000-000000000045';
   render(() => <CrmEmailPrivacySettings />);
@@ -113,9 +173,14 @@ it('keeps the sharing status instead of Connect email while sharing is on', () =
   state.enabled = true;
   render(() => <CrmEmailPrivacySettings />);
 
-  screen.getByText('Sharing on');
+  const contribution = within(
+    screen
+      .getByRole('heading', { name: 'Your email contribution' })
+      .closest('section') as HTMLElement
+  );
+  contribution.getByText('Sharing on');
   expect(screen.queryByRole('button', { name: 'Connect email' })).toBeNull();
-  screen.getByRole('button', { name: 'Stop sharing my emails' });
+  contribution.getByRole('button', { name: 'Stop sharing my emails' });
 });
 
 it('keeps the load error and retry without offering Connect email for an unknown mailbox', () => {

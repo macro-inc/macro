@@ -1,7 +1,11 @@
 //! The mail events the email services publish for the rest of Macro:
-//! activity, routines and suggestions hear of mail through them.
+//! activity, routines and suggestions hear of mail through them, and Email
+//! labeled routines of the labels a thread gains.
 
-use email_e2e::{DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, eventually};
+#![recursion_limit = "256"]
+
+use email_e2e::outlook_emulator::MessageChange;
+use email_e2e::{DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, User, eventually};
 use serde_json::{Value, json};
 
 /// The events of one kind published about the inbox so far.
@@ -105,4 +109,259 @@ async fn gmail_received_and_sent_mail_is_published_once() -> Result<(), Report> 
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_received_and_sent_mail_is_published_once() -> Result<(), Report> {
     received_and_sent_mail_is_published_once(Provider::Outlook).await
+}
+
+/// A label of the inbox owner's own, made in Macro: its Macro id, and how the
+/// provider names it on a message (a Gmail label id, an Outlook category).
+async fn own_label(user: &User, inbox: &Inbox, name: &str) -> Result<(String, String), Report> {
+    let created = inbox
+        .post("/email/labels", Some(&json!({ "label_name": name })))
+        .await?
+        .ok()?;
+    let id = created["label"]["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let at_provider = eventually(
+        "Macro to know the provider's label",
+        DEFAULT_TIMEOUT,
+        async || {
+            let labels = user.get("/email/labels").await?.ok()?;
+            Ok(labels["labels"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|label| label["id"] == id.as_str())
+                .and_then(|label| label["providerLabelId"].as_str())
+                .filter(|known| inbox.provider() == Provider::Outlook || *known != name)
+                .map(str::to_owned))
+        },
+    )
+    .await?;
+    let on_message = match inbox.provider() {
+        Provider::Gmail => at_provider,
+        Provider::Outlook => name.to_owned(),
+    };
+    Ok((id, on_message))
+}
+
+/// The labels an event says its thread gained.
+fn gained(metadata: &Value) -> Vec<String> {
+    metadata["labels_gained"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|id| id.as_str().map(str::to_owned))
+        .collect()
+}
+
+/// The label events about the inbox that name labels a thread gained.
+async fn gains(stack: &Stack, inbox: &Inbox) -> Result<Vec<Value>, Report> {
+    Ok(events_of(stack, inbox, "email.thread_labels_updated")
+        .await?
+        .into_iter()
+        .map(|event| event["metadata"].clone())
+        .filter(|metadata| !gained(metadata).is_empty())
+        .collect())
+}
+
+/// Waits for a label event naming a label the thread gained.
+async fn wait_for_gain(stack: &Stack, inbox: &Inbox, thread: &Value) -> Result<Value, Report> {
+    eventually(
+        &format!("a label the thread {thread} gained"),
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok(gains(stack, inbox)
+                .await?
+                .into_iter()
+                .find(|metadata| metadata["thread_id"] == *thread))
+        },
+    )
+    .await
+}
+
+/// Waits until `count` messages have been published as received, and
+/// returns their metadata.
+async fn wait_for_received(
+    stack: &Stack,
+    inbox: &Inbox,
+    count: usize,
+) -> Result<Vec<Value>, Report> {
+    eventually(
+        &format!("{count} received messages in {}", inbox.email()),
+        DEFAULT_TIMEOUT,
+        async || {
+            let received: Vec<Value> = events_of(stack, inbox, "email.message_received")
+                .await?
+                .into_iter()
+                .map(|event| event["metadata"].clone())
+                .collect();
+            Ok((received.len() >= count).then_some(received))
+        },
+    )
+    .await
+}
+
+/// A label the inbox's owner puts on a message at the provider is published
+/// once, as a label its thread gained; a reply that arrives with a label the
+/// thread already has gains nothing.
+///
+/// When it fails: routines on Email labeled never start for labels added in
+/// Gmail or Outlook, or start again for each message of a labeled thread.
+async fn a_label_added_at_the_provider_is_published_as_gained(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let (label, on_message) = own_label(&ada, &inbox, "Clients").await?;
+
+    let first = inbox.deliver(&Mail {
+        message_id: Some("site-visit@example.net".to_owned()),
+        ..Mail::new(
+            "Carol <carol@example.net>",
+            "Site visit",
+            "Is Tuesday fine?",
+        )
+    })?;
+    let thread = inbox.wait_for_preview("inbox", "Site visit").await?["id"].clone();
+    let received = wait_for_received(&stack, &inbox, 1).await?;
+    assert!(gained(&received[0]).is_empty(), "{received:?}");
+
+    match provider {
+        Provider::Gmail => {
+            stack
+                .gmail()
+                .modify_labels(inbox.email(), &first.id, &[on_message.clone()], &[])?
+        }
+        Provider::Outlook => stack.outlook().update_message(
+            inbox.email(),
+            &first.id,
+            &MessageChange {
+                categories: Some(vec![on_message.clone()]),
+                ..Default::default()
+            },
+        )?,
+    }
+    let labeled = wait_for_gain(&stack, &inbox, &thread).await?;
+    assert_eq!(gained(&labeled), [label], "{labeled}");
+    assert_eq!(labeled.get("automated"), None, "{labeled}");
+
+    inbox.deliver(
+        &Mail::new(
+            "Carol <carol@example.net>",
+            "Re: Site visit",
+            "Or Wednesday.",
+        )
+        .in_reply_to("site-visit@example.net")
+        .labeled(&on_message),
+    )?;
+    let received = wait_for_received(&stack, &inbox, 2).await?;
+    assert_eq!(received[1]["thread_id"], thread, "{received:?}");
+    assert!(gained(&received[1]).is_empty(), "{received:?}");
+    let gains = gains(&stack, &inbox).await?;
+    assert_eq!(gains.len(), 1, "{gains:?}");
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_label_added_at_the_provider_is_published_as_gained() -> Result<(), Report> {
+    a_label_added_at_the_provider_is_published_as_gained(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_label_added_at_the_provider_is_published_as_gained() -> Result<(), Report> {
+    a_label_added_at_the_provider_is_published_as_gained(Provider::Outlook).await
+}
+
+/// Mail that arrives with one of its owner's labels, as a mail filter puts
+/// on, is published as received with the label its new thread gained.
+///
+/// When it fails: routines on Email labeled miss mail that is filed as it
+/// arrives, which is how most labels are put on.
+async fn mail_that_arrives_labeled_is_published_with_its_labels(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let (label, on_message) = own_label(&ada, &inbox, "Invoices").await?;
+
+    inbox.deliver(
+        &Mail::new("Billing <billing@example.net>", "Invoice 42", "Attached.").labeled(&on_message),
+    )?;
+    let thread = inbox.wait_for_preview("inbox", "Invoice 42").await?["id"].clone();
+    let received = wait_for_received(&stack, &inbox, 1).await?;
+    assert_eq!(received[0]["thread_id"], thread, "{received:?}");
+    assert_eq!(gained(&received[0]), [label], "{received:?}");
+    // Arriving labeled is one event: no label event says it again.
+    assert!(gains(&stack, &inbox).await?.is_empty());
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_that_arrives_labeled_is_published_with_its_labels() -> Result<(), Report> {
+    mail_that_arrives_labeled_is_published_with_its_labels(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_mail_that_arrives_labeled_is_published_with_its_labels() -> Result<(), Report> {
+    mail_that_arrives_labeled_is_published_with_its_labels(Provider::Outlook).await
+}
+
+/// A category the owner puts on in Macro is published as theirs; the same
+/// category put on by an agent's tool is marked automated, so it starts no
+/// routine. Outlook only: there the mailbox workers publish the write from
+/// the outbox, while a Gmail write is published by the process that made it,
+/// and the harness runs the tools in-process with no Kafka publisher (the
+/// email crate's message label tests cover Gmail's flag).
+///
+/// When it fails: an agent or routine sorting the inbox starts routines on
+/// Email labeled, and two such routines can set each other off.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_labels_an_agent_adds_are_marked_automated() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Outlook, ada.email()).await?;
+    let (label, _) = own_label(&ada, &inbox, "Clients").await?;
+    inbox.deliver(&Mail::new("Carol <carol@example.net>", "By hand", "One."))?;
+    inbox.deliver(&Mail::new(
+        "Carol <carol@example.net>",
+        "By the agent",
+        "Two.",
+    ))?;
+    let by_hand = inbox.wait_for_preview("inbox", "By hand").await?["id"].clone();
+    let by_agent = inbox.wait_for_preview("inbox", "By the agent").await?["id"].clone();
+
+    inbox
+        .patch(
+            &format!(
+                "/email/threads/{}/labels",
+                by_hand.as_str().unwrap_or_default()
+            ),
+            Some(&json!({ "label_id": label, "value": true })),
+        )
+        .await?
+        .ok()?;
+    let owners = wait_for_gain(&stack, &inbox, &by_hand).await?;
+    assert_eq!(gained(&owners), [label.clone()], "{owners}");
+    assert_eq!(owners.get("automated"), None, "{owners}");
+
+    let done = stack
+        .email_tools()?
+        .call(
+            &ada,
+            "UpdateThreadLabels",
+            &json!({ "thread_id": by_agent, "label_id": label, "add": true }),
+        )
+        .await?
+        .map_err(|refusal| rootcause::report!("the tool refused the call: {refusal}"))?;
+    assert_eq!(done["failedCount"], 0, "{done}");
+    let agents = wait_for_gain(&stack, &inbox, &by_agent).await?;
+    assert_eq!(gained(&agents), [label], "{agents}");
+    assert_eq!(agents["automated"], true, "{agents}");
+
+    stack.finish().await
 }
