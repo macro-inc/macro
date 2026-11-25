@@ -101,8 +101,13 @@ bun run lab:smoke -- --lab-run [--family <name>|all] [--provider mock|kimi]
   the host), report observations, capture the quiz, act through the quiz's
   own controls, close. There is no message for script, navigation,
   coordinates or the browser protocol; anything malformed or unknown ends
-  the host. The host gets only the allowlisted environment, and the runner
-  kills it at the deadline and after every attempt.
+  the host, and so does a second `open` or a second `act`. An `act` carries
+  the observations the runner gated on, and the host refuses it if anything
+  has been observed since. The host gets only the allowlisted environment.
+  After every attempt, including at the deadline, the runner asks the host
+  to close (up to 10 s), then sends it SIGTERM (Playwright closes its
+  Chromium) and SIGKILL after 5 s more, and finally kills any process still
+  using the attempt's profile, so no Chromium outlives its attempt.
 - **Runner** (`src/run.ts`, `src/gate.ts`). Owns the gate. The
   planner never sees or influences a gate decision. Success comes only from
   the service's status. Records hold fixed failure codes, never error
@@ -156,8 +161,8 @@ images, the three-minute deadline and server-side text checks; run A was the
 first families code; run C (below) is the current code.
 
 Run C, the current code (Chromium driven from the Node browser host), 3
-attempts per family: relation 3/3, count 3/3, order 3/3, transcription 2/3,
-rotation 3/3, so 14 of 15 solved, no errors. Planner latency was 1.0–3.5 s
+attempts per family: relation 3/3, count 3/3, order 3/3, transcription 2/3
+(1 incorrect), rotation 3/3, so 14 of 15 solved, no errors. Planner latency was 1.0–3.5 s
 except one count call at 32 s; tokens per call as below.
 
 Run B:

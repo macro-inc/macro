@@ -18,8 +18,10 @@ stealth or evasion. The lab answers only its own quiz, only at
 
 From this directory, use the repository dev shell in each lab terminal so
 installation and execution both use the same Bun as CI.
-The runner drives Chromium from a Node child process, so `node` (the dev
-shell's) must be on `PATH` too.
+The runner drives Chromium from a Node child process, so `node` 22.18 or
+newer (it runs the TypeScript host directly) must be on `PATH` too; the dev
+shell's does. A challenge's browser is stopped at its three-minute deadline
+plus up to 15 s of shutdown.
 
 ```sh
 nix develop ../..
@@ -66,7 +68,7 @@ Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
 bun run check
-# … 113 pass, 0 fail
+# … 119 pass, 0 fail
 ```
 
 Mock smoke run. The mock always answers `--mock-choice`, so about one in four
