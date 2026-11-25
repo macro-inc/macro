@@ -60,7 +60,7 @@ export function Homepage(props: { embedded?: boolean } = {}) {
             </h1>
             <h2 class="macro-home-tagline">
               Macro replaces 27+ apps with one connected <br />
-              system for humans and agents.
+              workspace for humans and agents.
             </h2>
             <div class="macro-home-actions">
               <a
