@@ -701,8 +701,24 @@ export function createGraphqlItemPreviewQuery(
     const data = result()?.data;
     return data ? previewFromQuery(data, item()) : undefined;
   });
+  // The server stops answering for a company merged into another; only the
+  // REST preview names the company that stays, so a cached title of the
+  // merged one must not stand in once the server has answered without it.
+  const answeredWithout = () => {
+    const query = result();
+    return (
+      normalizedItemType(item()) === 'crm_company' &&
+      !!query?.isFetched &&
+      !query.isFetching &&
+      !query.stale &&
+      !query.error?.networkError &&
+      livePreview() === undefined
+    );
+  };
   const cachedPreview = () =>
-    group()?.cached().get(normalizedRecordKey(item())!);
+    answeredWithout()
+      ? undefined
+      : group()?.cached().get(normalizedRecordKey(item())!);
   const data = () => {
     const generation = group()?.generation;
     if (!generation || !cacheSessionGeneration.isCurrent(generation)) return;

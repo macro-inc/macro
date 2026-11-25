@@ -7,11 +7,13 @@ const entry = vi.hoisted(() => ({
   blockId: 'company-1',
   state: {} as Record<string, unknown>,
   captors: new Map<string, () => unknown>(),
+  replace: vi.fn(),
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
     handle: {
+      replace: entry.replace,
       currentEntryState: () => entry.state,
       captureEntryState: () => {
         for (const [key, capture] of entry.captors)
@@ -25,13 +27,26 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
 }));
 vi.mock('@app/features/crm/crm-company', () => ({
-  Company: (props: { section: string }) => <p>Showing {props.section}</p>,
+  Company: (props: {
+    section: string;
+    onMerged?: (survivorId: string) => void;
+  }) => (
+    <>
+      <p>Showing {props.section}</p>
+      <button type="button" onClick={() => props.onMerged?.('company-9')}>
+        Merged
+      </button>
+    </>
+  ),
   CompanyTabs: (props: { onChange: (section: string) => void }) => (
     <button type="button" onClick={() => props.onChange('files')}>
       Files
     </button>
   ),
   CompanyVisibilityButton: () => null,
+}));
+vi.mock('@app/features/crm/crm-merged-company', () => ({
+  useOpenMergedCompany: (open: (survivorId: string) => void) => open,
 }));
 vi.mock('@app/features/crm/crm-link', () => ({
   CrmCopyLinkButton: () => null,
@@ -67,6 +82,16 @@ afterEach(() => {
   entry.state = {};
   entry.captors.clear();
   entry.blockId = 'company-1';
+  entry.replace.mockReset();
+});
+
+it('shows the company a merged one went into in place of it', () => {
+  render(() => <CompanyBlockAdapter />);
+  fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
+  expect(entry.replace).toHaveBeenCalledExactlyOnceWith({
+    next: { type: 'company', id: 'company-9' },
+    mergeHistory: true,
+  });
 });
 
 it('returns to the chosen section when Back comes back to the company', () => {
