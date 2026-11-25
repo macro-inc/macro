@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import { withCallbacks } from '@queries/utils';
 import type { CountedReaction } from '@service-storage/generated/schemas/countedReaction';
 import type { MessageParent } from '@service-storage/messages';
 import {
@@ -9,10 +9,13 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
+import {
+  deviceOrRest,
+  type MessageWrite,
+  reactFromDevice,
+} from './device-writes';
 import { MessageNonceKeys } from './keys';
-import { channelCacheHost, channelCacheHostFor } from './local/channel-flag';
-import { channelWrites } from './local/channel-sync';
-import { channelWriteNetworkMode, whenOnline } from './local/channel-writes';
+import { channelCacheHostFor } from './local/channel-flag';
 import {
   type MessageTarget,
   patchTargetMessage,
@@ -209,34 +212,13 @@ const removeReactionNonce = createMutationNonce<ReactionParams>(
 /**
  * Mutation to add a reaction to a channel message.
  */
-export function useAddReactionMutation(
-  callbacks?: MutationCallbacks<
-    EntityMessage | undefined,
-    Error,
-    ReactionParams,
-    ReactionMutationContext
-  >
-) {
-  return useMutation(() => ({
+export function useAddReactionMutation(): MessageWrite<
+  ReactionParams,
+  EntityMessage | undefined
+> {
+  const rest = useMutation(() => ({
     gcTime: 0,
-    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
-      const host = channelCacheHostFor(vars.parent);
-      if (host) {
-        return channelWrites(host).react({
-          channelId: vars.parent.id,
-          id: vars.messageId,
-          emoji: vars.emoji,
-          add: true,
-          userId: vars.userId,
-          reactions:
-            vars.currentReactions &&
-            addUserReaction(vars.currentReactions, vars.emoji, vars.userId)
-              .reactions,
-          nonce: addReactionNonce.use(vars),
-        });
-      }
-      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,
@@ -246,84 +228,77 @@ export function useAddReactionMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage | undefined,
+      EntityMessage,
       Error,
       ReactionParams,
       ReactionMutationContext
-    >(
-      {
-        onMutate: async (vars) => {
-          addReactionNonce.prepare(vars);
-          await queryClient.cancelQueries({
-            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
-          });
-          return optimisticAddReaction({
-            parent: vars.parent,
-            message_id: vars.messageId,
-            emoji: vars.emoji,
-            userId: vars.userId,
-            currentReactions: vars.currentReactions,
-            threadId: vars.threadId,
-          });
-        },
-        onSuccess(data) {
-          if (data) applyMessage(data, 'reaction_changed');
-        },
-        onError(error, vars, context) {
-          console.error('failed to add reaction', error);
-          toast.failure('Failed to add reaction');
-          if (context) {
-            rollbackAddReaction(vars.parent, context);
-          }
-        },
-        onSettled: (_, __, vars) => {
-          addReactionNonce.cleanup(vars);
-          softInvalidateTargetCaches(
-            vars.parent,
-            resolveMessageTarget({
-              parent: vars.parent,
-              messageId: vars.messageId,
-              threadId: vars.threadId,
-            })
-          );
-        },
+    >({
+      onMutate: async (vars) => {
+        addReactionNonce.prepare(vars);
+        await queryClient.cancelQueries({
+          queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
+        });
+        return optimisticAddReaction({
+          parent: vars.parent,
+          message_id: vars.messageId,
+          emoji: vars.emoji,
+          userId: vars.userId,
+          currentReactions: vars.currentReactions,
+          threadId: vars.threadId,
+        });
       },
-      callbacks
-    ),
+      onSuccess(data) {
+        applyMessage(data, 'reaction_changed');
+      },
+      onError(error, vars, context) {
+        console.error('failed to add reaction', error);
+        toast.failure('Failed to add reaction');
+        if (context) {
+          rollbackAddReaction(vars.parent, context);
+        }
+      },
+      onSettled: (_, __, vars) => {
+        addReactionNonce.cleanup(vars);
+        softInvalidateTargetCaches(
+          vars.parent,
+          resolveMessageTarget({
+            parent: vars.parent,
+            messageId: vars.messageId,
+            threadId: vars.threadId,
+          })
+        );
+      },
+    }),
   }));
+  return deviceOrRest((vars) => {
+    const host = channelCacheHostFor(vars.parent);
+    return (
+      host &&
+      reactFromDevice(host, {
+        channelId: vars.parent.id,
+        id: vars.messageId,
+        emoji: vars.emoji,
+        add: true,
+        userId: vars.userId,
+        reactions:
+          vars.currentReactions &&
+          addUserReaction(vars.currentReactions, vars.emoji, vars.userId)
+            .reactions,
+      })
+    );
+  }, rest);
 }
 
 /**
  * Mutation to remove a reaction from a channel message.
  */
-export function useRemoveReactionMutation(
-  callbacks?: MutationCallbacks<
-    EntityMessage | undefined,
-    Error,
-    ReactionParams,
-    ReactionMutationContext
-  >
-) {
-  return useMutation(() => ({
+export function useRemoveReactionMutation(): MessageWrite<
+  ReactionParams,
+  EntityMessage | undefined
+> {
+  const rest = useMutation(() => ({
     gcTime: 0,
-    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
-      const host = channelCacheHostFor(vars.parent);
-      if (host) {
-        return channelWrites(host).react({
-          channelId: vars.parent.id,
-          id: vars.messageId,
-          emoji: vars.emoji,
-          add: false,
-          userId: vars.userId,
-          reactions:
-            vars.currentReactions &&
-            removeUserReaction(vars.currentReactions, vars.emoji, vars.userId)
-              .reactions,
-          nonce: removeReactionNonce.use(vars),
-        });
-      }
-      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,
@@ -333,49 +308,63 @@ export function useRemoveReactionMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage | undefined,
+      EntityMessage,
       Error,
       ReactionParams,
       ReactionMutationContext
-    >(
-      {
-        onMutate: async (vars) => {
-          removeReactionNonce.prepare(vars);
-          await queryClient.cancelQueries({
-            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
-          });
-          return optimisticRemoveReaction({
-            parent: vars.parent,
-            message_id: vars.messageId,
-            emoji: vars.emoji,
-            userId: vars.userId,
-            currentReactions: vars.currentReactions,
-            threadId: vars.threadId,
-          });
-        },
-        onSuccess(data) {
-          if (data) applyMessage(data, 'reaction_changed');
-        },
-        onError(error, vars, context) {
-          console.error('failed to remove reaction', error);
-          toast.failure('Failed to remove reaction');
-          if (context) {
-            rollbackRemoveReaction(vars.parent, context);
-          }
-        },
-        onSettled: (_, __, vars) => {
-          removeReactionNonce.cleanup(vars);
-          softInvalidateTargetCaches(
-            vars.parent,
-            resolveMessageTarget({
-              parent: vars.parent,
-              messageId: vars.messageId,
-              threadId: vars.threadId,
-            })
-          );
-        },
+    >({
+      onMutate: async (vars) => {
+        removeReactionNonce.prepare(vars);
+        await queryClient.cancelQueries({
+          queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
+        });
+        return optimisticRemoveReaction({
+          parent: vars.parent,
+          message_id: vars.messageId,
+          emoji: vars.emoji,
+          userId: vars.userId,
+          currentReactions: vars.currentReactions,
+          threadId: vars.threadId,
+        });
       },
-      callbacks
-    ),
+      onSuccess(data) {
+        applyMessage(data, 'reaction_changed');
+      },
+      onError(error, vars, context) {
+        console.error('failed to remove reaction', error);
+        toast.failure('Failed to remove reaction');
+        if (context) {
+          rollbackRemoveReaction(vars.parent, context);
+        }
+      },
+      onSettled: (_, __, vars) => {
+        removeReactionNonce.cleanup(vars);
+        softInvalidateTargetCaches(
+          vars.parent,
+          resolveMessageTarget({
+            parent: vars.parent,
+            messageId: vars.messageId,
+            threadId: vars.threadId,
+          })
+        );
+      },
+    }),
   }));
+  return deviceOrRest((vars) => {
+    const host = channelCacheHostFor(vars.parent);
+    return (
+      host &&
+      reactFromDevice(host, {
+        channelId: vars.parent.id,
+        id: vars.messageId,
+        emoji: vars.emoji,
+        add: false,
+        userId: vars.userId,
+        reactions:
+          vars.currentReactions &&
+          removeUserReaction(vars.currentReactions, vars.emoji, vars.userId)
+            .reactions,
+      })
+    );
+  }, rest);
 }

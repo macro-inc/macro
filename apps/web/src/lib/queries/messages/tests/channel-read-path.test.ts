@@ -58,9 +58,8 @@ vi.mock('../timeline', async (importOriginal) => ({
 const { useChannelReadPath, useChannelMessageResolver } = await import(
   '../channel-timeline-source'
 );
-const { channelCacheHost, markChannelCacheAnswered } = await import(
-  '../local/channel-flag'
-);
+const { channelCacheHost, channelCacheHostFor, markChannelCacheAnswered } =
+  await import('../local/channel-flag');
 const soup = (await import('@service-storage/graphql-soup')) as unknown as {
   __setKept: (host: unknown) => void;
 };
@@ -162,6 +161,42 @@ describe('useChannelReadPath', () => {
 
     path.setUnsupported();
     expect(path.mode()).toBe('rest');
+  });
+});
+
+describe('writes of a channel', () => {
+  const channel = { type: 'channel' as const, id: 'written' };
+  /** Mounts a view of the channel, as the app does: effects run. */
+  const view = (parent: typeof channel = channel) =>
+    createRoot((dispose) => ({
+      path: useChannelReadPath(() => parent),
+      dispose,
+    }));
+
+  it('go to the device, and only a channel’s do', () => {
+    posthog.__setFlag({ enabled: true, loading: false });
+    const { dispose } = view();
+    expect(channelCacheHostFor(channel)).toBe(mocks.host);
+    expect(
+      channelCacheHostFor({ type: 'document', id: 'written' })
+    ).toBeUndefined();
+    dispose();
+  });
+
+  it('stay on REST while a view on screen reads the channel over it', () => {
+    posthog.__setFlag({ enabled: false, loading: true });
+    const first = view();
+    const second = view();
+    // Turned on meanwhile: the open views stay on REST, and so do its writes.
+    posthog.__setFlag({ enabled: true, loading: false });
+    expect(first.path.mode()).toBe('rest');
+    expect(channelCacheHostFor(channel)).toBeUndefined();
+    expect(channelCacheHostFor({ type: 'channel', id: 'c2' })).toBe(mocks.host);
+
+    first.dispose();
+    expect(channelCacheHostFor(channel)).toBeUndefined();
+    second.dispose();
+    expect(channelCacheHostFor(channel)).toBe(mocks.host);
   });
 });
 

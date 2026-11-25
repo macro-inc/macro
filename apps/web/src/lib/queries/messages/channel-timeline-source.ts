@@ -9,10 +9,16 @@ import type {
   MessageParent,
   MessageTimelineEntry,
 } from '@service-storage/messages';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
-import { sessionChannelHost } from './local/channel-flag';
+import { keepChannelOnRest, sessionChannelHost } from './local/channel-flag';
 import { readStoredThreadId } from './local/channel-pages';
 import {
   channelSyncRuntime,
@@ -168,6 +174,11 @@ export function useChannelReadPath(parent: Accessor<MessageParent>) {
     if (!host()) return 'rest';
     return previous ?? (flag().enabled ? 'local' : 'rest');
   }, undefined);
+  createEffect(() => {
+    const read = parent();
+    if (read.type === 'channel' && mode() === 'rest' && !unsupported())
+      onCleanup(keepChannelOnRest(read.id));
+  });
   return { host, mode, setUnsupported: () => setUnsupported(true) };
 }
 

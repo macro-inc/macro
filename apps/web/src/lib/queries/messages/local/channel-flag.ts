@@ -78,8 +78,27 @@ export function channelCacheHost(): CacheHost | undefined {
 /** The host for a parent's messages: only channels read from the device. */
 export function channelCacheHostFor(parent: {
   type: string;
+  id: string;
 }): CacheHost | undefined {
-  return parent.type === 'channel' ? channelCacheHost() : undefined;
+  if (parent.type !== 'channel' || restReaders.has(parent.id)) return undefined;
+  return channelCacheHost();
+}
+
+/** Views on screen that read a channel over REST, by channel. */
+const restReaders = new Map<string, number>();
+
+/**
+ * Keeps a channel's writes on REST until the returned call. A view opened
+ * before the flag turned on stays on REST, where only a REST write shows
+ * before the server has it.
+ */
+export function keepChannelOnRest(channelId: string): () => void {
+  restReaders.set(channelId, (restReaders.get(channelId) ?? 0) + 1);
+  return () => {
+    const rest = (restReaders.get(channelId) ?? 1) - 1;
+    if (rest > 0) restReaders.set(channelId, rest);
+    else restReaders.delete(channelId);
+  };
 }
 
 /** Calls `listener` each time feature flags load or change. */

@@ -1,18 +1,16 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import { render } from '@solidjs/testing-library';
-import { MutationObserver, QueryClient } from '@tanstack/query-core';
-import { QueryClientProvider } from '@tanstack/solid-query';
+import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  SEND_MESSAGE_MUTATION_KEY,
-  UNSENT_AFTER_MS,
-  useMessageUnsent,
-} from '../unsent';
+import { UNSENT_AFTER_MS, useMessageUnsent } from '../unsent';
 
-const { channelCacheHost } = vi.hoisted(() => ({
+const { channelCacheHost, sending } = vi.hoisted(() => ({
   channelCacheHost: vi.fn((): object | undefined => ({})),
+  sending: vi.fn((_messageId: string) => false),
 }));
 vi.mock('../local/channel-flag', () => ({ channelCacheHost }));
+vi.mock('../local/channel-sync', () => ({
+  channelWrites: () => ({ sending }),
+}));
 
 function Probe(props: { id: string }) {
   const unsent = useMessageUnsent(() => props.id);
@@ -20,81 +18,41 @@ function Probe(props: { id: string }) {
 }
 
 describe('useMessageUnsent', () => {
-  beforeEach(() => vi.useFakeTimers());
+  const [sends, setSends] = createStore<Record<string, boolean>>({});
+  beforeEach(() => {
+    vi.useFakeTimers();
+    setSends({ m1: false, m2: false });
+    sending.mockImplementation((id) => sends[id] ?? false);
+  });
   afterEach(() => {
     vi.useRealTimers();
     channelCacheHost.mockReturnValue({});
   });
 
   it('marks only a send that has stayed pending, until it settles', async () => {
-    const client = new QueryClient();
-    let deliver: (value: null) => void = () => {};
-    const observer = new MutationObserver(client, {
-      mutationKey: SEND_MESSAGE_MUTATION_KEY,
-      mutationFn: (_vars: { optimisticId: string }) =>
-        new Promise<null>((resolve) => {
-          deliver = resolve;
-        }),
-    });
-    const view = (id: string) =>
-      render(() => (
-        <QueryClientProvider client={client}>
-          <Probe id={id} />
-        </QueryClientProvider>
-      ));
-    const mine = view('m1');
-    const other = view('m2');
+    const mine = render(() => <Probe id="m1" />);
+    const other = render(() => <Probe id="m2" />);
 
-    const sent = observer.mutate({ optimisticId: 'm1' });
+    setSends('m1', true);
     await vi.advanceTimersByTimeAsync(UNSENT_AFTER_MS - 1);
     expect(mine.container.textContent).toBe('ok');
     await vi.advanceTimersByTimeAsync(1);
     expect(mine.container.textContent).toBe('unsent');
     expect(other.container.textContent).toBe('ok');
 
-    deliver(null);
-    await sent;
-    await vi.advanceTimersByTimeAsync(0);
+    setSends('m1', false);
     expect(mine.container.textContent).toBe('ok');
   });
 
-  it('marks nothing while channels send over REST', async () => {
+  it('follows no send while channels send over REST', async () => {
     channelCacheHost.mockReturnValue(undefined);
-    const client = new QueryClient();
-    const observer = new MutationObserver(client, {
-      mutationKey: SEND_MESSAGE_MUTATION_KEY,
-      mutationFn: (_vars: { optimisticId: string }) =>
-        new Promise<null>(() => {}),
-    });
-    const view = render(() => (
-      <QueryClientProvider client={client}>
-        <Probe id="m1" />
-      </QueryClientProvider>
-    ));
+    sending.mockClear();
+    const view = render(() => <Probe id="m1" />);
 
-    fireAndForgetMutate(observer);
+    setSends('m1', true);
     await vi.advanceTimersByTimeAsync(UNSENT_AFTER_MS + 1);
 
     expect(view.container.textContent).toBe('ok');
-  });
-
-  it('follows no mutation while channels send over REST', () => {
-    channelCacheHost.mockReturnValue(undefined);
-    const client = new QueryClient();
-    const subscribe = vi.spyOn(client.getMutationCache(), 'subscribe');
-    render(() => (
-      <QueryClientProvider client={client}>
-        <Probe id="m1" />
-        <Probe id="m2" />
-      </QueryClientProvider>
-    ));
-
-    expect(subscribe).not.toHaveBeenCalled();
+    expect(sending).not.toHaveBeenCalled();
   });
 });
-
-function fireAndForgetMutate(
-  observer: MutationObserver<null, Error, { optimisticId: string }>
-): void {
-  fireAndForget(observer.mutate({ optimisticId: 'm1' }), 'test');
-}
