@@ -101,24 +101,27 @@ export function waitingNotice(page: Page): Locator {
  * Keeps the app's local cache from starting on the page's next load: the
  * worker that opens it cannot load, as when its script fails to download.
  * (A page route, so it runs before `loadAppSteadily`'s.) Returns what lets
- * it load again, how many times it was refused and has loaded since, and how
- * long after the last refusal it first loaded.
+ * it load again, how many of the cache's attempts it refused and how often
+ * it has loaded since, and how long after the last refusal it first loaded.
  */
 export async function cacheWorkerUnloadable(page: Page): Promise<{
   lift: () => void;
-  refusals: () => number;
+  refusedAttempts: () => number;
   loads: () => number;
   msFromRefusalToLoad: () => number;
 }> {
   const coordinator = /\/cache\.coordinator\.shared-worker-[^/]*\.js$/;
   let refused = true;
-  let refusals = 0;
+  let refusedAttempts = 0;
   let loads = 0;
   let lastRefusal = 0;
   let firstLoad = 0;
   await page.route(coordinator, (route: Route) => {
     if (refused) {
-      refusals += 1;
+      // One attempt asks up to three times, 100 and 200 ms apart
+      // (COORDINATOR_CONNECT_RETRY_DELAYS_MS); attempts are a second or more
+      // apart.
+      if (Date.now() - lastRefusal > 600) refusedAttempts += 1;
       lastRefusal = Date.now();
       return route.abort();
     }
@@ -130,7 +133,7 @@ export async function cacheWorkerUnloadable(page: Page): Promise<{
     lift: () => {
       refused = false;
     },
-    refusals: () => refusals,
+    refusedAttempts: () => refusedAttempts,
     loads: () => loads,
     msFromRefusalToLoad: () => firstLoad - lastRefusal,
   };

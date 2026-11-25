@@ -127,17 +127,17 @@ for (const provider of PROVIDERS) {
       );
       saw('STC-434');
 
-      // Retry shows only between the cache's own attempts, and one can be
-      // due within seconds when it first shows. Once the next of them has
-      // failed, the one after is more than six seconds away, so a load
-      // sooner than that after the refusal can only be the attempt Retry
-      // starts.
+      // Retry shows only between the cache's own attempts, which wait longer
+      // after each failure (at least 1.6 s after the second, 12.8 s after
+      // the fifth, up to 30 s). Once a fresh attempt, the fifth or later,
+      // has failed, a load within six seconds of it can only be the attempt
+      // Retry starts.
       const retry = notice.getByRole('button', { name: 'Retry', exact: true });
       await expect(retry).toBeVisible({ timeout: 90_000 });
-      const refusals = fault.refusals();
+      const attempts = Math.max(fault.refusedAttempts(), 4);
       await expect
-        .poll(fault.refusals, { timeout: 45_000 })
-        .toBeGreaterThan(refusals);
+        .poll(fault.refusedAttempts, { timeout: 60_000 })
+        .toBeGreaterThan(attempts);
       await expect(retry).toBeVisible();
       fault.lift();
       await retry.click({ timeout: 5_000 });
