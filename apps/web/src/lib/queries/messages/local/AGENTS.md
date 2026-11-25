@@ -49,8 +49,8 @@ with the watermark after it.
   behind, is tried again after a wait that doubles (`CATCH_UP_RETRY_MS` to
   `CATCH_UP_RETRY_MAX_MS`), which a frame or a reconnect cuts short. The
   server does not say when a new connection receives every change, so
-  `LISTENING_MS` after it nothing heard counts and each channel is asked for
-  once more. An acknowledgement's sequence serves only as the next page's cursor
+  `LISTENING_MS` after it nothing heard before counts and each channel is asked
+  for once more. An acknowledgement's sequence serves only as the next page's cursor
   while more pages follow; the last page, a gap and a reset read the device
   again. Take
   `epoch()` before a server read and report it with the sequence the server
@@ -60,7 +60,7 @@ with the watermark after it.
 - Views read again when the host reports a change of the channel
   (`onChannelChanged`, every tab's, through the runtime's `onChanged`). A view's
   own store is reported to it too, so a device that keeps losing what a view
-  stores is asked `SESSION_CHANGE_RELOADS` times, then left.
+  stores is asked `SESSION_CHANGE_RELOADS` times at once, then after waits.
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
   durable cache mutation queue and waits for their settlement. The hooks in
   `../mutations.ts` and `../reactions.ts` pick the path for each write
@@ -153,9 +153,11 @@ lost; of those the server refused, only sends and deletes answered
   capture a write's trace (`Telemetry.captureContext`) before any await.
 - What failed with no connection loads again when it returns
   (`watchReconnect`, started before each request), and nothing else retries a
-  window or thread that shows nothing. One that is shown but the device no
-  longer holds follows nothing, so it is also read again after a wait that
-  doubles from `VIEW_RETRY_MS`. A failed page waits for a scroll, the
+  window or thread that shows nothing. One that is shown but not held follows
+  nothing, so it is also read again after a wait that doubles from
+  `VIEW_RETRY_MS`: while the server fails, as long as it does; while the device
+  does (it lost, refused or could not read it), `DEVICE_RETRIES` times, then when
+  the connection or the device's database returns. A failed page waits for a scroll, the
   connection, or the same wait (`olderFailed`), so the call panel, which pages
   whenever paging is idle, asks at a bounded rate.
 - The server's copy of a page or thread lacks what this device has queued: once

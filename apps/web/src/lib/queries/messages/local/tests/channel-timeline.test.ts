@@ -20,7 +20,7 @@ import {
   rootSortKey,
 } from '../channel-map';
 import type * as ChannelNetwork from '../channel-network';
-import { storeResult, VIEW_RETRY_MS } from '../channel-network';
+import { DEVICE_RETRIES, storeResult, VIEW_RETRY_MS } from '../channel-network';
 import type {
   ChannelPageEntry,
   FetchChannelServerPage,
@@ -1726,6 +1726,47 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     }
   });
 
+  it('asks a device that does not store a window again a few times, each after a longer wait', async () => {
+    const rows = messages(2);
+    let stores = false;
+    const { fetchPage, requests } = serverOver(
+      () => rows,
+      async () => {
+        if (!stores) throw new Error('disk full');
+        return applied('9');
+      }
+    );
+    vi.useFakeTimers();
+    const mounted = mount({ rows, held: false, fetchPage });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(requests).toHaveLength(1);
+      for (let retry = 0; retry < DEVICE_RETRIES; retry += 1) {
+        await vi.advanceTimersByTimeAsync(VIEW_RETRY_MS * 2 ** retry - 1);
+        expect(requests).toHaveLength(1 + retry);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(requests).toHaveLength(2 + retry);
+      }
+      expect(vi.getTimerCount()).toBe(0);
+
+      // Left until the connection returns, then followed once stored.
+      stores = true;
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(requests).toHaveLength(DEVICE_RETRIES + 2);
+      mounted.addRow(graphqlMessage(3));
+      mounted.runtime.changed();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mounted.timeline.entries()).toHaveLength(3);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      mounted.dispose();
+      vi.useRealTimers();
+      onlineManager.setOnline(true);
+    }
+  });
+
   it('reads a page the device refused at every read again once the connection is back', async () => {
     const rows = messages(70);
     const fetchPage = vi
@@ -2143,7 +2184,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     }
   });
 
-  it('does not read on reconnect a page given up in the other direction', async () => {
+  it('reads the window on reconnect, not a page given up in the other direction', async () => {
     const rows = messages(250);
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
@@ -2175,10 +2216,12 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await mounted.timeline.loadOlder();
       expect(fetchPage).toHaveBeenCalledTimes(8);
       const reads = mounted.host.reads.length;
+      mounted.setHeld(true);
       onlineManager.setOnline(false);
       onlineManager.setOnline(true);
       await settle();
-      expect(mounted.host.reads.slice(reads)).toEqual([]);
+      const [first] = mounted.host.reads.slice(reads);
+      expect(first?.around).toBeDefined();
       expect(fetchPage).toHaveBeenCalledTimes(8);
     } finally {
       mounted.dispose();

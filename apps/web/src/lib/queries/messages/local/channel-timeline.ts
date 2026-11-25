@@ -14,6 +14,7 @@ import {
 } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import {
+  deviceRetryWait,
   graphqlErrorCode,
   isMissingMessage,
   type ReconnectWatch,
@@ -314,10 +315,8 @@ export function createLocalChannelTimeline(
   let loadToken = 0;
   // The device holds the window it loaded and every page stored since.
   let held = false;
-  // Rereads in a row that missed a window the device was said to hold.
-  let losses = 0;
-  // Reads in a row that failed to replace the window shown.
-  let failedReloads = 0;
+  // Reads in a row that did not leave the window following the device.
+  let failures = 0;
   // Pages of this window merged in whose outcome is not recorded yet: the
   // store has not answered, or a refusal is not yet marked unstored.
   let storing = 0;
@@ -440,7 +439,7 @@ export function createLocalChannelTimeline(
   };
 
   const load = (around: string | undefined): Promise<void> => {
-    losses = 0;
+    failures = 0;
     currentLoad = loadWindow(around, 0);
     return currentLoad;
   };
@@ -650,11 +649,8 @@ export function createLocalChannelTimeline(
       // is read again: after a wait, or as the connection returns.
       if (reloads > 0) {
         setState({ loadingOlder: false, loadingNewer: false });
-        failedReloads += 1;
-        watch.failed(() => {
-          currentLoad = loadWindow(around, 1);
-          fireAndForget(currentLoad, 'channel-local-sync');
-        }, viewRetryWait(failedReloads));
+        failures += 1;
+        readLater(around, trace, watch, viewRetryWait(failures));
         return;
       }
       setState({ phase: 'failed', error });
@@ -669,7 +665,6 @@ export function createLocalChannelTimeline(
       onUnsupported();
       return;
     }
-    failedReloads = 0;
     setState({
       phase: 'ready',
       entries: mergeEntries(
@@ -691,15 +686,21 @@ export function createLocalChannelTimeline(
       if (reloads < SESSION_CHANGE_RELOADS) {
         currentLoad = loadWindow(around, reloads + 1);
         await currentLoad;
+        return;
       }
+      deviceFailed(around, trace);
       return;
     }
     // A page given up meanwhile left the device without what it shows.
     held = settled === 'held' && givenUp === givenUpBefore;
-    if (!held) return;
+    if (!held) {
+      deviceFailed(around, trace);
+      return;
+    }
+    const fromServer = loaded.some(({ source }) => source === 'server');
+    if (!fromServer) failures = 0;
     // A server page lacks what this device has not sent yet.
-    if (missedReread || loaded.some(({ source }) => source === 'server'))
-      scheduleReread();
+    if (missedReread || fromServer) scheduleReread();
     // Opening asks the server only when the channel is not proven current.
     fireAndForget(
       trace.run(() => deps.runtime.ensureCurrent(channelId)),
@@ -707,7 +708,37 @@ export function createLocalChannelTimeline(
     );
   };
 
-  const reread = async () => {
+  /** The message to read the window shown around; none at the live end. */
+  const shownAround = () =>
+    state.newerCursor === null
+      ? undefined
+      : (anchorId ?? middleMessageId(state.entries));
+
+  /** Reads the window again after `wait`, or as the connection returns. */
+  const readLater = (
+    around: string | undefined,
+    trace: TraceContext,
+    watch: ReconnectWatch,
+    wait: number | undefined
+  ) =>
+    watch.failed(
+      () =>
+        trace.run(() => {
+          currentLoad = loadWindow(around, 1);
+          fireAndForget(currentLoad, 'channel-local-sync');
+        }),
+      wait
+    );
+
+  /** The window shown follows nothing until it is read again. */
+  const deviceFailed = (around: string | undefined, trace: TraceContext) => {
+    failures += 1;
+    reconnect?.stop();
+    reconnect = watchReconnect();
+    readLater(around, trace, reconnect, deviceRetryWait(failures));
+  };
+
+  const reread = async (trace: TraceContext) => {
     if (state.phase !== 'ready') {
       // The window being read may predate the change: read it once it holds.
       if (state.phase === 'loading') missedReread = true;
@@ -737,21 +768,21 @@ export function createLocalChannelTimeline(
     }
     if (result.kind === 'lost') {
       // Reset or evicted meanwhile: load the window again, from the server. A
-      // device that keeps missing what it stored is not asked for ever: every
-      // load's own store reports a change.
-      losses += 1;
-      if (losses > SESSION_CHANGE_RELOADS) {
+      // device that keeps missing what it stored is not asked at once for
+      // ever: every load's own store reports a change.
+      if (failures >= SESSION_CHANGE_RELOADS) {
         held = false;
+        deviceFailed(shownAround(), trace);
         return;
       }
-      currentLoad = loadWindow(
-        live ? undefined : (anchorId ?? middleMessageId(state.entries)),
-        1
-      );
+      failures += 1;
+      currentLoad = loadWindow(shownAround(), 1);
       await currentLoad;
       return;
     }
-    losses = 0;
+    failures = 0;
+    // One that failed before this may be waiting to load the window again.
+    reconnect?.stop();
     setState('olderCursor', result.olderCursor);
     setState('entries', reconcile(result.entries, { key: 'key' }));
   };
@@ -762,11 +793,12 @@ export function createLocalChannelTimeline(
       rereadAgain = true;
       return;
     }
+    const trace = Telemetry.captureContext();
     rereading = (async () => {
       try {
         do {
           rereadAgain = false;
-          await reread();
+          await reread(trace);
         } while (rereadAgain);
       } finally {
         rereading = undefined;
@@ -776,7 +808,7 @@ export function createLocalChannelTimeline(
   };
   /** A window the device could not store or read during an outage is read again. */
   const resume = () => {
-    losses = 0;
+    failures = 0;
     if (held) {
       if (!holds() || state.loadingOlder || state.loadingNewer)
         missedResume = true;
@@ -784,12 +816,7 @@ export function createLocalChannelTimeline(
     }
     if (state.phase !== 'ready')
       return fireAndForget(load(anchorId), 'channel-local-sync');
-    currentLoad = loadWindow(
-      state.newerCursor === null
-        ? undefined
-        : (anchorId ?? middleMessageId(state.entries)),
-      1
-    );
+    currentLoad = loadWindow(shownAround(), 1);
     fireAndForget(currentLoad, 'channel-local-sync');
   };
   onCleanup(
@@ -876,7 +903,7 @@ export function createLocalChannelTimeline(
    * The window stops following the device until it is loaded again, which an
    * outage that ended meanwhile does at once.
    */
-  const letGo = () => {
+  const letGo = (trace: TraceContext) => {
     held = false;
     givenUp += 1;
     if (missedResume) return resume();
@@ -884,6 +911,7 @@ export function createLocalChannelTimeline(
     for (const direction of ['older', 'newer'] as const)
       if (state.unstored[direction] !== null) pageReconnects[direction]?.stop();
     setState('unstored', { older: null, newer: null });
+    deviceFailed(shownAround(), trace);
   };
 
   /**
@@ -918,7 +946,7 @@ export function createLocalChannelTimeline(
       if (first === 'stale') return 'stale';
       if (first === 'held') return 'done';
       if (first === 'unheld' || !held) {
-        letGo();
+        letGo(trace);
         return 'done';
       }
       // Marked before the page is read again, so a scroll as the read ends,
@@ -936,7 +964,7 @@ export function createLocalChannelTimeline(
     }
     if (settled === 'stale') return 'stale';
     if (settled !== 'held') {
-      letGo();
+      letGo(trace);
       return 'done';
     }
     setState('unstored', direction, null);

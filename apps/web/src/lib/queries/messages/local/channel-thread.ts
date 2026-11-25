@@ -36,6 +36,7 @@ import {
   type ChannelQueryOptions,
   type ChannelStoreResult,
   cacheSessionChanged,
+  deviceRetryWait,
   isMissingMessage,
   queryChannelNetwork,
   type ReconnectWatch,
@@ -430,10 +431,8 @@ export function createLocalChannelThread(
   let held = false;
   // The device changed while it did not: read once it does.
   let changed = false;
-  // Device reads in a row that missed a thread the device was said to hold.
-  let misses = 0;
-  // Reads in a row that failed to replace the thread shown.
-  let failedReloads = 0;
+  // Reads in a row that did not leave the thread following the device.
+  let failures = 0;
   // The load in flight. A reload starts after an await, outside any Solid
   // owner, so closing the thread aborts it through here, not `onCleanup`.
   let abort: AbortController | undefined;
@@ -443,6 +442,26 @@ export function createLocalChannelThread(
 
   const show = (thread: MessageThread) =>
     setState('thread', reconcile(thread, { key: 'id' }));
+
+  /** Loads the thread again after `wait`, or as the connection returns. */
+  const loadLater = (
+    root: string,
+    trace: TraceContext,
+    watch: ReconnectWatch,
+    wait: number | undefined
+  ) =>
+    watch.failed(
+      () => trace.run(() => fireAndForget(load(root), 'channel-thread')),
+      wait
+    );
+
+  /** The thread shown follows nothing until it is loaded again. */
+  const deviceFailed = (root: string, trace: TraceContext) => {
+    failures += 1;
+    reconnect?.stop();
+    reconnect = watchReconnect();
+    loadLater(root, trace, reconnect, deviceRetryWait(failures));
+  };
 
   const load = async (root: string, reloads = 0): Promise<void> => {
     const current = ++token;
@@ -470,11 +489,10 @@ export function createLocalChannelThread(
         onUnsupported();
         return;
       }
-      failedReloads = 0;
       setState('error', undefined);
       show(loaded.thread);
       if (loaded.source === 'device') {
-        misses = 0;
+        failures = 0;
         follow(root);
         fireAndForget(
           trace.run(() => deps.runtime.ensureCurrent(channelId)),
@@ -484,15 +502,18 @@ export function createLocalChannelThread(
       }
       if (loaded.stored === 'session-changed') {
         // The new session can store what the old one could not.
-        if (reloads >= SESSION_CHANGE_RELOADS) return;
-        await load(root, reloads + 1);
+        if (reloads < SESSION_CHANGE_RELOADS) await load(root, reloads + 1);
+        else deviceFailed(root, trace);
         return;
       }
       deps.runtime.noteServerRead(channelId, {
         readSeq: loaded.readSeq,
         epoch,
       });
-      if (loaded.stored === 'unheld') return;
+      if (loaded.stored === 'unheld') {
+        deviceFailed(root, trace);
+        return;
+      }
       // A server thread lacks what this device has not sent yet.
       changed = true;
       follow(root);
@@ -511,17 +532,18 @@ export function createLocalChannelThread(
       // The device may not hold a thread that stays shown, so it follows
       // nothing until it is read again: after a wait, too.
       const shown = untrack(() => state.thread !== undefined);
-      if (shown) failedReloads += 1;
-      watch.failed(
-        () => fireAndForget(load(root), 'channel-thread'),
-        shown ? viewRetryWait(failedReloads) : undefined
+      if (shown) failures += 1;
+      loadLater(
+        root,
+        trace,
+        watch,
+        shown ? viewRetryWait(failures) : undefined
       );
     }
   };
 
   const loadAfresh = (root: string) => {
-    misses = 0;
-    failedReloads = 0;
+    failures = 0;
     return load(root);
   };
 
@@ -557,11 +579,15 @@ export function createLocalChannelThread(
     if (kind !== 'miss' || current !== token) return;
     // Reset or evicted meanwhile: load it again, from the server. The
     // replies shown stay until the new ones replace them. A device that
-    // keeps missing what it stored is not asked for ever: every load's
-    // own store reports a change.
-    misses += 1;
+    // keeps missing what it stored is not asked at once for ever: every
+    // load's own store reports a change.
     held = false;
-    if (misses <= SESSION_CHANGE_RELOADS) await trace.run(() => load(root));
+    if (failures >= SESSION_CHANGE_RELOADS) {
+      deviceFailed(root, trace);
+      return;
+    }
+    failures += 1;
+    await trace.run(() => load(root));
   };
 
   /**
@@ -580,13 +606,16 @@ export function createLocalChannelThread(
       } catch (error) {
         span.setAttr('thread.device_error', deviceErrorCode(error));
         if (current === token && rereadAgain) return { kind: undefined, trace };
+        if (current === token) deviceFailed(root, trace);
         throw error;
       }
       span.setAttr('thread.source', device.kind);
       if (current !== token) return { kind: 'stale' as const, trace };
       if (device.kind === 'unsupported') onUnsupported();
       if (device.kind === 'thread') {
-        misses = 0;
+        failures = 0;
+        // One that failed before this may be waiting to load the thread again.
+        reconnect?.stop();
         show(device.thread);
       }
       return { kind: device.kind, trace };

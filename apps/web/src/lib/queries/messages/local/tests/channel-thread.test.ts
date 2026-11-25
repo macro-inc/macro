@@ -12,7 +12,7 @@ import { createEffect, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { markChannelCacheUnsupported } from '../channel-flag';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
-import { VIEW_RETRY_MS } from '../channel-network';
+import { DEVICE_RETRIES, VIEW_RETRY_MS } from '../channel-network';
 import type { ChannelViewChange } from '../channel-sync-runtime';
 import {
   createLocalChannelThread,
@@ -569,9 +569,10 @@ describe('createLocalChannelThread', () => {
       sync.change();
       await vi.advanceTimersByTimeAsync(0);
       expect(fetchPage).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(VIEW_RETRY_MS);
+      // The device lost it, then the server failed: two in a row.
+      await vi.advanceTimersByTimeAsync(2 * VIEW_RETRY_MS);
       expect(fetchPage).toHaveBeenCalledTimes(2);
-      await vi.advanceTimersByTimeAsync(2 * VIEW_RETRY_MS - 1);
+      await vi.advanceTimersByTimeAsync(4 * VIEW_RETRY_MS - 1);
       expect(fetchPage).toHaveBeenCalledTimes(2);
       covered = true;
       await vi.advanceTimersByTimeAsync(1);
@@ -585,6 +586,95 @@ describe('createLocalChannelThread', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(fetchPage).toHaveBeenCalledTimes(3);
       dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('asks a device that does not store a thread again a few times, then follows it once stored', async () => {
+    vi.useFakeTimers();
+    let stores = false;
+    let covered = false;
+    let keys = [channelMessageKey(first.id)];
+    const host = fakeHost(() => devicePage(keys, { covered }), {
+      records: [root, first, second],
+    });
+    const sync = runtime();
+    const server = serverThread();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async (...args) => {
+      const answer = await server(...args);
+      covered = stores;
+      return stores
+        ? answer
+        : { ...answer, cached: Promise.reject(new Error('disk full')) };
+    });
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: sync, fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      for (let retry = 0; retry < DEVICE_RETRIES; retry += 1) {
+        expect(fetchPage).toHaveBeenCalledTimes(1 + retry);
+        await vi.advanceTimersByTimeAsync(VIEW_RETRY_MS * 2 ** retry);
+      }
+      expect(fetchPage).toHaveBeenCalledTimes(1 + DEVICE_RETRIES);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(thread.replies()).toHaveLength(2);
+
+      stores = true;
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchPage).toHaveBeenCalledTimes(2 + DEVICE_RETRIES);
+      expect(thread.replies()).toHaveLength(1);
+      keys = [channelMessageKey(second.id), ...keys];
+      sync.change();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(thread.replies()).toHaveLength(2);
+    } finally {
+      dispose();
+      vi.useRealTimers();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('reads a held thread again after a wait when the device failed the read of a change', async () => {
+    vi.useFakeTimers();
+    let keys = [channelMessageKey(first.id)];
+    const host = fakeHost(() => devicePage(keys), {
+      records: [root, first, second],
+    });
+    const sync = runtime();
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: sync, fetchPage: serverThread() },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      vi.spyOn(host, 'channelTimeline').mockRejectedValueOnce(
+        new Error('busy')
+      );
+      keys = [channelMessageKey(second.id), ...keys];
+      sync.change();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(thread.replies()).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(VIEW_RETRY_MS);
+      expect(thread.replies()).toHaveLength(2);
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       dispose();

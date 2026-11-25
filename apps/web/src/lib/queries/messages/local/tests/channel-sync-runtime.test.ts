@@ -851,7 +851,7 @@ describe('connections', () => {
     expect(asked()).toEqual(['5', '5']);
   });
 
-  it('does not trust a read sent before the server surely pushed changes', async () => {
+  it('does not trust a read sent before the server is taken to push changes', async () => {
     const { runtime, read, asked } = setup('5');
     runtime.onConnected();
     const sent = runtime.epoch();

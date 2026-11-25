@@ -37,8 +37,9 @@ export const CATCH_UP_RETRY_MS = 2_000;
 export const CATCH_UP_RETRY_MAX_MS = 60_000;
 /**
  * A connection is up before the server pushes changes over it, and nothing says
- * when it does: what changes in between is in no frame. Past this wait it
- * surely does, and the channels are asked for once more.
+ * when it does: what changes in between is in no frame. Past this wait it is
+ * taken to, and the channels are asked for once more. A change missed by a
+ * server that took longer shows with the channel's next one.
  */
 export const LISTENING_MS = 5_000;
 /**
@@ -143,8 +144,8 @@ export interface ChannelSyncRuntime {
   /** A view opened the channel; returns its release. */
   open(channelId: string): () => void;
   /**
-   * Changes when the socket drops, connects or surely pushes every change;
-   * taken before a server read.
+   * Changes when the socket drops or connects, and `LISTENING_MS` after; taken
+   * before a server read.
    */
   epoch(): number;
   /** A server read of the channel was answered. */
@@ -587,7 +588,7 @@ export function createChannelSyncRuntime(
     state.pendingAt = undefined;
   };
 
-  /** What the server said before it surely pushed every change proves nothing. */
+  /** What the server said before it was taken to push every change proves nothing. */
   const askAgain = () => {
     socketEpoch += 1;
     for (const [channelId, state] of channels) {
