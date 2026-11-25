@@ -32,6 +32,7 @@ axum = [
 # Merging records: one transaction across the owners of rows that name them.
 merge = [
   "dep:activity",
+  "dep:macro_event_broker",
   "dep:favorites",
   "dep:model-entity",
   "dep:saved_views",

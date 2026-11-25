@@ -687,6 +687,7 @@ where
                 json!({ "values": reference.previous }),
             )
         }));
+        let stored = |value: &Value| serde_json::from_value::<PropertyValue>(value.clone()).ok();
         let mut written: Vec<ChangedEntityProperty> = values
             .written
             .iter()
@@ -695,6 +696,13 @@ where
                 entity_id: row.entity_id.clone(),
                 entity_type: row.entity_type,
                 property_definition_id: row.property_definition_id,
+                value: values
+                    .moved
+                    .iter()
+                    .find(|moved| moved.id == row.id)
+                    .and_then(|moved| moved.values.as_ref())
+                    .and_then(stored),
+                previous_value: None,
                 updated_at: row.updated_at,
             })
             .collect();
@@ -703,6 +711,8 @@ where
             entity_id: row.entity_id.clone(),
             entity_type: row.entity_type,
             property_definition_id: row.property_definition_id,
+            value: stored(&row.values),
+            previous_value: stored(&row.previous),
             updated_at: row.updated_at,
         }));
 
@@ -935,3 +945,61 @@ where
     }
 }
 
+/// Merging is on only for users the rollout flag names. Missing or failed
+/// flags keep it off.
+pub struct FlaggedMerge<F>(pub F);
+
+impl<F> std::fmt::Debug for FlaggedMerge<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlaggedMerge").finish_non_exhaustive()
+    }
+}
+
+#[async_trait::async_trait]
+impl<F: feature_flags::FeatureFlags + Send + Sync> crate::domain::record_merge::service::MergeGate
+    for FlaggedMerge<F>
+{
+    #[tracing::instrument(name = "crm.merge.availability", skip_all)]
+    async fn enabled_for(&self, user: macro_user_id::user_id::MacroUserIdStr<'_>) -> bool {
+        match self.0.load(&user).await {
+            Ok(flags) => flags.is_enabled(crate::domain::record_merge::MERGE_FLAG),
+            Err(error) => {
+                tracing::warn!(error = ?error, "failed to load the merge flag");
+                false
+            }
+        }
+    }
+}
+
+/// Publishes the property rows a merge wrote, as the property service does
+/// after its own writes, so search and open lists catch up. The events carry
+/// no actor: a merge's rewrites are not edits anyone's activity should show.
+pub struct PropertyMergeEffects<Broker>(pub Broker);
+
+impl<Broker> crate::domain::record_merge::service::MergeEffects for PropertyMergeEffects<Broker>
+where
+    Broker: macro_event_broker::MacroEventBroker + Send + Sync,
+{
+    fn properties_changed(&self, changes: &[ChangedEntityProperty]) {
+        use properties::domain::events::{EntityPropertyUpdatedMetadata, PropertyMacroEvent};
+        for change in changes {
+            let event = PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
+                entity_property_id: change.entity_property_id,
+                entity_id: change.entity_id.clone(),
+                entity_type: change.entity_type,
+                property_definition_id: change.property_definition_id,
+                actor_user_id: None,
+                actor: None,
+                on_behalf_of: None,
+                source: None,
+                inherited_from_project: None,
+                value: change.value.clone(),
+                previous_value: change.previous_value.clone(),
+                updated_at: change.updated_at,
+            });
+            drop(self.0.send_event(&event).inspect_err(|error| {
+                tracing::error!(error = ?error, "failed to schedule a merged property's event");
+            }));
+        }
+    }
+}

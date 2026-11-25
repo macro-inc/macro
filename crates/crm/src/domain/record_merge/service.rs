@@ -22,6 +22,10 @@ pub struct ChangedEntityProperty {
     pub entity_type: PropertyEntityType,
     /// The property definition.
     pub property_definition_id: Uuid,
+    /// Its value now.
+    pub value: Option<models_properties::service::property_value::PropertyValue>,
+    /// Its value before the merge, when it changed.
+    pub previous_value: Option<models_properties::service::property_value::PropertyValue>,
     /// When the row was written.
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

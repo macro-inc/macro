@@ -82,6 +82,8 @@ pub struct RetargetedReference {
     pub property_definition_id: Uuid,
     /// The stored value before the merge.
     pub previous: serde_json::Value,
+    /// The stored value after it.
+    pub values: serde_json::Value,
     /// When the merge wrote it.
     pub updated_at: DateTime<Utc>,
 }
@@ -339,10 +341,11 @@ pub async fn retarget_references_in(
                    )),
                    updated_at = NOW()
                FROM old WHERE ep.id = old.id
-               RETURNING ep.id, ep.entity_id, ep.entity_type, ep.property_definition_id, ep.updated_at
+               RETURNING ep.id, ep.entity_id, ep.entity_type, ep.property_definition_id, ep.values, ep.updated_at
            )
            SELECT updated.id, updated.entity_id, updated.entity_type AS "entity_type: EntityType",
-                  updated.property_definition_id, old.values AS "previous!", updated.updated_at
+                  updated.property_definition_id, old.values AS "previous!", updated.values AS "values!",
+                  updated.updated_at
            FROM updated JOIN old ON old.id = updated.id
            ORDER BY updated.id"#,
         &ids,
@@ -361,6 +364,7 @@ pub async fn retarget_references_in(
             entity_type: row.entity_type,
             property_definition_id: row.property_definition_id,
             previous: row.previous,
+            values: row.values,
             updated_at: row.updated_at,
         })
         .collect())

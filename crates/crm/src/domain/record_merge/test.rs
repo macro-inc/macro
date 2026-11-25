@@ -232,3 +232,161 @@ fn a_request_key_fingerprints_the_whole_command() {
         request_fingerprint(&b, "r1", SharingRulesChoice::Keep)
     );
 }
+
+mod service {
+    use std::sync::{Arc, Mutex};
+
+    use bot_id::BotId;
+    use entity_access::domain::models::{
+        BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+        MemberTeamRole, TeamRole,
+    };
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+    use uuid::Uuid;
+
+    use super::super::service::{
+        ChangedEntityProperty, MergeCommitted, MergeEffects, MergeGate, RecordMergeRepository,
+        RecordMergeService, RecordMerges,
+    };
+    use super::super::*;
+    use crate::domain::auth::{CrmMemberAccess, CrmTeamReceipt};
+    use crate::domain::model::CrmError;
+
+    const USER: &str = "macro|merger@example.com";
+
+    #[derive(Default)]
+    struct Repo {
+        calls: Mutex<Vec<&'static str>>,
+        replayed: bool,
+    }
+
+    impl CrmMemberAccess for Arc<Repo> {
+        async fn member_has_crm_access(&self, _: Uuid, user: &str) -> Result<bool, CrmError> {
+            Ok(user == USER)
+        }
+    }
+
+    fn outcome() -> MergeOutcome {
+        MergeOutcome {
+            merge_id: Uuid::from_u128(9),
+            record_type: MergeRecordType::Company,
+            survivor_id: Uuid::from_u128(1),
+            merged_ids: vec![Uuid::from_u128(2)],
+            committed_at: chrono::DateTime::UNIX_EPOCH,
+        }
+    }
+
+    impl RecordMergeRepository for Arc<Repo> {
+        async fn preview(&self, _: &MergeScope, _: &MergeTargets) -> Result<MergePreview, MergeError> {
+            self.calls.lock().unwrap().push("preview");
+            Err(MergeError::RecordUnavailable)
+        }
+
+        async fn commit(&self, scope: &MergeScope, _: &MergeCommand) -> Result<MergeCommitted, MergeError> {
+            assert_eq!(scope.actor.as_ref(), USER);
+            self.calls.lock().unwrap().push("commit");
+            Ok(MergeCommitted {
+                outcome: outcome(),
+                replayed: self.replayed,
+                changed_properties: vec![ChangedEntityProperty {
+                    entity_property_id: Uuid::from_u128(5),
+                    entity_id: "task".into(),
+                    entity_type: models_properties::EntityType::Document,
+                    property_definition_id: Uuid::from_u128(6),
+                    value: None,
+                    previous_value: None,
+                    updated_at: chrono::DateTime::UNIX_EPOCH,
+                }],
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct Gate(bool);
+
+    #[async_trait::async_trait]
+    impl MergeGate for Gate {
+        async fn enabled_for(&self, _: MacroUserIdStr<'_>) -> bool {
+            self.0
+        }
+    }
+
+    #[derive(Default)]
+    struct Effects(Mutex<usize>);
+
+    impl MergeEffects for Effects {
+        fn properties_changed(&self, changes: &[ChangedEntityProperty]) {
+            *self.0.lock().unwrap() += changes.len();
+        }
+    }
+
+    fn receipt(role: TeamRole) -> CrmTeamReceipt<MemberTeamRole> {
+        CrmTeamReceipt::from_team_receipt(
+            EntityAccessReceipt::<MemberTeamRole>::try_new_authenticated_user(
+                MacroUserIdStr::parse_from_str(USER).unwrap().into_owned(),
+                Entity {
+                    entity_id: Uuid::now_v7().to_string(),
+                    entity_type: EntityType::Team,
+                },
+                EntityPermission::TeamRole { role },
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn command() -> MergeCommand {
+        MergeCommand {
+            targets: MergeTargets::new(MergeRecordType::Company, Uuid::from_u128(1), [Uuid::from_u128(2)]).unwrap(),
+            revision: "r".into(),
+            request_key: Uuid::from_u128(3),
+            sharing_rules: SharingRulesChoice::Keep,
+        }
+    }
+
+    fn service(repo: &Arc<Repo>, enabled: bool, effects: &Arc<Effects>) -> RecordMergeService<Arc<Repo>> {
+        RecordMergeService::new(repo.clone())
+            .with_gate(Arc::new(Gate(enabled)))
+            .with_effects(effects.clone())
+    }
+
+    #[tokio::test]
+    async fn only_admins_with_the_flag_reach_the_repository() {
+        let repo = Arc::new(Repo::default());
+        let effects = Arc::new(Effects::default());
+
+        let off = service(&repo, false, &effects);
+        assert!(matches!(off.commit(&receipt(TeamRole::Admin), &command()).await, Err(MergeError::Unavailable)));
+        let ungated = RecordMergeService::new(repo.clone());
+        assert!(matches!(ungated.commit(&receipt(TeamRole::Owner), &command()).await, Err(MergeError::Unavailable)));
+
+        let on = service(&repo, true, &effects);
+        assert!(matches!(
+            on.commit(&receipt(TeamRole::Member), &command()).await,
+            Err(MergeError::PermissionRequired)
+        ));
+        let team_bot = CrmTeamReceipt::from_team_receipt(
+            EntityAccessReceipt::try_new_bot(
+                BotId::new_from_uuid(Uuid::from_u128(123)).into_storage_id(),
+                BotReceiptScope::Team { team_id: Uuid::from_u128(4) },
+                Entity { entity_id: Uuid::from_u128(4).to_string(), entity_type: EntityType::Team },
+                EntityPermission::TeamRole { role: TeamRole::Admin },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(on.commit(&team_bot, &command()).await, Err(MergeError::PermissionRequired)));
+        assert!(repo.calls.lock().unwrap().is_empty(), "refusals never reach storage");
+
+        assert_eq!(on.commit(&receipt(TeamRole::Admin), &command()).await.unwrap(), outcome());
+        assert_eq!(*effects.0.lock().unwrap(), 1, "a commit publishes what it changed");
+    }
+
+    #[tokio::test]
+    async fn an_exact_retry_publishes_nothing() {
+        let repo = Arc::new(Repo { replayed: true, ..Repo::default() });
+        let effects = Arc::new(Effects::default());
+        service(&repo, true, &effects).commit(&receipt(TeamRole::Owner), &command()).await.unwrap();
+        assert_eq!(*effects.0.lock().unwrap(), 0);
+    }
+}
