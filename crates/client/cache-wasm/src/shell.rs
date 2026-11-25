@@ -1260,6 +1260,12 @@ struct JsQueueReport {
     outcome: &'static str,
     kept: u64,
     dropped: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    read_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    wipe_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    import_ms: Option<f64>,
 }
 
 fn cache_open_result(
@@ -1285,6 +1291,9 @@ fn cache_open_result(
             outcome: queue.outcome.as_str(),
             kept: queue.kept,
             dropped: queue.dropped,
+            read_ms: queue.times.read_ms,
+            wipe_ms: queue.times.wipe_ms,
+            import_ms: queue.times.import_ms,
         })?,
     )?;
     Ok(result.into())

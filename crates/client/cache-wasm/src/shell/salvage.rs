@@ -5,6 +5,7 @@
 //! engine may die anywhere in between.
 
 use super::{err_js, reset_required_js_error, storage_err_js};
+use crate::query_telemetry;
 use cache_turso::{
     QueueRead, SalvageFile, SalvagedQueue, TursoStorage, TursoStorageError, read_queue,
 };
@@ -45,13 +46,38 @@ impl QueueOutcome {
 }
 
 /// How a queue crossed from a wiped database to the open one.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct QueueReport {
     pub(super) outcome: QueueOutcome,
     /// Mutations queued in the open database that came from a wiped one.
     pub(super) kept: u64,
     /// Mutations known to be lost.
     pub(super) dropped: u64,
+    pub(super) times: CrossingTimes,
+}
+
+/// How long each step of a crossing took, for those it had.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct CrossingTimes {
+    /// Until the queue of the old database was durable in the side file.
+    pub(super) read_ms: Option<f64>,
+    pub(super) wipe_ms: Option<f64>,
+    pub(super) import_ms: Option<f64>,
+}
+
+impl CrossingTimes {
+    /// These and the ones of a later crossing, added up.
+    fn then(self, later: Self) -> Self {
+        let sum = |first: Option<f64>, second: Option<f64>| match (first, second) {
+            (Some(first), Some(second)) => Some(first + second),
+            _ => first.or(second),
+        };
+        Self {
+            read_ms: sum(self.read_ms, later.read_ms),
+            wipe_ms: sum(self.wipe_ms, later.wipe_ms),
+            import_ms: sum(self.import_ms, later.import_ms),
+        }
+    }
 }
 
 /// A wiped database's queue, until the next database holds it.
@@ -71,10 +97,11 @@ pub(super) async fn wipe_keeping_queue(
     scope: &str,
     owner: OpfsOwner,
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
+    let started = query_telemetry::now_ms();
     let sidecar = owner.sidecar();
     let (owner, bytes) = or_busy(owner, sidecar.read().await).await?;
     let file = SalvageFile::decode(&bytes.unwrap_or_default());
-    let (owner, read) = read_before_wipe(scope, owner, &sidecar, file).await?;
+    let (owner, mut read) = read_before_wipe(scope, owner, &sidecar, file).await?;
     let unwritten = match read.frame {
         Some(queue) => write_queue(&sidecar, read.end, queue).await,
         None => None,
@@ -83,7 +110,13 @@ pub(super) async fn wipe_keeping_queue(
         Some(_) => note_loss(&sidecar, read.end).await,
         None => read.end,
     };
+    let wiping = query_telemetry::now_ms();
     let owner = wipe(owner).await?;
+    read.report.times = CrossingTimes {
+        read_ms: Some(wiping - started),
+        wipe_ms: Some(query_telemetry::now_ms() - wiping),
+        import_ms: None,
+    };
     // A full disk has room again.
     let unwritten = match unwritten {
         Some(queue) => write_queue(&sidecar, end, queue).await,
@@ -258,6 +291,7 @@ fn report_of(found: &QueueRead) -> QueueReport {
         },
         kept: 0,
         dropped: found.dropped,
+        times: CrossingTimes::default(),
     }
 }
 
@@ -273,6 +307,7 @@ impl Crossing {
                 },
                 kept: 0,
                 dropped: self.report.dropped + later.report.dropped,
+                times: self.report.times.then(later.report.times),
             },
         }
     }
@@ -283,6 +318,7 @@ impl Crossing {
         sidecar: &Sidecar,
         storage: &mut TursoStorage,
     ) -> Result<QueueReport, JsValue> {
+        let started = query_telemetry::now_ms();
         let mut report = self.report;
         let bytes = match sidecar.read().await {
             Ok(bytes) => bytes,
@@ -335,6 +371,7 @@ impl Crossing {
         // The database names the queue it holds, so a copy that stays for any
         // other reason is inert while the database can be read.
         remove(sidecar).await?;
+        report.times.import_ms = Some(query_telemetry::now_ms() - started);
         Ok(report)
     }
 }

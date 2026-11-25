@@ -96,6 +96,10 @@ export type CacheQueueCrossing = {
   kept: number;
   /** Mutations known to be lost. */
   dropped: number;
+  /** How long each step of the crossing took, for those it had. */
+  readMs?: number;
+  wipeMs?: number;
+  importMs?: number;
 };
 
 export interface CacheOpenResult {

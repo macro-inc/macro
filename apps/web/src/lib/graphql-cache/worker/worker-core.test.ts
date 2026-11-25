@@ -3308,6 +3308,62 @@ describe('CacheWorkerCore', () => {
     }
   );
 
+  it('times each step of a queue that crosses', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheForRecoveryWithOutcome: vi.fn().mockResolvedValue({
+        engine: {},
+        outcome: 'reset-storage-uncertain',
+        queue: {
+          outcome: 'kept',
+          kept: 2,
+          dropped: 0,
+          readMs: 40,
+          wipeMs: 5,
+          importMs: 7,
+        },
+      }),
+    });
+    const core = new CacheWorkerCore({
+      recoveryOpen: true,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    const step = {
+      openOutcome: 'reset-storage-uncertain',
+      queueOutcome: 'kept',
+    };
+    expect(
+      observations.filter(
+        ({ name, queueOutcome }) =>
+          queueOutcome !== undefined && name !== 'graphql_cache.schema_init'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.queue_read',
+        durationMs: 40,
+      }),
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.recovery_wipe',
+        durationMs: 5,
+      }),
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.queue_import',
+        durationMs: 7,
+      }),
+    ]);
+  });
+
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({

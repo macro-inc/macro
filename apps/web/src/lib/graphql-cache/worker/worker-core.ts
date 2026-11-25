@@ -1620,6 +1620,7 @@ export class CacheWorkerCore {
             : {}),
           durationMs: this.now() - schemaStartedAt,
         });
+        this.recordQueueCrossing(openOutcome, queue);
         await this.refreshQueueDiagnostics(true);
       } catch (error) {
         this.telemetry.record({
@@ -1633,6 +1634,30 @@ export class CacheWorkerCore {
       }
     })();
     await this.initPromise;
+  }
+
+  /** One record per step of a wipe that carries the queue. */
+  private recordQueueCrossing(
+    openOutcome: CacheOpenOutcome,
+    queue: CacheQueueCrossing | undefined
+  ): void {
+    const steps = [
+      ['graphql_cache.queue_read', queue?.readMs],
+      ['graphql_cache.recovery_wipe', queue?.wipeMs],
+      ['graphql_cache.queue_import', queue?.importMs],
+    ] as const;
+    for (const [name, durationMs] of steps) {
+      if (durationMs === undefined) continue;
+      this.telemetry.record({
+        name,
+        operationCategory: 'initialization',
+        outcome: 'success',
+        errorCode: 'none',
+        openOutcome,
+        ...(queue ? { queueOutcome: queue.outcome } : {}),
+        durationMs,
+      });
+    }
   }
 
   private async openWhenOwnerLockIsFree(

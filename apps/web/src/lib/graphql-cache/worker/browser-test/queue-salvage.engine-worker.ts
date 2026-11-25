@@ -51,8 +51,8 @@ async function open(scope: string, recovery: boolean): Promise<void> {
     },
     telemetry: {
       record: (observation) => {
-        if (observation.queueOutcome === undefined) return;
-        const { queueOutcome, queueKept, queueDropped } = observation;
+        const { name, queueOutcome, queueKept, queueDropped } = observation;
+        if (name !== 'graphql_cache.schema_init' || !queueOutcome) return;
         crossing = `${queueOutcome} ${queueKept} ${queueDropped}`;
       },
       flush: () => undefined,
