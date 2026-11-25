@@ -1,3 +1,4 @@
+import type { EntityData } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { Accessor } from 'solid-js';
@@ -11,11 +12,14 @@ import {
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
-  withSearchOperatorQuery,
 } from '../core/search-operator-filters';
 import { searchQueryParts } from '../core/search-operators';
 import { compileSearchQuery } from '../core/search-query';
-import { compileToAst, queryStateFrom } from '../filters/filter-store';
+import {
+  bothTargetAsts,
+  compileToAst,
+  queryStateFrom,
+} from '../filters/filter-store';
 import { createSearchResultFilter } from '../filters/search-results';
 import { buildSoupSearchRequest } from './search-request';
 
@@ -41,19 +45,33 @@ export function createEmbeddedSearchSource(options: {
   const query = createMemo(() =>
     queryStateFrom(compileSearchQuery(options.filters()))
   );
-  const browseQuery = createMemo(() => {
+  // The facets picked beside the field and the typed operators must both
+  // hold, so each is compiled and the two are joined.
+  const browseBody = createMemo(() => {
     const operators = operatorFilters();
+    const body = compileToAst(query());
     return operators
-      ? withSearchOperatorQuery(query(), searchOperatorQuery(operators))
-      : query();
+      ? bothTargetAsts(
+          body,
+          compileToAst(queryStateFrom(searchOperatorQuery(operators)))
+        )
+      : body;
   });
   const filtered = () =>
     options.filters().type !== 'all' ||
     options.filters().tags.length > 0 ||
     parts().nameText === '';
-  const matches = createMemo(() =>
-    createSearchResultFilter(options.filters().type, query())
-  );
+  const matches = createMemo(() => {
+    const inType = createSearchResultFilter(options.filters().type, query());
+    // The types `type:` and the other operators leave are alternatives.
+    const inOperatorTypes = (operatorFilters()?.indexes ?? []).map((index) =>
+      createSearchResultFilter(index, query())
+    );
+    return (entity: EntityData) =>
+      inType(entity) &&
+      (inOperatorTypes.length === 0 ||
+        inOperatorTypes.some((matchesType) => matchesType(entity)));
+  });
   const entityPool = useOptionalSearchContext()?.entityPool(
     () => enabled() && !filtered() && Boolean(parts().nameText.trim())
   );
@@ -74,7 +92,7 @@ export function createEmbeddedSearchSource(options: {
   const browse = useSoupAstItemsQuery(
     () => ({
       params: { limit: 25, sort_method: 'updated_at' },
-      body: compileToAst(browseQuery()),
+      body: browseBody(),
     }),
     () => ({
       enabled: enabled() && browsing(),

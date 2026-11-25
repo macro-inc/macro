@@ -46,6 +46,7 @@ describe('searchOperatorCompletions', () => {
 
   it('offers the caller’s tags, inboxes and channels, quoted when spaced', () => {
     expect(inserts('tag:t')).toEqual(['tag:"Team offsite"', 'tag:Travel']);
+    expect(inserts('launch tag:“Team off')).toEqual(['tag:"Team offsite"']);
     expect(inserts('inbox:te')).toEqual(['inbox:team@example.com']);
     expect(inserts('in:#q')).toEqual(['in:#"Q3 launch"']);
     expect(inserts('in:inbox')).toEqual([]);

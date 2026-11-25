@@ -203,6 +203,12 @@ export function searchOperatorFilters(
 export function searchOperatorQuery({ state }: SearchOperatorFilters): Query {
   const query = compileSearchQuery(state);
   const include = { ...query.include };
+  // A tag narrows every kind that carries tags, as on the service, while a
+  // type's own compile keeps tags to the types whose facets offer them.
+  if (state.tags.length) {
+    include.tagFilters = state.tags;
+    if (state.tagMode === 'all') include.tagFilterMode = 'all';
+  }
   if (state.email.inboxIds?.length) include.emailLinkId = state.email.inboxIds;
   if (state.channels.in.length) include.channelId = state.channels.in;
   if (state.channels.from.length) include.channelSenderId = state.channels.from;
@@ -307,7 +313,9 @@ const anyOf = (name: string, values: (string | undefined)[]) => {
  * The operators that ask for what `state` filters, to write into the Search
  * field in place of picked filters, so the field shows the whole search. An
  * id with no name to write is written as it is: it names nothing, so the
- * search narrows rather than dropping the condition.
+ * search narrows rather than dropping the condition. A channel `in:#` can't
+ * name (a DM) is left out instead: the search then reaches every channel,
+ * that one among them, rather than finding nothing.
  */
 export function searchFiltersOperatorText(
   state: SearchFiltersState,
@@ -338,7 +346,10 @@ export function searchFiltersOperatorText(
       ? [
           ...anyOf(
             'in',
-            scope.in.map((id) => `#${asValue(names.channel(id) ?? id)}`)
+            scope.in.map((id) => {
+              const name = names.channel(id);
+              return name === undefined ? undefined : `#${asValue(name)}`;
+            })
           ),
           ...anyOf('from', scope.from.map(person)),
         ]

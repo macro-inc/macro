@@ -118,6 +118,15 @@ describe('searchQueryParts', () => {
     expect(parts.read.operators).toBe(2);
   });
 
+  it('needs a word with a letter or digit, as the service drops the rest', () => {
+    expect(searchQueryParts('assignee:me -').serviceText).toBe('');
+    expect(searchQueryParts('tag:finance 🎉').serviceText).toBe('');
+    expect(searchQueryParts('status:in_progress &').serviceText).toBe('');
+    expect(searchQueryParts('status:in_progress & launch').serviceText).toBe(
+      'status:in_progress & launch'
+    );
+  });
+
   it('keeps email operators for the service, which reads them alone', () => {
     expect(searchQueryParts('is:unread').serviceText).toBe('is:unread');
   });
@@ -138,6 +147,7 @@ describe('isUnfinishedSearchOperator', () => {
     ['author:an', true],
     ['inbox:ana@', true],
     ['assignee:me', false],
+    ['assignee:ana@example', true],
     ['from:ana', false],
     ['tag:fin', false],
     ['type:tasks', false],
@@ -152,11 +162,22 @@ describe('searchOperatorSpans', () => {
     searchOperatorSpans(text).map(({ start, end }) => text.slice(start, end));
 
   it('marks whole operators, the service’s and Mail’s', () => {
-    expect(drawn('launch type:task tag:"q3 plan" is:unread')).toEqual([
+    expect(drawn('launch type:task tag:"q3 plan"')).toEqual([
       'type:task',
       'tag:"q3 plan"',
-      'is:unread',
     ]);
+    expect(drawn('launch is:unread from:ana')).toEqual([
+      'is:unread',
+      'from:ana',
+    ]);
+    expect(drawn('tag:finance OR tag:legal')).toEqual([
+      'tag:finance',
+      'tag:legal',
+    ]);
+  });
+
+  it('leaves Mail’s operators plain where email isn’t searched', () => {
+    expect(drawn('type:task is:unread')).toEqual(['type:task']);
   });
 
   it('leaves words, invalid values and half-typed operators plain', () => {

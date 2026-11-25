@@ -369,8 +369,12 @@ export function createInputActions(
         const operators = searchFiltersOperatorText(state, {
           userId,
           tag: (id) => tagOptions.optionsById().get(id)?.label,
+          // `in:#` reaches named channels, not DMs.
           channel: (id) =>
-            searchChannels().find((channel) => channel.id === id)?.label,
+            searchableChannels
+              .items()
+              .find((channel) => channel.id === id && channel.bucket !== 'dm')
+              ?.data.name,
           inbox: (id) =>
             email.accounts.inboxes().find((inbox) => inbox.id === id)
               ?.email_address,

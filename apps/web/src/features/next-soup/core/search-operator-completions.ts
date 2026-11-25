@@ -1,5 +1,6 @@
 import { match } from 'ts-pattern';
 import {
+  isPhraseQuote,
   SEARCH_OPERATOR_CALL_STATUSES,
   SEARCH_OPERATOR_NAMES,
   SEARCH_OPERATOR_PRIORITIES,
@@ -44,7 +45,7 @@ export function searchTokenAtEnd(text: string): string | undefined {
   let start = 0;
   for (let index = 0; index < text.length; index++) {
     const char = text[index] ?? '';
-    if (char === '"') inQuotes = !inQuotes;
+    if (isPhraseQuote(char)) inQuotes = !inQuotes;
     else if (/\s/.test(char) && !inQuotes) start = index + 1;
   }
   const token = text.slice(start);
@@ -75,7 +76,9 @@ export function searchOperatorBeingTyped(
     return undefined;
   return {
     name: name as SearchOperatorName,
-    value: token.slice(colon + 1).replaceAll('"', ''),
+    value: [...token.slice(colon + 1)]
+      .filter((char) => !isPhraseQuote(char))
+      .join(''),
   };
 }
 

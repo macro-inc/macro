@@ -86,6 +86,11 @@ describe('searchOperatorFilters', () => {
       'macro|ana@example.com',
     ]);
 
+    const calendar = searchOperatorQuery(compile('type:calendar tag:finance'));
+    expect(calendar.include?.tagFilters).toEqual([
+      { propertyId: 'tags-1', type: 'select', value: 'finance-1' },
+    ]);
+
     const inbox = compile('inbox:ana@example.com');
     expect(inbox.state.type).toBe('email');
     expect(searchOperatorQuery(inbox).include?.emailLinkId).toEqual([
@@ -160,5 +165,17 @@ describe('searchFiltersOperatorText', () => {
       }
     );
     expect(read.state.channels).toEqual(state.channels);
+  });
+
+  it('leaves out a channel it cannot name', () => {
+    const text = searchFiltersOperatorText(
+      {
+        ...compile('').state,
+        type: 'channels',
+        channels: { in: ['dm-1'], from: [] },
+      },
+      NAMES
+    );
+    expect(text).toBe('type:channel');
   });
 });

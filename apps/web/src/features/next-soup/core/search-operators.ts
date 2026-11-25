@@ -135,7 +135,18 @@ const isOneOf = <T extends string>(
 const hasWord = (text: string) => /[\p{Alphabetic}\p{N}]/u.test(text);
 
 /** Quotes a phrase is typed with, as the service reads them. */
-const PHRASE_QUOTES = /["“”„‟]/;
+const PHRASE_QUOTES = /["“”„]/;
+
+/** Whether `char` opens or closes a phrase, as the service reads it. */
+export const isPhraseQuote = (char: string) => PHRASE_QUOTES.test(char);
+
+/**
+ * The terms the service searches with: beside a term with a letter or digit,
+ * one without either (`-`, `&`, an emoji) is dropped before operators are
+ * read, so it doesn't count as the word operators need.
+ */
+const withoutWordlessTerms = (terms: string[]) =>
+  terms.some(hasWord) ? terms.filter(hasWord) : terms;
 
 /**
  * The query's terms as the service splits them: by whitespace outside
@@ -165,7 +176,7 @@ const NAME_AND_VALUE = /^([A-Za-z_]+):(.*)$/s;
 const ATOM = "[A-Za-z0-9!#%&'*+/=?^_`{|}~-]+";
 const LABEL = '[A-Za-z0-9-]+';
 /** An address as Macro's user ids take one. */
-const ADDRESS = new RegExp(`^${ATOM}(?:\\.${ATOM})*@${LABEL}(?:\\.${LABEL})*$`);
+const ADDRESS = new RegExp(`^${ATOM}(?:\\.${ATOM})*@${LABEL}(?:\\.${LABEL})+$`);
 /** Something, `@`, something: the address `inbox:` takes. */
 const INBOX_ADDRESS = /^[^@\s]+@[^@\s]+$/;
 
@@ -481,7 +492,9 @@ export function searchQueryParts(text: string): SearchQueryParts {
       );
     })
     .join(' ');
-  const read = readSearchOperators(splitSearchTerms(searched));
+  const read = readSearchOperators(
+    withoutWordlessTerms(splitSearchTerms(searched))
+  );
   const words = read.terms.filter((term) => !readsAsEmailSearchOperator(term));
   const onlyTypes = read.groups.every((group) => group.name === 'type');
   return {
@@ -496,24 +509,26 @@ export function searchQueryParts(text: string): SearchQueryParts {
 export type SearchOperatorSpan = { start: number; end: number };
 
 /**
- * Where the query's operators are, to draw them: every whole token the
- * search reads as an operator, its own or Mail's. One still being typed stays
- * plain, as Mail draws it.
+ * Where the query's operators are, to draw them: each whole token the search
+ * reads as an operator, its own or Mail's, read with the rest of the query.
+ * Mail's draw only where email is searched, since elsewhere they are words.
+ * One still being typed stays plain, as Mail draws it.
  */
 export function searchOperatorSpans(text: string): SearchOperatorSpan[] {
-  const spans: SearchOperatorSpan[] = [];
+  const tokens: { start: number; end: number; token: string; term: string }[] =
+    [];
   let start = -1;
   let inQuotes = false;
   const close = (end: number) => {
     if (start < 0) return;
     const token = text.slice(start, end);
-    const term = splitSearchTerms(token)[0] ?? token;
+    const term = splitSearchTerms(token)[0];
     if (
-      (readsAsSearchOperator(token) || readsAsEmailSearchOperator(token)) &&
+      term !== undefined &&
       !isUnfinishedSearchOperator(term) &&
       !isUnfinishedEmailSearchOperator(token)
     ) {
-      spans.push({ start, end });
+      tokens.push({ start, end, token, term });
     }
     start = -1;
   };
@@ -524,5 +539,21 @@ export function searchOperatorSpans(text: string): SearchOperatorSpan[] {
     else if (start < 0) start = index;
   }
   close(text.length);
-  return spans;
+
+  const read = readSearchOperators(
+    withoutWordlessTerms(tokens.map(({ term }) => term))
+  );
+  // The words the operators leave, counted, so of two equal tokens only the
+  // one read as an operator is drawn.
+  const words = new Map<string, number>();
+  for (const term of read.terms) words.set(term, (words.get(term) ?? 0) + 1);
+  const searchesEmail = searchOperatorIndexes(read).includes('email');
+  return tokens.flatMap(({ start, end, token, term }) => {
+    const left = words.get(term) ?? 0;
+    if (left === 0) return readsAsSearchOperator(token) ? [{ start, end }] : [];
+    words.set(term, left - 1);
+    return searchesEmail && readsAsEmailSearchOperator(token)
+      ? [{ start, end }]
+      : [];
+  });
 }

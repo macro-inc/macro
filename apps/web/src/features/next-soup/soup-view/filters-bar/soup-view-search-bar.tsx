@@ -230,22 +230,15 @@ export function SearchbarInput(
       props.onDismiss?.();
       return true;
     })
-    // Tab writes the offered operator; declining it otherwise leaves Tab to
-    // focus order, and having a handler at all keeps the editor's tab
-    // indentation out of this single-line field.
-    .onTab((event) => {
-      if (operatorRows().length === 0) return false;
-      event.preventDefault();
-      pickOperator(Math.max(0, activeIndex()));
-      return true;
-    })
+    .onTab(() => false)
     .use(searchOperatorHighlights)
     .use((lex) =>
       lex.registerCommand(
         KEY_ARROW_DOWN_COMMAND,
         () => {
           if (editor.controls.isInlineMenuOpen()) return false;
-          if (operatorRows().length > 0) {
+          // Past the last row the keyboard goes on to the results, as Mail's.
+          if (activeIndex() < operatorRows().length - 1) {
             moveActive(1);
             return true;
           }

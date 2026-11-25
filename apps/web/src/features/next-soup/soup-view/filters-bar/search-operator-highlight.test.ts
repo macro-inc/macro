@@ -11,12 +11,12 @@ function field(html: string) {
 describe('operatorRanges', () => {
   it('covers each typed operator across the field’s text nodes', () => {
     const root = field(
-      '<p><span>launch type:</span><span>task </span><span contenteditable="false">Ana Lima</span><span> is:unread</span></p>'
+      '<p><span>launch type:</span><span>task </span><span contenteditable="false">Ana Lima</span><span> tag:finance</span></p>'
     );
 
     expect(operatorRanges(root).map((range) => range.toString())).toEqual([
       'type:task',
-      'is:unread',
+      'tag:finance',
     ]);
   });
 

@@ -626,12 +626,14 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           persistedActiveTabs()[view] ??
           activeTab()
       );
+      // Search holds its filters as typed operators, as initialize keeps it.
+      const restoresFilters = view !== 'search';
       const query =
-        entryState && 'search.filters' in entryState
+        !restoresFilters || (entryState && 'search.filters' in entryState)
           ? undefined
           : persistedQueryFor(view, tabId);
       const predicates =
-        entryState && 'search.predicates' in entryState
+        !restoresFilters || (entryState && 'search.predicates' in entryState)
           ? undefined
           : persistedPredicatesFor(view, tabId);
 

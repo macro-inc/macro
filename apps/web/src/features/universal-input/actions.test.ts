@@ -114,8 +114,16 @@ vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     useList: () => ({
       items: () => [
-        { id: 'team-channel', data: { name: 'engineering' } },
-        { id: 'julia-dm', data: { name: 'Julia direct message' } },
+        {
+          id: 'team-channel',
+          bucket: 'channel',
+          data: { name: 'engineering' },
+        },
+        {
+          id: 'julia-dm',
+          bucket: 'dm',
+          data: { name: 'Julia direct message' },
+        },
       ],
     }),
   }),
@@ -368,7 +376,25 @@ describe('destination adapters', () => {
       )
     ).rejects.toThrow();
   });
-  it('opens global search with resolved sender and channel operators rather than dropping them', async () => {
+  it('opens global search on a channel by its name', async () => {
+    const searchFilters = JSON.stringify({
+      type: 'channels',
+      channels: { in: ['team-channel'], from: [] },
+    });
+    const result = await execute(
+      input('search', { query: 'budget', searchFilters })
+    );
+    result.open?.();
+    expect(mocks.replace).toHaveBeenCalledWith({
+      next: expect.objectContaining({
+        id: 'search',
+        params: expect.objectContaining({
+          initialQuery: 'type:channel in:#engineering budget',
+        }),
+      }),
+    });
+  });
+  it('opens global search with the sender, leaving out a DM in:# cannot name', async () => {
     const searchFilters = JSON.stringify({
       type: 'channels',
       channels: { in: ['julia-dm'], from: ['John'] },
@@ -381,8 +407,7 @@ describe('destination adapters', () => {
       next: expect.objectContaining({
         id: 'search',
         params: expect.objectContaining({
-          initialQuery:
-            'type:channel in:#"Julia direct message" from:john@example.com budget',
+          initialQuery: 'type:channel from:john@example.com budget',
         }),
       }),
     });
