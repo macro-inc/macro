@@ -16,9 +16,14 @@ use crate::domain::email_search::TagOption;
 use crate::domain::operator_names::{InboxAddress, OperatorNameSource};
 use crate::outbound::email_search::caller_tag_options;
 
-/// The channel types `in:#` names; a DM has no name of its own.
-const NAMED_CHANNEL_TYPES: [ChannelType; 3] =
-    [ChannelType::Public, ChannelType::Private, ChannelType::Team];
+/// The channel types `in:#` names: a DM by the name the caller sees for it,
+/// the other person's, as the channel list shows it.
+const IN_CHANNEL_TYPES: [ChannelType; 4] = [
+    ChannelType::Public,
+    ChannelType::Private,
+    ChannelType::Team,
+    ChannelType::DirectMessage,
+];
 
 #[cfg(test)]
 mod test;
@@ -77,7 +82,7 @@ impl OperatorNameSource for OperatorNamesPgSource {
                     patterns: &patterns,
                     regex_patterns: true,
                     channel_ids: &[],
-                    channel_types: &NAMED_CHANNEL_TYPES,
+                    channel_types: &IN_CHANNEL_TYPES,
                     after,
                     limit: page_size,
                 },
