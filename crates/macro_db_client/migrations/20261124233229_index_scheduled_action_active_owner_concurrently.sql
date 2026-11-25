@@ -9,5 +9,5 @@
 -- to_regclass('scheduled_action_active_owner_idx')`, and if false run
 -- `DROP INDEX CONCURRENTLY scheduled_action_active_owner_idx` before retrying.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS scheduled_action_active_owner_idx
-    ON scheduled_action (owner, id)
+    ON scheduled_action (owner)
     WHERE enabled AND (event_filters IS NOT NULL OR next_run_at IS NOT NULL);
