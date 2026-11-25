@@ -1,6 +1,13 @@
 import { type ChannelEntity, isChannelEntity } from '@entity';
-import type { Client } from '@urql/core';
-import { createMemo, createRoot } from 'solid-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import type { Client, OperationResult } from '@urql/core';
+import {
+  createComponent,
+  createComputed,
+  createMemo,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 import {
@@ -61,6 +68,11 @@ vi.mock('../../lib/graphql-cache/worker/wasm-module', async () => {
   };
 });
 
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'user-1',
+  useIsAuthenticated: () => () => true,
+}));
+
 vi.mock(
   '../../lib/service-clients/service-storage/graphql-soup',
   async (importOriginal) => {
@@ -82,6 +94,7 @@ vi.mock(
   }
 );
 
+import { useCachedChannelsByIds } from '../../lib/queries/channel/by-ids';
 import { createGraphqlSoupAstItemsQuery } from '../../lib/queries/soup/graphql/items';
 
 type WireNotification = {
@@ -230,6 +243,9 @@ function createChannelCacheEngine(initial: WireChannel[]) {
 
   return {
     entityFilterCalls,
+    evictChannel: (id: string) => {
+      channels.delete(`GraphqlSoupChannel:${id}`);
+    },
     currentAuthority: async (identity: string) => testAuthority(identity),
     currentRevision: async () => parseCacheRevision(String(revision)),
     currentStorageGeneration: async () =>
@@ -701,6 +717,149 @@ describe('worker-to-UI invalidation through CacheWorkerCore and CoordinatorCore'
       });
     } finally {
       dispose();
+    }
+  });
+
+  it('keeps a compacted channel visible across a cache miss and a 50 ms network fetch', async () => {
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const engine = createChannelCacheEngine(
+      initialIds.map((id) => makeWireChannel(id, { isParticipant: true }))
+    );
+    runtimeState.engine = engine;
+    const host = createWorkerCacheHost({
+      scope: 'worker-ui-test',
+      requestTimeoutMs: 2_000,
+      onInitializationError: vi.fn(),
+      telemetry: { record: vi.fn(), flush: vi.fn() },
+    });
+    runtimeState.host = host;
+
+    let networkFetches = 0;
+    const pendingFetches: Promise<void>[] = [];
+    let fetchStarted!: () => void;
+    const fetchStartedPromise = new Promise<void>((resolve) => {
+      fetchStarted = resolve;
+    });
+    let releaseFetch!: () => void;
+    const releaseFetchPromise = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+
+    runtimeState.client = {
+      executeQuery: (
+        request: { variables?: unknown },
+        opts?: Record<string, unknown>
+      ) => {
+        const subject = makeSubject<OperationResult>();
+        const serialized = JSON.stringify(request?.variables ?? {});
+        if (serialized.includes('ch-0000')) {
+          networkFetches += 1;
+          fetchStarted();
+          pendingFetches.push(
+            (async () => {
+              await releaseFetchPromise;
+              const restored = makeWireChannel('ch-0000', {
+                isParticipant: true,
+                channelName: 'Restored ch-0000',
+              });
+              await host.writeQuery({
+                generation: TEST_AUTHORITY_GENERATION,
+                query:
+                  'query MissingChannels { user { soup { items { id } } } }',
+                data: { channels: [restored] },
+              });
+              subject.next({
+                operation: { ...request, context: opts ?? {} } as never,
+                data: {
+                  user: {
+                    soup: {
+                      items: [restored],
+                      nextCursor: null,
+                    },
+                  },
+                },
+                stale: false,
+                hasNext: false,
+              });
+              subject.complete();
+            })()
+          );
+        }
+        return subject.source;
+      },
+    } as unknown as Client;
+
+    const queryClient = new QueryClient();
+    let result!: ReturnType<typeof useCachedChannelsByIds>;
+    let setIds!: (next: string[]) => void;
+    let watchCompaction = false;
+    const missingSnapshots: Array<{ ids: string[]; loading: boolean }> = [];
+
+    const dispose = createRoot((dispose) => {
+      const [ids, updateIds] = createSignal(initialIds);
+      setIds = updateIds;
+      createComponent(QueryClientProvider, {
+        client: queryClient,
+        get children() {
+          result = useCachedChannelsByIds(ids, () => true);
+          createComputed(() => {
+            const list = result.channels();
+            if (watchCompaction && !list.some((ch) => ch.id === 'ch-0000')) {
+              missingSnapshots.push({
+                ids: list.map((ch) => ch.id).sort(),
+                loading: result.isLoading(),
+              });
+            }
+          });
+          return null;
+        },
+      });
+      return dispose;
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(result.channels()).toHaveLength(1501);
+        },
+        { timeout: 10_000 }
+      );
+
+      // Evict ch-0000 from the local cache so the receiving batch's predicate
+      // misses it after compaction and falls back to the network fetch.
+      engine.evictChannel('ch-0000');
+      watchCompaction = true;
+
+      const surviving = ['ch-0000', 'ch-0500', 'ch-1000', 'ch-1500'];
+      setIds(surviving);
+
+      // Wait until the real missing-entity network lookup starts, hold it open
+      // for 50 ms, and confirm ch-0000 stays visible the entire time.
+      await fetchStartedPromise;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+      expect(missingSnapshots).toEqual([]);
+
+      releaseFetch();
+      await Promise.all(pendingFetches);
+      await vi.waitFor(() => {
+        const ch0 = result.channels().find((ch) => ch.id === 'ch-0000');
+        expect(ch0?.name).toBe('Restored ch-0000');
+      });
+      expect(networkFetches).toBeGreaterThanOrEqual(1);
+      expect(missingSnapshots).toEqual([]);
+    } finally {
+      releaseFetch();
+      dispose();
+      queryClient.clear();
     }
   });
 });

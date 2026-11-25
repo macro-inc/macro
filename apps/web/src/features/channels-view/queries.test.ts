@@ -573,11 +573,27 @@ describe('channels resolved by id', () => {
           .sort()
       ).toEqual(surviving);
 
+      // Between the local predicate settling on a cache miss (`pending = false`,
+      // `hasPageData = false`) and the network fetch starting, moved rows must
+      // stay visible rather than flashing away.
+      const liveBatches = batchStates.filter((s) => !s.disposed);
+      batch(() => {
+        for (const state of liveBatches) {
+          state.pending[1](false);
+          state.hasPageData[1](false);
+        }
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
       // Now simulate a deleted moved channel: the receiving predicate omits the
       // moved IDs (returning only its own pre-existing channel) and the network
       // lookup fails. Handoff rows must NOT stay visible or suppress error/retry.
       const offline = new Error('offline');
-      const liveBatches = batchStates.filter((s) => !s.disposed);
       batch(() => {
         for (const state of liveBatches) {
           state.pending[1](false);

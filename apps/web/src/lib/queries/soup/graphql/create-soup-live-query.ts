@@ -673,17 +673,6 @@ export function createSoupLiveQuery(
     undefined,
     { equals: arrayEquals }
   );
-  const maintainedBaselineKeys = createMemo(() => {
-    const withoutEmail = options().localReconciliation === 'without-email';
-    return new Set(
-      serverRecords()
-        .filter(
-          (record) =>
-            !withoutEmail || record.__typename !== 'GraphqlSoupEmailThread'
-        )
-        .map(soupItemKey)
-    );
-  });
   const maintainedDisplayedKeys = createMemo(
     () => new Set(liveRecords().map(soupItemKey))
   );
@@ -703,7 +692,7 @@ export function createSoupLiveQuery(
     }
     const withoutEmail = options().localReconciliation === 'without-email';
     const records = liveRecords();
-    const baselineKeys = maintainedBaselineKeys();
+    const baselineKeys = snapshot.baselineKeys ?? new Set<string>();
     const displayedKeys = maintainedDisplayedKeys();
     if (
       previous &&

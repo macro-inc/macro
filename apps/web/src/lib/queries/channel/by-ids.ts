@@ -189,9 +189,11 @@ export function useCachedChannelsByIds(
             isChannelEntity(entity) && activeIds.has(entity.id)
         );
       }, []);
-      // Bridge rows handed off during compaction only while the receiving
-      // query is still loading. Once loading ends (success or failure), the
-      // receiving query owns membership, errors, and retries.
+      // Bridge rows handed off during compaction until the receiving query
+      // either fails or settles an authoritative page for the merged ID set.
+      // Keeping handoff rows while `!query.hasPageData` prevents a gap between
+      // the local predicate reporting `ready` on a cache miss and the missing-
+      // entity network fetch starting in an effect.
       const channels = createMemo<ChannelEntity[]>(() => {
         const activeIds = batchIdSet();
         const own = resolved();
@@ -200,7 +202,7 @@ export function useCachedChannelsByIds(
           if (!activeIds.has(id) || ownIds.has(id)) handoff.delete(id);
         }
         if (handoff.size === 0) return own;
-        if (!loading()) {
+        if (error() || (!loading() && query.hasPageData)) {
           handoff.clear();
           return own;
         }

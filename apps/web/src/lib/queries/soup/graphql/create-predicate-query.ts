@@ -45,6 +45,8 @@ export type LiveQuerySnapshot<T> = {
   records: readonly LiveQueryRow<T>[];
   retainedKeys: readonly string[];
   optimistic: boolean;
+  /** Baseline keys that this predicate snapshot was evaluated against. */
+  baselineKeys?: ReadonlySet<string>;
 };
 
 type LiveQueryHost = Pick<
@@ -94,6 +96,9 @@ export function createPredicateQuery<T extends object>(options: {
         return;
       }
       const id = crypto.randomUUID();
+      const baselineKeys: ReadonlySet<string> = new Set(
+        request.source.baseline.map((entry) => entry.key)
+      );
       const [rows, setRows] = createStore<Record<string, LiveQueryRow<T>>>({});
       const touchRowVersion = (recordKey: string) => {
         const row = rows[recordKey];
@@ -254,6 +259,7 @@ export function createPredicateQuery<T extends object>(options: {
                     records: orderedRows,
                     retainedKeys: result.retainedKeys,
                     optimistic: result.optimistic,
+                    baselineKeys,
                   });
                   setError(undefined);
                   setStatus('ready');
