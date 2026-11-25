@@ -29,6 +29,12 @@ export function FailureNotice(props: {
       <Match when={props.failure === 'notProvisioned'}>
         {alert(t('passwords.vaultNotProvisioned'))}
       </Match>
+      <Match when={props.failure === 'settingUp'}>
+        {alert(t('passwords.vaultSettingUp'))}
+      </Match>
+      <Match when={props.failure === 'vaultFailed'}>
+        {alert(t('passwords.vaultFailed'))}
+      </Match>
       <Match when={props.failure}>{alert(t('passwords.failed'))}</Match>
     </Switch>
   );

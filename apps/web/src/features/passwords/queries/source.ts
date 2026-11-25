@@ -78,10 +78,29 @@ export function busyDelay(retries: number): number {
   return BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random());
 }
 
+/**
+ * The team's first save sets its vault up. If that takes longer than the
+ * server waits, the save answers `vault_setting_up` and the server finishes
+ * in the background: resend the same request (same operation id) a few times,
+ * waiting between 7 and 21 seconds in all.
+ */
+export const SETTING_UP_RETRIES = 3;
+const SETTING_UP_BACKOFF_MS = 2000;
+/** Jittered exponential wait before setting-up retry number `retries`. */
+export function settingUpDelay(retries: number): number {
+  return SETTING_UP_BACKOFF_MS * 2 ** retries * (0.5 + Math.random());
+}
+
 function failure(codes: readonly string[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
   if (codes.includes(PasswordErrorCode.vault_not_provisioned))
     return 'notProvisioned';
+  if (codes.includes(PasswordErrorCode.vault_setting_up)) return 'settingUp';
+  if (
+    codes.includes(PasswordErrorCode.vault_setup_failed) ||
+    codes.includes(PasswordErrorCode.vault_needs_recovery)
+  )
+    return 'vaultFailed';
   if (codes.includes('NETWORK_ERROR')) return 'unreachable';
   if (
     codes.includes(PasswordErrorCode.vault_unavailable) ||
@@ -131,7 +150,10 @@ const SCOPE_CHANGED = 'SCOPE_CHANGED';
 function importFailure(codes: readonly string[]): ImportRequestFailure {
   const has = (code: string) => codes.includes(code);
   if (has('NETWORK_ERROR')) return { retryable: true, reason: 'unreachable' };
-  if (has(PasswordErrorCode.vault_busy))
+  if (
+    has(PasswordErrorCode.vault_busy) ||
+    has(PasswordErrorCode.vault_setting_up)
+  )
     return { retryable: true, reason: 'busy' };
   if (
     has('SERVER_ERROR') ||
@@ -141,7 +163,11 @@ function importFailure(codes: readonly string[]): ImportRequestFailure {
     return { retryable: true, reason: 'server_error' };
   if (has(SCOPE_CHANGED))
     return { retryable: false, reason: 'account_changed' };
-  if (has(PasswordErrorCode.vault_not_provisioned))
+  if (
+    has(PasswordErrorCode.vault_not_provisioned) ||
+    has(PasswordErrorCode.vault_setup_failed) ||
+    has(PasswordErrorCode.vault_needs_recovery)
+  )
     return { retryable: false, reason: 'not_provisioned' };
   if (has(PasswordErrorCode.invalid_request))
     return { retryable: false, reason: 'invalid' };
@@ -183,7 +209,9 @@ export function createPasswordSource(
   ): Promise<Result<T, string[]>> {
     const payload = body ? JSON.stringify(body) : undefined;
     return Telemetry.span('passwords.request', async (span) => {
-      for (let retries = 0; ; retries++) {
+      let retries = 0;
+      let settingUpRetries = 0;
+      for (;;) {
         // Never send or finish a request for a viewer that has since changed.
         if (!isCurrent()) return err([SCOPE_CHANGED]);
         span.setAttr('retry.count', retries);
@@ -229,7 +257,18 @@ export function createPasswordSource(
             (error) => error.code === PasswordErrorCode.vault_busy
           )
         ) {
-          await sleep(busyDelay(retries));
+          await sleep(busyDelay(retries++));
+          continue;
+        }
+        if (
+          response.isErr() &&
+          settingUpRetries < SETTING_UP_RETRIES &&
+          response.error.some(
+            (error) => error.code === PasswordErrorCode.vault_setting_up
+          )
+        ) {
+          span.setAttr('passwords.setting_up.retries', settingUpRetries + 1);
+          await sleep(settingUpDelay(settingUpRetries++));
           continue;
         }
         const codes = response.mapErr((errors) =>
