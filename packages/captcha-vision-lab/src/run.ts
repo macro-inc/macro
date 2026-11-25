@@ -309,6 +309,13 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     );
     const screenshot = await quiz.screenshot({ type: 'png' });
 
+    // Reading the page takes time too: check again that what the planner
+    // will see still comes from the gated page.
+    const inputRejection = rejectedBy(
+      checkPage('before_planner', observed, attestation())
+    );
+    if (inputRejection !== undefined) return inputRejection;
+
     // Exactly one planner call per challenge.
     record.plannerCalls += 1;
     const plannerStarted = performance.now();

@@ -40,7 +40,8 @@ bun run lab:smoke -- --lab-run [--provider mock|kimi]
         refused; popups counted and closed
       gate before_planner: URL, one navigation, no redirect/popup/frame/
         blocked request, and the service attests this session opened it
-      planner(screenshot of #quiz, visible prompt, visible labels) → {choice}
+      read the screenshot of #quiz, visible prompt and labels; gate again
+      planner(screenshot, prompt, labels) → {choice}
       gate before_action (same checks, fresh attestation)
       click the chosen label's own option button → one submission
       gate after_action (observations after a 500 ms quiet window): anything

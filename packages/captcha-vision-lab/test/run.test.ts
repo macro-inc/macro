@@ -89,12 +89,14 @@ describe('a lab run with the mock planner', () => {
     expect(record.actions).toEqual([
       { kind: 'choose', label: correctLabel(SEED) },
     ]);
-    expect(record.gate.map((decision) => decision.allowed)).toEqual([
-      true,
-      true,
-      true,
-      true,
+    expect(record.gate.map((decision) => decision.stage)).toEqual([
+      'before_navigation',
+      'before_planner',
+      'before_planner',
+      'before_action',
+      'after_action',
     ]);
+    expect(record.gate.every((decision) => decision.allowed)).toBe(true);
     expect(inputs).toHaveLength(1);
     expect(inputs[0]!.labels).toEqual(LABELS);
     expect(inputs[0]!.prompt).toBe(
