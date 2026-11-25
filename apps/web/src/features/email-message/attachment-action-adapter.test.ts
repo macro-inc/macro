@@ -1,7 +1,10 @@
 import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createEmailAttachmentOpener } from './attachment-action-adapter';
+import {
+  createEmailAttachmentOpener,
+  downloadEmailAttachment,
+} from './attachment-action-adapter';
 
 const mocks = vi.hoisted(() => ({
   openWithSplit: vi.fn(),
@@ -89,4 +92,22 @@ it('keeps opening other files from their Drive copy, which previews workbooks', 
     { preferNewSplit: true }
   );
   expect(mocks.downloadFile).not.toHaveBeenCalled();
+});
+
+it('downloads an attachment under its original name and type', async () => {
+  await downloadEmailAttachment({
+    db_id: 'pdf',
+    filename: 'Agenda.pdf',
+    mime_type: 'application/pdf',
+  });
+
+  expect(mocks.getDownloadUrl).toHaveBeenCalledWith('pdf');
+  expect(fetch).toHaveBeenCalledWith(
+    'https://files.example.com/signed',
+    expect.anything()
+  );
+  const [file, name] = mocks.downloadFile.mock.calls[0];
+  expect(name).toBe('Agenda.pdf');
+  expect(file.type).toBe('application/pdf');
+  expect(mocks.getDocument).not.toHaveBeenCalled();
 });

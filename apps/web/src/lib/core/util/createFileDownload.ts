@@ -11,6 +11,7 @@ import {
   type Accessor,
   batch,
   createEffect,
+  createRoot,
   createSignal,
   on,
   onCleanup,
@@ -300,3 +301,20 @@ export function createFileDownload(
 }
 
 export type FileDownloadController = ReturnType<typeof createFileDownload>;
+
+/**
+ * Downloads one file through the shared controller under a root of its own,
+ * for an action with no control to bind it to. The controller cancels its
+ * transfer when its owner is disposed, and choosing a menu item disposes the
+ * menu it sits in. Resolves once the file is handed off or its failure is
+ * reported.
+ */
+export async function startFileDownload(source: DownloadSource) {
+  await createRoot(async (dispose) => {
+    try {
+      await createFileDownload(() => source).start();
+    } finally {
+      dispose();
+    }
+  });
+}
