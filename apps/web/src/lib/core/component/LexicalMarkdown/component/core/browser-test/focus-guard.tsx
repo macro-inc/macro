@@ -7,6 +7,7 @@ import {
   $createTextNode,
   $getRoot,
   $getSelection,
+  $isElementNode,
   $isRangeSelection,
   $setSelection,
   type BaseSelection,
@@ -51,7 +52,8 @@ function Fixture() {
   const guardWindow: FocusGuardWindow = window;
   guardWindow.backgroundEdit = () =>
     body.lexical.update(() => {
-      $getRoot().getLastChildOrThrow().append($createTextNode(' (edited)'));
+      const last = $getRoot().getLastChild();
+      if ($isElementNode(last)) last.append($createTextNode(' (edited)'));
     });
   guardWindow.focusDocument = () => body.lexical.focus();
 

@@ -50,6 +50,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
+import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import {
@@ -579,7 +580,10 @@ render(
           <UserContextProvider>
             <MobileSettingsProvider>
               <DragDropProvider>
-                <Peer />
+                {/* Some decorators (a theme mention) reach for the router. */}
+                <MemoryRouter>
+                  <Route path="*" component={Peer} />
+                </MemoryRouter>
               </DragDropProvider>
             </MobileSettingsProvider>
           </UserContextProvider>

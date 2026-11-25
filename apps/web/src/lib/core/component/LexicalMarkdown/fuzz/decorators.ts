@@ -60,7 +60,7 @@ const FACTORIES: Record<string, () => LexicalNode> = {
       agentSessionId: ID,
       turn: 0,
       segment: 0,
-      rows: [{ id: 'row', label: 'Read the document', status: 'done' }],
+      rows: [{ id: 'row', label: 'Read the document', status: 'completed' }],
       sealed: true,
     }),
   'agent-context': () =>
