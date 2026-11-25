@@ -47,19 +47,6 @@ export type AppEvents = {
     reason: AccountDeletionReason | 'not_provided';
     feedback?: string;
   };
-  login_from_onboarding: Record<string, unknown>;
-  mobile_web_welcome_viewed: Record<string, unknown>;
-  mobile_web_signup_sent_viewed: Record<string, unknown>;
-
-  // --- Interactive tutorial (optional; decoupled from acquisition) ---------
-  tutorial_started: { isFirstTime: boolean };
-  tutorial_step: {
-    id: string;
-    index: number;
-    state: 'viewed' | 'completed' | 'skipped';
-  };
-  tutorial_completed: { isFirstTime: boolean };
-  tutorial_skipped: Record<string, unknown>;
 
   // --- Onboarding v4 (the full-screen /onboarding stepper) -----------------
   /** A GTM invite welcome page resolved its link (`/invite?token=`). */
@@ -144,13 +131,21 @@ export type AppEvents = {
    * everything connected along the way.
    */
   onboarding_v4_completed: {
-    plan: 'free' | 'premium' | 'max';
+    plan: 'free' | 'premium' | 'business' | 'max';
     plan_skipped: boolean;
     emails_connected: number;
     connectors_connected: string[];
   };
   /** A @macro.com account used the staff Bypass button; `step` is where. */
   onboarding_v4_bypassed: { step: string };
+  /**
+   * A phone-browser user reached the last screen, "Macro is better on
+   * desktop", and chose how to go on: `viewed`, then `download_app` (store
+   * link) or `continue_in_browser`.
+   */
+  onboarding_v4_desktop_handoff: {
+    action: 'viewed' | 'download_app' | 'continue_in_browser';
+  };
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;
@@ -162,7 +157,7 @@ export type AppEvents = {
    * the same event with `source: 'marketing'`.
    */
   desktop_download_clicked: {
-    platform: 'macos' | 'linux';
+    platform: 'macos' | 'macos-intel' | 'linux';
     source: 'app_settings';
   };
   notifications_toggled: Record<string, unknown>;
@@ -271,8 +266,8 @@ export type AppEvents = {
   ai_credits_checkout_start: { amountCents: number };
   /** A payer changed their AI usage billing (overage) settings. */
   ai_overage_updated: { enabled: boolean; limitCents: number };
-  /** An existing subscriber moved between Premium and Max. */
-  plan_changed: { plan: 'premium' | 'max'; from?: string };
+  /** An existing subscriber moved between Premium, Business and Max. */
+  plan_changed: { plan: 'premium' | 'business' | 'max'; from?: string };
 
   /**
    * An email the user sent, counted once when the outbox accepts it. Undo

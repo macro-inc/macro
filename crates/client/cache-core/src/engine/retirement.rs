@@ -159,28 +159,11 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 remove.push(key);
                 continue;
             };
-            if ![
-                identity::ALIAS_FIELD,
-                identity::MUTATION_UUID_FIELD,
-                identity::DELETED_FIELD,
-            ]
-            .iter()
-            .any(|field| record.fields.contains_key(*field))
-            {
+            if identity::retain_metadata(&mut record) {
+                retain.push((key, record));
+            } else {
                 remove.push(key);
-                continue;
             }
-            record.fields.retain(|field, _| {
-                matches!(
-                    field.as_str(),
-                    identity::ALIAS_FIELD
-                        | identity::MUTATION_UUID_FIELD
-                        | identity::DELETED_FIELD
-                        | "id"
-                        | "__typename"
-                )
-            });
-            retain.push((key, record));
         }
         if !retain.is_empty() {
             self.retire_record_fields(retain, vec![]).await?;

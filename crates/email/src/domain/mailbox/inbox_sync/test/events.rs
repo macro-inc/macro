@@ -356,10 +356,16 @@ async fn catalog_debug_counts_cover_add_update_delete_mixed_and_unchanged() {
         let (_, fake) = make_service(false);
         fake.0.lock().unwrap().import.catalog = stored;
         let output = Output::default();
-        super::super::catalog::sync_labels(&fake, LINK, &provider)
-            .with_subscriber(output.subscriber())
-            .await
-            .unwrap();
+        super::super::catalog::sync_labels(
+            &fake,
+            &fake,
+            LINK,
+            &super::fakes::link().macro_id,
+            &provider,
+        )
+        .with_subscriber(output.subscriber())
+        .await
+        .unwrap();
         if let Some((added, updated, deleted)) = counts {
             assert_event(
                 &output,

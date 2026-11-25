@@ -45,16 +45,30 @@ export const inThread = (
       (entry.thread === thread || entry.root === thread || entry.id === thread)
   );
 
+/** Why a message is never judged: the agent's own post, a bot's, or one with no sender. */
+export type IgnoredBecause = 'own' | 'bot' | 'no_sender';
+
+/**
+ * How a judged message was decided: `dm` or `mention` (addressed, no screen
+ * asked); `screen` (the screen judged it); `screen_failed` (the screen
+ * failed, so a reply in a thread the agent is in counts as for it and
+ * anything else doesn't). Set by `judge` itself, never read back from the
+ * screen's question keys, which the agent may name anything.
+ */
+export type JudgedBy = 'dm' | 'mention' | 'screen' | 'screen_failed';
+
 export type Verdict =
-  | { readonly kind: 'ignored' }
+  | { readonly kind: 'ignored'; readonly because: IgnoredBecause }
   | {
       readonly kind: 'irrelevant';
       readonly p: Probabilities;
+      readonly by: JudgedBy;
     }
   | {
       readonly kind: 'relevant';
       readonly mentioned: boolean;
       readonly p: Probabilities;
+      readonly by: JudgedBy;
     };
 
 /**
@@ -65,8 +79,15 @@ export type Verdict =
 const screenQuestions = 8;
 const screenQuestion = /^[a-z0-9_]{1,32}$/;
 
+/** Why the verdict is what it is: why it was ignored, or how it was judged. */
+export type VerdictReason = IgnoredBecause | JudgedBy;
+
+export const verdictReason = (verdict: Verdict): VerdictReason =>
+  verdict.kind === 'ignored' ? verdict.because : verdict.by;
+
 /**
- * What a `chat.screen` span records of a verdict: its kind, and each
+ * What a `chat.screen` span records of a verdict: its kind, its
+ * reason ({@link verdictReason}), and each
  * probability by the screen's question key (`addressed` for a DM or a
  * mention, `fallback` when the screen failed), at most
  * {@link screenQuestions} well-formed ones. Never the message.
@@ -75,6 +96,7 @@ export const screenAttributes = (
   verdict: Verdict
 ): Readonly<Record<string, string | number | boolean>> => ({
   'chat.screen.verdict': verdict.kind,
+  'chat.screen.reason': verdictReason(verdict),
   ...(verdict.kind === 'relevant'
     ? { 'chat.screen.mentioned': verdict.mentioned }
     : {}),
@@ -124,12 +146,18 @@ export const judge = async (
   }
 ): Promise<Verdict> => {
   const sender = entry.sender_id;
-  if (sender === '' || sender === me || sender.startsWith('bot|'))
-    return { kind: 'ignored' };
+  if (sender === '') return { kind: 'ignored', because: 'no_sender' };
+  if (sender === me) return { kind: 'ignored', because: 'own' };
+  if (sender.startsWith('bot|')) return { kind: 'ignored', because: 'bot' };
 
   const mentioned = mentions.includes(me) || textMentions(entry.text, [me]);
   if (mentioned || entry.dm)
-    return { kind: 'relevant', mentioned, p: addressed };
+    return {
+      kind: 'relevant',
+      mentioned,
+      p: addressed,
+      by: mentioned ? 'mention' : 'dm',
+    };
   const ask = (recent: readonly Entry[]) =>
     decide(
       {
@@ -147,10 +175,10 @@ export const judge = async (
   if (p === undefined) {
     const fallback = { fallback: 1 };
     return inThread(history, me, entry.thread ?? entry.root)
-      ? { kind: 'relevant', mentioned, p: fallback }
-      : { kind: 'irrelevant', p: fallback };
+      ? { kind: 'relevant', mentioned, p: fallback, by: 'screen_failed' }
+      : { kind: 'irrelevant', p: fallback, by: 'screen_failed' };
   }
   return isRelevant(p, screen)
-    ? { kind: 'relevant', mentioned, p }
-    : { kind: 'irrelevant', p };
+    ? { kind: 'relevant', mentioned, p, by: 'screen' }
+    : { kind: 'irrelevant', p, by: 'screen' };
 };

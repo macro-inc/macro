@@ -1,11 +1,15 @@
 import { SearchOperatorOverlay } from '@app/components/view-shell/search-operator-text';
+import { SearchTipsSheet } from '@app/components/view-shell/search-tips';
+import { EMAIL_SEARCH_DOCS_URL } from '@app/constants/docs-links';
 import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
+import InfoIcon from '@icon/system/regular/info.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { EmailSearchSuggestionList } from '../../components/EmailSearchSuggestionList';
+import { emailSearchTips } from '../../components/EmailSearchTips';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 import { emailSearchTextParts } from '../../search/email-search-scope';
 
@@ -23,6 +27,7 @@ export function EmailMobileSearchField(props: {
   ref: (input: HTMLInputElement) => void;
 }) {
   let input: HTMLInputElement | undefined;
+  const [tipsOpen, setTipsOpen] = createSignal(false);
 
   // Escape leaves the page, as Cancel does, from the field and after Search
   // has dropped its focus, since a hardware keyboard can still press it.
@@ -45,7 +50,8 @@ export function EmailMobileSearchField(props: {
   // Keeps the keyboard up for presses on the field's own controls.
   const keepFocus = (event: Event) => event.preventDefault();
   // A hardware keyboard walks the rows under the field and picks one; a
-  // picked view keeps the keyboard up for the words, as a tap does.
+  // picked view or operator keeps the keyboard up for the words, as a tap
+  // does.
   const moveInSuggestions = (event: KeyboardEvent) => {
     const suggestions = props.suggestions;
     const active = suggestions.active();
@@ -103,11 +109,26 @@ export function EmailMobileSearchField(props: {
                 return;
               }
               // Search drops the keyboard to show the results.
-              if (event.key === 'Enter') input?.blur();
+              if (event.key !== 'Enter') return;
+              props.suggestions.commit();
+              input?.blur();
             }}
           />
         </div>
-        <Show when={props.search}>
+        {/* The empty field offers its tips where the X clears typed text. */}
+        <Show
+          when={props.search}
+          fallback={
+            <Button
+              aria-label={t('searchOperators.tips')}
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTipsOpen(true)}
+            >
+              <InfoIcon class="size-4" />
+            </Button>
+          }
+        >
           <Button
             aria-label={t('emailViews.clearSearch')}
             variant="ghost"
@@ -125,13 +146,19 @@ export function EmailMobileSearchField(props: {
           {t('common.cancel')}
         </Button>
       </MobileHeader.Island>
+      <SearchTipsSheet
+        tips={emailSearchTips()}
+        docsUrl={EMAIL_SEARCH_DOCS_URL}
+        open={tipsOpen()}
+        onOpenChange={setTipsOpen}
+      />
     </div>
   );
 }
 
 /**
- * The views an `in:` being typed can name, or recent searches, below the
- * search field while it has focus.
+ * The views an `in:` being typed can name, the operators that finish what is
+ * typed, or recent searches, below the search field while it has focus.
  */
 export function EmailMobileSearchSuggestions(props: {
   suggestions: EmailSearchSuggestions;
@@ -146,7 +173,7 @@ export function EmailMobileSearchSuggestions(props: {
           onPick={(index) => {
             const editsQuery = props.suggestions.editsQuery?.(index) ?? false;
             props.suggestions.pick(index);
-            // A view picked keeps the keyboard up to type the words.
+            // A view or operator picked keeps the keyboard up to type the words.
             if (!editsQuery) props.onPicked();
           }}
         />

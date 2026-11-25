@@ -46,17 +46,10 @@ export function TimerControl(props: TimerControlProps): JSX.Element {
       <Show
         when={props.running}
         fallback={
-          <>
-            <span class="flex items-center gap-2">
-              <PlayIcon class="size-3 shrink-0" />
-              {t('timeTracking.startTimer')}
-            </span>
-            <Show when={props.variant === 'row'}>
-              <span class="text-xs text-ink-muted">
-                {t('timeTracking.startTimerHint')}
-              </span>
-            </Show>
-          </>
+          <span class="flex items-center gap-2">
+            <PlayIcon class="size-3 shrink-0" />
+            {t('timeTracking.startTimer')}
+          </span>
         }
       >
         <span class="flex items-center gap-2">

@@ -40,7 +40,8 @@ export function ListHeader(props: {
 }
 
 /**
- * The query belongs to the view; only the expanded presentation is local.
+ * The query belongs to the view. Whether the field is open is local, unless
+ * the view keeps it (`open`) to count an open, empty field as a search.
  *
  * The field hands the keyboard to the results instead of trapping it:
  * ArrowDown or Enter moves to the first result, and Escape leaves the field
@@ -57,9 +58,16 @@ export function ListHeaderSearch(props: {
   registerFocus: (focus: () => void) => void;
   /**
    * The open field takes the rest of the header, and closes again when it is
-   * left empty. The view hides its other header actions while it is open.
+   * left empty: once focus leaves the header, so a control beside the title
+   * (Email's search tips) can take focus. The view hides its other header
+   * actions while it is open.
    */
   wide?: boolean;
+  /**
+   * Set by a view that keeps the field's open state, to close it itself. An
+   * open field is then a search, which Escape in the list closes.
+   */
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   suggestions?: ListSearchSuggestions;
@@ -67,7 +75,8 @@ export function ListHeaderSearch(props: {
   operators?: (value: string) => readonly SearchTextPart[];
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const [expanded, setExpandedState] = createSignal(Boolean(props.value));
+  const [expandedState, setExpandedState] = createSignal(Boolean(props.value));
+  const expanded = () => props.open ?? expandedState();
   const setExpanded = (open: boolean) => {
     if (open === expanded()) return;
 
@@ -76,6 +85,9 @@ export function ListHeaderSearch(props: {
   };
   let input: HTMLInputElement | undefined;
   let trigger: HTMLButtonElement | undefined;
+  // Set while an empty wide field waits for focus to leave its header.
+  let stopWatchingHeader: (() => void) | undefined;
+  onCleanup(() => stopWatchingHeader?.());
   const focus = () => {
     setExpanded(true);
     queueMicrotask(() => {
@@ -93,6 +105,7 @@ export function ListHeaderSearch(props: {
   };
   const keys = useListSearchKeys({
     value: () => props.value,
+    open: () => props.open ?? false,
     clear,
     focusResults: () => props.focusResults,
     input: () => input,
@@ -102,14 +115,31 @@ export function ListHeaderSearch(props: {
   onMount(() => {
     props.registerFocus(focus);
     // A view restored with a search starts with its field open.
-    if (expanded()) props.onOpenChange?.(true);
+    if (expandedState()) props.onOpenChange?.(true);
   });
   // The view keeps its own copy of these; a field that unmounts while open
   // (a tab that cannot search, a thread over the list) must not leave it set.
+  // Told after the teardown that unmounts the field: written during it, the
+  // view's state makes memos stale while their owner is still being cleaned,
+  // and a cleanup that reads one disposes that owner twice and fails the
+  // navigation that unmounted the field.
   onCleanup(() => {
-    props.onOpenChange?.(false);
-    props.onFocusChange?.(false);
+    const { onOpenChange, onFocusChange } = props;
+    queueMicrotask(() => {
+      onOpenChange?.(false);
+      onFocusChange?.(false);
+    });
   });
+  // A field its view closes can go with focus still in it, without a blur.
+  createEffect(
+    on(
+      expanded,
+      (open) => {
+        if (!open) props.onFocusChange?.(false);
+      },
+      { defer: true }
+    )
+  );
   // A wide field hides the header's other actions, so it closes as soon as
   // the view clears its search from outside (a tab change) and nobody is
   // typing in it.
@@ -166,9 +196,36 @@ export function ListHeaderSearch(props: {
           onClose={close}
           onKeyDown={keys.onKeyDown}
           onFocus={() => props.onFocusChange?.(true)}
-          onBlur={() => {
+          onBlur={(event) => {
             props.onFocusChange?.(false);
-            if (props.wide && !props.value.trim()) setExpanded(false);
+            if (!props.wide || props.value.trim()) return;
+            // Focus moving to another control in the header (Email's search
+            // tips) keeps the empty field open until it leaves the header.
+            const header = input?.closest<HTMLElement>(
+              '[data-view-shell-header]'
+            );
+            const next = event.relatedTarget;
+            if (!(header && next instanceof Node && header.contains(next))) {
+              setExpanded(false);
+              return;
+            }
+            stopWatchingHeader?.();
+            const closeOnLeave = (leave: FocusEvent) => {
+              const target = leave.relatedTarget;
+              if (
+                target !== input &&
+                target instanceof Node &&
+                header.contains(target)
+              )
+                return;
+              stopWatchingHeader?.();
+              if (target !== input && !props.value.trim()) setExpanded(false);
+            };
+            header.addEventListener('focusout', closeOnLeave);
+            stopWatchingHeader = () => {
+              header.removeEventListener('focusout', closeOnLeave);
+              stopWatchingHeader = undefined;
+            };
           }}
           onEscape={keys.onEscape}
         />

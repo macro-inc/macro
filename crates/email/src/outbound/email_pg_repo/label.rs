@@ -241,7 +241,15 @@ pub(super) async fn stage_thread_label_change(
     )
     .await?;
 
+    let mut absent = Vec::new();
     if add {
+        absent = email_db_client::labels::thread_gain::absent_from_thread(
+            &mut tx,
+            link_id,
+            thread_id,
+            &[provider_label_id.to_owned()],
+        )
+        .await?;
         insert_message_labels_batch(&mut *tx, &message_ids, provider_label_id, link_id).await?;
     } else {
         delete_message_labels_batch(&mut *tx, &message_ids, provider_label_id, link_id).await?;
@@ -287,6 +295,7 @@ pub(super) async fn stage_thread_label_change(
     tx.commit().await?;
 
     Ok(Some(StagedLabelChange {
+        thread_gained: !absent.is_empty() && messages.iter().any(|message| !message.is_draft),
         messages,
         changed_ids,
     }))

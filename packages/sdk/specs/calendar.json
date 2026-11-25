@@ -4049,7 +4049,7 @@
           },
           "isSubscription": {
             "type": "boolean",
-            "description": "Whether this is one of Google's shared system calendars (holidays,\nbirthdays) the account subscribes to rather than one a person maintains."
+            "description": "Whether the account subscribes to this calendar as a feed: Google's\nsystem calendars (holidays, birthdays), and calendars added by URL in\nGoogle or subscribed from the web in Outlook."
           },
           "isWritable": {
             "type": "boolean",

@@ -1,5 +1,7 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use ai_billing::PlanTier;
 use anyhow::{Result, bail};
 use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
@@ -24,7 +26,7 @@ use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades, UpgradeOutcome};
 use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
 use super::event_runs::ConfigurationRevision;
-use super::event_trigger::ActionTrigger;
+use super::event_trigger::{ActionTrigger, EventFilters};
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionPolicyError, CheckedStepProblems,
     CreatedItem, DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun,
@@ -32,12 +34,14 @@ use super::models::{
     ScheduledAction, SubRoutine, SubRoutineKey,
 };
 use super::ports::{
-    CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode, SavedAction,
-    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, StepProblems,
-    SubRoutines, SuggestionOrigins, TaskTargetValidator,
+    CodeUpgrades, DraftHandBacks, NoRoutineCode, OwnerInboxes, RequestSessions, RoutineCode,
+    RoutinePlans, SavedAction, ScheduledActionExecutor, ScheduledActionRepo,
+    ScheduledActionService, StepProblems, SubRoutines, SuggestionOrigins, TaskTargetValidator,
 };
+use super::routine_limit::RoutineLimit;
 
 mod sub_routines;
+use super::run_stops::RunStops;
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
@@ -52,6 +56,7 @@ pub struct ScheduledActionServiceImpl<
     Code = NoRoutineCode,
     Upgrades = NoCodeUpgrades,
     Rollout = EventRoutinesOff,
+    Plans = FreePlans,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
@@ -71,6 +76,22 @@ pub struct ScheduledActionServiceImpl<
     origins: Option<Arc<dyn SuggestionOrigins>>,
     /// Finds the agent session behind a create, to tell a routine run's.
     run_sessions: Option<Arc<dyn RequestSessions>>,
+    /// Which inboxes an owner may pick in an inbox filter. Without it, none.
+    inboxes: Option<Arc<dyn OwnerInboxes>>,
+    /// Where a stop of a run in progress is sent.
+    stops: RunStops,
+    /// Each owner's plan, which limits their active routines.
+    plans: Plans,
+}
+
+/// Composition without plan lookups: every owner gets the Free routine
+/// limit, so a host that forgets to wire plans fails closed.
+pub struct FreePlans;
+
+impl RoutinePlans for FreePlans {
+    async fn plan(&self, _owner: &MacroUserIdStr<'static>) -> Result<PlanTier> {
+        Ok(PlanTier::Free)
+    }
 }
 
 /// What keeps a draft session's check as its answer.
@@ -120,17 +141,21 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             drafts: None,
             origins: None,
             run_sessions: None,
+            inboxes: None,
+            stops: RunStops::default(),
+            plans: FreePlans,
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, Plans>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, Plans>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades, Rollout> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades, Rollout, Plans>
+    {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -145,6 +170,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            inboxes: self.inboxes,
+            stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -152,7 +180,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades, Rollout> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades, Rollout, Plans>
+    {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -167,6 +196,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            inboxes: self.inboxes,
+            stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -174,7 +206,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     pub fn with_event_routines<R: EventRoutineRollout>(
         self,
         rollout: R,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, R> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, R, Plans>
+    {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -189,6 +222,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            inboxes: self.inboxes,
+            stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -198,7 +234,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         self,
         code: Arc<C>,
         upgrades: Arc<U>,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U, Rollout> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U, Rollout, Plans> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -213,6 +249,35 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             drafts: self.drafts,
             origins: self.origins,
             run_sessions: self.run_sessions,
+            inboxes: self.inboxes,
+            stops: self.stops,
+            plans: self.plans,
+        }
+    }
+
+    /// Limits each owner's active routines by their plan.
+    pub fn with_routine_plans<P: RoutinePlans>(
+        self,
+        plans: P,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, P>
+    {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            rollout: self.rollout,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
+            code: self.code,
+            upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
+            run_sessions: self.run_sessions,
+            inboxes: self.inboxes,
+            stops: self.stops,
+            plans,
         }
     }
 
@@ -240,6 +305,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     /// routine's sub-routines, finding the session through `sessions`.
     pub fn with_run_sessions(mut self, sessions: Arc<dyn RequestSessions>) -> Self {
         self.run_sessions = Some(sessions);
+        self
+    }
+
+    /// Check inbox filters against the inboxes `inboxes` says each owner has.
+    pub fn with_owner_inboxes(mut self, inboxes: Arc<dyn OwnerInboxes>) -> Self {
+        self.inboxes = Some(inboxes);
+        self
+    }
+
+    /// Send stops of runs in progress through `stops`, shared with the
+    /// executor that runs them.
+    pub fn with_run_stops(mut self, stops: RunStops) -> Self {
+        self.stops = stops;
         self
     }
 
@@ -304,6 +382,25 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if !enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
         }
+        if trigger
+            .event_filters()
+            .is_some_and(EventFilters::watches_email_labels)
+        {
+            let labels = self
+                .rollout
+                .email_labels_enabled_for(owner)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "feature flags unavailable; email label triggers stay off"
+                    );
+                })
+                .unwrap_or(false);
+            if !labels {
+                return Err(ActionPolicyError::EmailLabelsDisabled.into());
+            }
+        }
         Ok(())
     }
 
@@ -316,6 +413,33 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             return Err(ActionPolicyError::ConditionsDisabled.into());
         }
         Ok(())
+    }
+
+    /// The limit a write must respect when it leaves `action` active and it
+    /// wasn't before. `None` when the write adds no active routine, so pausing,
+    /// deleting, and editing an active routine never depend on plan lookups.
+    #[tracing::instrument(
+        name = "routine.activation_limit",
+        err,
+        skip_all,
+        fields(plan = tracing::field::Empty, limit = tracing::field::Empty)
+    )]
+    async fn activation_limit(
+        &self,
+        was_active: bool,
+        action: &ScheduledAction,
+    ) -> Result<Option<RoutineLimit>>
+    where
+        Plans: RoutinePlans,
+    {
+        if was_active || !action.is_active() {
+            return Ok(None);
+        }
+        let limit = RoutineLimit::for_plan(self.plans.plan(action.owner_user()?).await?);
+        let span = tracing::Span::current();
+        span.record("plan", tracing::field::display(limit.plan()));
+        span.record("limit", limit.max_active());
+        Ok(Some(limit))
     }
 
     /// Every create goes through here, so only a person creates a routine
@@ -339,6 +463,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Github: GithubInstallationClaims,
         Code: RoutineCode,
         Rollout: EventRoutineRollout,
+        Plans: RoutinePlans,
     {
         if requester == Requester::Program && writes_as_owner(&input.task) {
             return Err(ActionPolicyError::OwnerIdentityNeedsPerson.into());
@@ -366,6 +491,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         self.check_event_management(&input.trigger, owner_user)
             .await?;
         self.check_conditions(&input.trigger)?;
+        self.check_inboxes(&input.trigger, owner_user).await?;
         self.targets.validate_task(&input.task, owner_user).await?;
         let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
@@ -374,30 +500,29 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger, now, |_| false)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
-        let created = self
-            .repo
-            .create_action(ScheduledAction {
-                id: None,
-                owner,
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task,
-                enabled: input.enabled,
-                run_visibility: input.run_visibility,
-                created_at: now,
-                updated_at: now,
-                configuration_revision: ConfigurationRevision::INITIAL,
-                event_activated_at,
-                next_run_at,
-                claimed: None,
-                template_id,
-                appearance,
-                suggestion_id,
-                description,
-                sub_routine,
-            })
-            .await?;
+        let action = ScheduledAction {
+            id: None,
+            owner,
+            name: input.name,
+            trigger: input.trigger,
+            kind: input.kind,
+            task,
+            enabled: input.enabled,
+            run_visibility: input.run_visibility,
+            created_at: now,
+            updated_at: now,
+            configuration_revision: ConfigurationRevision::INITIAL,
+            event_activated_at,
+            next_run_at,
+            claimed: None,
+            template_id,
+            appearance,
+            suggestion_id,
+            description,
+            sub_routine,
+        };
+        let activation = self.activation_limit(false, &action).await?;
+        let created = self.repo.create_action(action, activation).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Create(created.clone()))
             .await
@@ -448,6 +573,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if input.enabled
             && let Err(error) = self.check_github(&input.trigger, owner).await
         {
+            problems.push(check_problem(error)?);
+        }
+        if let Err(error) = self.check_inboxes(&input.trigger, owner).await {
             problems.push(check_problem(error)?);
         }
         if let Err(error) = next_run(&input.trigger, Utc::now(), |_| false) {
@@ -509,6 +637,79 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(())
     }
 
+    /// An inbox filter names only inboxes its owner receives mail in now.
+    async fn check_inboxes(
+        &self,
+        trigger: &ActionTrigger,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<()> {
+        let picked: BTreeSet<Uuid> = trigger
+            .event_filters()
+            .into_iter()
+            .flat_map(|filters| filters.as_slice())
+            .filter_map(|filter| filter.inboxes())
+            .flatten()
+            .copied()
+            .collect();
+        if picked.is_empty() {
+            return Ok(());
+        }
+        self.check_picked_inboxes(&picked, owner).await
+    }
+
+    // The owner is an email address: never a span field. The request's own
+    // span names the routine an update changes.
+    #[tracing::instrument(
+        name = "routine.check_inboxes",
+        skip_all,
+        fields(
+            picked = picked.len(),
+            unknown = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        ),
+        // A pick that isn't the owner's is the person's mistake; a failed lookup
+        // is also recorded as an error on `routine.owner_inboxes`.
+        err(level = "warn")
+    )]
+    async fn check_picked_inboxes(
+        &self,
+        picked: &BTreeSet<Uuid>,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<()> {
+        let span = tracing::Span::current();
+        let unknown = self.unknown_inboxes(picked, owner).await;
+        span.record(
+            "outcome",
+            match &unknown {
+                Ok(0) => "accepted",
+                Ok(_) => "unknown_inboxes",
+                Err(_) => "lookup_failed",
+            },
+        );
+        let unknown = unknown?;
+        span.record("unknown", unknown);
+        if unknown == 0 {
+            Ok(())
+        } else {
+            Err(ActionPolicyError::UnknownInboxes.into())
+        }
+    }
+
+    /// How many of `picked` aren't inboxes `owner` receives mail in. With no
+    /// way to list inboxes, none can be checked, so every pick counts.
+    async fn unknown_inboxes(
+        &self,
+        picked: &BTreeSet<Uuid>,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<usize> {
+        let Some(inboxes) = &self.inboxes else {
+            return Ok(picked.len());
+        };
+        let asked: Vec<Uuid> = picked.iter().copied().collect();
+        let theirs: BTreeSet<Uuid> = inboxes.among(owner, &asked).await?.into_iter().collect();
+        Ok(picked.difference(&theirs).count())
+    }
+
     /// Replace a routine's configuration, then make its sub-routines follow
     /// a change of whether it is on. A program may rename, describe or switch
     /// off a routine that writes as its owner, but not switch one to, change
@@ -526,6 +727,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Code: RoutineCode,
         Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
+        Plans: RoutinePlans,
     {
         if requester == Requester::Program
             && writes_as_owner(&input.task)
@@ -637,8 +839,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Code: RoutineCode,
         Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
+        Plans: RoutinePlans,
     {
         require_explicit_selection(&action.task, &input.task)?;
+        let was_active = action.is_active();
         input.task = named_steps(&input.task);
         // Clients don't echo the SDK the stored code was checked against.
         if same_task(&action.task, &input.task) {
@@ -659,6 +863,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             self.check_event_management(&action.trigger, owner).await?;
             self.check_event_management(&input.trigger, owner).await?;
             self.check_conditions(&input.trigger)?;
+            // Only a changed trigger: a disconnected inbox mustn't block other edits.
+            if trigger_changed {
+                self.check_inboxes(&input.trigger, owner).await?;
+            }
         }
         let now = Utc::now();
         if claim_blocks_replacement(&action, now) && !disable_only {
@@ -717,7 +925,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             link.paused_by_parent = !input.enabled && (with_parent || link.paused_by_parent);
         }
 
-        let updated = self.repo.update_action(action).await?;
+        let activation = self.activation_limit(was_active, &action).await?;
+        let updated = self.repo.update_action(action, activation).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Update(updated.clone()))
             .await
@@ -941,13 +1150,24 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout, Plans> ScheduledActionService
+    for ScheduledActionServiceImpl<
+        Rpo,
+        Exe,
+        Grants,
+        Targets,
+        Github,
+        Code,
+        Upgrades,
+        Rollout,
+        Plans,
+    >
 where
     Github: GithubInstallationClaims,
     Code: RoutineCode,
     Upgrades: CodeUpgrades,
     Rollout: EventRoutineRollout,
+    Plans: RoutinePlans,
     Rpo: ScheduledActionRepo + SubRoutines,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,
@@ -1057,6 +1277,7 @@ where
             Ok(SavedAction::Updated(_)) => "updated",
             Err(error) => match error.downcast_ref::<ActionPolicyError>() {
                 Some(ActionPolicyError::TooManySubRoutines) => "refused_cap",
+                Some(ActionPolicyError::RoutineLimitReached(_)) => "refused_limit",
                 _ => "failed",
             },
         };
@@ -1288,6 +1509,24 @@ where
         action.owner_user()?;
         // Manual execution deliberately has no event reference or event-run ID.
         self.executor.execute_action(action).await
+    }
+
+    #[tracing::instrument(name = "routine.stop", skip_all, err, fields(action_id = tracing::field::Empty, running = tracing::field::Empty))]
+    async fn stop_run(&self, receipt: EntityAccessReceipt<OwnerAccessLevel>) -> Result<()> {
+        let action = self.load_granted(&receipt).await?;
+        let Some(id) = action.id else {
+            bail!("cannot stop a run without an id");
+        };
+        let span = tracing::Span::current();
+        span.record("action_id", tracing::field::display(id));
+        // A routine that isn't running has nothing to stop; a stop sent again
+        // after its run ended changes nothing.
+        let running = self.repo.running_run(&id).await?;
+        span.record("running", running.is_some());
+        match running {
+            Some(run) => self.stops.request(run.run_id).await,
+            None => Ok(()),
+        }
     }
 
     async fn get_execution_records(

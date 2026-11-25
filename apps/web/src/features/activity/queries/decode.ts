@@ -123,6 +123,21 @@ function decodeAction(
         participant,
       })
     )
+    .with(
+      { __typename: 'GraphqlActivityRecordMerged' },
+      ({ merged, dropped }) => ({
+        kind: 'record-merged' as const,
+        merged: merged.map((record) => ({
+          id: record.id,
+          name: record.name ?? null,
+        })),
+        dropped: dropped.map((value) => ({
+          property: value.property,
+          record: value.record,
+          value: value.value as unknown,
+        })),
+      })
+    )
     .with({ __typename: 'GraphqlActivityUnknownAction' }, ({ tag }) => ({
       kind: 'unknown' as const,
       tag,

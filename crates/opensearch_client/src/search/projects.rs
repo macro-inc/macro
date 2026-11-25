@@ -56,6 +56,7 @@ impl ProjectQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
@@ -79,8 +80,15 @@ impl ProjectQueryBuilder {
             bool_query.filter(nested);
         }
 
-        // Name match: every term must match the project name.
+        // Name match: every term must match the project name, and none a
+        // minus left out.
         bool_query.must(self.inner.build_title_term_query()?);
+        for query in self
+            .inner
+            .excluded_field_queries(ProjectSearchConfig::TITLE_KEY)?
+        {
+            bool_query.must_not(query);
+        }
 
         Ok(bool_query)
     }

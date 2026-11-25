@@ -9,14 +9,33 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { Snapshot, Status } from './generated/native-update-status';
 import { createNativeUpdatePreparation } from './native-update-preparation';
+import { stageDeployedBundle } from './stage-bundle';
 
-export type NativeUpdateStatus =
-  | { status: 'Disabled' | 'Idle' | 'Checking' | 'Installing' }
-  | { status: 'Downloading' | 'Ready'; data: { version: string } }
-  | { status: 'Error'; data: { message: string } };
+/**
+ * The host's `Snapshot`. Binaries from before failed installs were reported
+ * send the status alone, without `failedInstallVersion`.
+ */
+export type NativeUpdateStatus = Status &
+  Partial<Pick<Snapshot, 'failedInstallVersion'>>;
+
+/**
+ * True while the previous launch's failed install is being tried again: the
+ * update is downloading again or is ready. A check alone may find nothing to
+ * install, so it doesn't count.
+ */
+export function retryingFailedInstall(status: NativeUpdateStatus): boolean {
+  if (!status.failedInstallVersion) return false;
+  return status.status === 'Downloading' || status.status === 'Ready';
+}
 
 export function nativeUpdateDescription(status: NativeUpdateStatus): string {
+  if (retryingFailedInstall(status)) {
+    return status.status === 'Ready'
+      ? "The last app update couldn't be installed. Restart to try again."
+      : "The last app update couldn't be installed. Downloading it again…";
+  }
   return match(status)
     .with(
       { status: 'Disabled' },
@@ -48,6 +67,7 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   const [preparing, setPreparing] = createSignal(false);
   const [status, setStatus] = createSignal<NativeUpdateStatus>({
     status: 'Disabled',
+    failedInstallVersion: null,
   });
   let disposed = false;
   let unsubscribe = () => {};
@@ -58,6 +78,12 @@ export function createNativeUpdates(flush: () => Promise<void>) {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       setPreparing(true);
+      // Fetch the deployed web bundle while saves finish, so the new version
+      // starts on it instead of asking for another restart. Work that blocks
+      // the restart would only leave a download behind.
+      const staging = hasAutomaticReloadHolds()
+        ? undefined
+        : stageDeployedBundle();
       await Promise.race([
         preparation.prepare(),
         new Promise<never>((_, reject) => {
@@ -72,6 +98,10 @@ export function createNativeUpdates(flush: () => Promise<void>) {
           );
         }),
       ]);
+      await staging;
+      // A call, upload or import may have started while the bundle downloaded.
+      if (hasAutomaticReloadHolds())
+        throw new Error('Finish your current work before restarting Macro.');
       await invoke('restart_native_update');
     } catch (error) {
       setPreparing(false);

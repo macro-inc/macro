@@ -1040,6 +1040,25 @@ async fn run_server() -> anyhow::Result<()> {
         entity_access_service.clone(),
         authorization_state.clone(),
     );
+    // Summaries read the primary: the screens read them again after each
+    // change, and the replica can lag by seconds. Exports read the replica.
+    let time_report_service = Arc::new(
+        time_tracking::domain::report_service::TimeReportServiceImpl::new(
+            time_tracking::outbound::pg_report_repo::PgTimeReportRepository::new(
+                db.clone(),
+                readonly_db.clone(),
+            ),
+            entity_access_service.clone(),
+            time_tracking::outbound::project_tasks::SystemPropertyProjectTasks::new(
+                system_properties_service.clone(),
+            ),
+        ),
+    );
+    let time_report_state = time_tracking::inbound::report_router::TimeReportRouterState::new(
+        time_report_service.clone(),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
 
     let passwords_repository = Arc::new(
         passwords::outbound::postgres::PgRepository::new(db.clone())
@@ -2019,6 +2038,32 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
 
+    // Gated per user; the merge publishes the property rows it rewrote.
+    let merge_service = Arc::new(
+        crm::domain::record_merge::service::RecordMergeService::new(
+            crm::outbound::record_merge::PgRecordMergeRepository::new(
+                db.clone(),
+                databases_service.clone(),
+            ),
+        )
+        .with_gate(Arc::new(crm::outbound::record_merge::FlaggedMerge(
+            flags.clone(),
+        )))
+        .with_effects(Arc::new(crm::outbound::record_merge::PropertyMergeEffects(
+            macro_event_broker.clone(),
+        )))
+        .with_pipeline_access(Arc::new(crm::outbound::record_merge::PipelineGrants(
+            entity_access_service.clone(),
+        )))
+        .with_reference_access(Arc::new(crm::outbound::record_merge::ReferenceGrants::new(
+            db.clone(),
+            entity_access_service.clone(),
+        )))
+        .with_notices(Arc::new(crm::outbound::record_merge::SharingNotices(
+            notification_ingress_service.clone(),
+        ))),
+    );
+
     let database_webhooks_service = Arc::new(database_webhooks::wiring::build_service(
         db.clone(),
         databases_service.clone(),
@@ -2745,6 +2790,7 @@ async fn run_server() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         time_tracking_state,
+        time_report_state,
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
             authorization_state.clone(),
@@ -2814,6 +2860,10 @@ async fn run_server() -> anyhow::Result<()> {
         // the write that changed it.
         graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext::new(
             time_tracking_service,
+            entity_access_service.clone(),
+        ),
+        graphql_time_report_context: graphql_time_tracking::TimeReportGraphqlContext::new(
+            time_report_service,
             entity_access_service.clone(),
         ),
         graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(
@@ -3006,6 +3056,11 @@ async fn run_server() -> anyhow::Result<()> {
         pipeline_state: crm::inbound::pipelines::PipelineRouterState {
             service: pipeline_service,
             access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
+        merge_state: crm::inbound::record_merge::MergeRouterState {
+            merges: merge_service,
+            entity_access: entity_access_service.clone(),
             authorization: authorization_state.clone(),
         },
         pipeline_workflow_state: crm::inbound::pipeline_workflows::PipelineWorkflowRouterState {

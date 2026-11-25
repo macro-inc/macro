@@ -1777,8 +1777,9 @@ export type VisibleCalendar = {
      */
     isPrimary: boolean;
     /**
-     * Whether this is one of Google's shared system calendars (holidays,
-     * birthdays) the account subscribes to rather than one a person maintains.
+     * Whether the account subscribes to this calendar as a feed: Google's
+     * system calendars (holidays, birthdays), and calendars added by URL in
+     * Google or subscribed from the web in Outlook.
      */
     isSubscription: boolean;
     /**

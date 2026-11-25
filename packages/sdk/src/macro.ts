@@ -110,6 +110,15 @@ export type {
   CrmEmailRuleSet,
 } from './entities/crm-email-privacy/email-rules';
 export {
+  type CrmCompanyMerge,
+  type CrmCompanyMergeCommit,
+  type CrmContactMerge,
+  type CrmContactMergeCommit,
+  CrmMergeNamespace,
+  type CrmMergeOutcome,
+  type CrmMergePreview,
+} from './entities/crm-merges/merges';
+export {
   type AddColumnOptions,
   type ApplyOpsOptions,
   type ChangeColumnTypeOptions,
@@ -284,7 +293,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly teams: TeamNamespace;
 
-  /** Your running timer; time is logged and read on the task. */
+  /** Your running timer and your own or your team's time; time is logged and read on the task. */
   readonly time: TimeNamespace;
 
   readonly users: UserNamespace;
@@ -598,8 +607,11 @@ export type { ReferralLink } from './entities/referrals/namespace';
 export type {
   RoutineApp,
   RoutineEventFilter,
+  RoutineEventFilterDetail,
+  RoutineTriggerDetail,
   RoutineTriggerOptions,
   SingleRoutineTrigger,
+  SingleRoutineTriggerDetail,
 } from './entities/routines/routine';
 export {
   Routine,
@@ -635,6 +647,10 @@ export {
 export type {
   SuggestionInput,
   SuggestionsReview,
+  SuggestionTopic,
+  SuggestionTopicInput,
+  SuggestionTopicReason,
+  SuggestionTopicReasonInput,
 } from './entities/suggestions/namespace';
 export {
   Suggestion,
@@ -654,6 +670,17 @@ export {
   NotTimeEntryAuthorError,
   TimerOverLimitError,
 } from './entities/time/errors';
+export type {
+  TimeExport,
+  TimeGroup,
+  TimeGrouping,
+  TimePeriodOptions,
+  TimeScopeOptions,
+  TimeSummary,
+  TimeSummaryOptions,
+  TimeTotal,
+  TimeTotalKey,
+} from './entities/time/report';
 export type {
   LogTimeOptions,
   StartTimerOptions,

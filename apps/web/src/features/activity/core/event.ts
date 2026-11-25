@@ -22,6 +22,15 @@ export type ActivityAction =
       entryDate: string;
       source: 'manual' | 'timer';
     }
+  /**
+   * Other records were merged into this one (a CRM company), with the
+   * team-visible values of theirs that this one's own replaced.
+   */
+  | {
+      kind: 'record-merged';
+      merged: { id: string; name: string | null }[];
+      dropped: { property: string; record: string; value: unknown }[];
+    }
   | { kind: 'unknown'; tag: string };
 
 /**

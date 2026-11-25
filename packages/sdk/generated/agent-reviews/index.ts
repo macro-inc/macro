@@ -27,6 +27,24 @@ export type CalendarEventTypeInput =
  */
 "out_of_office";
 
+/**  Objects confirmed in the current Notion write's ledger. */
+export type ConfirmedNotionWrites = {
+	/**  Copied pages. */
+	documents: number,
+	/**  Copied databases. */
+	databases: number,
+	/**  Rows inserted into databases, including writes from unfinished copies. */
+	databaseRows: number,
+	/**  The subset of database rows written before their source stopped. */
+	partialDatabaseRows?: number,
+	/**  Databases copied as task lists. */
+	taskLists: number,
+	/**  Tasks inserted into task lists, including writes from unfinished lists. */
+	tasks: number,
+	/**  The subset of tasks written before their source stopped. */
+	partialTasks?: number,
+};
+
 /**  Create a calendar event. */
 export type CreateCalendarEvent = CreateCalendarEvent_Serialize | CreateCalendarEvent_Deserialize;
 
@@ -212,6 +230,86 @@ export type GuestPolicy = {
 };
 
 /**
+ *  Something a HubSpot import cannot carry into Macro CRM, counted on the
+ *  review card and in the final report.
+ */
+export type HubspotLoss =
+/**  A record's HubSpot owner is not a member of the team; it stays unassigned. */
+"owner_not_member" |
+/**  A deal with no company; Macro pipelines track companies, so it is not imported. */
+"deal_without_company" |
+/**  A deal in a pipeline that is archived or missing; it is not imported. */
+"deal_without_pipeline" |
+/**  A contact or deal linked to more than one company; only its primary is kept. */
+"extra_company_links" |
+/**
+ *  A company domain Macro does not key companies by (a personal email
+ *  provider, or not a domain); the company is created by name only.
+ */
+"domain_rejected" |
+/**
+ *  A deal currency Macro does not support; the amount is left empty rather
+ *  than shown in another currency.
+ */
+"unsupported_currency" |
+/**  A company's further domains; only its primary domain is kept. */
+"additional_domains" |
+/**  A company's HubSpot owner; Macro companies have no owner. */
+"company_owner" |
+/**
+ *  A company sharing its domain with another planned company; both become
+ *  one CRM company.
+ */
+"merged_company" |
+/**
+ *  A contact sharing its primary address with another planned contact;
+ *  both become one CRM contact.
+ */
+"merged_contact" |
+/**
+ *  A contact whose company was left out of the import; it is created
+ *  without one.
+ */
+"contact_without_company";
+
+/**  How many records lost one thing. */
+export type HubspotLossCount = {
+	/**  What was lost. */
+	loss: HubspotLoss,
+	/**  Records affected. */
+	count: number,
+};
+
+/**  What a HubSpot plan holds, for the review card. */
+export type HubspotReport = {
+	/**  Deal pipelines, each becoming a Macro pipeline. */
+	pipelines: number,
+	/**  Companies. */
+	companies: number,
+	/**  Contacts. */
+	contacts: number,
+	/**  Deals, each becoming an entry in its pipeline. */
+	deals: number,
+	/**  HubSpot owners named by the planned records. */
+	owners: number,
+	/**  Of those, owners matched to a team member by email. */
+	ownersMatched: number,
+	/**  Records already in Macro from an earlier import, left as they are. */
+	alreadyImported: number,
+	/**  Records this import created in the CRM. */
+	created?: number,
+	/**
+	 *  Records this import matched to ones already in the CRM (same domain,
+	 *  address or deal) or to a teammate's import, instead of creating them.
+	 */
+	linked?: number,
+	/**  What cannot be carried over, by kind. */
+	losses: HubspotLossCount[],
+	/**  Portal-defined property names whose values stay in HubSpot. */
+	customProperties: string[],
+};
+
+/**
  *  The one draft an import review carries: which source's staged plan it
  *  presents, the plan rows the user took out of it, and the rows whose
  *  sharing they changed: `shared` to share with their team, `personal` to
@@ -255,7 +353,15 @@ export type ImportKind =
 /**  A Jira epic grouping. */
 "jira_epic" |
 /**  A Slack channel. */
-"channel";
+"channel" |
+/**  A HubSpot deal pipeline. */
+"hubspot_pipeline" |
+/**  A HubSpot company. */
+"hubspot_company" |
+/**  A HubSpot contact. */
+"hubspot_contact" |
+/**  A HubSpot deal. */
+"hubspot_deal";
 
 /**  Which source's staged plan an import review presents. */
 export type ImportReviewSource =
@@ -264,7 +370,9 @@ export type ImportReviewSource =
 /**  A Linear plan, staged by ImportFromLinear. */
 "linear" |
 /**  A Jira plan, staged by ImportFromJira. */
-"jira";
+"jira" |
+/**  A HubSpot plan, staged by ImportFromHubspot. */
+"hubspot";
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =
@@ -279,6 +387,26 @@ export type ItemStatus =
 /**  Outcome requires reconciliation. */
 "unknown";
 
+/**  Changes to one view of an imported database. */
+export type NotionChangedView = {
+	/**  Stable Notion identity, separate from the title. */
+	viewId: string,
+	/**  Display title. */
+	title: string,
+	/**  Changes ordered by impact. */
+	changes: NotionViewChange[],
+};
+
+/**  Views that changed on one database. */
+export type NotionDatabaseViewChanges = {
+	/**  Stable Notion data source identity. */
+	databaseId: string,
+	/**  Display title. */
+	title: string,
+	/**  Views ordered by their highest impact. */
+	views: NotionChangedView[],
+};
+
 /**  Where a Notion workspace import stands. */
 export type NotionImportReport = NotionImportReport_Serialize | NotionImportReport_Deserialize;
 
@@ -286,6 +414,10 @@ export type NotionImportReport = NotionImportReport_Serialize | NotionImportRepo
 export type NotionImportReport_Deserialize = {
 	/**  Provider items skipped because they were unreadable, or optional features unavailable. */
 	warnings?: string[],
+	/**  Grouped report details for a Notion workspace review. */
+	details?: NotionReportDetails_Deserialize | null,
+	/**  Actual writes from the completed Notion ledger, excluding reused copies. */
+	confirmed?: ConfirmedNotionWrites | null,
 	/**  Tracker issues in the plan. */
 	issues?: number,
 	/**  Tracker groups written as Macro projects. */
@@ -326,11 +458,11 @@ export type NotionImportReport_Deserialize = {
 	documents: number,
 	/**  Data sources written as databases. */
 	databases: number,
-	/**  Rows those databases hold, every one counted while planning. */
+	/**  Estimated database rows while planning, confirmed rows once completed. */
 	databaseRows: number,
 	/**  Tasks the task lists become, one per row. */
 	taskRows: number,
-	/**  Plan objects already imported. */
+	/**  Plan objects finished so far, or confirmed new copies once completed. */
 	imported: number,
 	/**  Plan objects still waiting to be written. */
 	waiting: number,
@@ -356,12 +488,20 @@ export type NotionImportReport_Deserialize = {
 	handItems?: NotionReportItem_Deserialize[],
 	/**  Objects that failed to import, with the failure. */
 	failures?: NotionReportItem_Deserialize[],
+	/**  Total objects that failed, including those outside the sample. */
+	failureCount?: number,
+	/**  A HubSpot plan's counts, owners and losses. */
+	hubspot?: HubspotReport | null,
 };
 
 /**  Where a Notion workspace import stands. */
 export type NotionImportReport_Serialize = {
 	/**  Provider items skipped because they were unreadable, or optional features unavailable. */
 	warnings?: string[],
+	/**  Grouped report details for a Notion workspace review. */
+	details?: NotionReportDetails_Serialize | null,
+	/**  Actual writes from the completed Notion ledger, excluding reused copies. */
+	confirmed?: ConfirmedNotionWrites | null,
 	/**  Tracker issues in the plan. */
 	issues: number,
 	/**  Tracker groups written as Macro projects. */
@@ -402,11 +542,11 @@ export type NotionImportReport_Serialize = {
 	documents: number,
 	/**  Data sources written as databases. */
 	databases: number,
-	/**  Rows those databases hold, every one counted while planning. */
+	/**  Estimated database rows while planning, confirmed rows once completed. */
 	databaseRows: number,
 	/**  Tasks the task lists become, one per row. */
 	taskRows: number,
-	/**  Plan objects already imported. */
+	/**  Plan objects finished so far, or confirmed new copies once completed. */
 	imported: number,
 	/**  Plan objects still waiting to be written. */
 	waiting: number,
@@ -432,6 +572,10 @@ export type NotionImportReport_Serialize = {
 	handItems: NotionReportItem_Serialize[],
 	/**  Objects that failed to import, with the failure. */
 	failures: NotionReportItem_Serialize[],
+	/**  Total objects that failed, including those outside the sample. */
+	failureCount: number,
+	/**  A HubSpot plan's counts, owners and losses. */
+	hubspot?: HubspotReport | null,
 };
 
 /**  A teammate who already imported some of a plan's objects. */
@@ -440,6 +584,53 @@ export type NotionImporter = {
 	by: string,
 	/**  How many of the plan's objects they imported. */
 	count: number,
+};
+
+/**  Details alongside the outcome on a Notion import card. */
+export type NotionReportDetails = NotionReportDetails_Serialize | NotionReportDetails_Deserialize;
+
+/**  Details alongside the outcome on a Notion import card. */
+export type NotionReportDetails_Deserialize = {
+	/**  A sample of items deliberately left out, with the reviewed reasons. */
+	notImported: NotionReviewOmission_Deserialize[],
+	/**  Totals for each review choice. */
+	omissionCounts?: NotionReviewOmissionCount[],
+	/**  Saved view differences, sampled by impact and grouped by source and view. */
+	viewChanges: NotionDatabaseViewChanges[],
+	/**  Total number of changed views. */
+	viewCount?: number,
+	/**  Total number of displayed and undisplayed change lines. */
+	viewChangeCount?: number,
+	/**  A sample of tab selections caused by an unspecified Notion tab. */
+	tabChoices: NotionTabChoice_Deserialize[],
+	/**  Total number of placements that used a default tab. */
+	tabChoiceCount?: number,
+	/**  A sample of legacy notices and non-view fidelity changes. */
+	notes: NotionReportNote[],
+	/**  Totals for each kind of notice. */
+	noteCounts?: NotionReportNoteCount[],
+};
+
+/**  Details alongside the outcome on a Notion import card. */
+export type NotionReportDetails_Serialize = {
+	/**  A sample of items deliberately left out, with the reviewed reasons. */
+	notImported: NotionReviewOmission_Serialize[],
+	/**  Totals for each review choice. */
+	omissionCounts?: NotionReviewOmissionCount[],
+	/**  Saved view differences, sampled by impact and grouped by source and view. */
+	viewChanges: NotionDatabaseViewChanges[],
+	/**  Total number of changed views. */
+	viewCount: number,
+	/**  Total number of displayed and undisplayed change lines. */
+	viewChangeCount: number,
+	/**  A sample of tab selections caused by an unspecified Notion tab. */
+	tabChoices: NotionTabChoice_Serialize[],
+	/**  Total number of placements that used a default tab. */
+	tabChoiceCount: number,
+	/**  A sample of legacy notices and non-view fidelity changes. */
+	notes: NotionReportNote[],
+	/**  Totals for each kind of notice. */
+	noteCounts?: NotionReportNoteCount[],
 };
 
 /**  One object a workspace import report calls out. */
@@ -472,6 +663,127 @@ export type NotionReportItem_Serialize = {
 	/**  Why it is called out: the decision model's reason, or the failure. */
 	reason?: string | null,
 };
+
+/**  A counted content or compatibility note. */
+export type NotionReportNote = {
+	/**  Semantic category. */
+	kind: NotionReportNoteKind,
+	/**  Number of incidents represented by this notice. */
+	count: number,
+	/**  Human-readable text, with affected source and property titles. */
+	message: string,
+};
+
+/**  Counts for one kind of content note, including notes outside the sample. */
+export type NotionReportNoteCount = {
+	/**  Semantic category. */
+	kind: NotionReportNoteKind,
+	/**  Number of notices. */
+	lines: number,
+	/**  Number of incidents described by the notices. */
+	count: number,
+};
+
+/**  Content-level notes that do not describe a saved view or a reviewed skip. */
+export type NotionReportNoteKind =
+/**  Part of the source could not be copied. */
+"omitted" |
+/**  A calculated value was kept as a fixed snapshot. */
+"snapshot" |
+/**  A reference uses a different destination, such as a source link. */
+"reference" |
+/**  Other source details, including legacy notices. */
+"other";
+
+/**  A review choice and the item it left out. */
+export type NotionReviewOmission = NotionReviewOmission_Serialize | NotionReviewOmission_Deserialize;
+
+/**  Counts for one review choice, including items outside the sample. */
+export type NotionReviewOmissionCount = {
+	/**  The reviewed choice responsible. */
+	kind: NotionReviewOmissionKind,
+	/**  Pages left out. */
+	pages: number,
+	/**  Databases left out. */
+	databases: number,
+	/**  Other objects left out. */
+	other: number,
+};
+
+/**  Why an item was left for the user in the reviewed plan. */
+export type NotionReviewOmissionKind =
+/**  The plan proposed leaving the item out and the review kept that choice. */
+"left_out" |
+/**  The review excluded a proposed copy. */
+"excluded" |
+/**  The plan left this item for manual handling. */
+"by_hand";
+
+/**  A review choice and the item it left out. */
+export type NotionReviewOmission_Deserialize = {
+	/**  Which review choice led to the omission. */
+	kind: NotionReviewOmissionKind,
+	/**  Source title, link and review reason. */
+	item: NotionReportItem_Deserialize,
+};
+
+/**  A review choice and the item it left out. */
+export type NotionReviewOmission_Serialize = {
+	/**  Which review choice led to the omission. */
+	kind: NotionReviewOmissionKind,
+	/**  Source title, link and review reason. */
+	item: NotionReportItem_Serialize,
+};
+
+/**  A first-tab choice when Notion omitted the view from a reference. */
+export type NotionTabChoice = NotionTabChoice_Serialize | NotionTabChoice_Deserialize;
+
+/**  A first-tab choice when Notion omitted the view from a reference. */
+export type NotionTabChoice_Deserialize = {
+	/**  Container identity. Different linked placements may choose different tabs. */
+	containerId: string,
+	/**  Title of the page or row containing the reference. */
+	containerTitle?: string | null,
+	/**  Database name shown in the reference. */
+	database: string,
+	/**  Name of the returned first tab. */
+	tab: string,
+};
+
+/**  A first-tab choice when Notion omitted the view from a reference. */
+export type NotionTabChoice_Serialize = {
+	/**  Container identity. Different linked placements may choose different tabs. */
+	containerId: string,
+	/**  Title of the page or row containing the reference. */
+	containerTitle?: string | null,
+	/**  Database name shown in the reference. */
+	database: string,
+	/**  Name of the returned first tab. */
+	tab: string,
+};
+
+/**  A counted, readable difference in an imported view. */
+export type NotionViewChange = {
+	/**  Semantic category used for ordering and grouping. */
+	kind: NotionViewChangeKind,
+	/**  Number of changed settings represented in this line. */
+	count: number,
+	/**  Human-readable description. */
+	message: string,
+};
+
+/**  The kind and severity of a user-visible change to a saved view. */
+export type NotionViewChangeKind =
+/**  The filter may return extra rows. */
+"filter" |
+/**  The layout or grouping changed. */
+"layout" |
+/**  The order of rows may change. */
+"sort" |
+/**  Columns hidden in Notion are visible. */
+"visibility" |
+/**  Other display settings. */
+"display";
 
 /**  Out-of-office decline behavior supplied to the calendar tools. */
 export type OutOfOfficeInput = {

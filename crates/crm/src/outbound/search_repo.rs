@@ -65,11 +65,16 @@ fn escape_like(term: &str) -> String {
 }
 
 impl CrmSearchRepository for CrmSearchRepositoryImpl {
-    #[tracing::instrument(skip(self, term), fields(term_len = term.len()), err)]
+    #[tracing::instrument(
+        skip(self, term, excluded_terms),
+        fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
+        err
+    )]
     async fn search_company_names(
         &self,
         team_id: &Uuid,
         term: &str,
+        excluded_terms: &[String],
         company_ids: &[Uuid],
         hidden: Option<bool>,
         include_hidden: bool,
@@ -77,6 +82,10 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         cursor: Option<CrmCompanySearchCursor>,
     ) -> Result<Vec<CrmCompanyNameMatch>, CrmError> {
         let pattern = format!("%{}%", escape_like(term));
+        let excluded_patterns: Vec<String> = excluded_terms
+            .iter()
+            .map(|excluded| format!("%{}%", escape_like(excluded)))
+            .collect();
         let highlight = format!("({})", escape_regex(term));
         let cursor_ts = cursor.map(|c| c.last_updated_at);
         let cursor_id = cursor.map(|c| c.last_id);
@@ -89,31 +98,58 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         // override, the domain string, and the directory name. `$2`
         // (hidden) defaults to visible-only when NULL. The keyset guard
         // ($7/$8) seeks past the previous page under the
-        // `(updated_at DESC, id DESC)` sort; NULL = first page.
+        // `(updated_at DESC, id DESC)` sort; NULL = first page. `$10`
+        // holds the words a minus leaves out, checked only on the sorted
+        // matches behind the first `OFFSET 0`, so the `LIMIT` stops the
+        // check once a page is full; the second keeps it a probe of one
+        // company's domains, which the planner would otherwise hash over
+        // every team's domains.
         let rows = sqlx::query!(
             r#"
             WITH matched AS (
-                SELECT c.id, c.custom_name, c.last_interaction AS updated_at
-                FROM crm_companies c
-                WHERE c.team_id = $1
-                  AND (
-                      (c.hidden = FALSE AND ($2::bool IS NULL OR $2 = FALSE))
-                      OR (c.hidden = TRUE AND $2 = TRUE AND $9)
-                  )
-                  AND (cardinality($3::uuid[]) = 0 OR c.id = ANY($3))
-                  AND (
-                      c.custom_name ILIKE $4
-                      OR EXISTS (
-                          SELECT 1
-                          FROM crm_domains d
-                          LEFT JOIN crm_domain_directory dd
-                              ON LOWER(dd.domain) = LOWER(d.domain)
-                          WHERE d.company_id = c.id
-                            AND (d.domain ILIKE $4 OR dd.name ILIKE $4)
+                SELECT candidate.id, candidate.custom_name, candidate.updated_at
+                FROM (
+                    SELECT c.id, c.custom_name, c.last_interaction AS updated_at
+                    FROM crm_companies c
+                    WHERE c.team_id = $1
+                      AND (
+                          (c.hidden = FALSE AND ($2::bool IS NULL OR $2 = FALSE))
+                          OR (c.hidden = TRUE AND $2 = TRUE AND $9)
                       )
-                  )
-                  AND ($7::timestamptz IS NULL OR (c.last_interaction, c.id) < ($7, $8))
-                ORDER BY c.last_interaction DESC, c.id DESC
+                      AND (cardinality($3::uuid[]) = 0 OR c.id = ANY($3))
+                      AND (
+                          c.custom_name ILIKE $4
+                          OR EXISTS (
+                              SELECT 1
+                              FROM crm_domains d
+                              LEFT JOIN crm_domain_directory dd
+                                  ON LOWER(dd.domain) = LOWER(d.domain)
+                              WHERE d.company_id = c.id
+                                AND (d.domain ILIKE $4 OR dd.name ILIKE $4)
+                          )
+                      )
+                      AND ($7::timestamptz IS NULL OR (c.last_interaction, c.id) < ($7, $8))
+                    ORDER BY c.last_interaction DESC, c.id DESC
+                    OFFSET 0
+                ) candidate
+                WHERE cardinality($10::text[]) = 0
+                   OR NOT (
+                       COALESCE(candidate.custom_name ILIKE ANY($10::text[]), false)
+                       OR EXISTS (
+                           SELECT 1
+                           FROM crm_domains d
+                           LEFT JOIN crm_domain_directory dd
+                               ON LOWER(dd.domain) = LOWER(d.domain)
+                           WHERE d.company_id = candidate.id
+                             AND d.team_id = $1
+                             AND (
+                                 d.domain ILIKE ANY($10::text[])
+                                 OR dd.name ILIKE ANY($10::text[])
+                             )
+                           OFFSET 0
+                       )
+                   )
+                ORDER BY candidate.updated_at DESC, candidate.id DESC
                 LIMIT $5
             ),
             primary_domain AS (
@@ -147,6 +183,7 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
             cursor_ts,
             cursor_id,
             include_hidden,
+            &excluded_patterns,
         )
         .fetch_all(&self.pool)
         .await

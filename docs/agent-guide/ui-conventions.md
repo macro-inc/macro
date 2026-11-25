@@ -59,7 +59,9 @@ tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Decide those steps from whether the row fits with the
 shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
 Reviews' list header, Email's list header, which hides its view options
-before Search would leave the pane, Email's phone reply buttons) or the split header's
+and then its inbox tabs' labels before Search would leave the pane, Tasks' list
+header, which hides its layout group and then its view options, Calendar's
+period controls, which show Today as its icon first, Email's phone reply buttons) or the split header's
 `PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
@@ -220,10 +222,8 @@ and navigation lists use a linear 32px top fade as content scrolls
 beneath the header. The fade grows with the scroll
 offset and clears at the top; it does not blur content or change mobile fades.
 
-On touch, glass rims stay highlighted around most of the perimeter, with short soft gaps
-at the top-right and bottom-left corners. Light themes keep a soft highlight
-through those corners so they are only slightly dimmer. The iOS app also uses shared
-[glass press feedback](navigation.md#mobile-glass-feedback).
+On touch, glass surfaces draw an even 1px hairline edge with no highlight or
+bevel (see [mobile glass feedback](navigation.md#mobile-glass-feedback)).
 
 ## Selection controls
 

@@ -94,19 +94,22 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     checked: 'checkScheduledAction',
     listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
     read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
-    created: 'createScheduledAction addSuggestion',
+    created: 'createScheduledAction addSuggestion nameSuggestionTopic',
     deleted: 'deleteScheduledAction',
     edited:
       'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
+    stopped: 'stopScheduledActionRun',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
     archived: 'retireSuggestion retireRoutineSuggestion',
     linked: 'attachSuggestionDraft',
+    submitted: 'reportSuggestionRun',
     approved: 'acceptSuggestion',
     rejected: 'dismissSuggestion',
     restored: 'restoreSuggestion',
+    cancelled: 'stopSuggestionRun',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
@@ -247,7 +250,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       exportDocument streamEvents
       passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
-      getTaskTemplate getTimer
+      getTaskTemplate getTimer getTimeSummary exportTime
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -269,7 +272,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       findCrmPipelineEntries searchCrmPipelineEntries
     `,
     queried: `
-      previewCrmEmailRules validateCrmEmailRules
+      previewCrmEmailRules validateCrmEmailRules previewCrmMerge
       queryCrmPipelineRows queryDatabases postItemsSoupAst
       calculateSpreadsheet
     `,
@@ -304,7 +307,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
       applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail addCrmCompanyDomain removeCrmCompanyDomain updateCrmPipelineEntries updateSavedViewDefinition setSavedViewAppearance writeDocumentMarkdown
-      updateTaskTemplate updateTimeEntry
+      updateTaskTemplate updateTimeEntry commitCrmMerge
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `

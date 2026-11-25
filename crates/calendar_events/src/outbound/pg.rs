@@ -45,7 +45,7 @@ use crate::domain::{
         GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
         GuestPolicy, MeetingCopy, OccurrenceException, OccurrenceListing, OccurrenceRange,
         OwnedInbox, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities,
-        VisibleCalendar, is_system_calendar,
+        VisibleCalendar, is_google_subscription, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -326,6 +326,7 @@ struct VisibleCalendarRow {
     provider: String,
     online_meeting_providers: Vec<String>,
     contributes_to_availability: bool,
+    web_subscription: bool,
 }
 
 fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
@@ -353,7 +354,11 @@ fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
         custom_color: row.custom_color,
         is_primary: row.is_primary,
         is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
-        is_subscription: is_system_calendar(&row.provider_calendar_id),
+        is_subscription: if outlook {
+            row.web_subscription
+        } else {
+            is_google_subscription(&row.provider_calendar_id)
+        },
         contributes_to_availability: row.contributes_to_availability,
         sync_error: VisibleCalendar::sync_issue(
             row.last_sync_error,
@@ -2701,7 +2706,8 @@ impl CalendarRepository for PgCalendarRepository {
                 EXISTS(SELECT 1 FROM calendar_outlook_declines d
                     WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS "unconfirmed_reply!",
                 calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers,
-                COALESCE(preference.contributes_to_availability, true) AS "contributes_to_availability!"
+                COALESCE(preference.contributes_to_availability, true) AS "contributes_to_availability!",
+                calendar.web_subscription
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id

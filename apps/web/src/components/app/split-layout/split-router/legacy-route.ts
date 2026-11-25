@@ -1,3 +1,4 @@
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import {
   AGENTS_ARCHIVE_ROUTE_ID,
   AGENTS_ARCHIVE_VIEW_ID,
@@ -308,6 +309,15 @@ export function splitLocationFromContent(
     };
   }
 
+  if (content.type === 'component' && content.id === AGENT_SCREEN_ROUTE_ID) {
+    const harnessId = content.params?.harnessId;
+    if (typeof harnessId === 'string' && harnessId.length > 0) {
+      return {
+        route: paneRoute({ id: AGENT_SCREEN_ROUTE_ID, params: { harnessId } }),
+      };
+    }
+  }
+
   if (content.type === 'call') {
     return {
       route: paneRoute({ id: 'call-detail', params: { callId: content.id } }),
@@ -459,6 +469,17 @@ export function splitContentFromLocation(
       return { type: 'pr', id: foreignEntityId };
     }
     throw new Error('Invalid PR detail split route');
+  }
+  if (root.id === AGENT_SCREEN_ROUTE_ID) {
+    const { harnessId } = routeParams(location.route);
+    if (typeof harnessId === 'string' && harnessId.length > 0) {
+      return {
+        type: 'component',
+        id: AGENT_SCREEN_ROUTE_ID,
+        params: { harnessId },
+      };
+    }
+    throw new Error('Invalid agent screen split route');
   }
   if (root.id === 'call-detail') {
     const { callId } = routeParams(location.route);

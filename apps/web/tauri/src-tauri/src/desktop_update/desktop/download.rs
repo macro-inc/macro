@@ -91,6 +91,30 @@ impl Store {
         Ok(bytes)
     }
 
+    /// Where a newer update downloads while this store's update stays ready
+    /// to install.
+    pub fn staging(&self) -> Self {
+        Self::new(self.directory.join("next"), self.pubkey.clone())
+    }
+
+    /// Moves a verified download from `staged` into this store, replacing the
+    /// update it held. The bytes move in one rename, so the store holds one
+    /// whole update or the other; a stale record costs only a fresh download
+    /// on a later launch, since every install verifies the bytes again.
+    pub fn adopt(&self, staged: &Store) -> std::io::Result<()> {
+        std::fs::rename(
+            staged.directory.join(COMPLETE),
+            self.directory.join(COMPLETE),
+        )?;
+        std::fs::rename(staged.directory.join(RECORD), self.directory.join(RECORD))
+            .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not move the native update download record"))
+            .ok();
+        remove_file(&self.directory.join(PARTIAL))
+            .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove a replaced native update download"))
+            .ok();
+        Ok(())
+    }
+
     /// Deletes the saved download, once it is installed or no longer offered.
     pub fn remove(&self) -> std::io::Result<()> {
         for name in [COMPLETE, PARTIAL, RECORD] {
@@ -181,8 +205,21 @@ impl Store {
         let mut file = options.open(&partial).await?;
 
         // Each chunk is written as it arrives, so a quit keeps what came.
-        while let Some(chunk) = response.chunk().await? {
-            file.write_all(&chunk).await?;
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => file.write_all(&chunk).await?,
+                Ok(None) => break,
+                Err(error) => {
+                    // A tokio write finishes on the blocking pool after it
+                    // returns; flush so the kept bytes are on disk on return.
+                    // The transfer's error is the cause the caller reports.
+                    file.flush()
+                        .await
+                        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not flush a failed native update download"))
+                        .ok();
+                    return Err(error.into());
+                }
+            }
         }
         file.sync_all().await?;
         drop(file);

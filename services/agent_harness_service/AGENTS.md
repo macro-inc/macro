@@ -81,6 +81,34 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   agent's own account; a deleted creator falls back to the team owner; no
   provider, no one to follow or a failed load refuses with
   403). Agent git and agent MCP keys share the same check.
+  While a person drives the agent's computer, `HeldBrains` (around the one
+  `BrainAuthenticator` every `/brain/*` route shares) holds each request until
+  the hand-back, woken by `computer_screen`'s lease notifications, for at most
+  5 minutes (at once on shutdown), then answers 503 `overloaded_error` with
+  `Retry-After: 10`. The agent is also frozen while a person drives (see
+  `guest_files.rs` below), so the hold matters only to an agent that
+  restarted mid-drive. Take-over and hand-back notices (the driver by name,
+  never their id) go only to the agent's main loop: a
+  `/brain/anthropic/v1/messages` request marked `x-macro-agent-loop: main`
+  (the starter agent's `behavior/agent/claude.ts` sets it through
+  `ANTHROPIC_CUSTOM_HEADERS`) that offers tools, so neither the runtime's
+  side queries nor Claude Code's tool-less side calls take them. They go
+  last in its last user message, after its `tool_result` blocks, as
+  `<macro-runtime-notice>{json}</macro-runtime-notice>` text blocks with `<`,
+  `>` and `&` escaped (`anthropic_gateway/screen_notices.rs`); each is
+  claimed by one request at a time, deleted once a finished answer was
+  handed whole to the caller's connection (a 2xx JSON body, or a stream that
+  reached `message_stop` with no broken chunk; the body's last part waits
+  for the deletion) and given back otherwise: an SSE `error` after the 200,
+  a broken stream, or a caller that hung up first (the rest is still
+  drained, for metering only). Handed to the connection is not read by the
+  agent: a hang-up after that (behind a buffering proxy, say) loses the
+  notice. A caller that read the answer but closed before its end was seen
+  gets it again, so delivery is at least once; each frame carries the
+  notice's `id`, the same on every delivery. A subagent's requests carry the same mark and may
+  take them, and they are not kept in the agent's history: a hint for its
+  next turn, not a record. An agent on its owner's own Claude plan never
+  reaches this gateway, so it gets no notices.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
@@ -95,6 +123,76 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   are recorded once, when the socket closes, against the agent
   (`livekit-inference-deepgram-*` pricing rows). Upstream error details stay
   in logs. Span: `speech_gateway.session`; never record transcripts or text.
+- `src/solver_runs.rs` + `src/solver_runs/pg.rs`: the budget of an agent
+  teammate's CAPTCHA run, in Postgres (`agent_captcha_runs`,
+  `agent_captcha_solves`) so it holds across replicas and deploys. A run
+  (`POST /brain/captcha/runs`, ended early by `POST /brain/captcha/runs/{id}/end` or when its last solve finishes; expiry is the backstop) lives 6 minutes and allows 16 Fireworks calls,
+  2 of them in flight, and 2 solves; an agent has at most 1 unexpired run and
+  starts at most 20 an hour and 100 a day (`budgetExceeded`), so the per-run
+  call cap is also the calls-per-hour bound (20 × 16), and the in-flight cap
+  on the run row is a per-agent cap. Every model call and solve sends the run
+  as `x-macro-solver-run`: missing, unknown or another agent's run is a 403
+  `solver_run_required`, expired 403 `solver_run_expired`, ended early 403 `solver_run_ended`, used up 429
+  `solver_run_exhausted`, two calls running 429 `solver_run_busy`. A call is
+  taken by one conditional `UPDATE`; starting a run and claiming a solve
+  hold a per-agent advisory lock. `track` delivers `ai_usage` tracking
+  observations (begin + finalize, three tries) under the run id.
+- `src/captcha_gateway.rs` + `src/captcha_gateway/`: `POST /brain/captcha/runs`
+  and `POST /brain/captcha/solve` on the egress listener, for agent
+  teammates' `captcha` MCP. Same brain key, `enable-agent-teammates` check and
+  admission as the speech gateway (`brain::BrainAccess`). `/runs` answers
+  `started` (`runId`, `expiresAt`, `modelCalls`, `solves`), `budgetExceeded`
+  or `notConfigured` (either key missing). `solves.rs` owns the
+  `CaptchaSolver` port, the challenge (`recaptchaV2`/`recaptchaV3`/`turnstile`;
+  the page URL loses its query, fragment and credentials; non-http(s) is a
+  400), idempotency through the solves ledger (a finished `solveId` replays
+  its answer, one in flight is a 409 `solve_in_progress`, another agent's a
+  409 `solve_id_taken`; refusals are not recorded; an unfinished solve older
+  than 3 minutes died with its process and replays `vendorError`), the
+  per-agent caps counted from the solve rows (1 concurrent, 20 an hour, 100 a
+  day: `budgetExceeded`) and polling (every 2 s, 120 s in all; a rate limit
+  or outage while polling is waited out). The solve runs on its own task, so
+  a caller that hangs up neither cancels it nor skips its usage. `capsolver.rs`
+  is the only adapter (`CapsolverApiUrl`, `OVERRIDE_CAPSOLVER_API_URL` for
+  `crates/capsolver_emulator`); a `keyBlocked` answer stops tasks from this
+  process for five minutes. `CAPSOLVER_API_KEY` is optional: unset or empty
+  answers `notConfigured` (no run needed). Only `solved` costs anything: a
+  tracking observation with CapSolver's `taskId` as `provider_request_id` and
+  `UnsupportedDimensions` usage, which never bills, and, only with
+  `SolveLimits::charge_users` on, one `ProviderCredits` against the agent at
+  `capsolver-<task>` pricing on the legacy `UsageRecorder` (which settles it).
+  It is off: CapSolver's terms forbid reselling without written approval, so
+  Macro absorbs the cost until then. Span `captcha_gateway.solve` /
+  `captcha_gateway.start_run`; never record the token, site key, page path or
+  query, or vendor error text. No traceparent goes to CapSolver.
+- `src/fireworks_gateway.rs` + `src/fireworks_gateway/`:
+  `POST /brain/fireworks/v1/chat/completions` (any other path is a 404), the
+  OpenAI-compatible passthrough the CAPTCHA run's Kimi K3 calls, on
+  `FIREWORK_API_KEY` (Doppler `shared_ai`, optional: unset or empty answers
+  503 `{"error":{"type":"not_configured"}}`). Same brain check; each call takes
+  one model call from its solver run (refusals in the OpenAI shape with
+  `error.code`); only `accounts/fireworks/models/kimi-k3`, output cap at most
+  2048 (also when unset or null), and a stream gets `stream_options.include_usage`.
+  Usage (cached prompt tokens as `cache_read`) is billed against the agent at
+  `kimi-k3` pricing on the legacy recorder, draining a stream whose caller
+  hung up (the shared `anthropic_gateway::pump`), and observed in the
+  tracking journal under the run with Fireworks' response id as
+  `provider_request_id` (the journal never bills, so each call bills once).
+  No local double: `model_emulator` speaks only Gemini. Span
+  `brain_fireworks.chat` (`gen_ai.response.id` is Fireworks' id). No
+  traceparent goes to Fireworks.
+- `src/brain_bench.rs` (feature `brain-bench`, bin `brain_bench`): a dev
+  server with just those brain routes, built by their real router
+  constructors: one bearer key `BRAIN_BENCH_KEY` mapped to `--agent` (a
+  `"User"` id, default a fixed fake agent), rollout and admission always on,
+  solver runs in the migrated MacroDB at `--database-url` (required), usage
+  printed as JSON lines and served at `GET /_bench/usage`. `FIREWORK_API_KEY`
+  and `CAPSOLVER_API_KEY` optional (`OVERRIDE_CAPSOLVER_API_URL` for the
+  emulator); `--listen` defaults to loopback `127.0.0.1:8490`, since it
+  holds real keys behind one bench key. Never deployed.
+  `capsolver_live_contract` (ignored) solves the Turnstile and reCAPTCHA v2
+  test keys once each through the real adapter, and fails when
+  `CAPSOLVER_API_KEY` is unset or blank.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
@@ -104,6 +202,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   and `GET /internal/computers/{id}/moves` (internal API key only): start and
   watch moving a computer to another host; the operator's move pass (every
   5 s) does the work.
+- The operator's image upgrade pass (every 10 s, development only:
+  `image_upgrades_allowed` in `src/computers.rs`) advances the one unfinished
+  image upgrade (`hosted_runtimes::domain::image_upgrade`), which the
+  Firecracker image rollout workflow records with the `image-upgrade` binary.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
   every computer creation asks the auth service's internal
   `/internal/team_agent_enrollment` route, so an agent computer never enrolls
@@ -124,8 +226,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   from: a Firecracker image such as `macro-box/2026-11-10`, or a Docker tag;
   `COMPUTERS_AGENT_IMAGE` the agent-mode one agent teammates' computers get
   (`macro-box-agent/2026-11-10`, `macro-box-agent:latest`). Each
-  computer records its own image; updates go through hosted_runtimes' image
-  update routes, never by changing this value for existing computers.
+  computer records its own image; existing computers move only through an
+  image upgrade (the pass above), never by changing this value.
   HostedHarnesses pairing records the buyer as the harness owner, but the
   harness belongs to the computer's team: its owner and admins manage it
   (Claude sign-in included) and every member can run agents on it.
@@ -175,6 +277,92 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
   sign-in when setup is unfinished or the credential expired. Spans:
   `computer.harnessd.command`/`.refresh`/`.refresh_all`.
+- `src/computers/screen.rs` + `src/computers/screen/`: agent screens over
+  VNC (domain in `crates/computer_screen`). `POST
+  /computers/{harness_id}/screen/tickets` `{transport: vnc, surface: desktop,
+  mode}` → `{ticket, expiresAt, url}` takes the account holder's own
+  credential (`AccountHolderOrInternal`), refuses programs
+  (`is_program_run`) and agent accounts, checks the rollout and the harness
+  (`View` to watch, `Manage` to drive; `access.rs` adapts both, and people's
+  names, to the domain's ports), limits tickets per person, and mints a
+  single-use 60 s ticket;
+  `GET /computers/{harness_id}/screen/ws?ticket=` redeems it and runs the
+  socket (`socket.rs`): binary frames are raw RFB both ways, text frames JSON
+  control (`takeOver`, `handBack`, `input`, `visibility`, `stop`; server
+  `state`/`error`/`ended`), with access (rollout included) re-checked and the
+  socket marked seen every 30 s and on every take-over (three failed lookups
+  in a row end it, as do three failed touches or a row another socket ended
+  as `lost`); a driver who loses access releases the lease at once.
+  `handBack` may name its `leaseId`: a tab that missed a newer drive of the
+  same person's gets `staleHandBack` and a fresh `state`, and nothing is
+  handed back (an idle socket's hand-back names its own drive too).
+  `state.driver` is `{name, isYou}`, never a user id; `state.leaseId` is an
+  opaque id per drive. A socket with no `visibility` `visible: true` (the
+  viewer repeats it) and no input for 10 minutes, or 2 minutes after
+  `visible: false`, ends `idle`, handing back if it drives. A person opens at most 4 sockets on a
+  computer, and a computer 16 watching sockets (`tooManySockets`; driving
+  sockets don't count against it). Its own task writes the WebSocket
+  through a bounded outbox, so a viewer that stops reading never stalls the
+  loop: media waits when the outbox fills and resumes as soon as a frame
+  leaves it, and a write that takes 10 s ends the socket. Raw RFB from the
+  viewer that media has no room for waits in the loop (reading the viewer
+  pauses meanwhile, so order holds) while media keeps running; 10 s of no
+  room ends the socket `tunnelFailed`. The `viewers` count in `state` is this replica's. An open
+  socket, watching or driving, keeps the computer awake (`in_use.rs`).
+  Before the first frame the socket wakes a hibernated computer
+  (`state.waking`). One driver lease per computer, renewed by driver input at
+  most every 15 s; a take-over by the same user moves it to the new socket,
+  `state.drivingHere` says which socket holds it, and any socket of the
+  driver may hand back. `media.rs` `VncMedia` relays raw RFB from Xvnc (5901)
+  through `rfb.rs` `RfbGate`, which drops input unless this socket drives
+  before its lease's expiry, keeps SetEncodings to what `RfbServerFilter` can
+  frame (Raw, CopyRect, ZRLE and pixel-free pseudo-encodings; no
+  ExtendedClipboard, so the clipboard is plain Latin-1), speaks RFB 3.8 and
+  32-bit true-colour pixels only (any other SetPixelFormat closes it),
+  and fails closed on anything it can't parse; `RfbServerFilter` frames
+  Xvnc's side without decoding pixels and drops ServerCutText unless this
+  socket drives (Xvnc runs with `-SendPrimary=0`); typed `input` goes through
+  `RfbInjector`'s own RFB connection (handshake and each input bounded to
+  10 s; its tunnel opens in a task of its own, bounded by the tunnel's 20 s
+  ready timeout, so a connect given up never drops a guest program before
+  its reaper exists; a connect is bounded by the lease's end and
+  followed by one read of the lease, so input goes in only while it is still
+  this socket's unexpired drive; each send is bounded by the lease's end). A drive that ends in the middle of the guest's
+  clipboard ends the socket rather than pass the rest. Xvnc is reached only by a `socat`
+  tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,
+  implemented in `computers.rs`): nothing before its ready line is media,
+  and a tunnel still running 2 s after its session closed is killed (on the
+  computer tasks' tracker, only if the pid is still that socat). When
+  media stops short, the operator says whether the computer runs, which
+  picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).
+  Screens count as in use for hibernation (`in_use.rs`); relief reads that
+  before it suspends, with no lock against a screen opening meanwhile, so a
+  screen opened in that window sees the computer go off and wakes it when
+  opened again. `guest_files.rs`
+  freezes the agent for a drive before a take-over counts (`freeze <drive>`
+  through `socat` to the guest's root-owned `/run/macro-agent-pause/sock`,
+  `nix/macro-box/files/macro-agent-pause`; `frozen`/`idle` let it start,
+  anything else refuses it with `agentNotPausable`), sends `keep <drive>` on
+  each lease renewal (the guest thaws the agent itself 3 minutes after the
+  last; a keep answering `thawed`, `superseded` or `failed` is reported to
+  `ScreenService::refreeze`, which freezes again only while that drive is
+  live, and otherwise ends it with `agentNotPausable` to the driver;
+  `computers/screen/refreezes.rs` runs each computer's refreezes one at a
+  time in their own task, keeping the latest request that comes meanwhile
+  for right after), and
+  `thaw <drive>` after (the guest never freezes a thawed drive again; a few
+  tries off the request path, then `ScreenService::reap`; `superseded` means
+  a newer drive froze it). A computer that isn't running is never exec'd
+  into. An agent computer whose image has no helper fails a freeze and has
+  nothing to keep or thaw (`idle`). A take-over whose access check fails answers
+  `takeOverUnavailable` and keeps the socket. It
+  keeps `/home/macro/agent/state/screen-driver` (`human` while someone
+  drives; only each computer's latest change, written a few computers at a
+  time by one worker, never on a request path) and `state/harness-id`
+  (written from `sign_in_ahead.rs`). Each replica runs `ScreenService::reap`
+  every minute (lapsed leases, owed thaws).
+  Spans: `computer.screen.ticket`/`.session`/`.wake`/`.tunnel`/`.driver_file`/
+  `.freeze`/`.thaw`, and `ScreenService::reap`'s per round.
 - `src/computers/claude_expiry.rs`: the notices of the operator's
   `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
   `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude
@@ -252,10 +440,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   a thread's due date for `email_focus_worker` and meters it as `EmailFocus`.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
   domain/adapters live in `crates/scheduled_action`. Its run observers send
-  `routine_run_finished` analytics and, for every run, an inbox-only
-  `routine_run_finished` notification to the owner
+  `routine_run_finished` analytics and, for every run but one its owner
+  stopped, an inbox-only `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`), which names a
-  sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
+  sub-routine's run "<name> · from <parent>" and, for a run refused for a
+  disconnected app, the apps to reconnect (`appsToConnect`). Every instance listens for run
+  stops (`listen_for_stops`) and shares one `RunStops` between the executor
+  and the service. `with_run_sessions` hands the
   scheduler the code-mode invocation lookup so a routine an Ask AI step's
   session creates becomes its run's sub-routine. AI drafts routines
   (`POST /scheduled-actions/drafts`) in a hidden session of the in-process
@@ -377,9 +568,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 ## Tool contracts
 
 - Internal session tools require explicit `acting_as`, resolved by the shared gate, plus existing owner/edit authorization. SDK executions choose one account for the whole program; review decisions use the saved acting account. Keep their restricted prompt/stop route separate from human approval controls.
-- An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
+- An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, `jira`, or `hubspot`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
 - One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `run()` in `lib.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
-- The import service registers read-only Notion, Linear and Jira readers over the connectors' API connections wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
+- The import service registers read-only Notion, Linear, Jira and HubSpot readers over the connectors' API connections, and HubSpot's CRM writer, wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
 - Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
 - The owner connecting an app a session asked for produces an `app.connected` event (`agent_harness::domain::app_connections`).
@@ -546,3 +737,11 @@ attachment answers typed 503 before any command. macrod ingress keeps its
 existing authorization.
 Authentication checks the owning hosted host heartbeat per request, so its
 attachment observation can briefly differ from this service's operator presence.
+
+Import review actions reconcile external dependency defaults through the import
+service before saving. Record offered exclusions only after the review save
+succeeds. At approval, call `approve_workspace_dependencies` with the saved
+draft; it replaces review-scoped inclusion facts before starting the write.
+Do not compute or pass a second dependency whitelist: the domain reads the
+current review’s persisted consent on start and resume. The import domain owns consent, retry and source-stop policy;
+the host never queries import tables directly.

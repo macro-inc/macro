@@ -75,6 +75,7 @@ fn service(count: usize, wait_for_shutdown: bool) -> Service {
         action_id: generate_uuid_v7(), revision: ConfigurationRevision::INITIAL,
         event: serde_json::from_value(json!({"event_id":generate_uuid_v7(), "event_name":"document.updated", "entity_id":generate_uuid_v7(), "message_id":null})).unwrap(),
         admitted_at: Utc::now(),
+        traceparent: None,
     }).collect();
     Service {
         state,
@@ -275,4 +276,38 @@ async fn a_run_still_pending_during_dispatch_is_not_dispatched_again() {
     executions.close();
     executions.wait().await;
     assert_eq!(queue.started.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_run_is_dispatched_in_the_trace_its_event_was_admitted_in() {
+    let recorded = crate::trace_context::testing::Recorded::start();
+    let admission = tracing::info_span!(parent: None, "admission");
+    let admitted_in = crate::trace_context::testing::context_of(&admission);
+    let mut pending = service(1, false).state.pending.lock().unwrap().remove(0);
+    pending.traceparent = admission.in_scope(crate::trace_context::current);
+    drop(admission);
+    // The worker tests beside this one make the same span with no subscriber,
+    // in parallel, and can leave its callsite cached as disabled.
+    let run = (0..5)
+        .find_map(|_| {
+            tracing::callsite::rebuild_interest_cache();
+            Some(run_span(&pending)).filter(|span| !span.is_disabled())
+        })
+        .expect("the run span is recorded");
+    drop(run);
+
+    let run = recorded.finished("routine.event_run");
+    assert_eq!(run.span_context.trace_id(), admitted_in.trace_id());
+    assert_eq!(run.parent_span_id, admitted_in.span_id());
+    let field = |name: &str| {
+        run.attributes
+            .iter()
+            .find(|attribute| attribute.key.as_str() == name)
+            .map(|attribute| attribute.value.to_string())
+    };
+    assert_eq!(field("action_id"), Some(pending.action_id.to_string()));
+    assert_eq!(
+        field("event_id"),
+        Some(pending.event.event_id().as_uuid().to_string())
+    );
 }

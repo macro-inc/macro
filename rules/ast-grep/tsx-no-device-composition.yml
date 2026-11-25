@@ -23,6 +23,7 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/agent-screen/route-views.tsx
   - apps/web/src/features/agents-view/model-selector.tsx
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
@@ -31,6 +32,8 @@ ignores:
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
+  # The regions of the database page: its header, view toolbar, records and no-tables state.
+  - apps/web/src/features/block-database/database-page-controls.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-fig/fig-block.tsx
   - apps/web/src/features/block-form/form-block.tsx
@@ -61,6 +64,7 @@ ignores:
   - apps/web/src/features/tasks-view/components/TasksDetailView.tsx
   - apps/web/src/features/settings/TeamMembers.tsx
   - apps/web/src/features/time-tracking/task-time-pill.tsx
+  - apps/web/src/features/time-tracking/tasks-time.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
   - apps/web/src/features/agent-session-activity/components/activity-row.tsx
@@ -83,7 +87,6 @@ ignores:
   - apps/web/src/features/block-channel/component/Top.tsx
   - apps/web/src/features/block-company/component/CompanyBlockAdapter.tsx
   - apps/web/src/features/block-contact/component/ContactBlockAdapter.tsx
-  - apps/web/src/features/block-database/component/TopBar.tsx
   - apps/web/src/features/block-form/views/builder-view.tsx
   - apps/web/src/features/block-image/component/ImageContent.tsx
   - apps/web/src/features/block-md/comments/CommentMargin.tsx
@@ -234,7 +237,6 @@ ignores:
   - apps/web/src/features/tasks-view/components/TasksSidebar.tsx
   - apps/web/src/features/tasks-view/components/task-list/TaskList.tsx
   - apps/web/src/features/tasks-view/components/task-list/TaskListEntity.tsx
-  - apps/web/src/features/tutorial/InteractiveOnboardingModal.tsx
   - apps/web/src/features/universal-input/views/universal-composer.tsx
   - apps/web/src/features/whatsapp-linked/components/chat-list.tsx
   - apps/web/src/features/whatsapp-linked/views/whatsapp-page.tsx

@@ -1608,6 +1608,9 @@ async fn list_calendars_maps_visible_calendars() {
         outlook.id = Uuid::from_u128(5);
         outlook.provider = crate::domain::models::CalendarProvider::Outlook;
         outlook.capabilities = crate::domain::models::CalendarCapabilities::outlook(true);
+        outlook.is_primary = false;
+        outlook.is_writable = false;
+        outlook.is_subscription = true;
         calendars.push(outlook);
     }
     let (_, context) = context(mutations, empty_occurrences());
@@ -1622,6 +1625,7 @@ async fn list_calendars_maps_visible_calendars() {
     assert_eq!(calendar.email_address, "gab@example.com");
     assert!(calendar.is_primary);
     assert!(calendar.is_writable);
+    assert!(!calendar.is_subscription);
     assert!(calendar.contributes_to_availability);
     assert_eq!(
         calendar.provider,
@@ -1629,6 +1633,11 @@ async fn list_calendars_maps_visible_calendars() {
     );
     assert!(calendar.capabilities.remove_conference);
     let outlook = &response.calendars[1];
+    assert!(
+        outlook.is_subscription,
+        "a calendar subscribed by link is labelled as a subscription"
+    );
+    assert!(!outlook.is_writable);
     assert_eq!(
         outlook.provider,
         crate::domain::models::CalendarProvider::Outlook

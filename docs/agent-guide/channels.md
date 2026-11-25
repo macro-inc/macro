@@ -186,8 +186,9 @@ An external email can be selected as a channel participant. For an unregistered 
 **New direct message** opens a draft message whose To
 field takes either people or one existing conversation. People open their DM
 or group chat, creating it on the first message. While the field is empty it
-also suggests the channels and group chats you belong to (the same set as
-Share To; reach a one-to-one DM by picking the person). A picked channel is the
+also suggests every channel and group chat in your channel list, whatever its
+size (the same set as Share To and the iOS share sheet; reach a one-to-one DM
+by picking the person). A picked channel is the
 only recipient: the field takes no typing and suggests nothing until its chip
 is removed (its X, or Backspace), and once anyone is picked channels are no
 longer suggested. Send posts into the channel and opens it at the message, as
@@ -566,10 +567,9 @@ The new-message compose screen and channel message/reply inputs use the same
 attachment and send controls on mobile and desktop. On phones, the `+` drawer
 offers `Format text` beneath `Mention` to toggle the formatting ribbon.
 iOS uses the native media attachment picker.
-In the iOS app, both collapsed and expanded channel inputs use the shared
-[glass press spotlight](navigation.md#mobile-glass-feedback). Tap the editor and its
-enabled actions to check the highlight; the caret, draft, keyboard, and action
-timing should remain unchanged. Flat embedded inputs keep their host's surface.
+Collapsed and expanded channel inputs use the shared
+[mobile glass](navigation.md#mobile-glass-feedback) edge, with normal tap
+feedback. Flat embedded inputs keep their host's surface.
 Short top-level drafts place attachment, message text, and send on one row on
 both mobile and desktop. Text that wraps onto a second line, explicit line
 breaks, non-paragraph blocks (lists, blockquotes, headings, etc.), and attachments
@@ -633,7 +633,11 @@ Escape also cancels an edit. The iOS app uses its native media picker. Check inl
 on desktop and touch: attach a file and save, then edit again and discard changes
 without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
-Check this arrangement at both phone and tablet widths.
+Check this arrangement at both phone and tablet widths. Its To field is the
+New direct message field (see [Create a channel](#create-a-channel)): people,
+or one channel or group chat, which fills the field until its chip is removed.
+Send posts into that channel and closes the sheet without leaving the current
+view. Phones and tablets behave the same.
 
 With a wrapping draft present, repeatedly narrow and widen the desktop split
 and window, then scroll the message history. The composer should settle into
@@ -1148,27 +1152,30 @@ notifications along with the other notifications for that thread.
 Desktop only, behind `enable-channel-notification-gutter`, which is on in
 local development (`VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER` overrides it).
 Open a channel in a pane at least 1400px wide, so the list docks in the
-gutter, with notifications from another account: new top-level messages, a
-thread reply, and a mention. Then narrow the pane to see the popover and the
-hidden states. Check that:
+gutter, with unread notifications from another account: new top-level
+messages, a thread reply, and a mention. Then narrow the pane to see the
+popover and the hidden states. Check that:
 
-- A round check sits in the gutter left of each stack's newest message. For a
-  thread, it sits beside the newest notified reply, or beside the top-level
-  message while the thread is collapsed. Clicking it removes the check and
-  marks that stack's notifications done in Home.
 - A toggle with the notifications bell and a count sits at the top left of
   the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
-  card docked in the gutter. Narrower panes open the list as a popover. Not
-  done and Unread switch which stacks it lists. Clicking a row scrolls to its
-  message, and the row's check marks it done (or read, in Unread). While a
-  list's notifications load it says so, and if the read fails it offers Retry
-  instead of an empty list.
-- Unseen stacks show an unread dot before their icon, and the toggle shows
-  one after its count while any not-done stack is unseen. Reading a stack (here, in Home, or
-  on another device) clears its dot.
-- With nothing left to mark done, the bell and the list hide (an open popover
-  closes); a new notification brings the bell back.
-- Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
+  card docked in the gutter. Narrower panes open the list as a popover. There
+  are no checks beside the messages and no view switch: the list, headed
+  **Unread**, holds what was unread when the channel opened. Opening the
+  channel from its Home or inbox row (which marks that row read) still lists
+  the row's notifications, without their unread dot.
+- Scrolling through every message leaves the list unchanged; read entries
+  lose their unread dot, and the toggle loses its dot once none is unread.
+- A thread reply or a mention that arrives while the channel is open joins
+  the list (its thread's entry, or a new one). A new top-level message does
+  not; it is listed the next time the channel opens.
+- Clicking an entry scrolls to its message and leaves it listed (a popover
+  closes). Its check removes only that entry and marks its whole stack done:
+  Home and the inbox drop it. A failed mark puts the entry back and says so.
+- After the last entry is checked off (or **Mark all done**), the bell and
+  the list hide; a reply or mention arriving brings the bell back. Leaving
+  and reopening the channel takes a fresh list.
+- While the channel's notifications load nothing shows; if the read fails,
+  the bell offers Retry. Below 72px of gutter, the toggle hides.
 
 ## Requests to join
 
@@ -1388,9 +1395,11 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order. An unseen invite (being added to a channel)
-makes the channel unread, as it is in Notifications and the Chat badge, until
-Chat opens the channel and marks the invite seen.
+groups keep the source's page order. A collapsed section and **Unread only**
+also keep a channel whose only unread is a mention in a thread: its row shows the
+mention count and no unread dot, and the mention lights the Chat badge. Being
+added to a channel does not make it unread; opening the channel in Chat marks
+its invite seen, which tidies Notifications.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
@@ -1727,7 +1736,16 @@ and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
-The app-shell Chat badge uses `ChannelUnreadPresence`: only
+With unified notifications on, the app-shell Chat badge lights for an unseen
+top-level message or a mention, thread mentions included: what can make a channel
+unread in the sidebar or show a mention count on its row. A thread reply, a
+reaction, a ping or an invite leaves it dark (see
+[Notifications](notifications.md)). To check, have another account reply in a
+thread you are part of: the badge stays dark and Notifications lists the reply as
+unread. Then have them mention you in that thread: the badge lights and the
+channel's row shows **1**, under **Unread only** too.
+
+With unified notifications off, the badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread top-level message/mention ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It
 excludes replies, thread mentions, and reactions, matching the channel-row badges.

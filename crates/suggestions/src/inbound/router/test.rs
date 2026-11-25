@@ -183,6 +183,7 @@ impl SuggestionApi for FakeSuggestions {
         Ok(SuggestionFeed {
             suggestions: Vec::new(),
             done: limit.is_none().then(Vec::new),
+            topics: limit.is_none().then(Vec::new),
             counts: crate::domain::model::FeedCounts::default(),
         })
     }
@@ -228,6 +229,24 @@ impl SuggestionApi for FakeSuggestions {
         Ok(())
     }
 
+    async fn report_run(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: crate::domain::model::RunReport,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        unreachable!()
+    }
+
+    async fn stop_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        _: Uuid,
+    ) -> Result<(), SuggestionError> {
+        self.reach(user, caller)
+    }
+
     fn brief(&self, _: GenerationTrigger, _: chrono_tz::Tz) -> String {
         unreachable!()
     }
@@ -263,6 +282,15 @@ impl SuggestionApi for FakeSuggestions {
         unreachable!()
     }
 
+    async fn name_topic(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: crate::domain::topic::NameTopic,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        unreachable!()
+    }
+
     async fn retire(
         &self,
         _: &CreationPrincipal,
@@ -282,6 +310,30 @@ impl SuggestionApi for FakeSuggestions {
     ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         unreachable!()
     }
+}
+
+/// The person's own session generates nothing, so it names no topics.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_person_themself_cannot_name_a_topic(pool: PgPool) {
+    let h = harness(pool, true).await;
+    h.session(OWNER, "suggestions").await;
+    let app: Router = suggestion_router(SuggestionRouterState {
+        service: Arc::new(h.service),
+        authorization_state: MacroAuthorizationState::new(Arc::new(Owner)),
+    });
+    let response = app
+        .oneshot(
+            Request::put("/suggestions/topics")
+                .header("authorization", "Bearer owner")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"key":"event:offsite","name":"Spring offsite"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 /// Send `method uri` with `jwt`, optionally marked as a program's request,
@@ -387,6 +439,7 @@ async fn a_refused_generation_session_gets_a_403() {
         ("POST", format!("/suggestions/{suggestion}/accept")),
         ("POST", format!("/suggestions/{suggestion}/dismiss")),
         ("POST", format!("/suggestions/{suggestion}/restore")),
+        ("POST", format!("/suggestions/{suggestion}/stop")),
         ("POST", "/suggestions/viewed".to_owned()),
     ] {
         let status = send(&service, method, &uri, AGENT_JWT, true, Some(generation)).await;

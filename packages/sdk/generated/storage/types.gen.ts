@@ -6232,9 +6232,14 @@ export type CrmCompanyFilters = {
  */
 export type CrmCompanyPreview = {
     /**
-     * The company.
+     * The requested company id.
      */
     id: string;
+    /**
+     * The company the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a company that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The team's name override, else the primary domain's directory name.
      */
@@ -6347,9 +6352,14 @@ export type CrmContactPreview = {
      */
     email?: string | null;
     /**
-     * The contact.
+     * The requested contact id.
      */
     id: string;
+    /**
+     * The contact the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a contact that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The contact's display name.
      */
@@ -7758,6 +7768,22 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * One value a merge drops.
+ */
+export type DroppedValue = {
+    /**
+     * The record merged away that held it.
+     */
+    recordId: string;
+    /**
+     * The value.
+     */
+    value: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -9482,6 +9508,20 @@ export type EmailFilters = {
      */
     exclude_labels?: Array<string>;
     /**
+     * Leave out the threads in these mailbox views. Search only.
+     */
+    exclude_views?: Array<EmailSearchView>;
+    /**
+     * True for the caller's favorite threads only, false to leave them out.
+     * Search only.
+     */
+    favorite?: boolean | null;
+    /**
+     * True for threads with an attachment on any message, false for threads
+     * with none. Search only.
+     */
+    has_attachment?: boolean | null;
+    /**
      * Filter by email importance. None to not filter. True to show only important emails
      * (drafts, personal, sent, or uncategorized). False to show only unimportant emails
      * (those categorized as promotions, social, updates, or forums).
@@ -9496,6 +9536,14 @@ export type EmailFilters = {
      * Filter by the email thread's read flag, independently of notification state.
      */
     is_read?: boolean | null;
+    /**
+     * Tags or labels each thread must carry, or must not, by name, as typing
+     * `label:` or `in:<name>` into the search does. A name matches the
+     * caller's tags with that label and the labels with that name in the
+     * caller's inboxes, ignoring case; a name that is neither matches
+     * nothing. Search only.
+     */
+    label_names?: Array<EmailLabelMatch>;
     /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
@@ -9525,10 +9573,26 @@ export type EmailFilters = {
      */
     senders?: Array<string>;
     /**
+     * Only messages sent at or after this instant. Mail with no sent time
+     * never matches. Search only.
+     */
+    sent_after?: string | null;
+    /**
+     * Only messages sent before this instant. Mail with no sent time never
+     * matches. Search only.
+     */
+    sent_before?: string | null;
+    /**
      * Controls whether shared email threads are included in results.
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    /**
+     * Words or phrases each message must contain, or must not, in one part
+     * of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+     * into the search does. Search only.
+     */
+    text_matches?: Array<EmailTextMatch>;
     view?: null | EmailSearchView;
 };
 
@@ -9646,6 +9710,22 @@ export type EmailInclusionRule = {
 };
 
 /**
+ * A tag or provider label that an email thread must, or must not, carry,
+ * named by its label.
+ */
+export type EmailLabelMatch = {
+    /**
+     * Leave out the threads that carry it instead.
+     */
+    exclude?: boolean;
+    /**
+     * The label of one of the caller's tags, or the name of a label in one
+     * of the caller's inboxes, ignoring case.
+     */
+    name: string;
+};
+
+/**
  * Provenance established by authenticated credentials, never a request field.
  */
 export type EmailPolicyActorKind = 'member' | 'agent' | 'api' | 'system';
@@ -9679,7 +9759,7 @@ export type EmailPolicyAudit = {
 /**
  * Events in the member-only policy history; records never contain mail content.
  */
-export type EmailPolicyAuditAction = 'rules_activated' | 'all_mail_enabled' | 'withdrawn' | 'mailbox_revoked' | 'live_targets_changed';
+export type EmailPolicyAuditAction = 'rules_activated' | 'all_mail_enabled' | 'withdrawn' | 'mailbox_revoked' | 'live_targets_changed' | 'records_merged';
 
 /**
  * One explicit sharing command; member and team never come from the body.
@@ -9993,6 +10073,14 @@ export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConse
  */
 export type EmailPrivacySettings = {
     /**
+     * Team domains listed because their company is archived, mapped to that
+     * company. They can't be removed until the company is restored. Empty for
+     * members, who can't see archived companies.
+     */
+    archived_team_domains: {
+        [key: string]: string;
+    };
+    /**
      * Whether the caller can remove a team exclusion.
      */
     can_remove_team_domains: boolean;
@@ -10103,7 +10191,31 @@ export type EmailRuleValidation = {
 /**
  * A mailbox view the Email list scopes a search to, as its tabs do.
  */
-export type EmailSearchView = 'sent' | 'drafts';
+export type EmailSearchView = 'sent' | 'drafts' | 'calendar';
+
+/**
+ * A word or phrase that must, or must not, appear in one part of a message.
+ */
+export type EmailTextMatch = {
+    /**
+     * Leave out the messages that match instead.
+     */
+    exclude?: boolean;
+    /**
+     * The part of the message matched.
+     */
+    part: EmailTextPart;
+    /**
+     * One word, matched as a search word is (a prefix unless the search is
+     * exact), or several words, matched as an adjacent phrase.
+     */
+    text: string;
+};
+
+/**
+ * The part of an email message a search condition matches.
+ */
+export type EmailTextPart = 'any' | 'subject' | 'from' | 'to' | 'cc' | 'bcc';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -11444,6 +11556,31 @@ export type FavoritesList = {
      * The requesting user's favorites, in manual order.
      */
     favorites: Array<Favorite>;
+};
+
+/**
+ * A team-visible field whose values differ. The value of the record that
+ * stays is kept; the others are dropped and kept in the merge log.
+ */
+export type FieldConflict = {
+    /**
+     * The values dropped, with the record each came from.
+     */
+    dropped: Array<DroppedValue>;
+    /**
+     * The value kept.
+     */
+    kept: {
+        [key: string]: unknown;
+    };
+    /**
+     * The property definition.
+     */
+    propertyId: string;
+    /**
+     * The property's name.
+     */
+    propertyName: string;
 };
 
 /**
@@ -14743,9 +14880,229 @@ export type MeetingsResponse = {
 };
 
 /**
+ * Why a merge can't go ahead until someone changes the records.
+ */
+export type MergeBlock = {
+    kind: 'same_address_people';
+    /**
+     * Every person involved, archived ones too.
+     */
+    people: Array<SameAddressPerson>;
+} | {
+    kind: 'different_companies';
+    /**
+     * The people who would change company.
+     */
+    people: Array<OtherCompanyPerson>;
+};
+
+/**
+ * A reviewed merge to commit.
+ */
+export type MergeCommitRequest = {
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * A new key per merge, reused only to retry the same one: a retry
+     * returns the first result.
+     */
+    requestKey: string;
+    /**
+     * The revision of the review being confirmed.
+     */
+    revision: string;
+    /**
+     * What happens to teammates' email sharing that names a record merged
+     * away; keeps sharing it when left out.
+     */
+    sharingRules?: SharingRulesChoice;
+    /**
+     * The records merged into it.
+     */
+    sourceIds: Array<string>;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * What email sync does after the merge. The record that stays keeps its
+ * setting; domains whose sync was off stay out of sync.
+ */
+export type MergeEmailSync = {
+    /**
+     * Domains joining it whose mail stays out of sync.
+     */
+    keptOut: Array<string>;
+    /**
+     * Whether the record that stays syncs mail.
+     */
+    survivorSyncs: boolean;
+};
+
+/**
+ * Why a merge was refused.
+ */
+export type MergeErrorResponse = {
+    blocked?: null | MergeBlock;
+    /**
+     * A stable code: `merge_permission_required`, `merge_unavailable`,
+     * `record_unavailable`, `record_hidden`, `record_already_merged`,
+     * `merge_preview_stale`, `merge_request_reused`, `merge_conflict`,
+     * `merge_sharing_rules_too_large`, `invalid_request`.
+     */
+    code: string;
+    /**
+     * For `record_already_merged`, the record it opens now.
+     */
+    currentId?: string | null;
+    /**
+     * What happened, for people.
+     */
+    message: string;
+    /**
+     * The record a `record_hidden` or `record_already_merged` refusal is about.
+     */
+    recordId?: string | null;
+};
+
+/**
  * How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes).
  */
 export type MergeMode = 'union' | 'combine' | 'fragment' | 'intersect' | 'subtract';
+
+/**
+ * What moves to the record that stays.
+ */
+export type MergeMoves = {
+    /**
+     * People filed under the records merged away.
+     */
+    contacts: number;
+    /**
+     * Discussion messages on them.
+     */
+    discussionMessages: number;
+    /**
+     * Pipeline entries tracking the records merged away.
+     */
+    pipelineEntries: number;
+    /**
+     * Tasks, notes, emails, calls, events and rows that reference them.
+     */
+    references: number;
+};
+
+/**
+ * A committed merge.
+ */
+export type MergeOutcome = {
+    /**
+     * When the merge committed.
+     */
+    committedAt: string;
+    /**
+     * The merge's id in the merge log.
+     */
+    mergeId: string;
+    /**
+     * The records merged into it; their ids now open the record that stays.
+     */
+    mergedIds: Array<string>;
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * The review an admin confirms before merging.
+ */
+export type MergePreview = {
+    blocked?: null | MergeBlock;
+    /**
+     * Team-visible values that differ.
+     */
+    conflicts: Array<FieldConflict>;
+    /**
+     * What email sync does.
+     */
+    emailSync: MergeEmailSync;
+    /**
+     * The domains (or addresses) the record that stays has after the merge,
+     * its own first.
+     */
+    identifiers: Array<string>;
+    /**
+     * What moves.
+     */
+    moves: MergeMoves;
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * Changes whenever anything shown here changes; the commit must name it.
+     */
+    revision: string;
+    /**
+     * Pipelines where the record that stays will have several entries.
+     */
+    sharedPipelines: Array<SharedPipeline>;
+    sharingRules?: null | SharingRulesPreview;
+    /**
+     * The records merged into it.
+     */
+    sources: Array<MergedRecord>;
+    /**
+     * The record that stays.
+     */
+    survivor: MergedRecord;
+};
+
+/**
+ * The records a merge names.
+ */
+export type MergePreviewRequest = {
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * The records merged into it, at most ten.
+     */
+    sourceIds: Array<string>;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * The kind of record a merge combines.
+ */
+export type MergeRecordType = 'company' | 'contact';
+
+/**
+ * A record as the review names it.
+ */
+export type MergedRecord = {
+    /**
+     * Record id.
+     */
+    id: string;
+    /**
+     * Display name, as listings show it.
+     */
+    name: string;
+};
 
 /**
  * Shared message representation for channel timelines and entity discussions.
@@ -16115,6 +16472,28 @@ export type OptionRename = {
      * The new label.
      */
     to: string;
+};
+
+/**
+ * A person a contact merge would move to another company.
+ */
+export type OtherCompanyPerson = {
+    /**
+     * The company it is filed under.
+     */
+    companyId: string;
+    /**
+     * That company's name, as listings show it.
+     */
+    companyName: string;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
 };
 
 /**
@@ -19088,6 +19467,33 @@ export type S3ObjectInfo = {
     key: string;
 };
 
+/**
+ * A person blocking the merge: they share an address with someone filed
+ * under another of the records.
+ */
+export type SameAddressPerson = {
+    /**
+     * The address both hold.
+     */
+    address: string;
+    /**
+     * Whether the contact is archived.
+     */
+    archived: boolean;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
+    /**
+     * The record it is filed under.
+     */
+    recordId: string;
+};
+
 export type SaveBomPart = {
     /**
      * The file path of the bom part content
@@ -19729,6 +20135,47 @@ export type SharedExternalChatReference = {
      * Macro user who added the chat and shared it.
      */
     ownerId: string;
+};
+
+/**
+ * A pipeline in which the record that stays will have more than one entry.
+ * Entries are distinct deals, so they stay separate.
+ */
+export type SharedPipeline = {
+    /**
+     * Entries the record that stays has in it after the merge.
+     */
+    entriesAfter: number;
+    /**
+     * Pipeline name.
+     */
+    name: string;
+    /**
+     * Pipeline id.
+     */
+    pipelineId: string;
+};
+
+/**
+ * What happens to a teammate's email-sharing rule that names a record merged
+ * away. A rule is never pointed at the record that stays, which would share
+ * more than its owner chose.
+ */
+export type SharingRulesChoice = 'keep' | 'stop';
+
+/**
+ * Teammates whose email-sharing rules name a record merged away. Whose rules
+ * they are is not shown.
+ */
+export type SharingRulesPreview = {
+    /**
+     * Whether every changed rule set still fits the rule limits when kept.
+     */
+    keepFits: boolean;
+    /**
+     * How many teammates' rules change.
+     */
+    teammates: number;
 };
 
 /**
@@ -23639,6 +24086,139 @@ export type TimeEntryPage = {
  * How a time entry was made.
  */
 export type TimeEntrySource = 'manual' | 'timer';
+
+/**
+ * A scope's entries over a period as CSV text.
+ */
+export type TimeExport = {
+    /**
+     * False when entries were left out: past 10,000 entries or 16 MiB, or
+     * past the first 5,000 tasks of the scope.
+     */
+    complete: boolean;
+    /**
+     * The CSV: one row per entry, oldest day first.
+     */
+    csv: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * The total of one group, and its split by the second grouping.
+ */
+export type TimeGroup = {
+    /**
+     * What the group is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged in the group.
+     */
+    minutes: number;
+    /**
+     * The group's totals by the second grouping, in report order; empty
+     * without one.
+     */
+    rows: Array<TimeTotal>;
+    /**
+     * Tasks with time in the group.
+     */
+    taskCount: number;
+};
+
+/**
+ * What one total is for.
+ */
+export type TimeGroupKey = {
+    by: 'person';
+    /**
+     * The person.
+     */
+    userId: string;
+} | {
+    by: 'task';
+    /**
+     * The task document.
+     */
+    taskId: string;
+} | {
+    by: 'day';
+    /**
+     * The loggers' calendar day.
+     */
+    date: string;
+};
+
+/**
+ * What a report's totals are grouped by.
+ */
+export type TimeGrouping = 'person' | 'task' | 'day';
+
+/**
+ * Whose time a report reads.
+ */
+export type TimeScopeName = 'project' | 'mine' | 'team';
+
+/**
+ * The time a scope logged over a period.
+ */
+export type TimeSummary = {
+    /**
+     * False when the scope held more than 5,000 tasks and only the first
+     * 5,000 were read.
+     */
+    complete: boolean;
+    /**
+     * The first day of the period.
+     */
+    from: string;
+    /**
+     * Totals by the first grouping, in report order: days in calendar order,
+     * people and tasks with the most time first. For the caller's own and
+     * their team's time grouped by person, every current member has a group,
+     * with or without time.
+     */
+    groups: Array<TimeGroup>;
+    /**
+     * For a project, its tasks the caller can see that are out of the
+     * Trash, with time or not; absent for other scopes.
+     */
+    scopeTaskCount?: number | null;
+    /**
+     * Tasks with time in the period.
+     */
+    taskCount: number;
+    /**
+     * Totals by the second grouping across all groups, in report order;
+     * empty without one.
+     */
+    thenTotals: Array<TimeTotal>;
+    /**
+     * The last day of the period.
+     */
+    to: string;
+    /**
+     * Minutes logged in the period.
+     */
+    totalMinutes: number;
+};
+
+/**
+ * A total of minutes.
+ */
+export type TimeTotal = {
+    /**
+     * What the total is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged.
+     */
+    minutes: number;
+};
 
 /**
  * Error body of the time tracking endpoints.
@@ -29798,6 +30378,52 @@ export type GetCrmMemberAccessResponses = {
 };
 
 export type GetCrmMemberAccessResponse = GetCrmMemberAccessResponses[keyof GetCrmMemberAccessResponses];
+
+export type CommitCrmMergeData = {
+    body: MergeCommitRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/merges';
+};
+
+export type CommitCrmMergeErrors = {
+    400: MergeErrorResponse;
+    401: ErrorResponse;
+    403: MergeErrorResponse;
+    404: MergeErrorResponse;
+    409: MergeErrorResponse;
+};
+
+export type CommitCrmMergeError = CommitCrmMergeErrors[keyof CommitCrmMergeErrors];
+
+export type CommitCrmMergeResponses = {
+    200: MergeOutcome;
+};
+
+export type CommitCrmMergeResponse = CommitCrmMergeResponses[keyof CommitCrmMergeResponses];
+
+export type PreviewCrmMergeData = {
+    body: MergePreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/merges/preview';
+};
+
+export type PreviewCrmMergeErrors = {
+    400: MergeErrorResponse;
+    401: ErrorResponse;
+    403: MergeErrorResponse;
+    404: MergeErrorResponse;
+    409: MergeErrorResponse;
+};
+
+export type PreviewCrmMergeError = PreviewCrmMergeErrors[keyof PreviewCrmMergeErrors];
+
+export type PreviewCrmMergeResponses = {
+    200: MergePreview;
+};
+
+export type PreviewCrmMergeResponse = PreviewCrmMergeResponses[keyof PreviewCrmMergeResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;
@@ -38380,6 +39006,96 @@ export type UpdateTimeEntryResponses = {
 };
 
 export type UpdateTimeEntryResponse = UpdateTimeEntryResponses[keyof UpdateTimeEntryResponses];
+
+export type ExportTimeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+    };
+    url: '/time/export';
+};
+
+export type ExportTimeErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type ExportTimeError = ExportTimeErrors[keyof ExportTimeErrors];
+
+export type ExportTimeResponses = {
+    200: TimeExport;
+};
+
+export type ExportTimeResponse = ExportTimeResponses[keyof ExportTimeResponses];
+
+export type GetTimeSummaryData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+        /**
+         * What the totals are grouped by.
+         */
+        groupBy: TimeGrouping;
+        /**
+         * What each group is split by; another grouping than `groupBy`.
+         */
+        thenBy?: TimeGrouping;
+    };
+    url: '/time/summary';
+};
+
+export type GetTimeSummaryErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type GetTimeSummaryError = GetTimeSummaryErrors[keyof GetTimeSummaryErrors];
+
+export type GetTimeSummaryResponses = {
+    200: TimeSummary;
+};
+
+export type GetTimeSummaryResponse = GetTimeSummaryResponses[keyof GetTimeSummaryResponses];
 
 export type ListTimeEntriesData = {
     body?: never;

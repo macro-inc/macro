@@ -1,7 +1,10 @@
-//! [`ComputersInUse`] for relief: a computer is in use while any agent bound
-//! to its harness has a session with work under way (a turn not yet ended,
-//! or prompts queued). Asked only for quiet guests on a host under memory
-//! pressure, so a handful of reads per pass at most.
+//! [`ComputersInUse`] for relief: a computer is in use while someone watches
+//! or drives its screen, or any agent bound to its harness has a session
+//! with work under way (a turn not yet ended, or prompts queued). Asked only
+//! for quiet guests on a host under memory pressure, so a handful of reads
+//! per pass at most. It is a snapshot: relief takes no lock against a
+//! screen opening between it and the suspend, so a screen opened in that
+//! window sees the computer go off, and opening it again wakes it.
 
 use std::collections::HashSet;
 
@@ -9,16 +12,20 @@ use agent_session::domain::ports::RuntimeSessionLookup;
 use agent_session::outbound::runtime_sessions::PgRuntimeSessions;
 use bots::domain::ports::HarnessAssignments;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use computer_screen::domain::ports::ScreenRepo as _;
+use computer_screen::domain::service::SESSION_FRESH_FOR;
+use computer_screen::outbound::pg::PgScreenRepo;
 use hosted_runtimes::domain::ids::ComputerId;
 use hosted_runtimes::domain::ports::{ComputerRepo, ComputersInUse, ComputersInUseFuture};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
 use sqlx::PgPool;
 
-/// Agent sessions on each computer's harness, from Postgres.
+/// Screens and agent sessions on each computer, from Postgres.
 pub struct SessionsInUse {
     computers: PgComputerRepo,
     bots: PgBotsRepo,
     sessions: PgRuntimeSessions,
+    screens: PgScreenRepo,
 }
 
 impl SessionsInUse {
@@ -27,6 +34,7 @@ impl SessionsInUse {
         Self {
             computers,
             bots: PgBotsRepo::new(pool.clone()),
+            screens: PgScreenRepo::new(pool.clone()),
             sessions: PgRuntimeSessions(pool),
         }
     }
@@ -35,8 +43,17 @@ impl SessionsInUse {
         &self,
         candidates: &[ComputerId],
     ) -> Result<HashSet<ComputerId>, rootcause::Report> {
-        let mut in_use = HashSet::new();
+        let mut in_use: HashSet<ComputerId> = self
+            .screens
+            .computers_in_use(candidates, SESSION_FRESH_FOR)
+            .await
+            .map_err(rootcause::Report::new)?
+            .into_iter()
+            .collect();
         for computer_id in candidates {
+            if in_use.contains(computer_id) {
+                continue;
+            }
             let harness = self
                 .computers
                 .get(*computer_id)

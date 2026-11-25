@@ -362,7 +362,10 @@ function TaskSavedViewMenuItems(props: {
   );
 }
 
-export function TaskSavedViewsList() {
+export function TaskSavedViewsList(props: {
+  /** False while another view (Time) shows, so no saved view reads as open. */
+  showSelection?: boolean;
+}) {
   const {
     savedViews,
     savedViewsList,
@@ -392,7 +395,10 @@ export function TaskSavedViewsList() {
                 <SavedViewListRow
                   view={record()}
                   touchActions={isTouchDevice()}
-                  selected={selectedId() === record().id}
+                  selected={
+                    props.showSelection !== false &&
+                    selectedId() === record().id
+                  }
                   scopeKey={viewerId()}
                   onSelect={() => selectSavedView(record().id)}
                   menu={(defer) => (

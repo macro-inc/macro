@@ -195,7 +195,9 @@ it('leaves one record of the time when Undo cannot delete the saved entry', asyn
       'Could not undo. Check the time logged on both tasks.'
     )
   );
-  expect(timer.discard.mock.calls).toEqual([['timer-2'], ['timer-3']]);
+  const restartId = timer.start.mock.calls[1]?.[0].id;
+  expect(restartId).toEqual(expect.any(String));
+  expect(timer.discard.mock.calls).toEqual([['timer-2'], [restartId]]);
 });
 
 it('finishes Undo when a step whose reply was lost did land', async () => {
@@ -226,7 +228,6 @@ it('finishes Undo when a step whose reply was lost did land', async () => {
 
 it('discards a restart whose reply was lost when Undo cannot delete the entry', async () => {
   const timer = fakeTimer(DESIGN);
-  const restarted = { ...DESIGN, id: 'timer-3' };
   timer.start
     .mockResolvedValueOnce(
       ok({
@@ -242,10 +243,7 @@ it('discards a restart whose reply was lost when Undo cannot delete the entry', 
         },
       })
     )
-    .mockImplementationOnce(async () => {
-      timer.timer = () => restarted;
-      return ok({ kind: 'committed', data: undefined });
-    });
+    .mockResolvedValueOnce(ok({ kind: 'committed', data: undefined }));
   timer.discard.mockResolvedValue(ok({ kind: 'committed', data: null }));
   mocks.remove.mockResolvedValue(
     err({ kind: 'failed', error: new Error('server error') })
@@ -258,7 +256,9 @@ it('discards a restart whose reply was lost when Undo cannot delete the entry', 
       'Could not undo. Check the time logged on both tasks.'
     )
   );
-  expect(timer.discard.mock.calls).toEqual([['timer-2'], ['timer-3']]);
+  const restartId = timer.start.mock.calls[1]?.[0].id;
+  expect(restartId).toEqual(expect.any(String));
+  expect(timer.discard.mock.calls).toEqual([['timer-2'], [restartId]]);
 });
 
 it('keeps the saved entry when Undo cannot start the first timer again', async () => {

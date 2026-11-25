@@ -65,8 +65,22 @@ projects.
   `SEARCH_TEST_OPENSEARCH_URL=http://127.0.0.1:<port> cargo test -p
   opensearch_client --test content_search`. A search the test keeps for a
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
+  `tests/content_search/email_operators.rs` runs the same way and checks the
+  conditions typed Mail search operators become (`EmailTextCondition`,
+  `EmailLabelCondition`, excluded threads, sent bounds), the inboxes and
+  shared threads a search reaches (`inbox_link_ids`, by inbox, never by
+  owner), an address beside a word, hyphenated and punctuated words in email
+  text and searches at the term cap inside the unified request; it needs the
+  emails index empty too.
 
 ## Gotchas
+
+- A top-level `range` on a date field fails the whole unified search
+  (`unsupported_operation_exception` in the fetch phase) whenever the plain
+  highlighter has a populated field to highlight, on OpenSearch 3.5 and
+  whether the field is indexed or doc values only. A range inside a `nested`
+  query (document date properties) is safe. Email sent bounds are therefore a
+  script over the doc values (`emails::sent_between_query`).
 
 - Map a failed `.send()` with `OpensearchClientError::request_failed` and a
   failed body read with `deserialization_failed`. Both take an
@@ -153,6 +167,67 @@ projects.
   outside content, words under three characters keep the capped
   `match_phrase_prefix`; OpenSearch has no phrase prefix that keeps every
   match.
+- An address or a domain in an email search, which is any term with an `@` or
+  a dotted name (`example.com`, `node.js`), matches apart from the words beside
+  it, and the words match together, all in the address fields or all in the
+  text fields (`emails::terms::term_groups`). Never match each word apart: one
+  that is in many addresses, such as the name of the searcher's own domain,
+  would match nearly every message, and one the analyzer drops (`½`) would
+  match none. Regexp input that uses syntax stays one group.
+- Email text terms go into one `simple_query_string`
+  (`emails::terms::build_text_query_string`), where a `term*` prefix is not
+  analyzed: `follow-up*` looks for one token `follow-up`, which the index
+  never holds. A term of one word with ASCII punctuation around it
+  (`follow-`, `Re:`, `-lunch`) matches by that word alone, as a prefix or,
+  under three characters, as the whole word; one `single_word` does not count
+  (a Devanagari word with a virama) is an uncapped `term*` too. Any other
+  partial term is a query the analyzer reads (`terms::analyzed_prefix`): a
+  phrase prefix when it is certainly several tokens (`follow-up`, `東京都`),
+  otherwise an all-words `match_bool_prefix` (`CO₂`, a Thai run, `lunch🎉`).
+  Never give `match_phrase_prefix` a term the tokenizer may read as one token
+  (`CO₂` is `co`): it becomes a clause per word that shares the prefix, up to
+  256 in each field. Everything a `simple_query_string` would read as syntax
+  is escaped (`terms::escape_syntax`): unescaped, the address clause of
+  `-lunch` was NOT `lunch` and matched every other message. Only regexp input
+  keeps its punctuation.
+- OpenSearch refuses a query of more than 1,024 clauses on an index shard
+  (`too_many_nested_clauses`). A search of email alone then fails with a 500,
+  and a search of several kinds answers without the email hits. An email term
+  is a clause per token in each field where it is neither quoted nor a prefix
+  (`terms::clauses`), so a search whose terms cost more than
+  `terms::MAX_TERM_CLAUSES` is built in the compact form, which quotes every
+  term that is not a prefix. Keep whole addresses and their `.parts` in
+  separate clauses (`terms::addresses_query`): a pattern for one costs a
+  clause in each field of the other and never matches there.
+  `email_operators.rs` runs every shape of term up to the cap of 50 terms. A
+  `has_child` clause counts as one in its parent's query and has its own
+  limit.
+- Channel messages carry their link URLs in `links` (up to the query, at
+  most 2 KB each), analyzed by the built-in `pattern` analyzer,
+  which splits a host into its names (`app.sketchpad.example` -> app,
+  sketchpad, example); `content_text` keeps a host whole, so a site name
+  inside a subdomain never matched. A built-in analyzer needs no analysis
+  settings, so the field was added to the live index in place; a change to
+  `content_text` would need a new index version and a full reindex. `pattern`
+  has no maximum token length, so a link longer than Lucene's 32,766-byte
+  term would fail its whole document: keep the cap. Each content term also
+  matches `links` (`query::link_query`): its words split the same way and
+  matched by `create_query`'s rules (several words in order, as a capped
+  phrase prefix), with a leading `http`, `https` or `www` left out. A term of only
+  those, `com`, `org`, `net` or the start of one, matches no link (on dev
+  `com` alone was in 182 of 228 messages' links), and neither does one with a
+  non-ASCII letter, which `pattern` would split into looser ASCII pieces. A
+  hit matched only there takes its `links` highlight as its content snippet
+  (`parse_highlight_hit`), as `source_names` stands in for a calendar name.
+  `tests/content_search/channel_links.rs` checks it against a real index.
+- A word a minus leaves out (`UnifiedSearchArgs::excluded_terms`) is a
+  `must_not` of exactly the query it would run as one of the index's terms
+  in the search's mode: a `has_child` without inner hits for chunks,
+  messages and segments (with the role or speaker filter a term carries),
+  `create_query` on a name or title, the content fields and links for a
+  channel message. Email turns it into Mail's excluded text condition over
+  every part. Build a new index's terms so that the same query leaves a
+  word out; `tests/content_search` checks it through `Case::left_out`.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

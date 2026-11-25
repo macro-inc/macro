@@ -338,6 +338,10 @@ async function activate(
                 activation.databaseAction === 'wipe-before-open'
                   ? 'reset-storage-uncertain'
                   : 'opened-existing',
+              queue:
+                activation.databaseAction === 'wipe-before-open'
+                  ? 'reset'
+                  : 'preserved',
             })
           );
           telemetry?.postMessage({

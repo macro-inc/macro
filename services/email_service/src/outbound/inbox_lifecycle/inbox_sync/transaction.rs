@@ -91,8 +91,30 @@ impl InboxSyncLabelTransaction for PgInboxSyncTransaction {
         &mut self,
         link_id: Uuid,
         message_id: Uuid,
+        thread_id: Uuid,
         labels: &[String],
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        use email_db_client::labels::thread_gain;
+
+        let user_labels: Vec<String> = labels
+            .iter()
+            .filter(|label| !service::label::system_labels::is_system(label))
+            .cloned()
+            .collect();
+
+        let mut absent = Vec::new();
+        if !user_labels.is_empty() {
+            email_db_client::labels::pending_writes::lock_thread_label_writes(
+                &mut self.0,
+                &[thread_id],
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+            absent = thread_gain::absent_from_thread(&mut self.0, link_id, thread_id, &user_labels)
+                .await
+                .map_err(anyhow::Error::from)?;
+        }
+
         email_db_client::labels::insert::insert_message_labels(
             &mut self.0,
             link_id,
@@ -101,8 +123,12 @@ impl InboxSyncLabelTransaction for PgInboxSyncTransaction {
             false,
             &[],
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+
+        let carried = thread_gain::carried_by_messages(&mut self.0, &[message_id], &absent)
+            .await
+            .map_err(anyhow::Error::from)?;
+        Ok(carried.into_iter().map(|label| label.label_id).collect())
     }
 
     async fn remove_labels(

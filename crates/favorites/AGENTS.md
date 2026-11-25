@@ -47,6 +47,9 @@ hexagonal architecture pattern.
 
 ## Gotchas
 
+- `outbound/merge::retarget_favorites_in` points favorites of merged CRM
+  records at the record that stays, one per user, in the caller's
+  transaction.
 - Authorize adds with `ports::FavoriteView`, not `ViewAccessLevel`: channels
   resolve to channel roles, which `ViewAccessLevel` never accepts.
 

@@ -4,31 +4,19 @@ import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/rou
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArchiveIcon from '@icon/system/regular/archive.svg';
-import BellIcon from '@icon/system/regular/bell-simple.svg';
-import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import FocusIcon from '@icon/system/regular/crosshair.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import FileIcon from '@icon/system/regular/file.svg';
-import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
-import SpamIcon from '@icon/system/regular/prohibit.svg';
-import StarIcon from '@icon/system/regular/star.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
 import TrayIcon from '@icon/system/regular/tray.svg';
-import UsersThreeIcon from '@icon/system/regular/users-three.svg';
-import SignalIcon from '@icon/system/regular/wave-sine.svg';
-import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { type Component, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_LABELS, EMAIL_TABS, isEmailInboxTab } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { EMAIL_TAB_ICONS } from '../tab-icons';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
+import { EmailLabelsSection } from '../views/email-labels-section';
 import { EmailSavedViewsSection } from '../views/email-saved-views';
 import { EmailInboxList } from './EmailInboxSelector';
 
@@ -46,22 +34,6 @@ const LIBRARY_TAB_IDS = [
   'spam',
   'trash',
 ] as const satisfies readonly EmailTab[];
-const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
-  important: SignalIcon,
-  noise: NoiseIcon,
-  favorites: StarIcon,
-  sent: PaperPlaneTiltIcon,
-  scheduled: ClockIcon,
-  reminders: BellIcon,
-  calendar: CalendarBlankIcon,
-  drafts: FileIcon,
-  shared: UsersThreeIcon,
-  archived: ArchiveIcon,
-  all: EnvelopeIcon,
-  focus: FocusIcon,
-  spam: SpamIcon,
-  trash: TrashIcon,
-};
 
 function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
   const { shownTab, setTab, savedViewActive } = useEmailView();
@@ -75,7 +47,7 @@ function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
       })}
     >
       <ViewSidebar.Icon>
-        <Dynamic component={TAB_ICONS[props.id]} class="size-4" />
+        <Dynamic component={EMAIL_TAB_ICONS[props.id]} class="size-4" />
       </ViewSidebar.Icon>
       <span class="truncate">{props.label ?? EMAIL_TAB_LABELS[props.id]}</span>
     </ViewSidebar.Item>
@@ -209,7 +181,16 @@ export function EmailSidebar() {
 
         <EmailNavigation />
 
+        {/* Under Library on desktop; at the end of the phone's sheet. */}
+        <Show when={!isTouchDevice()}>
+          <EmailLabelsSection />
+        </Show>
+
         <EmailSavedViewsSection />
+
+        <Show when={isTouchDevice()}>
+          <EmailLabelsSection />
+        </Show>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

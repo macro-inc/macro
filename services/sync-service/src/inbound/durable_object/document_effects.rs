@@ -55,6 +55,7 @@ pub(super) struct WorkerDocumentEffects<'a> {
     pub document_state: &'a DocumentState,
     pub document_id: &'a str,
     pub attribution: Option<&'a DocumentAttribution>,
+    pub report_edit: bool,
 }
 
 fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
@@ -83,9 +84,12 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
         let editors = take_editors(&self.session.pending_editors);
         let env = self.session.env.clone();
         let document_id = self.document_id.to_owned();
+        let report_edit = self.report_edit;
         self.session.state.wait_until(async move {
             report_new_doc_state(&document_id, &snapshot, &env, editors).await;
-            report_interaction(&document_id, &env, InteractionReason::Edited).await;
+            if report_edit {
+                report_interaction(&document_id, &env, InteractionReason::Edited).await;
+            }
         });
         Ok(())
     }

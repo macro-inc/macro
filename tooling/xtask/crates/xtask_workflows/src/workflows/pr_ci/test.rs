@@ -17,9 +17,10 @@ fn called(call: &Call) -> serde_yaml::Value {
         .expect("called workflow parses")
 }
 
-/// A called workflow the gate doesn't wait for could fail after the gate passed.
+/// A called workflow the gate doesn't wait for could fail after the gate passed,
+/// so only a call marked outside the gate may be left out.
 #[test]
-fn the_gate_waits_for_start_and_every_call() {
+fn the_gate_waits_for_start_and_every_gating_call() {
     let workflow = rendered();
     let needs: Vec<&str> = workflow["jobs"]["gate"]["needs"]
         .as_sequence()
@@ -31,8 +32,18 @@ fn the_gate_waits_for_start_and_every_call() {
     assert_eq!(needs[0], "start");
     assert_eq!(
         &needs[1..],
-        CALLS.iter().map(|call| call.id).collect::<Vec<_>>()
+        CALLS
+            .iter()
+            .filter(|call| call.gating)
+            .map(|call| call.id)
+            .collect::<Vec<_>>()
     );
+    let outside: Vec<&str> = CALLS
+        .iter()
+        .filter(|call| !call.gating)
+        .map(|call| call.id)
+        .collect();
+    assert_eq!(outside, ["desktop-windows"]);
 }
 
 /// GitHub refuses to call a workflow without a `workflow_call` trigger.

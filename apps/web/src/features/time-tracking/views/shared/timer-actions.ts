@@ -5,6 +5,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { openDialog } from '@ui/components/ImperativeDialog';
 import { err } from 'neverthrow';
+import { v7 as uuidv7 } from 'uuid';
 import { EditEntryDialog } from '../../components/edit-entry-dialog';
 import {
   type OverLimitChoice,
@@ -148,25 +149,16 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
       began = true;
       const discarded = await timerOps.discard(newTimerId);
       if (discarded.isErr()) return err(discarded.error);
+      const restartId = uuidv7();
       const restarted = await timerOps.start({
+        id: restartId,
         taskId: stopped.taskId,
         startedAt,
       });
       if (restarted.isErr()) return err(restarted.error);
       const removed = await writes.remove(stopped);
       if (removed.isOk()) return removed;
-      // A restart whose reply was lost has no reply to name it; the timer the
-      // re-read found is it when it runs on that task from that start.
-      const reread = runningTimer.timer();
-      const restartedId =
-        restarted.value.kind !== 'committed'
-          ? undefined
-          : (restarted.value.data?.timeTracking.runningTimer?.id ??
-            (reread?.taskId === stopped.taskId &&
-            Date.parse(reread.startedAt) === Date.parse(startedAt)
-              ? reread.id
-              : undefined));
-      if (restartedId) await timerOps.discard(restartedId);
+      await timerOps.discard(restartId);
       return removed;
     });
     if (undone.isErr() && !began) return fail(undone.error);

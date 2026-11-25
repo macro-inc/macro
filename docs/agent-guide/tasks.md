@@ -11,7 +11,9 @@ The main Tasks list (List layout, not project or CRM task lists) starts with the
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
 `Sort`, `Group`, `New`, and an expandable Search icon
-(`Ctrl+F` opens it). The active-filter count sits beside the filter icon inside
+(`Ctrl+F` opens it). A pane too narrow for those actions hides the layout
+group, then Sort and Group, before New or Search would leave the pane; each
+comes back once there is room (`s` sorts only while Sort shows). The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 Project, and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
@@ -439,12 +441,20 @@ saved-date semantics do not change.
 Behind `enable-time-tracking`. A task's property row has a Time pill
 (`InlineTaskTimeLogged` in `Notebook.tsx`, from `features/time-tracking`)
 showing Time logged, the sum of the task's entries, or "Time" when nothing is
-logged. On desktop it opens a popover: a length input that reads `1h 30m`,
+logged. It wears the row's other chips' look (`secondary`, `xs`, a
+`size-3 touch:size-4` icon). On desktop it opens a popover: a length input that reads `1h 30m`,
 `1.5h`, `90m`, `1:30` or a bare number of hours and shows what it understood
 (Enter logs it for today), one-tap 15m/30m/1h/2h, Custom entry (length, day,
-optional start and end, note) and the entries by day with day totals. On
+optional start and end, note) and the entries by day with day totals. An
+entry reads like a Discussion comment (`EntryList`, the same rows in the
+popover, the phone sheet and a My week cell): the person's picture and name,
+quiet (muted, regular weight), then quieter still the start–end span and
+"timer" when a timer made it (wrapped under the name when they do not fit
+beside it, never cut), the length and the author's ⋯ menu on that line
+(others' rows keep its space), and the note in full ink at the row's size
+directly under the name, wrapped and cut to three lines with Show more. On
 touch it opens a bottom sheet with the one-tap lengths, Custom entry and the
-entries; swipe one's own entry right to edit it, left to delete it. Only
+entries; tap one's own entry, or swipe it right, to edit it, left to delete it. Only
 people with edit access log; everyone who can see the task sees its entries;
 only an entry's author changes or deletes it. Time logged never shows as a
 generic property row or details row, and the Add property picker never offers
@@ -484,6 +494,82 @@ and a view-only teammate (a task shared with the team at view level, its edit
 link turned off): log each accepted form, a one-tap length and a custom entry
 on another day; edit and delete one's own; the teammate sees entries and no
 input; a log made offline lands once after reconnecting.
+
+### Time on a project
+
+With `enable-time-tracking` on, desktop and tablet projects get a **Time** tab
+after Overview and Tasks (`features/time-tracking/project-time.tsx`, mounted by
+`views/project-workspace.tsx`; route section `time`). Its row holds the period
+(This week, Last week, This month, Last month, This year; weeks start on the
+calendar's Week starts on preference), Person / Task / Day, and Export CSV.
+Below are three figures: the period's total ("Logged in November"), this
+week's total whatever the period, and Tasks with time out of the project's
+tasks the viewer can see. Rows open to what is underneath: a person to their
+tasks, a task to its people, a day to its tasks; a task row (or a task's
+Open task button) opens the task in the project's place, with the project in
+its breadcrumb (on desktop and a tablet), or, with Shift or on a phone, as a
+task in a split. Totals are summed on the server (`GraphqlUser.timeSummary`, which reads
+the primary) and read again after the viewer logs time anywhere. Export
+downloads the period's entries as the server's CSV (`GET /time/export`), and
+says so when it left entries out. A project past the report's task
+cap says its totals leave some tasks out. Phones keep the one-page project: a
+Time row under Discussion opens a sheet with the period, its total, people
+(each opening to their tasks) and the tasks with the most time; no export.
+With the flag off there is no tab or row, and a `time` link shows Overview.
+
+### Time in Tasks
+
+With `enable-time-tracking` on, the Tasks sidebar has a **Time** section under
+Projects with **My week** and **Team** (`tasks/time/week`, `tasks/time/team`;
+`features/time-tracking/tasks-time.tsx`). The week starts on the calendar's
+Week starts on preference, Saturday and Sunday hide with its Show weekends
+off, and ‹ › step a week at a time with **This week** to come back; a week
+outside this year is named with its year. Day columns read weekday first
+(`Mon 23`), as in the calendar's week view. With
+weekends hidden the week reads Monday to Friday, so every total, on desktop
+and phone, counts only the days shown.
+
+- Desktop **My week** is a timesheet: the viewer's tasks with time that week
+  down the side, the days across, each task's total on the right and each
+  day's at the bottom. Clicking a cell opens that task's entries for the day
+  and a length field: Enter logs a new entry on that task and day (typing never
+  overwrites the entries already there; edit or delete them from the list, as
+  in a task's Time popover). A task the viewer can only view lists its
+  entries without the length field. **Add task** puts a task on the sheet
+  before it has time; **Start timer** asks for a task and starts the timer on
+  it. A task name opens the task in the week's place
+  (`tasks/time/week/task/<id>`); its breadcrumb reads My week and, like
+  closing the task, returns to the week. Shift-click opens it in a new split,
+  and a task already open in another split is brought forward there. Below
+  about 830px the grid scrolls sideways rather than squeeze out the task
+  names.
+- **Team** is the same grid by person: every current member of the viewer's
+  team, read-only, counting only tasks the viewer can see.
+- Phones and tablets show **My week** as the week's days, each with its total
+  and tasks; **Log time** asks for a task, then opens that task's Time sheet.
+  Team lists each member opening to their days; a member with no time is a
+  plain row with a dash. On a tablet a task tapped in My week opens in the
+  preview pane beside the week, as in the Tasks list; on a phone it opens on
+  its own.
+
+The grid reads the primary and reads again after the viewer's own writes (and
+their other sessions'), so a cell just typed shows its new total at once.
+
+Every task a time view lists (a project's Time tab and phone sheet, desktop
+My week, the phone and tablet My week) reads as its Tasks list row: priority
+then status before the name, drawn by the list's own `TaskPropertyControl`
+at the list's spacing, and the viewer's running timer after the name. They
+only show the values, as a task's status does on the timeline: a press on
+them opens the task like the rest of the row, and the task is where they
+change. Editing them in place would need each task's permission, which the
+server checks one task at a time, on reports of up to thousands of tasks.
+They come from the summary's task (`TimeSummaryTaskFields`), the cached task
+document the Tasks list also reads, so a status or priority changed
+elsewhere shows on an open report. A task put on the sheet with Add task is
+not in the summary until it has time, so its row reads that one task in the
+same shape (`ReportTask`, through the same cached document) and shows them at
+once, their place held while a task the cache lacks is read; when its first
+time is logged the summary takes over and the row stays as it was.
 
 ## Import from Linear
 
@@ -1258,7 +1344,7 @@ controls on the right. Built-in scopes and saved views stay in the shared Tasks
 sidebar, without header tabs or a saved-view selector. In project detail, the phone title island shows the project appearance
 and name; its actions share, copy the link, or rename when editing is allowed.
 Phone detail stays one page rather than switching Overview and Tasks.
-On desktop, Tab, Shift+Tab, `1` and `2` switch Overview and Tasks while the
+On desktop, Tab, Shift+Tab, `1` and `2` (`3` for Time, with time tracking on) switch Overview and Tasks while the
 keyboard is on the project (its task list, or nothing focused); in a field,
 the description or on a button, Tab is focus order.
 Projects use the same list rows, property cells, selection, group headers, and
@@ -1361,7 +1447,7 @@ Closing the popover without submitting keeps the underlying view open.
 Opening a project from Tasks keeps the Tasks workspace and its navigation.
 Home rows instead preview it inline with a Home return breadcrumb; touch and
 explicit split activation still use this full Tasks workspace. Desktop and
-tablet keep Overview/Tasks tabs, with compact icons when space is limited.
+tablet keep Overview/Tasks tabs (and Time with time tracking on), with compact icons when space is limited.
 Phones keep the one-page project layout and caret-only Back, project-title,
 Share, and Details header islands. The project-title menu retains Change icon,
 Copy Link, Share, and permission-aware project actions. On desktop/tablet Overview, Cmd+K also
@@ -1464,7 +1550,7 @@ its Project set to this project (change or clear it like any property), and the
 create request carries it, so there is no separate assignment step. The new row
 appears once the task is created. Desktop and tablet section tabs stay unchanged. Phones show one page:
 title and property pills, a description of up to eight lines with Show more /
-Show less, a Discussion entry, then Tasks. The description uses the largest
+Show less, a Discussion entry, a Time row (with time tracking on), then Tasks. The description uses the largest
 five-to-eight-line preview that leaves the Tasks heading and the first row's top
 above the floating controls. Empty descriptions show the full placeholder without
 clamping or Show more. The property row contains only property pills; open the

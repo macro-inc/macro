@@ -3,7 +3,7 @@
 //! enrollment. Local stacks override them per fleet (`OVERRIDE_*`).
 
 use macro_service_urls::{
-    AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AuthServiceUrl,
+    AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AppServiceUrl, AuthServiceUrl,
     ConnectionGatewayWebsocketUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl,
     McpServiceUrl, ScheduledActionServiceUrl, TelemetryIntakeUrl,
 };
@@ -22,9 +22,16 @@ pub const SPEECH_URL_KEY: &str = "MACRO_SPEECH_URL";
 
 /// Where the agent's spans go (OTLP/HTTP), the standard OTel variable.
 pub const TELEMETRY_KEY: &str = "OTEL_EXPORTER_OTLP_ENDPOINT";
+/// The deployment the agent's spans are tagged with (`dev`, `prod`, `local`),
+/// the name this service's own spans carry, so they land in one environment.
+pub const TELEMETRY_ENVIRONMENT_KEY: &str = "OTEL_DEPLOYMENT_ENVIRONMENT";
 
-/// Resolves [`EnrollmentEnvironment`] from the service URL types.
-pub struct AgentAddresses;
+/// Resolves [`EnrollmentEnvironment`] from the service URL types, in the
+/// service's configured environment.
+pub struct AgentAddresses {
+    /// The deployment the agent's spans are tagged with.
+    pub environment: macro_service_urls::macro_env::Environment,
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("{name} must be a computer-reachable URL without credentials, query or fragment")]
@@ -64,21 +71,47 @@ fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, Tea
     Ok(raw.trim_end_matches('/').to_owned())
 }
 
-/// The agent's telemetry intake, or none when it is this machine's loopback,
-/// which a computer can't reach (a local stack without a wired collector).
-fn telemetry(raw: &str) -> Result<Option<(&'static str, String)>, TeamAgentError> {
+/// A URL the agent only hands to people (its owner's browser opens it), so a
+/// local stack's loopback web app is fine; it must still be plain http(s).
+fn browser_url(name: &'static str, raw: &str) -> Result<String, TeamAgentError> {
+    let invalid = || TeamAgentError::internal(UnreachableAddress { name });
+    let url = macro_service_urls::Url::parse(raw).map_err(|_| invalid())?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(invalid());
+    }
+    Ok(raw.trim_end_matches('/').to_owned())
+}
+
+/// The agent's telemetry intake and the deployment its spans are tagged
+/// with, or neither when the intake is this machine's loopback, which a
+/// computer can't reach (a local stack without a wired collector).
+fn telemetry(
+    raw: &str,
+    environment: macro_service_urls::macro_env::Environment,
+) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let url = macro_service_urls::Url::parse(raw).map_err(|_| {
         TeamAgentError::internal(UnreachableAddress {
             name: TELEMETRY_KEY,
         })
     })?;
     if is_loopback(&url) {
-        return Ok(None);
+        return Ok(Vec::new());
     }
-    Ok(Some((TELEMETRY_KEY, checked(TELEMETRY_KEY, raw, false)?)))
+    Ok(vec![
+        (TELEMETRY_KEY, checked(TELEMETRY_KEY, raw, false)?),
+        (TELEMETRY_ENVIRONMENT_KEY, environment.to_string()),
+    ])
 }
 
-fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
+fn resolve(
+    environment: macro_service_urls::macro_env::Environment,
+) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let storage = DocumentStorageServiceUrl::new().map_err(TeamAgentError::internal)?;
     let auth = AuthServiceUrl::new().map_err(TeamAgentError::internal)?;
     let cognition = DocumentCognitionServiceUrl::new().map_err(TeamAgentError::internal)?;
@@ -89,8 +122,10 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let gateway = ApiGatewayUrl::new().map_err(TeamAgentError::internal)?;
     let egress = AgentHarnessEgressUrl::new().map_err(TeamAgentError::internal)?;
     let egress = checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?;
+    let app = AppServiceUrl::new().map_err(TeamAgentError::internal)?;
+    let app = browser_url(AppServiceUrl::OVERRIDE_ENV_VAR_NAME, &app)?;
     let intake = TelemetryIntakeUrl::new().map_err(TeamAgentError::internal)?;
-    let telemetry = telemetry(&intake)?;
+    let telemetry = telemetry(&intake, environment)?;
     Ok(vec![
         (
             DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
@@ -141,6 +176,11 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
             checked(McpServiceUrl::OVERRIDE_ENV_VAR_NAME, &mcp, false)?,
         ),
         (GATEWAY_KEY, checked(GATEWAY_KEY, &gateway, false)?),
+        // The brain routes the agent's relay forwards (`/brain/captcha/*`,
+        // `/brain/fireworks/*`) are under it.
+        (AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, egress.clone()),
+        // Links the agent sends its owner (its screen, a session) open here.
+        (AppServiceUrl::OVERRIDE_ENV_VAR_NAME, app),
         (ANTHROPIC_BASE_URL_KEY, format!("{egress}/brain/anthropic")),
         (SPEECH_URL_KEY, format!("{egress}/brain/inference")),
     ]
@@ -151,6 +191,6 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
 
 impl EnrollmentEnvironment for AgentAddresses {
     fn environment(&self) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
-        resolve()
+        resolve(self.environment)
     }
 }

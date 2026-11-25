@@ -1,5 +1,5 @@
 import type { Client } from '@urql/core';
-import { err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRunningTimer } from '../../primitives/running-timer';
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   startTimer: vi.fn(),
   stopTimer: vi.fn(),
+  readRunningTimer: vi.fn(),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -36,6 +37,7 @@ vi.mock('../../queries/timer', () => ({
   startTimer: mocks.startTimer,
   stopTimer: mocks.stopTimer,
   discardTimer: vi.fn(),
+  readRunningTimer: mocks.readRunningTimer,
 }));
 vi.mock('../../queries/time-tracking-changes', () => ({
   refreshOnTimeTrackingChanges: () => undefined,
@@ -52,6 +54,8 @@ const WIREFRAMES: RunningTimer = {
   task: { __typename: 'GraphqlSoupDocument', id: 'task-1', name: 'Wireframes' },
 };
 const LOST = err({ kind: 'failed', error: new Error('connection closed') });
+// A refetch that settles at once while the screen still shows the old timer.
+const REFETCHED = { error: null };
 
 const [timer, setTimer] = createSignal<RunningTimer | undefined>();
 let dispose: (() => void) | undefined;
@@ -84,12 +88,12 @@ afterEach(() => dispose?.());
 
 it('says nothing when a start whose reply was lost did land', async () => {
   mocks.startTimer.mockResolvedValue(LOST);
-  mocks.refetch.mockImplementation(async () => {
-    setTimer(WIREFRAMES);
-    return { error: null };
-  });
+  mocks.refetch.mockResolvedValue(REFETCHED);
+  mocks.readRunningTimer.mockImplementation(async () =>
+    ok({ ...WIREFRAMES, id: mocks.startTimer.mock.calls[0]?.[0].id })
+  );
   mountActions().start('task-1');
-  await vi.waitFor(() => expect(mocks.refetch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(mocks.readRunningTimer).toHaveBeenCalledOnce());
   await settled();
   expect(mocks.failure).not.toHaveBeenCalled();
   expect(mocks.success).not.toHaveBeenCalled();
@@ -98,7 +102,8 @@ it('says nothing when a start whose reply was lost did land', async () => {
 
 it('still says a start failed when it did not land', async () => {
   mocks.startTimer.mockResolvedValue(LOST);
-  mocks.refetch.mockResolvedValue({ error: null });
+  mocks.refetch.mockResolvedValue(REFETCHED);
+  mocks.readRunningTimer.mockResolvedValue(ok(undefined));
   mountActions().start('task-1');
   await vi.waitFor(() =>
     expect(mocks.failure).toHaveBeenCalledWith(
@@ -110,12 +115,10 @@ it('still says a start failed when it did not land', async () => {
 it('says nothing when a stop whose reply was lost did land', async () => {
   setTimer(WIREFRAMES);
   mocks.stopTimer.mockResolvedValue(LOST);
-  mocks.refetch.mockImplementation(async () => {
-    setTimer(undefined);
-    return { error: null };
-  });
+  mocks.refetch.mockResolvedValue(REFETCHED);
+  mocks.readRunningTimer.mockResolvedValue(ok(undefined));
   mountActions().stop();
-  await vi.waitFor(() => expect(mocks.refetch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(mocks.readRunningTimer).toHaveBeenCalledOnce());
   await settled();
   expect(mocks.failure).not.toHaveBeenCalled();
   expect(mocks.alert).not.toHaveBeenCalled();

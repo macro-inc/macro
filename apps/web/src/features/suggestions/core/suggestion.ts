@@ -9,6 +9,10 @@ export type SuggestionTarget = {
 export type SuggestionRun = {
   sessionId: string;
   startedAt: string;
+  /** Asked to stop and not yet stopped: the row says it is stopping. */
+  stopping: boolean;
+  /** The one line the run wrote saying what it did and what it sent; absent until it writes one. */
+  report?: string;
 };
 
 export type SuggestionCategory =
@@ -66,6 +70,15 @@ export type SuggestionKind =
  */
 export type SuggestionStatus = 'open' | 'running' | 'failed' | 'done';
 
+/** Something the person has going on that several suggestions are part of. */
+export type Topic = {
+  /** The same from one generation to the next. */
+  key: string;
+  name: string;
+  /** Why it matters now; absent when nothing it said still holds. */
+  reason?: string;
+};
+
 /** One proactive suggestion for the person, as the feed shows it. */
 export type Suggestion = SuggestionKind & {
   id: string;
@@ -83,6 +96,8 @@ export type Suggestion = SuggestionKind & {
   /** When it was last written; accepting sends it back, so a card can't take up text it never showed. */
   updatedAt: string;
   about: SuggestionTarget[];
+  /** The topic it is part of; absent for one that stands alone. */
+  topic?: Pick<Topic, 'key' | 'name'>;
   /** What a finished suggestion left to open; absent until it settled. */
   result?: SuggestionTarget;
 };
@@ -97,6 +112,8 @@ export type FeedCounts = Record<SuggestionStatus, number>;
 export type SuggestionFeed = {
   suggestions: Suggestion[];
   counts: FeedCounts;
+  /** The topics of the suggestions that wait or run. */
+  topics: Topic[];
 };
 
 /**

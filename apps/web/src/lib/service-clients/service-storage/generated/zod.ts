@@ -9556,6 +9556,11 @@ export const getCrmEmailPrivacyResponse = zod
   .union([
     zod
       .object({
+        archived_team_domains: zod
+          .record(zod.string(), zod.uuid())
+          .describe(
+            "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored. Empty for\nmembers, who can't see archived companies."
+          ),
         can_remove_team_domains: zod
           .boolean()
           .describe('Whether the caller can remove a team exclusion.'),
@@ -9699,6 +9704,11 @@ export const updateCrmEmailPrivacyBody = zod
 
 export const updateCrmEmailPrivacyResponse = zod
   .object({
+    archived_team_domains: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        "Team domains listed because their company is archived, mapped to that\ncompany. They can't be removed until the company is restored. Empty for\nmembers, who can't see archived companies."
+      ),
     can_remove_team_domains: zod
       .boolean()
       .describe('Whether the caller can remove a team exclusion.'),
@@ -10180,6 +10190,7 @@ export const listCrmEmailPolicyHistoryResponse = zod
                     'withdrawn',
                     'mailbox_revoked',
                     'live_targets_changed',
+                    'records_merged',
                   ])
                   .describe(
                     'Events in the member-only policy history; records never contain mail content.'
@@ -10936,6 +10947,297 @@ export const getCrmMemberAccessResponse = zod
   .describe(
     'Current authority for the authenticated viewer; contribution consent is separate.'
   );
+
+/**
+ * @summary Merge records into the one that stays, as reviewed. It can't be undone.
+The records merged away are deleted; their ids keep opening the record
+that stays. Refused with `merge_preview_stale` when anything the review
+showed has changed.
+ */
+export const commitCrmMergeBodySourceIdsMax = 10;
+
+export const commitCrmMergeBody = zod
+  .object({
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    requestKey: zod
+      .uuid()
+      .describe(
+        'A new key per merge, reused only to retry the same one: a retry\nreturns the first result.'
+      ),
+    revision: zod
+      .string()
+      .describe('The revision of the review being confirmed.'),
+    sharingRules: zod
+      .enum(['keep', 'stop'])
+      .optional()
+      .describe(
+        "What happens to a teammate's email-sharing rule that names a record merged\naway. A rule is never pointed at the record that stays, which would share\nmore than its owner chose."
+      ),
+    sourceIds: zod
+      .array(zod.uuid())
+      .min(1)
+      .max(commitCrmMergeBodySourceIdsMax)
+      .describe('The records merged into it.'),
+    survivorId: zod.uuid().describe('The record that stays.'),
+  })
+  .describe('A reviewed merge to commit.');
+
+export const commitCrmMergeResponse = zod
+  .object({
+    committedAt: zod.iso.datetime({}).describe('When the merge committed.'),
+    mergeId: zod.uuid().describe("The merge's id in the merge log."),
+    mergedIds: zod
+      .array(zod.uuid())
+      .describe(
+        'The records merged into it; their ids now open the record that stays.'
+      ),
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    survivorId: zod.uuid().describe('The record that stays.'),
+  })
+  .describe('A committed merge.');
+
+/**
+ * @summary Review a merge: what moves to the record that stays, the values that
+differ, what happens to email sync and teammates' sharing, and anything
+that blocks it. Read-only. Admins and owners only, while merging is
+enabled for them.
+ */
+export const previewCrmMergeBodySourceIdsMax = 10;
+
+export const previewCrmMergeBody = zod
+  .object({
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    sourceIds: zod
+      .array(zod.uuid())
+      .min(1)
+      .max(previewCrmMergeBodySourceIdsMax)
+      .describe('The records merged into it, at most ten.'),
+    survivorId: zod.uuid().describe('The record that stays.'),
+  })
+  .describe('The records a merge names.');
+
+export const previewCrmMergeResponseMovesContactsMin = 0;
+
+export const previewCrmMergeResponseMovesDiscussionMessagesMin = 0;
+
+export const previewCrmMergeResponseMovesPipelineEntriesMin = 0;
+
+export const previewCrmMergeResponseMovesReferencesMin = 0;
+
+export const previewCrmMergeResponseSharedPipelinesItemEntriesAfterMin = 0;
+
+export const previewCrmMergeResponseSharingRulesTeammatesMin = 0;
+
+export const previewCrmMergeResponse = zod
+  .object({
+    blocked: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['same_address_people']),
+                people: zod
+                  .array(
+                    zod
+                      .object({
+                        address: zod
+                          .string()
+                          .describe('The address both hold.'),
+                        archived: zod
+                          .boolean()
+                          .describe('Whether the contact is archived.'),
+                        contactId: zod.uuid().describe('Contact id.'),
+                        name: zod
+                          .string()
+                          .nullish()
+                          .describe('Contact name, when it has one.'),
+                        recordId: zod
+                          .uuid()
+                          .describe('The record it is filed under.'),
+                      })
+                      .describe(
+                        'A person blocking the merge: they share an address with someone filed\nunder another of the records.'
+                      )
+                  )
+                  .describe('Every person involved, archived ones too.'),
+              })
+              .describe(
+                'People under different records share an address; merging would file\ntwo people with one address under the same record.'
+              ),
+            zod
+              .object({
+                kind: zod.enum(['different_companies']),
+                people: zod
+                  .array(
+                    zod
+                      .object({
+                        companyId: zod
+                          .uuid()
+                          .describe('The company it is filed under.'),
+                        companyName: zod
+                          .string()
+                          .describe(
+                            "That company's name, as listings show it."
+                          ),
+                        contactId: zod.uuid().describe('Contact id.'),
+                        name: zod
+                          .string()
+                          .nullish()
+                          .describe('Contact name, when it has one.'),
+                      })
+                      .describe(
+                        'A person a contact merge would move to another company.'
+                      )
+                  )
+                  .describe('The people who would change company.'),
+              })
+              .describe(
+                "People merged away are filed under another company than the contact\nthat stays and hold a work address, or no address, so they can't\nchange company, as a contact edit couldn't move them: merge the\ncompanies first, or keep a contact filed under their company."
+              ),
+          ])
+          .describe(
+            "Why a merge can't go ahead until someone changes the records."
+          ),
+      ])
+      .optional(),
+    conflicts: zod
+      .array(
+        zod
+          .object({
+            dropped: zod
+              .array(
+                zod
+                  .object({
+                    recordId: zod
+                      .uuid()
+                      .describe('The record merged away that held it.'),
+                    value: zod.object({}).describe('The value.'),
+                  })
+                  .describe('One value a merge drops.')
+              )
+              .describe('The values dropped, with the record each came from.'),
+            kept: zod.object({}).describe('The value kept.'),
+            propertyId: zod.uuid().describe('The property definition.'),
+            propertyName: zod.string().describe("The property's name."),
+          })
+          .describe(
+            'A team-visible field whose values differ. The value of the record that\nstays is kept; the others are dropped and kept in the merge log.'
+          )
+      )
+      .describe('Team-visible values that differ.'),
+    emailSync: zod
+      .object({
+        keptOut: zod
+          .array(zod.string())
+          .describe('Domains joining it whose mail stays out of sync.'),
+        survivorSyncs: zod
+          .boolean()
+          .describe('Whether the record that stays syncs mail.'),
+      })
+      .describe(
+        'What email sync does after the merge. The record that stays keeps its\nsetting; domains whose sync was off stay out of sync.'
+      ),
+    identifiers: zod
+      .array(zod.string())
+      .describe(
+        'The domains (or addresses) the record that stays has after the merge,\nits own first.'
+      ),
+    moves: zod
+      .object({
+        contacts: zod
+          .number()
+          .min(previewCrmMergeResponseMovesContactsMin)
+          .describe('People filed under the records merged away.'),
+        discussionMessages: zod
+          .number()
+          .min(previewCrmMergeResponseMovesDiscussionMessagesMin)
+          .describe('Discussion messages on them.'),
+        pipelineEntries: zod
+          .number()
+          .min(previewCrmMergeResponseMovesPipelineEntriesMin)
+          .describe('Pipeline entries tracking the records merged away.'),
+        references: zod
+          .number()
+          .min(previewCrmMergeResponseMovesReferencesMin)
+          .describe(
+            'Tasks, notes, emails, calls, events and rows that reference them.'
+          ),
+      })
+      .describe('What moves to the record that stays.'),
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    revision: zod
+      .string()
+      .describe(
+        'Changes whenever anything shown here changes; the commit must name it.'
+      ),
+    sharedPipelines: zod
+      .array(
+        zod
+          .object({
+            entriesAfter: zod
+              .number()
+              .min(previewCrmMergeResponseSharedPipelinesItemEntriesAfterMin)
+              .describe(
+                'Entries the record that stays has in it after the merge.'
+              ),
+            name: zod.string().describe('Pipeline name.'),
+            pipelineId: zod.uuid().describe('Pipeline id.'),
+          })
+          .describe(
+            'A pipeline in which the record that stays will have more than one entry.\nEntries are distinct deals, so they stay separate.'
+          )
+      )
+      .describe(
+        'Pipelines where the record that stays will have several entries.'
+      ),
+    sharingRules: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            keepFits: zod
+              .boolean()
+              .describe(
+                'Whether every changed rule set still fits the rule limits when kept.'
+              ),
+            teammates: zod
+              .number()
+              .min(previewCrmMergeResponseSharingRulesTeammatesMin)
+              .describe("How many teammates' rules change."),
+          })
+          .describe(
+            'Teammates whose email-sharing rules name a record merged away. Whose rules\nthey are is not shown.'
+          ),
+      ])
+      .optional(),
+    sources: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Record id.'),
+            name: zod.string().describe('Display name, as listings show it.'),
+          })
+          .describe('A record as the review names it.')
+      )
+      .describe('The records merged into it.'),
+    survivor: zod
+      .object({
+        id: zod.uuid().describe('Record id.'),
+        name: zod.string().describe('Display name, as listings show it.'),
+      })
+      .describe('A record as the review names it.'),
+  })
+  .describe('The review an admin confirms before merging.');
 
 /**
  * @summary List the caller's live pipelines in their CRM.
@@ -18515,7 +18817,13 @@ export const previewCrmRecordsResponse = zod
       .array(
         zod
           .object({
-            id: zod.uuid().describe('The company.'),
+            id: zod.uuid().describe('The requested company id.'),
+            mergedInto: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The company the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a company that was not merged.'
+              ),
             name: zod
               .string()
               .nullish()
@@ -18549,7 +18857,13 @@ export const previewCrmRecordsResponse = zod
               .describe(
                 "The contact's primary email, which titles a contact with no name."
               ),
-            id: zod.uuid().describe('The contact.'),
+            id: zod.uuid().describe('The requested contact id.'),
+            mergedInto: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The contact the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a contact that was not merged.'
+              ),
             name: zod
               .string()
               .nullish()
@@ -56644,6 +56958,30 @@ export const postItemsSoupBody = zod
           .describe(
             'Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'
           ),
+        exclude_views: zod
+          .array(
+            zod
+              .enum(['sent', 'drafts', 'calendar'])
+              .describe(
+                'A mailbox view the Email list scopes a search to, as its tabs do.'
+              )
+          )
+          .optional()
+          .describe(
+            'Leave out the threads in these mailbox views. Search only.'
+          ),
+        favorite: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "True for the caller's favorite threads only, false to leave them out.\nSearch only."
+          ),
+        has_attachment: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'True for threads with an attachment on any message, false for threads\nwith none. Search only.'
+          ),
         importance: zod
           .boolean()
           .nullish()
@@ -56661,6 +56999,28 @@ export const postItemsSoupBody = zod
           .nullish()
           .describe(
             "Filter by the email thread's read flag, independently of notification state."
+          ),
+        label_names: zod
+          .array(
+            zod
+              .object({
+                exclude: zod
+                  .boolean()
+                  .optional()
+                  .describe('Leave out the threads that carry it instead.'),
+                name: zod
+                  .string()
+                  .describe(
+                    "The label of one of the caller's tags, or the name of a label in one\nof the caller's inboxes, ignoring case."
+                  ),
+              })
+              .describe(
+                'A tag or provider label that an email thread must, or must not, carry,\nnamed by its label.'
+              )
+          )
+          .optional()
+          .describe(
+            "Tags or labels each thread must carry, or must not, by name, as typing\n`label:` or `in:<name>` into the search does. A name matches the\ncaller's tags with that label and the labels with that name in the\ncaller's inboxes, ignoring case; a name that is neither matches\nnothing. Search only."
           ),
         link_ids: zod
           .array(zod.string())
@@ -56703,17 +57063,56 @@ export const postItemsSoupBody = zod
           .describe(
             "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           ),
+        sent_after: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'Only messages sent at or after this instant. Mail with no sent time\nnever matches. Search only.'
+          ),
+        sent_before: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'Only messages sent before this instant. Mail with no sent time never\nmatches. Search only.'
+          ),
         shared: zod
           .enum(['exclude', 'include', 'only'])
           .optional()
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        text_matches: zod
+          .array(
+            zod
+              .object({
+                exclude: zod
+                  .boolean()
+                  .optional()
+                  .describe('Leave out the messages that match instead.'),
+                part: zod
+                  .enum(['any', 'subject', 'from', 'to', 'cc', 'bcc'])
+                  .describe(
+                    'The part of an email message a search condition matches.'
+                  ),
+                text: zod
+                  .string()
+                  .describe(
+                    'One word, matched as a search word is (a prefix unless the search is\nexact), or several words, matched as an adjacent phrase.'
+                  ),
+              })
+              .describe(
+                'A word or phrase that must, or must not, appear in one part of a message.'
+              )
+          )
+          .optional()
+          .describe(
+            'Words or phrases each message must contain, or must not, in one part\nof it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus\ninto the search does. Search only.'
+          ),
         view: zod
           .union([
             zod.null(),
             zod
-              .enum(['sent', 'drafts'])
+              .enum(['sent', 'drafts', 'calendar'])
               .describe(
                 'A mailbox view the Email list scopes a search to, as its tabs do.'
               ),
@@ -90078,6 +90477,223 @@ export const updateTimeEntryResponse = zod
   .describe(
     "An entry and its task's Time logged after the write that returned it."
   );
+
+/**
+ * @summary A scope's entries over a period as CSV text, oldest day first: one row
+per entry with its day, person (as an email), task, minutes, hours, note
+and source. Capped at 10,000 entries and 16 MiB; `complete` is false when
+entries were left out. May miss writes from the last few seconds.
+ */
+export const exportTimeQueryParams = zod.object({
+  scope: zod.enum(['project', 'mine', 'team']).describe('Whose time to read.'),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe('The project, with `scope=project` only.'),
+  from: zod.iso.date().describe('The first day, `YYYY-MM-DD`.'),
+  to: zod.iso
+    .date()
+    .describe('The last day, `YYYY-MM-DD`, at most 365 days after `from`.'),
+});
+
+export const exportTimeResponseRowsMin = 0;
+
+export const exportTimeResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'False when entries were left out: past 10,000 entries or 16 MiB, or\npast the first 5,000 tasks of the scope.'
+      ),
+    csv: zod.string().describe('The CSV: one row per entry, oldest day first.'),
+    rows: zod
+      .number()
+      .min(exportTimeResponseRowsMin)
+      .describe('Entries written.'),
+  })
+  .describe("A scope's entries over a period as CSV text.");
+
+/**
+ * @summary A scope's time over a period: the total, totals by the first grouping,
+each split by the second, and the second grouping's totals. Only tasks
+the caller can see count, out of the Trash; a scope past 5,000 tasks is
+read to the first 5,000 and answers `complete: false`.
+ */
+export const getTimeSummaryQueryParams = zod.object({
+  scope: zod.enum(['project', 'mine', 'team']).describe('Whose time to read.'),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe('The project, with `scope=project` only.'),
+  from: zod.iso.date().describe('The first day, `YYYY-MM-DD`.'),
+  to: zod.iso
+    .date()
+    .describe('The last day, `YYYY-MM-DD`, at most 365 days after `from`.'),
+  groupBy: zod
+    .enum(['person', 'task', 'day'])
+    .describe('What the totals are grouped by.'),
+  thenBy: zod
+    .enum(['person', 'task', 'day'])
+    .optional()
+    .describe('What each group is split by; another grouping than `groupBy`.'),
+});
+
+export const getTimeSummaryResponseGroupsItemMinutesMin = 0;
+
+export const getTimeSummaryResponseGroupsItemRowsItemMinutesMin = 0;
+
+export const getTimeSummaryResponseGroupsItemTaskCountMin = 0;
+
+export const getTimeSummaryResponseScopeTaskCountMin = 0;
+
+export const getTimeSummaryResponseTaskCountMin = 0;
+
+export const getTimeSummaryResponseThenTotalsItemMinutesMin = 0;
+
+export const getTimeSummaryResponseTotalMinutesMin = 0;
+
+export const getTimeSummaryResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'False when the scope held more than 5,000 tasks and only the first\n5,000 were read.'
+      ),
+    from: zod.iso.date().describe('The first day of the period.'),
+    groups: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .union([
+                zod
+                  .object({
+                    by: zod.enum(['person']),
+                    userId: zod.string().describe('The person.'),
+                  })
+                  .describe("One person's time."),
+                zod
+                  .object({
+                    by: zod.enum(['task']),
+                    taskId: zod.string().describe('The task document.'),
+                  })
+                  .describe('The time on one task.'),
+                zod
+                  .object({
+                    by: zod.enum(['day']),
+                    date: zod.iso.date().describe("The loggers' calendar day."),
+                  })
+                  .describe('The time logged for one day.'),
+              ])
+              .describe('What one total is for.'),
+            minutes: zod
+              .number()
+              .min(getTimeSummaryResponseGroupsItemMinutesMin)
+              .describe('Minutes logged in the group.'),
+            rows: zod
+              .array(
+                zod
+                  .object({
+                    key: zod
+                      .union([
+                        zod
+                          .object({
+                            by: zod.enum(['person']),
+                            userId: zod.string().describe('The person.'),
+                          })
+                          .describe("One person's time."),
+                        zod
+                          .object({
+                            by: zod.enum(['task']),
+                            taskId: zod.string().describe('The task document.'),
+                          })
+                          .describe('The time on one task.'),
+                        zod
+                          .object({
+                            by: zod.enum(['day']),
+                            date: zod.iso
+                              .date()
+                              .describe("The loggers' calendar day."),
+                          })
+                          .describe('The time logged for one day.'),
+                      ])
+                      .describe('What one total is for.'),
+                    minutes: zod
+                      .number()
+                      .min(getTimeSummaryResponseGroupsItemRowsItemMinutesMin)
+                      .describe('Minutes logged.'),
+                  })
+                  .describe('A total of minutes.')
+              )
+              .describe(
+                "The group's totals by the second grouping, in report order; empty\nwithout one."
+              ),
+            taskCount: zod
+              .number()
+              .min(getTimeSummaryResponseGroupsItemTaskCountMin)
+              .describe('Tasks with time in the group.'),
+          })
+          .describe(
+            'The total of one group, and its split by the second grouping.'
+          )
+      )
+      .describe(
+        "Totals by the first grouping, in report order: days in calendar order,\npeople and tasks with the most time first. For the caller's own and\ntheir team's time grouped by person, every current member has a group,\nwith or without time."
+      ),
+    scopeTaskCount: zod
+      .number()
+      .min(getTimeSummaryResponseScopeTaskCountMin)
+      .nullish()
+      .describe(
+        'For a project, its tasks the caller can see that are out of the\nTrash, with time or not; absent for other scopes.'
+      ),
+    taskCount: zod
+      .number()
+      .min(getTimeSummaryResponseTaskCountMin)
+      .describe('Tasks with time in the period.'),
+    thenTotals: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .union([
+                zod
+                  .object({
+                    by: zod.enum(['person']),
+                    userId: zod.string().describe('The person.'),
+                  })
+                  .describe("One person's time."),
+                zod
+                  .object({
+                    by: zod.enum(['task']),
+                    taskId: zod.string().describe('The task document.'),
+                  })
+                  .describe('The time on one task.'),
+                zod
+                  .object({
+                    by: zod.enum(['day']),
+                    date: zod.iso.date().describe("The loggers' calendar day."),
+                  })
+                  .describe('The time logged for one day.'),
+              ])
+              .describe('What one total is for.'),
+            minutes: zod
+              .number()
+              .min(getTimeSummaryResponseThenTotalsItemMinutesMin)
+              .describe('Minutes logged.'),
+          })
+          .describe('A total of minutes.')
+      )
+      .describe(
+        'Totals by the second grouping across all groups, in report order;\nempty without one.'
+      ),
+    to: zod.iso.date().describe('The last day of the period.'),
+    totalMinutes: zod
+      .number()
+      .min(getTimeSummaryResponseTotalMinutesMin)
+      .describe('Minutes logged in the period.'),
+  })
+  .describe('The time a scope logged over a period.');
 
 /**
  * @summary List a task's time entries, newest day first, with its Time logged.

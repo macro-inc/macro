@@ -73,6 +73,12 @@ export type SearchOptions = {
   calendarScope?: CalendarEventSearchScope;
   /** Results per request, default 50. Iteration may fetch many pages. */
   pageSize?: number;
+  /**
+   * The IANA time zone typed dates are read in, such as `America/New_York`:
+   * `after:2017/06/01` starts at that day's midnight there. Defaults to this
+   * runtime's zone; code mode runs in UTC, so pass the user's.
+   */
+  timeZone?: string;
 };
 
 /** Resume a page with its opaque cursor and the same options. */

@@ -162,14 +162,21 @@ due and its date is absent when the provider supplies no payment/due date.
 - `GET /user/stripe/trial_eligibility` reads the authenticated customer's
   eligibility without creating checkout. Any prior subscription disqualifies
   the first-subscription trial, including canceled or incomplete subscriptions.
-  The trial is Pro only. Max checkout is paid immediately, and a trialing Pro
-  subscription that moves to Max ends the trial and starts a Max billing cycle
-  now. A team's first Max seat does the same; seat changes on a subscription
-  already trialing on Max keep its trial.
+  The trial is Pro only. Business and Max checkout is paid immediately, and a
+  trialing Pro subscription that moves to either ends the trial and starts its
+  billing cycle now. A team's first Business or Max seat does the same; seat
+  changes on a subscription already trialing on one keep its trial.
+- Checkout takes an `interval` (`month` by default). Pro is sold monthly only
+  (400 for annual Pro); Business and Max monthly or annually. Seat prices are
+  the optional `STRIPE_BUSINESS_{MONTHLY,YEARLY}_PRICE_ID` and
+  `STRIPE_MAX_{MONTHLY,YEARLY}_PRICE_ID`; a plan with neither is not sold.
+  Once `STRIPE_MAX_MONTHLY_PRICE_ID` is set, `STRIPE_MAX_PRICE_ID` (the
+  original $200 monthly price) is legacy: its subscribers keep it and seats
+  added to their item reuse it, while new monthly Max seats get the new price.
 - Nonterminal subscriptions (including past due, unpaid, paused, and incomplete)
   require management; only canceled and incomplete-expired subscriptions allow
   replacement. Eligibility includes `existingSubscription` for recovery UI.
-- Share checkout idempotency generations across Pro, Max, and trial terms. Reuse
+- Share checkout idempotency generations across every plan, interval and trial term. Reuse
   exact open offers; expire other open subscription sessions before replacement.
   Never advance a generation after an ambiguous provider failure. Complete the
   backend rollout before releasing clients that depend on these protections.
@@ -258,6 +265,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   reauthorization instead of retrying. Keep it 4xx: a 500 makes callers retry
   and trips the HTTP server-errors monitor. Macro's own OAuth client failing
   (`invalid_client`) stays a 500.
+- `/internal/microsoft_access_token` answers 401 for a grant whose refresh
+  Microsoft refused (`ReauthorizationRequired`, `MissingPermissions`). A
+  refusal is recorded in `refresh_refused_at`, never a revocation: the grant
+  answers 401 without asking Microsoft for `REFUSED_REFRESH_RETRY` (an hour),
+  then refreshes once more, and a refresh that works clears it. Only a
+  disconnect or a replacing grant revokes (`revoke_released_grant`).
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.

@@ -2,6 +2,7 @@ import {
   createBrowserOfflineSignal,
   deviceLooksOffline,
 } from '@core/util/connectivity';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   StartTimerMutation,
   StopTimerMutation,
@@ -16,12 +17,14 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import { v7 as uuidv7 } from 'uuid';
 import { elapsedSeconds, serverOffset } from '../core/timer-clock';
 import { refreshOnTimeTrackingChanges } from '../queries/time-tracking-changes';
 import {
   createRunningTimerQuery,
   discardTimer,
   type RunningTimer,
+  readRunningTimer,
   startTimer,
   stopTimer,
 } from '../queries/timer';
@@ -45,7 +48,8 @@ const BUSY = {
   message: 'Another timer change is in progress',
 } as const;
 
-type StartArgs = { taskId: string; startedAt?: string };
+/** `id` names the timer before the reply does, for a caller that must know it. */
+type StartArgs = { id?: string; taskId: string; startedAt?: string };
 type StopArgs = { timerId: string; endedAt?: string; logAll?: boolean };
 
 /** The timer writes, for use inside one exclusive change. */
@@ -121,20 +125,22 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     landed: (timer: RunningTimer | undefined) => boolean
   ): Promise<TimeWriteResult<T>> {
     if (result.isOk() || result.error.kind !== 'failed') return result;
-    const reread = await query.refetch();
-    if (reread.error || !landed(query.timer())) return result;
+    // A refetch can settle on a copy from before the write, so ask the server
+    // itself; the refetch only brings the screen up to date.
+    const held = await readRunningTimer({ client: dependencies.client() });
+    fireAndForget(query.refetch(), 'time-tracking');
+    if (held.isErr() || !landed(held.value)) return result;
     return ok({ kind: 'committed', data: undefined });
   }
 
   const ops: TimerOps = {
-    start: async (args) =>
-      settle(
-        await startTimer(args, { client: dependencies.client() }),
-        (timer) =>
-          timer?.taskId === args.taskId &&
-          (!args.startedAt ||
-            Date.parse(timer.startedAt) === Date.parse(args.startedAt))
-      ),
+    start: async (args) => {
+      const id = args.id ?? uuidv7();
+      return settle(
+        await startTimer({ ...args, id }, { client: dependencies.client() }),
+        (timer) => timer?.id === id
+      );
+    },
     stop: async (args) =>
       settle(
         await stopTimer(args, { client: dependencies.client() }),

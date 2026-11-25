@@ -31,6 +31,7 @@ pub(crate) fn config_values() -> serde_json::Value {
         "AUTHENTICATION_SERVICE_SECRET_KEY": "auth-secret-name",
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 2000,
+        "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS": 6000,
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 10000,
         "AI_USAGE_OVERAGE_MARKUP_PERCENT": 5,
         "KAFKA_BROKERS": "localhost:9092",
@@ -50,7 +51,8 @@ pub(crate) fn config_values() -> serde_json::Value {
         "MAX_REPO_SIZE_BYTES": 524288000,
         "PUSHES_PER_MINUTE": 30,
         "LIVEKIT_API_KEY": "livekit-key",
-        "LIVEKIT_API_SECRET": "livekit-secret"
+        "LIVEKIT_API_SECRET": "livekit-secret",
+        "FIREWORK_API_KEY": "firework-key"
     })
 }
 
@@ -127,13 +129,15 @@ fn values() -> serde_json::Value {
         "HARNESS_BOT_ID": "00000000-0000-0000-0000-000000000001",
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 1500,
+        "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS": 4500,
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 15000,
         "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25,
         "REPO_STORAGE_ROOT": "/data/agent-git",
         "MAX_REPO_SIZE_BYTES": 524288000,
         "PUSHES_PER_MINUTE": 30,
         "LIVEKIT_API_KEY": "livekit-key",
-        "LIVEKIT_API_SECRET": "livekit-secret"
+        "LIVEKIT_API_SECRET": "livekit-secret",
+        "FIREWORK_API_KEY": "firework-key"
     });
     for key in [
         "FUSIONAUTH_BASE_URL",
@@ -329,7 +333,7 @@ fn computer_retention_and_past_due_grace_default_to_two_weeks_and_a_week_and_ref
 }
 
 #[test]
-fn agent_repo_storage_limits_and_speech_credentials_are_required() {
+fn agent_repo_storage_limits_and_provider_credentials_are_required() {
     for key in [
         "REPO_STORAGE_ROOT",
         "MAX_REPO_SIZE_BYTES",
@@ -342,4 +346,26 @@ fn agent_repo_storage_limits_and_speech_credentials_are_required() {
         let error = serde_json::from_value::<Config>(incomplete).err().unwrap();
         assert!(error.to_string().contains(key), "{error}");
     }
+}
+
+#[test]
+fn the_fireworks_key_is_optional() {
+    let mut unkeyed = config_values();
+    unkeyed.as_object_mut().unwrap().remove("FIREWORK_API_KEY");
+    let config: Config = serde_json::from_value(unkeyed).unwrap();
+    assert_eq!(config.firework_api_key.value(), None);
+
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(config.firework_api_key.value(), Some("firework-key"));
+}
+
+#[test]
+fn the_capsolver_key_is_optional() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(config.capsolver_api_key.value(), None);
+
+    let mut keyed = config_values();
+    keyed["CAPSOLVER_API_KEY"] = serde_json::json!("capsolver-key");
+    let config: Config = serde_json::from_value(keyed).unwrap();
+    assert_eq!(config.capsolver_api_key.value(), Some("capsolver-key"));
 }
