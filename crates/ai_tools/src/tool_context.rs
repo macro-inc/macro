@@ -719,6 +719,9 @@ pub fn build_merge_tool_context(
     )
     .with_effects(Arc::new(crm::outbound::record_merge::PropertyMergeEffects(
         event_broker,
+    )))
+    .with_pipeline_access(Arc::new(crm::outbound::record_merge::PipelineGrants(
+        databases.entity_access_service.clone(),
     )));
     if let Some(flags) = feature_flags {
         merges = merges.with_gate(Arc::new(crm::outbound::record_merge::FlaggedMerge(flags)));

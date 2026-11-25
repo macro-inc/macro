@@ -67,6 +67,9 @@ pub struct MergedEntityValues {
     pub deleted: Vec<MergeEntityValue>,
     /// Rows written, for publication.
     pub written: Vec<WrittenEntityProperty>,
+    /// Whether a merged record holds a value `locked` did not, attached
+    /// after it was read; the merge must not go ahead without it.
+    pub unreviewed: bool,
 }
 
 /// A reference another entity holds to a merged record, as it was.
@@ -220,16 +223,33 @@ pub async fn merge_entity_values_in(
     )
     .fetch_all(&mut *conn)
     .await?;
+    // Only what was read under its writer locks: a value attached since has
+    // no lock here, and deleting it would drop it unrecorded.
+    let reviewed: Vec<Uuid> = locked.iter().map(|value| value.id).collect();
     let deleted_ids = sqlx::query_scalar!(
-        r#"DELETE FROM entity_properties WHERE entity_type = $1 AND entity_id = ANY($2)
+        r#"DELETE FROM entity_properties
+           WHERE entity_type = $1 AND entity_id = ANY($2) AND id = ANY($3)
            RETURNING id"#,
         entity_type as EntityType,
         sources,
+        &reviewed,
     )
     .fetch_all(&mut *conn)
     .await?;
+    let unreviewed = sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+               SELECT 1 FROM entity_properties WHERE entity_type = $1 AND entity_id = ANY($2)
+           ) AS "unreviewed!""#,
+        entity_type as EntityType,
+        sources,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
 
-    let mut merged = MergedEntityValues::default();
+    let mut merged = MergedEntityValues {
+        unreviewed,
+        ..MergedEntityValues::default()
+    };
     for value in locked {
         if moves.contains(&value.id) {
             merged.moved.push(value.clone());

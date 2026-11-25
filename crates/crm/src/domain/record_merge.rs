@@ -291,6 +291,19 @@ pub struct MergePreview {
     pub sharing_rules: Option<SharingRulesPreview>,
     /// Set when the merge can't go ahead.
     pub blocked: Option<MergeBlock>,
+    /// The entries moving in each pipeline, so the review names and counts
+    /// only the pipelines its reader can open.
+    #[serde(skip)]
+    pub pipeline_moves: Vec<PipelineMoves>,
+}
+
+/// The entries of merged records in one pipeline.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PipelineMoves {
+    /// The pipeline.
+    pub pipeline_id: Uuid,
+    /// Its entries for a merged record.
+    pub entries: u32,
 }
 
 /// A committed merge.

@@ -122,6 +122,7 @@ export default {
   policyActionWithdraw: 'Sharing stopped',
   policyActionRevoke: 'Mailbox access revoked',
   policyActionTargets: 'Live rule targets changed',
+  policyActionMerged: 'Companies merged',
   policyActionUnknown: 'Sharing changed',
   policyActorMember: 'You',
   policyActorAgent: 'Your agent',

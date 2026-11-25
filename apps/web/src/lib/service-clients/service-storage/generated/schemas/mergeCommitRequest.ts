@@ -21,7 +21,11 @@ returns the first result. */
   /** What happens to teammates' email sharing that names a record merged
 away; keeps sharing it when left out. */
   sharingRules?: SharingRulesChoice;
-  /** The records merged into it. */
+  /**
+   * The records merged into it.
+   * @minItems 1
+   * @maxItems 10
+   */
   sourceIds: string[];
   /** The record that stays. */
   survivorId: string;

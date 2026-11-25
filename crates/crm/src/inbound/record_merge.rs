@@ -87,6 +87,7 @@ pub struct MergePreviewRequest {
     /// The record that stays.
     pub survivor_id: Uuid,
     /// The records merged into it, at most ten.
+    #[schema(min_items = 1, max_items = 10)]
     pub source_ids: Vec<Uuid>,
 }
 
@@ -99,6 +100,7 @@ pub struct MergeCommitRequest {
     /// The record that stays.
     pub survivor_id: Uuid,
     /// The records merged into it.
+    #[schema(min_items = 1, max_items = 10)]
     pub source_ids: Vec<Uuid>,
     /// The revision of the review being confirmed.
     pub revision: String,

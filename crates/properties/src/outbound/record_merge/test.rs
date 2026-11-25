@@ -287,3 +287,56 @@ async fn references_name_the_survivor_once_and_leave_other_records_alone(pool: P
         refs(&[("COMPANY", &unrelated)])
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_value_attached_after_the_review_is_kept_and_reported(pool: PgPool) {
+    let team = setup(&pool).await;
+    let tier = definition(&pool, "Tier", "STRING", Some(team), None).await;
+    let stage = definition(&pool, "Region", "STRING", Some(team), None).await;
+    let [survivor, source] = [Uuid::now_v7(), Uuid::now_v7()].map(|id| id.to_string());
+    let reviewed = value(
+        &pool,
+        &source,
+        "COMPANY",
+        &tier.to_string(),
+        json!({"type": "String", "value": "Gold"}),
+    )
+    .await;
+
+    let mut tx = pool.begin().await.unwrap();
+    let locked = lock_entity_values_in(
+        &mut tx,
+        EntityType::Company,
+        &[survivor.clone(), source.clone()],
+        &survivor,
+    )
+    .await
+    .unwrap();
+    // Another writer attaches a property the review never saw.
+    let late = value(
+        &pool,
+        &source,
+        "COMPANY",
+        &stage.to_string(),
+        json!({"type": "String", "value": "Won"}),
+    )
+    .await;
+
+    let merged = merge_entity_values_in(
+        &mut tx,
+        EntityType::Company,
+        &survivor,
+        &[source.clone()],
+        &locked,
+        &[],
+    )
+    .await
+    .unwrap();
+    assert!(merged.unreviewed);
+    assert_eq!(
+        merged.deleted.iter().map(|v| v.id).collect::<Vec<_>>(),
+        vec![reviewed]
+    );
+    tx.rollback().await.unwrap();
+    assert!(stored(&pool, late).await.is_some());
+}

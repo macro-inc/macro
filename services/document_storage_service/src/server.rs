@@ -2051,6 +2051,9 @@ async fn run_server() -> anyhow::Result<()> {
         )))
         .with_effects(Arc::new(crm::outbound::record_merge::PropertyMergeEffects(
             macro_event_broker.clone(),
+        )))
+        .with_pipeline_access(Arc::new(crm::outbound::record_merge::PipelineGrants(
+            entity_access_service.clone(),
         ))),
     );
 

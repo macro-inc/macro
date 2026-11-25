@@ -31,7 +31,8 @@ export type CrmCompanyMergeCommit = CrmCompanyMerge & {
   revision: string;
   /**
    * One UUID per merge, reused only to retry the same one: a retry returns
-   * the first result. A new one is made when left out.
+   * the first result. Left out, it comes from `revision`, so committing the
+   * same review again after a lost response returns that result too.
    */
   requestKey?: string;
   /**
@@ -40,6 +41,19 @@ export type CrmCompanyMergeCommit = CrmCompanyMerge & {
    */
   sharingRules?: SharingRulesChoice;
 };
+
+/** A request key that is the same for every commit of one review. */
+function reviewKey(revision: string): string {
+  const hex = revision.toLowerCase();
+  if (!/^[0-9a-f]{32,}$/.test(hex)) return crypto.randomUUID();
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
 
 /**
  * Merging duplicate CRM companies into one.
@@ -87,7 +101,7 @@ export class CrmMergeNamespace {
           survivorId: merge.survivorId,
           sourceIds: merge.sourceIds,
           revision: merge.revision,
-          requestKey: merge.requestKey ?? crypto.randomUUID(),
+          requestKey: merge.requestKey ?? reviewKey(merge.revision),
           sharingRules: merge.sharingRules,
         },
       }),

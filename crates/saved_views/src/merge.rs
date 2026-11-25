@@ -57,7 +57,9 @@ pub async fn retarget_crm_list_companies_in(
         let previous = sqlx::query!(
             r#"WITH previous AS MATERIALIZED (
                    SELECT id, config, revision FROM saved_view
-                   WHERE id = $1 AND jsonb_typeof(config->'companyIds') = 'array'
+                   WHERE id = $1 AND config->>'kind' = 'crm-list'
+                     AND config->>'teamId' = $4::uuid::text
+                     AND jsonb_typeof(config->'companyIds') = 'array'
                      AND config->'companyIds' ?| $2
                    FOR UPDATE
                ), rewritten AS (
@@ -81,6 +83,7 @@ pub async fn retarget_crm_list_companies_in(
             id,
             &sources,
             survivor,
+            team_id,
         )
         .fetch_optional(&mut *conn)
         .await?;

@@ -11,7 +11,7 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use activity::{
@@ -37,7 +37,7 @@ use crate::domain::{
     model::CrmError,
     record_merge::{
         MergeCommand, MergeEmailSync, MergeError, MergeMoves, MergeOutcome, MergePreview,
-        MergeRecordType, MergeScope, MergeTargets, MergedRecord, SharedPipeline,
+        MergeRecordType, MergeScope, MergeTargets, MergedRecord, PipelineMoves, SharedPipeline,
         SharingRulesChoice, SharingRulesPreview,
         plan::{self, RecordValue, ValuePlan, ValueVisibility},
         service::{ChangedEntityProperty, MergeCommitted, RecordMergeRepository},
@@ -213,25 +213,33 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
         }
     }
 
-    // Entries are rows whose primary cell names one of the records.
-    let mut entries: BTreeMap<Uuid, (String, Vec<(Uuid, bool)>)> = BTreeMap::new();
+    // Entries are rows whose primary cell names one of the records; a row
+    // counts once, as a source's when any of its cells names a source.
+    let mut entries: BTreeMap<Uuid, (String, HashMap<Uuid, bool>)> = BTreeMap::new();
     for cell in facts.cells.iter().filter(|cell| cell.primary) {
         let from_source = names_any(&cell.values, EntityKind::Company, targets.sources());
         let rows = &mut entries
             .entry(cell.pipeline_id)
-            .or_insert_with(|| (cell.pipeline_name.clone(), Vec::new()))
+            .or_insert_with(|| (cell.pipeline_name.clone(), HashMap::new()))
             .1;
-        if !rows.iter().any(|(row, _)| *row == cell.row_id) {
-            rows.push((cell.row_id, from_source));
-        }
+        *rows.entry(cell.row_id).or_default() |= from_source;
     }
-    let pipeline_entries = entries
-        .values()
-        .map(|(_, rows)| rows.iter().filter(|(_, from_source)| *from_source).count())
-        .sum::<usize>();
+    let pipeline_moves: Vec<PipelineMoves> = entries
+        .iter()
+        .map(|(pipeline_id, (_, rows))| PipelineMoves {
+            pipeline_id: *pipeline_id,
+            entries: u32::try_from(rows.values().filter(|from_source| **from_source).count())
+                .unwrap_or(u32::MAX),
+        })
+        .filter(|moves| moves.entries > 0)
+        .collect();
+    let pipeline_entries = pipeline_moves
+        .iter()
+        .map(|moves| moves.entries)
+        .fold(0u32, u32::saturating_add);
     let shared_pipelines = entries
         .iter()
-        .filter(|(_, (_, rows))| rows.len() > 1 && rows.iter().any(|(_, source)| *source))
+        .filter(|(_, (_, rows))| rows.len() > 1 && rows.values().any(|source| *source))
         .map(|(pipeline_id, (name, rows))| SharedPipeline {
             pipeline_id: *pipeline_id,
             name: name.clone(),
@@ -271,7 +279,7 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
         identifiers,
         moves: MergeMoves {
             contacts: u32::try_from(state.moving_people()).unwrap_or(u32::MAX),
-            pipeline_entries: u32::try_from(pipeline_entries).unwrap_or(u32::MAX),
+            pipeline_entries,
             references: u32::try_from(facts.references).unwrap_or(u32::MAX),
             discussion_messages: u32::try_from(facts.discussion_messages).unwrap_or(u32::MAX),
         },
@@ -283,13 +291,25 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
         },
         sharing_rules,
         blocked: plan::same_address_block(&state.people),
+        pipeline_moves,
     };
-    // Whose rules change and at which revision is not shown, but a change to
-    // either makes the commit write something else.
+    // Whose rules change and at which revision, and which company holds each
+    // domain, are not shown, but a change to any makes the commit write
+    // something else.
     let unshown: Vec<String> = facts
         .sharing
         .iter()
         .map(|member| format!("{}:{}", member.user_id, member.revision))
+        .chain(
+            std::iter::once(&state.survivor)
+                .chain(&state.sources)
+                .map(|company| {
+                    let mut domains: Vec<&str> =
+                        company.domains.iter().map(|d| d.domain.as_str()).collect();
+                    domains.sort_unstable();
+                    format!("{}:{}", company.id, domains.join(","))
+                }),
+        )
         .collect();
     preview.revision = plan::revision(&preview, &unshown);
     CompanyReview { preview, values }
@@ -677,6 +697,9 @@ where
         )
         .await
         .map_err(db)?;
+        if values.unreviewed {
+            return Err(MergeError::PreviewStale);
+        }
         for value in values.moved.iter().chain(&values.deleted) {
             changes.push(MergeChange::new(
                 "properties",
@@ -945,6 +968,21 @@ where
             });
         }
 
+        // The receipt's role can be gone by now: a demotion committed before
+        // this read stops the merge, and the row lock holds off a later one.
+        let admin = sqlx::query_scalar!(
+            r#"SELECT team_role IN ('admin','owner') AS "admin!" FROM team_user
+               WHERE team_id = $1 AND user_id = $2 FOR SHARE"#,
+            scope.team_id,
+            scope.actor.as_ref(),
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db)?;
+        if admin != Some(true) {
+            return Err(MergeError::PermissionRequired);
+        }
+
         let merge_id = Uuid::now_v7();
         sqlx::query!(
             r#"INSERT INTO crm_merges (id, team_id, user_id, record_type, request_key, request_fingerprint,
@@ -981,6 +1019,27 @@ where
             replayed: false,
             changed_properties,
         })
+    }
+}
+
+/// Pipeline grants as the pipeline list reads them.
+pub struct PipelineGrants<A>(pub Arc<A>);
+
+#[async_trait::async_trait]
+impl<A: entity_access::domain::ports::AccessiblePipelines>
+    crate::domain::record_merge::service::MergePipelineAccess for PipelineGrants<A>
+{
+    async fn readable(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        pipelines: &[Uuid],
+    ) -> Result<std::collections::HashSet<Uuid>, MergeError> {
+        let grants = self
+            .0
+            .pipelines_access(user, pipelines)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(anyhow::anyhow!(error)))?;
+        Ok(grants.into_keys().collect())
     }
 }
 

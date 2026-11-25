@@ -252,6 +252,7 @@ fn a_request_key_fingerprints_the_whole_command() {
 }
 
 mod service {
+    use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
     use bot_id::BotId;
@@ -263,8 +264,8 @@ mod service {
     use uuid::Uuid;
 
     use super::super::service::{
-        ChangedEntityProperty, MergeCommitted, MergeEffects, MergeGate, RecordMergeRepository,
-        RecordMergeService, RecordMerges,
+        ChangedEntityProperty, MergeCommitted, MergeEffects, MergeGate, MergePipelineAccess,
+        RecordMergeRepository, RecordMergeService, RecordMerges,
     };
     use super::super::*;
     use crate::domain::auth::{CrmMemberAccess, CrmTeamReceipt};
@@ -276,6 +277,7 @@ mod service {
     struct Repo {
         calls: Mutex<Vec<&'static str>>,
         replayed: bool,
+        preview: Option<MergePreview>,
     }
 
     impl CrmMemberAccess for Arc<Repo> {
@@ -301,7 +303,7 @@ mod service {
             _: &MergeTargets,
         ) -> Result<MergePreview, MergeError> {
             self.calls.lock().unwrap().push("preview");
-            Err(MergeError::RecordUnavailable)
+            self.preview.clone().ok_or(MergeError::RecordUnavailable)
         }
 
         async fn commit(
@@ -334,6 +336,24 @@ mod service {
     impl MergeGate for Gate {
         async fn enabled_for(&self, _: MacroUserIdStr<'_>) -> bool {
             self.0
+        }
+    }
+
+    struct Pipelines(HashSet<Uuid>);
+
+    #[async_trait::async_trait]
+    impl MergePipelineAccess for Pipelines {
+        async fn readable(
+            &self,
+            user: &MacroUserIdStr<'static>,
+            pipelines: &[Uuid],
+        ) -> Result<HashSet<Uuid>, MergeError> {
+            assert_eq!(user.as_ref(), USER);
+            Ok(pipelines
+                .iter()
+                .copied()
+                .filter(|pipeline| self.0.contains(pipeline))
+                .collect())
         }
     }
 
@@ -457,5 +477,84 @@ mod service {
             .await
             .unwrap();
         assert_eq!(*effects.0.lock().unwrap(), 0);
+    }
+
+    fn reviewed(open: Uuid, hidden: Uuid) -> MergePreview {
+        let shared = |pipeline_id, name: &str| SharedPipeline {
+            pipeline_id,
+            name: name.into(),
+            entries_after: 2,
+        };
+        MergePreview {
+            revision: "r".into(),
+            record_type: MergeRecordType::Company,
+            survivor: MergedRecord {
+                id: Uuid::from_u128(1),
+                name: "Kept".into(),
+            },
+            sources: vec![MergedRecord {
+                id: Uuid::from_u128(2),
+                name: "Merged".into(),
+            }],
+            identifiers: vec!["kept.example.com".into()],
+            moves: MergeMoves {
+                contacts: 0,
+                pipeline_entries: 5,
+                references: 0,
+                discussion_messages: 0,
+            },
+            shared_pipelines: vec![shared(open, "Deals"), shared(hidden, "Private deals")],
+            conflicts: Vec::new(),
+            email_sync: MergeEmailSync {
+                survivor_syncs: true,
+                kept_out: Vec::new(),
+            },
+            sharing_rules: None,
+            blocked: None,
+            pipeline_moves: vec![
+                PipelineMoves {
+                    pipeline_id: open,
+                    entries: 2,
+                },
+                PipelineMoves {
+                    pipeline_id: hidden,
+                    entries: 3,
+                },
+            ],
+        }
+    }
+
+    #[tokio::test]
+    async fn a_review_names_and_counts_only_the_pipelines_its_reader_can_open() {
+        let [open, hidden] = [Uuid::from_u128(10), Uuid::from_u128(11)];
+        let repo = Arc::new(Repo {
+            preview: Some(reviewed(open, hidden)),
+            ..Repo::default()
+        });
+        let effects = Arc::new(Effects::default());
+        let targets = command().targets;
+
+        let preview = service(&repo, true, &effects)
+            .with_pipeline_access(Arc::new(Pipelines(HashSet::from([open]))))
+            .preview(&receipt(TeamRole::Admin), &targets)
+            .await
+            .unwrap();
+        assert_eq!(
+            preview
+                .shared_pipelines
+                .iter()
+                .map(|shared| shared.pipeline_id)
+                .collect::<Vec<_>>(),
+            vec![open]
+        );
+        assert_eq!(preview.moves.pipeline_entries, 2);
+        assert_eq!(preview.revision, "r", "the revision still binds them all");
+
+        let unchecked = service(&repo, true, &effects)
+            .preview(&receipt(TeamRole::Admin), &targets)
+            .await
+            .unwrap();
+        assert!(unchecked.shared_pipelines.is_empty());
+        assert_eq!(unchecked.moves.pipeline_entries, 0);
     }
 }

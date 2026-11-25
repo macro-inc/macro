@@ -12,7 +12,11 @@ import type { MergeRecordType } from './mergeRecordType';
 export interface MergePreviewRequest {
   /** The kind of record merged. */
   recordType: MergeRecordType;
-  /** The records merged into it, at most ten. */
+  /**
+   * The records merged into it, at most ten.
+   * @minItems 1
+   * @maxItems 10
+   */
   sourceIds: string[];
   /** The record that stays. */
   survivorId: string;

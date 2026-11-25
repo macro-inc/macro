@@ -10944,6 +10944,8 @@ The records merged away are deleted; their ids keep opening the record
 that stays. Refused with `merge_preview_stale` when anything the review
 showed has changed.
  */
+export const commitCrmMergeBodySourceIdsMax = 10;
+
 export const commitCrmMergeBody = zod
   .object({
     recordType: zod
@@ -10963,7 +10965,11 @@ export const commitCrmMergeBody = zod
       .describe(
         "What happens to a teammate's email-sharing rule that names a record merged\naway. A rule is never pointed at the record that stays, which would share\nmore than its owner chose."
       ),
-    sourceIds: zod.array(zod.uuid()).describe('The records merged into it.'),
+    sourceIds: zod
+      .array(zod.uuid())
+      .min(1)
+      .max(commitCrmMergeBodySourceIdsMax)
+      .describe('The records merged into it.'),
     survivorId: zod.uuid().describe('The record that stays.'),
   })
   .describe('A reviewed merge to commit.');
@@ -10990,6 +10996,8 @@ differ, what happens to email sync and teammates' sharing, and anything
 that blocks it. Read-only. Admins and owners only, while merging is
 enabled for them.
  */
+export const previewCrmMergeBodySourceIdsMax = 10;
+
 export const previewCrmMergeBody = zod
   .object({
     recordType: zod
@@ -10997,6 +11005,8 @@ export const previewCrmMergeBody = zod
       .describe('The kind of record a merge combines.'),
     sourceIds: zod
       .array(zod.uuid())
+      .min(1)
+      .max(previewCrmMergeBodySourceIdsMax)
       .describe('The records merged into it, at most ten.'),
     survivorId: zod.uuid().describe('The record that stays.'),
   })

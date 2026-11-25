@@ -55718,7 +55718,9 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "The records merged into it."
+            "description": "The records merged into it.",
+            "maxItems": 10,
+            "minItems": 1
           },
           "survivorId": {
             "type": "string",
@@ -55965,7 +55967,9 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "The records merged into it, at most ten."
+            "description": "The records merged into it, at most ten.",
+            "maxItems": 10,
+            "minItems": 1
           },
           "survivorId": {
             "type": "string",

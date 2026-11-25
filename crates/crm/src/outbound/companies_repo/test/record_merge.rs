@@ -992,3 +992,76 @@ async fn opposing_merges_at_once_commit_one_and_refuse_the_other(pool: PgPool) {
         .await;
     assert_eq!(aliases, 1, "no alias points both ways");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_admin_demoted_after_the_review_cannot_commit_it(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let merge = targets(stays, &[merged]);
+    let preview = world.merges.preview(&world.scope(), &merge).await.unwrap();
+
+    sqlx::query("UPDATE team_user SET team_role = 'member' WHERE team_id = $1 AND user_id = $2")
+        .bind(world.team)
+        .bind(OWNER)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let command = MergeCommand {
+        targets: merge,
+        revision: preview.revision,
+        request_key: Uuid::now_v7(),
+        sharing_rules: SharingRulesChoice::Keep,
+    };
+    assert!(matches!(
+        world.merges.commit(&world.scope(), &command).await,
+        Err(MergeError::PermissionRequired)
+    ));
+    let left: i64 = world
+        .scalar("SELECT count(*) FROM crm_companies WHERE id = $1", merged)
+        .await;
+    assert_eq!(left, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_merge_log_records_each_new_old_id(pool: PgPool) {
+    let world = World::new(pool).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+
+    let outcome = world
+        .merge(&targets(stays, &[merged]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+
+    let logged: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM crm_merge_changes
+         WHERE merge_id = $1 AND table_name = 'crm_company_aliases'
+           AND row_key = jsonb_build_object('retired_id', $2::uuid) AND previous = 'null'::jsonb",
+    )
+    .bind(outcome.merge_id)
+    .bind(merged)
+    .fetch_one(&world.pool)
+    .await
+    .unwrap();
+    assert_eq!(logged, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_domain_changing_company_after_the_review_makes_it_stale(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let merge = targets(stays, &[merged]);
+    let before = world.merges.preview(&world.scope(), &merge).await.unwrap();
+
+    // The review shows the same domains either way; only who holds one moved.
+    sqlx::query("UPDATE crm_domains SET company_id = $1 WHERE domain = 'merged.example.com'")
+        .bind(stays)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let after = world.merges.preview(&world.scope(), &merge).await.unwrap();
+    assert_eq!(after.identifiers, before.identifiers);
+    assert_ne!(after.revision, before.revision);
+}

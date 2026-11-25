@@ -1,6 +1,6 @@
 //! The merge use case shared by the HTTP routes, the SDK and agent tools.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use entity_access::domain::models::MemberTeamRole;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -74,6 +74,18 @@ pub trait MergeEffects: Send + Sync {
     fn properties_changed(&self, changes: &[ChangedEntityProperty]);
 }
 
+/// The pipelines a user can open. A review names and counts only those;
+/// the commit still moves every entry.
+#[async_trait::async_trait]
+pub trait MergePipelineAccess: Send + Sync {
+    /// Which of `pipelines` the user can open.
+    async fn readable(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pipelines: &[Uuid],
+    ) -> Result<HashSet<Uuid>, MergeError>;
+}
+
 /// The merge operations inbound adapters call.
 pub trait RecordMerges: Send + Sync + 'static {
     /// Review a merge.
@@ -96,6 +108,7 @@ pub struct RecordMergeService<R> {
     repository: R,
     gate: Option<Arc<dyn MergeGate>>,
     effects: Option<Arc<dyn MergeEffects>>,
+    pipelines: Option<Arc<dyn MergePipelineAccess>>,
 }
 
 impl<R: RecordMergeRepository> RecordMergeService<R> {
@@ -105,6 +118,7 @@ impl<R: RecordMergeRepository> RecordMergeService<R> {
             repository,
             gate: None,
             effects: None,
+            pipelines: None,
         }
     }
 
@@ -117,6 +131,12 @@ impl<R: RecordMergeRepository> RecordMergeService<R> {
     /// Attach the publisher for changes in other domains.
     pub fn with_effects(mut self, effects: Arc<dyn MergeEffects>) -> Self {
         self.effects = Some(effects);
+        self
+    }
+
+    /// Attach pipeline access; without it a review names no pipeline.
+    pub fn with_pipeline_access(mut self, pipelines: Arc<dyn MergePipelineAccess>) -> Self {
+        self.pipelines = Some(pipelines);
         self
     }
 
@@ -161,7 +181,38 @@ impl<R: RecordMergeRepository> RecordMerges for RecordMergeService<R> {
         targets: &MergeTargets,
     ) -> Result<MergePreview, MergeError> {
         let scope = self.scope(access).await?;
-        self.repository.preview(&scope, targets).await
+        let mut preview = self.repository.preview(&scope, targets).await?;
+        // Admins aren't granted every pipeline; one they can't open stays
+        // out of the review. Its revision still binds them all.
+        let mut holders: Vec<Uuid> = preview
+            .pipeline_moves
+            .iter()
+            .map(|moves| moves.pipeline_id)
+            .chain(
+                preview
+                    .shared_pipelines
+                    .iter()
+                    .map(|shared| shared.pipeline_id),
+            )
+            .collect();
+        holders.sort_unstable();
+        holders.dedup();
+        let readable = match &self.pipelines {
+            Some(pipelines) if !holders.is_empty() => {
+                pipelines.readable(&scope.actor, &holders).await?
+            }
+            _ => HashSet::new(),
+        };
+        preview
+            .shared_pipelines
+            .retain(|shared| readable.contains(&shared.pipeline_id));
+        preview.moves.pipeline_entries = preview
+            .pipeline_moves
+            .iter()
+            .filter(|moves| readable.contains(&moves.pipeline_id))
+            .map(|moves| moves.entries)
+            .fold(0u32, u32::saturating_add);
+        Ok(preview)
     }
 
     #[tracing::instrument(

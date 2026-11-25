@@ -105,10 +105,10 @@ impl CompaniesRepositoryImpl {
         // Sync and archive writers hold the privacy lock, so these flags and
         // domains stay as read until commit.
         let state = Self::company_merge_state(&mut *conn, team, targets).await?;
-        if !state.survivor.email_sync {
-            for domain in state.kept_out() {
-                Self::guard_team_domain_exclusion(&mut *conn, team, &domain).await?;
-            }
+        // Kept out by the survivor's setting or by new team blocks, each is a
+        // new exclusion and takes the same guard.
+        for domain in state.kept_out() {
+            Self::guard_team_domain_exclusion(&mut *conn, team, &domain).await?;
         }
         let mut domains: Vec<&str> = state
             .sources
@@ -451,16 +451,25 @@ impl CompaniesRepositoryImpl {
                 json!({ "company_id": row.company_id, "merge_id": row.merge_id }),
             )
         }));
-        sqlx::query!(
+        let aliased = sqlx::query_scalar!(
             r#"INSERT INTO crm_company_aliases (retired_id, company_id, merge_id)
-               SELECT id, $1, $3 FROM UNNEST($2::uuid[]) AS retired(id)"#,
+               SELECT id, $1, $3 FROM UNNEST($2::uuid[]) AS retired(id)
+               RETURNING retired_id"#,
             survivor,
             &sources,
             merge_id,
         )
-        .execute(&mut *conn)
+        .fetch_all(&mut *conn)
         .await
         .map_err(db)?;
+        changes.extend(aliased.into_iter().map(|retired_id| {
+            MergeChange::new(
+                "crm",
+                "crm_company_aliases",
+                json!({ "retired_id": retired_id }),
+                Value::Null,
+            )
+        }));
 
         Self::record_company_matching_change(&mut *conn, team, survivor).await?;
         for source in &sources {
