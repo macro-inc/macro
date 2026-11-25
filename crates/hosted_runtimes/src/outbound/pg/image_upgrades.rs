@@ -322,7 +322,7 @@ impl ImageUpgrades for PgComputerRepo {
             .fetch_optional(&mut *tx)
             .await?;
             if current.is_none()
-                || Self::runtime_update_pending(&mut tx, computer.computer_id).await?
+                || Self::runtime_update_pending(&mut tx, computer.computer_id, true).await?
             {
                 return Ok(false);
             }
@@ -346,6 +346,16 @@ impl ImageUpgrades for PgComputerRepo {
         )
         .execute(&mut *tx)
         .await?;
+        if updated.rows_affected() == 1 && computer.state == ComputerUpgradeState::Upgraded {
+            sqlx::query!(
+                r#"UPDATE agent_runtime_update SET cleared_at = $2
+                   WHERE computer_id = $1 AND outcome = 'needs_operator' AND cleared_at IS NULL"#,
+                computer.computer_id.as_uuid(),
+                now,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
         tx.commit().await?;
         Ok(updated.rows_affected() == 1)
     }

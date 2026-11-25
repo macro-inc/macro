@@ -268,6 +268,14 @@ pub trait ComputerMoves: Send + Sync + 'static {
     fn held(&self, computer_id: ComputerId)
     -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Check competing holds for an image replacement, allowing image recovery.
+    fn held_for_image(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send {
+        self.held(computer_id)
+    }
+
     /// Run a leased fleet effect again at `run_after` without counting an
     /// attempt (its computer is held by a move).
     fn postpone_effect(

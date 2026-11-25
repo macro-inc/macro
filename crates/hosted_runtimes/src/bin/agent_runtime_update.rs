@@ -52,7 +52,7 @@ async fn main() -> Result<(), Report> {
             )
         })?;
     println!("Runtime update request {id} recorded");
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(67 * 60);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(95 * 60);
     loop {
         if let Some(outcome) = repo.runtime_update_outcome(id).await? {
             println!("Runtime update {id}: {}", outcome.as_ref());

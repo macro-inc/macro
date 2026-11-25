@@ -200,6 +200,10 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   boot's HEAD, and after 3 the next start
   rolls back with a commit of last-good's tree on top of the broken head,
   which the runtime's next sync pushes, so a pull can't undo it.
+- The guest runtime updater inspects the checkout in a transient systemd
+  unit. It reuses the agent sandbox and disables network and namespaces for
+  inspection. Chromium retains its user namespaces. Boot-time pruning
+  requires an empty agent cgroup because children can survive a restart.
 - The agent's desktop is five system units in that sandbox, none in
   macro's session: `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901),
   `macro-agent-openbox` (what its menu starts stays in the sandbox),
@@ -403,8 +407,8 @@ existing credentials: no new pairing and no Claude login.
   loopback while `network-online.target` never comes: the claim and macrod's
   runtime connection still go through, and neither unit is ordered after it.
 - The agent runtime (`packages/muppet` and the starter agent's packages)
-  reaches agents only in a new image; a harness deploy changes only the
-  seeded starter agent. Release the two together
+  ships with the image. A compatible dev teammate can select a versioned
+  runtime bundle. A harness deploy changes only the seeded starter agent
   (`docs/runbooks/firecracker-computers-rollout.md`).
 - After `packages/starter-agent/bun.lock` changes, update `outputHash` in
   `_agent-runtime.nix` from the fetch derivation's reported `got:` hash.

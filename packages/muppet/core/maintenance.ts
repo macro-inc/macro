@@ -31,7 +31,10 @@ export const maintenance = (recoverSchedules?: () => Promise<void>) => {
       notify();
     },
     setFence: (next: string | undefined) => {
-      if (next === token) return;
+      if (next === token) {
+        if (next !== undefined) notify();
+        return;
+      }
       token = next;
       if (next === undefined) {
         resume?.resolve();
@@ -84,6 +87,7 @@ export const maintenanceReceipts = ({
   readFence,
   watchFence,
   write,
+  onError,
 }: {
   readonly control: ReturnType<typeof maintenance>;
   readonly invocation: string;
@@ -91,29 +95,38 @@ export const maintenanceReceipts = ({
   readonly readFence: () => string | undefined;
   readonly watchFence: (changed: () => void) => void;
   readonly write: (name: 'ready' | 'drained', value: string) => Promise<void>;
+  readonly onError: (error: unknown) => void;
 }) => {
   let revision: string | undefined;
   let delivered: string | undefined;
-  let writes = Promise.resolve();
-  const reportDrain = (): void => {
+  let writing = false;
+  const reportDrain = async (): Promise<void> => {
     const token = control.drained();
-    if (token === undefined || token === delivered || revision === undefined)
+    if (
+      token === undefined ||
+      token === delivered ||
+      revision === undefined ||
+      writing
+    )
       return;
-    delivered = token;
-    writes = writes
-      .then(() => write('drained', JSON.stringify({ invocation, token })))
-      .catch((error: unknown) => {
-        console.error('agent runtime drain receipt failed', error);
-      });
+    writing = true;
+    try {
+      await write('drained', JSON.stringify({ invocation, token }));
+      delivered = token;
+    } catch (error) {
+      onError(error);
+    } finally {
+      writing = false;
+    }
   };
   const refresh = () => control.setFence(readFence());
   watchFence(refresh);
   refresh();
-  control.change(reportDrain);
+  control.change(() => void reportDrain());
   return async (head: string) => {
     if (!control.canDrain()) return;
     await write('ready', JSON.stringify({ invocation, runtime, head }));
     revision = head;
-    reportDrain();
+    void reportDrain();
   };
 };

@@ -41,6 +41,7 @@ version_a=$(printf 'a%.0s' {1..40})
 version_b=$(printf 'b%.0s' {1..40})
 version_c=$(printf 'c%.0s' {1..40})
 version_d=$(printf 'd%.0s' {1..40})
+version_e=$(printf 'e%.0s' {1..40})
 work="$base/archive"
 mkdir -p "$work/node_modules/@macro-inc/muppet/"{host,core}
 cp "$base/docker/host/maintenance.ts" "$work/node_modules/@macro-inc/muppet/host/"
@@ -124,7 +125,7 @@ assert_unchanged "$baseline"
 echo 'Incompatible behavior refuses the update before fencing'
 echo '{"apiLevel":3}' >"$work/node_modules/@macro-inc/muppet/package.json"
 package
-expect_exit 1 submit "$version_d" "$digest"
+expect_exit 1 submit "$version_e" "$digest"
 assert_unchanged "$baseline"
 echo '{"apiLevel":4}' >"$work/node_modules/@macro-inc/muppet/package.json"
 package
@@ -184,6 +185,15 @@ guest 'touch /home/macro/.fixture/suppress-ready'
 submit "$version_b" "$digest" >"$base/interrupted.log" 2>&1 &
 crashing=$!
 wait_until "test \"\$(readlink /home/.macro-agent-runtime/current 2>/dev/null || true)\" = '$version_b'"
+guest 'while read -r inspection rest; do
+  if [[ $rest == *"Macro agent runtime inspection"* ]]; then
+    systemctl show -p User -p Group -p ProtectHome -p NoNewPrivileges -p PrivateNetwork "$inspection"
+  fi
+done < <(systemctl list-units --plain --type service --state running --no-legend --no-pager)' >"$base/inspection.log"
+cat "$base/inspection.log"
+for property in User=macro Group=macro-agent ProtectHome=tmpfs NoNewPrivileges=yes PrivateNetwork=yes; do
+  grep -qx "$property" "$base/inspection.log"
+done
 guest 'systemctl kill --signal=KILL macro-agent-runtime-update.service'
 if wait "$crashing"; then
   echo 'expected interrupted update to fail' >&2
@@ -207,8 +217,14 @@ unready=$(guest 'systemctl show -P InvocationID macro-agent')
 expect_exit 1 submit "$version_c" "$digest"
 assert_unchanged "$unready"
 
+echo 'Boot-time pruning preserves cached bundles while the agent cgroup has processes'
+guest "grep -qx 'populated 1' /sys/fs/cgroup/macro.slice/macro-agent.slice/macro-agent.service/cgroup.events
+/opt/fixture/bin/update boot
+test -d '/home/.macro-agent-runtime/$version_b'"
+
 echo 'An image change clears the old bundle selection and cache'
-guest 'rm -f /home/macro/.fixture/old-behavior
+guest 'systemctl stop macro-agent
+rm -f /home/macro/.fixture/old-behavior
 ln -sfn /opt/fixture/next-image /opt/fixture/system
 /opt/fixture/bin/update boot
 test ! -e /home/.macro-agent-runtime/current

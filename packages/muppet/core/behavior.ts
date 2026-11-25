@@ -1,3 +1,4 @@
+import { trackMaintenanceAcknowledgement } from '../internal/schedule-acknowledgement.ts';
 import type { Agent, EventContext, Woke } from './agent.ts';
 import type { Capability, Catalog } from './capability.ts';
 import { describeError } from './error.ts';
@@ -294,6 +295,7 @@ const make = <Needs, Provided, Sources, Failures>(
       const done = (async () => {
         for await (const payload of source) {
           const dispatch = async () => {
+            if (control !== undefined) trackMaintenanceAcknowledgement(payload);
             // try, not .then: a handler that isn't async can throw before it returns a promise.
             const handled = await (async (): Promise<Handled> => {
               try {

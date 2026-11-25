@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test';
-import { maintenance, trackMaintenanceTask } from '../maintenance.ts';
+import {
+  maintenance,
+  maintenanceReceipts,
+  trackMaintenanceTask,
+} from '../maintenance.ts';
 
 test('a fence drains detached work and delivers queued work after release', async () => {
   const control = maintenance();
@@ -56,4 +60,36 @@ test('unclassified sources cannot report a drained invocation', () => {
   control.eligible(false);
   control.setFence('update');
   expect(control.drained()).toBeUndefined();
+});
+
+test('a failed drain receipt is retried on the next fence refresh', async () => {
+  const control = maintenance();
+  control.eligible(true);
+  const failed = Promise.withResolvers<void>();
+  const delivered = Promise.withResolvers<void>();
+  let refresh = () => {};
+  let attempts = 0;
+  const ready = maintenanceReceipts({
+    control,
+    invocation: 'one',
+    runtime: 'image',
+    readFence: () => 'update',
+    watchFence: (listener) => {
+      refresh = listener;
+    },
+    write: async (name) => {
+      if (name === 'ready') return;
+      attempts += 1;
+      if (attempts === 1) throw new Error('temporary write failure');
+      delivered.resolve();
+    },
+    onError: () => failed.resolve(),
+  });
+  await ready('head');
+  await failed.promise;
+  await Promise.resolve();
+  expect(attempts).toBe(1);
+  refresh();
+  await delivered.promise;
+  expect(attempts).toBe(2);
 });

@@ -76,6 +76,8 @@ read it before changing behaviour.
   the dev-only single-teammate runtime update, queued by the
   `agent-runtime-update` CLI. The Postgres lease holds the computer against
   moves and image upgrades while the host's fixed guest updater runs.
+  Repeated failed settlement probes past the deadline leave a recovery
+  hold that a successful image upgrade clears.
 
 ## Scope
 

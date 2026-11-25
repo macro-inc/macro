@@ -47,6 +47,7 @@ if (directory && invocation && runtime && head) {
       control,
       invocation,
       runtime,
+      onError: fault,
       readFence: () => read(fence),
       watchFence: (refresh) => {
         const update = () => {

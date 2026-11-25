@@ -1,7 +1,7 @@
 //! Lease storage and the database fence shared by image and runtime updates.
 
 use super::{PgComputerError, PgComputerRepo, Tx};
-use crate::domain::ids::ComputerId;
+use crate::domain::ids::{ComputerId, HostId};
 use crate::domain::runtime_update::{
     RuntimeBundle, RuntimeUpdate, RuntimeUpdateOutcome, RuntimeUpdates,
 };
@@ -12,12 +12,15 @@ impl PgComputerRepo {
     pub(super) async fn runtime_update_pending(
         tx: &mut Tx<'_>,
         computer: ComputerId,
+        allow_image_recovery: bool,
     ) -> Result<bool, PgComputerError> {
         Ok(sqlx::query_scalar!(
             r#"SELECT EXISTS (
-                SELECT 1 FROM agent_runtime_update WHERE computer_id = $1 AND outcome IS NULL
+                SELECT 1 FROM agent_runtime_update WHERE computer_id = $1
+                AND (outcome IS NULL OR ($2 IS FALSE AND outcome = 'needs_operator' AND cleared_at IS NULL))
             ) AS "pending!""#,
             computer.as_uuid(),
+            allow_image_recovery,
         )
         .fetch_one(&mut **tx)
         .await?)
@@ -69,7 +72,9 @@ impl RuntimeUpdates for PgComputerRepo {
                 WHERE plan.computer_id = $1 AND batch.finished_at IS NULL
                   AND plan.state IN ('replacing', 'verifying', 'rolling_back')
             )
-            ON CONFLICT (computer_id) WHERE outcome IS NULL DO NOTHING
+            ON CONFLICT (computer_id)
+            WHERE outcome IS NULL OR (outcome = 'needs_operator' AND cleared_at IS NULL)
+            DO NOTHING
             RETURNING id
             "#,
             computer.as_uuid(),
@@ -105,13 +110,19 @@ impl RuntimeUpdates for PgComputerRepo {
         &self,
         holder: Uuid,
         lease: Duration,
+        hosts: &[HostId],
     ) -> Result<Option<RuntimeUpdate>, PgComputerError> {
+        let host_ids: Vec<_> = hosts.iter().copied().map(HostId::into_inner).collect();
         let row = sqlx::query!(
             r#"
             WITH candidate AS (
-                SELECT id, lease_holder IS NOT NULL AS attempted FROM agent_runtime_update
-                WHERE outcome IS NULL AND lease_until <= now()
-                ORDER BY lease_until, id LIMIT 1 FOR UPDATE SKIP LOCKED
+                SELECT request.id, request.lease_holder IS NOT NULL AS attempted
+                FROM agent_runtime_update request
+                JOIN hosted_runtime computer ON computer.id = request.computer_id
+                WHERE request.outcome IS NULL AND request.lease_until <= now()
+                  AND computer.host_id = ANY($3)
+                ORDER BY request.lease_until, request.id LIMIT 1
+                FOR UPDATE OF request SKIP LOCKED
             )
             UPDATE agent_runtime_update item
             SET lease_holder = $1, lease_until = now() + $2::bigint * interval '1 second'
@@ -121,6 +132,7 @@ impl RuntimeUpdates for PgComputerRepo {
             "#,
             holder,
             lease.num_seconds(),
+            &host_ids,
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -135,6 +147,30 @@ impl RuntimeUpdates for PgComputerRepo {
             deadline: row.deadline_at,
             attempted: row.attempted,
         }))
+    }
+
+    async fn defer_runtime_update_settlement(
+        &self,
+        holder: Uuid,
+        id: Uuid,
+    ) -> Result<bool, PgComputerError> {
+        let terminal = sqlx::query_scalar!(
+            r#"
+            UPDATE agent_runtime_update
+            SET settle_failures = settle_failures + 1,
+                lease_until = now() + interval '1 minute',
+                outcome = CASE WHEN settle_failures >= 2 THEN 'needs_operator' END,
+                source_url = CASE WHEN settle_failures < 2 THEN source_url END
+            WHERE id = $1 AND lease_holder = $2 AND lease_until > now() AND outcome IS NULL
+              AND deadline_at <= now()
+            RETURNING (outcome = 'needs_operator') AS terminal
+            "#,
+            id,
+            holder,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(terminal.flatten().unwrap_or(false))
     }
 
     async fn finish_runtime_update(

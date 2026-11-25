@@ -425,7 +425,11 @@ where
         if computer.hibernated_at.is_some() {
             return Ok(Err(NotNow::Skip("it is hibernated".to_owned())));
         }
-        let busy = self.repo.held(computer.id).await.map_err(internal)?
+        let busy = self
+            .repo
+            .held_for_image(computer.id)
+            .await
+            .map_err(internal)?
             || !computer.state.macrod_connected
             || self
                 .relief

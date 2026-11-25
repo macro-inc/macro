@@ -346,6 +346,26 @@ let
   restartAgent = pkgs.writeShellScript "macro-agent-restart" ''
     exec ${lib.getExe pauseAgent} restart -
   '';
+  # A sibling unit runs inspection as the agent with the same home and
+  # privilege boundaries. It starts in systemd's mount namespace.
+  inspectionSandbox = builtins.removeAttrs sandbox [ "RestartSec" ] // {
+    Restart = "no";
+    PrivateNetwork = true;
+    RestrictNamespaces = true;
+    WorkingDirectory = workspace;
+    RuntimeMaxSec = 800;
+  };
+  inspectionProperties = lib.mapAttrsToList (
+    name: value:
+    "--property=${name}=${
+      if builtins.isList value then
+        lib.concatStringsSep " " value
+      else if builtins.isBool value then
+        lib.boolToString value
+      else
+        toString value
+    }"
+  ) inspectionSandbox;
   runtimeUpdate = pkgs.writeShellApplication {
     name = "macro-agent-runtime-update";
     runtimeInputs = [
@@ -372,6 +392,8 @@ let
       control=${runtimeControl}
       pause=${pauseState}
       image_runtime=${cfg.runtime}
+      agent_cgroup=/sys/fs/cgroup/macro.slice/${sandbox.Slice}/macro-agent.service
+      inspection_properties=( ${lib.escapeShellArgs inspectionProperties} )
     ''
     + builtins.readFile ./files/agent-runtime-update;
   };

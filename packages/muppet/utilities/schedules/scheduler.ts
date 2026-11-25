@@ -8,6 +8,7 @@
 import { errorMessage } from '../../core/error.ts';
 import { source } from '../../core/event.ts';
 import { hostedMaintenance } from '../../core/maintenance.ts';
+import { acknowledgeMaintenanceEvent } from '../../internal/schedule-acknowledgement.ts';
 import type { Clock } from '../time/index.ts';
 import {
   instant,
@@ -201,6 +202,15 @@ export const scheduler = ({
     ...(schedule.data === undefined ? {} : { data: schedule.data }),
   });
 
+  async function* deliver(event: Fired): AsyncGenerator<Fired, void> {
+    const acknowledged = acknowledgeMaintenanceEvent(event);
+    yield event;
+    // If this write fails, leave the invocation un-drainable. Its store has
+    // not durably acknowledged the completed handler.
+    await update((current) => end(current, event.name, clock.now()));
+    acknowledged();
+  }
+
   /** One pass: records what was missed, fires what is due, and says how long to sleep. */
   async function* pass(): AsyncGenerator<Fired, number> {
     try {
@@ -211,8 +221,7 @@ export const scheduler = ({
         for (const [name, entry] of pending) {
           const { due: occurrence } = entry.run;
           if (occurrence === undefined) continue;
-          yield firing(name, occurrence, entry.schedule);
-          await update((current) => end(current, name, clock.now()));
+          yield* deliver(firing(name, occurrence, entry.schedule));
         }
         await recovery();
         recovery = undefined;
@@ -228,8 +237,7 @@ export const scheduler = ({
           await update((current) => start(current, fire, clock.now()))
         )[fire.name];
         if (entry === undefined) continue;
-        yield firing(fire.name, isoText(fire.due), entry.schedule);
-        await update((current) => end(current, fire.name, clock.now()));
+        yield* deliver(firing(fire.name, isoText(fire.due), entry.schedule));
       }
       // Firing took time, so look again before sleeping.
       if (verdict.fire.length > 0) return 0;

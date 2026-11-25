@@ -193,7 +193,9 @@ keeps its own Bun lock.
 The dispatcher continues work already admitted while fencing new wakes. Chat
 replays queued input from its persisted cursor and inbox. A firing left
 pending in a maintenance handoff replays for the same scheduled occurrence.
-An interruption near the acknowledgement can redeliver that occurrence.
+A live drain waits for admitted schedule handlers and their persisted completion.
+If a completion write fails, the invocation cannot acknowledge a drain. An
+unplanned interruption before acknowledgement can redeliver the occurrence.
 Ordinary restarts keep the scheduler's existing policy. A timeout releases the fence on the same process.
 Unknown event sources make an invocation ineligible for a drain.
 
@@ -208,12 +210,25 @@ own guest. Recovery releases a stranded fence and retries from the journal,
 including after a guest reboot. The controller confirms the guest journal
 has settled before accepting a terminal result. A lost or interrupted
 response retains its lease for a bounded retry. The overall deadline stops
-new attempts. If the guest still cannot prove settlement, the computer
-remains held for recovery. macrod and the guest keep running through a
-normal service update.
+new attempts. After three failed settlement probes past the deadline, the
+controller records `needs_operator` and logs a warning. The computer stays
+held against moves, power actions, reconcile and new runtime updates. A
+successful image upgrade clears the hold and boots the image runtime.
+Use a different approved image for recovery. The normal eligibility checks
+require a running, idle guest and connected macrod. If the guest is
+unavailable, use the existing manual host recovery procedure. Confirm the
+agent has reported ready before retrying a runtime update.
+Service updates leave macrod and the guest running. Cached bundles are
+pruned at boot when the agent cgroup is empty, since a child can survive a
+service restart with the old runtime.
+
+If `agent.env` changes during the candidate restart or readiness wait, the
+path unit's restart helper can time out after 20 seconds waiting for the
+pause/restart lock. In that case the new enrollment, credentials, or
+telemetry settings take effect on the next agent service restart.
 
 The workflow reports `applied`, `refused`, `rolled_back`,
-`rollback_failed` or `expired`. Use `journalctl -u macro-agent.service -u
+`rollback_failed`, `expired` or `needs_operator`. Use `journalctl -u macro-agent.service -u
 macro-agent-runtime-update.service -u macro-agent-runtime-recover.service`
 on the guest for invocation and rollback details. For emergency recovery on
 an approved dev guest, the root command

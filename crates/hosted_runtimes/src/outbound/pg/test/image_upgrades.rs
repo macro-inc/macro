@@ -235,8 +235,18 @@ async fn runtime_update_and_image_replacement_hold_the_computer_exclusively(pool
             .unwrap()
     );
 
+    assert!(
+        repo.claim_runtime_update(
+            Uuid::now_v7(),
+            Duration::minutes(15),
+            &[crate::domain::ids::HostId::new(Uuid::now_v7())],
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
     let previous = repo
-        .claim_runtime_update(Uuid::now_v7(), Duration::zero())
+        .claim_runtime_update(Uuid::now_v7(), Duration::zero(), &[microvm.id])
         .await
         .unwrap()
         .unwrap();
@@ -244,14 +254,14 @@ async fn runtime_update_and_image_replacement_hold_the_computer_exclusively(pool
     assert!(!previous.attempted);
     let holder = Uuid::now_v7();
     let claimed = repo
-        .claim_runtime_update(holder, Duration::minutes(15))
+        .claim_runtime_update(holder, Duration::minutes(15), &[microvm.id])
         .await
         .unwrap()
         .unwrap();
     assert_eq!(claimed.id, id);
     assert!(claimed.attempted);
     assert!(
-        repo.claim_runtime_update(Uuid::now_v7(), Duration::minutes(15))
+        repo.claim_runtime_update(Uuid::now_v7(), Duration::minutes(15), &[microvm.id])
             .await
             .unwrap()
             .is_none()
@@ -262,16 +272,62 @@ async fn runtime_update_and_image_replacement_hold_the_computer_exclusively(pool
             .await
             .unwrap()
     );
+    sqlx::query!(
+        "UPDATE agent_runtime_update SET deadline_at = now() WHERE id = $1",
+        id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut holder = holder;
     assert!(
-        repo.finish_runtime_update(holder, id, RuntimeUpdateOutcome::RolledBack)
+        !repo
+            .defer_runtime_update_settlement(Uuid::now_v7(), id)
             .await
             .unwrap()
     );
+    for terminal in [false, false, true] {
+        assert_eq!(
+            repo.defer_runtime_update_settlement(holder, id)
+                .await
+                .unwrap(),
+            terminal
+        );
+        if terminal {
+            break;
+        }
+        assert!(repo.held_for_image(computer.id).await.unwrap());
+        sqlx::query!(
+            "UPDATE agent_runtime_update SET lease_until = now() WHERE id = $1",
+            id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        holder = Uuid::now_v7();
+        repo.claim_runtime_update(holder, Duration::minutes(15), &[microvm.id])
+            .await
+            .unwrap()
+            .unwrap();
+    }
     assert_eq!(
         repo.runtime_update_outcome(id).await.unwrap(),
-        Some(RuntimeUpdateOutcome::RolledBack)
+        Some(RuntimeUpdateOutcome::NeedsOperator)
     );
-    assert!(!repo.held(computer.id).await.unwrap());
+    assert!(repo.held(computer.id).await.unwrap());
+    assert!(!repo.held_for_image(computer.id).await.unwrap());
+    for event in [Event::PowerOn, Event::PowerOff, Event::ReleaseNow] {
+        assert!(matches!(
+            repo.apply(computer.id, event, now()).await.unwrap(),
+            Some(Applied::Rejected(Rejected::RuntimeUpdateInProgress))
+        ));
+    }
+    assert!(
+        repo.request_runtime_update(computer.id, &bundle)
+            .await
+            .unwrap()
+            .is_none()
+    );
 
     assert!(
         repo.update_computer_upgrade(image_holder, image, now())
@@ -283,5 +339,18 @@ async fn runtime_update_and_image_replacement_hold_the_computer_exclusively(pool
             .await
             .unwrap()
             .is_none()
+    );
+    image.state = ComputerUpgradeState::Upgraded;
+    assert!(
+        repo.update_computer_upgrade(image_holder, image, now())
+            .await
+            .unwrap()
+    );
+    assert!(!repo.held(computer.id).await.unwrap());
+    assert!(
+        repo.request_runtime_update(computer.id, &bundle)
+            .await
+            .unwrap()
+            .is_some()
     );
 }

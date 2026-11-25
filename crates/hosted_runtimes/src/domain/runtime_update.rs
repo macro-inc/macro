@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
-use crate::domain::ids::ComputerId;
+use crate::domain::ids::{ComputerId, HostId};
 
 /// The request and its presigned, short-lived download URL.
 #[derive(Clone, Deserialize, Serialize)]
@@ -61,6 +61,8 @@ pub enum RuntimeUpdateOutcome {
     RollbackFailed,
     /// No remaining attempt could fit before the deadline.
     Expired,
+    /// Recovery could not establish settlement after repeated probes.
+    NeedsOperator,
 }
 
 /// A claimed update.
@@ -100,7 +102,15 @@ pub trait RuntimeUpdates: Send + Sync {
         &self,
         holder: Uuid,
         lease: Duration,
+        hosts: &[HostId],
     ) -> impl Future<Output = Result<Option<RuntimeUpdate>, Self::Err>> + Send;
+
+    /// Defer a failed settlement probe or require image recovery after the limit.
+    fn defer_runtime_update_settlement(
+        &self,
+        holder: Uuid,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Publish a terminal outcome only under the lease that ran the request.
     fn finish_runtime_update(

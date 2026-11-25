@@ -58,8 +58,19 @@ bundles=/home/.macro-agent-runtime
 control=/run/macro-agent-runtime
 pause=/run/macro-agent-pause
 image_runtime=/opt/fixture/image
-drain_timeout=4
-ready_timeout=4
+agent_cgroup=/sys/fs/cgroup/macro.slice/macro-agent.slice/macro-agent.service
+inspection_properties=(
+  --property=User=macro --property=Group=macro-agent
+  --property=Slice=macro-agent.slice --property=ProtectHome=tmpfs
+  --property=BindPaths=/home/macro/agent
+  --property=InaccessiblePaths=/run/macro-agent-pause
+  --property=WorkingDirectory=/home/macro/agent/workspace
+  --property=ProtectSystem=strict --property=NoNewPrivileges=yes
+  --property=CapabilityBoundingSet= --property=PrivateNetwork=yes
+  --property=RestrictNamespaces=yes --property=RuntimeMaxSec=60
+)
+drain_timeout=6
+ready_timeout=10
 CONFIG
   cat /fixture/update
 } >/opt/fixture/bin/update
