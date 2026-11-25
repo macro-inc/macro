@@ -321,7 +321,8 @@ function registerMediaPlugin(editor: LexicalEditor) {
           mediaType,
         ]);
       },
-      { discrete: true, tag: 'historic' }
+      // An upload can finish after the person has moved to another split.
+      { discrete: true, tag: BACKGROUND_UPDATE_TAGS }
     );
   };
 

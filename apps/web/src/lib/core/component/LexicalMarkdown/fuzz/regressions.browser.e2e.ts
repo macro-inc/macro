@@ -17,7 +17,7 @@ const PICTURE = Buffer.from(
 /** Serves `PICTURE` for every picture URL, through the image proxy or not. */
 async function servePictures(page: Page) {
   await page.route(
-    (url) => url.href.includes('picture-'),
+    (url) => /\/picture-\d+\.png/.test(decodeURIComponent(url.href)),
     (route: Route) =>
       route.fulfill({
         contentType: 'image/png',
