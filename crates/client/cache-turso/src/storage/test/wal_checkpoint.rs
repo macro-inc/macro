@@ -544,6 +544,7 @@ fn a_failed_adoption_on_an_owned_wal_leaves_the_log_whole_for_the_wipe_to_read()
     let io = FaultIo::new();
     let path = "owned-failed-adoption.db";
     let (storage, frames) = owned_with_a_queue(&io, path);
+    let written = io.database_writes();
     test_hooks::corrupt_next_adoption();
     let failed = storage
         .adopt_schema(
@@ -560,9 +561,13 @@ fn a_failed_adoption_on_an_owned_wal_leaves_the_log_whole_for_the_wipe_to_read()
 
     // The close copied nothing into the file the wipe deletes, and the read
     // before the wipe replays the whole log.
+    assert_eq!(io.database_writes(), written, "the close copied the WAL");
     let reopened = open(&io, path, false);
     let left = wal_frames(&reopened);
-    assert!(left >= frames, "the close copied the WAL: {frames} -> {left}");
+    assert!(
+        left >= frames,
+        "the close copied the WAL: {frames} -> {left}"
+    );
     let queue = reopened.salvage_queue("scope", None, 0).queue.unwrap();
     assert_eq!(queue.len(), 1);
     // With the schema it was queued under.
