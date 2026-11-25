@@ -50,7 +50,7 @@ export async function updateEmailThreadLabel(
   args: Parameters<typeof emailClient.updateThreadLabel>[0]
 ) {
   const result = await emailClient.updateThreadLabel(args);
-  if (result.isOk()) await invalidateEditedThread(args.thread_id);
+  if (!result.isErr()) await invalidateEditedThread(args.thread_id);
   if (
     result.isErr() &&
     result.error.some((error) => error.code === 'NOT_FOUND')
@@ -65,7 +65,7 @@ export async function updateEmailThreadState(
   args: Parameters<typeof emailClient.updateThreadState>[0]
 ) {
   const result = await emailClient.updateThreadState(args);
-  if (result.isOk()) await invalidateEditedThread(args.thread_id);
+  if (!result.isErr()) await invalidateEditedThread(args.thread_id);
   if (
     result.isErr() &&
     result.error.some((error) => error.code === 'NOT_FOUND')
