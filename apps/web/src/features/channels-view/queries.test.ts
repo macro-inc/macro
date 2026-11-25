@@ -334,6 +334,110 @@ describe('channels resolved by id', () => {
   it('keeps the previous answer when a settled lookup has no data', () => {
     expect(resolveReferencedChannels(resolved, settled)).toBe(resolved);
   });
+
+  it('keeps untouched 500-ID batches mounted when individual channel references churn', () => {
+    const disposedBatches: number[] = [];
+    const batchArgGetters: Array<() => unknown> = [];
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const batchIndex = batchArgGetters.length;
+      batchArgGetters.push(args);
+      onCleanup(() => disposedBatches.push(batchIndex));
+      return {
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        hasPageData: true,
+        hasNextPage: false,
+        get data() {
+          const body = args().body;
+          const matches = JSON.stringify(body).match(/ch-\d{4}/g) ?? [];
+          return { entities: matches.map((id) => channelEntity(id)) };
+        },
+      };
+    });
+    const initialIds = Array.from(
+      { length: 1002 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(initialIds);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(3);
+      expect(result.channels()).toHaveLength(1002);
+      const middleBatchArgsBefore = batchArgGetters[1]();
+
+      // Remove 1 ID from batch 0 and add 1 new ID into the non-full tail batch.
+      setIds([...initialIds.slice(1), 'ch-9999']);
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(3);
+      expect(disposedBatches).toEqual([]);
+      expect(batchArgGetters[1]()).toBe(middleBatchArgsBefore);
+      expect(result.channels()).toHaveLength(1002);
+      expect(result.channels().some((ch) => ch.id === 'ch-0000')).toBe(false);
+      expect(result.channels().some((ch) => ch.id === 'ch-9999')).toBe(true);
+
+      // Repeated partial-bucket replacements must reuse freed slots instead of
+      // growing active batch roots unboundedly.
+      for (let round = 1; round <= 20; round += 1) {
+        const prefix = `r${round}`;
+        const rotated = [
+          'ch-0001',
+          ...Array.from(
+            { length: 999 },
+            (_, idx) => `${prefix}-${String(idx).padStart(4, '0')}`
+          ),
+        ];
+        setIds(rotated);
+      }
+      const activeCount =
+        useSoupAstItemsQuery.mock.calls.length - disposedBatches.length;
+      expect(activeCount).toBeLessThanOrEqual(3);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('keeps newly added IDs pending while the bucket cache predicate is loading', () => {
+    const { dispose, result, setCacheStatus } = createRoot((dispose) => {
+      const [cacheStatus, setCacheStatus] = createSignal<'loading' | 'ready'>(
+        'loading'
+      );
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        hasPageData: false,
+        hasNextPage: false,
+        get cacheStatus() {
+          return cacheStatus();
+        },
+        data: { entities: [channelEntity('existing')] },
+      }));
+      return {
+        dispose,
+        setCacheStatus,
+        result: useCachedChannelsByIds(
+          () => ['existing', 'newly-added'],
+          () => true
+        ),
+      };
+    });
+    try {
+      expect(result.isLoading()).toBe(true);
+      expect([...result.pendingIds()]).toEqual(['newly-added']);
+      setCacheStatus('ready');
+      expect(result.isLoading()).toBe(false);
+      expect([...result.pendingIds()]).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
 });
 
 describe('Threads rail source', () => {
