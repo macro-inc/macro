@@ -1,4 +1,4 @@
-use super::helpers::insert_company_alias;
+use super::helpers::{insert_company_alias, insert_contact_alias};
 use crate::domain::{
     association::{CrmAssociation, CrmRecordAssociation},
     companies_repo::CompaniesRepository,
@@ -129,6 +129,57 @@ async fn contact_covers_only_itself(pool: PgPool) {
         )
         .await,
         Some(CrmRecordAssociation::contact(id(1006)))
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn an_old_id_resolves_to_the_contact_it_was_merged_into(pool: PgPool) {
+    let (into_visible, into_foreign, into_hidden) =
+        (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    insert_contact_alias(&pool, into_visible, id(1002)).await;
+    insert_contact_alias(&pool, into_foreign, id(1003)).await;
+    insert_contact_alias(&pool, into_hidden, id(1007)).await;
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let viewer = || CrmContactListScope::Viewer(VIEWER);
+    let team = |include_hidden| CrmContactListScope::Team {
+        team_id: id(12),
+        include_hidden,
+    };
+
+    for (old_id, contact) in [
+        (into_visible, id(1002)),
+        (into_foreign, id(1003)),
+        (into_hidden, id(1007)),
+    ] {
+        let (old_id, contact) = (
+            CrmAssociation::Contact(old_id),
+            CrmAssociation::Contact(contact),
+        );
+        assert_eq!(
+            resolve(&repo, viewer(), old_id).await,
+            resolve(&repo, viewer(), contact).await,
+        );
+        for include_hidden in [false, true] {
+            assert_eq!(
+                resolve(&repo, team(include_hidden), old_id).await,
+                resolve(&repo, team(include_hidden), contact).await,
+            );
+        }
+    }
+    assert_eq!(
+        resolve(&repo, viewer(), CrmAssociation::Contact(into_visible)).await,
+        Some(CrmRecordAssociation::contact(id(1002)))
+    );
+    assert_eq!(
+        resolve(&repo, team(true), CrmAssociation::Contact(into_hidden)).await,
+        Some(CrmRecordAssociation::contact(id(1007)))
+    );
+    assert_eq!(
+        resolve(&repo, viewer(), CrmAssociation::Contact(into_foreign)).await,
+        None
     );
 }
 

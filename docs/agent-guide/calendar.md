@@ -49,6 +49,15 @@ occurrences. A refused save shows
 create leaves the grid. An edit that adds a new Macro call still waits for the
 call to be linked. Over REST the composer closes when the provider answers.
 
+A moved event keeps its id, but its occurrence is keyed by its start, so the
+server's answer to a drag or a time edit that changes the start replaces the
+occurrence. Details opened on it stay open while the move is answered, then
+follow the occurrence the answer names to its chip, and the URL drops a link's
+locator for the old one. A resize, and a one-occurrence move of a series, keep
+the key. When the answer cannot say
+which occurrence replaced the moved one (a whole series moved, a queued move),
+the details close as the old occurrence leaves the grid.
+
 If a permission change retires a successful create response, the composer uses
 the preserved server identity. If that identity cannot be read yet, it closes
 and refreshes the calendar without opening the event or offering a duplicate

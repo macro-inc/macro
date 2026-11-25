@@ -18812,7 +18812,13 @@ export const previewCrmRecordsResponse = zod
               .describe(
                 "The contact's primary email, which titles a contact with no name."
               ),
-            id: zod.uuid().describe('The contact.'),
+            id: zod.uuid().describe('The requested contact id.'),
+            mergedInto: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The contact the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a contact that was not merged.'
+              ),
             name: zod
               .string()
               .nullish()

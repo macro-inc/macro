@@ -59,6 +59,20 @@ test.describe('a calendar create through the real cache and queue', () => {
     });
   });
 
+  // Class web-cal-move-details: when this fails, details opened on an event
+  // just moved close once the move saves, because nothing says which
+  // occurrence the server keyed anew in place of the moved one.
+  test('when moved, is followed from the moved occurrence to the one the server keys anew', async ({
+    page,
+  }) => {
+    const outcome = await page.evaluate(() => window.calendarCreate.move());
+    expect(outcome).toEqual({
+      beforeAnswer: { moving: true, shown: ['moved occurrence'] },
+      announced: ['2026-11-28T15:00:00+00:00 -> 2026-11-28T16:00:00+00:00'],
+      moving: false,
+    });
+  });
+
   test('leaves the calendar when the server refuses it', async ({ page }) => {
     const outcome = await page.evaluate(() =>
       window.calendarCreate.run('refuse')

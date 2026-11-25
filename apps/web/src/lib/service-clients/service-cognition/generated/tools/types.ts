@@ -12333,9 +12333,9 @@ export interface CalendarEventCopyItem {
   isReadOnly: boolean;
 }
 /**
- * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is primary, writable and part of the user's busy time.
+ * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is primary, writable, a subscription and part of the user's busy time.
  *
- * Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a colleague's calendar reports the user's own address, and being writable or not primary proves nothing either way. `contributesToAvailability` marks the calendars that are the user's schedule. Call any other by its name, say whose it is when the name shows that, and otherwise say you cannot tell.
+ * Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a colleague's calendar reports the user's own address, and being writable or not primary proves nothing either way. `contributesToAvailability` marks the calendars that are the user's schedule. Call any other by its name, say whose it is when the name shows that, and otherwise say you cannot tell. Call a calendar with `isSubscription` a subscription the account follows (Google's holidays and birthdays, or a calendar added by URL or from the web); the flag does not say who keeps it.
  *
  * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool unless choosing conference or other provider-dependent behavior. Check `capabilities` before requesting a conference, removing one, or using custom recurrence. An empty result means no calendar is connected.
  */
@@ -12383,6 +12383,12 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
+  /**
+   * Whether the account subscribes to this calendar as a feed: Google's
+   * holidays and birthdays calendars, a calendar added by URL in Google,
+   * or one subscribed from the web in Outlook.
+   */
+  isSubscription: boolean;
   /**
    * Whether this calendar counts toward the user's busy time. Only these
    * are the user's own schedule; false does not say whose calendar it is.

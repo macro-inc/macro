@@ -2517,7 +2517,9 @@ type GraphqlCalendar {
 	"""
 	isWritable: Boolean!
 	"""
-	Whether this is a shared system calendar (holidays, birthdays).
+	Whether the account subscribes to this calendar as a feed: one of
+	Google's system calendars (holidays, birthdays), or one added by URL in
+	Google or subscribed from the web in Outlook.
 	"""
 	isSubscription: Boolean!
 	"""
@@ -5128,6 +5130,11 @@ input GraphqlEmailLiteral @oneOf {
 	Threads with at least one attachment of this kind.
 	"""
 	attachment: GraphqlAttachmentKind
+	"""
+	Threads with at least one message carrying this label of one of the
+	viewer's inboxes.
+	"""
+	label: ID
 	"""
 	The created at option.
 	"""

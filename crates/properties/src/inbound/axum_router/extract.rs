@@ -154,8 +154,8 @@ where
     Ok(receipt)
 }
 
-/// The id of the entity the path names now, which for a merged company's old
-/// id is the company it was merged into. Grants nothing.
+/// The id of the entity the path names now, which for a merged company's or
+/// contact's old id is the record it was merged into. Grants nothing.
 async fn current_entity_id<A>(
     entity_access_service: &A,
     params: &EntityPathParams,

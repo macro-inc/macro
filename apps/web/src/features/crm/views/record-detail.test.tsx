@@ -133,6 +133,7 @@ vi.mock('./company-detail', async () => {
     Company: (props: {
       companyId: string;
       onOpenContact(contact: CrmContact): void;
+      onMerged?: (survivorId: string) => void;
     }) => {
       onCleanup(
         useCrmContext().registerTaskComposerRecord(() => ({
@@ -164,6 +165,7 @@ vi.mock('./company-detail', async () => {
           >
             Open Maya
           </button>
+          <button onClick={() => props.onMerged?.('company-9')}>Merged</button>
         </>
       );
     },
@@ -268,6 +270,7 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
     setRecords(trail.map((entry) => ({ ...entry })));
   };
   const close = vi.fn(() => setRecords([]));
+  const merged = vi.fn();
   const failed = vi.fn(() => <div>Navigation failed</div>);
   render(() => (
     <ErrorBoundary fallback={failed}>
@@ -290,12 +293,13 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
             open(records());
           }}
           onClose={close}
+          onMerged={merged}
           navigation={null}
         />
       </Show>
     </ErrorBoundary>
   ));
-  return { close, records, failed, setCommentTarget, opened };
+  return { close, records, failed, setCommentTarget, opened, merged };
 }
 
 const crumbs = () =>
@@ -368,6 +372,32 @@ it('follows the company link back along the trail to a split already showing it'
   fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
   expect(opened).toHaveBeenLastCalledWith(['company-1'], { followLink: true });
   expect(crumbs()).toEqual(['Pipeline', 'Northstar']);
+});
+
+it('hands its host the company a shown company was merged into', () => {
+  const { merged, opened } = renderDetail(
+    { type: 'company', id: 'company-1', name: 'Northstar' },
+    'Pipeline'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
+  expect(merged).toHaveBeenCalledExactlyOnceWith('company-9');
+  expect(opened).not.toHaveBeenCalled();
+});
+
+it('hands a company read answering another id to its host, once', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  taskContext.companyLoaded = true;
+  const merged = vi.fn();
+  render(() => (
+    <>
+      <Company companyId="company-0" section="files" onMerged={merged} />
+      <Company companyId="COMPANY-1" section="files" onMerged={merged} />
+    </>
+  ));
+  expect(merged).toHaveBeenCalledExactlyOnceWith('company-1');
 });
 
 it('registers the actual company detail while mounted and clears it on unmount', async () => {

@@ -54,6 +54,8 @@ export function canonicalRecordId(id: string): string | undefined {
 export type CrmRecordPreviews = {
   previews: PreviewItem[];
   failed: Map<string, ResultError<string>[]>;
+  /** Requested companies merged into another, whose preview names that one. */
+  merged: string[];
 };
 
 /** The canonical ids of `ids` that the server would read, each once. */
@@ -154,6 +156,7 @@ export async function fetchCrmRecordPreviews(
   );
   const previews: PreviewItem[] = [];
   const failed = new Map<string, ResultError<string>[]>();
+  const merged = new Set<string>();
 
   for (const id of companyIds) {
     const base = { id, type: 'crm_company', loading: false } as const;
@@ -168,6 +171,7 @@ export async function fetchCrmRecordPreviews(
       previews.push({ ...base, access: 'no_access' });
       continue;
     }
+    if (company.mergedInto && canonical) merged.add(canonical);
     const name = company.name ?? company.primaryDomain ?? 'Unknown Company';
     previews.push({
       ...base,
@@ -201,7 +205,7 @@ export async function fetchCrmRecordPreviews(
     });
   }
 
-  return { previews, failed };
+  return { previews, failed, merged: [...merged] };
 }
 
 /** A pipeline previews from its own read; one gone or trashed reads as deleted. */

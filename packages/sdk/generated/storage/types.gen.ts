@@ -6352,9 +6352,14 @@ export type CrmContactPreview = {
      */
     email?: string | null;
     /**
-     * The contact.
+     * The requested contact id.
      */
     id: string;
+    /**
+     * The contact the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a contact that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The contact's display name.
      */

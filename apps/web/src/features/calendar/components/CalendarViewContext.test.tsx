@@ -7,6 +7,7 @@ import {
   OCCURRENCE_FOCUS_TIMEOUT_MS,
   useCalendarFocus,
 } from '@app/features/calendar-view/calendar-focus-target';
+import type { CalendarOccurrenceMove } from '@queries/calendar/graphql/mutations';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createRoot, createSignal } from 'solid-js';
@@ -25,6 +26,11 @@ const creates = vi.hoisted(() => ({
   landed: new Map<string, string>(),
   answered: new Map<string, CalendarOccurrenceItem>(),
 }));
+/** Moving occurrences by `JSON.stringify([eventId, occurrenceKey])`, as the grid keys chips. */
+const moves = vi.hoisted(() => ({
+  moving: new Set<string>(),
+  listeners: new Set<(move?: CalendarOccurrenceMove) => void>(),
+}));
 
 vi.mock('@queries/calendar/team-cache', () => ({
   subscribeToTeamCalendarReset: (onReset: () => void) => {
@@ -36,6 +42,14 @@ vi.mock('@queries/calendar/graphql/mutations', () => ({
   isCalendarEventCreating: (id: string) => creates.creating.has(id),
   createdCalendarEventId: (id: string) => creates.landed.get(id),
   createdCalendarOccurrence: (id: string) => creates.answered.get(id),
+  isCalendarOccurrenceMoving: (eventId: string, occurrenceKey: string) =>
+    moves.moving.has(JSON.stringify([eventId, occurrenceKey])),
+  onCalendarOccurrenceMoved: (
+    listener: (move?: CalendarOccurrenceMove) => void
+  ) => {
+    moves.listeners.add(listener);
+    return () => moves.listeners.delete(listener);
+  },
 }));
 vi.mock('../hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
@@ -227,7 +241,7 @@ describe('details opened on an event whose create has not landed', () => {
 
     expect(view().selectedEvent()).toBe(server);
     expect(view().selectedEventAnchor()).toBe(chip);
-    expect(focused).toHaveBeenLastCalledWith('server-1');
+    expect(focused).toHaveBeenLastCalledWith('server-1', KEY);
   });
 
   it('keeps a list selection on its row when the create lands', () => {
@@ -351,7 +365,7 @@ describe('details opened on an event whose create has not landed', () => {
       });
       expect(view().selectedEvent()?.timeZone).toBeUndefined();
       expect(view().selectedEventAnchor()).toBe(chip);
-      expect(focused).toHaveBeenLastCalledWith('server-1');
+      expect(focused).toHaveBeenLastCalledWith('server-1', KEY);
     });
 
     it('stays open until the page draws the server’s copy, then follows it', () => {
@@ -407,5 +421,208 @@ describe('details opened on an event whose create has not landed', () => {
       expect(focused()).toBe('server-1');
       expect(view().selectedEvent()).toBe(local);
     });
+  });
+});
+
+describe('details opened on an event that was just moved', () => {
+  const FROM = '2026-11-28T15:00:00+00:00';
+  const TO = '2026-11-28T16:00:00+00:00';
+  // The grid keys a chip by its event and occurrence key; a standalone
+  // event's key is its start, so a move gives its chip a new id.
+  const occurrence = (occurrenceKey: string, start = occurrenceKey) =>
+    ({
+      id: JSON.stringify(['event-1', occurrenceKey]),
+      eventId: 'event-1',
+      occurrenceKey,
+      start,
+      title: 'Planning',
+      sourceCalendarIds: ['calendar-1'],
+      calendar: { id: 'calendar-1' },
+    }) as CalendarEvent;
+  const moved = occurrence(FROM, TO);
+  const saved = occurrence(TO);
+  const page = (...events: CalendarEvent[]) =>
+    new Map(events.map((event) => [event.id, event]));
+  const ref = JSON.stringify(['event-1', FROM]);
+  const announce = (move?: CalendarOccurrenceMove) => {
+    for (const listener of moves.listeners) listener(move);
+  };
+  /** The move's answer names the saved occurrence, and the move ends. */
+  const answer = () => {
+    announce({
+      from: { eventId: 'event-1', occurrenceKey: FROM },
+      to: { eventId: 'event-1', occurrenceKey: TO },
+    });
+    moves.moving.delete(ref);
+    announce();
+  };
+
+  beforeEach(() => {
+    creates.creating = new Set();
+    creates.landed = new Map();
+    creates.answered = new Map();
+    moves.moving = new Set([ref]);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('stay open while the move waits for its answer, though the page no longer draws its occurrence', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+
+    view().refreshSelectedEventFromPage(page(saved), true);
+
+    expect(view().selectedEvent()).toBe(moved);
+  });
+
+  it('follow it to the saved occurrence and its chip, and keep naming the event', () => {
+    const focused = vi.fn();
+    const { view } = renderContexts(focused);
+    const chip = document.createElement('a');
+    view().selectEvent(moved, document.createElement('a'));
+
+    answer();
+    view().refreshSelectedEventFromPage(page(saved), true, (id) =>
+      id === saved.id ? chip : undefined
+    );
+
+    expect(view().selectedEvent()).toBe(saved);
+    expect(view().selectedEventAnchor()).toBe(chip);
+    expect(focused).toHaveBeenLastCalledWith('event-1', TO);
+  });
+
+  it('follow it while the page still draws the occurrence it moved from', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+
+    answer();
+    view().refreshSelectedEventFromPage(
+      page(occurrence(FROM), saved),
+      true,
+      () => undefined
+    );
+
+    expect(view().selectedEvent()).toBe(saved);
+  });
+
+  it('stay on the occurrence the page draws until it draws the saved one', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+    answer();
+
+    view().refreshSelectedEventFromPage(page(moved), true);
+    expect(view().selectedEvent()).toBe(moved);
+
+    view().refreshSelectedEventFromPage(page(saved), true);
+    expect(view().selectedEvent()).toBe(saved);
+  });
+
+  it('keep a list selection on its row', () => {
+    const { view } = renderContexts();
+    const row = document.createElement('button');
+    view().selectEvent(moved, row, 'agenda');
+
+    answer();
+    view().refreshSelectedEventFromPage(page(saved), true, () =>
+      document.createElement('a')
+    );
+
+    expect(view().selectedEvent()).toBe(saved);
+    expect(view().selectedEventAnchor()).toBe(row);
+  });
+
+  it('close as before when the answer did not say which occurrence replaced it', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+
+    moves.moving.delete(ref);
+    announce();
+    view().refreshSelectedEventFromPage(page(saved), true);
+
+    expect(view().selectedEvent()).toBeUndefined();
+  });
+
+  it('keep following through the chip remounting before the page draws the saved occurrence', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+    answer();
+
+    view().reanchorSelectedEvent(moved, document.createElement('a'));
+    view().refreshSelectedEventFromPage(page(saved), true);
+
+    expect(view().selectedEvent()).toBe(saved);
+  });
+
+  it('never lead a later selection to where an earlier move went', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+    answer();
+    view().refreshSelectedEventFromPage(page(saved), true);
+    view().closeEventDetails();
+
+    // The event now repeats, and an instance takes the key the move left.
+    const instance = { ...occurrence(FROM), recurrenceId: FROM };
+    view().selectEvent(instance, document.createElement('a'));
+    view().refreshSelectedEventFromPage(page(instance, saved), true);
+
+    expect(view().selectedEvent()).toBe(instance);
+  });
+
+  it('follow a second move made before the page drew the first', () => {
+    const LATER = '2026-11-28T17:00:00+00:00';
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+    answer();
+
+    announce({
+      from: { eventId: 'event-1', occurrenceKey: TO },
+      to: { eventId: 'event-1', occurrenceKey: LATER },
+    });
+    const later = occurrence(LATER);
+    view().refreshSelectedEventFromPage(page(later), true);
+
+    expect(view().selectedEvent()).toBe(later);
+  });
+
+  it('follow only the move of the occurrence they show', () => {
+    const { view } = renderContexts();
+    const other = occurrence('2026-11-29T15:00:00+00:00');
+    view().selectEvent(other, document.createElement('a'));
+
+    answer();
+    view().refreshSelectedEventFromPage(page(other, saved), true);
+
+    expect(view().selectedEvent()).toBe(other);
+  });
+
+  it('close when the page draws neither occurrence', () => {
+    const { view } = renderContexts();
+    view().selectEvent(moved, document.createElement('a'));
+
+    answer();
+    view().refreshSelectedEventFromPage(page(), true);
+
+    expect(view().selectedEvent()).toBeUndefined();
+  });
+
+  it('stay on a series occurrence moved alone, which keeps its key', () => {
+    const SERIES_KEY = '2026-11-27T15:00:00+00:00';
+    const instance = {
+      ...occurrence(SERIES_KEY),
+      recurrenceId: SERIES_KEY,
+      recurrenceLines: ['RRULE:FREQ=DAILY'],
+    };
+    const movedInstance = { ...instance, start: '2026-11-27T17:00:00+00:00' };
+    const { view } = renderContexts();
+    view().selectEvent(instance, document.createElement('a'));
+    moves.moving.add(JSON.stringify(['event-1', SERIES_KEY]));
+
+    view().refreshSelectedEventFromPage(page(movedInstance), true);
+    moves.moving.clear();
+    view().refreshSelectedEventFromPage(page(movedInstance), true);
+
+    expect(view().selectedEvent()).toBe(movedInstance);
   });
 });
