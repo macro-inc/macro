@@ -164,6 +164,14 @@ function forgetCreate(localId: string) {
   unreadCreates.delete(localId);
 }
 
+/** Asks every tracked host where a confirmed create landed, once more. */
+function readUnread(localId: string) {
+  if (!unreadCreates.has(localId)) return;
+  for (const read of createReaders) {
+    fireAndForget(read(localId), 'calendar-create-settlement');
+  }
+}
+
 function landCreate(
   localId: string,
   serverId: string | undefined,
@@ -189,6 +197,8 @@ function landCreate(
  */
 function withServerEventId<T extends { eventId: string }>(args: T): T {
   if (pendingCreates.has(args.eventId)) {
+    // The cache may have been too busy to tell where it landed.
+    readUnread(args.eventId);
     throw new CalendarMutationError(
       'This event is still being created. Try again once it syncs.',
       'not_found',
@@ -759,11 +769,7 @@ export async function executeGraphqlCreate(
   } finally {
     answeringCreates.delete(clientId);
     // It settled while its call was out, and the call answered nothing more.
-    if (unreadCreates.has(clientId)) {
-      for (const read of createReaders) {
-        fireAndForget(read(clientId), 'calendar-create-settlement');
-      }
-    }
+    readUnread(clientId);
   }
 }
 

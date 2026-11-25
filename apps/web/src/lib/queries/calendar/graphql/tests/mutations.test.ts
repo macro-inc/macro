@@ -1281,6 +1281,24 @@ describe('executeGraphqlCreate', () => {
       trackedHost(landedAs('server-13', localId)).untrack();
     });
 
+    it('is asked for again by an edit it refuses', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      host.readRecordsByKeys.mockImplementation(landedAs('server-17', localId));
+      const edit = () =>
+        executeGraphqlUpdate(
+          fakeHost(graphqlEvent(), []),
+          { eventId: localId, patch: { title: 'Later' } },
+          fakeClient('queued').client
+        );
+
+      await expect(edit()).rejects.toThrow('still being created');
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-17')
+      );
+      untrack();
+    });
+
     it('is told of once when two reads find it', async () => {
       const { host, untrack } = trackedHost();
       const localId = await settledWhilePaused(host.settle);
