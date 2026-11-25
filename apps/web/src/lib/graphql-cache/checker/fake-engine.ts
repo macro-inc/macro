@@ -53,7 +53,7 @@ export class DurableStorage {
   readonly openConflicts: string[] = [];
   /** Every mutation that reached a durable queue, with where it went. */
   readonly admitted = new Map<string, string>();
-  /** When each mutation went that was in a queue that could not be read. */
+  /** The tick of each mutation's wipe, for those whose queue could not be read. */
   readonly unreadable = new Map<string, number>();
   /** By scope: settles when the context that has its files open lets go. */
   readonly filesFreed = new Map<string, Promise<void>>();
@@ -113,10 +113,10 @@ export class DurableStorage {
     return lost ? 'reset' : 'preserved';
   }
 
-  wipe(scope: string, now: number): void {
+  wipe(scope: string, tick: number): void {
     const database = this.database(scope);
     for (const uuid of database.unreadable ? database.queue.keys() : [])
-      if (!database.salvaged.has(uuid)) this.unreadable.set(uuid, now);
+      if (!database.salvaged.has(uuid)) this.unreadable.set(uuid, tick);
     database.queue.clear();
     database.wipes += 1;
     database.unreadable = false;
@@ -297,7 +297,7 @@ export class FakeEngineCore {
     if (this.options.recoveryOpen) {
       this.storage.salvage(scope);
       await this.laterTask('engine-task');
-      this.storage.wipe(scope, this.sim.now);
+      this.storage.wipe(scope, this.sim.nextTick());
       await this.laterTask('engine-task');
     }
     if (
