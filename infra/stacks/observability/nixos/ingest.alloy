@@ -54,12 +54,24 @@ otelcol.processor.transform "ai_content" {
     context = "span"
     statements = [
       `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+      // A harness's own title for a tool call, often its command line. Where it
+      // gave no tool name, the title is the name and part of the span's.
+      `delete_key(attributes, "macro.genai.tool.title")`,
+      `set(name, "execute_tool") where IsMatch(attributes["gen_ai.tool.name"], "[^A-Za-z0-9_.:/-]")`,
+      `delete_key(attributes, "gen_ai.tool.name") where IsMatch(attributes["gen_ai.tool.name"], "[^A-Za-z0-9_.:/-]")`,
+      // A provider's error can quote the request, and a tool's is its output.
+      // error.type stays.
+      `set(status.message, "") where attributes["gen_ai.operation.name"] != nil`,
     ]
   }
   trace_statements {
     context = "spanevent"
     statements = [
       `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+      `delete_matching_keys(attributes, "^exception\\.(message|stacktrace)$") where span.attributes["gen_ai.operation.name"] != nil`,
+      // The model client names an event after its message, which can be a
+      // response it couldn't parse.
+      `set(name, "rig") where IsMatch(attributes["target"], "^rig")`,
     ]
   }
   output { traces = [otelcol.processor.batch.ingest.input] }

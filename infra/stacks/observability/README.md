@@ -189,7 +189,7 @@ local collector's own telemetry, and tags resources and metric datapoints with `
 and `deployment.environment="local"`; services add `macro.local.instance`,
 which the forwarder copies onto metric datapoints. Dev
 dashboards and alerts select `dev`/`development`, so this data stays out of
-them. It also forwards their logs above debug, which ingest drops
+them. It also forwards their logs except debug and trace, which ingest drops
 (`nixos/ingest.alloy`): one local service failing in a loop sent more than every
 other sender together. Only `local-telemetry`'s run events reach Loki. The
 `Macro run_local` dashboard's last row
@@ -201,9 +201,11 @@ shows sampled traces by machine.
 Before storage, `nixos/ingest.alloy` removes what people and models wrote from
 spans and span events, whichever service sent them: the `gen_ai.*` messages,
 prompts, completions, system instructions, tool definitions, and tool call
-arguments and results. Token counts, models, operations, outcomes and the
+arguments and results. It also removes a tool call's title, a tool name that is
+really a title, and the error text of `gen_ai` spans, which can quote any of
+those. Token counts, models, operations, outcomes, `error.type` and the
 `macro.genai.*` sizes stay. A new attribute that carries content belongs in its
-`ai_content` pattern.
+`ai_content` statements.
 
 ### Pinned exporter limits
 

@@ -1041,7 +1041,7 @@ everything it receives there; stacks that are already running are sent from then
 on, but carry their instance name only after their next bring-up. The summary
 links the `Macro run_local` dashboard filtered to your machine: its last row
 shows traces by machine. The hosted ingest drops local stacks' logs, so read
-those in the stack's own Loki.
+those in the machine's own Loki (http://localhost:3001).
 
 **What is sent.** Everything your services send to the local collector, which
 includes request attributes, log messages and error text from your local data;
