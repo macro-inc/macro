@@ -114,7 +114,6 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 .macro-homepage .macro-home-hero::before { display: none; }
 .macro-homepage .macro-home-hero h1 { margin: 0 0 24px; font-size: 40px; line-height: 1.1; white-space: nowrap; }
 .macro-homepage .macro-home-hero > .macro-home-tagline { width: min(640px, 100%); margin: 0; color: #a8a8a8; font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif; letter-spacing: normal; text-wrap: balance; }
-.macro-home-tagline-mobile { display: none; }
 .macro-home-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 32px; }
 .macro-home-actions .homepage-hero-cta { width: auto; min-width: 140px; padding-inline: 24px; }
 .macro-home-demo { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 140px; min-height: 40px; padding: 0 24px; border-radius: 999px; background: #141415; color: #fff; font: 500 14px/24px 'Inter Variable', Inter, sans-serif; text-decoration: none; white-space: nowrap; transition: opacity 150ms; }
@@ -124,9 +123,7 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 @media (max-width: 699px) {
   .macro-homepage .macro-home-hero { padding: 100px 16px 32px; align-items: flex-start; text-align: left; }
   .macro-homepage .macro-home-hero h1 { margin-bottom: 22px; font-size: clamp(21px, 7.5vw, 40px); line-height: 1.1; white-space: nowrap; }
-  .macro-homepage .macro-home-hero > .macro-home-tagline { width: 100%; max-width: 336px; font-size: 14px; line-height: 1.6; text-wrap: wrap; }
-  .macro-home-tagline-desktop { display: none; }
-  .macro-home-tagline-mobile { display: inline; }
+  .macro-homepage .macro-home-hero > .macro-home-tagline { width: 100%; font-size: 14px; line-height: 1.6; text-wrap: wrap; }
   .macro-home-actions { justify-content: flex-start; gap: 8px; margin-top: 24px; }
   .macro-home-actions :is(.homepage-hero-cta, .macro-home-demo) { min-width: 0; min-height: 38px; height: 38px; padding-inline: 20px; font-size: 13px; }
 }
