@@ -188,7 +188,9 @@ macrod's hidden `<macrod-runtime>` header and other leading Macro tags.
   `macrod herdr-acp` exits with the same error. Each session is a core terminal labelled with a new
   `herdr.space` and `herdr.tab`, so the app shows it in a space of its own.
   macrod starts the shell and then types `exec <agent> …` into it, so the agent
-  gets the operator's login environment. herdr-core refuses to type into a
+  gets the operator's login environment. The launch send omits
+  `HC_TERMINAL_ID` so hc types the command as plain shell input. Prompt sends
+  retain the sender identity. herdr-core refuses to type into a
   terminal whose output has not settled in its first seconds ("still
   starting"); nothing was typed, so macrod retries such a send for up to 30
   seconds. Space and tab names and focus go through `herdr-app do`, and macrod
