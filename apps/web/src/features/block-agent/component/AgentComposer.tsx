@@ -6,6 +6,7 @@ import {
 import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
+  preferredSpeedRevision,
   setPreferredSpeed,
 } from '@core/component/AI/signal/speed';
 /**
@@ -109,10 +110,13 @@ export function AgentComposer(props: {
   const [configuring, setConfiguring] = createSignal(false);
   const chooseModel = async (model: string, selection?: EffortSelection) => {
     if (readOnly() || configuring()) return false;
+    const resetSpeed = !selection && isMacroHarness(session()?.harness);
+    const speedRevision = preferredSpeedRevision();
     setConfiguring(true);
     try {
       await selectModel(model, selection);
-      if (!selection) setPreferredSpeed('standard');
+      if (resetSpeed && speedRevision === preferredSpeedRevision())
+        setPreferredSpeed('standard');
       return true;
     } catch (error) {
       toast.failure(

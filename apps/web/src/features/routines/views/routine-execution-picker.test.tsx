@@ -7,12 +7,14 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { type ComponentProps, createResource, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildAgentRoster,
   type PersistedAgentLike,
 } from '../../agents-view/core/roster';
+import { UnifiedModelSelector } from '../../agents-view/model-selector';
 import { createComposerModels } from '../../agents-view/queries/composer-models';
 import type { RoutineTarget } from '../core/routine-target';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
@@ -208,6 +210,34 @@ afterEach(() => {
 });
 
 describe('routine execution picker', () => {
+  it('uses the host model label in the opened selector card', async () => {
+    render(() => (
+      <UnifiedModelSelector
+        state={{
+          model: 'runtime/opaque',
+          models: [
+            {
+              id: 'runtime/opaque',
+              label: 'Workspace model',
+            },
+          ],
+          suggestedModels: [],
+          onModel: () => {},
+          onEffort: () => {},
+          onSpeed: () => {},
+        }}
+      />
+    ));
+    const trigger = screen.getByRole('button', {
+      name: 'Choose an agent or model',
+    });
+    expect(trigger.textContent).toContain('Workspace model');
+    fireEvent.click(trigger);
+    const card = await screen.findByRole('dialog');
+    expect(
+      within(card).getByRole('button', { name: 'Workspace model' })
+    ).toBeTruthy();
+  });
   it('selects Macro models and focuses the card before closing', async () => {
     const { selection } = mount({
       kind: 'agent',
@@ -291,11 +321,18 @@ describe('routine execution picker', () => {
         agentId: externalId,
         modelOverride: 'old',
       });
-      const trigger = openAgents();
+      const user = userEvent.setup();
+      const trigger = screen.getByRole('button', {
+        name: 'Choose an agent or model',
+      });
+      await user.click(trigger);
+      await user.click(
+        within(screen.getByRole('dialog')).getAllByRole('button')[0]
+      );
+      await user.click(screen.getByRole('button', { name: 'See all' }));
       const row = screen.getByRole('button', { name: /^Researcher/ });
       row.focus();
-      fireEvent.keyDown(row, { key });
-      fireEvent.click(row);
+      await user.keyboard(key === 'Enter' ? '{Enter}' : ' ');
       expect(selection()).toEqual({ kind: 'agent', agentId: managedId });
       await expectClosed(trigger);
     }

@@ -117,8 +117,8 @@ export function createMobileSearchSuggestions(
     const token = searchTokenAtEnd(query()) ?? '';
     return DATE_TOKEN.test(token) && !readsAsEmailSearchOperator(token);
   });
-  // A whole operator is followed by a space, so the next word starts; the
-  // textarea keeps it, as markdown in the desktop field doesn't.
+  // A whole operator is followed by a space, so the next word starts, as in
+  // the desktop field.
   const write = (insert: string, whole: boolean) => {
     const text = query();
     const token = searchTokenAtEnd(text) ?? '';

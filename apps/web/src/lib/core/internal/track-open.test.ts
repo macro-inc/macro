@@ -2,7 +2,6 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('./trackBlockOpened', () => ({ track }));
-vi.mock('@queries/client', () => ({ useQueryClient: () => undefined }));
 
 import { trackOpen } from './track-open';
 
@@ -18,7 +17,6 @@ it('records an open for a signed-in user', async () => {
   expect(track).toHaveBeenCalledExactlyOnceWith({
     itemId: 'doc-1',
     blockName: 'pdf',
-    client: expect.any(Function),
   });
 });
 
