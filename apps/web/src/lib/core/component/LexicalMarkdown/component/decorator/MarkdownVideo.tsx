@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import VideoIcon from '@icon/system/regular/file-video.svg';
@@ -265,6 +266,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
 
   return (
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
+      <DialogClosesOnNavigation />
       <div
         ref={containerRef}
         class={cn(

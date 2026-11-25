@@ -1736,9 +1736,14 @@ the existing error toast. Keep the startup cover fallback in the same owner,
 and let it defer to a pending tap's deadline. The deadline requires responsive
 JavaScript and IPC; it cannot recover a frozen WebContent process.
 
-Open sheets and touch dialogs close when the app navigates, as a scrim tap
-closes them (`createCloseOnNavigation` in `MobileDrawer` and `Dialog`): when
-the active pane shows another view (a link, an agent, the dock, Back), and
+Open sheets, touch dialogs and touch `Dropdown` menus close when the app
+navigates, as a scrim tap closes them (`createCloseOnNavigation` in
+`MobileDrawer`, `Dialog` and `Dropdown`; overlays built on Kobalte's dialog
+directly, such as the full-screen media viewers, the create menu and the
+tablet Launcher and Share dialogs, render `DialogClosesOnNavigation` inside the
+root). Kobalte `ContextMenu` (it has no `open` prop), `Popover` and `Select`
+don't close yet; phones use sheets for long-press and picker menus. The rest
+close when the active pane shows another view (a link, an agent, the dock, Back), and
 before a notification tap navigates, since it may land on the page already
 shown. A search change (filters) or a pane adopting its content's real id
 keeps the view, so those sheets stay open; so does a sheet the destination
@@ -1750,7 +1755,8 @@ swipe-back, so without this its sheets stayed over the new page. Opt out with
 choose: the incoming-share sheet (discards the shared files) and the push and
 iPad prompts (record the prompt as dismissed). The
 backend-free phone and tablet regression drives the real pane stack, router and
-notification tap path with simulated native IPC:
+notification tap path with simulated native IPC, over sheets, a dialog, the
+media viewers, a menu, the Share dialog and the create menu:
 `bunx playwright test --config src/components/app/mobile/navigation-browser-test/playwright.config.ts`.
 
 The frontend cover deadline has a backend-free phone browser regression:
