@@ -3,6 +3,7 @@
 //! Design doc: `apps/web/docs/graphql-normalized-cache-plan.md`.
 
 pub mod calendar;
+pub mod channel_timeline;
 pub mod codec;
 pub mod denormalize;
 pub mod deps;
@@ -22,6 +23,7 @@ mod query_path;
 pub mod queue;
 pub mod record_selection;
 pub mod revision;
+pub mod schema_change;
 pub mod search;
 pub mod store;
 pub mod value;

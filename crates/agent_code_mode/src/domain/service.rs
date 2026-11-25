@@ -443,6 +443,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ImportCompaniesCsv"
                 | "AddCompanyDomain"
                 | "RemoveCompanyDomain"
+                // macro.crm.merges: previewCompanies() and mergeCompanies().
+                | "PreviewMerge"
+                | "MergeRecords"
                 // macro.crm.pipelines and CrmPipeline.
                 | "ListPipelines"
                 | "CreatePipeline"

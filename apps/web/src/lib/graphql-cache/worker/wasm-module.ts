@@ -33,6 +33,12 @@ import type {
   CalendarCommitArgs,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelChange,
+  ChannelCommitArgs,
+  ChannelCommitOutcome,
+  ChannelTimelineCacheArgs,
+  ChannelTimelineCacheResult,
+  ChannelTimelineEvictArgs,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -50,6 +56,11 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
+import type {
+  CacheQueueOutcome,
+  CacheSchemaChange,
+  CacheSchemaResetReason,
+} from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
@@ -88,9 +99,38 @@ export type CacheQueueDiagnostics =
       oldestCreatedAtMs: null;
     };
 
+/** What became of the mutations a wiped database queued. */
+export type CacheQueueCrossing = {
+  outcome: CacheQueueOutcome;
+  /** Mutations now queued that a wiped database had queued. */
+  kept: number;
+  /** Mutations known to be lost. */
+  dropped: number;
+  /** How long each step of the crossing took, for those it had. */
+  readMs?: number;
+  wipeMs?: number;
+  importMs?: number;
+};
+
 export interface CacheOpenResult {
   engine: CacheEngine;
   outcome: CacheOpenOutcome;
+  /** Optional while older cached WASM artifacts are still in circulation. */
+  queue?: CacheQueueCrossing;
+  /** What bringing the opened records to the worker's GraphQL schema did;
+   * absent from WASM built before the cache stored its schema. */
+  schemaChange?: CacheOpenSchemaChange;
+}
+
+/** `schemaChange` of an open result. */
+export interface CacheOpenSchemaChange {
+  change: CacheSchemaChange;
+  resetReason?: CacheSchemaResetReason;
+  changedTypes: number;
+  droppedRecords: number;
+  incompleteDocuments: number;
+  retiredOverlays: number;
+  adoptMs: number;
 }
 
 export type CacheEngineHydrationResult = WriteResult &
@@ -157,6 +197,20 @@ export interface CacheEngine {
   ): Promise<CalendarRangeCacheResult>;
   /** Resolves like `writeQuery`: deleted records are reported as `changed`. */
   calendarCommit(commit: CalendarCommitArgs): Promise<WriteResult>;
+  onChannelsChanged(
+    callback: (changes: ChannelChange[]) => void
+  ): Promise<void>;
+  channelTimeline(
+    request: ChannelTimelineCacheArgs
+  ): Promise<ChannelTimelineCacheResult>;
+  /** Resolves like `writeQuery`, plus the channel's sequence after the commit. */
+  channelTimelineCommit(
+    commit: ChannelCommitArgs
+  ): Promise<WriteResult & { channel: ChannelCommitOutcome }>;
+  channelTimelineEvict(
+    eviction: ChannelTimelineEvictArgs
+  ): Promise<WriteResult & { channelIds: string[]; hasMore: boolean }>;
+  channelTimelineStats(): Promise<{ channels: number; entries: number }>;
   writeQuery(
     context: {
       originOpId?: string;
@@ -164,6 +218,7 @@ export interface CacheEngine {
         opId: string;
         entityResolvers?: readonly EntityResolverWire[];
       };
+      channelCommit?: ChannelCommitArgs;
     },
     query: string,
     operationName: string | undefined,
@@ -177,7 +232,8 @@ export interface CacheEngine {
     variables: Record<string, unknown> | undefined,
     data: unknown,
     identity: string | undefined,
-    hydrationScope?: HydrationScope
+    hydrationScope?: HydrationScope,
+    channelCommit?: ChannelCommitArgs
   ): Promise<CacheEngineHydrationResult>;
   /**
    * `hydrateQuery` in two halves: `prepareHydrate` reads what the response
@@ -190,7 +246,8 @@ export interface CacheEngine {
     variables: Record<string, unknown> | undefined,
     data: unknown,
     identity: string | undefined,
-    hydrationScope?: HydrationScope
+    hydrationScope?: HydrationScope,
+    channelCommit?: ChannelCommitArgs
   ): Promise<void>;
   /**
    * Optional, after `prepareHydrate`: runs the kept hydrate's next projection
@@ -270,6 +327,8 @@ export interface CacheEngine {
   clear(): Promise<CacheRevisionResult>;
   /** Reset/recreate OPFS; concurrent calls wait for the fresh engine. */
   physicalReset(): Promise<void>;
+  /** Until it is called, every later open reports the loss again. */
+  queueLossTold?(): Promise<void>;
   /** Gracefully close Turso/OPFS and release the owner lock. */
   close(): Promise<void>;
 }

@@ -35,7 +35,11 @@ export const fakeEvents = (page: Page) =>
   page.evaluate(() => window.onboardingFixture.events());
 
 export async function expectLanded(page: Page, text: string) {
-  await expect(page.getByTestId('landed')).toHaveText(text);
+  // Checkout finishes across two full fixture reloads plus a webhook poll,
+  // which can exceed Playwright's 5s assertion default under parallel Vite load.
+  await expect(page.getByTestId('landed')).toHaveText(text, {
+    timeout: 15_000,
+  });
 }
 
 /** The visible swatch; its radio is visually hidden inside the label. */

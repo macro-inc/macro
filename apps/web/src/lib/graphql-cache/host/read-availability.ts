@@ -1,4 +1,5 @@
 import type { CacheRequest } from '../protocol';
+import { visibleTimeout } from './visible-timeout';
 
 /** Only RPCs that cannot durably change storage may time out or bypass a handoff. */
 export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
@@ -13,6 +14,8 @@ export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
     kind === 'contact-snapshot' ||
     kind === 'entity-filter' ||
     kind === 'calendar-range' ||
+    kind === 'channel-timeline' ||
+    kind === 'channel-timeline-stats' ||
     kind === 'people-context' ||
     kind === 'people-search' ||
     kind === 'inspect-mutations' ||
@@ -47,7 +50,8 @@ export function cacheRequestStamp(
   if (
     isReadOnlyCacheRequest(kind) ||
     kind === 'invalidate' ||
-    kind === 'delete-records'
+    kind === 'delete-records' ||
+    kind === 'channel-timeline-evict'
   )
     return 'observed';
   if (isControlCacheRequest(kind)) return 'none';
@@ -59,6 +63,7 @@ export class CacheReadAvailability {
   private unavailable: Error | undefined;
   private paused = false;
   private readonly waiting = new Set<(error: Error) => void>();
+  private readonly waitingWrites = new Set<(error: Error) => void>();
 
   get error(): Error | undefined {
     return this.unavailable;
@@ -80,28 +85,59 @@ export class CacheReadAvailability {
     this.waiting.clear();
   }
 
+  /** Like `block`, for writes that wait for a handshake too. */
+  blockAll(error: Error): void {
+    this.block(error);
+    for (const reject of this.waitingWrites) reject(error);
+    this.waitingWrites.clear();
+  }
+
   resume(): void {
     this.paused = false;
     this.unavailable = undefined;
   }
 
+  /** `expiresAfter` bounds a read's wait; a write has none. An aborted read
+   * leaves nothing behind. A `held` write is not given up by `blockAll`. */
   async waitUntilReady(
     initialize: () => Promise<void>,
-    readOnly: boolean
+    admission: 'read' | 'write' | 'held',
+    expiresAfter?: {
+      timeoutMs: number;
+      error: () => Error;
+      signal?: AbortSignal;
+      superseded: () => Error;
+    }
   ): Promise<void> {
+    const readOnly = admission === 'read';
     if (readOnly && this.unavailable) throw this.unavailable;
-    let rejectRead: ((error: Error) => void) | undefined;
+    const bound = readOnly ? expiresAfter : undefined;
+    if (bound?.signal?.aborted) throw bound.superseded();
+    let rejectWait: ((error: Error) => void) | undefined;
     const blocked = new Promise<never>((_resolve, reject) => {
-      rejectRead = reject;
+      rejectWait = reject;
       if (readOnly) this.waiting.add(reject);
+      if (admission === 'write') this.waitingWrites.add(reject);
     });
+    const stopTimeout =
+      bound &&
+      visibleTimeout(() => rejectWait?.(bound.error()), bound.timeoutMs);
+    const onAbort = () => {
+      if (bound) rejectWait?.(bound.superseded());
+    };
+    bound?.signal?.addEventListener('abort', onAbort, { once: true });
     try {
       // Both read and write startup waits take the same microtask path so
       // making reads interruptible cannot reorder admission ahead of writes.
       await Promise.race([initialize(), blocked]);
       if (readOnly && this.unavailable) throw this.unavailable;
     } finally {
-      if (rejectRead) this.waiting.delete(rejectRead);
+      stopTimeout?.();
+      bound?.signal?.removeEventListener('abort', onAbort);
+      if (rejectWait) {
+        this.waiting.delete(rejectWait);
+        this.waitingWrites.delete(rejectWait);
+      }
     }
   }
 }

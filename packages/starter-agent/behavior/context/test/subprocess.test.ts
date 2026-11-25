@@ -101,6 +101,7 @@ test(
                 MUPPET_RELAY_URL: relay.url,
                 MUPPET_RELAY_TOKEN: relay.token,
                 MUPPET_CREDENTIAL_NAMES: 'MACRO_API_KEY,MACRO_GATEWAY',
+                MUPPET_WEB_APP_URL: 'http://localhost:3005',
               }
             ),
           }
@@ -124,6 +125,7 @@ test(
         '  log(read);',
         '  return {',
         '    principal: await (await context.macro()).myPrincipalId(),',
+        '    webApp: (await context.macro()).webAppUrl,',
         '    names: await context.credentials.names(),',
         "    inEnvironment: JSON.stringify(Reflect.get(Reflect.get(globalThis, 'process'), 'env')).includes('mak_real'),",
         '  };',
@@ -134,6 +136,8 @@ test(
       kind: 'succeeded',
       output: {
         principal: agentId,
+        // Links a script sends people open in the enrollment's web app.
+        webApp: 'http://localhost:3005',
         names: ['MACRO_API_KEY', 'MACRO_GATEWAY'],
         inEnvironment: false,
       },

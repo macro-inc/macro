@@ -10,19 +10,26 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    AffectedOperationsResultWire, CalendarRangeResultWire, ClaimedMutationWire,
-    CommitOptimisticWriteResultWire, DeferOptimisticWriteResultWire, EngineHandle,
-    EnqueueOptimisticMutationResultWire, EntityFilterRequest, EntityFilterResult,
-    MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
-    RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest, WriteResultWire,
+    AffectedOperationsResultWire, CalendarRangeResultWire, ChannelEvictionResultWire,
+    ChannelTimelineResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
+    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
+    EntityFilterRequest, EntityFilterResult, MutationUpsertKindWire, ReadResultWire,
+    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest,
+    WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_cache_changed_with_hints,
     emit_mutation_settled, emit_ops_affected,
 };
 use cache_core::calendar::{CalendarCommit, CalendarRangeRequest};
+use cache_core::channel_timeline::{
+    ChannelCommitOutcome, ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest,
+    ChannelTimelineStats,
+};
+use cache_core::engine::channel_changes::ChannelChange;
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::meta::Schema;
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::{
@@ -32,8 +39,10 @@ use cache_core::{
         PeopleSearchResult,
     },
 };
-use cache_turso::TursoFileDatabase;
+use cache_turso::{SchemaAdoption, TursoFileDatabase, TursoStorage, TursoStorageError, Unrecorded};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 #[cfg(test)]
@@ -50,6 +59,13 @@ fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
                 .bytes()
                 .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
     })
+}
+
+/// The trace id of a well-formed `traceparent`, for a receive span's
+/// `upstream.trace_id`; `None` for anything else, since the iOS subscriber
+/// panics on a NUL in a span field.
+fn upstream_trace_id(traceparent: Option<&str>) -> Option<&str> {
+    people_trace_correlation(traceparent)?.split('-').nth(1)
 }
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
@@ -104,15 +120,26 @@ pub async fn graphql_cache_init<R: Runtime>(
     scope: String,
     hot_capacity: Option<u32>,
 ) -> Result<(), String> {
-    // A pre-runtime-schema bundle may return after an OTA rollback. Retain
-    // persisted definitions needed by queued work instead of reverting to only
-    // the metadata embedded in the binary.
+    // A pre-runtime-schema bundle may return after an OTA rollback. The
+    // schema the cache stores keeps the definitions its records and queued
+    // work need instead of reverting to only the metadata in the binary.
     let schema_sdl = cache_core::meta::BUNDLED_SCHEMA_SDL.to_owned();
-    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl).await
+    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl, None)
+        .await
+        .map(drop)
 }
 
 /// Parses bundle SDL while retaining native cache execution and native Turso storage.
 /// The dedicated command prevents old binaries from silently ignoring the schema payload.
+/// Resolves with what opening the cache did to it ([`SchemaInit`]), or null
+/// when an earlier call opened it.
+/// The span logs no error: one can quote the bundle's SDL. The webview records
+/// the returned error, and the storage open logs its own.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "init", upstream.trace_id = upstream_trace_id(traceparent.as_deref()))
+)]
 #[tauri::command]
 pub async fn graphql_cache_init_with_schema<R: Runtime>(
     app: AppHandle<R>,
@@ -120,15 +147,15 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
     scope: String,
     hot_capacity: Option<u32>,
     schema_sdl: String,
-) -> Result<(), String> {
-    let incoming = cache_core::meta::Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
+    traceparent: Option<String>,
+) -> Result<Option<SchemaInit>, String> {
+    let incoming = Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
-    let schema_path = dir.join("schema.json");
-    let handle = {
+    let (handle, report) = {
         let mut guard = state
             .0
             .lock()
@@ -137,42 +164,250 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             if existing.scope != scope {
                 return Err("graphql cache scope mismatch".into());
             }
-            existing.handle.clone()
+            (existing.handle.clone(), None)
         } else {
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-            let schema = match std::fs::read_to_string(&schema_path) {
-                Ok(json) => cache_core::meta::Schema::from_json(&json)
-                    .and_then(|old| old.merge(&incoming))
-                    .map_err(|e| e.to_string())?,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    cache_core::meta::bundled_schema()
-                        .merge(&incoming)
-                        .map_err(|e| e.to_string())?
-                }
-                Err(error) => return Err(error.to_string()),
-            };
-            // Validate persisted metadata before opening or modifying user storage.
-            crate::engine::persist_schema(&schema_path, &schema)?;
-            let database =
-                TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
-            let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
+            let (storage, adoption, report) = open_cache(&dir, &scope, &incoming)?;
             let events = app.clone();
-            let handle = EngineHandle::with_schema(storage, hot_capacity, schema)
-                .with_authority_listener(scope.clone(), move |authority| {
+            let channel_events = app.clone();
+            let handle = EngineHandle::with_channel_listener(
+                storage,
+                hot_capacity,
+                adoption.schema,
+                move |changes: &[ChannelChange]| {
                     crate::emit_cache_event(
-                        &events,
-                        "graphql-cache://authority-changed",
-                        authority,
+                        &channel_events,
+                        crate::CHANNELS_CHANGED_EVENT,
+                        changes,
                     );
-                });
+                },
+            )
+            .with_authority_listener(scope.clone(), move |authority| {
+                crate::emit_cache_event(&events, "graphql-cache://authority-changed", authority);
+            });
             *guard = Some(InitializedCache {
                 scope,
                 handle: handle.clone(),
             });
-            handle
+            (handle, Some(report))
         }
     };
-    handle.install_schema(&incoming, &schema_path).await
+    handle.install_schema(&incoming).await?;
+    Ok(report)
+}
+
+/// What opening the cache did to its records, for the webview: it records
+/// `graphql_cache.schema_init` as the browser worker does, since spans of
+/// this process stay on the device. Mirrors the worker's `schemaChange`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaInit {
+    /// `unchanged`, or the tier's name.
+    pub change: &'static str,
+    /// Why every record went, for a reset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reset_reason: Option<&'static str>,
+    /// The types whose records went, for the types tier.
+    pub changed_types: usize,
+    /// Records the change dropped.
+    pub dropped_records: u64,
+    /// Index documents the change left incomplete.
+    pub incomplete_documents: u64,
+    /// Queued writes whose overlays no longer fit.
+    pub retired_overlays: u64,
+    /// How long adopting the schema took.
+    pub adopt_ms: u64,
+    /// The file was replaced: it could not be opened, or the schema could
+    /// not be adopted in it.
+    pub physical_reset: bool,
+    /// The storage version an older build left the file at, when it was
+    /// upgraded in place.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage_upgraded_from: Option<u32>,
+}
+
+/// Where native builds before storage 13 kept, beside the cache file, the
+/// GraphQL schema its records were written under. The file stores it now.
+const LEGACY_SCHEMA_FILE: &str = "schema.json";
+
+/// Opens the cache in `dir` for `scope` and brings its records and queued
+/// writes to `incoming`, this webview's schema, returning the schema the
+/// engine runs with and what the open did. A tier that fails or runs out of space resets the
+/// cache; a corrupt file, an uncertain write, or a cache that cannot even
+/// reset is replaced and opened empty. An older build's schema
+/// file names what wrote a cache that stores no schema yet, and goes once the
+/// cache stores one; a file that cannot be read names nothing, and the
+/// records it described go.
+pub(crate) fn open_cache(
+    dir: &Path,
+    scope: &str,
+    incoming: &Arc<Schema>,
+) -> Result<(TursoStorage, SchemaAdoption, SchemaInit), String> {
+    let legacy = dir.join(LEGACY_SCHEMA_FILE);
+    let unrecorded = match std::fs::read_to_string(&legacy) {
+        Ok(json) => Schema::from_json(&json).map_or(Unrecorded::Unreadable, Unrecorded::Known),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Unrecorded::Guess,
+        Err(_) => Unrecorded::Unreadable,
+    };
+    let database = TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
+    let (storage, replaced) = open_storage(&database, scope)?;
+    let upgraded_from = storage.upgraded_from_storage_version();
+    let opened = match adopt_schema(&storage, incoming, unrecorded) {
+        Ok((adoption, report)) => (
+            storage,
+            adoption,
+            SchemaInit {
+                physical_reset: replaced,
+                storage_upgraded_from: upgraded_from,
+                ..report
+            },
+        ),
+        Err(error) if error.requires_physical_reset() => {
+            storage.try_close().map_err(|e| e.to_string())?;
+            database.physical_reset().map_err(|e| e.to_string())?;
+            tracing::warn!(
+                graphql_cache.physical_reset_reason = ?error.physical_reset_reason(),
+                "graphql cache replaced its file: the schema could not be adopted in it"
+            );
+            let (storage, _) = open_storage(&database, scope)?;
+            let (adoption, report) =
+                adopt_schema(&storage, incoming, Unrecorded::Guess).map_err(|e| e.to_string())?;
+            (
+                storage,
+                adoption,
+                SchemaInit {
+                    physical_reset: true,
+                    ..report
+                },
+            )
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    match std::fs::remove_file(&legacy) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            tracing::warn!(error = %error, "graphql cache kept an older build's schema file")
+        }
+    }
+    Ok(opened)
+}
+
+/// Opens the cache file for `scope`, replacing it when it is incompatible or
+/// uncertain, and says whether it did; a replacement logs why. A file an
+/// older build wrote at an earlier storage version is
+/// upgraded in place first; the span records the version it came from, and an
+/// event reports it with the open's duration, since the native subscriber
+/// prints events, not span fields recorded late.
+#[tracing::instrument(
+    name = "graphql_cache.native.open",
+    skip_all,
+    fields(graphql_cache.storage.upgraded_from = tracing::field::Empty),
+    err
+)]
+fn open_storage(database: &TursoFileDatabase, scope: &str) -> Result<(TursoStorage, bool), String> {
+    let started = std::time::Instant::now();
+    let (storage, replaced) = match database.open(scope) {
+        Ok(storage) => (storage, false),
+        Err(error) if error.requires_physical_reset() => {
+            database.physical_reset().map_err(|e| e.to_string())?;
+            tracing::warn!(
+                graphql_cache.physical_reset_reason = ?error.physical_reset_reason(),
+                "graphql cache replaced a file it could not open"
+            );
+            (database.open(scope).map_err(|e| e.to_string())?, true)
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    if let Some(version) = storage.upgraded_from_storage_version() {
+        tracing::Span::current().record("graphql_cache.storage.upgraded_from", version);
+        tracing::info!(
+            graphql_cache.storage.upgraded_from = version,
+            graphql_cache.storage.open_ms =
+                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            "graphql cache storage upgraded in place"
+        );
+    }
+    Ok((storage, replaced))
+}
+
+/// Brings an opened cache to `incoming` (`TursoStorage::adopt_schema`),
+/// returning the adoption and its report for the webview. The span records
+/// the tier and what it dropped; a change also logs an event with its
+/// duration, since the native subscriber prints events, not span fields
+/// recorded late.
+#[tracing::instrument(
+    name = "graphql_cache.native.adopt_schema",
+    skip_all,
+    fields(
+        graphql_cache.schema.change = tracing::field::Empty,
+        graphql_cache.schema.reset_reason = tracing::field::Empty,
+        graphql_cache.schema.changed_types = tracing::field::Empty,
+        graphql_cache.schema.dropped_records = tracing::field::Empty,
+        graphql_cache.schema.incomplete_documents = tracing::field::Empty,
+        graphql_cache.schema.retired_overlays = tracing::field::Empty,
+    ),
+    err
+)]
+fn adopt_schema(
+    storage: &TursoStorage,
+    incoming: &Arc<Schema>,
+    unrecorded: Unrecorded,
+) -> Result<(SchemaAdoption, SchemaInit), TursoStorageError> {
+    let started = std::time::Instant::now();
+    let adoption = storage.adopt_schema(
+        incoming,
+        &soup_filter_cache_adapter::projection_inputs(),
+        unrecorded,
+    )?;
+    let changed_types = match &adoption.change {
+        Some(cache_core::schema_change::Tier::Types { changed, .. }) => changed.len(),
+        Some(_) | None => 0,
+    };
+    let reset_reason = adoption.reset_reason().map(<&'static str>::from);
+    let span = tracing::Span::current();
+    span.record("graphql_cache.schema.change", adoption.outcome());
+    if let Some(reason) = reset_reason {
+        span.record("graphql_cache.schema.reset_reason", reason);
+    }
+    span.record("graphql_cache.schema.changed_types", changed_types);
+    span.record(
+        "graphql_cache.schema.dropped_records",
+        adoption.dropped_records,
+    );
+    span.record(
+        "graphql_cache.schema.incomplete_documents",
+        adoption.incomplete_documents,
+    );
+    span.record(
+        "graphql_cache.schema.retired_overlays",
+        adoption.retired_overlays,
+    );
+    let adopt_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    if adoption.change.is_some() {
+        tracing::info!(
+            graphql_cache.schema.change = adoption.outcome(),
+            graphql_cache.schema.reset_reason = reset_reason,
+            graphql_cache.schema.changed_types = changed_types,
+            graphql_cache.schema.dropped_records = adoption.dropped_records,
+            graphql_cache.schema.incomplete_documents = adoption.incomplete_documents,
+            graphql_cache.schema.retired_overlays = adoption.retired_overlays,
+            graphql_cache.schema.adopt_ms = adopt_ms,
+            "graphql cache brought to a new GraphQL schema"
+        );
+    }
+    let report = SchemaInit {
+        change: adoption.outcome(),
+        reset_reason,
+        changed_types,
+        dropped_records: adoption.dropped_records,
+        incomplete_documents: adoption.incomplete_documents,
+        retired_overlays: adoption.retired_overlays,
+        adopt_ms,
+        physical_reset: false,
+        storage_upgraded_from: None,
+    };
+    Ok((adoption, report))
 }
 
 /// Returns the current in-memory cache revision as a decimal string.
@@ -538,6 +773,79 @@ pub async fn graphql_cache_calendar_commit<R: Runtime>(
     Ok(result)
 }
 
+/// Answers one channel or thread page from the native timeline index.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline(
+    state: State<'_, CacheState>,
+    request: ChannelTimelineRequest,
+) -> Result<ChannelTimelineResultWire, String> {
+    engine_handle(&state)?.channel_timeline(request).await
+}
+
+fn emit_channel_write<R: Runtime>(
+    app: &AppHandle<R>,
+    result: &WriteResultWire,
+    generation: Option<uuid::Uuid>,
+) {
+    let generation = generation_tag(generation);
+    emit_ops_affected(
+        app,
+        &result.affected_ops,
+        result.field_changes.as_ref(),
+        generation.as_deref(),
+    );
+    if result.revision_advanced {
+        emit_cache_changed_with_hints(
+            app,
+            &result.revision,
+            result.reset,
+            result.search_changed_buckets.as_ref(),
+            result.unchanged_views.as_ref(),
+            generation.as_deref(),
+        );
+    }
+}
+
+/// Commits what is known of a channel without a response (a touch, a reset or
+/// dropped threads), then broadcasts the deleted records like a write.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline_commit<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
+    commit: ChannelTimelineCommit,
+) -> Result<WriteResultWire, String> {
+    let result = engine_handle(&state)?
+        .with_generation(generation)
+        .channel_timeline_commit(commit)
+        .await?;
+    emit_channel_write(&app, &result, generation);
+    Ok(result)
+}
+
+/// Removes the channels touched longest ago, then broadcasts the deleted
+/// records like a write.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline_evict<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    eviction: ChannelEviction,
+) -> Result<ChannelEvictionResultWire, String> {
+    let result = engine_handle(&state)?
+        .channel_timeline_evict(eviction)
+        .await?;
+    emit_channel_write(&app, &result.write, None);
+    Ok(result)
+}
+
+/// Counts the channels and entries the native timeline index holds.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline_stats(
+    state: State<'_, CacheState>,
+) -> Result<ChannelTimelineStats, String> {
+    engine_handle(&state)?.channel_timeline_stats().await
+}
+
 /// Active-query registration installed by a network write.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -569,6 +877,7 @@ pub async fn graphql_cache_write<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
     identity: Option<String>,
+    channel_commit: Option<ChannelTimelineCommit>,
     traceparent: Option<String>,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
@@ -584,6 +893,7 @@ pub async fn graphql_cache_write<R: Runtime>(
             variables: variables.unwrap_or_default(),
             data,
             identity,
+            channel_commit,
         })
         .await?;
     emit_ops_affected(
@@ -624,6 +934,9 @@ pub enum HydrationResultWire {
         /// Whether this hydration changed the effective cache view.
         #[serde(rename = "revisionAdvanced")]
         revision_advanced: bool,
+        /// What the response's channel commit did.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        channel: Option<ChannelCommitOutcome>,
     },
     /// Every response field was cache-only.
     Void {
@@ -638,6 +951,9 @@ pub enum HydrationResultWire {
         /// Whether this hydration changed the effective cache view.
         #[serde(rename = "revisionAdvanced")]
         revision_advanced: bool,
+        /// What the response's channel commit did.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        channel: Option<ChannelCommitOutcome>,
     },
 }
 
@@ -664,6 +980,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
     identity: Option<String>,
+    channel_commit: Option<ChannelTimelineCommit>,
     traceparent: Option<String>,
 ) -> Result<HydrationResultWire, String> {
     let result = engine_handle(&state)?
@@ -675,6 +992,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             data,
             identity,
             None,
+            channel_commit,
         )
         .await?;
     if result.write_result.reset {
@@ -707,6 +1025,7 @@ pub struct ScopedHydrationRequest {
     data: serde_json::Value,
     identity: Option<String>,
     hydration_scope: cache_core::engine::HydrationScope,
+    channel_commit: Option<ChannelTimelineCommit>,
 }
 
 /// Admits a background response without switching account or data generation.
@@ -732,6 +1051,7 @@ pub async fn graphql_cache_hydrate_scoped(
             request.data,
             request.identity,
             Some(request.hydration_scope),
+            request.channel_commit,
         )
         .await?;
     Ok(hydration_result(result))
@@ -745,12 +1065,14 @@ fn hydration_result(result: crate::engine::HydrationWriteResultWire) -> Hydratio
             data,
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
+            channel: result.write_result.channel,
         },
         None => HydrationResultWire::Void {
             unchanged_views: result.unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
+            channel: result.write_result.channel,
         },
     }
 }

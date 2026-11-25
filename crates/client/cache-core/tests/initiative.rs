@@ -111,6 +111,7 @@ fn mutation_updates_list_and_detail_without_losing_detail_fields() {
                         variables,
                         data,
                         identity: None,
+                        channel: None,
                     },
                 )
                 .await

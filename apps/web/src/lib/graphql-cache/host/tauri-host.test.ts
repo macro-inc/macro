@@ -33,7 +33,7 @@ import {
   NativeCacheUpgradeRequiredError,
 } from './tauri-host';
 
-type EventCallback = (event: { payload: Record<string, unknown> }) => void;
+type EventCallback = (event: { payload: unknown }) => void;
 
 const filterArgs: EntityFilterCacheArgs = {
   filters: {},
@@ -91,6 +91,103 @@ describe('createTauriCacheHost', () => {
       notify({ payload: { revision: String(revision) } });
     }
     expect(span).toHaveBeenCalledTimes(3);
+    host.dispose();
+  });
+
+  it('records what the native open did to the cache as graphql_cache.schema_init', async () => {
+    const attributes = new Map<string, unknown>();
+    const end = vi.fn();
+    const anonymousSpan = vi
+      .spyOn(Telemetry, 'anonymousSpan')
+      .mockImplementation(
+        () =>
+          ({
+            setAttr: (key: string, value: unknown) => {
+              attributes.set(key, value);
+            },
+            end,
+          }) as unknown as ReturnType<typeof Telemetry.anonymousSpan>
+      );
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? {
+            change: 'reset',
+            resetReason: 'invalid',
+            changedTypes: 0,
+            droppedRecords: 12,
+            incompleteDocuments: 3,
+            retiredOverlays: 1,
+            adoptMs: 7,
+            physicalReset: true,
+            storageUpgradedFrom: 12,
+          }
+        : null
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    expect(anonymousSpan).toHaveBeenCalledWith('graphql_cache.schema_init');
+    expect(Object.fromEntries(attributes)).toEqual({
+      'cache.backend': 'turso-native',
+      'cache.operation_category': 'initialization',
+      'cache.outcome': 'success',
+      'cache.schema.change': 'reset',
+      'cache.schema.reset_reason': 'invalid',
+      'cache.schema.changed_types': 0,
+      'cache.schema.dropped_records': 12,
+      'cache.schema.incomplete_documents': 3,
+      'cache.schema.retired_overlays': 1,
+      'cache.schema.adopt_ms': 7,
+      'cache.schema.physical_reset': true,
+      'cache.storage.upgraded_from': 12,
+    });
+    expect(end).toHaveBeenCalledOnce();
+    host.dispose();
+  });
+
+  it('records no schema_init when the native cache was already open', async () => {
+    const anonymousSpan = vi.spyOn(Telemetry, 'anonymousSpan');
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    expect(anonymousSpan).not.toHaveBeenCalledWith('graphql_cache.schema_init');
+    host.dispose();
+  });
+
+  it('starts a record deletion in the context it was called in', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_delete_records'
+        ? { revision: '2', affectedOps: [] }
+        : null
+    );
+    let inCaller = false;
+    const openedInCaller: boolean[] = [];
+    const span = Telemetry.span.bind(Telemetry);
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      ...args: Parameters<typeof span>
+    ) => {
+      openedInCaller.push(inCaller);
+      return span(...args);
+    }) as typeof Telemetry.span);
+    vi.spyOn(Telemetry, 'captureContext').mockReturnValue({
+      run: (work) => {
+        inCaller = true;
+        try {
+          return work();
+        } finally {
+          inCaller = false;
+        }
+      },
+    });
+
+    await host.deleteRecords(['GraphqlSoupDocument:1'], 'generation-1');
+
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_delete_records', {
+      keys: ['GraphqlSoupDocument:1'],
+      generation: 'generation-1',
+      traceparent: undefined,
+    });
+    expect(openedInCaller).toEqual([true]);
     host.dispose();
   });
 
@@ -346,7 +443,10 @@ describe('createTauriCacheHost', () => {
     notify({ payload: { revision: INITIAL_CACHE_REVISION } });
     expect(changed).not.toHaveBeenCalled();
     notify({ payload: { revision: INITIAL_CACHE_REVISION, reset: true } });
-    expect(changed).toHaveBeenCalledExactlyOnceWith({ storage: 'reset' });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({
+      storage: 'reset',
+      queue: 'reset',
+    });
     host.dispose();
   });
 
@@ -406,7 +506,40 @@ describe('createTauriCacheHost', () => {
     expect(onInitializationError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'init failed' })
     );
+    // A failed engine never opens, but its readiness waiters settle.
+    await expect(host.whenReady?.()).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
     host.dispose();
+  });
+
+  it('reports readiness once native initialization completes', async () => {
+    const init = Promise.withResolvers<null>();
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? init.promise
+        : Promise.resolve(null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    expect(host.isReady?.()).toBe(false);
+    const ready = host.whenReady?.();
+    init.resolve(null);
+    await ready;
+    expect(host.isReady?.()).toBe(true);
+    host.dispose();
+    expect(host.isReady?.()).toBe(false);
+  });
+
+  it('settles readiness waiters when disposed before native initialization completes', async () => {
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? new Promise(() => {})
+        : Promise.resolve(null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const ready = host.whenReady?.();
+    host.dispose();
+    await ready;
+    expect(host.isReady?.()).toBe(false);
   });
 
   it('preserves the old queue and refuses writes when an OTA outpaces the native runtime', async () => {
@@ -1270,6 +1403,10 @@ describe('createTauriCacheHost', () => {
       event: 'mutation-settled',
       payload: { transactionId: '1', status: 'committed' },
     },
+    {
+      event: 'channels-changed',
+      payload: [{ channelId: 'c1', kind: 'changed' }],
+    },
   ])(
     'flushes invalidations before $event observers run',
     ({ event, payload }) => {
@@ -1282,6 +1419,7 @@ describe('createTauriCacheHost', () => {
       });
       host.onCacheGenerationChanged(() => seen.push('generation'));
       host.onMutationSettled(() => seen.push('settled'));
+      host.onChannelChanged(() => seen.push('channel'));
       eventCallbacks.get('graphql-cache://ops-affected')!({
         payload: { opIds: [`${host.clientId}:5`] },
       });
@@ -1302,6 +1440,25 @@ describe('createTauriCacheHost', () => {
       payload: { revision: INITIAL_CACHE_REVISION },
     });
     expect(calls).toBe(1);
+  });
+
+  it('delivers each channel a native transaction changed', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const seen = vi.fn();
+    host.onChannelChanged(seen);
+    await Promise.resolve();
+
+    const changes = [
+      { channelId: 'c1', kind: 'changed' },
+      { channelId: 'c2', kind: 'reset' },
+    ];
+    const notify = eventCallbacks.get('graphql-cache://channels-changed')!;
+    notify({ payload: changes });
+    expect(seen.mock.calls).toEqual(changes.map((change) => [change]));
+
+    host.dispose();
+    notify({ payload: changes });
+    expect(seen).toHaveBeenCalledTimes(2);
   });
 
   it.each([undefined, 'DRAFT_ALREADY_SENT'])(
@@ -1694,6 +1851,219 @@ describe('createTauriCacheHost', () => {
     } finally {
       process.off('unhandledRejection', record);
     }
+  });
+
+  describe('channel timelines', () => {
+    const pageArgs = { channelId: 'c1', limit: 50 };
+    const page = {
+      kind: 'page',
+      revision: '4',
+      covered: true,
+      keys: ['GraphqlChannelMessage:m1'],
+      olderCursor: null,
+      newerCursor: null,
+      seq: '7',
+      optimistic: false,
+    };
+    const write = {
+      revision: '5',
+      revisionAdvanced: true,
+      changed: ['GraphqlChannelMessage:m1'],
+      affectedOps: [],
+      reset: false,
+    };
+
+    const outcome = { channelId: 'c1', seq: '8', outcome: 'applied' as const };
+
+    it('sends a commit with the response it describes and returns what it did', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_write')
+          return { ...write, channel: outcome };
+        if (command === 'graphql_cache_hydrate')
+          return { kind: 'void', revision: '5', channel: outcome };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'channel-native-write' });
+      const args = {
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ user { id } }',
+        data: {},
+      };
+      const channelCommit = { channelId: 'c1', seq: '8' };
+      const sent = (command: string) =>
+        JSON.stringify(
+          invokeMock.mock.calls.findLast(([name]) => name === command)?.[1]
+        );
+      try {
+        await expect(
+          host.writeQuery({ ...args, channelCommit })
+        ).resolves.toMatchObject({ channel: outcome });
+        expect(sent('graphql_cache_write')).toContain(
+          JSON.stringify({ channelCommit }).slice(1, -1)
+        );
+        await expect(
+          host.hydrateQuery({ ...args, channelCommit })
+        ).resolves.toMatchObject({ channel: outcome });
+        expect(sent('graphql_cache_hydrate')).toContain(
+          JSON.stringify({ channelCommit }).slice(1, -1)
+        );
+        await host.hydrateQuery(args);
+        expect(sent('graphql_cache_hydrate')).not.toContain('channelCommit');
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('reads pages, commits, evicts and counts through native commands', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_channel_timeline') return page;
+        if (command === 'graphql_cache_channel_timeline_commit')
+          return { ...write, channel: outcome };
+        if (command === 'graphql_cache_channel_timeline_evict')
+          return { ...write, channelIds: ['c1'], hasMore: false };
+        if (command === 'graphql_cache_channel_timeline_stats')
+          return { channels: 2, entries: 90 };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'channel-native' });
+      try {
+        await expect(host.channelTimeline(pageArgs)).resolves.toEqual(page);
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_channel_timeline',
+          { request: pageArgs }
+        );
+        const commit = {
+          channelId: 'c1',
+          seq: '8',
+          watermark: { kind: 'advance' as const, from: '7' },
+        };
+        await expect(
+          host.channelTimelineCommit(commit, TEST_AUTHORITY_GENERATION)
+        ).resolves.toEqual({
+          kind: 'committed',
+          revision: '5',
+          changed: ['GraphqlChannelMessage:m1'],
+          channel: outcome,
+        });
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_channel_timeline_commit',
+          { commit, generation: TEST_AUTHORITY_GENERATION }
+        );
+        const eviction = { touchedBeforeMs: 10, maxChannels: 5 };
+        await expect(host.channelTimelineEvict(eviction)).resolves.toEqual({
+          kind: 'evicted',
+          revision: '5',
+          changed: ['GraphqlChannelMessage:m1'],
+          channelIds: ['c1'],
+          hasMore: false,
+        });
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_channel_timeline_evict',
+          { eviction }
+        );
+        await expect(host.channelTimelineStats()).resolves.toEqual({
+          kind: 'stats',
+          channels: 2,
+          entries: 90,
+        });
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('opens its requests in the context it was called in', async () => {
+      const host = createTauriCacheHost({ scope: 'channel-trace' });
+      // The caller's context lasts only until its first await, as in a
+      // browser; `active` is the context a span would open in.
+      let callerContext: string | undefined;
+      let active: string | undefined;
+      const openedIn: (string | undefined)[] = [];
+      const span = Telemetry.span.bind(Telemetry);
+      try {
+        await host.readQuery({ query: '{ x }' });
+        vi.spyOn(Telemetry, 'span').mockImplementation(((
+          ...args: Parameters<typeof span>
+        ) => {
+          openedIn.push(active);
+          return span(...args);
+        }) as typeof Telemetry.span);
+        vi.spyOn(Telemetry, 'captureContext').mockImplementation(() => {
+          const captured = callerContext;
+          return {
+            run: (work) => {
+              active = captured;
+              try {
+                return work();
+              } finally {
+                active = undefined;
+              }
+            },
+          };
+        });
+        invokeMock.mockResolvedValue(page);
+
+        callerContext = 'caller';
+        const answer = host.channelTimeline(pageArgs);
+        callerContext = undefined;
+        await answer;
+
+        expect(openedIn).toEqual(['caller']);
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('reports old native binaries as unsupported and stops probing them', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_channel_timeline')
+          throw 'Command graphql_cache_channel_timeline not found';
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'old-native-channel' });
+      try {
+        const unsupported = { kind: 'unsupported' };
+        await expect(host.channelTimeline(pageArgs)).resolves.toEqual(
+          unsupported
+        );
+        await expect(
+          host.channelTimelineCommit(
+            { channelId: 'c1', reset: true },
+            TEST_AUTHORITY_GENERATION
+          )
+        ).resolves.toEqual(unsupported);
+        await expect(
+          host.channelTimelineEvict({ touchedBeforeMs: 1, maxChannels: 1 })
+        ).resolves.toEqual(unsupported);
+        await expect(host.channelTimelineStats()).resolves.toEqual(unsupported);
+        expect(
+          invokeMock.mock.calls.filter(([command]) =>
+            String(command).startsWith('graphql_cache_channel_')
+          )
+        ).toHaveLength(1);
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('does not mistake other channel failures for a missing command', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_channel_timeline')
+          throw 'channel timeline window is malformed';
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'channel-error' });
+      try {
+        await expect(host.channelTimeline(pageArgs)).rejects.toThrow(
+          'channel timeline window is malformed'
+        );
+        invokeMock.mockImplementation(async (command: string) =>
+          command === 'graphql_cache_channel_timeline' ? page : null
+        );
+        await expect(host.channelTimeline(pageArgs)).resolves.toEqual(page);
+      } finally {
+        host.dispose();
+      }
+    });
   });
 
   describe('calendar ranges', () => {

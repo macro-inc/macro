@@ -107,6 +107,32 @@ impl Storage for CommittingStorage {
             .await
     }
 
+    async fn load_channel_guard(
+        &self,
+        query: &cache_core::channel_timeline::ChannelGuardQuery,
+    ) -> Result<cache_core::channel_timeline::ChannelGuard, Self::Error> {
+        self.inner.load_channel_guard(query).await
+    }
+
+    async fn load_channel_entries(
+        &self,
+        channel_id: &str,
+        entries: cache_core::channel_timeline::ChannelEntries<'_>,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.inner.load_channel_entries(channel_id, entries).await
+    }
+
+    async fn put_channel_records(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+        channel: &cache_core::channel_timeline::ChannelWrite,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .put_channel_records(entries, projections, channel)
+            .await
+    }
+
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.inner.delete_batch(keys).await
     }
@@ -245,9 +271,10 @@ impl Storage for CommittingStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
         reconciliation: OptimisticShadowReconciliation,
+        channel: &cache_core::channel_timeline::ChannelWrite,
     ) -> Result<bool, Self::Error> {
         self.inner
-            .complete_mutation_with_shadow(id, claim, entries, projections, reconciliation)
+            .complete_mutation_with_shadow(id, claim, entries, projections, reconciliation, channel)
             .await
     }
 

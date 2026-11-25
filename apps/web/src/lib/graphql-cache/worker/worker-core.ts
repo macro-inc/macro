@@ -19,6 +19,10 @@ import type {
   CacheRevisionResult,
   CalendarCommitCacheResult,
   CalendarRangeCacheResult,
+  ChannelTimelineCacheResult,
+  ChannelTimelineCommitCacheResult,
+  ChannelTimelineEvictCacheResult,
+  ChannelTimelineStatsCacheResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheResult,
   HydrationResult,
@@ -41,12 +45,17 @@ import {
   isStorageTransactionRequest,
   operationCategoryForRequest,
 } from '../telemetry';
-import { cacheDatabaseIdentity } from './coordinator-protocol';
+import {
+  type CacheQueueState,
+  cacheDatabaseIdentity,
+} from './coordinator-protocol';
 import {
   type CacheEngine,
   type CacheEngineHydrationResult,
   type CacheOpenOutcome,
   type CacheOpenResult,
+  type CacheOpenSchemaChange,
+  type CacheQueueCrossing,
   type CacheWalCheckpoint,
   loadCacheWasm,
 } from './wasm-module';
@@ -63,6 +72,16 @@ const isStorageBusy = (error: unknown): boolean =>
   error !== null &&
   'cacheStorageBusy' in error &&
   error.cacheStorageBusy === true;
+
+/** An older WASM artifact carries no queue across a reset. */
+const queueAfterOpen = (
+  outcome: CacheOpenOutcome,
+  queue: CacheQueueCrossing | undefined
+): CacheQueueState => {
+  const crossing = queue?.outcome ?? 'none';
+  const untouched = outcome === 'opened-existing' && crossing === 'none';
+  return crossing === 'kept' || untouched ? 'preserved' : 'reset';
+};
 
 type PortLike = {
   postMessage(msg: unknown): void;
@@ -95,7 +114,10 @@ export interface CacheWorkerCoreOptions {
    * open. The failed request's response carries only the message. */
   onStorageBusy?: () => void;
   /** Reports the bounded open outcome to the coordinator transport. */
-  onInitializationOutcome?: (outcome: CacheOpenOutcome) => void;
+  onInitializationOutcome?: (
+    outcome: CacheOpenOutcome,
+    queue: CacheQueueState
+  ) => void;
   /**
    * Runs once WASM holds the database owner lock and before it touches OPFS;
    * opening proceeds when the returned promise resolves.
@@ -195,7 +217,9 @@ function isAuthoritativeWrite(request: CacheRequest): boolean {
     request.kind === 'people-update' ||
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'delete-records' ||
-    request.kind === 'calendar-commit'
+    request.kind === 'calendar-commit' ||
+    request.kind === 'channel-timeline-commit' ||
+    request.kind === 'channel-timeline-evict'
   );
 }
 
@@ -216,20 +240,27 @@ function revisionAdvancementCategory(
       'hydrate',
       'people-update',
       'calendar-commit',
+      'channel-timeline-commit',
       () => 'authoritative-write' as const
     )
     .with('enqueue-optimistic-mutation', () => 'optimistic-enqueue' as const)
     .with('commit-optimistic-write', () => 'optimistic-commit' as const)
     .with('rollback-optimistic-write', () => 'optimistic-rollback' as const)
     .with('invalidate', () => 'external-invalidation' as const)
-    .with('delete-records', () => 'deletion' as const)
+    .with('delete-records', 'channel-timeline-evict', () => 'deletion' as const)
     .with('clear', () => 'clear' as const)
     .otherwise(() => undefined);
 }
 
 function requestPriority(request: CacheRequest): number {
-  if (request.kind === 'hydrate' || request.kind === 'people-update')
+  if (
+    request.kind === 'hydrate' ||
+    request.kind === 'people-update' ||
+    request.kind === 'channel-timeline-evict'
+  )
     return BACKGROUND_HYDRATION_PRIORITY;
+  // A channel page is only read to paint an open channel or thread.
+  if (request.kind === 'channel-timeline') return USER_VISIBLE_READ_PRIORITY;
   if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
@@ -239,6 +270,7 @@ function requestPriority(request: CacheRequest): number {
   if (
     request.kind === 'write' ||
     request.kind === 'calendar-commit' ||
+    request.kind === 'channel-timeline-commit' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
@@ -465,6 +497,11 @@ export class CacheWorkerCore {
       this.reportResetRequired(error);
       throw error;
     }
+  }
+
+  /** Lets go of the lost writes the open reported, which pages now know of. */
+  async queueLossTold(): Promise<void> {
+    await this.engine?.queueLossTold?.();
   }
 
   /**
@@ -819,7 +856,8 @@ export class CacheWorkerCore {
         request.variables,
         request.data,
         request.identity,
-        request.hydrationScope
+        request.hydrationScope,
+        request.channelCommit
       );
     }
     await prepare(
@@ -828,7 +866,8 @@ export class CacheWorkerCore {
       request.variables,
       request.data,
       request.identity,
-      request.hydrationScope
+      request.hydrationScope,
+      request.channelCommit
     );
     await this.runReadsBeforeHydrateCommit();
     const step = engine.stepHydrate?.bind(engine);
@@ -903,6 +942,8 @@ export class CacheWorkerCore {
         this.executingAuthority = before;
       }
       const storesContent = cacheRequestStamp(request.kind) === 'captured';
+      // A channel eviction removes by age, not by what a response named, so it
+      // runs under any session.
       const removes =
         request.kind === 'invalidate' || request.kind === 'delete-records';
       // A queued command settles under its own stamp even once that is stale.
@@ -1092,12 +1133,54 @@ export class CacheWorkerCore {
         };
         return committed;
       })
+      .with({ kind: 'channel-timeline' }, async (request) => {
+        const result: ChannelTimelineCacheResult =
+          await this.requireEngine().channelTimeline(request.request);
+        return result.kind === 'unsupported'
+          ? result
+          : { ...result, revision: parseCacheRevision(result.revision) };
+      })
+      .with({ kind: 'channel-timeline-commit' }, async (request) => {
+        const { channel, ...result } =
+          await this.requireEngine().channelTimelineCommit(request.commit);
+        result.revision = parseCacheRevision(result.revision);
+        this.fanOut(result, true);
+        const committed: ChannelTimelineCommitCacheResult = {
+          kind: 'committed',
+          revision: result.revision,
+          changed: result.changed,
+          channel,
+        };
+        return committed;
+      })
+      .with({ kind: 'channel-timeline-evict' }, async (request) => {
+        const { channelIds, hasMore, ...result } =
+          await this.requireEngine().channelTimelineEvict(request.eviction);
+        result.revision = parseCacheRevision(result.revision);
+        this.fanOut(result, true);
+        const evicted: ChannelTimelineEvictCacheResult = {
+          kind: 'evicted',
+          revision: result.revision,
+          changed: result.changed,
+          channelIds,
+          hasMore,
+        };
+        return evicted;
+      })
+      .with({ kind: 'channel-timeline-stats' }, async () => {
+        const stats: ChannelTimelineStatsCacheResult = {
+          kind: 'stats',
+          ...(await this.requireEngine().channelTimelineStats()),
+        };
+        return stats;
+      })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
           {
             originOpId: request.originOpId,
             registration: request.registration,
+            channelCommit: request.channelCommit,
           },
           request.query,
           request.operationName,
@@ -1125,14 +1208,22 @@ export class CacheWorkerCore {
               : {}),
           });
         }
+        const channel =
+          result.channel === undefined ? {} : { channel: result.channel };
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
-            ? { kind: 'void', revision: result.revision, reset: result.reset }
+            ? {
+                kind: 'void',
+                revision: result.revision,
+                reset: result.reset,
+                ...channel,
+              }
             : {
                 kind: 'data',
                 data: result.data,
                 revision: result.revision,
                 reset: result.reset,
+                ...channel,
               };
         return hydration;
       })
@@ -1527,6 +1618,8 @@ export class CacheWorkerCore {
         : undefined;
       try {
         let openOutcome: CacheOpenOutcome;
+        let schemaChange: CacheOpenSchemaChange | undefined;
+        let queue: CacheQueueCrossing | undefined;
         if (awaitStorageGrant && onOwnerLockBusy) {
           const open = this.options.recoveryOpen
             ? wasm.openCacheForRecoveryWithOutcome
@@ -1551,6 +1644,8 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
+          queue = opened.queue;
         } else if (this.options.recoveryOpen) {
           if (wasm.openCacheForRecoveryWithOutcome) {
             const opened = await wasm.openCacheForRecoveryWithOutcome(
@@ -1560,6 +1655,8 @@ export class CacheWorkerCore {
             );
             this.engine = opened.engine;
             openOutcome = opened.outcome;
+            schemaChange = opened.schemaChange;
+            queue = opened.queue;
           } else {
             this.engine = await wasm.openCacheForRecovery(scope, hotCapacity);
             openOutcome = 'reset-storage-uncertain';
@@ -1572,6 +1669,8 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
+          queue = opened.queue;
         } else {
           this.engine = await wasm.openCache(scope, hotCapacity);
           openOutcome = 'opened-existing';
@@ -1580,15 +1679,40 @@ export class CacheWorkerCore {
           // A stale artifact opened storage without asking the coordinator.
           throw new Error('cache WASM does not support the owner-lock grant');
         }
-        this.options.onInitializationOutcome?.(openOutcome);
+        await this.engine.onChannelsChanged((changes) =>
+          this.push({ kind: 'channels-changed', changes })
+        );
+        this.options.onInitializationOutcome?.(
+          openOutcome,
+          queueAfterOpen(openOutcome, queue)
+        );
         this.telemetry.record({
           name: 'graphql_cache.schema_init',
           operationCategory: 'initialization',
           outcome: 'success',
           errorCode: 'none',
           openOutcome,
+          ...(schemaChange === undefined
+            ? {}
+            : {
+                schemaChange: schemaChange.change,
+                schemaResetReason: schemaChange.resetReason,
+                schemaChangedTypes: schemaChange.changedTypes,
+                schemaDroppedRecords: schemaChange.droppedRecords,
+                schemaIncompleteDocuments: schemaChange.incompleteDocuments,
+                schemaRetiredOverlays: schemaChange.retiredOverlays,
+                schemaAdoptMs: schemaChange.adoptMs,
+              }),
+          ...(queue && queue.outcome !== 'none'
+            ? {
+                queueOutcome: queue.outcome,
+                queueKept: queue.kept,
+                queueDropped: queue.dropped,
+              }
+            : {}),
           durationMs: this.now() - schemaStartedAt,
         });
+        this.recordQueueCrossing(openOutcome, queue);
         await this.refreshQueueDiagnostics(true);
       } catch (error) {
         this.telemetry.record({
@@ -1602,6 +1726,32 @@ export class CacheWorkerCore {
       }
     })();
     await this.initPromise;
+  }
+
+  /** One record per step of a wipe that carries the queue. */
+  private recordQueueCrossing(
+    openOutcome: CacheOpenOutcome,
+    queue: CacheQueueCrossing | undefined
+  ): void {
+    const steps = [
+      ['graphql_cache.queue_read', queue?.readMs],
+      ['graphql_cache.recovery_wipe', queue?.wipeMs],
+      ['graphql_cache.queue_import', queue?.importMs],
+    ] as const;
+    for (const [name, durationMs] of steps) {
+      if (durationMs === undefined) continue;
+      const failed =
+        name === 'graphql_cache.queue_read' && queue?.outcome === 'unreadable';
+      this.telemetry.record({
+        name,
+        operationCategory: 'initialization',
+        outcome: failed ? 'error' : 'success',
+        errorCode: failed ? 'integrity' : 'none',
+        openOutcome,
+        ...(queue ? { queueOutcome: queue.outcome } : {}),
+        durationMs,
+      });
+    }
   }
 
   private async openWhenOwnerLockIsFree(

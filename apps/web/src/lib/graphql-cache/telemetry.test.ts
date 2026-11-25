@@ -80,6 +80,9 @@ describe('cache telemetry privacy contract', () => {
       queueDiagnosticsAvailability: 'available',
       revisionCategory: 'authoritative-write',
       resetAttempt: 'wipe-before-open',
+      queueOutcome: 'partial',
+      queueKept: 2,
+      queueDropped: 1,
       queueDepth: 3,
       oldestAgeMs: 42,
       walFrames: 700,
@@ -95,6 +98,9 @@ describe('cache telemetry privacy contract', () => {
         queueDiagnosticsAvailability: 'available',
         revisionCategory: 'authoritative-write',
         resetAttempt: 'wipe-before-open',
+        queueOutcome: 'partial',
+        queueKept: 2,
+        queueDropped: 1,
         queueDepth: 3,
         oldestAgeMs: 42,
         walFrames: 700,
@@ -102,6 +108,69 @@ describe('cache telemetry privacy contract', () => {
     ]);
     expect(JSON.stringify(events)).not.toMatch(
       /private-scope|private-mutation|mutation Private/
+    );
+  });
+
+  it('exports an open schema change and drops unknown tiers and reasons', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    reporter.emit({
+      name: 'graphql_cache.schema_init',
+      operationCategory: 'initialization',
+      outcome: 'success',
+      schemaChange: 'reset',
+      schemaResetReason: 'roots',
+      schemaChangedTypes: 0,
+      schemaDroppedRecords: 1200,
+      schemaIncompleteDocuments: 0,
+      schemaRetiredOverlays: 3,
+      schemaAdoptMs: 250,
+    });
+    reporter.emit({
+      name: 'graphql_cache.schema_init',
+      operationCategory: 'initialization',
+      outcome: 'success',
+      schemaChange: 'GraphqlSecretType',
+      schemaResetReason: 'private',
+    } as unknown as CacheTelemetryObservation);
+
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        schemaChange: 'reset',
+        schemaResetReason: 'roots',
+        schemaChangedTypes: 0,
+        schemaDroppedRecords: 1200,
+        schemaIncompleteDocuments: 0,
+        schemaRetiredOverlays: 3,
+        schemaAdoptMs: 250,
+      })
+    );
+    expect(events[1]).not.toHaveProperty('schemaChange');
+    expect(events[1]).not.toHaveProperty('schemaResetReason');
+  });
+
+  it('exports the reset of a schema change whose own tier failed', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    reporter.emit({
+      name: 'graphql_cache.schema_init',
+      operationCategory: 'initialization',
+      outcome: 'success',
+      schemaChange: 'reset',
+      schemaResetReason: 'failed',
+    });
+
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        schemaChange: 'reset',
+        schemaResetReason: 'failed',
+      })
     );
   });
 
@@ -133,6 +202,34 @@ describe('cache telemetry privacy contract', () => {
       expect.not.objectContaining({ requestKind: expect.anything() }),
     ]);
     expect(JSON.stringify(events)).not.toContain('Private');
+  });
+
+  it('exports why the cache failed closed from a fixed list', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    const failedClosed = {
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'error',
+      ownerEvent: 'owner-lock-unavailable',
+      errorCode: 'lock',
+      unavailableReason: 'holder-kept',
+    } as const;
+    // The coordinator's event crosses the relay to the page.
+    expect(isCacheTelemetryObservation(failedClosed)).toBe(true);
+    reporter.emit(failedClosed);
+    reporter.emit({
+      ...failedClosed,
+      unavailableReason: 'another build keeps the database',
+    } as unknown as CacheTelemetryObservation);
+
+    expect(events).toEqual([
+      expect.objectContaining(failedClosed),
+      expect.not.objectContaining({ unavailableReason: expect.anything() }),
+    ]);
   });
 
   it('rejects relay payloads with unknown fields or ad-hoc names', () => {

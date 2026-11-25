@@ -25,7 +25,7 @@ data:
         grafana.macro-internal.com grafana;
         otlp.macro-internal.com otlp;
       }
-    limit_req_zone $server_name zone=ingest:1m rate=100r/s;
+    limit_req_zone $server_name zone=ingest:1m rate=400r/s;
     map $http_upgrade $connection_upgrade {
       default upgrade;
       "" close;
@@ -57,7 +57,7 @@ data:
       location ~ ^/v1/(traces|logs|metrics)$ {
         if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
-    limit_req zone=ingest burst=200 nodelay;
+    limit_req zone=ingest burst=800 nodelay;
     limit_req_status 429;
     proxy_read_timeout 30s;
 
@@ -68,7 +68,7 @@ data:
       location = /api/v1/write {
         if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
-    limit_req zone=ingest burst=200 nodelay;
+    limit_req zone=ingest burst=800 nodelay;
     limit_req_status 429;
     proxy_read_timeout 30s;
     auth_basic "metrics";
@@ -82,7 +82,7 @@ data:
       location = /loki/api/v1/push {
         if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
-    limit_req zone=ingest burst=200 nodelay;
+    limit_req zone=ingest burst=800 nodelay;
     limit_req_status 429;
     proxy_read_timeout 30s;
     auth_basic "metrics";

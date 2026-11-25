@@ -66,11 +66,14 @@ read their code, and follow that pattern rather than inventing a new one.
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge
   (iOS back swipe).
-- Keep navigation, filter pills, and create-menu taps silent; keep haptics for
-  long press and use `hapticImpact('light')` for valid message/AI sends. Navigation
-  acts on click so held or cancelled touches do nothing. `glass` and `island`
-  controls and channel inputs get iOS-app-only press animation from
-  `installGlassPress`; reuse it and keep Android and web free of the effect.
+- Add no native-only press animation: the iOS and Android apps look and
+  respond like a mobile browser, with normal tap feedback. Haptics confirm only
+  gestures with no cue under the finger: `hapticImpact('medium')` when a long
+  press fires (`touchHandler`, the mobile canvas), and `hapticImpact('light')`
+  as a swipe row (`SwipableRow`) or pull to refresh crosses its threshold and
+  backs off it, as a dock reorder drag starts, and as each reorder (drag or
+  arrow key) moves a view. Taps and sends stay silent. Navigation acts on click so held or cancelled touches do
+  nothing. Touch `glass` and `island` surfaces draw a flat hairline edge.
 
 ## Sheets, menus, and dialogs
 
@@ -99,9 +102,10 @@ read their code, and follow that pattern rather than inventing a new one.
   and cancel `pointerdown` and `mousedown` on the rows so the search field
   keeps the keyboard. It hands focus back to the field that had it when it
   opened, so its opener cancels `pointerdown` and `mousedown` too.
-  `Property.SheetEditor` (entity and date properties), `InlineTagsSheetPill`,
-  and the event composer's guest pill use it. Short lists (status, priority)
-  stay dropdowns: on touch, property menus leave focus where it was.
+  `Property.SheetEditor` (entity and date properties) and `InlineTagsSheetPill`
+  use it. Calendar's People picker instead opens a page inside its existing
+  composer sheet. Short lists (status, priority) stay dropdowns: on touch,
+  property menus leave focus where it was.
 - A backdrop tap only dismisses: `MobileDrawer` swallows the rest of that tap,
   so it never presses what the scrim covered, even when the sheet unmounts as
   it closes (a `<Show>` around it, or `openDialog`). It swallows only a tap
@@ -110,10 +114,12 @@ read their code, and follow that pattern rather than inventing a new one.
   per-sheet delays or click guards for it. A drag dismissal the owner refuses
   (to confirm a discard, or while an action is pending) snaps the sheet back
   open.
-- Sheets and touch dialogs close themselves when the app navigates to
-  another page; don't close them per sheet. Pass `keepOpenOnNavigation` only
-  when dismissing does something the user didn't choose (discards files
-  shared to the app, records a prompt as dismissed). A sheet that reopens
+- Sheets, touch dialogs and `Dropdown` menus close themselves when the app
+  navigates to another page; don't close them per sheet. An overlay built on
+  Kobalte's `Dialog` directly (a full-screen viewer) renders
+  `DialogClosesOnNavigation` inside its root instead. Pass
+  `keepOpenOnNavigation` only when dismissing does something the user didn't
+  choose (discards files shared to the app, records a prompt as dismissed). A sheet that reopens
   after a dialog closes checks `shownPage()` first: a navigation may have
   closed the dialog.
 - A sheet opened from another sheet stacks on it under its own scrim, which

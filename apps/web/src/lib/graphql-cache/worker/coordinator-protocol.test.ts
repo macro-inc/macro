@@ -204,6 +204,7 @@ describe('coordinator runtime protocol', () => {
       ...version,
       kind: 'cache-unavailable',
       reason: 'another app version holds the database',
+      unavailableReason: 'files-busy',
     };
     const superseded = {
       ...version,
@@ -218,7 +219,8 @@ describe('coordinator runtime protocol', () => {
     };
     for (const valid of [
       cacheUnavailable,
-      { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: 'recovery-failed' },
+      { ...version, kind: 'pong' },
       superseded,
       removeStale,
     ]) {
@@ -226,7 +228,10 @@ describe('coordinator runtime protocol', () => {
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
-      { ...cacheUnavailable, superseded: false },
+      { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: undefined },
+      { ...version, kind: 'pong', extra: true },
+      { ...cacheUnavailable, unavailableReason: 'disk on fire' },
       { ...superseded, reason: '' },
       { ...superseded, superseded: true },
       { ...superseded, buildTime: 1 },
@@ -361,6 +366,90 @@ describe('coordinator runtime protocol', () => {
         mail: { view: 'INBOX' },
         baseline: Array(5001).fill(baseline[0]),
       })
+    ).toBe(false);
+  });
+
+  it('validates channel timeline page, commit, evict and stats requests', () => {
+    const page = { channelId: 'c1', limit: 50 };
+    const pageRequest = (request: unknown) =>
+      isCacheRequest({ id: 1, kind: 'channel-timeline', request });
+    expect(pageRequest(page)).toBe(true);
+    expect(pageRequest({ ...page, threadRootId: 'm1', before: 'k1' })).toBe(
+      true
+    );
+    expect(pageRequest({ ...page, around: 'GraphqlChannelMessage:m1' })).toBe(
+      true
+    );
+    expect(pageRequest({ ...page, limit: 0 })).toBe(false);
+    expect(pageRequest({ ...page, limit: 101 })).toBe(false);
+    expect(pageRequest({ ...page, before: 'k1', after: 'k2' })).toBe(false);
+    expect(pageRequest({ ...page, before: 'has space' })).toBe(false);
+    expect(pageRequest({ ...page, around: 'm1' })).toBe(false);
+    expect(pageRequest({ ...page, channelId: '' })).toBe(false);
+    expect(pageRequest({ ...page, extra: true })).toBe(false);
+
+    const commit = {
+      channelId: 'c1',
+      seq: '5',
+      watermark: { kind: 'advance', from: '4' },
+      coverage: [
+        { start: '', end: '\u{10FFFF}' },
+        { threadRootId: 'm1', start: 'k1', end: 'k2' },
+      ],
+      removedIds: ['m2'],
+      droppedThreadRootIds: ['m3'],
+      touchedAtMs: 10,
+      reset: true,
+    };
+    const generation = '00000000-0000-4000-8000-000000000001';
+    // A commit is checked the same alone and beside the response it describes.
+    for (const request of [
+      (commit: unknown) => ({ kind: 'channel-timeline-commit', commit }),
+      (channelCommit: unknown) => ({ kind: 'write', data: {}, channelCommit }),
+      (channelCommit: unknown) => ({
+        kind: 'hydrate',
+        data: {},
+        channelCommit,
+      }),
+    ]) {
+      const accepts = (commit: unknown) =>
+        isCacheRequest({
+          id: 1,
+          generation,
+          ...request(commit),
+          ...(request(commit).kind === 'channel-timeline-commit'
+            ? {}
+            : { query: '{ user { id } }' }),
+        });
+      expect(accepts(commit)).toBe(true);
+      expect(accepts({ channelId: 'c1' })).toBe(true);
+      expect(accepts({ ...commit, watermark: { kind: 'lower' } })).toBe(true);
+      expect(accepts({})).toBe(false);
+      expect(accepts({ ...commit, extra: 1 })).toBe(false);
+      expect(accepts({ ...commit, seq: '-1' })).toBe(false);
+      expect(accepts({ ...commit, watermark: { kind: 'advance' } })).toBe(
+        false
+      );
+      expect(
+        accepts({ ...commit, watermark: { kind: 'lower', from: '1' } })
+      ).toBe(false);
+      expect(accepts({ ...commit, removedIds: [''] })).toBe(false);
+      expect(
+        accepts({ ...commit, coverage: [{ start: 'a b', end: 'c' }] })
+      ).toBe(false);
+    }
+
+    const evictRequest = (eviction: unknown) =>
+      isCacheRequest({ id: 1, kind: 'channel-timeline-evict', eviction });
+    expect(evictRequest({ touchedBeforeMs: 1, maxChannels: 200 })).toBe(true);
+    expect(evictRequest({ touchedBeforeMs: 1, maxChannels: 201 })).toBe(false);
+    expect(evictRequest({ touchedBeforeMs: 1.5, maxChannels: 1 })).toBe(false);
+
+    expect(isCacheRequest({ id: 1, kind: 'channel-timeline-stats' })).toBe(
+      true
+    );
+    expect(
+      isCacheRequest({ id: 1, kind: 'channel-timeline-stats', extra: 1 })
     ).toBe(false);
   });
 
@@ -655,6 +744,7 @@ describe('coordinator runtime protocol', () => {
   it.each([
     { ...version, kind: 'registered', tabId: 'tab' },
     { ...version, kind: 'registered', tabId: 'tab', ownerElsewhere: true },
+    { ...version, kind: 'registered', tabId: 'tab', coordinatorLockName: 'a' },
     {
       ...version,
       kind: 'become-owner',
@@ -687,9 +777,10 @@ describe('coordinator runtime protocol', () => {
       kind: 'engine-replaced',
       ownerEpoch: 2,
       openOutcome: 'opened-existing',
+      queue: 'preserved',
     },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
-    { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
+    { ...version, kind: 'connection-closed', reason: 'tab messageerror' },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });
@@ -703,6 +794,20 @@ describe('coordinator runtime protocol', () => {
           kind: 'registered',
           tabId: 'tab',
           ownerElsewhere,
+        }).ok
+      ).toBe(false);
+    }
+  );
+
+  it.each(['', 1, null])(
+    'rejects a registration whose coordinatorLockName is %s',
+    (coordinatorLockName) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'registered',
+          tabId: 'tab',
+          coordinatorLockName,
         }).ok
       ).toBe(false);
     }
@@ -722,11 +827,40 @@ describe('coordinator runtime protocol', () => {
         kind: 'engine-replaced',
         ownerEpoch: 2,
         openOutcome,
+        queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
       };
       expect(validateCoordinatorToTabEnvelope(message)).toEqual({
         ok: true,
         value: message,
       });
+    }
+  );
+
+  it.each([undefined, null, true, 'kept'])(
+    'rejects an engine whose queue state is %s',
+    (queue) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'engine-replaced',
+          ownerEpoch: 2,
+          openOutcome: 'reset-storage-uncertain',
+          queue,
+        }).ok
+      ).toBe(false);
+      expect(
+        validateEngineToCoordinatorEnvelope({
+          ...version,
+          kind: 'engine-ready',
+          tabId: 'tab',
+          ownerEpoch: 1,
+          ownerLockName: 'owner-lock',
+          ownerLockHeld: true,
+          databaseActionProof: 'wiped-before-open',
+          openOutcome: 'reset-storage-uncertain',
+          queue,
+        }).ok
+      ).toBe(false);
     }
   );
 
@@ -794,8 +928,30 @@ describe('coordinator runtime protocol', () => {
         ownerLockHeld: true,
         databaseActionProof: 'wiped-before-open',
         openOutcome: 'reset-storage-uncertain',
+        queue: 'preserved',
       }).ok
     ).toBe(true);
+    for (const [ownerLockClientId, ok] of [
+      ['client', true],
+      [undefined, true],
+      ['', false],
+      [1, false],
+    ] as const) {
+      expect(
+        validateEngineToCoordinatorEnvelope({
+          ...version,
+          kind: 'engine-ready',
+          tabId: 'tab',
+          ownerEpoch: 1,
+          ownerLockName: 'owner-lock',
+          ownerLockHeld: true,
+          ownerLockClientId,
+          databaseActionProof: 'opened-existing',
+          openOutcome: 'opened-existing',
+          queue: 'preserved',
+        }).ok
+      ).toBe(ok);
+    }
     expect(
       validateEngineToCoordinatorEnvelope({
         ...version,
@@ -806,6 +962,7 @@ describe('coordinator runtime protocol', () => {
         ownerLockHeld: false,
         databaseActionProof: 'wiped-before-open',
         openOutcome: 'reset-storage-uncertain',
+        queue: 'preserved',
       }).ok
     ).toBe(false);
     expect(
@@ -924,10 +1081,10 @@ describe('coordinator runtime protocol', () => {
     // The current versions moved past the unversioned name, so the lock
     // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t12'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t14'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t12'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t14'
     );
   });
 

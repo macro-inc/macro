@@ -16,6 +16,7 @@ import { EMAIL_TAB_ICONS } from '../tab-icons';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
+import { EmailLabelsSection } from '../views/email-labels-section';
 import { EmailSavedViewsSection } from '../views/email-saved-views';
 import { EmailInboxList } from './EmailInboxSelector';
 
@@ -180,7 +181,16 @@ export function EmailSidebar() {
 
         <EmailNavigation />
 
+        {/* Under Library on desktop; at the end of the phone's sheet. */}
+        <Show when={!isTouchDevice()}>
+          <EmailLabelsSection />
+        </Show>
+
         <EmailSavedViewsSection />
+
+        <Show when={isTouchDevice()}>
+          <EmailLabelsSection />
+        </Show>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

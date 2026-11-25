@@ -429,6 +429,7 @@ fn network_write_registers_matching_synthetic_dependencies_without_a_read() {
                         }
                     }),
                     identity: None,
+                    channel: None,
                 },
             )
             .await
@@ -483,6 +484,7 @@ fn a_write_normalized_beforehand_registers_what_a_normalizing_write_does() {
             variables: &variables,
             data: &data,
             identity: None,
+            channel: None,
         };
         let update_variables = object(json!({ "input": { "threadId": "thread-1" } }));
         let update = json!({
@@ -539,6 +541,7 @@ fn a_response_normalized_before_a_schema_install_is_refused() {
             variables: &variables,
             data: &data,
             identity: None,
+            channel: None,
         };
         let normalized = engine.normalize_network(None, input).unwrap();
         let schema = engine.schema_snapshot();

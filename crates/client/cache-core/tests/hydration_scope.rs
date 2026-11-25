@@ -21,6 +21,7 @@ fn guarded_hydration_binds_fresh_storage_and_survives_engine_replacement() {
             variables: variables.as_object().unwrap(),
             data: &data,
             identity: Some("viewer"),
+            channel: None,
         };
         let first = engine
             .hydrate_query_in_scope(write, &scope, vec![])
@@ -62,6 +63,7 @@ fn late_responses_never_repopulate_cleared_storage() {
             variables: &serde_json::Map::new(),
             data: &json!({}),
             identity: Some("viewer"),
+            channel: None,
         };
         assert!(matches!(
             engine.hydrate_query_in_scope(write, &scope, vec![]).await,
@@ -122,6 +124,7 @@ fn response_and_bound_account_must_both_match_the_captured_scope() {
                 variables: &serde_json::Map::new(),
                 data: &json!({}),
                 identity: response,
+                channel: None,
             };
             assert!(matches!(
                 engine.hydrate_query_in_scope(write, &scope, vec![]).await,

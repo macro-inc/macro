@@ -80,6 +80,7 @@ fn stale_enqueue_derives_query_link_repair_before_current_generation_settlement(
                         variables: &Default::default(),
                         data: &response,
                         identity: None,
+                        channel: None,
                     },
                     vec![],
                     Some(authority.generation),
@@ -171,6 +172,7 @@ fn stale_commands_keep_fresh_revalidations_through_retirement_and_settlement() {
                         variables: variables.as_object().unwrap(),
                         data: &data,
                         identity: None,
+                        channel: None,
                     },
                     vec![],
                     Some(Uuid::nil()),
@@ -319,7 +321,7 @@ fn malformed_authority_is_not_a_fresh_unproven_cache() {
                 fields: [(AUTHORITY_FIELD.into(), state)].into(),
             };
             storage
-                .put_batch(vec![(EntityKey(AUTHORITY_KEY.into()), marker.clone())])
+                .put_batch(vec![(EntityKey(AUTHORITY_META_KEY.into()), marker.clone())])
                 .await
                 .unwrap();
             let mut engine = Engine::new(storage);
@@ -334,7 +336,7 @@ fn malformed_authority_is_not_a_fresh_unproven_cache() {
             assert_eq!(
                 engine
                     .storage()
-                    .get_batch(&[EntityKey(AUTHORITY_KEY.into())])
+                    .get_batch(&[EntityKey(AUTHORITY_META_KEY.into())])
                     .await
                     .unwrap(),
                 vec![Some(marker)]
@@ -532,6 +534,7 @@ fn stale_success_settles_the_command_and_identity_without_restoring_its_response
                     variables: variables.as_object().unwrap(),
                     data: &response,
                     identity: Some("viewer"),
+                    channel: None,
                 },
                 vec![],
                 Some(allowed.authority.generation),
@@ -831,7 +834,7 @@ fn legacy_identity_hydrates_the_account_without_creating_a_permission_proof() {
             .storage()
             .get_batch(&[
                 EntityKey("__meta:identity".into()),
-                EntityKey(AUTHORITY_KEY.into()),
+                EntityKey(AUTHORITY_META_KEY.into()),
             ])
             .await
             .unwrap();
@@ -1129,6 +1132,7 @@ fn retired_calendar_create_can_select_its_committed_identity_without_response_co
                     variables: variables.as_object().unwrap(),
                     data: &response,
                     identity: Some("viewer"),
+                    channel: None,
                 },
                 vec![],
                 Some(allowed.authority.generation),

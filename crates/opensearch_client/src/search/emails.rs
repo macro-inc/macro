@@ -3,6 +3,7 @@ use crate::{
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         properties::build_tag_filter,
+        query::QueryKey,
         utils::should_wildcard_field_query_builder,
     },
 };
@@ -19,7 +20,6 @@ use terms::{MAX_TERM_CLAUSES, clauses, terms_query};
 pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const USER_ID_KEY: Option<&'static str> = Some("user_id");
     const TITLE_KEY: &'static str = "subject";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Emails;
 }
@@ -158,6 +158,9 @@ fn sent_between_query<'a>(
 
 pub(crate) struct EmailQueryBuilder {
     inner: SearchQueryBuilder<EmailSearchConfig>,
+    /// The inboxes the caller reads: their own and those delegated to them.
+    /// Unused when `ids_only`.
+    inbox_link_ids: Vec<String>,
     /// Threads every hit must belong to, on top of the access filter
     required_thread_ids: Vec<String>,
     /// link ids to query over
@@ -173,6 +176,9 @@ pub(crate) struct EmailQueryBuilder {
     bcc: Vec<String>,
     /// The recipients of the email message
     recipients: Vec<String>,
+    /// The inboxes whose labels the caller may read: their own and the ones
+    /// they manage. A label matches a message only in one of these.
+    label_link_ids: Vec<String>,
     /// Labels to include (emails must have at least one)
     include_labels: Vec<String>,
     /// Labels to exclude (emails must not have any)
@@ -183,10 +189,9 @@ pub(crate) struct EmailQueryBuilder {
     importance: Option<bool>,
     /// When true, only search the subject field (for name-only search mode)
     subject_only: bool,
-    /// Tag option ids the thread must carry (definition-agnostic)
-    tag_option_ids: Vec<String>,
-    /// Whether the thread must carry every tag option id instead of any
-    match_all_tags: bool,
+    /// Tag groups the thread must meet, each by any one of its option ids
+    /// (definition-agnostic)
+    tag_groups: Vec<Vec<String>>,
     /// Words or phrases matched against one part of each message
     text_conditions: Vec<EmailTextCondition>,
     /// Tags or labels each hit's thread must, or must not, carry
@@ -203,6 +208,7 @@ impl EmailQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
+            inbox_link_ids: Vec::new(),
             required_thread_ids: Vec::new(),
             link_ids: Vec::new(),
             exclude_link_ids: Vec::new(),
@@ -210,12 +216,12 @@ impl EmailQueryBuilder {
             cc: Vec::new(),
             bcc: Vec::new(),
             recipients: Vec::new(),
+            label_link_ids: Vec::new(),
             include_labels: Vec::new(),
             exclude_labels: Vec::new(),
             importance: None,
             subject_only: false,
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
             text_conditions: Vec::new(),
             label_conditions: Vec::new(),
             exclude_thread_ids: Vec::new(),
@@ -230,10 +236,39 @@ impl EmailQueryBuilder {
         fn page(page: u32) -> Self;
         fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
-        fn user_ids(user_ids: Vec<String>) -> Self;
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+    }
+
+    pub fn inbox_link_ids(mut self, inbox_link_ids: Vec<String>) -> Self {
+        self.inbox_link_ids = inbox_link_ids;
+        self
+    }
+
+    /// The mail a search reaches: the messages in the caller's inboxes and
+    /// the threads named by id, such as those shared with them, or with
+    /// `ids_only` those threads alone. Mail is reached by the inbox holding
+    /// it, never by its owner: an owner's inboxes are delegated one by one,
+    /// and the owner's id would reach all of them.
+    fn access_query<'a>(&'a self) -> Result<QueryType<'a>> {
+        if self.inner.ids_only {
+            return self.inner.build_filter_query(None);
+        }
+
+        let inboxes = QueryType::terms("link_id", self.inbox_link_ids.clone());
+        if self.inner.ids.is_empty() {
+            return Ok(inboxes);
+        }
+
+        let mut access = BoolQueryBuilder::new();
+        access.minimum_should_match(1);
+        access.should(QueryType::terms(
+            EmailSearchConfig::ID_KEY,
+            self.inner.ids.clone(),
+        ));
+        access.should(inboxes);
+        Ok(access.build().into())
     }
 
     pub fn required_thread_ids(mut self, required_thread_ids: Vec<String>) -> Self {
@@ -291,19 +326,30 @@ impl EmailQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
     pub fn text_conditions(mut self, text_conditions: Vec<EmailTextCondition>) -> Self {
         self.text_conditions = text_conditions;
         self
+    }
+
+    pub fn label_link_ids(mut self, label_link_ids: Vec<String>) -> Self {
+        self.label_link_ids = label_link_ids;
+        self
+    }
+
+    /// Messages carrying any of `labels` in an inbox whose labels the caller
+    /// may read. Labels people make are theirs, so a thread shared from
+    /// someone else's inbox never carries them for the caller.
+    fn carrying_labels<'a>(&'a self, labels: Vec<String>) -> QueryType<'a> {
+        let mut carrying = BoolQueryBuilder::new();
+        carrying.filter(QueryType::terms("labels", labels));
+        carrying.filter(QueryType::terms("link_id", self.label_link_ids.clone()));
+        QueryType::Bool(carrying.build())
     }
 
     pub fn label_conditions(mut self, label_conditions: Vec<EmailLabelCondition>) -> Self {
@@ -325,11 +371,16 @@ impl EmailQueryBuilder {
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         // A search of typed conditions alone (`is:unread`, `from:ana`) has no
         // terms, so it carries only the filters below.
-        let mut content_bool_query = if self.inner.terms.is_empty() {
-            self.inner.build_access_bool_query()?
-        } else {
-            self.inner.build_content_bool_query()?
-        };
+        // An unknown match type fails the search, as it does in every index.
+        if !self.inner.terms.is_empty() {
+            QueryKey::from_match_type(&self.inner.match_type)?;
+        }
+        let mut content_bool_query = BoolQueryBuilder::new();
+        content_bool_query.filter(self.access_query()?);
+        content_bool_query.filter(QueryType::term(
+            "_index",
+            EmailSearchConfig::ENTITY_INDEX.index_name(),
+        ));
 
         // A name search matches its terms in the subject alone.
         let term_fields = if self.subject_only {
@@ -349,12 +400,14 @@ impl EmailQueryBuilder {
                 clauses(text, keyword_fields, text_fields)
             })
             .sum();
-        // Each address or label filter a request lists is a clause of its own.
+        // Each address filter a request lists is a clause of its own; the
+        // excluded labels are two together: their names and the inboxes.
+        let excluded_labels = if self.exclude_labels.is_empty() { 0 } else { 2 };
         let listed_filters = self.sender.len()
             + self.cc.len()
             + self.bcc.len()
             + self.recipients.len()
-            + self.exclude_labels.len();
+            + excluded_labels;
         let compact = term_clauses + listed_filters > MAX_TERM_CLAUSES;
 
         // In subject_only mode (name search), replace with a match on TITLE_KEY (subject).
@@ -397,9 +450,12 @@ impl EmailQueryBuilder {
             let mut carries = BoolQueryBuilder::new();
             carries.minimum_should_match(1);
             if !condition.labels.is_empty() {
-                carries.should(QueryType::terms("labels", condition.labels.clone()));
+                carries.should(self.carrying_labels(condition.labels.clone()));
             }
-            if let Some(tags) = build_tag_filter(&condition.tag_option_ids, false) {
+            if !condition.tag_option_ids.is_empty()
+                && let Some(tags) =
+                    build_tag_filter(std::slice::from_ref(&condition.tag_option_ids))
+            {
                 carries.should(tags);
             }
             if condition.exclude {
@@ -463,18 +519,18 @@ impl EmailQueryBuilder {
         }
 
         if !self.include_labels.is_empty() {
-            content_bool_query.filter(QueryType::terms("labels", self.include_labels.clone()));
+            content_bool_query.filter(self.carrying_labels(self.include_labels.clone()));
         }
 
         // Tag filter: nested clause(s) matching the option ids in
         // `properties.values`. Thread-level properties are denormalized onto
         // every message doc, so filtering per doc filters the thread.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             content_bool_query.filter(nested);
         }
 
-        for label in &self.exclude_labels {
-            content_bool_query.must_not(QueryType::term("labels", label.clone()));
+        if !self.exclude_labels.is_empty() {
+            content_bool_query.must_not(self.carrying_labels(self.exclude_labels.clone()));
         }
 
         // Importance filter. Source of truth for the label logic is in
@@ -577,7 +633,7 @@ pub(crate) struct EmailIndex {
 pub struct EmailSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
-    pub user_ids: Vec<String>,
+    pub inbox_link_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
@@ -586,6 +642,7 @@ pub struct EmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    pub label_link_ids: Vec<String>,
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
@@ -595,8 +652,7 @@ pub struct EmailSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub subject_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub text_conditions: Vec<EmailTextCondition>,
     pub label_conditions: Vec<EmailLabelCondition>,
     pub exclude_thread_ids: Vec<String>,
@@ -611,7 +667,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .page_size(args.page_size)
             .page(args.page)
             .user_id(&args.user_id)
-            .user_ids(args.user_ids)
+            .inbox_link_ids(args.inbox_link_ids)
             .ids(args.thread_ids)
             .required_thread_ids(args.required_thread_ids)
             .link_ids(args.link_ids)
@@ -620,14 +676,14 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .cc(args.cc)
             .bcc(args.bcc)
             .recipients(args.recipients)
+            .label_link_ids(args.label_link_ids)
             .include_labels(args.include_labels)
             .exclude_labels(args.exclude_labels)
             .importance(args.importance)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .subject_only(args.subject_only)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
             .text_conditions(args.text_conditions)
             .label_conditions(args.label_conditions)
             .exclude_thread_ids(args.exclude_thread_ids)

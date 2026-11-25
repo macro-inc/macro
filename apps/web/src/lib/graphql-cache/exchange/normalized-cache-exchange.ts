@@ -34,6 +34,10 @@ import { externalWriteVersion, predatesExternalWrite } from './external-writes';
  *   head receives a synthetic `queued` disposition instead of waiting.
  * - Without one: forwarded normally; successful responses are normalized
  *   through the standard write path so dependent cached queries update.
+ *   The caller receives the result once those writes finish.
+ * - A mutation whose context names a trace (`TRACE_PARENT_CONTEXT_KEY`) is
+ *   enqueued, attempted and sent in that trace. Without optimism, its cache
+ *   writes are that trace's `graphql.mutation.cache_effects` phase.
  *
  * Cache failures normally degrade to the network. An admitted optimistic
  * enqueue with an unknown durable outcome emits an error instead, because
@@ -41,7 +45,11 @@ import { externalWriteVersion, predatesExternalWrite } from './external-writes';
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -75,16 +83,21 @@ import {
   tap,
 } from 'wonka';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
+import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
 import type { CacheHost } from '../host/types';
 import {
   type CacheReadPriority,
   type CacheRevision,
+  type ChannelCommitArgs,
+  type ChannelCommitOutcome,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
   isAdmittedEnqueueUncertainError,
+  isCacheOutageError,
   isCacheRevision,
-  isOwnerEpochLostError,
+  isEngineAbsentError,
   isOwnerLockUnavailableError,
+  isWriteNotAdmittedError,
   type QueryRevalidationWire,
   type ReadResult,
 } from '../protocol';
@@ -178,6 +191,12 @@ declare module '@urql/core' {
      * rereads rank as ordinary reads, behind those of mounted views.
      */
     backgroundReader?: true;
+    /**
+     * What a network result proves about a channel, stored in the transaction
+     * that stores the result. Not read from mutations: the queue replays those
+     * without a context.
+     */
+    channelCommit?: (data: unknown) => ChannelCommitArgs | undefined;
   }
 }
 
@@ -201,6 +220,11 @@ export type NormalizedCacheResultMetadata =
       revision?: CacheRevision;
       /** Local-only acknowledgement; never rejects or republishes response data. */
       persistence?: Promise<CacheRevision | undefined>;
+      /**
+       * What the context's channel commit did; undefined when nothing of it was
+       * stored. Never rejects. Present whenever the context made a commit.
+       */
+      channelCommit?: Promise<ChannelCommitOutcome | undefined>;
     }
   | { source: 'normalized-cache-hit' }
   | { source: 'normalized-cache-patch' }
@@ -221,11 +245,13 @@ export function normalizedCacheResultMetadata(
     return { source };
   }
   if (source !== 'live-network') return;
-  const { revision, persistence, cacheEffectsApplied } = metadata as {
-    cacheEffectsApplied?: unknown;
-    revision?: unknown;
-    persistence?: unknown;
-  };
+  const { revision, persistence, cacheEffectsApplied, channelCommit } =
+    metadata as {
+      channelCommit?: unknown;
+      cacheEffectsApplied?: unknown;
+      revision?: unknown;
+      persistence?: unknown;
+    };
   return {
     source,
     ...(typeof cacheEffectsApplied === 'boolean'
@@ -234,6 +260,13 @@ export function normalizedCacheResultMetadata(
     ...(isCacheRevision(revision) ? { revision } : {}),
     ...(isThenable(persistence)
       ? { persistence: persistence as Promise<CacheRevision | undefined> }
+      : {}),
+    ...(isThenable(channelCommit)
+      ? {
+          channelCommit: channelCommit as Promise<
+            ChannelCommitOutcome | undefined
+          >,
+        }
       : {}),
   };
 }
@@ -247,6 +280,12 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
     typeof (value as { then?: unknown }).then === 'function'
   );
 }
+
+/** What storing a query's network result answered. */
+type StoredQueryResult = {
+  revision: CacheRevision;
+  channel: ChannelCommitOutcome | undefined;
+};
 
 function withResultMetadata(
   result: OperationResult,
@@ -436,7 +475,7 @@ function operationCacheEffects(data: unknown): CacheEffect[] {
   );
 }
 
-function uncertainEnqueueResult(op: Operation, error: Error): OperationResult {
+function unsentEnqueueResult(op: Operation, error: Error): OperationResult {
   return {
     operation: op,
     data: undefined,
@@ -483,6 +522,12 @@ export interface NormalizedCacheExchangeOptions {
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
   onCacheError?: (error: unknown, op: Operation) => void;
   /**
+   * Subscribes a function that asks the network again for every mounted query,
+   * to call after updates pushed to this client were missed: they are in
+   * neither the cache nor what the queries show.
+   */
+  onUpdatesMissed?: (refetch: () => void) => () => void;
+  /**
    * Extracts the session identity (e.g. viewer id, `data.user.id`) from a
    * response. The extracted value is passed to the cache as an opaque tag;
    * a write tagged with a different identity than the one bound to the
@@ -527,6 +572,8 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
+    // Asked for while urql still waits for their answer, which drops the ask.
+    const owedRefetches = new Map<number, Operation>();
     const documentReader = createDocumentQueryReader(host);
     // Teardown and generation changes cancel document reads in flight. The
     // read is already stale then, so the cancellation is not a cache failure.
@@ -551,6 +598,7 @@ export function normalizedCacheExchange(
     type RetainedReplacementFallback = {
       version: number;
       writeArgs: Parameters<CacheHost['writeQuery']>[0];
+      outage: boolean;
       readyPending: boolean;
       recovering: boolean;
       invalidated: boolean;
@@ -560,7 +608,8 @@ export function normalizedCacheExchange(
       /** Includes background persistence for dependency/replacement ordering. */
       networkBoundQueries: number;
       networkRequestsInFlight: number;
-      replacementFallback: boolean;
+      /** Why the network answers for the cache, until an engine serves it again. */
+      replacementFallback?: 'replacement' | 'outage';
       deferredAffected: boolean;
       completedReplacementFallback: boolean;
       networkRegistrationSatisfied: boolean;
@@ -573,13 +622,19 @@ export function normalizedCacheExchange(
     // that unsubscribe as soon as the early network result reaches toPromise().
     const queryResultTurns = new Map<number, Promise<void>>();
     const queryStates = new Map<number, QueryState>();
+    const fallbackAfter = (
+      error: unknown,
+      state: QueryState
+    ): QueryState['replacementFallback'] =>
+      state.replacementFallback === 'outage' || isCacheOutageError(error)
+        ? 'outage'
+        : 'replacement';
     const queryState = (key: number): QueryState => {
       let state = queryStates.get(key);
       if (!state) {
         state = {
           networkBoundQueries: 0,
           networkRequestsInFlight: 0,
-          replacementFallback: false,
           deferredAffected: false,
           completedReplacementFallback: false,
           networkRegistrationSatisfied: false,
@@ -659,6 +714,20 @@ export function normalizedCacheExchange(
       );
     };
 
+    const refetchAfterOutage = (key: number): void => {
+      const op = activeOps.get(key);
+      if (!op) return;
+      client.reexecuteOperation(
+        makeOperation(op.kind, op, {
+          ...op.context,
+          requestPolicy:
+            op.context.requestPolicy === 'cache-only'
+              ? 'cache-only'
+              : 'network-only',
+        })
+      );
+    };
+
     const recoverRetainedReplacementFallback = (key: number): void => {
       const state = queryStates.get(key);
       const retained = state?.retainedReplacementFallback;
@@ -666,6 +735,14 @@ export function normalizedCacheExchange(
         return;
       retained.readyPending = true;
       if (retained.recovering || state.networkBoundQueries > 0) return;
+      if (retained.outage) {
+        // An outage has no bound, and another page may have served again and
+        // written a newer answer since this one: ask again.
+        retained.invalidated = true;
+        state.retainedReplacementFallback = undefined;
+        refetchAfterOutage(key);
+        return;
+      }
       retained.recovering = true;
       const recovery = (async () => {
         while (
@@ -696,7 +773,7 @@ export function normalizedCacheExchange(
               return;
             }
             state.retainedReplacementFallback = undefined;
-            state.replacementFallback = false;
+            state.replacementFallback = undefined;
             state.deferredAffected = false;
             state.completedReplacementFallback = false;
             state.networkRegistrationSatisfied = false;
@@ -873,7 +950,7 @@ export function normalizedCacheExchange(
           }
           const registrationOnly = state.completedReplacementFallback;
           state.completedReplacementFallback = false;
-          state.replacementFallback = false;
+          state.replacementFallback = undefined;
           if (state.retainedReplacementFallback) {
             recoverRetainedReplacementFallback(key);
             continue;
@@ -954,7 +1031,7 @@ export function normalizedCacheExchange(
         const deferred = state.deferredAffected;
         state.deferredAffected = false;
         const replacementFallback = state.replacementFallback;
-        state.replacementFallback = false;
+        state.replacementFallback = undefined;
         if (deferred) {
           state.completedReplacementFallback = false;
           if (!replacementRegistrationSatisfied) {
@@ -1166,11 +1243,11 @@ export function normalizedCacheExchange(
         } catch (error) {
           reportReadError(error, op);
           if (
-            isOwnerEpochLostError(error) &&
+            isEngineAbsentError(error) &&
             queryStates.get(op.key) === readState &&
             (readVersion.isCurrent() || readState.networkBoundQueries > 0)
           ) {
-            readState.replacementFallback = true;
+            readState.replacementFallback = fallbackAfter(error, readState);
           }
         }
         if (!readVersion.isCurrent()) {
@@ -1258,15 +1335,23 @@ export function normalizedCacheExchange(
         const enqueueTelemetry = queueTelemetry.enqueue({
           uuid: args.uuid,
           operationName: args.operationName,
+          parent: mutationTraceParentOf(op),
         });
         let enqueue: EnqueueOptimisticMutationResult;
         let linkPatchesDegraded = false;
         try {
           enqueue = await host.enqueueOptimisticMutation(args, claim);
         } catch (error) {
+          // Whatever else changed meanwhile, this write is nowhere. Sending it
+          // now would put it ahead of writes its caller has made since.
+          if (isWriteNotAdmittedError(error)) {
+            enqueueTelemetry.failed('not-admitted');
+            options.onCacheError?.(error, op);
+            return unsentEnqueueResult(op, error);
+          }
           if (!mutationQueue.isCurrent(epoch)) {
             enqueueTelemetry.failed('storage-changed');
-            return uncertainEnqueueResult(
+            return unsentEnqueueResult(
               op,
               new Error('cache storage changed during enqueue', {
                 cause: error,
@@ -1278,7 +1363,7 @@ export function normalizedCacheExchange(
             options.onCacheError?.(error, op);
             // Fencing the old engine does not remove a committed queue entry.
             // Never forward or retry an enqueue whose reply was lost.
-            return uncertainEnqueueResult(op, error);
+            return unsentEnqueueResult(op, error);
           }
           // Another context holds the database, so the enqueue never reached
           // an engine. Send it as a disabled cache would.
@@ -1330,9 +1415,14 @@ export function normalizedCacheExchange(
               claim
             );
           } catch (fallbackError) {
+            if (isWriteNotAdmittedError(fallbackError)) {
+              enqueueTelemetry.failed('not-admitted');
+              options.onCacheError?.(fallbackError, op);
+              return unsentEnqueueResult(op, fallbackError);
+            }
             if (!mutationQueue.isCurrent(epoch)) {
               enqueueTelemetry.failed('storage-changed');
-              return uncertainEnqueueResult(
+              return unsentEnqueueResult(
                 op,
                 new Error('cache storage changed during enqueue', {
                   cause: fallbackError,
@@ -1342,7 +1432,7 @@ export function normalizedCacheExchange(
             options.onCacheError?.(fallbackError, op);
             if (isAdmittedEnqueueUncertainError(fallbackError)) {
               enqueueTelemetry.failed('uncertain');
-              return uncertainEnqueueResult(op, fallbackError);
+              return unsentEnqueueResult(op, fallbackError);
             }
             enqueueTelemetry.failed('rejected');
             enqueueForward(op);
@@ -1351,7 +1441,7 @@ export function normalizedCacheExchange(
         }
         if (!mutationQueue.isCurrent(epoch)) {
           enqueueTelemetry.failed('storage-changed');
-          return uncertainEnqueueResult(
+          return unsentEnqueueResult(
             op,
             new Error('cache storage changed during enqueue')
           );
@@ -1361,18 +1451,46 @@ export function normalizedCacheExchange(
           replaced: enqueue.upsertKind.kind === 'replaced-pending',
           claimed: enqueue.initialClaim.kind === 'claimed',
           linkPatchesDegraded,
+          engine: enqueue.engine,
         });
         return await mutationQueue.admit(op, enqueue, epoch);
       }
 
-      /** Applies operation cache effects serially and isolates every failure. */
+      /** A result's channel commit; a failing caller only loses the commit. */
+      function channelCommitOf(
+        result: OperationResult
+      ): ChannelCommitArgs | undefined {
+        const op = result.operation;
+        if (op.kind === 'mutation' || result.data == null || result.error)
+          return undefined;
+        try {
+          return op.context.channelCommit?.(result.data);
+        } catch (error) {
+          options.onCacheError?.(error, op);
+          return undefined;
+        }
+      }
+
+      /**
+       * Applies operation cache effects serially and isolates every failure.
+       * With a span, each effect is a child span named for `phase`, and the
+       * host's own spans for it start inside that child.
+       */
       async function applyOperationCacheEffects(
         op: Operation,
         effects: CacheEffect[],
         isCurrent: () => boolean = () => true,
-        span?: Span
+        span?: Span,
+        phase: 'subscription' | 'mutation' = 'subscription',
+        channel?: {
+          commit: ChannelCommitArgs;
+          stored: (outcome: ChannelCommitOutcome | undefined) => void;
+        }
       ): Promise<boolean> {
         let applied = true;
+        // The commit goes with the frame's last write, and only once everything
+        // before it is stored: it says the device holds the whole frame.
+        const lastWrite = effects.findLast((effect) => effect.kind === 'write');
         const generation =
           typeof op.context.cacheSessionGeneration === 'string'
             ? op.context.cacheSessionGeneration
@@ -1384,29 +1502,39 @@ export function normalizedCacheExchange(
           if (!current()) return false;
           const effectSpan = span?.span(
             effect.kind === 'write'
-              ? 'graphql.subscription.cache_write'
-              : 'graphql.subscription.cache_delete'
+              ? `graphql.${phase}.cache_write`
+              : `graphql.${phase}.cache_delete`
           );
-          try {
-            if (effect.kind === 'write') {
-              await host.writeQuery({
-                generation,
-                query: queryText(op),
-                operationName: operationName(op),
-                variables: op.variables as Record<string, unknown> | undefined,
-                data: effect.data,
-              });
-            } else {
+          const send = async () => {
+            if (effect.kind === 'delete') {
               await host.deleteRecords([effect.key], generation);
+              return;
             }
+            const write = await host.writeQuery({
+              generation,
+              query: queryText(op),
+              operationName: operationName(op),
+              variables: op.variables as Record<string, unknown> | undefined,
+              data: effect.data,
+              channelCommit:
+                effect === lastWrite && applied ? channel?.commit : undefined,
+            });
+            if (effect === lastWrite) channel?.stored(write.channel);
+          };
+          const failure =
+            phase === 'mutation'
+              ? 'Mutation cache effect failed'
+              : 'Subscription cache effect failed';
+          try {
+            await (effectSpan ? effectSpan.run(send) : send());
           } catch (error) {
             applied = false;
-            span?.error('Subscription cache effect failed');
+            span?.error(failure);
             span?.setAttr('cache.failure', classifyCacheError(error));
             effectSpan?.setAttr('cache.failure', classifyCacheError(error));
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
-            effectSpan?.error('Subscription cache effect failed');
+            effectSpan?.error(failure);
             options.onCacheError?.(error, op);
           } finally {
             effectSpan?.end();
@@ -1421,8 +1549,9 @@ export function normalizedCacheExchange(
       async function persistQueryResult(
         result: OperationResult,
         state: QueryState,
-        resultVersion: number
-      ): Promise<CacheRevision | undefined> {
+        resultVersion: number,
+        channelCommit: ChannelCommitArgs | undefined
+      ): Promise<StoredQueryResult | undefined> {
         const op = result.operation;
         const releaseTurn = await acquireQueryResultTurn(op.key);
         const reportError = (error: unknown): void => {
@@ -1466,12 +1595,14 @@ export function normalizedCacheExchange(
             data: result.data,
             identity: options.extractIdentity?.(result.data),
             registerDependencies: isActive(),
+            channelCommit,
           };
           const retained: RetainedReplacementFallback | undefined =
             result.error === undefined && result.hasNext !== true && isActive()
               ? {
                   version: resultVersion,
                   writeArgs,
+                  outage: state.replacementFallback === 'outage',
                   readyPending: false,
                   recovering: false,
                   invalidated: false,
@@ -1516,7 +1647,10 @@ export function normalizedCacheExchange(
             if (state.retainedReplacementFallback === retained) {
               state.retainedReplacementFallback = undefined;
             }
-            return deletion?.revision ?? write.revision;
+            return {
+              revision: deletion?.revision ?? write.revision,
+              channel: write.channel,
+            };
           } catch (error) {
             reportError(error);
             if (
@@ -1557,9 +1691,10 @@ export function normalizedCacheExchange(
               retained &&
               isActive() &&
               state.networkResultVersion === resultVersion &&
-              (state.replacementFallback || isOwnerEpochLostError(error))
+              (state.replacementFallback || isEngineAbsentError(error))
             ) {
-              state.replacementFallback = true;
+              state.replacementFallback = fallbackAfter(error, state);
+              retained.outage = state.replacementFallback === 'outage';
               state.retainedReplacementFallback = retained;
             }
             return undefined;
@@ -1582,39 +1717,99 @@ export function normalizedCacheExchange(
         }
       }
 
-      async function deleteReportedRecords(result: OperationResult) {
+      /** With a span, the host's own spans for the deletion start inside it. */
+      async function deleteReportedRecords(
+        result: OperationResult,
+        span?: Span
+      ) {
         const op = result.operation;
         if (result.error || result.hasNext || result.data == null)
           return { attempted: false, revision: undefined };
         try {
           const keys = options.deletedRecordKeys?.(result) ?? [];
+          span?.setAttr('cache.deleted_record_count', keys.length);
           if (keys.length === 0)
             return { attempted: false, revision: undefined };
-          const deletion = await host.deleteRecords(
-            keys,
-            typeof op.context.cacheSessionGeneration === 'string'
-              ? op.context.cacheSessionGeneration
-              : UNKNOWN_CACHE_GENERATION
-          );
+          const send = () =>
+            host.deleteRecords(
+              keys,
+              typeof op.context.cacheSessionGeneration === 'string'
+                ? op.context.cacheSessionGeneration
+                : UNKNOWN_CACHE_GENERATION
+            );
+          const deletion = await (span ? span.run(send) : send());
           return { ...deletion, attempted: true };
         } catch (error) {
+          span?.error('Mutation cache deletion failed');
+          span?.setAttr('cache.failure', classifyCacheError(error));
           options.onCacheError?.(error, op);
         }
         return { attempted: true, revision: undefined };
       }
 
+      /**
+       * A successful unqueued mutation's cache effects and reported
+       * deletions, as one `graphql.mutation.cache_effects` phase of the trace
+       * its caller named, so a trace shows how long the caller waited on the
+       * cache after the server answered.
+       */
+      async function applyTracedMutationCacheEffects(
+        result: OperationResult,
+        parent: TraceContext
+      ): Promise<void> {
+        const op = result.operation;
+        const effects = operationCacheEffects(result.data);
+        await parent.run(() =>
+          Telemetry.span('graphql.mutation.cache_effects', async (span) => {
+            span.setAttr(
+              'graphql.operation.name',
+              operationName(op) ?? 'unknown'
+            );
+            const applied = await applyOperationCacheEffects(
+              op,
+              effects,
+              undefined,
+              span,
+              'mutation'
+            );
+            const deletion = await deleteReportedRecords(result, span);
+            // A failed deletion reports no revision.
+            const deleted =
+              !deletion.attempted || deletion.revision !== undefined;
+            span.setAttr('cache.effects_applied', applied && deleted);
+          })
+        );
+      }
+
       function refetchActiveQueries() {
-        for (const operation of activeOps.values())
-          client.reexecuteOperation(
-            makeOperation('query', operation, {
-              ...operation.context,
-              requestPolicy:
-                operation.context.requestPolicy === 'cache-only'
-                  ? 'cache-only'
-                  : 'network-only',
-              cacheSessionGeneration: cacheSessionGeneration.capture(),
-            })
-          );
+        for (const operation of activeOps.values()) {
+          if (operation.context.requestPolicy !== 'cache-only')
+            owedRefetches.set(operation.key, operation);
+          refetchActiveQuery(operation);
+        }
+      }
+
+      function refetchActiveQuery(operation: Operation) {
+        client.reexecuteOperation(
+          makeOperation('query', operation, {
+            ...operation.context,
+            requestPolicy:
+              operation.context.requestPolicy === 'cache-only'
+                ? 'cache-only'
+                : 'network-only',
+            cacheSessionGeneration: cacheSessionGeneration.capture(),
+          })
+        );
+      }
+
+      /** Asks again once `result` has reached its subscribers. */
+      function refetchOwed({ operation, hasNext, stale }: OperationResult) {
+        // A stale result says that its network answer is still on its way.
+        if (hasNext || stale || !owedRefetches.has(operation.key)) return;
+        queueMicrotask(() => {
+          const owed = owedRefetches.get(operation.key);
+          if (owed) refetchActiveQuery(owed);
+        });
       }
 
       async function writeThrough(
@@ -1664,6 +1859,7 @@ export function normalizedCacheExchange(
           };
         }
 
+        const channelCommit = channelCommitOf(result);
         const output =
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
@@ -1680,6 +1876,7 @@ export function normalizedCacheExchange(
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
           const generation = subscriptionGenerations.get(op.key);
+          let outcome: ChannelCommitOutcome | undefined;
           const effects = runSubscriptionCacheEffects(
             result,
             previousEffects,
@@ -1690,7 +1887,14 @@ export function normalizedCacheExchange(
                 () =>
                   generation !== undefined &&
                   subscriptionGenerations.get(op.key) === generation,
-                span
+                span,
+                'subscription',
+                channelCommit && {
+                  commit: channelCommit,
+                  stored: (stored) => {
+                    outcome = stored;
+                  },
+                }
               )
           );
           subscriptionEffectChains.set(op.key, effects);
@@ -1699,6 +1903,9 @@ export function normalizedCacheExchange(
             return withResultMetadata(result, {
               source: 'live-network',
               cacheEffectsApplied,
+              ...(channelCommit
+                ? { channelCommit: Promise.resolve(outcome) }
+                : {}),
             });
           } finally {
             if (subscriptionEffectChains.get(op.key) === effects) {
@@ -1735,6 +1942,7 @@ export function normalizedCacheExchange(
               data: result.data,
               identity: options.extractIdentity?.(result.data),
               entityResolvers,
+              channelCommit,
             });
             const deletion = await deleteReportedRecords(result);
             return withResultMetadata(
@@ -1745,11 +1953,14 @@ export function normalizedCacheExchange(
               {
                 source: 'live-network',
                 revision: deletion?.revision ?? hydration.revision,
+                ...(channelCommit
+                  ? { channelCommit: Promise.resolve(hydration.channel) }
+                  : {}),
               }
             );
           } catch (error) {
             options.onCacheError?.(error, op);
-            return {
+            const failed = {
               ...result,
               data: undefined,
               error: new CombinedError({
@@ -1757,6 +1968,12 @@ export function normalizedCacheExchange(
                   error instanceof Error ? error : new Error(String(error)),
               }),
             };
+            return channelCommit
+              ? withResultMetadata(failed, {
+                  source: 'live-network',
+                  channelCommit: Promise.resolve(undefined),
+                })
+              : failed;
           }
         } else if (op.kind === 'query') {
           const state = queryState(op.key);
@@ -1790,20 +2007,26 @@ export function normalizedCacheExchange(
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
           if (result.data != null && !result.error) state.cacheReadVersion += 1;
-          const persistence =
+          const stored =
             op.context.persistResult === false
               ? Promise.resolve(undefined)
-              : persistQueryResult(result, state, version);
+              : persistQueryResult(result, state, version, channelCommit);
           return withResultMetadata(result, {
             source: 'live-network',
-            persistence,
+            persistence: stored.then((answer) => answer?.revision),
+            ...(channelCommit
+              ? { channelCommit: stored.then((answer) => answer?.channel) }
+              : {}),
           });
         } else if (op.kind === 'mutation') {
           const attempt = queueAttemptOf(op);
           if (attempt) return await mutationQueue.settle(result, attempt);
 
           const optimistic = optimisticContextOf(op);
-          if (result.data != null && !result.error) {
+          const parent = mutationTraceParentOf(op);
+          if (result.data != null && !result.error && parent) {
+            await applyTracedMutationCacheEffects(result, parent);
+          } else if (result.data != null && !result.error) {
             await applyOperationCacheEffects(
               op,
               operationCacheEffects(result.data)
@@ -1826,6 +2049,8 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
+          if (op.context.requestPolicy === 'network-only')
+            owedRefetches.delete(op.key);
           // A contextless same-key revalidation shares the mounted reader's
           // scope and its reread rank.
           const mounted = activeOps.get(op.key)?.context;
@@ -1879,9 +2104,11 @@ export function normalizedCacheExchange(
             subscriptionGenerations.set(op.key, {});
           }
           if (op.kind === 'teardown') {
+            mutationQueue.abandon(op.key);
             hydrationRequests.delete(op.key);
             subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
+            owedRefetches.delete(op.key);
             liveQueries.delete(op.key);
             documentReader.forget(op.key);
             queryStates.delete(op.key);
@@ -1901,7 +2128,13 @@ export function normalizedCacheExchange(
       if (!host.disabled) {
         mutationQueue.start();
       }
-      const cleanups = [unsubscribePush, stopSettlements];
+      const cleanups = [
+        unsubscribePush,
+        stopSettlements,
+        mutationQueue.dispose,
+      ];
+      const stopRefetching = options.onUpdatesMissed?.(refetchActiveQueries);
+      if (stopRefetching) cleanups.push(stopRefetching);
       if (!host.disabled) {
         cleanups.push(
           cacheSessionGeneration.onChanged(() => {
@@ -1924,12 +2157,15 @@ export function normalizedCacheExchange(
         cleanups.push(
           host.onCacheGenerationChanged((change) => {
             cacheGeneration += 1;
-            if (change.storage === 'reset') mutationQueue.resetStorage();
+            if (change.queue === 'reset') mutationQueue.resetStorage();
             liveQueries.clear();
             documentReader.clear();
             mutationQueue.wake();
           })
         );
+        // A host that was paused let the queue's poll lapse.
+        if (host.onOwnerReady)
+          cleanups.push(host.onOwnerReady(mutationQueue.wake));
         if (typeof addEventListener === 'function') {
           addEventListener('online', mutationQueue.wake);
           cleanups.push(() =>
@@ -1944,6 +2180,7 @@ export function normalizedCacheExchange(
       options.signal?.addEventListener('abort', dispose, { once: true });
       return pipe(
         merge([affectedResults$, cacheResults$, mutationPrep$, forwarded$]),
+        tap(refetchOwed),
         map((result) => {
           if (
             result.operation.kind !== 'query' ||

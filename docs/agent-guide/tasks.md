@@ -441,12 +441,20 @@ saved-date semantics do not change.
 Behind `enable-time-tracking`. A task's property row has a Time pill
 (`InlineTaskTimeLogged` in `Notebook.tsx`, from `features/time-tracking`)
 showing Time logged, the sum of the task's entries, or "Time" when nothing is
-logged. On desktop it opens a popover: a length input that reads `1h 30m`,
+logged. It wears the row's other chips' look (`secondary`, `xs`, a
+`size-3 touch:size-4` icon). On desktop it opens a popover: a length input that reads `1h 30m`,
 `1.5h`, `90m`, `1:30` or a bare number of hours and shows what it understood
 (Enter logs it for today), one-tap 15m/30m/1h/2h, Custom entry (length, day,
-optional start and end, note) and the entries by day with day totals. On
+optional start and end, note) and the entries by day with day totals. An
+entry reads like a Discussion comment (`EntryList`, the same rows in the
+popover, the phone sheet and a My week cell): the person's picture and name,
+quiet (muted, regular weight), then quieter still the start–end span and
+"timer" when a timer made it (wrapped under the name when they do not fit
+beside it, never cut), the length and the author's ⋯ menu on that line
+(others' rows keep its space), and the note in full ink at the row's size
+directly under the name, wrapped and cut to three lines with Show more. On
 touch it opens a bottom sheet with the one-tap lengths, Custom entry and the
-entries; swipe one's own entry right to edit it, left to delete it. Only
+entries; tap one's own entry, or swipe it right, to edit it, left to delete it. Only
 people with edit access log; everyone who can see the task sees its entries;
 only an entry's author changes or deletes it. Time logged never shows as a
 generic property row or details row, and the Add property picker never offers
@@ -546,6 +554,22 @@ and phone, counts only the days shown.
 
 The grid reads the primary and reads again after the viewer's own writes (and
 their other sessions'), so a cell just typed shows its new total at once.
+
+Every task a time view lists (a project's Time tab and phone sheet, desktop
+My week, the phone and tablet My week) reads as its Tasks list row: priority
+then status before the name, drawn by the list's own `TaskPropertyControl`
+at the list's spacing, and the viewer's running timer after the name. They
+only show the values, as a task's status does on the timeline: a press on
+them opens the task like the rest of the row, and the task is where they
+change. Editing them in place would need each task's permission, which the
+server checks one task at a time, on reports of up to thousands of tasks.
+They come from the summary's task (`TimeSummaryTaskFields`), the cached task
+document the Tasks list also reads, so a status or priority changed
+elsewhere shows on an open report. A task put on the sheet with Add task is
+not in the summary until it has time, so its row reads that one task in the
+same shape (`ReportTask`, through the same cached document) and shows them at
+once, their place held while a task the cache lacks is read; when its first
+time is logged the summary takes over and the row stays as it was.
 
 ## Import from Linear
 

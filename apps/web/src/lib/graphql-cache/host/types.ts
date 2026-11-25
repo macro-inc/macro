@@ -21,6 +21,14 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelChange,
+  ChannelCommitArgs,
+  ChannelTimelineCacheArgs,
+  ChannelTimelineCacheResult,
+  ChannelTimelineCommitCacheResult,
+  ChannelTimelineEvictArgs,
+  ChannelTimelineEvictCacheResult,
+  ChannelTimelineStatsCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -85,6 +93,8 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+  /** What the response proves about a channel; stored in its transaction. */
+  channelCommit?: ChannelCommitArgs;
 }
 
 export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
@@ -92,7 +102,8 @@ export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
   hydrationScope?: HydrationScope;
 }
 
-export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
+export interface EnqueueOptimisticMutationArgs
+  extends Omit<CacheWriteArgs, 'channelCommit'> {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -130,6 +141,9 @@ export type CacheChangeOptions = {
 /** Engine replacement is independent of whether durable cache data survived. */
 export type CacheGenerationChange = {
   storage: 'preserved' | 'reset';
+  /** Queued mutations can outlive the storage that queued them. Reset means
+   * that some may be gone and that transaction IDs may start over. */
+  queue: 'preserved' | 'reset';
 };
 
 export type AffectedOperationsListener = (
@@ -144,8 +158,20 @@ export interface CacheHost {
   readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback when browser cache APIs are unsupported. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported,
+   * and while `paused`. */
   readonly disabled?: boolean;
+  /** Whether the cache engine is open now, and not `paused`. Writes made
+   * before it opens wait for it (while paused they are refused), so a reader
+   * that must see its write land last can check this. Absent on hosts that are
+   * always ready. */
+  isReady?(): boolean;
+  /** Settles once the engine is open, or once this host stops trying (fails
+   * or is disposed). Never rejects and never starts initialization. */
+  whenReady?(): Promise<void>;
+  /** Nothing can open the database for now. The host keeps its subscriptions
+   * and serves again, without being replaced, once something can. */
+  readonly paused?: boolean;
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;
@@ -178,6 +204,21 @@ export interface CacheHost {
     args: CalendarCommitArgs,
     generation: string
   ): Promise<CalendarCommitCacheResult>;
+  /** Answers one channel or thread page from the local timeline index. */
+  channelTimeline(
+    args: ChannelTimelineCacheArgs
+  ): Promise<ChannelTimelineCacheResult>;
+  /** Applies a channel commit that comes with no response. */
+  channelTimelineCommit(
+    args: ChannelCommitArgs,
+    generation: string
+  ): Promise<ChannelTimelineCommitCacheResult>;
+  /** Removes the channels opened longest ago with their cached messages. */
+  channelTimelineEvict(
+    args: ChannelTimelineEvictArgs
+  ): Promise<ChannelTimelineEvictCacheResult>;
+  /** Counts the channels and entries the timeline index holds. */
+  channelTimelineStats(): Promise<ChannelTimelineStatsCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked
@@ -217,7 +258,7 @@ export interface CacheHost {
   commitOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
-    args: CacheWriteArgs
+    args: Omit<CacheWriteArgs, 'channelCommit'>
   ): Promise<CommitOptimisticWriteResult>;
   /** Permanently fails a claimed mutation and drops its optimistic layer. */
   rollbackOptimisticWrite(
@@ -257,6 +298,22 @@ export interface CacheHost {
   onCacheGenerationChanged(
     cb: (change: CacheGenerationChange) => void
   ): () => void;
+
+  /** Reports, in every tab, each channel whose timeline a stored transaction
+   * changed: a commit, a stamped write, an eviction, a reset, or an optimistic
+   * write queued, settled or rolled back. Clearing the cache is reported by
+   * onCacheGenerationChanged instead. */
+  onChannelChanged(cb: (change: ChannelChange) => void): () => void;
+
+  /**
+   * The cache's owner answers again: after the host starts, after an owner
+   * change that replaced the engine, and after one that was called off. For a
+   * reader with no network to turn to, refused with
+   * `isOwnerHandoffBlockedError` or ended by a `CacheRequestTimeoutError`
+   * while it waited. Nothing is replayed to a late subscriber. Absent on a host
+   * whose reads never wait for an owner.
+   */
+  onOwnerReady?(cb: () => void): () => void;
 
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

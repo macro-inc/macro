@@ -108,7 +108,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["reply test".to_string()],
         user_id: "macro|alice@example.com".to_string(),
-        user_ids: vec![],
+        inbox_link_ids: vec![],
         thread_ids: vec![],
         required_thread_ids: vec![],
         link_ids: vec![],
@@ -117,6 +117,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         cc: vec![],
         bcc: vec![],
         recipients: vec![],
+        label_link_ids: vec![],
         include_labels: vec![],
         exclude_labels: vec![],
         importance: None,
@@ -126,8 +127,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         collapse: true,
         ids_only: false,
         subject_only: false,
-        tag_option_ids: vec![],
-        match_all_tags: false,
+        tag_groups: vec![],
         text_conditions: vec![],
         label_conditions: vec![],
         exclude_thread_ids: vec![],
@@ -154,7 +154,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["hello".to_string(), "test".to_string()],
         user_id: "macro|alice@example.com".to_string(),
-        user_ids: vec![],
+        inbox_link_ids: vec![],
         thread_ids: vec![],
         required_thread_ids: vec![],
         link_ids: vec![],
@@ -163,6 +163,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         cc: vec![],
         bcc: vec![],
         recipients: vec![],
+        label_link_ids: vec![],
         include_labels: vec![],
         exclude_labels: vec![],
         importance: None,
@@ -172,8 +173,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         collapse: true,
         ids_only: false,
         subject_only: false,
-        tag_option_ids: vec![],
-        match_all_tags: false,
+        tag_groups: vec![],
         text_conditions: vec![],
         label_conditions: vec![],
         exclude_thread_ids: vec![],
@@ -240,7 +240,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
 #[test]
 fn an_excluded_link_s_mail_never_matches_whatever_grants_it() -> anyhow::Result<()> {
     let json = EmailQueryBuilder::new(vec!["invoice".to_string()])
-        .user_ids(vec!["macro|owner@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string()])
         .ids(vec!["shared-thread".to_string()])
         .exclude_link_ids(vec!["deleting-link".to_string()])
         .build_bool_query()?
@@ -263,6 +263,11 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .page(1)
         .user_id("user123")
         .collapse(true)
+        .inbox_link_ids(vec![
+            "link1".to_string(),
+            "link2".to_string(),
+            "link3".to_string(),
+        ])
         .ids(vec!["thread1".to_string(), "thread2".to_string()])
         .link_ids(vec!["link1".to_string(), "link2".to_string()])
         .sender(vec!["sender@example.com".to_string()])
@@ -280,7 +285,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         "minimum_should_match": 1,
                         "should": [
                             {"terms": {"entity_id": ["thread1", "thread2"]}},
-                            {"term": {"user_id": "user123"}}
+                            {"terms": {"link_id": ["link1", "link2", "link3"]}}
                         ]
                     }
                 },
@@ -471,6 +476,7 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
         .user_id("user123")
         .collapse(false)
         .importance(Some(true))
+        .label_link_ids(vec!["own-link".to_string()])
         .exclude_labels(vec!["INBOX".to_string()]);
 
     let bool_query = builder.build_bool_query()?;
@@ -482,7 +488,9 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
     assert_eq!(must_not.len(), 3);
 
     // One should be the INBOX term exclusion
-    let has_inbox_exclusion = must_not.iter().any(|q| q["term"]["labels"] == "INBOX");
+    let has_inbox_exclusion = must_not
+        .iter()
+        .any(|q| *q == carrying(&["INBOX"], &["own-link"]));
     assert!(has_inbox_exclusion);
 
     // One should be the nested importance bool
@@ -501,6 +509,7 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
         .user_id("user123")
         .collapse(false)
         .importance(Some(false))
+        .label_link_ids(vec!["own-link".to_string()])
         .exclude_labels(vec!["CATEGORY_SOCIAL".to_string()]);
 
     let bool_query = builder.build_bool_query()?;
@@ -510,7 +519,7 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
     // Should have the explicit CATEGORY_SOCIAL exclusion
     let has_social_exclusion = must_not
         .iter()
-        .any(|q| q["term"]["labels"] == "CATEGORY_SOCIAL");
+        .any(|q| *q == carrying(&["CATEGORY_SOCIAL"], &["own-link"]));
     assert!(has_social_exclusion);
 
     // Should have the importance filter in filter array
@@ -526,10 +535,10 @@ fn test_build_bool_query_tag_filter_emits_flat_terms() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("user123")
-        .tag_option_ids(vec![
+        .tag_groups(vec![vec![
             "00000001-0000-0000-0003-000000000001".to_string(),
             "00000001-0000-0000-0003-000000000002".to_string(),
-        ]);
+        ]]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
@@ -566,13 +575,13 @@ fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("user123")
-        .tag_option_ids(vec![]);
+        .tag_groups(vec![]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
         !filter.iter().any(|f| f.get("nested").is_some()),
-        "empty tag_option_ids should emit no nested clause: {filter:?}"
+        "no tag groups should emit no nested clause: {filter:?}"
     );
     Ok(())
 }
@@ -582,11 +591,11 @@ fn access_filter(json: &serde_json::Value) -> &serde_json::Value {
 }
 
 #[test]
-fn test_shared_threads_widen_the_mailbox_access() -> anyhow::Result<()> {
+fn test_shared_threads_widen_the_inbox_access() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("partial")
         .user_id("macro|viewer@example.com")
-        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string(), "delegated-link".to_string()])
         .ids(vec!["shared-thread".to_string()]);
 
     let json = builder.build_bool_query()?.build().to_json();
@@ -598,7 +607,7 @@ fn test_shared_threads_widen_the_mailbox_access() -> anyhow::Result<()> {
                 "minimum_should_match": 1,
                 "should": [
                     { "terms": { "entity_id": ["shared-thread"] } },
-                    { "terms": { "user_id": ["macro|viewer@example.com"] } }
+                    { "terms": { "link_id": ["own-link", "delegated-link"] } }
                 ]
             }
         })
@@ -611,7 +620,7 @@ fn test_ids_only_searches_only_the_listed_threads() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("partial")
         .user_id("macro|viewer@example.com")
-        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string()])
         .ids(vec!["shared-thread".to_string()])
         .ids_only(true);
 
@@ -629,14 +638,14 @@ fn test_required_thread_ids_narrow_on_top_of_access() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("partial")
         .user_id("macro|viewer@example.com")
-        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .inbox_link_ids(vec!["own-link".to_string()])
         .required_thread_ids(vec!["thread-a".to_string(), "thread-b".to_string()]);
 
     let json = builder.build_bool_query()?.build().to_json();
 
     assert_eq!(
         access_filter(&json),
-        &json!({ "terms": { "user_id": ["macro|viewer@example.com"] } })
+        &json!({ "terms": { "link_id": ["own-link"] } })
     );
     let filters = json["bool"]["filter"].as_array().unwrap();
     assert!(
@@ -752,6 +761,7 @@ fn a_search_of_conditions_alone_keeps_the_access_filter() -> anyhow::Result<()> 
     let builder = EmailQueryBuilder::new(Vec::new())
         .match_type("partial")
         .user_id("user123")
+        .inbox_link_ids(vec!["own-link".to_string()])
         .sent_between(Some(1_000), Some(2_000));
 
     let json = builder.build_bool_query()?.build().to_json();
@@ -759,7 +769,7 @@ fn a_search_of_conditions_alone_keeps_the_access_filter() -> anyhow::Result<()> 
     assert!(json["bool"]["must"].is_null());
     assert_eq!(
         access_filter(&json),
-        &json!({ "term": { "user_id": "user123" } })
+        &json!({ "terms": { "link_id": ["own-link"] } })
     );
     let filters = json["bool"]["filter"].as_array().unwrap();
     assert!(filters.contains(&json!({
@@ -806,6 +816,7 @@ fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
         .match_type("partial")
         .user_id("user123")
+        .label_link_ids(vec!["own-link".to_string()])
         .label_conditions(vec![
             EmailLabelCondition {
                 labels: vec!["Fundraising".to_string()],
@@ -834,7 +845,7 @@ fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
         .find(|filter| filter["bool"]["minimum_should_match"] == 1)
         .expect("the label condition is a filter");
     let should = carries["bool"]["should"].as_array().unwrap();
-    assert_eq!(should[0], json!({ "terms": { "labels": ["Fundraising"] } }));
+    assert_eq!(should[0], carrying(&["Fundraising"], &["own-link"]));
     assert!(should[1]["nested"].is_object());
 
     assert_eq!(
@@ -842,7 +853,7 @@ fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
         json!([
             {
                 "bool": {
-                    "should": [{ "terms": { "labels": ["Updates"] } }],
+                    "should": [carrying(&["Updates"], &["own-link"])],
                     "minimum_should_match": 1
                 }
             },
@@ -1357,5 +1368,36 @@ fn listed_filters_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> {
         &|builder| builder.sender(senders(120)),
         40
     )?);
+    Ok(())
+}
+
+/// Messages carrying any of `labels` in one of `links`.
+fn carrying(labels: &[&str], links: &[&str]) -> serde_json::Value {
+    json!({
+        "bool": {
+            "filter": [
+                { "terms": { "labels": labels } },
+                { "terms": { "link_id": links } }
+            ]
+        }
+    })
+}
+
+#[test]
+fn a_label_matches_only_in_inboxes_whose_labels_the_caller_reads() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .label_link_ids(vec!["own-link".to_string(), "managed-link".to_string()])
+        .include_labels(vec!["travel".to_string()])
+        .exclude_labels(vec!["newsletters".to_string(), "spam-ish".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    let links = ["own-link", "managed-link"];
+    let filter = json["bool"]["filter"].as_array().unwrap();
+    assert!(filter.contains(&carrying(&["travel"], &links)));
+    let must_not = json["bool"]["must_not"].as_array().unwrap();
+    assert!(must_not.contains(&carrying(&["newsletters", "spam-ish"], &links)));
     Ok(())
 }

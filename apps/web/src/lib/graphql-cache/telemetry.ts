@@ -11,6 +11,9 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.wasm_prefetch_compile',
   'graphql_cache.wasm_instantiate',
   'graphql_cache.schema_init',
+  'graphql_cache.queue_read',
+  'graphql_cache.recovery_wipe',
+  'graphql_cache.queue_import',
   'graphql_cache.db_ready',
   'graphql_cache.host_ready',
   'graphql_cache.registration_retry',
@@ -78,6 +81,38 @@ export const CACHE_OPEN_OUTCOMES = [
 ] as const;
 export type CacheOpenOutcome = (typeof CACHE_OPEN_OUTCOMES)[number];
 
+/** What opening a cache with this build's GraphQL schema did to its records:
+ * nothing, a compatible change, dropping the changed types, or a reset. */
+export const CACHE_SCHEMA_CHANGES = [
+  'unchanged',
+  'compatible',
+  'types',
+  'reset',
+] as const;
+export type CacheSchemaChange = (typeof CACHE_SCHEMA_CHANGES)[number];
+
+/** Why a schema change dropped every record. */
+export const CACHE_SCHEMA_RESET_REASONS = [
+  'unreadable',
+  'roots',
+  'invalid',
+  'failed',
+] as const;
+export type CacheSchemaResetReason =
+  (typeof CACHE_SCHEMA_RESET_REASONS)[number];
+
+/** What became of the mutations a wiped database queued: `none` without any,
+ * `kept` with every one queued under its own ID, `partial` with some lost or
+ * queued under new IDs, and none of them otherwise. */
+export const CACHE_QUEUE_OUTCOMES = [
+  'none',
+  'kept',
+  'partial',
+  'unreadable',
+  'abandoned',
+] as const;
+export type CacheQueueOutcome = (typeof CACHE_QUEUE_OUTCOMES)[number];
+
 export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
   'available',
   'unavailable',
@@ -137,6 +172,7 @@ export const CACHE_OWNER_EVENTS = [
   'elected',
   'activated',
   'graceful-drain-started',
+  'drain-timed-out',
   'graceful-drain-completed',
   'visibility-handoff-started',
   'visibility-handoff-blocked',
@@ -147,6 +183,7 @@ export const CACHE_OWNER_EVENTS = [
   'unpark-completed',
   'navigation-departure',
   'coordinator-restarted',
+  'startup-unanswered',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
@@ -158,6 +195,22 @@ export const CACHE_OWNER_EVENTS = [
   'stale-database-kept',
 ] as const;
 export type CacheOwnerEvent = (typeof CACHE_OWNER_EVENTS)[number];
+
+/**
+ * Why a cache failed closed, leaving its tabs on the network: the engine gave
+ * up waiting for the owner lock, another build holds the database and could
+ * not be asked to yield (no BroadcastChannel) or declined, the database files
+ * stayed open elsewhere, or a newer build took the database over.
+ */
+export const CACHE_UNAVAILABLE_REASONS = [
+  'owner-lock-timeout',
+  'no-takeover-channel',
+  'holder-kept',
+  'files-busy',
+  'recovery-failed',
+  'superseded',
+] as const;
+export type CacheUnavailableReason = (typeof CACHE_UNAVAILABLE_REASONS)[number];
 
 export const CACHE_ROLLOUT_COHORTS = [
   'control',
@@ -228,9 +281,13 @@ const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
   'people-context': true,
   'entity-filter': true,
   'calendar-range': true,
+  'channel-timeline': true,
+  'channel-timeline-stats': true,
   write: true,
   hydrate: true,
   'calendar-commit': true,
+  'channel-timeline-commit': true,
+  'channel-timeline-evict': true,
   'people-update': true,
   'contact-reconcile': true,
   'enqueue-optimistic-mutation': true,
@@ -261,8 +318,21 @@ export type CacheTelemetryObservation = {
   errorDetail?: CacheErrorDetail;
   resetReason?: CacheResetReason;
   ownerEvent?: CacheOwnerEvent;
+  unavailableReason?: CacheUnavailableReason;
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
+  /** The open's schema change (`graphql_cache.schema_init`). */
+  schemaChange?: CacheSchemaChange;
+  schemaResetReason?: CacheSchemaResetReason;
+  schemaChangedTypes?: number;
+  schemaDroppedRecords?: number;
+  schemaIncompleteDocuments?: number;
+  schemaRetiredOverlays?: number;
+  /** How long the open spent bringing its records to the schema. */
+  schemaAdoptMs?: number;
+  queueOutcome?: CacheQueueOutcome;
+  queueKept?: number;
+  queueDropped?: number;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
@@ -366,6 +436,10 @@ function sanitizeObservation(
     CACHE_OWNER_EVENTS.includes(input.ownerEvent)
       ? { ownerEvent: input.ownerEvent }
       : {}),
+    ...(input.unavailableReason !== undefined &&
+    CACHE_UNAVAILABLE_REASONS.includes(input.unavailableReason)
+      ? { unavailableReason: input.unavailableReason }
+      : {}),
     ...(input.persistence === 'granted' ||
     input.persistence === 'denied' ||
     input.persistence === 'unknown'
@@ -374,6 +448,43 @@ function sanitizeObservation(
     ...(input.openOutcome !== undefined &&
     CACHE_OPEN_OUTCOMES.includes(input.openOutcome)
       ? { openOutcome: input.openOutcome }
+      : {}),
+    ...(input.schemaChange !== undefined &&
+    CACHE_SCHEMA_CHANGES.includes(input.schemaChange)
+      ? { schemaChange: input.schemaChange }
+      : {}),
+    ...(input.schemaResetReason !== undefined &&
+    CACHE_SCHEMA_RESET_REASONS.includes(input.schemaResetReason)
+      ? { schemaResetReason: input.schemaResetReason }
+      : {}),
+    ...(boundedNumber(input.schemaChangedTypes) !== undefined
+      ? { schemaChangedTypes: boundedNumber(input.schemaChangedTypes) }
+      : {}),
+    ...(boundedNumber(input.schemaDroppedRecords) !== undefined
+      ? { schemaDroppedRecords: boundedNumber(input.schemaDroppedRecords) }
+      : {}),
+    ...(boundedNumber(input.schemaIncompleteDocuments) !== undefined
+      ? {
+          schemaIncompleteDocuments: boundedNumber(
+            input.schemaIncompleteDocuments
+          ),
+        }
+      : {}),
+    ...(boundedNumber(input.schemaRetiredOverlays) !== undefined
+      ? { schemaRetiredOverlays: boundedNumber(input.schemaRetiredOverlays) }
+      : {}),
+    ...(boundedNumber(input.schemaAdoptMs, 3_600_000) !== undefined
+      ? { schemaAdoptMs: boundedNumber(input.schemaAdoptMs, 3_600_000) }
+      : {}),
+    ...(input.queueOutcome !== undefined &&
+    CACHE_QUEUE_OUTCOMES.includes(input.queueOutcome)
+      ? { queueOutcome: input.queueOutcome }
+      : {}),
+    ...(boundedNumber(input.queueKept) !== undefined
+      ? { queueKept: boundedNumber(input.queueKept) }
+      : {}),
+    ...(boundedNumber(input.queueDropped) !== undefined
+      ? { queueDropped: boundedNumber(input.queueDropped) }
       : {}),
     ...(input.queueDiagnosticsAvailability !== undefined &&
     CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY.includes(
@@ -637,12 +748,16 @@ export function operationCategoryForRequest(
       'people-context',
       'entity-filter',
       'calendar-range',
+      'channel-timeline',
+      'channel-timeline-stats',
       () => 'read' as const
     )
     .with(
       'write',
       'hydrate',
       'calendar-commit',
+      'channel-timeline-commit',
+      'channel-timeline-evict',
       'people-update',
       'contact-reconcile',
       () => 'write' as const
@@ -681,6 +796,8 @@ export function isStorageTransactionRequest(
     'hydrate',
     'people-update',
     'calendar-commit',
+    'channel-timeline-commit',
+    'channel-timeline-evict',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',
     'defer-optimistic-write',
@@ -848,8 +965,19 @@ export function isCacheTelemetryObservation(
       'errorDetail',
       'resetReason',
       'ownerEvent',
+      'unavailableReason',
       'persistence',
       'openOutcome',
+      'schemaChange',
+      'schemaResetReason',
+      'schemaChangedTypes',
+      'schemaDroppedRecords',
+      'schemaIncompleteDocuments',
+      'schemaRetiredOverlays',
+      'schemaAdoptMs',
+      'queueOutcome',
+      'queueKept',
+      'queueDropped',
       'queueDiagnosticsAvailability',
       'revisionCategory',
       'resetAttempt',

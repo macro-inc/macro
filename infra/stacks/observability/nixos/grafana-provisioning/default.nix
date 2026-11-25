@@ -65,6 +65,16 @@ in
         name = "computers-fleet.json";
         dashboard = dashboard ./computers-dashboard.nix;
       }
+      {
+        name = "firecracker-capacity.json";
+        dashboard = dashboard ./firecracker-capacity-dashboard.nix;
+      }
+    ])
+    (provider "macro-agents" [
+      {
+        name = "agents.json";
+        dashboard = dashboard ./agents-dashboard.nix;
+      }
     ])
     (provider "macro-run-local" [
       {

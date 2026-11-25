@@ -173,6 +173,43 @@ function TrackDemo() {
 }
 // #endregion
 
+// #region demo:choices
+function ChoicesDemo() {
+  const [value, setValue] = createSignal<'event' | 'away'>('event');
+  return (
+    // Choice faces are 24px on desktop and 28px inside 44px touch targets.
+    <Tabs
+      aria-label="Event type"
+      variant="choices"
+      wrap
+      options={[
+        { value: 'event', label: 'Event' },
+        { value: 'away', label: 'Out of office' },
+      ]}
+      value={value()}
+      onChange={setValue}
+    />
+  );
+}
+// #endregion
+
+// #region demo:filled-choices
+function FilledChoicesDemo() {
+  const [value, setValue] = createSignal<'event' | 'away'>('event');
+  return (
+    <Tabs
+      aria-label="Filled event type"
+      variant="choices-filled"
+      options={[
+        { value: 'event', label: 'Event' },
+        { value: 'away', label: 'Out of office' },
+      ]}
+      value={value()}
+      onChange={setValue}
+    />
+  );
+}
+// #endregion
 export default defineDoc({
   name: 'Tabs',
   category: 'Navigation',
@@ -189,6 +226,20 @@ export default defineDoc({
       description:
         'Header view tabs sit after the title, left of the controls. Optional desktop pill tooltips explain a label on hover or input focus without renaming it; the explanation remains an accessible description on touch. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
       render: ViewDemo,
+    },
+    {
+      id: 'choices',
+      title: 'Form choices',
+      description:
+        'Separate 24px choice faces use 12px text; touch keeps 28px faces inside 44px targets.',
+      render: ChoicesDemo,
+    },
+    {
+      id: 'filled-choices',
+      title: 'Filled form choices',
+      description:
+        'Separate 28px choices pair solid accent selection with its foreground token. Radio and keyboard behavior stays shared.',
+      render: FilledChoicesDemo,
     },
     {
       id: 'counts',

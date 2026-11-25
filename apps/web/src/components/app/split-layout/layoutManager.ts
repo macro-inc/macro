@@ -157,6 +157,11 @@ export type SplitMount = BlockMount | ComponentMount;
 
 export type PopoverSplitOptions = {
   content: SplitContent;
+  /**
+   * Most of the window rather than the default dialog width: for content
+   * built around a picture, such as an agent's screen.
+   */
+  wide?: boolean;
   /** Handles a close request. Call `close` to finish closing the popover. */
   onClose?: (close: () => void) => void;
 };

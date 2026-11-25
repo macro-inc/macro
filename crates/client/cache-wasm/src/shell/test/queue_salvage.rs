@@ -1,0 +1,1611 @@
+use super::schema_change::{labelled, set_worker_schema};
+use super::*;
+use crate::shell::salvage::{
+    QueueOutcome, QueueReport, wipe_keeping_queue, wipe_keeping_queue_after,
+};
+use cache_turso::{QueueLoss, SalvageFile};
+use std::cell::Cell;
+
+const UUID: &str = "00000000-0000-4000-8000-000000000011";
+
+/// Lets no note of a loss into a side file, as on a full disk.
+const REFUSE_LOSSES: &str = "const frame = args[0];
+    if (frame.byteLength === 22 && frame[12] === 4)
+      throw new DOMException('full', 'QuotaExceededError');
+    return original(...args);";
+
+/// [`REFUSE_LOSSES`], for the next `self.lossesToRefuse` losses written.
+const REFUSE_EARLY_LOSSES: &str = "const frame = args[0];
+    if (self.lossesToRefuse > 0 && frame.byteLength === 22 && frame[12] === 4) {
+      self.lossesToRefuse -= 1;
+      throw new DOMException('full', 'QuotaExceededError');
+    }
+    return original(...args);";
+
+fn side_file(scope: &str) -> String {
+    format!("{}-salvage", database_identity(scope))
+}
+
+async fn owner(scope: &str) -> OpfsOwner {
+    OpfsOwner::acquire(&database_identity(scope))
+        .await
+        .expect("owner")
+}
+
+/// Every frame of the side file, without the room it keeps after them.
+async fn read_side_file(scope: &str) -> Vec<u8> {
+    let mut bytes = read_whole_side_file(scope).await;
+    bytes.truncate(SalvageFile::decode(&bytes).end() as usize);
+    bytes
+}
+
+async fn read_whole_side_file(scope: &str) -> Vec<u8> {
+    let owner = owner(scope).await;
+    let bytes = owner.sidecar().read().await.expect("side file");
+    owner.release().await.expect("release");
+    bytes
+}
+
+async fn write_side_file(scope: &str, bytes: &[u8]) {
+    let owner = owner(scope).await;
+    owner.sidecar().write_tail(0, bytes).await.expect("write");
+    owner.release().await.expect("release");
+}
+
+/// Writes a side file whose lock an engine holds.
+async fn leave_side_file(scope: &str, bytes: &[u8]) {
+    let hex = bytes.iter().map(|byte| format!("{byte:02x}"));
+    run_js(
+        "return (async () => {
+          const [file, hex] = name.split('|');
+          const root = await navigator.storage.getDirectory();
+          const entry = await root.getFileHandle(file, { create: true });
+          const handle = await entry.createSyncAccessHandle();
+          handle.write(Uint8Array.from(hex.match(/../g), (byte) => parseInt(byte, 16)));
+          handle.close();
+        })()",
+        &format!("{}|{}", side_file(scope), hex.collect::<String>()),
+    )
+    .await;
+}
+
+/// A closed database of one account that queues one mutation.
+async fn closed_with_queue(scope: &str) {
+    closed_with(scope, UUID).await;
+}
+
+async fn closed_with(scope: &str, uuid: &str) {
+    let engine = fresh_engine(scope).await;
+    resolved(engine.write_query(
+        write_context(None),
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(property_base()),
+        Some("user-1".into()),
+    ))
+    .await;
+    queue_mutation(&engine, uuid).await;
+    resolved(engine.close()).await;
+}
+
+/// Lets no queue's frame into a side file, as on a full disk.
+async fn refuse_queue_frames(refuse: bool) {
+    run_js(
+        "return (async () => {
+          const handle = FileSystemSyncAccessHandle.prototype;
+          if (name === '') { handle.write = handle.writeAnything; return; }
+          handle.writeAnything = handle.write;
+          handle.write = function (bytes, options) {
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            const room = bytes.byteLength < 14 ? -1 : bytes.byteLength - 13 - view.getUint32(0, true);
+            if ((room === 0 || room === 35) && view.getUint8(12) === 1)
+              throw new DOMException('full', 'QuotaExceededError');
+            return this.writeAnything(bytes, options);
+          };
+        })()",
+        if refuse { "refuse" } else { "" },
+    )
+    .await;
+}
+
+/// Keeps a side file open, as another context does.
+async fn hold_side_file(scope: &str) {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          const entry = await root.getFileHandle(name, { create: true });
+          self.heldSideFile = await entry.createSyncAccessHandle();
+        })()",
+        &side_file(scope),
+    )
+    .await;
+}
+
+async fn release_side_file() {
+    run_js("self.heldSideFile.close(); return Promise.resolve();", "").await;
+}
+
+/// Breaks one method of every sync handle of a side file: `body` replaces it
+/// and may call `original`. Returns through [`restore_side_files`].
+async fn break_side_files(method: &str, body: &str) {
+    run_js(
+        "return (async () => {
+          const [method, body] = name.split('|');
+          const files = FileSystemFileHandle.prototype;
+          const create = files.createSyncAccessHandle;
+          self.restoreSideFiles = () => { files.createSyncAccessHandle = create; };
+          const replacement = new Function('original', 'args', body);
+          files.createSyncAccessHandle = async function (...options) {
+            const handle = await create.apply(this, options);
+            if (this.name.endsWith('-salvage')) {
+              const original = handle[method].bind(handle);
+              handle[method] = (...args) => replacement(original, args);
+            }
+            return handle;
+          };
+        })()",
+        &format!("{method}|{body}"),
+    )
+    .await;
+}
+
+async fn restore_side_files() {
+    run_js("self.restoreSideFiles(); return Promise.resolve();", "").await;
+}
+
+/// Changes the closed database behind its owner's back.
+async fn change(scope: &str, sql: &str) {
+    let owner = owner(scope).await;
+    let OpenResult::Ready(session) = owner.open().await.expect("open") else {
+        panic!("the pair is whole")
+    };
+    let connected = session.connect().expect("connect");
+    connected.connection().execute(sql).expect("change");
+    let closed = connected.try_close().expect("close");
+    let owner = closed.preserve().expect("preserve");
+    owner.release().await.expect("release");
+}
+
+/// Wipes as an engine does that dies before it opens the next database.
+async fn wipe_and_die(scope: &str) {
+    let owner = owner(scope).await;
+    let Ok((owner, _)) = wipe_keeping_queue(scope, owner).await else {
+        panic!("wipe keeps the queue")
+    };
+    owner.release().await.expect("release");
+}
+
+/// Dies later: the next database is there, but nothing was imported into it.
+async fn wipe_open_and_die(scope: &str) {
+    wipe_and_die(scope).await;
+    let copy = read_side_file(scope).await;
+    write_side_file(scope, &[]).await;
+    let (engine, _, _) = open(scope, false).await;
+    resolved(engine.close()).await;
+    write_side_file(scope, &copy).await;
+}
+
+async fn open(scope: &str, recovery: bool) -> (CacheEngine, &'static str, serde_json::Value) {
+    let (engine, outcome, queue, _) = open_with_change(scope, recovery).await;
+    (engine, outcome, queue)
+}
+
+async fn open_with_change(
+    scope: &str,
+    recovery: bool,
+) -> (CacheEngine, &'static str, serde_json::Value, JsSchemaChange) {
+    let (engine, outcome, queue, change) =
+        open_cache_inner(scope.into(), None, recovery, None, false)
+            .await
+            .expect("open");
+    let queue = serde_json::json!([queue.outcome.as_str(), queue.kept, queue.dropped]);
+    (engine, outcome.as_str(), queue, change)
+}
+
+async fn depth(engine: &CacheEngine) -> String {
+    let diagnostics = resolved(engine.queue_diagnostics()).await;
+    js_sys::Reflect::get(&diagnostics, &JsValue::from_str("depth"))
+        .expect("depth")
+        .as_string()
+        .expect("depth is text")
+}
+
+async fn tell(engine: &CacheEngine, scope: &str) {
+    resolved(engine.queue_loss_told()).await;
+    assert!(!opfs_file_exists(&side_file(scope)).await);
+}
+
+/// The whole queue is there, under its account, and can be sent.
+async fn assert_kept(engine: &CacheEngine, scope: &str) {
+    tell(engine, scope).await;
+    assert_eq!(depth(engine).await, "1");
+    assert!(!opfs_file_exists(&side_file(scope)).await);
+    let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
+    assert_eq!(identity.as_deref(), Some("user-1"));
+    let claimed = claim(engine).await;
+    assert_eq!(claimed["uuid"], UUID, "{claimed}");
+}
+
+/// Claims once every earlier lease has ended.
+async fn claim(engine: &CacheEngine) -> serde_json::Value {
+    thread_local!(static NOW: Cell<f64> = const { Cell::new(100.0) });
+    let now = NOW.replace(NOW.get() + 100.0);
+    from_js(resolved(engine.claim_next_mutation("next".into(), now, now + 50.0)).await)
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_recovery_open_keeps_the_queue_and_wipes_the_rest() {
+    const SCOPE: &str = "cache-wasm-salvage-recovery";
+    closed_with_queue(SCOPE).await;
+    let (engine, outcome, queue) = open(SCOPE, true).await;
+    assert_eq!(outcome, "reset-storage-uncertain");
+    assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+    let read: serde_json::Value = from_js(
+        resolved(engine.read_query(
+            None,
+            PROPERTY_QUERY.into(),
+            Some("Soup".into()),
+            js(variables()),
+            JsValue::UNDEFINED,
+        ))
+        .await,
+    );
+    assert_eq!(read["kind"], "miss");
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_cache_that_cannot_take_the_schema_keeps_its_queue_under_the_schema_it_was_queued_under()
+{
+    const SCOPE: &str = "cache-wasm-salvage-adoption";
+    const IN_PLACE: &str = "cache-wasm-salvage-adoption-in-place";
+    set_worker_schema(Some(labelled("String")));
+    closed_with_queue(IN_PLACE).await;
+    closed_with_queue(SCOPE).await;
+    set_worker_schema(Some(labelled("[String]")));
+    let (engine, outcome, queue, in_place) = open_with_change(IN_PLACE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(in_place.change, "types");
+    close_and_destroy(&engine, IN_PLACE).await;
+
+    // The file fails the adoption as a corrupt one does: it is wiped as a
+    // recovery wipe is, and the next one adopts the schema as it would have.
+    cache_turso::migration_test_hooks::corrupt_next_adoption();
+    let (engine, outcome, queue, moved) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "reset-corrupt");
+    assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+    assert_eq!(
+        (moved.change, moved.changed_types, moved.retired_overlays),
+        (
+            in_place.change,
+            in_place.changed_types,
+            in_place.retired_overlays
+        )
+    );
+    assert_kept(&engine, SCOPE).await;
+    resolved(engine.close()).await;
+
+    let (engine, outcome, queue, again) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(again.change, "unchanged");
+    set_worker_schema(None);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+/// The page reads both reports off the export, which `open_cache_inner` does
+/// not cover.
+#[wasm_bindgen_test(async)]
+async fn the_exported_open_carries_the_schema_change_and_the_queue_of_a_schema_wipe() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-export";
+    set_worker_schema(Some(labelled("String")));
+    closed_with_queue(SCOPE).await;
+    set_worker_schema(Some(labelled("[String]")));
+    cache_turso::migration_test_hooks::corrupt_next_adoption();
+    let opened = open_cache_with_outcome(SCOPE.into(), None, None, None)
+        .await
+        .expect("open");
+    let field = |name: &str| js_sys::Reflect::get(&opened, &JsValue::from_str(name)).expect(name);
+    let read =
+        |name: &str| serde_wasm_bindgen::from_value::<serde_json::Value>(field(name)).expect(name);
+    assert_eq!(read("outcome"), "reset-corrupt");
+    let queue = read("queue");
+    assert_eq!(
+        (
+            queue["outcome"].as_str(),
+            queue["kept"].as_u64(),
+            queue["dropped"].as_u64()
+        ),
+        (Some("kept"), Some(1), Some(0))
+    );
+    assert_eq!(read("schemaChange")["change"], "types");
+    let engine = field("engine");
+    let close = js_sys::Function::from(
+        js_sys::Reflect::get(&engine, &JsValue::from_str("close")).expect("close"),
+    );
+    resolved(js_sys::Promise::from(close.call0(&engine).expect("close"))).await;
+    set_worker_schema(None);
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_the_open_told_before_a_schema_wipe_is_told_once_and_never_as_kept() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-loss";
+    // Noted in the side file, the later open reads it back; refused there,
+    // only the earlier open knows of it.
+    for refused in [false, true] {
+        set_worker_schema(Some(labelled("String")));
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 1,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        set_worker_schema(Some(labelled("[String]")));
+        if refused {
+            break_side_files("write", REFUSE_LOSSES).await;
+        }
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+        let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
+        if refused {
+            restore_side_files().await;
+        }
+        assert_eq!(outcome, "reset-corrupt", "{refused}");
+        assert_eq!(queue, serde_json::json!(["partial", 1, 1]), "{refused}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+    set_worker_schema(None);
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_the_side_file_refused_before_a_schema_wipe_outlives_a_worker_that_never_told_it() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-untold";
+    // Refused once, the note is written again before the wipe and keeps its
+    // count; refused twice, the import after the wipe notes that writes were
+    // lost, as any loss whose count the side file could not keep.
+    for (refusals, later) in [(1, 1), (2, 0)] {
+        set_worker_schema(Some(labelled("String")));
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 1,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        set_worker_schema(Some(labelled("[String]")));
+        break_side_files("write", REFUSE_EARLY_LOSSES).await;
+        let refuse = format!("self.lossesToRefuse = {refusals}; return Promise.resolve();");
+        run_js(&refuse, "").await;
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+        let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
+        restore_side_files().await;
+        assert_eq!(outcome, "reset-corrupt", "{refusals}");
+        assert_eq!(queue, serde_json::json!(["partial", 1, 1]), "{refusals}");
+        // Its worker dies before it tells the page.
+        resolved(engine.close()).await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["unreadable", 0, later]),
+            "{refusals}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+        set_worker_schema(None);
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_taken_after_a_loss_nobody_noted_tells_it_to_whoever_imports_it() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-copy";
+    let untold = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 1,
+        ..QueueReport::default()
+    };
+    let noted = QueueReport {
+        noted: true,
+        ..untold
+    };
+    for (earlier, expected) in [
+        (untold, "partial"),
+        (noted, "kept"),
+        (QueueReport::default(), "kept"),
+    ] {
+        closed_with_queue(SCOPE).await;
+        // No loss note reaches the side file, and the engine dies before it
+        // opens the next database.
+        break_side_files("write", REFUSE_LOSSES).await;
+        let owner = owner(SCOPE).await;
+        let Ok((owner, _)) = wipe_keeping_queue_after(SCOPE, owner, &earlier).await else {
+            panic!("wipe keeps the queue")
+        };
+        owner.release().await.expect("release");
+        restore_side_files().await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!([expected, 1, 0]), "{earlier:?}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_taken_when_the_side_file_could_not_be_read_tells_a_loss_to_whoever_imports_it() {
+    const SCOPE: &str = "cache-wasm-salvage-unread-copy";
+    // The wipe writes over the note it cannot read, so the note it leaves
+    // counts the earlier loss too, unless the side file refuses it as well.
+    for (losses_refused, counted) in [(true, 0), (false, 2)] {
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 2,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        let noted = QueueReport {
+            outcome: QueueOutcome::Unreadable,
+            dropped: 2,
+            noted: true,
+            ..QueueReport::default()
+        };
+        // The wipe cannot read the note back, and the engine dies before it
+        // opens the next database.
+        let files = "FileSystemFileHandle.prototype.createSyncAccessHandle";
+        run_js(
+            &format!("self.untouchedFiles = {files}; return Promise.resolve();"),
+            "",
+        )
+        .await;
+        break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+        if losses_refused {
+            break_side_files("write", REFUSE_LOSSES).await;
+        }
+        let owner = owner(SCOPE).await;
+        let Ok((owner, _)) = wipe_keeping_queue_after(SCOPE, owner, &noted).await else {
+            panic!("wipe keeps the queue")
+        };
+        owner.release().await.expect("release");
+        run_js(
+            &format!("{files} = self.untouchedFiles; return Promise.resolve();"),
+            "",
+        )
+        .await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["partial", 1, counted]),
+            "losses refused: {losses_refused}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test]
+fn a_noted_loss_keeps_its_count_when_the_later_open_could_not_read_it() {
+    let earlier = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 2,
+        noted: true,
+        ..QueueReport::default()
+    };
+    let later = |dropped| QueueReport {
+        outcome: QueueOutcome::Partial,
+        kept: 1,
+        dropped,
+        noted: true,
+        ..QueueReport::default()
+    };
+    // Read back, or counted by a wipe that could not read it, the note is
+    // among what the later open counted.
+    assert_eq!(earlier.then(later(3)).dropped, 3);
+    // Unread, only the earlier open knows its count.
+    assert_eq!(earlier.then(later(0)).dropped, 2);
+    let unnoted = QueueReport {
+        noted: false,
+        ..earlier
+    };
+    assert_eq!(unnoted.then(later(0)).dropped, 2);
+    assert_eq!(unnoted.then(later(3)).dropped, 5);
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_reset_tier_keeps_the_queue_in_its_own_database() {
+    const SCOPE: &str = "cache-wasm-salvage-reset-tier";
+    closed_with_queue(SCOPE).await;
+    change(
+        SCOPE,
+        "UPDATE cache_schema SET hash = 'other', incoming_hash = 'other', artifact = x'00'",
+    )
+    .await;
+    let (engine, outcome, queue, adopted) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(adopted.change, "reset");
+    assert_eq!(adopted.reset_reason, Some("unreadable"));
+    assert_eq!(adopted.retired_overlays, 1);
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_queue_survives_an_engine_that_dies_at_any_step_of_the_wipe() {
+    const SCOPE: &str = "cache-wasm-salvage-deaths";
+    for recovery in [false, true] {
+        // After the copy, before the wipe.
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let copy = read_side_file(SCOPE).await;
+        assert!(!copy.is_empty());
+        closed_with_queue(SCOPE).await;
+        write_side_file(SCOPE, &copy).await;
+        let (engine, _, _) = open(SCOPE, recovery).await;
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+
+        // During the copy.
+        closed_with_queue(SCOPE).await;
+        write_side_file(SCOPE, &copy[..copy.len() - 1]).await;
+        let (engine, _, _) = open(SCOPE, recovery).await;
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+
+        // During the wipe, which leaves one file of the pair.
+        destroy_cache(SCOPE.into()).await.expect("destroy");
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        write_side_file(SCOPE, &copy).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+
+        // After the wipe, once and again.
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+
+        // After the import, before the copy is gone.
+        write_side_file(SCOPE, &copy).await;
+        let (engine, _, _) = open(SCOPE, recovery).await;
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_settled_write_never_comes_back_from_a_copy() {
+    const SCOPE: &str = "cache-wasm-salvage-settled";
+    for recovery in [false, true] {
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let copy = read_side_file(SCOPE).await;
+        let (engine, _, _) = open(SCOPE, false).await;
+        let claimed = claim(&engine).await;
+        resolved(
+            engine.rollback_optimistic_write(
+                claimed["transactionId"].as_str().expect("id").into(),
+                "next".into(),
+                claimed["leaseGeneration"]
+                    .as_str()
+                    .expect("generation")
+                    .into(),
+            ),
+        )
+        .await;
+        assert_eq!(depth(&engine).await, "0");
+        resolved(engine.close()).await;
+        write_side_file(SCOPE, &copy).await;
+        let (engine, _, _) = open(SCOPE, recovery).await;
+        assert_eq!(depth(&engine).await, "0");
+        assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_latched_reset_keeps_the_queue_for_the_next_open() {
+    const SCOPE: &str = "cache-wasm-salvage-latched";
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    resolved(engine.invalidate_keys(vec!["GraphqlSoupDocument:any".into()])).await;
+    engine.arm_storage_fault(TestStorageFault::GetBatch).await;
+    assert_reset_required(engine.read_query(
+        None,
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        JsValue::UNDEFINED,
+    ))
+    .await;
+    resolved(engine.close()).await;
+    assert!(opfs_file_exists(&side_file(SCOPE)).await);
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_queue_that_keeps_ending_the_engine_is_given_up() {
+    const SCOPE: &str = "cache-wasm-salvage-attempts";
+    for (attempts, survives) in [(2, true), (3, false)] {
+        // Reads that never came back.
+        closed_with_queue(SCOPE).await;
+        write_side_file(SCOPE, &SalvageFile::read_attempt().repeat(attempts)).await;
+        let (engine, _, queue) = open(SCOPE, true).await;
+        if survives {
+            assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+            assert_kept(&engine, SCOPE).await;
+        } else {
+            assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+            assert_eq!(depth(&engine).await, "0");
+        }
+        tell(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+
+        // Imports that never came back.
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let mut copy = read_side_file(SCOPE).await;
+        copy.extend(SalvageFile::import_attempt().repeat(attempts));
+        write_side_file(SCOPE, &copy).await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        if survives {
+            assert_kept(&engine, SCOPE).await;
+        } else {
+            assert_eq!(queue, serde_json::json!(["abandoned", 0, 1]));
+            assert_eq!(depth(&engine).await, "0");
+        }
+        tell(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_queue_lost_behind_an_older_copy_is_never_called_kept() {
+    const SCOPE: &str = "cache-wasm-salvage-unreadable";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut older = read_side_file(SCOPE).await;
+    older.extend(SalvageFile::read_attempt().repeat(3));
+    for dies in [false, true] {
+        // This database's own queue is never read.
+        closed_with_queue(SCOPE).await;
+        write_side_file(SCOPE, &older).await;
+        if dies {
+            wipe_and_die(SCOPE).await;
+        }
+        let (engine, _, queue) = open(SCOPE, !dies).await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_wiped_queue_that_left_no_copy_is_never_called_kept() {
+    const SCOPE: &str = "cache-wasm-salvage-no-copy";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let older = read_side_file(SCOPE).await;
+    for recovery in [false, true] {
+        closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+        write_side_file(SCOPE, &older).await;
+        refuse_queue_frames(true).await;
+        wipe_and_die(SCOPE).await;
+        refuse_queue_frames(false).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_wipe_that_left_no_copy_at_all_says_so() {
+    const SCOPE: &str = "cache-wasm-salvage-nothing";
+    for recovery in [false, true] {
+        closed_with_queue(SCOPE).await;
+        refuse_queue_frames(true).await;
+        wipe_and_die(SCOPE).await;
+        refuse_queue_frames(false).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+        tell(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_queue_wiped_unread_says_so_after_a_death() {
+    const SCOPE: &str = "cache-wasm-salvage-unread-death";
+    // Reads that never came back.
+    closed_with_queue(SCOPE).await;
+    write_side_file(SCOPE, &SalvageFile::read_attempt().repeat(3)).await;
+    wipe_open_and_die(SCOPE).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    tell(&engine, SCOPE).await;
+    resolved(engine.close()).await;
+
+    // A write no build can read.
+    closed_with_queue(SCOPE).await;
+    change(
+        SCOPE,
+        "UPDATE optimistic_layers SET normalized_updates = x'ff'",
+    )
+    .await;
+    wipe_open_and_die(SCOPE).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 1]));
+    resolved(engine.close()).await;
+
+    // The death of one that told its own loss is not told again.
+    closed_with_queue(SCOPE).await;
+    change(
+        SCOPE,
+        "UPDATE optimistic_layers SET normalized_updates = x'ff'",
+    )
+    .await;
+    let (engine, _, queue) = open(SCOPE, true).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 1]));
+    tell(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_queue_given_up_at_a_wipe_says_so_after_a_death() {
+    const SCOPE: &str = "cache-wasm-salvage-given-up-death";
+    closed_with_queue(SCOPE).await;
+    change(
+        SCOPE,
+        "INSERT INTO meta (key, value) VALUES ('salvaged-queue', '00000000-0000-0000-0000-000000000000 99 9007199254740991 true')",
+    )
+    .await;
+    wipe_open_and_die(SCOPE).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["abandoned", 0, 1]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_latched_reset_that_could_not_read_the_queue_tells_the_next_open() {
+    const SCOPE: &str = "cache-wasm-salvage-latched-loss";
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    engine.arm_storage_fault(TestStorageFault::GetBatch).await;
+    resolved(engine.invalidate_keys(vec!["GraphqlSoupDocument:any".into()])).await;
+    assert_reset_required(engine.read_query(
+        None,
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        JsValue::UNDEFINED,
+    ))
+    .await;
+    leave_side_file(SCOPE, &SalvageFile::read_attempt().repeat(3)).await;
+    resolved(engine.close()).await;
+    let told = read_side_file(SCOPE).await;
+    write_side_file(SCOPE, &[]).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    resolved(engine.close()).await;
+    write_side_file(SCOPE, &told).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_that_could_not_be_told_is_told_by_every_open_until_it_was() {
+    const SCOPE: &str = "cache-wasm-salvage-untold";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    let doubted = [copy.clone(), SalvageFile::loss(QueueLoss::default())].concat();
+    let given_up = [copy, SalvageFile::import_attempt().repeat(3)].concat();
+    let unreadable = ("unreadable", 0);
+    let cases = [
+        // Reads that never came back.
+        (
+            Some(SalvageFile::read_attempt().repeat(3)),
+            true,
+            unreadable,
+            unreadable,
+        ),
+        (Some(doubted), false, ("partial", 0), unreadable),
+        (Some(given_up), false, ("abandoned", 1), ("abandoned", 1)),
+        // One of the database's files is gone.
+        (None, false, unreadable, unreadable),
+    ];
+    for (file, recovery, first, later) in cases {
+        if recovery || file.is_none() {
+            closed_with_queue(SCOPE).await;
+        }
+        match file {
+            Some(file) => write_side_file(SCOPE, &file).await,
+            None => remove_opfs_file(&database_identity(SCOPE)).await,
+        }
+        let mut recovery = recovery;
+        for (outcome, dropped) in [first, later, later, later, later] {
+            let (engine, _, queue) = open(SCOPE, recovery).await;
+            assert_eq!((&queue[0], &queue[2]), (&outcome.into(), &dropped.into()));
+            resolved(engine.close()).await;
+            recovery = false;
+        }
+        let (engine, _, _) = open(SCOPE, false).await;
+        tell(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_nobody_was_told_of_outlives_a_wipe_that_carries_newer_writes() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-wipe";
+    for (dies, recovery) in [(false, true), (true, false), (true, true)] {
+        closed_with_queue(SCOPE).await;
+        write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+        if dies {
+            wipe_and_die(SCOPE).await;
+        }
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["partial", 1, 0]),
+            "{dies} {recovery}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_that_may_have_been_imported_is_never_called_kept_once_its_database_is_torn() {
+    const SCOPE: &str = "cache-wasm-salvage-torn";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut copy = read_side_file(SCOPE).await;
+    copy.extend(SalvageFile::import_attempt());
+    for recovery in [false, true] {
+        let (engine, _, _) = open(SCOPE, false).await;
+        resolved(engine.close()).await;
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        write_side_file(SCOPE, &copy).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_of_a_torn_database_is_never_called_kept_when_its_doubt_does_not_fit() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-full";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut copy = read_side_file(SCOPE).await;
+    copy.extend(SalvageFile::import_attempt());
+    for recovery in [false, true] {
+        let (engine, _, _) = open(SCOPE, false).await;
+        resolved(engine.close()).await;
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        write_side_file(SCOPE, &copy).await;
+        break_side_files("write", REFUSE_LOSSES).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        restore_side_files().await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_of_a_torn_database_is_never_called_kept_after_a_death() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-death";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut copy = read_side_file(SCOPE).await;
+    copy.extend(SalvageFile::import_attempt());
+    for recovery in [false, true] {
+        let (engine, _, _) = open(SCOPE, false).await;
+        resolved(engine.close()).await;
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        write_side_file(SCOPE, &copy).await;
+        let owner = owner(SCOPE).await;
+        let (owner, crossing) = match recovery {
+            true => wipe_keeping_queue(SCOPE, owner)
+                .await
+                .unwrap_or_else(|_| panic!("wipe")),
+            false => (owner, Crossing::default()),
+        };
+        let sidecar = owner.sidecar();
+        let Ok((storage, _, _)) = open_or_wipe(SCOPE, owner, &sidecar, crossing).await else {
+            panic!("a fresh database opens")
+        };
+        release_storage(storage).await.expect("release");
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_says_so_after_a_death_at_creating_its_missing_file() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-create";
+    closed_with_queue(SCOPE).await;
+    let wal = format!("{}-wal", database_identity(SCOPE));
+    remove_opfs_file(&wal).await;
+    run_js(
+        "const directory = FileSystemDirectoryHandle.prototype;
+         const original = directory.getFileHandle;
+         self.restoreFiles = () => { directory.getFileHandle = original; };
+         directory.getFileHandle = async function (file, options) {
+           const handle = await original.call(this, file, options);
+           if (file === name && options?.create)
+             throw new DOMException('died', 'UnknownError');
+           return handle;
+         };
+         return Promise.resolve();",
+        &wal,
+    )
+    .await;
+    let died = open_cache_inner(SCOPE.into(), None, false, None, false).await;
+    run_js("self.restoreFiles(); return Promise.resolve();", "").await;
+    assert!(died.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_is_not_opened_while_its_side_file_is_busy() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-busy";
+    closed_with_queue(SCOPE).await;
+    remove_opfs_file(&format!("{}-wal", database_identity(SCOPE))).await;
+    hold_side_file(SCOPE).await;
+    let busy = open_cache_inner(SCOPE.into(), None, false, None, false).await;
+    release_side_file().await;
+    assert!(busy.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_is_not_opened_when_its_side_file_turns_busy() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-turns-busy";
+    closed_with_queue(SCOPE).await;
+    remove_opfs_file(&format!("{}-wal", database_identity(SCOPE))).await;
+    write_side_file(SCOPE, &SalvageFile::read_attempt()).await;
+    run_js(
+        "const files = FileSystemFileHandle.prototype;
+         const create = files.createSyncAccessHandle;
+         self.restoreFiles = () => { files.createSyncAccessHandle = create; };
+         let reads = 0;
+         files.createSyncAccessHandle = async function (...options) {
+           if (this.name.endsWith('-salvage') && ++reads > 1)
+             throw new DOMException('busy', 'NoModificationAllowedError');
+           return await create.apply(this, options);
+         };
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    let busy = open_cache_inner(SCOPE.into(), None, false, None, false).await;
+    run_js("self.restoreFiles(); return Promise.resolve();", "").await;
+    assert!(busy.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+/// Opens for recovery while every use of the side file after the first
+/// `uses` finds another context at it.
+async fn recover_with_a_busy_side_file(scope: &str, uses: usize) -> bool {
+    run_js(
+        "const files = FileSystemFileHandle.prototype;
+         const create = files.createSyncAccessHandle;
+         self.restoreFiles = () => { files.createSyncAccessHandle = create; };
+         let left = Number(name);
+         files.createSyncAccessHandle = async function (...options) {
+           if (this.name.endsWith('-salvage') && --left < 0)
+             throw new DOMException('busy', 'NoModificationAllowedError');
+           return await create.apply(this, options);
+         };
+         return Promise.resolve();",
+        &uses.to_string(),
+    )
+    .await;
+    let opened = open_cache_inner(scope.into(), None, true, None, false).await;
+    run_js("self.restoreFiles(); return Promise.resolve();", "").await;
+    opened.is_ok()
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_side_file_that_turns_busy_costs_no_queue() {
+    for uses in [0, 1, 2] {
+        let scope = format!("cache-wasm-salvage-turns-busy-{uses}");
+        closed_with_queue(&scope).await;
+        assert!(!recover_with_a_busy_side_file(&scope, uses).await);
+        let (engine, _, queue) = open(&scope, true).await;
+        assert_eq!(queue, serde_json::json!(["kept", 1, 0]), "{uses}");
+        assert_kept(&engine, &scope).await;
+        close_and_destroy(&engine, &scope).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_says_so_after_a_wipe_that_found_it_busy() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-wal-busy";
+    closed_with_queue(SCOPE).await;
+    remove_opfs_file(&database_identity(SCOPE)).await;
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          const entry = await root.getFileHandle(name);
+          self.heldWal = await entry.createSyncAccessHandle();
+        })()",
+        &format!("{}-wal", database_identity(SCOPE)),
+    )
+    .await;
+    let busy = open_cache_inner(SCOPE.into(), None, true, None, false).await;
+    run_js("self.heldWal.close(); return Promise.resolve();", "").await;
+    assert!(busy.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_torn_database_says_so_when_its_doubt_does_not_fit() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-blank";
+    for recovery in [false, true] {
+        closed_with_queue(SCOPE).await;
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        break_side_files("write", REFUSE_LOSSES).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        restore_side_files().await;
+        assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]), "{recovery}");
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_nobody_was_told_of_outlives_a_wipe_with_no_room_for_newer_writes() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-full";
+    closed_with_queue(SCOPE).await;
+    write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+    refuse_queue_frames(true).await;
+    let (engine, _, queue) = open(SCOPE, true).await;
+    refuse_queue_frames(false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_nobody_was_told_of_outlives_a_death_before_it_is_noted_behind_newer_writes() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-death";
+    closed_with_queue(SCOPE).await;
+    write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+    break_side_files("write", REFUSE_LOSSES).await;
+    wipe_and_die(SCOPE).await;
+    restore_side_files().await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_death_between_noting_a_loss_and_ending_the_copy_under_it_queues_nothing_twice() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-cut";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    let untold = [SalvageFile::loss(QueueLoss::default()), copy.clone()].concat();
+    let doubted = [copy, SalvageFile::loss(QueueLoss::default())].concat();
+    let skip_ending = "if (args[0] === 22) throw new DOMException('died', 'UnknownError');
+        return original(...args);";
+    for left in [untold, doubted] {
+        let (engine, _, _) = open(SCOPE, false).await;
+        resolved(engine.close()).await;
+        write_side_file(SCOPE, &left).await;
+        let owner = owner(SCOPE).await;
+        let sidecar = owner.sidecar();
+        break_side_files("truncate", skip_ending).await;
+        let noted = sidecar
+            .replace(&SalvageFile::loss(QueueLoss::default()))
+            .await;
+        restore_side_files().await;
+        owner.release().await.expect("release");
+        assert!(noted.is_err());
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_ne!(queue[0], "none");
+        assert_ne!(queue[0], "kept");
+        tell(&engine, SCOPE).await;
+        assert_eq!(depth(&engine).await, "1");
+        resolved(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_told_loss_that_could_not_be_let_go_of_is_let_go_of_later() {
+    const SCOPE: &str = "cache-wasm-salvage-told-busy";
+    closed_with_queue(SCOPE).await;
+    write_side_file(SCOPE, &SalvageFile::loss(QueueLoss::default())).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    hold_side_file(SCOPE).await;
+    let told = wasm_bindgen_futures::JsFuture::from(engine.queue_loss_told()).await;
+    release_side_file().await;
+    assert!(told.is_err());
+    tell(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn telling_leaves_a_queue_that_could_not_be_read() {
+    const SCOPE: &str = "cache-wasm-salvage-told-unread";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+    run_js(
+        "self.removeEntry = FileSystemDirectoryHandle.prototype.removeEntry;
+         const create = FileSystemFileHandle.prototype.createSyncAccessHandle;
+         self.createAny = create;
+         FileSystemFileHandle.prototype.createSyncAccessHandle = async function (...options) {
+           const handle = await create.apply(this, options);
+           if (this.name.endsWith('-salvage'))
+             handle.write = handle.truncate = () => {
+               throw new DOMException('full', 'QuotaExceededError');
+             };
+           return handle;
+         };
+         FileSystemDirectoryHandle.prototype.removeEntry = async function (file, options) {
+           if (file.endsWith('-salvage')) throw new DOMException('no', 'UnknownError');
+           return self.removeEntry.call(this, file, options);
+         };
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    run_js(
+        "FileSystemFileHandle.prototype.createSyncAccessHandle = self.createAny;
+         FileSystemDirectoryHandle.prototype.removeEntry = self.removeEntry;
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    restore_side_files().await;
+    assert_eq!(queue[0], "unreadable");
+    resolved(engine.queue_loss_told()).await;
+    resolved(engine.close()).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_queue_the_database_holds_is_not_given_up_for_the_deaths_that_followed() {
+    const SCOPE: &str = "cache-wasm-salvage-held-deaths";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut copy = read_side_file(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    resolved(engine.close()).await;
+    copy.extend(SalvageFile::import_attempt().repeat(3));
+    write_side_file(SCOPE, &copy).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_is_forgotten_before_its_database() {
+    const SCOPE: &str = "cache-wasm-salvage-forgotten-first";
+    for reset in [false, true] {
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let copy = read_side_file(SCOPE).await;
+        let (engine, _, _) = open(SCOPE, false).await;
+        if !reset {
+            resolved(engine.close()).await;
+        }
+        leave_side_file(SCOPE, &copy).await;
+        run_js(
+            "const directory = FileSystemDirectoryHandle.prototype;
+             const original = directory.removeEntry;
+             self.removedFiles = [];
+             self.restoreFiles = () => { directory.removeEntry = original; };
+             directory.removeEntry = function (file, options) {
+               self.removedFiles.push(file);
+               return original.call(this, file, options);
+             };
+             return Promise.resolve();",
+            "",
+        )
+        .await;
+        match reset {
+            true => {
+                resolved(engine.physical_reset()).await;
+            }
+            false => destroy_cache(SCOPE.into()).await.expect("destroy"),
+        }
+        let first = run_js(
+            "self.restoreFiles(); return Promise.resolve(self.removedFiles[0]);",
+            "",
+        )
+        .await;
+        assert_eq!(first.as_string(), Some(side_file(SCOPE)), "{reset}");
+        if reset {
+            resolved(engine.close()).await;
+        }
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_database_outlives_a_copy_that_cannot_be_forgotten() {
+    const SCOPE: &str = "cache-wasm-salvage-forgotten-busy";
+    for reset in [false, true] {
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let copy = read_side_file(SCOPE).await;
+        let (engine, _, _) = open(SCOPE, false).await;
+        if !reset {
+            resolved(engine.close()).await;
+        }
+        leave_side_file(SCOPE, &copy).await;
+        hold_side_file(SCOPE).await;
+        let failed = match reset {
+            true => wasm_bindgen_futures::JsFuture::from(engine.physical_reset())
+                .await
+                .is_err(),
+            false => destroy_cache(SCOPE.into()).await.is_err(),
+        };
+        release_side_file().await;
+        assert!(failed);
+        // Only the database says that the copy is of a queue it took.
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!(["none", 0, 0]), "{reset}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_import_from_memory_leaves_the_copy_that_could_not_be_read() {
+    const SCOPE: &str = "cache-wasm-salvage-import-unread";
+    closed_with_queue(SCOPE).await;
+    let owner = owner(SCOPE).await;
+    let Ok((owner, crossing)) = wipe_keeping_queue(SCOPE, owner).await else {
+        panic!("wipe keeps the queue")
+    };
+    let sidecar = owner.sidecar();
+    let Ok((mut storage, _, crossing)) = open_or_wipe(SCOPE, owner, &sidecar, crossing).await
+    else {
+        panic!("a fresh database opens")
+    };
+    break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+    let full = "const handle = FileSystemSyncAccessHandle.prototype;
+         if (name === '') { handle.write = self.writeAny; return Promise.resolve(); }
+         self.writeAny = handle.write;
+         handle.write = () => { throw new DOMException('full', 'QuotaExceededError'); };
+         return Promise.resolve();";
+    run_js(full, "refuse").await;
+    let died = crossing.finish(&sidecar, &mut storage).await;
+    run_js(full, "").await;
+    restore_side_files().await;
+    assert!(died.is_err());
+    release_storage(storage).await.expect("release");
+
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_that_cannot_be_forgotten_fails_without_losing_the_lock() {
+    const SCOPE: &str = "cache-wasm-salvage-forget-fails";
+    closed_with_queue(SCOPE).await;
+    hold_side_file(SCOPE).await;
+    assert!(destroy_cache(SCOPE.into()).await.is_err());
+    release_side_file().await;
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    hold_side_file(SCOPE).await;
+    let reset = wasm_bindgen_futures::JsFuture::from(engine.physical_reset()).await;
+    assert!(reset.is_err());
+    release_side_file().await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    resolved(engine.close()).await;
+
+    // The database holds its copy already, and the copy cannot go.
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    resolved(engine.close()).await;
+    write_side_file(SCOPE, &copy).await;
+    let full = "throw new DOMException('full', 'QuotaExceededError');";
+    break_side_files("truncate", full).await;
+    run_js(
+        "self.removeEntry = FileSystemDirectoryHandle.prototype.removeEntry;
+         FileSystemDirectoryHandle.prototype.removeEntry = async () => {
+           throw new DOMException('no', 'UnknownError');
+         };
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    let failed = open_cache_inner(SCOPE.into(), None, true, None, false).await;
+    run_js(
+        "FileSystemDirectoryHandle.prototype.removeEntry = self.removeEntry;
+         return Promise.resolve();",
+        "",
+    )
+    .await;
+    restore_side_files().await;
+    assert!(failed.is_err());
+    let (engine, _, _) = open(SCOPE, true).await;
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_disk_with_room_for_no_more_than_the_attempt_still_says_what_is_lost() {
+    const SCOPE: &str = "cache-wasm-salvage-full";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let older = read_side_file(SCOPE).await;
+    closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+    write_side_file(SCOPE, &older).await;
+    break_side_files(
+        "write",
+        "const [bytes, { at }] = args;
+         self.sideFileRoom ??= at + bytes.byteLength;
+         if (at + bytes.byteLength > self.sideFileRoom)
+           throw new DOMException('full', 'QuotaExceededError');
+         return original(...args);",
+    )
+    .await;
+    wipe_and_die(SCOPE).await;
+    restore_side_files().await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_full_disk_still_says_what_is_lost_behind_a_copy() {
+    const SCOPE: &str = "cache-wasm-salvage-full-copy";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let older = read_whole_side_file(SCOPE).await;
+    closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+    write_side_file(SCOPE, &older).await;
+    break_side_files(
+        "write",
+        &format!(
+            "const [bytes, {{ at }}] = args;
+             if (at + bytes.byteLength > {})
+               throw new DOMException('full', 'QuotaExceededError');
+             return original(...args);",
+            older.len()
+        ),
+    )
+    .await;
+    wipe_and_die(SCOPE).await;
+    restore_side_files().await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_that_cannot_be_read_is_never_overtaken() {
+    const SCOPE: &str = "cache-wasm-salvage-unreadable-copy";
+    let broken = "throw new DOMException('no', 'NotReadableError');";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    for recovery in [false, true] {
+        destroy_cache(SCOPE.into()).await.expect("destroy");
+        closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+        write_side_file(SCOPE, &copy).await;
+        break_side_files("read", broken).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        restore_side_files().await;
+        let expected = if recovery { "partial" } else { "unreadable" };
+        assert_eq!(queue[0], expected, "{queue}");
+        resolved(engine.close()).await;
+        let (engine, _, _) = open(SCOPE, false).await;
+        assert_eq!(depth(&engine).await, "1");
+        resolved(engine.close()).await;
+
+        // A failure that passes costs nothing.
+        destroy_cache(SCOPE.into()).await.expect("destroy");
+        write_side_file(SCOPE, &copy).await;
+        break_side_files(
+            "read",
+            "if (self.failedOnce) return original(...args);
+             self.failedOnce = true;
+             throw new DOMException('no', 'NotReadableError');",
+        )
+        .await;
+        run_js("self.failedOnce = false; return Promise.resolve();", "").await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        restore_side_files().await;
+        assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_partial_import_that_could_not_tell_is_told_by_the_next_open() {
+    const SCOPE: &str = "cache-wasm-salvage-untold";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut partial = read_side_file(SCOPE).await;
+    partial.extend(SalvageFile::loss(QueueLoss::default()));
+    write_side_file(SCOPE, &partial).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    resolved(engine.close()).await;
+    write_side_file(SCOPE, &partial).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 0, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn failed_imports_of_an_older_queue_do_not_give_up_a_newer_one() {
+    const SCOPE: &str = "cache-wasm-salvage-other-imports";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut older = read_side_file(SCOPE).await;
+    older.extend(SalvageFile::import_attempt().repeat(3));
+    closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+    write_side_file(SCOPE, &older).await;
+    refuse_queue_frames(true).await;
+    let (engine, _, queue) = open(SCOPE, true).await;
+    refuse_queue_frames(false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 2, 0]));
+    assert_eq!(depth(&engine).await, "2");
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_never_outlives_the_account_it_was_queued_under() {
+    const SCOPE: &str = "cache-wasm-salvage-account";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+
+    // Signing out clears the database and keeps its name.
+    let (engine, _, _) = open(SCOPE, false).await;
+    leave_side_file(SCOPE, &copy).await;
+    resolved(engine.clear()).await;
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    resolved(engine.close()).await;
+
+    // Another account's first response resets it.
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    leave_side_file(SCOPE, &copy).await;
+    resolved(engine.write_query(
+        write_context(None),
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(property_base()),
+        Some("user-2".into()),
+    ))
+    .await;
+    assert_eq!(depth(&engine).await, "0");
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_clear_that_leaves_the_copy_behind_fails() {
+    const SCOPE: &str = "cache-wasm-salvage-clear-fails";
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    hold_side_file(SCOPE).await;
+    let cleared = wasm_bindgen_futures::JsFuture::from(engine.clear()).await;
+    assert!(cleared.is_err());
+    assert_eq!(depth(&engine).await, "0");
+    release_side_file().await;
+    resolved(engine.clear()).await;
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_side_file_whose_database_is_gone_is_cleaned_up() {
+    const SCOPE: &str = "cache-wasm-salvage-alone";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+    let older = format!("{}:s0.v0.t2", legacy_cache_database_name(SCOPE));
+    remove_opfs_pair(&older).await;
+    for (bytes, expected) in [
+        (
+            &*copy,
+            serde_json::json!({ "outcome": "queued-mutations", "queuedMutations": 1 }),
+        ),
+        (
+            &*SalvageFile::read_attempt(),
+            serde_json::json!({ "outcome": "removed" }),
+        ),
+    ] {
+        let owner = OpfsOwner::acquire(&older).await.expect("older owner");
+        owner.sidecar().write_tail(0, bytes).await.expect("write");
+        owner.release().await.expect("release");
+        assert_eq!(stale_cleanup(SCOPE, &older).await, expected);
+        assert!(!opfs_file_exists(&older).await, "nothing else was created");
+    }
+    assert!(!opfs_file_exists(&format!("{older}-salvage")).await);
+    remove_opfs_pair(&database_identity(SCOPE)).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn deliberate_wipes_take_the_copy_too() {
+    const SCOPE: &str = "cache-wasm-salvage-deliberate";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    resolved(engine.physical_reset()).await;
+    assert_eq!(depth(&engine).await, "0");
+    resolved(engine.close()).await;
+
+    // An older build's database stays while its queue is still on its way.
+    let older = format!("{}:s0.v0.t3", legacy_cache_database_name(SCOPE));
+    remove_opfs_pair(&older).await;
+    move_opfs_pair(&database_identity(SCOPE), &older).await;
+    let owner = OpfsOwner::acquire(&older).await.expect("older owner");
+    owner.sidecar().write_tail(0, &copy).await.expect("copy");
+    owner.release().await.expect("release");
+    assert_eq!(
+        stale_cleanup(SCOPE, &older).await,
+        serde_json::json!({ "outcome": "queued-mutations", "queuedMutations": 1 })
+    );
+    let owner = OpfsOwner::acquire(&older).await.expect("older owner");
+    owner.sidecar().remove().await.expect("remove");
+    owner.release().await.expect("release");
+    assert_eq!(
+        stale_cleanup(SCOPE, &older).await,
+        serde_json::json!({ "outcome": "removed" })
+    );
+    remove_opfs_pair(&database_identity(SCOPE)).await;
+}

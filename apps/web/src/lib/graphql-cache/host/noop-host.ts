@@ -49,6 +49,18 @@ export function createNoopCacheHost(): CacheHost {
     async calendarCommit() {
       return { kind: 'unsupported' };
     },
+    async channelTimeline() {
+      return { kind: 'unsupported' };
+    },
+    async channelTimelineCommit() {
+      return { kind: 'unsupported' };
+    },
+    async channelTimelineEvict() {
+      return { kind: 'unsupported' };
+    },
+    async channelTimelineStats() {
+      return { kind: 'unsupported' };
+    },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
     },
@@ -96,6 +108,9 @@ export function createNoopCacheHost(): CacheHost {
       return () => undefined;
     },
     onMutationSettled() {
+      return () => undefined;
+    },
+    onChannelChanged() {
       return () => undefined;
     },
     dispose() {},

@@ -4,6 +4,8 @@ use pollster::block_on;
 mod authority;
 mod bench;
 mod calendar;
+mod channel_timeline;
+mod contention;
 mod people;
 mod soup;
 mod watch;
@@ -65,6 +67,7 @@ fn scoped_native_hydration_rejects_late_pages_after_clear() {
             serde_json::json!({"user":{"id":"viewer"}}),
             Some("viewer".into()),
             Some(scope.clone()),
+            None,
         ))
     };
     assert!(!hydrate().unwrap().write_result.reset);
@@ -119,6 +122,7 @@ fn write(
         variables: variables(),
         data,
         identity: identity.map(str::to_string),
+        channel_commit: None,
     }))
     .unwrap()
 }
@@ -139,6 +143,8 @@ fn empty_write_result() -> WriteResultWire {
         unchanged_views: None,
         field_changes: None,
         identity_errors: Vec::new(),
+        unwritable_response: None,
+        channel: None,
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -147,6 +153,7 @@ fn empty_write_result() -> WriteResultWire {
         affected_ops: Vec::new(),
         reset: false,
         revalidations: Vec::new(),
+        engine: None,
     }
 }
 
@@ -165,6 +172,7 @@ fn query_writes_preserve_search_proof_and_viewer_field_scope_through_native_wire
         variables: other,
         data: soup_data(false),
         identity: Some("viewer".into()),
+        channel_commit: None,
     }))
     .unwrap();
     assert!(result.revision_advanced);
@@ -190,6 +198,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
     committed
         .identity_errors
         .push("missing identity response object".into());
+    committed.unwritable_response = Some("unknown field".into());
     let value =
         serde_json::to_value(CommitOptimisticWriteResultWire::Committed { result: committed })
             .unwrap();
@@ -198,6 +207,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
         value["identityErrors"],
         serde_json::json!(["missing identity response object"])
     );
+    assert_eq!(value["unwritableResponse"], "unknown field");
     assert_eq!(
         serde_json::to_value(MutationUpsertKindWire::ReplacedPending {
             removed_transaction_id: "1".to_string(),
@@ -280,6 +290,7 @@ fn identical_hydration_does_not_advance_the_native_revision() {
             soup_data(true),
             None,
             None,
+            None,
         ))
         .unwrap()
         .write_result
@@ -299,6 +310,7 @@ fn hydration_returns_only_unmarked_fields_and_retains_entities_without_pages() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        None,
         None,
         None,
     ))
@@ -429,6 +441,7 @@ fn explicit_key_selection_returns_native_cache_entities() {
         variables: variables(),
         data,
         identity: None,
+        channel_commit: None,
     }))
     .unwrap();
 
@@ -481,6 +494,7 @@ fn search_uses_native_materialized_projection() {
             }
         }),
         identity: None,
+        channel_commit: None,
     }))
     .unwrap();
 
@@ -563,6 +577,7 @@ fn registered_op_is_affected_by_later_writes() {
         variables: variables(),
         data: soup_data(false),
         identity: None,
+        channel_commit: None,
     }))
     .unwrap();
 
@@ -615,6 +630,9 @@ fn optimistic_layer_commits_durably() {
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
     let serialized = serde_json::to_value(&optimistic).unwrap();
     assert_eq!(serialized["upsertKind"]["kind"], "inserted");
+    // The enqueue reports its engine wait and hold for its queue span.
+    assert!(serialized["engine"]["lockWaitMs"].as_f64().unwrap() >= 0.0);
+    assert!(serialized["engine"]["lockHoldMs"].as_f64().unwrap() >= 0.0);
     assert_eq!(serialized["initialClaim"]["kind"], "claimed");
     assert_eq!(
         serialized["initialClaim"]["mutation"]["transactionId"],
@@ -656,6 +674,9 @@ fn optimistic_layer_commits_durably() {
         soup_data(true),
     ))
     .unwrap();
+    let serialized = serde_json::to_value(&committed).unwrap();
+    assert_eq!(serialized["kind"], "committed");
+    assert!(serialized["engine"]["lockHoldMs"].as_f64().unwrap() >= 0.0);
     let CommitOptimisticWriteResultWire::Committed { result: committed } = committed else {
         panic!("current transaction was reported as superseded")
     };
@@ -785,16 +806,29 @@ fn bad_transaction_id_is_an_error() {
 fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_loss() {
     block_on(async {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("schema.json");
-        let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
-        let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+        let bundled = cache_core::meta::bundled_schema();
+        let open = |schema: &Arc<cache_core::meta::Schema>| {
+            let (storage, adoption, _) =
+                crate::commands::open_cache(dir.path(), "scope-1", schema).unwrap();
+            assert!(
+                matches!(
+                    adoption.change,
+                    None | Some(cache_core::schema_change::Tier::Compatible)
+                ),
+                "{:?}",
+                adoption.change
+            );
+            assert_eq!(adoption.dropped_records, 0);
+            EngineHandle::with_schema(storage, None, adoption.schema)
+        };
+        let handle = open(&bundled);
         let generation = handle.current_storage_generation().await.unwrap();
         let sdl = format!(
             "{}\nextend type GraphqlUser {{ runtimeLabel: String }}",
             cache_core::meta::BUNDLED_SCHEMA_SDL
         );
         let schema = cache_core::meta::Schema::from_sdl(&sdl).unwrap();
-        handle.install_schema(&schema, &path).await.unwrap();
+        handle.install_schema(&schema).await.unwrap();
         let query = "query { user { id runtimeLabel } }";
         let data = serde_json::json!({"user": {"id": "viewer", "runtimeLabel": "OTA"}});
         handle
@@ -806,33 +840,31 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
                 variables: Variables::new(),
                 data: data.clone(),
                 identity: None,
+                channel_commit: None,
             })
             .await
             .unwrap();
         // Older windows/bundles may initialize again without downgrading metadata.
-        handle
-            .install_schema(&cache_core::meta::bundled_schema(), &path)
-            .await
-            .unwrap();
-        let persisted = std::fs::read_to_string(&path).unwrap();
+        handle.install_schema(&bundled).await.unwrap();
         let conflict = cache_core::meta::Schema::from_sdl(
             &sdl.replace("runtimeLabel: String", "runtimeLabel: [String]"),
         )
         .unwrap();
-        assert!(handle.install_schema(&conflict, &path).await.is_err());
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), persisted);
+        assert!(handle.install_schema(&conflict).await.is_err());
         handle.shutdown().unwrap();
-        let schema = cache_core::meta::Schema::from_json(&persisted).unwrap();
-        let reopened =
-            EngineHandle::with_schema(database.open_or_reset("scope-1").unwrap(), None, schema);
-        assert_eq!(
-            reopened.current_storage_generation().await.unwrap(),
-            generation
-        );
-        assert!(
-            matches!(reopened.read(None, query.into(), None, Variables::new(), vec![]).await.unwrap(), ReadResultWire::Hit { data: actual } if actual == data)
-        );
-        reopened.shutdown().unwrap();
+        // The OTA bundle opens next, then the bundle an OTA rollback returns
+        // to: the stored schema keeps the field the older one lacks.
+        for schema in [schema, bundled] {
+            let reopened = open(&schema);
+            assert_eq!(
+                reopened.current_storage_generation().await.unwrap(),
+                generation
+            );
+            assert!(
+                matches!(reopened.read(None, query.into(), None, Variables::new(), vec![]).await.unwrap(), ReadResultWire::Hit { data: actual } if actual == data)
+            );
+            reopened.shutdown().unwrap();
+        }
     });
 }
 
@@ -869,6 +901,7 @@ fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
                 data,
                 identity,
                 scope,
+                None,
             ))
             .unwrap();
             results.push(serde_json::json!({
@@ -914,6 +947,7 @@ fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole()
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        None,
         None,
         None,
     ));
@@ -1094,4 +1128,48 @@ fn a_teardown_queued_behind_an_abandoned_read_still_unregisters_it() {
     });
     let result = write(&handle, Some("client:2"), soup_data(true), None);
     assert!(result.affected_ops.is_empty());
+}
+
+#[test]
+fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
+    let handle = spawn_handle();
+    let optimistic = block_on(handle.enqueue_optimistic_mutation(
+        None,
+        "00000000-0000-4000-8000-000000000009".to_string(),
+        QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        soup_data(true),
+        vec![],
+        vec![],
+        vec![],
+        0,
+        "runner".to_string(),
+        10,
+        1_000,
+        None,
+        vec![],
+    ))
+    .unwrap();
+    let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {
+        panic!("new queue head should be claimed")
+    };
+
+    // No retry of this response can be written, so it settles without its
+    // content and the queue moves on.
+    let committed = block_on(handle.commit_optimistic_write(
+        optimistic.transaction_id,
+        "runner".to_string(),
+        claimed.lease_generation,
+        QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        serde_json::json!({"user": {"id": "user-1", "soup": "malformed"}}),
+    ))
+    .unwrap();
+    let CommitOptimisticWriteResultWire::Committed { result } = committed else {
+        panic!("settles: {committed:?}");
+    };
+    assert!(result.unwritable_response.is_some());
+    assert!(block_on(handle.inspect_mutations()).unwrap().is_empty());
 }

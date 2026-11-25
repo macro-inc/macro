@@ -9,6 +9,7 @@ import type { CalendarGuestInputBody } from '@service-calendar/generated/schemas
 import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
 import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
 import type { UpdateCalendarEventRequest } from '@service-calendar/generated/schemas/updateCalendarEventRequest';
+import type { VisibleCalendar } from '@service-calendar/generated/schemas/visibleCalendar';
 import {
   type CalendarDeletionScope,
   type CalendarInviteScope,
@@ -25,11 +26,13 @@ import { answeringGraphqlCalendarHost } from './graphql/flag';
 import {
   CalendarMutationError,
   committedEvent,
+  createdCalendarEventId,
   executeGraphqlCreate,
   executeGraphqlDelete,
   executeGraphqlInviteGuests,
   executeGraphqlRsvp,
   executeGraphqlUpdate,
+  isCalendarEventCreating,
 } from './graphql/mutations';
 import {
   type CalendarInvitationsData,
@@ -388,6 +391,8 @@ export interface InviteCalendarEventGuestsArgs {
   recurrenceId?: string;
   /** Cache key of the occurrence, for the optimistic update. */
   occurrenceKey?: string;
+  /** Runs once the invitation is saved locally and queued, before the server answers. */
+  onAccepted?: () => void;
 }
 
 /** The cached item with invited guests appended as unanswered. */
@@ -700,6 +705,8 @@ export interface UpdateCalendarEventArgs {
     UpdateCalendarEventRequest,
     'calendarId' | 'scope' | 'recurrenceId'
   >;
+  /** Runs once the update is saved locally and queued, before the server answers. */
+  onAccepted?: () => void;
 }
 
 type UpdateCallbacks = MutationCallbacks<
@@ -713,7 +720,7 @@ type UpdateCallbacks = MutationCallbacks<
 function applyCopyPatch<
   T extends Pick<
     CalendarEventEntity,
-    'title' | 'description' | 'location' | 'reminders'
+    'title' | 'description' | 'location' | 'reminders' | 'visibility'
   >,
 >(copy: T, patch: UpdateCalendarEventArgs['patch']): T {
   const next = { ...copy };
@@ -725,6 +732,9 @@ function applyCopyPatch<
   }
   if (patch.location !== undefined) {
     next.location = patch.location;
+  }
+  if (patch.visibility !== undefined && patch.visibility !== null) {
+    next.visibility = patch.visibility;
   }
   if (patch.reminders !== undefined && patch.reminders !== null) {
     next.reminders = patch.reminders;
@@ -837,10 +847,36 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
   }));
 }
 
+/**
+ * The id the server issued for a created event, or undefined while the
+ * create still waits in the queue under a local id.
+ */
+export function serverIssuedEventId(eventId: string): string | undefined {
+  const landed = createdCalendarEventId(eventId);
+  if (landed) return landed;
+  return isCalendarEventCreating(eventId) ? undefined : eventId;
+}
+
+export type CreateCalendarEventArgs = CreateCalendarEventRequest & {
+  /**
+   * Runs with the event under its local id once the create is saved locally
+   * and queued, before the server answers. Never runs over REST.
+   */
+  onAccepted?: (event: CalendarEventEntity) => void;
+  /**
+   * The calendar `calendarId` names, as the caller already holds it, so the
+   * local copy is built without reading the calendar list. Never sent.
+   */
+  calendar?: Pick<
+    VisibleCalendar,
+    'id' | 'emailLinkId' | 'emailAddress' | 'capabilities'
+  >;
+};
+
 type CreateCallbacks = MutationCallbacks<
   CalendarEventEntity | undefined,
   Error,
-  CreateCalendarEventRequest,
+  CreateCalendarEventArgs,
   unknown
 >;
 
@@ -853,15 +889,16 @@ type CreateCallbacks = MutationCallbacks<
  */
 export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: CreateCalendarEventRequest) => {
+    mutationFn: async (args: CreateCalendarEventArgs) => {
       if (answeringGraphqlCalendarHost())
         return (await executeGraphqlCreate(args)).event;
-      return await throwOnErr(() => emailClient.createCalendarEvent(args));
+      const { onAccepted: _accepted, calendar: _calendar, ...request } = args;
+      return await throwOnErr(() => emailClient.createCalendarEvent(request));
     },
     ...withCallbacks<
       CalendarEventEntity | undefined,
       Error,
-      CreateCalendarEventRequest
+      CreateCalendarEventArgs
     >(
       {
         onSuccess: (event, args) => {

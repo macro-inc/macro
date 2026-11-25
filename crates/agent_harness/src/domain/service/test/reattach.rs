@@ -318,7 +318,6 @@ fn listing_harness() -> (
         }),
         RecordingLifecyclePublisher::new(),
         crate::domain::pending::PendingCommands::new(),
-        PromptMentionsMock::new(),
         NotifierMock::new(),
     );
     turn_observer.bind(NoOpTurnObserver);

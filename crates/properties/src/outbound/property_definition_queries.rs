@@ -10,7 +10,10 @@ use models_properties::{DataType, EntityType, db};
 use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::model::{GetOrCreateTagDefinitionResult, PropertyDefinitionOwner};
+use super::query_error::{DEFINITION_NAME_INDEXES, OPTION_VALUE_INDEXES, violates_unique};
+use crate::domain::model::{
+    CreatePropertyDefinitionOutcome, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
+};
 
 /// Gets a single property definition by ID (includes system properties).
 pub async fn get_property_definition(
@@ -65,7 +68,7 @@ pub async fn get_property_definition(
 /// Returns None if the property doesn't exist, if the caller doesn't own it, or if it's a system property.
 /// The caller owns it when it is their user property, or a property of the team they belong to.
 /// System properties don't have owners and should be fetched via `get_property_definition`.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, user_id))]
 pub async fn get_property_definition_with_owner(
     pool: &Pool<Postgres>,
     property_id: Uuid,
@@ -119,9 +122,23 @@ pub async fn get_property_definition_with_owner(
     }))
 }
 
+/// Sorts definitions the way every definition listing answers: by lowercased
+/// display name, compared in Rust, then by id among names that compare equal.
+/// The database collation orders names differently (it skips spaces and
+/// punctuation), and neither listing's rows arrive in a fixed order for equal
+/// names, so a listing sorted only in SQL would disagree with the listing that
+/// carries options, and clients that cache both as one list would see it
+/// reorder.
+fn sort_by_lowercase_name<T>(rows: &mut [T], key: impl Fn(&T) -> (&str, Uuid)) {
+    rows.sort_by_cached_key(|row| {
+        let (name, id) = key(row);
+        (name.to_lowercase(), id)
+    });
+}
+
 /// Gets property definitions based on optional team and optional user access.
 /// Set `include_system` to true to also include system properties.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, user_id))]
 pub async fn list_property_definitions(
     pool: &Pool<Postgres>,
     team_id: Option<Uuid>,
@@ -159,7 +176,7 @@ pub async fn list_property_definitions(
     .fetch_all(pool)
     .await?;
 
-    let result = rows
+    let mut result: Vec<PropertyDefinition> = rows
         .into_iter()
         .map(|row| {
             PropertyDefinition::from(db::PropertyDefinition {
@@ -177,6 +194,7 @@ pub async fn list_property_definitions(
             })
         })
         .collect();
+    sort_by_lowercase_name(&mut result, |d| (&d.display_name, d.id));
 
     Ok(result)
 }
@@ -216,6 +234,28 @@ pub async fn get_visible_property_options_batch(
     .collect())
 }
 
+/// One definition joined with one of its options, or with none.
+struct DefinitionOptionRow {
+    id: Uuid,
+    team_id: Option<Uuid>,
+    user_id: Option<String>,
+    database_id: Option<Uuid>,
+    display_name: String,
+    data_type: DataType,
+    is_multi_select: bool,
+    specific_entity_type: Option<Option<EntityType>>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    is_system: bool,
+    option_id: Option<Uuid>,
+    option_display_order: Option<i32>,
+    option_number_value: Option<f64>,
+    option_string_value: Option<String>,
+    option_color: Option<String>,
+    option_created_at: Option<chrono::DateTime<chrono::Utc>>,
+    option_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 async fn read_property_definitions_with_options(
     pool: &Pool<Postgres>,
     team_id: Option<Uuid>,
@@ -224,8 +264,14 @@ async fn read_property_definitions_with_options(
     property_definition_ids: Option<&[Uuid]>,
 ) -> anyhow::Result<Vec<PropertyDefinitionWithOptions>> {
     let user_id: Option<&str> = user_id.map(|u| u.as_ref());
-    let rows = sqlx::query!(
-        r#"
+    // Two statements, not one with an optional id filter: a prepared statement
+    // shared by both shapes settles on a generic plan that scans every
+    // definition even when it is asked for one id.
+    let rows = match property_definition_ids {
+        None => {
+            sqlx::query_as!(
+                DefinitionOptionRow,
+                r#"
         SELECT
             pd.id,
             pd.team_id,
@@ -248,7 +294,47 @@ async fn read_property_definitions_with_options(
         FROM property_definitions pd
         LEFT JOIN property_options po ON pd.id = po.property_definition_id
         WHERE
-            ($4::uuid[] IS NULL OR pd.id = ANY($4))
+            (
+                ($3 AND pd.is_system)
+                OR ($1::uuid IS NOT NULL AND pd.team_id = $1)
+                OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            )
+        ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
+        "#,
+                team_id,
+                user_id,
+                include_system,
+            )
+            .fetch_all(pool)
+            .await?
+        }
+        Some(ids) => {
+            sqlx::query_as!(
+                DefinitionOptionRow,
+                r#"
+        SELECT
+            pd.id,
+            pd.team_id,
+            pd.user_id,
+            pd.database_id,
+            pd.display_name,
+            pd.data_type as "data_type: DataType",
+            pd.is_multi_select,
+            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+            pd.created_at,
+            pd.updated_at,
+            pd.is_system,
+            po.id as "option_id?",
+            po.display_order as "option_display_order?",
+            po.number_value as option_number_value,
+            po.string_value as option_string_value,
+            po.color as option_color,
+            po.created_at as "option_created_at?",
+            po.updated_at as "option_updated_at?"
+        FROM property_definitions pd
+        LEFT JOIN property_options po ON pd.id = po.property_definition_id
+        WHERE
+            pd.id = ANY($4)
             AND (
                 ($3 AND pd.is_system)
                 OR ($1::uuid IS NOT NULL AND pd.team_id = $1)
@@ -256,13 +342,15 @@ async fn read_property_definitions_with_options(
             )
         ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
         "#,
-        team_id,
-        user_id,
-        include_system,
-        property_definition_ids
-    )
-    .fetch_all(pool)
-    .await?;
+                team_id,
+                user_id,
+                include_system,
+                ids,
+            )
+            .fetch_all(pool)
+            .await?
+        }
+    };
 
     let mut property_map: HashMap<Uuid, PropertyDefinitionWithOptions> = HashMap::new();
 
@@ -336,11 +424,8 @@ async fn read_property_definitions_with_options(
 
     let mut results: Vec<PropertyDefinitionWithOptions> = property_map.into_values().collect();
 
-    results.sort_by(|a, b| {
-        a.definition
-            .display_name
-            .to_lowercase()
-            .cmp(&b.definition.display_name.to_lowercase())
+    sort_by_lowercase_name(&mut results, |d| {
+        (&d.definition.display_name, d.definition.id)
     });
 
     Ok(results)
@@ -348,7 +433,7 @@ async fn read_property_definitions_with_options(
 
 /// Creates a new property definition, atomically creating any select options
 /// alongside it.
-#[tracing::instrument(skip(pool, options))]
+#[tracing::instrument(skip(pool, options, owner))]
 pub async fn create_property_definition(
     pool: &Pool<Postgres>,
     owner: PropertyDefinitionOwner<'_>,
@@ -357,7 +442,7 @@ pub async fn create_property_definition(
     is_multi_select: bool,
     specific_entity_type: Option<EntityType>,
     options: Vec<PropertyOption>,
-) -> anyhow::Result<PropertyDefinition> {
+) -> anyhow::Result<CreatePropertyDefinitionOutcome> {
     let (team_id, user_id) = owner.into_ids();
     let user_id: Option<&str> = user_id.map(|u| u.as_ref());
 
@@ -365,7 +450,8 @@ pub async fn create_property_definition(
 
     let mut tx = pool.begin().await?;
 
-    let row = sqlx::query!(
+    // A unique violation aborts the transaction; dropping it rolls back.
+    let row = match sqlx::query!(
         r#"
         INSERT INTO property_definitions (
             id,
@@ -398,7 +484,14 @@ pub async fn create_property_definition(
         specific_entity_type as Option<EntityType>
     )
     .fetch_one(&mut *tx)
-    .await?;
+    .await
+    {
+        Ok(row) => row,
+        Err(err) if violates_unique(&err, &DEFINITION_NAME_INDEXES) => {
+            return Ok(CreatePropertyDefinitionOutcome::DuplicateName);
+        }
+        Err(err) => return Err(err.into()),
+    };
 
     let db_property_def = db::PropertyDefinition {
         id: row.id,
@@ -415,19 +508,28 @@ pub async fn create_property_definition(
     };
 
     for option in options {
-        create_property_option_tx(
+        match create_property_option_tx(
             &mut tx,
             db_property_def.id,
             option.display_order,
             option.value,
             option.color,
         )
-        .await?;
+        .await
+        {
+            Ok(()) => {}
+            Err(err) if violates_unique(&err, &OPTION_VALUE_INDEXES) => {
+                return Ok(CreatePropertyDefinitionOutcome::DuplicateOptionValue);
+            }
+            Err(err) => return Err(err.into()),
+        }
     }
 
     tx.commit().await?;
 
-    Ok(db_property_def.into())
+    Ok(CreatePropertyDefinitionOutcome::Created(
+        db_property_def.into(),
+    ))
 }
 
 /// Creates a database-owned definition without adding it to shared property lists.
@@ -470,7 +572,7 @@ pub async fn create_database_property_definition(
 /// A definition a user may bind as a column of `database_id`: a system one,
 /// their own, one of their teams', or one the database owns. `None` for
 /// anything else, which is indistinguishable from a missing definition.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, user_id), err)]
 pub async fn get_bindable_property_definition(
     pool: &Pool<Postgres>,
     property_definition_id: Uuid,
@@ -506,7 +608,7 @@ pub async fn get_bindable_property_definition(
 
 /// The definitions among `property_definition_ids` the user owns, directly
 /// or through a team they belong to; never a system or database-owned one.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, user_id), err)]
 pub async fn get_editable_property_definition_ids(
     pool: &Pool<Postgres>,
     property_definition_ids: &[Uuid],
@@ -578,7 +680,7 @@ pub(super) async fn create_property_option_tx(
     display_order: i32,
     value: PropertyOptionValue,
     color: Option<String>,
-) -> anyhow::Result<()> {
+) -> Result<(), sqlx::Error> {
     let id = macro_uuid::generate_uuid_v7();
     let (number_value, string_value) = value.to_db_values();
 
@@ -611,7 +713,7 @@ pub(super) async fn create_property_option_tx(
 pub const TAG_DEFINITION_DISPLAY_NAME: &str = "Tags";
 
 /// Gets the single tag definition owned by the given owner, if it exists.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, owner), err)]
 pub async fn get_tag_definition(
     pool: &Pool<Postgres>,
     owner: PropertyDefinitionOwner<'_>,
@@ -669,7 +771,7 @@ pub async fn get_tag_definition(
 ///
 /// Tag definitions are TAG-typed, multi-select, and unique per owner (enforced by a partial
 /// unique index). A lost create race re-fetches the definition the winner just created.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, owner), err)]
 pub async fn get_or_create_tag_definition(
     pool: &Pool<Postgres>,
     owner: PropertyDefinitionOwner<'_>,
@@ -692,23 +794,31 @@ pub async fn get_or_create_tag_definition(
     )
     .await
     {
-        Ok(definition) => Ok(GetOrCreateTagDefinitionResult {
-            definition,
-            created: true,
-        }),
-        Err(create_error) => match get_tag_definition(pool, owner).await? {
+        Ok(CreatePropertyDefinitionOutcome::Created(definition)) => {
+            Ok(GetOrCreateTagDefinitionResult {
+                definition,
+                created: true,
+            })
+        }
+        // A lost race leaves the winner's definition to read back.
+        outcome => match get_tag_definition(pool, owner).await? {
             Some(definition) => Ok(GetOrCreateTagDefinitionResult {
                 definition,
                 created: false,
             }),
-            None => Err(create_error),
+            None => match outcome {
+                Err(create_error) => Err(create_error),
+                Ok(_) => Err(anyhow::anyhow!(
+                    "tag definition create conflicted but none exists"
+                )),
+            },
         },
     }
 }
 
 /// Gets the tag definitions visible to a user — their own plus their teams' —
 /// with options attached. Team membership is resolved in the query.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, user_id))]
 pub async fn get_caller_tag_definitions_with_options(
     pool: &Pool<Postgres>,
     user_id: &str,

@@ -1,0 +1,720 @@
+use super::*;
+use cache_core::channel_timeline::{
+    ChannelCoverageWrite, ChannelRowWrite, ChannelTombstone, TIMELINE_HEAD, TIMELINE_START,
+};
+use cache_core::identity::DELETED_FIELD;
+use cache_core::value::CacheValue;
+use pollster::block_on;
+
+fn key(id: &str) -> EntityKey<'static> {
+    EntityKey::entity(MESSAGE_TYPENAME, &[id])
+}
+
+fn string(value: &str) -> CacheValue {
+    CacheValue::String(value.into())
+}
+
+fn message(
+    channel: &str,
+    id: &str,
+    sort_key: &str,
+    thread: Option<&str>,
+) -> (EntityKey<'static>, Record) {
+    let mut record = Record::default();
+    for (field, value) in [
+        ("__typename", string(MESSAGE_TYPENAME)),
+        ("id", string(id)),
+        ("channelId", string(channel)),
+        ("sortKey", string(sort_key)),
+        ("threadId", thread.map_or(CacheValue::Null, string)),
+        ("deletedAt", CacheValue::Null),
+        (
+            "content",
+            string("hello there, this is a message of ordinary length"),
+        ),
+    ] {
+        record.fields.insert(field.into(), value);
+    }
+    (key(id), record)
+}
+
+/// Channel c1 with roots m1..m6 at sort keys 10..60, two replies under m3,
+/// and one root in channel c2.
+fn seed() -> Vec<(EntityKey<'static>, Record)> {
+    let mut entries = (1..=6)
+        .map(|n| message("c1", &format!("m{n}"), &format!("{n}0"), None))
+        .collect::<Vec<_>>();
+    entries.push(message("c1", "r1", "~-31", Some("m3")));
+    entries.push(message("c1", "r2", "~-32", Some("m3")));
+    entries.push(message("c2", "x1", "10", None));
+    entries
+}
+
+fn latest(channel: &str, limit: u16) -> ChannelTimelineRequest {
+    ChannelTimelineRequest {
+        channel_id: channel.into(),
+        thread_root_id: None,
+        limit,
+        before: None,
+        after: None,
+        around: None,
+    }
+}
+
+fn span(start: &str, end: &str) -> TimelineSpan {
+    TimelineSpan {
+        start: start.into(),
+        end: end.into(),
+    }
+}
+
+fn covering(channel: &str, scope: TimelineScope, spans: Vec<TimelineSpan>) -> ChannelCoverageWrite {
+    ChannelCoverageWrite {
+        channel_id: channel.into(),
+        scope,
+        spans,
+    }
+}
+
+fn channel(id: &str) -> TimelineScope {
+    TimelineScope::Channel(id.into())
+}
+
+fn thread(root: &str) -> TimelineScope {
+    TimelineScope::Thread(root.into())
+}
+
+fn sync(channel: &str, seq: i64, touched_at_ms: i64) -> ChannelSync {
+    ChannelSync {
+        channel_id: channel.into(),
+        seq: Some(seq),
+        touched_at_ms,
+    }
+}
+
+fn tombstone(channel: &str, id: &str, seq: i64) -> ChannelTombstone {
+    ChannelTombstone {
+        record_key: key(id),
+        channel_id: channel.into(),
+        seq,
+    }
+}
+
+/// The rows of `entries`, read at `seq`.
+fn rows(entries: &[(EntityKey<'static>, Record)], seq: i64) -> ChannelWrite {
+    ChannelWrite {
+        rows: entries
+            .iter()
+            .map(|(key, record)| ChannelRowWrite {
+                row: project_channel_timeline(key, record).unwrap(),
+                seq,
+            })
+            .collect(),
+        ..ChannelWrite::default()
+    }
+}
+
+async fn write(
+    storage: &mut TursoStorage,
+    entries: &[(EntityKey<'static>, Record)],
+    channel: &ChannelWrite,
+) {
+    storage
+        .put_channel_records(entries, Vec::new(), channel)
+        .await
+        .unwrap();
+}
+
+/// A store of [`seed`] read at sequence 7, covering what `coverage` says.
+async fn write_seed(storage: &mut TursoStorage, coverage: Vec<ChannelCoverageWrite>) {
+    let entries = seed();
+    let channel = ChannelWrite {
+        coverage,
+        sync: vec![sync("c1", 7, 100), sync("c2", 7, 200)],
+        ..rows(&entries, 7)
+    };
+    write(storage, &entries, &channel).await;
+}
+
+fn deleted(key: EntityKey<'static>) -> (EntityKey<'static>, Record) {
+    let mut record = Record::default();
+    record
+        .fields
+        .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
+    (key, record)
+}
+
+async fn states(storage: &TursoStorage, ids: &[&str]) -> Vec<Option<(i64, bool)>> {
+    let guard = storage
+        .load_channel_guard(&ChannelGuardQuery {
+            keys: ids.iter().map(|id| key(id)).collect(),
+            ..ChannelGuardQuery::default()
+        })
+        .await
+        .unwrap();
+    ids.iter()
+        .map(|id| {
+            let state = guard.entries.get(&key(id))?;
+            Some((state.seq, state.removed))
+        })
+        .collect()
+}
+
+async fn spans(storage: &TursoStorage, channel: &str, scope: TimelineScope) -> Vec<TimelineSpan> {
+    let query = ChannelGuardQuery {
+        coverage: [(channel.to_owned(), scope)].into(),
+        ..ChannelGuardQuery::default()
+    };
+    let guard = storage.load_channel_guard(&query).await.unwrap();
+    guard.coverage.into_values().next().unwrap_or_default()
+}
+
+fn ids(rows: &[ChannelTimelineRow]) -> Vec<&str> {
+    rows.iter().filter_map(|row| row.record_key.id()).collect()
+}
+
+fn raw_execute(storage: &TursoStorage, sql: &str) {
+    driver::execute(&storage.connection(), sql, Vec::new()).unwrap();
+}
+
+fn scalar(storage: &TursoStorage, sql: &str) -> i64 {
+    let rows = driver::query(&storage.connection(), sql, Vec::new()).unwrap();
+    required_i64(&rows[0], 0).unwrap()
+}
+
+#[test]
+fn record_writes_keep_rows_current_and_never_make_one() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-write-through").unwrap();
+        storage.put_batch(seed()).await.unwrap();
+        assert_eq!(scalar(&storage, ROW_COUNT), 0);
+        let whole = || vec![span(TIMELINE_START, TIMELINE_HEAD)];
+        write_seed(
+            &mut storage,
+            vec![
+                covering("c1", channel("c1"), whole()),
+                covering("c1", thread("m3"), whole()),
+            ],
+        )
+        .await;
+        assert_eq!(scalar(&storage, ROW_COUNT), 9);
+
+        // A deleted reply stays indexed but hidden, at the same sequence.
+        let mut reply = message("c1", "r1", "~-31", Some("m3"));
+        reply
+            .1
+            .fields
+            .insert("deletedAt".into(), string("2026-01-01T00:00:00Z"));
+        storage.put_batch(vec![reply]).await.unwrap();
+        assert_eq!(states(&storage, &["r1"]).await, [Some((7, false))]);
+        let hidden = "SELECT COUNT(*) FROM channel_timeline WHERE hidden = 1";
+        assert_eq!(scalar(&storage, hidden), 1);
+
+        // A retired identity is a removal at the watermark.
+        storage.put_batch(vec![deleted(key("m4"))]).await.unwrap();
+        assert_eq!(states(&storage, &["m4"]).await, [Some((7, true))]);
+        assert_eq!(spans(&storage, "c1", channel("c1")).await, whole());
+
+        // A record that leaves for any other reason leaves a hole, in the
+        // list it was in.
+        storage.delete_batch(&[key("r2")]).await.unwrap();
+        assert_eq!(spans(&storage, "c1", thread("m3")).await, []);
+        assert_eq!(spans(&storage, "c1", channel("c1")).await, whole());
+        let mut moved = message("c1", "m6", "60", None);
+        moved.1.fields.remove("sortKey");
+        storage.put_batch(vec![moved]).await.unwrap();
+        assert_eq!(spans(&storage, "c1", channel("c1")).await, []);
+        assert_eq!(scalar(&storage, ROW_COUNT), 6);
+
+        storage.clear().await.unwrap();
+        for table in TABLES {
+            assert_eq!(
+                scalar(&storage, &format!("SELECT COUNT(*) FROM {table}")),
+                0
+            );
+        }
+    });
+}
+
+#[test]
+fn a_channel_write_is_one_transaction() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-atomic").unwrap();
+        write_seed(
+            &mut storage,
+            vec![covering(
+                "c1",
+                channel("c1"),
+                vec![span(TIMELINE_START, TIMELINE_HEAD)],
+            )],
+        )
+        .await;
+        let before = storage
+            .query_channel_timeline(&latest("c1", 10), 0)
+            .await
+            .unwrap();
+        let entries = [message("c1", "m7", "70", None), deleted(key("m2"))];
+        let channel = ChannelWrite {
+            deleted: vec![key("m1")],
+            tombstones: vec![tombstone("c1", "m2", 9)],
+            sync: vec![sync("c1", 9, 300)],
+            ..rows(&entries[..1], 9)
+        };
+        // The second record fails: nothing of the write is left.
+        storage.arm_fault(TestFault::After {
+            site: TestFaultSite::Put,
+            index: 1,
+        });
+        let failed = storage
+            .put_channel_records(&entries, Vec::new(), &channel)
+            .await;
+        assert!(failed.is_err());
+        assert_eq!(
+            storage
+                .query_channel_timeline(&latest("c1", 10), 0)
+                .await
+                .unwrap(),
+            before
+        );
+        assert_eq!(
+            states(&storage, &["m1", "m2", "m7"]).await,
+            [Some((7, false)), Some((7, false)), None]
+        );
+
+        write(&mut storage, &entries, &channel).await;
+        let after = storage
+            .query_channel_timeline(&latest("c1", 10), 0)
+            .await
+            .unwrap();
+        assert_eq!(ids(&after.older), ["m7", "m6", "m5", "m4", "m3"]);
+        assert_eq!(after.seq, Some(9));
+        assert_eq!(
+            states(&storage, &["m1", "m2", "m7"]).await,
+            [None, Some((9, true)), Some((9, false))]
+        );
+        assert_eq!(storage.get_batch(&[key("m1")]).await.unwrap(), [None]);
+
+        // A removed entry comes back with its row.
+        let back = [message("c1", "m2", "20", None)];
+        write(&mut storage, &back, &rows(&back, 12)).await;
+        assert_eq!(states(&storage, &["m2"]).await, [Some((12, false))]);
+        assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM channel_removed"), 0);
+    });
+}
+
+#[test]
+fn entries_are_found_by_channel_sequence_and_thread() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-entries").unwrap();
+        write_seed(&mut storage, Vec::new()).await;
+        let newer = [message("c1", "m7", "70", None)];
+        let channel = ChannelWrite {
+            tombstones: vec![tombstone("c1", "d1", 3), tombstone("c1", "d2", 5)],
+            ..rows(&newer, 9)
+        };
+        write(&mut storage, &newer, &channel).await;
+        let mut found = Vec::new();
+        for entries in [
+            ChannelEntries::All,
+            ChannelEntries::HeldBelow(9),
+            ChannelEntries::Thread("m3"),
+            ChannelEntries::TombstonesThrough(4),
+        ] {
+            let keys = storage.load_channel_entries("c1", entries).await.unwrap();
+            found.push(
+                keys.iter()
+                    .filter_map(EntityKey::id)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+        }
+        assert_eq!(
+            found,
+            [
+                "d1 d2 m1 m2 m3 m4 m5 m6 m7 r1 r2",
+                "m1 m2 m3 m4 m5 m6 r1 r2",
+                "r1 r2",
+                "d1",
+            ]
+        );
+        // A root id of another channel: nothing in this one answers to it.
+        let other = storage
+            .load_channel_entries("c2", ChannelEntries::Thread("m3"))
+            .await
+            .unwrap();
+        assert_eq!(other, []);
+    });
+}
+
+#[test]
+fn pages_read_inside_the_stretch_holding_their_anchor() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-pages").unwrap();
+        let none = storage
+            .query_channel_timeline(&latest("c1", 2), 0)
+            .await
+            .unwrap();
+        assert_eq!(none, ChannelTimelineSnapshot::default());
+        write_seed(
+            &mut storage,
+            vec![
+                covering("c1", channel("c1"), vec![span("20", TIMELINE_HEAD)]),
+                covering(
+                    "c1",
+                    thread("m3"),
+                    vec![span(TIMELINE_START, TIMELINE_HEAD)],
+                ),
+            ],
+        )
+        .await;
+
+        let page = storage
+            .query_channel_timeline(&latest("c1", 2), 0)
+            .await
+            .unwrap();
+        assert_eq!(page.span, Some(span("20", TIMELINE_HEAD)));
+        // One more than the page, newest first.
+        assert_eq!(ids(&page.older), ["m6", "m5", "m4"]);
+        assert_eq!(page.seq, Some(7));
+
+        let mut before = latest("c1", 2);
+        before.before = Some("40".into());
+        let page = storage.query_channel_timeline(&before, 0).await.unwrap();
+        assert_eq!(ids(&page.older), ["m3", "m2"]);
+        assert!(page.newer.is_empty());
+
+        let mut after = latest("c1", 2);
+        after.after = Some("20".into());
+        let page = storage.query_channel_timeline(&after, 0).await.unwrap();
+        assert_eq!(ids(&page.newer), ["m3", "m4", "m5"]);
+
+        // A reply anchors the channel read on its root.
+        let mut around = latest("c1", 4);
+        around.around = Some(key("r2"));
+        let page = storage.query_channel_timeline(&around, 0).await.unwrap();
+        assert_eq!(
+            page.anchor.as_ref().and_then(|row| row.record_key.id()),
+            Some("m3")
+        );
+        assert_eq!(ids(&page.older), ["m2"]);
+        assert_eq!(ids(&page.newer), ["m4", "m5", "m6"]);
+
+        // m1 is cached but below every fetched stretch.
+        around.around = Some(key("m1"));
+        let page = storage.query_channel_timeline(&around, 0).await.unwrap();
+        assert_eq!((page.span, page.seq), (None, Some(7)));
+
+        let mut replies = latest("c1", 5);
+        replies.thread_root_id = Some("m3".into());
+        let page = storage.query_channel_timeline(&replies, 0).await.unwrap();
+        assert_eq!(ids(&page.older), ["r2", "r1"]);
+
+        assert_eq!(
+            storage
+                .query_channel_timeline(&latest("c2", 2), 0)
+                .await
+                .unwrap()
+                .span,
+            None
+        );
+    });
+}
+
+#[test]
+fn writes_persist_across_reopen_and_eviction_takes_everything() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("channel-commit.db");
+        let mut storage = database.open("scope").unwrap();
+        let whole = || vec![span(TIMELINE_START, TIMELINE_HEAD)];
+        write_seed(
+            &mut storage,
+            vec![
+                covering("c1", channel("c1"), whole()),
+                covering("c2", channel("c2"), whole()),
+            ],
+        )
+        .await;
+        let channel = ChannelWrite {
+            tombstones: vec![tombstone("c1", "m2", 8)],
+            sync: vec![sync("c1", 8, 100)],
+            ..ChannelWrite::default()
+        };
+        write(&mut storage, &[deleted(key("m2"))], &channel).await;
+        storage.try_close().unwrap();
+
+        let mut storage = database.open("scope").unwrap();
+        let page = storage
+            .query_channel_timeline(&latest("c1", 10), 0)
+            .await
+            .unwrap();
+        assert_eq!(page.span, Some(span(TIMELINE_START, TIMELINE_HEAD)));
+        assert_eq!(ids(&page.older), ["m6", "m5", "m4", "m3", "m1"]);
+        assert_eq!(page.seq, Some(8));
+        assert_eq!(
+            states(&storage, &["m1", "m2"]).await,
+            [Some((7, false)), Some((8, true))]
+        );
+
+        let stats = storage.channel_timeline_stats().await.unwrap();
+        assert_eq!((stats.channels, stats.entries), (2, 8));
+        let eviction = ChannelEviction {
+            touched_before_ms: 150,
+            max_channels: 1,
+        };
+        let kept = BTreeSet::from(["c1".to_owned()]);
+        let evicted = storage
+            .channel_timeline_evict(&eviction, &kept)
+            .await
+            .unwrap();
+        assert_eq!(evicted, ChannelEvictionOutcome::default());
+        let evicted = storage
+            .channel_timeline_evict(&eviction, &BTreeSet::new())
+            .await
+            .unwrap();
+        assert_eq!(evicted.channel_ids, ["c1"]);
+        // The seven held entries and the record of the removed one.
+        assert_eq!(evicted.deleted_keys.len(), 8);
+        assert!(!evicted.has_more);
+        assert_eq!(
+            storage
+                .query_channel_timeline(&latest("c1", 10), 0)
+                .await
+                .unwrap(),
+            ChannelTimelineSnapshot::default()
+        );
+        assert_eq!(states(&storage, &["m1", "m2"]).await, [None, None]);
+        assert_eq!(scalar(&storage, ROW_COUNT), 1);
+        assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM records"), 1);
+        assert_eq!(scalar(&storage, SYNC_COUNT), 1);
+        assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM channel_coverage"), 1);
+
+        // A channel only a deletion was stored of.
+        let channel = ChannelWrite {
+            tombstones: vec![tombstone("c3", "m9", 9)],
+            ..ChannelWrite::default()
+        };
+        write(&mut storage, &[deleted(key("m9"))], &channel).await;
+        let evicted = storage
+            .channel_timeline_evict(&eviction, &BTreeSet::new())
+            .await
+            .unwrap();
+        assert_eq!(evicted.channel_ids, ["c3"]);
+        assert_eq!(states(&storage, &["m9"]).await, [None]);
+    });
+}
+
+#[test]
+fn a_page_costs_the_same_in_a_small_and_a_large_channel() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-scan-cost").unwrap();
+        let mut costs = Vec::new();
+        let mut written = 0;
+        for total in [200, 20_000] {
+            let entries = (written..total)
+                .map(|n| message("c1", &format!("m{n}"), &format!("{n:020}-x"), None))
+                .chain(
+                    (written..total)
+                        .map(|n| message("c2", &format!("o{n}"), &format!("{n:020}-x"), None)),
+                )
+                .collect::<Vec<_>>();
+            write(&mut storage, &entries, &rows(&entries, 1)).await;
+            written = total;
+            let mut steps = 0;
+            for (sql, low, high) in [
+                (
+                    ROWS_OLDER,
+                    TIMELINE_START.to_owned(),
+                    TIMELINE_HEAD.to_owned(),
+                ),
+                (
+                    ROWS_OLDER,
+                    TIMELINE_START.to_owned(),
+                    format!("{:020}-x", 120),
+                ),
+                (
+                    ROWS_NEWER,
+                    format!("{:020}-x", 20),
+                    TIMELINE_HEAD.to_owned(),
+                ),
+            ] {
+                let mut statement = driver::prepare(&storage.connection(), sql).unwrap();
+                let rows = driver::query_prepared(
+                    &mut statement,
+                    vec![text("c:c1"), text(&low), text(&high), Value::from_i64(51)],
+                )
+                .unwrap();
+                assert_eq!(rows.len(), 51);
+                steps += statement.metrics().vm_steps;
+            }
+            costs.push(steps);
+        }
+        assert!(
+            costs[1] <= costs[0] + 50,
+            "VM steps grew with the channel: {costs:?}"
+        );
+        for sql in [
+            ROWS_OLDER,
+            ROWS_NEWER,
+            KEYS_BY_SCOPE,
+            KEYS_BY_CHANNEL,
+            KEYS_BELOW,
+            REMOVED_BY_CHANNEL,
+            REMOVED_THROUGH,
+        ] {
+            let parameters = vec![
+                text("c:c1");
+                driver::prepare(&storage.connection(), sql)
+                    .unwrap()
+                    .parameters_count()
+            ];
+            let plan = driver::query(
+                &storage.connection(),
+                &format!("EXPLAIN QUERY PLAN {sql}"),
+                parameters,
+            )
+            .unwrap()
+            .iter()
+            .filter_map(|row| required_text(row, 3).ok())
+            .collect::<Vec<_>>()
+            .join(" ");
+            assert!(plan.contains("SEARCH"), "{sql}: {plan}");
+            assert!(!plan.contains("SCAN"), "{sql}: {plan}");
+            assert!(!plan.contains("TEMP B-TREE"), "{sql}: {plan}");
+        }
+    });
+}
+
+#[test]
+fn reopen_projects_held_rows_again_after_a_projection_change() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("channel-projection.db");
+        let mut storage = database.open("scope").unwrap();
+        write_seed(
+            &mut storage,
+            vec![
+                covering("c1", channel("c1"), vec![span("30", TIMELINE_HEAD)]),
+                covering(
+                    "c1",
+                    thread("m3"),
+                    vec![span(TIMELINE_START, TIMELINE_HEAD)],
+                ),
+            ],
+        )
+        .await;
+        let channel = ChannelWrite {
+            tombstones: vec![tombstone("c1", "d1", 6)],
+            ..ChannelWrite::default()
+        };
+        // A record without a row: nothing says how old it is.
+        write(&mut storage, &[message("c1", "u1", "55", None)], &channel).await;
+        raw_execute(&storage, "UPDATE channel_timeline SET sort_key = 'old'");
+        raw_execute(
+            &storage,
+            "DELETE FROM records WHERE __typename = 'GraphqlChannelMessage' AND id = 'r1'",
+        );
+        raw_execute(
+            &storage,
+            "UPDATE meta SET value = '0' WHERE key = 'channel_timeline_projection_version'",
+        );
+        storage.try_close().unwrap();
+
+        let storage = database.open("scope").unwrap();
+        assert_eq!(scalar(&storage, ROW_COUNT), 8);
+        let page = storage
+            .query_channel_timeline(&latest("c1", 2), 0)
+            .await
+            .unwrap();
+        assert_eq!(page.span, Some(span("30", TIMELINE_HEAD)));
+        assert_eq!(
+            (ids(&page.older), page.seq),
+            (vec!["m6", "m5", "m4"], Some(7))
+        );
+        assert_eq!(
+            states(&storage, &["m6", "d1", "u1"]).await,
+            [Some((7, false)), Some((6, true)), None]
+        );
+        // The reply without a record took what its thread covered.
+        assert_eq!(spans(&storage, "c1", thread("m3")).await, []);
+        storage.try_close().unwrap();
+
+        // A normal reopen neither scans nor decodes message records.
+        driver::arm_reset_failure(SEARCH_REBUILD_RECORDS);
+        let storage = database.open("scope").unwrap();
+        assert_eq!(scalar(&storage, ROW_COUNT), 8);
+        storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn reopen_rejects_a_channel_schema_drift() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("channel-schema.db");
+        let storage = database.open("scope").unwrap();
+        raw_execute(&storage, "DROP INDEX channel_timeline_channel_idx");
+        storage.try_close().unwrap();
+        let Err(error) = database.open("scope") else {
+            panic!("a drifted channel schema must not open");
+        };
+        assert_eq!(
+            error.physical_reset_reason(),
+            Some(PhysicalResetReason::Compatibility)
+        );
+    });
+}
+
+#[test]
+fn an_invalid_eviction_never_opens_a_transaction() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-invalid").unwrap();
+        let error = storage
+            .channel_timeline_evict(
+                &ChannelEviction {
+                    touched_before_ms: 1,
+                    max_channels: 0,
+                },
+                &BTreeSet::new(),
+            )
+            .await
+            .unwrap_err();
+        assert!(!error.requires_physical_reset());
+        assert_eq!(scalar(&storage, SYNC_COUNT), 0);
+    });
+}
+
+#[test]
+fn an_eviction_pass_stops_before_the_channel_that_makes_it_long() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-eviction-size").unwrap();
+        let held = [("c1", 150), ("c2", 50), ("c3", 1), ("c4", 300)];
+        for (touched_at_ms, (channel, total)) in (1..).zip(held) {
+            let entries = (0..total)
+                .map(|n| message(channel, &format!("{channel}-{n}"), &format!("{n:03}"), None))
+                .collect::<Vec<_>>();
+            let channel = ChannelWrite {
+                sync: vec![sync(channel, 7, touched_at_ms)],
+                ..rows(&entries, 7)
+            };
+            write(&mut storage, &entries, &channel).await;
+        }
+        let eviction = ChannelEviction {
+            touched_before_ms: 10,
+            max_channels: 10,
+        };
+        for (gone, records, has_more) in [
+            (&["c1", "c2"][..], 200, true),
+            (&["c3"], 1, true),
+            (&["c4"], 300, false),
+        ] {
+            let pass = storage
+                .channel_timeline_evict(&eviction, &BTreeSet::new())
+                .await
+                .unwrap();
+            assert_eq!(pass.channel_ids, gone);
+            assert_eq!(pass.deleted_keys.len(), records);
+            assert_eq!(pass.has_more, has_more);
+        }
+        assert_eq!(scalar(&storage, ROW_COUNT), 0);
+    });
+}

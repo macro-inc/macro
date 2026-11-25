@@ -84,6 +84,7 @@ const PLAIN_OWNER: MutationQueueOwner = {
   claimOwner: () => 'owner',
   holds: () => true,
   departed: () => undefined,
+  dispose: () => {},
 };
 function fixture(
   options: MutationQueueRunnerDeps['options'] = {},
@@ -117,6 +118,7 @@ function fixture(
   } as unknown as CacheHost;
   const revalidate = vi.fn(async () => {});
   const replayExplicitEffects = vi.fn(() => undefined);
+  const deleteReportedRecords = vi.fn(async () => ({ attempted: false }));
   let runner!: MutationQueueRunner;
   runner = createMutationQueueRunner({
     host,
@@ -144,11 +146,19 @@ function fixture(
       operationName: getOperationAST(op.query)?.name?.value,
       variables: op.variables ?? {},
     }),
-    deleteReportedRecords: async () => ({ attempted: false }),
+    deleteReportedRecords,
     replayExplicitEffects,
     revalidate,
   });
-  return { runner, forwarded, commit, host, revalidate, replayExplicitEffects };
+  return {
+    runner,
+    forwarded,
+    commit,
+    host,
+    revalidate,
+    replayExplicitEffects,
+    deleteReportedRecords,
+  };
 }
 
 it.each([
@@ -220,6 +230,65 @@ it.each([
       revalidations,
       expect.anything(),
       [],
+      true
+    );
+  }
+);
+
+it.each([
+  { outcome: { kind: 'committed' as const }, disposition: 'committed' },
+  {
+    outcome: {
+      kind: 'committed-superseded' as const,
+      replacementTransactionId: '2',
+    },
+    disposition: 'superseded',
+  },
+])(
+  'applies nothing from a confirmed response the cache could not write: $disposition',
+  async ({ outcome, disposition }) => {
+    const onCacheError = vi.fn();
+    const {
+      runner,
+      forwarded,
+      commit,
+      revalidate,
+      replayExplicitEffects,
+      deleteReportedRecords,
+    } = fixture({ onCacheError });
+    const op = operation();
+    commit.mockResolvedValue({
+      ...outcome,
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: ['draft-query'],
+      reset: false,
+      unwritableResponse: 'unknown field `subject`',
+    });
+    await runner.admit(op, enqueue(op, '1'), runner.epoch());
+    const data = {
+      saveEmailDraft: { draftId: 'canonical-draft', subject: 'Draft' },
+    };
+    const settled = await runner.settle(
+      { operation: forwarded[0], data, stale: false, hasNext: false },
+      queueAttemptOf(forwarded[0])!
+    );
+    // The server applied the write, so it settles as applied, not as failed.
+    expect(
+      settled.extensions?.normalizedCacheMutationDisposition
+    ).toMatchObject({ kind: disposition });
+    expect(onCacheError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'unknown field `subject`' }),
+      expect.anything()
+    );
+    expect(deleteReportedRecords).not.toHaveBeenCalled();
+    expect(replayExplicitEffects).not.toHaveBeenCalled();
+    expect(revalidate).toHaveBeenCalledOnce();
+    expect(revalidate).toHaveBeenCalledWith(
+      [],
+      expect.anything(),
+      ['draft-query'],
       true
     );
   }
@@ -366,15 +435,55 @@ function recordingTelemetry() {
 
 const savedDraft = { saveEmailDraft: { draftId: 'draft', subject: 'Draft' } };
 
-it('ends a live attempt once, as committed', async () => {
+it("ends a live attempt once, as committed, with the commit's engine timing", async () => {
   const { telemetry, attempts } = recordingTelemetry();
-  const { runner, forwarded } = fixture({ mutationQueueTelemetry: telemetry });
+  const { runner, forwarded, commit } = fixture({
+    mutationQueueTelemetry: telemetry,
+  });
+  const engine = { lockWaitMs: 2_250, lockHoldMs: 9 };
+  commit.mockResolvedValueOnce({
+    kind: 'committed',
+    revision: INITIAL_CACHE_REVISION,
+    revisionAdvanced: true,
+    changed: [],
+    affectedOps: [],
+    reset: false,
+    engine,
+  });
   await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
   await runner.settle(
     { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
     queueAttemptOf(forwarded[0])!
   );
-  expect(attempts).toEqual([{ sent: ['live'], finished: [['committed', {}]] }]);
+  expect(attempts).toEqual([
+    {
+      sent: ['live'],
+      finished: [
+        ['committed', { commitMs: expect.any(Number), commitEngine: engine }],
+      ],
+    },
+  ]);
+});
+
+it('records how long a commit that failed took', async () => {
+  const { telemetry, attempts } = recordingTelemetry();
+  const onCacheError = vi.fn();
+  const { runner, forwarded, commit } = fixture({
+    mutationQueueTelemetry: telemetry,
+    onCacheError,
+  });
+  commit.mockRejectedValueOnce(new Error('native commit lost'));
+  await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(attempts[0]?.finished).toEqual([
+    [
+      'ack-lost',
+      { commitMs: expect.any(Number), retryDelayMs: expect.any(Number) },
+    ],
+  ]);
 });
 
 it('sends a queued request inside its attempt span', async () => {
@@ -477,6 +586,7 @@ function liveOwner(departure: () => Promise<void>) {
   return {
     claimOwner: () => 'exchange-live:here',
     holds: () => true,
+    dispose: () => {},
     departed: vi.fn((leaseOwner: string) =>
       leaseOwner.startsWith('exchange-live:') ? departure() : undefined
     ),
@@ -715,6 +825,7 @@ it('hands back a claim whose owner the page let go while it waited for admission
     claimOwner: () => 'exchange-live:here:0',
     holds: (claimedAs) => shown || !claimedAs.startsWith('exchange-live:'),
     departed: () => undefined,
+    dispose: () => {},
   };
   const { runner, forwarded, host } = fixture(
     {
@@ -733,4 +844,58 @@ it('hands back a claim whose owner the page let go while it waited for admission
     expect.any(Number),
     'Admission deferred'
   );
+});
+
+it('keeps its owner while a request it sent is unanswered', async () => {
+  const letGo = vi.fn();
+  const { runner, forwarded } = fixture({}, { ...PLAIN_OWNER, dispose: letGo });
+  const op = operation();
+  const admitted = runner.admit(op, enqueue(op, '1'), runner.epoch());
+  await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+  // Retires the attempt, but not the request already on its way.
+  runner.resetStorage();
+  runner.dispose();
+  await admitted;
+  expect(letGo).not.toHaveBeenCalled();
+
+  const sent = forwarded[0]!;
+  await runner.settle(
+    { operation: sent, data: {}, stale: false, hasNext: false },
+    queueAttemptOf(sent)!
+  );
+  expect(letGo).toHaveBeenCalledOnce();
+});
+
+it('leaves no drain behind', async () => {
+  const { runner } = fixture();
+  runner.start();
+  expect(vi.getTimerCount()).toBe(1);
+  runner.dispose();
+  expect(vi.getTimerCount()).toBe(0);
+  runner.wake();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('lets its owner go at once, and sends nothing more, with no request unanswered', async () => {
+  const letGo = vi.fn();
+  let admit = (_: true) => {};
+  const { runner, forwarded, host } = fixture(
+    {
+      beforeMutationAttempt: () =>
+        new Promise((resolve) => {
+          admit = resolve;
+        }),
+    },
+    { ...PLAIN_OWNER, dispose: letGo }
+  );
+  const op = operation();
+  const admitted = runner.admit(op, enqueue(op, '1'), runner.epoch());
+  await Promise.resolve();
+  runner.dispose();
+  expect(letGo).toHaveBeenCalledOnce();
+
+  admit(true);
+  await admitted;
+  expect(forwarded).toEqual([]);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
 });

@@ -568,12 +568,6 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: InputReceivedMetadata;
 } | {
-    event_type: 'agent_session.mentioned';
-    /**
-     * A prompt named other users who can open the session.
-     */
-    metadata: SessionMentionedMetadata;
-} | {
     event_type: 'agent_session.stopped';
     /**
      * The session's live actor is gone.
@@ -6232,9 +6226,14 @@ export type CrmCompanyFilters = {
  */
 export type CrmCompanyPreview = {
     /**
-     * The company.
+     * The requested company id.
      */
     id: string;
+    /**
+     * The company the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a company that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The team's name override, else the primary domain's directory name.
      */
@@ -6347,9 +6346,14 @@ export type CrmContactPreview = {
      */
     email?: string | null;
     /**
-     * The contact.
+     * The requested contact id.
      */
     id: string;
+    /**
+     * The contact the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a contact that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The contact's display name.
      */
@@ -7758,6 +7762,22 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * One value a merge drops.
+ */
+export type DroppedValue = {
+    /**
+     * The record merged away that held it.
+     */
+    recordId: string;
+    /**
+     * The value.
+     */
+    value: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -9733,7 +9753,7 @@ export type EmailPolicyAudit = {
 /**
  * Events in the member-only policy history; records never contain mail content.
  */
-export type EmailPolicyAuditAction = 'rules_activated' | 'all_mail_enabled' | 'withdrawn' | 'mailbox_revoked' | 'live_targets_changed';
+export type EmailPolicyAuditAction = 'rules_activated' | 'all_mail_enabled' | 'withdrawn' | 'mailbox_revoked' | 'live_targets_changed' | 'records_merged';
 
 /**
  * One explicit sharing command; member and team never come from the body.
@@ -10046,6 +10066,14 @@ export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConse
  * Current consent and exclusions, readable by any team member.
  */
 export type EmailPrivacySettings = {
+    /**
+     * Team domains listed because their company is archived, mapped to that
+     * company. They can't be removed until the company is restored. Empty for
+     * members, who can't see archived companies.
+     */
+    archived_team_domains: {
+        [key: string]: string;
+    };
     /**
      * Whether the caller can remove a team exclusion.
      */
@@ -11522,6 +11550,31 @@ export type FavoritesList = {
      * The requesting user's favorites, in manual order.
      */
     favorites: Array<Favorite>;
+};
+
+/**
+ * A team-visible field whose values differ. The value of the record that
+ * stays is kept; the others are dropped and kept in the merge log.
+ */
+export type FieldConflict = {
+    /**
+     * The values dropped, with the record each came from.
+     */
+    dropped: Array<DroppedValue>;
+    /**
+     * The value kept.
+     */
+    kept: {
+        [key: string]: unknown;
+    };
+    /**
+     * The property definition.
+     */
+    propertyId: string;
+    /**
+     * The property's name.
+     */
+    propertyName: string;
 };
 
 /**
@@ -14821,9 +14874,229 @@ export type MeetingsResponse = {
 };
 
 /**
+ * Why a merge can't go ahead until someone changes the records.
+ */
+export type MergeBlock = {
+    kind: 'same_address_people';
+    /**
+     * Every person involved, archived ones too.
+     */
+    people: Array<SameAddressPerson>;
+} | {
+    kind: 'different_companies';
+    /**
+     * The people who would change company.
+     */
+    people: Array<OtherCompanyPerson>;
+};
+
+/**
+ * A reviewed merge to commit.
+ */
+export type MergeCommitRequest = {
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * A new key per merge, reused only to retry the same one: a retry
+     * returns the first result.
+     */
+    requestKey: string;
+    /**
+     * The revision of the review being confirmed.
+     */
+    revision: string;
+    /**
+     * What happens to teammates' email sharing that names a record merged
+     * away; keeps sharing it when left out.
+     */
+    sharingRules?: SharingRulesChoice;
+    /**
+     * The records merged into it.
+     */
+    sourceIds: Array<string>;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * What email sync does after the merge. The record that stays keeps its
+ * setting; domains whose sync was off stay out of sync.
+ */
+export type MergeEmailSync = {
+    /**
+     * Domains joining it whose mail stays out of sync.
+     */
+    keptOut: Array<string>;
+    /**
+     * Whether the record that stays syncs mail.
+     */
+    survivorSyncs: boolean;
+};
+
+/**
+ * Why a merge was refused.
+ */
+export type MergeErrorResponse = {
+    blocked?: null | MergeBlock;
+    /**
+     * A stable code: `merge_permission_required`, `merge_unavailable`,
+     * `record_unavailable`, `record_hidden`, `record_already_merged`,
+     * `merge_preview_stale`, `merge_request_reused`, `merge_conflict`,
+     * `merge_sharing_rules_too_large`, `invalid_request`.
+     */
+    code: string;
+    /**
+     * For `record_already_merged`, the record it opens now.
+     */
+    currentId?: string | null;
+    /**
+     * What happened, for people.
+     */
+    message: string;
+    /**
+     * The record a `record_hidden` or `record_already_merged` refusal is about.
+     */
+    recordId?: string | null;
+};
+
+/**
  * How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes).
  */
 export type MergeMode = 'union' | 'combine' | 'fragment' | 'intersect' | 'subtract';
+
+/**
+ * What moves to the record that stays.
+ */
+export type MergeMoves = {
+    /**
+     * People filed under the records merged away.
+     */
+    contacts: number;
+    /**
+     * Discussion messages on them.
+     */
+    discussionMessages: number;
+    /**
+     * Pipeline entries tracking the records merged away.
+     */
+    pipelineEntries: number;
+    /**
+     * Tasks, notes, emails, calls, events and rows that reference them.
+     */
+    references: number;
+};
+
+/**
+ * A committed merge.
+ */
+export type MergeOutcome = {
+    /**
+     * When the merge committed.
+     */
+    committedAt: string;
+    /**
+     * The merge's id in the merge log.
+     */
+    mergeId: string;
+    /**
+     * The records merged into it; their ids now open the record that stays.
+     */
+    mergedIds: Array<string>;
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * The review an admin confirms before merging.
+ */
+export type MergePreview = {
+    blocked?: null | MergeBlock;
+    /**
+     * Team-visible values that differ.
+     */
+    conflicts: Array<FieldConflict>;
+    /**
+     * What email sync does.
+     */
+    emailSync: MergeEmailSync;
+    /**
+     * The domains (or addresses) the record that stays has after the merge,
+     * its own first.
+     */
+    identifiers: Array<string>;
+    /**
+     * What moves.
+     */
+    moves: MergeMoves;
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * Changes whenever anything shown here changes; the commit must name it.
+     */
+    revision: string;
+    /**
+     * Pipelines where the record that stays will have several entries.
+     */
+    sharedPipelines: Array<SharedPipeline>;
+    sharingRules?: null | SharingRulesPreview;
+    /**
+     * The records merged into it.
+     */
+    sources: Array<MergedRecord>;
+    /**
+     * The record that stays.
+     */
+    survivor: MergedRecord;
+};
+
+/**
+ * The records a merge names.
+ */
+export type MergePreviewRequest = {
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * The records merged into it, at most ten.
+     */
+    sourceIds: Array<string>;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * The kind of record a merge combines.
+ */
+export type MergeRecordType = 'company' | 'contact';
+
+/**
+ * A record as the review names it.
+ */
+export type MergedRecord = {
+    /**
+     * Record id.
+     */
+    id: string;
+    /**
+     * Display name, as listings show it.
+     */
+    name: string;
+};
 
 /**
  * Shared message representation for channel timelines and entity discussions.
@@ -16197,6 +16470,28 @@ export type OptionRename = {
      * The new label.
      */
     to: string;
+};
+
+/**
+ * A person a contact merge would move to another company.
+ */
+export type OtherCompanyPerson = {
+    /**
+     * The company it is filed under.
+     */
+    companyId: string;
+    /**
+     * That company's name, as listings show it.
+     */
+    companyName: string;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
 };
 
 /**
@@ -19170,6 +19465,33 @@ export type S3ObjectInfo = {
     key: string;
 };
 
+/**
+ * A person blocking the merge: they share an address with someone filed
+ * under another of the records.
+ */
+export type SameAddressPerson = {
+    /**
+     * The address both hold.
+     */
+    address: string;
+    /**
+     * Whether the contact is archived.
+     */
+    archived: boolean;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
+    /**
+     * The record it is filed under.
+     */
+    recordId: string;
+};
+
 export type SaveBomPart = {
     /**
      * The file path of the bom part content
@@ -19436,34 +19758,6 @@ export type SessionIdentity = {
      * nothing and read as a person.
      */
     source?: SessionSource;
-};
-
-/**
- * A prompt named other users who can open the session. Published when the
- * prompt is accepted, not when it is answered: "come look at this" should
- * not wait for the turn.
- */
-export type SessionMentionedMetadata = {
-    /**
-     * The action carrying the prompt.
-     */
-    action_id: AgentActionId;
-    /**
-     * The session.
-     */
-    identity: SessionIdentity;
-    /**
-     * The users named, already narrowed to those who can open the session
-     * and never including the author.
-     */
-    mentioned: Array<MacroUserIdStr>;
-    mentioned_by?: null | MacroUserIdStr;
-    /**
-     * The channel or document message the prompt was posted as, when it
-     * arrived from a thread rather than the session view. That message
-     * already notified the users it named when it was posted.
-     */
-    origin_message_id?: string | null;
 };
 
 /**
@@ -19811,6 +20105,47 @@ export type SharedExternalChatReference = {
      * Macro user who added the chat and shared it.
      */
     ownerId: string;
+};
+
+/**
+ * A pipeline in which the record that stays will have more than one entry.
+ * Entries are distinct deals, so they stay separate.
+ */
+export type SharedPipeline = {
+    /**
+     * Entries the record that stays has in it after the merge.
+     */
+    entriesAfter: number;
+    /**
+     * Pipeline name.
+     */
+    name: string;
+    /**
+     * Pipeline id.
+     */
+    pipelineId: string;
+};
+
+/**
+ * What happens to a teammate's email-sharing rule that names a record merged
+ * away. A rule is never pointed at the record that stays, which would share
+ * more than its owner chose.
+ */
+export type SharingRulesChoice = 'keep' | 'stop';
+
+/**
+ * Teammates whose email-sharing rules name a record merged away. Whose rules
+ * they are is not shown.
+ */
+export type SharingRulesPreview = {
+    /**
+     * Whether every changed rule set still fits the rule limits when kept.
+     */
+    keepFits: boolean;
+    /**
+     * How many teammates' rules change.
+     */
+    teammates: number;
 };
 
 /**
@@ -30017,6 +30352,52 @@ export type GetCrmMemberAccessResponses = {
 };
 
 export type GetCrmMemberAccessResponse = GetCrmMemberAccessResponses[keyof GetCrmMemberAccessResponses];
+
+export type CommitCrmMergeData = {
+    body: MergeCommitRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/merges';
+};
+
+export type CommitCrmMergeErrors = {
+    400: MergeErrorResponse;
+    401: ErrorResponse;
+    403: MergeErrorResponse;
+    404: MergeErrorResponse;
+    409: MergeErrorResponse;
+};
+
+export type CommitCrmMergeError = CommitCrmMergeErrors[keyof CommitCrmMergeErrors];
+
+export type CommitCrmMergeResponses = {
+    200: MergeOutcome;
+};
+
+export type CommitCrmMergeResponse = CommitCrmMergeResponses[keyof CommitCrmMergeResponses];
+
+export type PreviewCrmMergeData = {
+    body: MergePreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/merges/preview';
+};
+
+export type PreviewCrmMergeErrors = {
+    400: MergeErrorResponse;
+    401: ErrorResponse;
+    403: MergeErrorResponse;
+    404: MergeErrorResponse;
+    409: MergeErrorResponse;
+};
+
+export type PreviewCrmMergeError = PreviewCrmMergeErrors[keyof PreviewCrmMergeErrors];
+
+export type PreviewCrmMergeResponses = {
+    200: MergePreview;
+};
+
+export type PreviewCrmMergeResponse = PreviewCrmMergeResponses[keyof PreviewCrmMergeResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;

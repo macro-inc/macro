@@ -15,6 +15,10 @@ export type Addresses = {
    * and `…/tts` under it.
    */
   readonly speech: string;
+  /** The harness's brain routes on the egress listener (`…/brain`): the CAPTCHA solver's model and solves. */
+  readonly brain: string;
+  /** Macro's web app (`OVERRIDE_APP_SERVICE_URL`), for links to people; the SDK's default when enrollment names none. */
+  readonly webApp?: string;
 };
 
 /** The public gateway origin enrollment gives, which every route below is under. */
@@ -25,8 +29,11 @@ const egressKey = 'OVERRIDE_AGENT_HARNESS_EGRESS_URL';
 const egressRoute = '/agent-harness-egress';
 /** The speech gateway enrollment gives (`authentication_service` `agent_addresses`). */
 const speechKey = 'MACRO_SPEECH_URL';
+/** `macro_service_urls::AppServiceUrl`'s override, which enrollment writes. */
+const webAppKey = 'OVERRIDE_APP_SERVICE_URL';
 /** Where speech is on the egress listener, for an enrollment that names none. */
 const speechRoute = '/brain/inference';
+const brainRoute = '/brain';
 const connectionService: ServiceName = 'connection';
 
 /**
@@ -130,6 +137,7 @@ export const addresses = (
     websocketKey,
     egressKey,
     speechKey,
+    webAppKey,
     ...services.map(({ override }) => override),
   ];
   const broken = named.find((key) => {
@@ -176,6 +184,8 @@ export const addresses = (
         speech === undefined || speech === ''
           ? `${egressBase}${speechRoute}`
           : trimmed(speech),
+      brain: `${egressBase}${brainRoute}`,
+      ...(values[webAppKey] ? { webApp: trimmed(values[webAppKey]) } : {}),
     },
   };
 };

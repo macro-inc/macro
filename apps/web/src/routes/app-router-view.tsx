@@ -1,6 +1,6 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { AgentsViewSkeleton } from '@app/features/agents-view/agents-view-skeleton';
-import { AgentSignup, MobileWebSignup } from '@app/features/auth/auth';
+import { AgentSignup } from '@app/features/auth/auth';
 import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-skeleton';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
@@ -42,9 +42,12 @@ import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
+  AgentScreenRouteView,
   AgentsRouteView,
   BookingLinksRouteView,
   CalendarRouteView,
+  CalendarSearchRouteView,
+  CalendarSettingsRouteView,
   CallDetailRouteView,
   CallsCallDetail,
   CallsRouteView,
@@ -87,6 +90,7 @@ import {
   GithubConnectRoutePage,
   LoginPage,
   LoginPopupSuccess,
+  MobileEmailSignupRedirect,
   OnboardingPage,
   PublicBookingRoutePage,
   SignupPage,
@@ -97,6 +101,7 @@ import {
   accountManagerRoute,
   activityRoute,
   agentChatsRoute,
+  agentScreenRoute,
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
@@ -108,6 +113,8 @@ import {
   baseRoute,
   bookingLinksRoute,
   bookingReceiptRoute,
+  calendarSearchRoute,
+  calendarSettingsRoute,
   calendarSplitRoute,
   callDetailRoute,
   callsCallRoute,
@@ -292,7 +299,7 @@ export function appRouteElements(): JSX.Element {
         <Route definition={welcomeRoute} component={WelcomePage} />
         <Route
           definition={mobileEmailSignupRoute}
-          component={MobileWebSignup}
+          component={MobileEmailSignupRedirect}
         />
         <Route definition={onboardingRoute} component={OnboardingPage} />
         <Route definition={inviteRoute} component={InviteWelcome} />
@@ -473,6 +480,14 @@ export function appRouteElements(): JSX.Element {
           />
         </Route>
         <Route
+          definition={calendarSearchRoute}
+          component={CalendarSearchRouteView}
+        />
+        <Route
+          definition={calendarSettingsRoute}
+          component={CalendarSettingsRouteView}
+        />
+        <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}
           loading={CalendarViewSkeleton}
@@ -492,6 +507,7 @@ export function appRouteElements(): JSX.Element {
           <Route definition={callsCallRoute} component={CallsCallDetail} />
         </Route>
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
+        <Route definition={agentScreenRoute} component={AgentScreenRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
             <Route definition={crmPipelineItemRoute} />

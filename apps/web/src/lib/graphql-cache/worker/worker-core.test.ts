@@ -6,6 +6,8 @@ import {
 } from '../authority-fixture';
 import {
   type CacheRequest,
+  type ChannelChange,
+  type ChannelCommitArgs,
   INITIAL_CACHE_REVISION,
   parseCacheRevision,
 } from '../protocol';
@@ -17,6 +19,7 @@ vi.mock('./wasm-module', () => ({
     const module = await loadCacheWasmMock();
     const wrap = (engine: object) => ({
       currentAuthority: async (identity: string) => testAuthority(identity),
+      onChannelsChanged: async () => undefined,
       ...engine,
     });
     const result = { ...module };
@@ -42,6 +45,31 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('pushes the channels a transaction changed to every port', async () => {
+    let report: ((changes: ChannelChange[]) => void) | undefined;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: async () => ({
+        onChannelsChanged: async (callback: typeof report) => {
+          report = callback;
+        },
+      }),
+    });
+    const ports = [{ postMessage: vi.fn() }, { postMessage: vi.fn() }];
+    const core = new CacheWorkerCore();
+    for (const port of ports) core.addPort(port);
+    await core.handleRequest(ports[0], {
+      id: 1,
+      kind: 'init',
+      scope: 'profile',
+    });
+    const changes: ChannelChange[] = [{ channelId: 'c1', kind: 'changed' }];
+    report?.(changes);
+    for (const port of ports)
+      expect(port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: 'channels-changed', changes })
+      );
+  });
+
   it('uses the owner stamp for warm reads and refreshes it after a clear', async () => {
     let generation = TEST_AUTHORITY_GENERATION;
     const currentAuthority = vi.fn(async (identity: string) => ({
@@ -1115,6 +1143,159 @@ describe('CacheWorkerCore', () => {
         revision: '2',
         changed: ['GraphqlCalendarOccurrence:e1:k'],
       },
+    });
+  });
+
+  it('keeps a channel commit behind the hydration it covers and reports the sequence', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const page = {
+      kind: 'page' as const,
+      revision: '1',
+      covered: false,
+      keys: [],
+      olderCursor: null,
+      newerCursor: null,
+      seq: null,
+      optimistic: false,
+    };
+    const write = {
+      revisionAdvanced: true,
+      affectedOps: [],
+      reset: false,
+      searchChangedBuckets: [],
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: vi.fn(async () => {
+          order.push('read');
+          markBlockerStarted();
+          await blocker;
+          return { kind: 'miss' as const };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrate');
+          return { ...write, revision: '1', changed: [], data: null };
+        }),
+        channelTimeline: vi.fn(async () => {
+          order.push('channel-timeline');
+          return page;
+        }),
+        channelTimelineCommit: vi.fn(async () => {
+          order.push('channel-timeline-commit');
+          return {
+            ...write,
+            revision: '2',
+            changed: ['GraphqlChannelMessage:m1'],
+            channel: { channelId: 'c1', seq: '9', outcome: 'applied' as const },
+          };
+        }),
+        channelTimelineEvict: vi.fn(async () => {
+          order.push('channel-timeline-evict');
+          return {
+            ...write,
+            revision: '3',
+            changed: ['GraphqlChannelMessage:m2'],
+            channelIds: ['c2'],
+            hasMore: true,
+          };
+        }),
+        channelTimelineStats: vi.fn(async () => ({ channels: 1, entries: 4 })),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = {
+      postMessage: vi.fn((message) =>
+        messages.push(withoutAuthorityEnvelope(message))
+      ),
+    };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const eviction = core.handleRequest(port, {
+      id: 3,
+      kind: 'channel-timeline-evict',
+      eviction: { touchedBeforeMs: 5, maxChannels: 10 },
+    });
+    const hydration = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 4,
+      kind: 'hydrate',
+      query: 'query ChannelTimeline { entries }',
+      data: { entries: [] },
+    });
+    const commit = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 5,
+      kind: 'channel-timeline-commit',
+      commit: {
+        channelId: 'c1',
+        coverage: [{ start: 'k1', end: '\u{10FFFF}' }],
+        seq: '9',
+        watermark: { kind: 'lower' },
+      },
+    });
+    const read = core.handleRequest(port, {
+      id: 6,
+      kind: 'channel-timeline',
+      request: { channelId: 'c1', limit: 50 },
+    });
+    releaseBlocker();
+    await Promise.all([running, eviction, hydration, commit, read]);
+    await core.handleRequest(port, { id: 7, kind: 'channel-timeline-stats' });
+
+    expect(order).toEqual([
+      'read',
+      'channel-timeline',
+      'channel-timeline-evict',
+      'hydrate',
+      'channel-timeline-commit',
+    ]);
+    expect(messages).toContainEqual({ id: 6, ok: true, result: page });
+    expect(messages).toContainEqual({
+      id: 5,
+      ok: true,
+      result: {
+        kind: 'committed',
+        revision: '2',
+        changed: ['GraphqlChannelMessage:m1'],
+        channel: { channelId: 'c1', seq: '9', outcome: 'applied' },
+      },
+    });
+    expect(messages).toContainEqual({
+      id: 3,
+      ok: true,
+      result: {
+        kind: 'evicted',
+        revision: '3',
+        changed: ['GraphqlChannelMessage:m2'],
+        channelIds: ['c2'],
+        hasMore: true,
+      },
+    });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: '2',
+      searchChangedBuckets: [],
+    });
+    expect(messages).toContainEqual({
+      id: 7,
+      ok: true,
+      result: { kind: 'stats', channels: 1, entries: 4 },
     });
   });
 
@@ -3094,6 +3275,56 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it.each(['write', 'hydrate'] as const)(
+    'stores a channel commit with the %s it describes and answers what it did',
+    async (kind) => {
+      const channel = { channelId: 'c1', seq: '9', outcome: 'applied' };
+      const answer = {
+        revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        channel,
+      };
+      const writeQuery = vi.fn().mockResolvedValue(answer);
+      const hydrateQuery = vi.fn().mockResolvedValue(answer);
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ writeQuery, hydrateQuery }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const channelCommit: ChannelCommitArgs = {
+        channelId: 'c1',
+        seq: '9',
+        watermark: { kind: 'lower' },
+      };
+      await core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
+        id: 2,
+        kind,
+        query: '{ user { id } }',
+        data: {},
+        channelCommit,
+      });
+
+      const engineArgs = (kind === 'write' ? writeQuery : hydrateQuery).mock
+        .calls[0];
+      expect(
+        kind === 'write' ? engineArgs?.[0]?.channelCommit : engineArgs?.at(-1)
+      ).toEqual(channelCommit);
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 2,
+          ok: true,
+          result: expect.objectContaining({ channel }),
+        })
+      );
+    }
+  );
+
   it('forwards a guarded hydration and publishes nothing on scope rejection', async () => {
     const hydrateQuery = vi
       .fn()
@@ -3125,7 +3356,8 @@ describe('CacheWorkerCore', () => {
       undefined,
       {},
       'viewer',
-      scope
+      scope,
+      undefined
     );
     expect(port.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'cache-hydrated' })
@@ -3226,7 +3458,10 @@ describe('CacheWorkerCore', () => {
     );
 
     expect(onInitializationOutcome).toHaveBeenCalledOnce();
-    expect(onInitializationOutcome).toHaveBeenCalledWith('reset-corrupt');
+    expect(onInitializationOutcome).toHaveBeenCalledWith(
+      'reset-corrupt',
+      'reset'
+    );
     expect(
       observations.filter((observation) =>
         [
@@ -3243,6 +3478,296 @@ describe('CacheWorkerCore', () => {
       })
     );
   });
+
+  it('records what bringing the opened records to the schema did', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn().mockResolvedValue({
+        engine: {
+          queueDiagnostics: vi.fn().mockResolvedValue({
+            availability: 'available',
+            depth: '0',
+            oldestCreatedAtMs: null,
+          }),
+        },
+        outcome: 'opened-existing',
+        schemaChange: {
+          change: 'types',
+          changedTypes: 2,
+          droppedRecords: 40,
+          incompleteDocuments: 0,
+          retiredOverlays: 1,
+          adoptMs: 12.5,
+        },
+      }),
+    });
+    const core = new CacheWorkerCore({
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.schema_init',
+        openOutcome: 'opened-existing',
+        schemaChange: 'types',
+        schemaChangedTypes: 2,
+        schemaDroppedRecords: 40,
+        schemaIncompleteDocuments: 0,
+        schemaRetiredOverlays: 1,
+        schemaAdoptMs: 12.5,
+      })
+    );
+  });
+
+  it('tells the engine that a lost queue was told of, when it can be', async () => {
+    const queueLossTold = vi.fn().mockResolvedValue(undefined);
+    for (const engine of [{}, { queueLossTold }]) {
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine,
+          outcome: 'opened-existing',
+          queue: { outcome: 'unreadable', kept: 0, dropped: 1 },
+        }),
+      });
+      const core = new CacheWorkerCore();
+      await core.queueLossTold();
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(queueLossTold).not.toHaveBeenCalled();
+      await core.queueLossTold();
+    }
+
+    expect(queueLossTold).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it.each([
+    ['opened-existing', undefined, 'preserved'],
+    ['opened-existing', 'none', 'preserved'],
+    ['opened-existing', 'kept', 'preserved'],
+    ['opened-existing', 'partial', 'reset'],
+    ['opened-existing', 'abandoned', 'reset'],
+    ['opened-new', 'none', 'reset'],
+    ['reset-storage-uncertain', undefined, 'reset'],
+    ['reset-storage-uncertain', 'none', 'reset'],
+    ['reset-storage-uncertain', 'kept', 'preserved'],
+    ['reset-corrupt', 'partial', 'reset'],
+    ['reset-corrupt', 'unreadable', 'reset'],
+    ['reset-incompatible', 'abandoned', 'reset'],
+  ])(
+    'after %s with a queue %s reports the queue %s',
+    async (outcome, crossing, queue) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome,
+          ...(crossing === undefined
+            ? {}
+            : { queue: { outcome: crossing, kept: 2, dropped: 1 } }),
+        }),
+      });
+      const onInitializationOutcome = vi.fn();
+      const core = new CacheWorkerCore({
+        onInitializationOutcome,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(onInitializationOutcome).toHaveBeenCalledExactlyOnceWith(
+        outcome,
+        queue
+      );
+      expect(
+        observations.filter(({ queueOutcome }) => queueOutcome !== undefined)
+      ).toEqual(
+        crossing === undefined || crossing === 'none'
+          ? []
+          : [
+              expect.objectContaining({
+                name: 'graphql_cache.schema_init',
+                openOutcome: outcome,
+                queueOutcome: crossing,
+                queueKept: 2,
+                queueDropped: 1,
+              }),
+            ]
+      );
+    }
+  );
+
+  it.each([
+    // A Reset tier keeps the queue in its own database.
+    ['opened-existing', 'reset', undefined],
+    // A file that could not take the schema is wiped keeping its queue.
+    ['reset-corrupt', 'types', 'kept'],
+  ] as const)(
+    'after %s whose schema change was %s, the queue crossing %s, reports both and keeps the queue',
+    async (outcome, change, crossing) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome,
+          schemaChange: {
+            change,
+            ...(change === 'reset' ? { resetReason: 'unreadable' } : {}),
+            changedTypes: change === 'types' ? 1 : 0,
+            droppedRecords: 40,
+            incompleteDocuments: 0,
+            retiredOverlays: 1,
+            adoptMs: 12.5,
+          },
+          ...(crossing === undefined
+            ? {}
+            : { queue: { outcome: crossing, kept: 1, dropped: 0 } }),
+        }),
+      });
+      const onInitializationOutcome = vi.fn();
+      const core = new CacheWorkerCore({
+        onInitializationOutcome,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(onInitializationOutcome).toHaveBeenCalledExactlyOnceWith(
+        outcome,
+        'preserved'
+      );
+      expect(
+        observations.filter(({ name }) => name === 'graphql_cache.schema_init')
+      ).toEqual([
+        expect.objectContaining({
+          openOutcome: outcome,
+          schemaChange: change,
+          schemaRetiredOverlays: 1,
+          ...(change === 'reset' ? { schemaResetReason: 'unreadable' } : {}),
+          ...(crossing === undefined
+            ? {}
+            : { queueOutcome: crossing, queueKept: 1, queueDropped: 0 }),
+        }),
+      ]);
+    }
+  );
+
+  it('times each step of a queue that crosses', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheForRecoveryWithOutcome: vi.fn().mockResolvedValue({
+        engine: {},
+        outcome: 'reset-storage-uncertain',
+        queue: {
+          outcome: 'kept',
+          kept: 2,
+          dropped: 0,
+          readMs: 40,
+          wipeMs: 5,
+          importMs: 7,
+        },
+      }),
+    });
+    const core = new CacheWorkerCore({
+      recoveryOpen: true,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    const step = {
+      openOutcome: 'reset-storage-uncertain',
+      queueOutcome: 'kept',
+    };
+    expect(
+      observations.filter(
+        ({ name, queueOutcome }) =>
+          queueOutcome !== undefined && name !== 'graphql_cache.schema_init'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.queue_read',
+        durationMs: 40,
+      }),
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.recovery_wipe',
+        durationMs: 5,
+      }),
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.queue_import',
+        durationMs: 7,
+      }),
+    ]);
+  });
+
+  it.each([
+    ['unreadable', 'error', 'integrity'],
+    ['abandoned', 'success', 'none'],
+    ['partial', 'success', 'none'],
+  ])(
+    'records a %s queue as read with %s',
+    async (queue, outcome, errorCode) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheForRecoveryWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome: 'reset-storage-uncertain',
+          queue: { outcome: queue, kept: 0, dropped: 1, readMs: 40, wipeMs: 5 },
+        }),
+      });
+      const core = new CacheWorkerCore({
+        recoveryOpen: true,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+      expect(
+        observations
+          .filter(({ name }) =>
+            [
+              'graphql_cache.queue_read',
+              'graphql_cache.recovery_wipe',
+            ].includes(String(name))
+          )
+          .map(({ name, ...step }) => [name, step.outcome, step.errorCode])
+      ).toEqual([
+        ['graphql_cache.queue_read', outcome, errorCode],
+        ['graphql_cache.recovery_wipe', 'success', 'none'],
+      ]);
+    }
+  );
 
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
@@ -3272,7 +3797,8 @@ describe('CacheWorkerCore', () => {
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
     expect(onInitializationOutcome).toHaveBeenCalledWith(
-      'reset-storage-uncertain'
+      'reset-storage-uncertain',
+      'reset'
     );
     expect(
       observations.filter((observation) =>

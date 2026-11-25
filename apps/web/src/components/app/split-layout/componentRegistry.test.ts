@@ -12,6 +12,17 @@ it('registers every view the rail opens', () => {
   }
 });
 
+it('registers the native Calendar Settings destination with its own shell', () => {
+  expect(resolveComponent('calendar-settings').initialMeta).toMatchObject({
+    splitPanelLayout: 'composable',
+  });
+});
+
+it('registers the native Calendar Search destination with its own shell', () => {
+  expect(resolveComponent('calendar-search').initialMeta).toMatchObject({
+    splitPanelLayout: 'composable',
+  });
+});
 it('opens a restored New Home split', () => {
   expect(() => resolveComponent('new-home')).not.toThrow();
 });

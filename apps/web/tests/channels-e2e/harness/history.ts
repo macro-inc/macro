@@ -117,9 +117,8 @@ export function readHistory(ofCast = cast()): History {
 
 /**
  * Takes every channel out of the cast's Favorites. The sidebar draws only the
- * rows near its window, and a deleted channel can stay under Favorites
- * (CHN-08), so on a stack many runs have used the row a test has just made
- * would be past the ones drawn.
+ * rows near its window, so on a stack many runs have used the row a test has
+ * just made would be past the ones drawn.
  */
 export async function clearFavoriteChannels(ofCast: number): Promise<void> {
   const http = await apiFor('ada', ofCast);

@@ -91,6 +91,8 @@ impl EngineHandle {
                     variables: request.variables,
                     data: request.data,
                     identity: request.identity,
+                    #[cfg(channel_commits)]
+                    channel: None,
                 },
                 request.scope,
                 &projections,

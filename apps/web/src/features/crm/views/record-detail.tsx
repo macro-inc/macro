@@ -35,6 +35,7 @@ import {
   CONTACT_SECTIONS,
   type CompanySection,
   type ContactSection,
+  type CrmMergeSurvivor,
   type CrmRecordRef,
   type CrmRecordSection,
 } from '../core/record';
@@ -84,6 +85,8 @@ type CrmRecordDetailProps = {
   ) => void;
   onSectionChange: (section: CrmRecordSection) => void;
   onClose: () => void;
+  /** Shows the company or contact the shown one was merged into, in its place. */
+  onMerged?: (survivor: CrmMergeSurvivor) => void;
   navigation: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
 };
@@ -240,6 +243,9 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                         section={companySection()}
                         headerToggle={false}
                         onOpenPipeline={props.onOpenPipeline}
+                        onMerged={(id) =>
+                          props.onMerged?.({ type: 'company', id })
+                        }
                         onOpenContact={(contact) =>
                           open({
                             type: 'contact',
@@ -255,6 +261,9 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                       section={contactSection()}
                       headerToggle={false}
                       onOpenPipeline={props.onOpenPipeline}
+                      onMerged={(id) =>
+                        props.onMerged?.({ type: 'contact', id })
+                      }
                       onOpenCompany={(companyId) => {
                         open(
                           { type: 'company', id: companyId, name: '' },

@@ -54,6 +54,76 @@ fn settled_import(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn approval_keeps_discarded_by_hand_dependencies_in_the_settlement(pool: PgPool) {
+    use crate::domain::models::NotionReviewOmissionKind;
+
+    const REASON: &str = "The database is not shared with the Notion connection.";
+    let owner = user("inline-by-hand");
+    let tracker = TaskTracker::new();
+    let sessions = Arc::new(Sessions::default());
+    let service = ImportServiceImpl::new(
+        notifying_repo(&pool, &sessions),
+        no_connections(),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+    let repo = service.repo.clone();
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let mut source = planned_page('d', "Unavailable database", false);
+    source.kind = ImportKind::DataSource;
+    source.metadata["plan"]["decision"] = serde_json::json!("hand");
+    source.metadata["plan"]["reason"] = serde_json::json!(REASON);
+    source.metadata["plan"]["dependencyOf"] = serde_json::json!([page_id('a')]);
+    let (review, ids) = approved(&pool, &owner, &[page('a', "Project"), source]).await;
+    repo.finish_run(&owner, ImportSource::Notion, RunStatus::Ready, None)
+        .await
+        .unwrap();
+
+    // The disabled Hand dependency cannot be opted in through the review.
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let discarded = repo
+        .list(
+            &owner,
+            Some(ImportSource::Notion),
+            Some(ImportStatus::Discarded),
+        )
+        .await
+        .unwrap();
+    assert!(discarded.iter().any(|row| row.id == ids[1]));
+    let report = service.notion_import_report(&owner).await.unwrap();
+    assert_eq!(report.status, Some(RunStatus::Completed));
+    let details = report.details.unwrap();
+    let item = details
+        .not_imported
+        .iter()
+        .find(|entry| entry.item.import_id == ids[1])
+        .unwrap();
+    assert_eq!(item.kind, NotionReviewOmissionKind::ByHand);
+    assert_eq!(item.item.reason.as_deref(), Some(REASON));
+    assert_eq!(report.hand_items.len(), 1);
+    assert_eq!(report.hand_items[0].import_id, ids[1]);
+    assert_eq!(report.hand_items[0].reason.as_deref(), Some(REASON));
+
+    let notifications = sessions.0.lock().unwrap();
+    assert_eq!(notifications.len(), 1);
+    let settlement = settled_import(&notifications[0]);
+    assert_eq!(settlement.outcome, ImportOutcome::Completed);
+    assert_eq!(settlement.hand_items.len(), 1);
+    assert_eq!(settlement.hand_items[0].title, "Unavailable database");
+    assert_eq!(settlement.hand_items[0].reason.as_deref(), Some(REASON));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_plan_presented_while_planning_tells_its_session_once_it_is_ready(pool: PgPool) {
     let owner = user("planned");
     let (review, session, _) = presented_while_planning(&pool, &owner).await;
@@ -144,7 +214,7 @@ async fn a_linear_plan_tells_its_session_it_came_from_linear(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_plan_that_fails_tells_no_session_it_is_ready(pool: PgPool) {
     let owner = user("plan-failed");
-    presented_while_planning(&pool, &owner).await;
+    let (review, _, _) = presented_while_planning(&pool, &owner).await;
     let sessions = Arc::new(Sessions::default());
     let service = ImportServiceImpl::new(
         notifying_repo(&pool, &sessions),
@@ -161,12 +231,97 @@ async fn a_plan_that_fails_tells_no_session_it_is_ready(pool: PgPool) {
     );
 
     assert!(sessions.0.lock().unwrap().is_empty());
+    let report = service.current_report(&owner).await.unwrap();
+    assert_eq!(report.status, Some(RunStatus::Failed));
+    assert_eq!(report.review_id, Some(review));
+    assert!(report.confirmed.is_none());
+    assert_eq!(report.imported, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cancellation_preserves_partial_rows_and_marks_sampled_settlement(pool: PgPool) {
+    use crate::domain::models::{FidelityWarning, WrittenKind, WrittenObject};
+    use agent_runtime_protocol::domain::notification::MAX_IMPORT_ITEMS;
+
+    let owner = user("cancelled-database");
+    let sessions = Arc::new(Sessions::default());
+    let repo = notifying_repo(&pool, &sessions);
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let mut source = planned_page('c', "Projects", false);
+    source.kind = ImportKind::DataSource;
+    source.metadata["plan"]["rows"] = serde_json::json!(99);
+    let (review, rows) = approved(&pool, &owner, &[source, page('a', "Guide")]).await;
+    repo.transition_run(
+        &owner,
+        ImportSource::Notion,
+        &[RunStatus::Running],
+        RunStatus::Importing,
+        None,
+    )
+    .await
+    .unwrap();
+    repo.mark_importing(&owner, &rows).await.unwrap();
+    let id = rows[0];
+    assert!(
+        repo.mark_import_failed(&owner, rows[1], "Page could not be copied")
+            .await
+            .unwrap()
+    );
+    repo.record_written(
+        &owner,
+        &[
+            WrittenObject::own(id, WrittenKind::Database, Uuid::now_v7()),
+            WrittenObject::for_row(id, WrittenKind::Row, &page_id('e'), Uuid::now_v7()),
+            WrittenObject::for_row(id, WrittenKind::Row, &page_id('f'), Uuid::now_v7()),
+        ],
+    )
+    .await
+    .unwrap();
+    let warnings: Vec<_> = (0..=MAX_IMPORT_ITEMS)
+        .map(|index| FidelityWarning::Text(format!("Import notice {index}")))
+        .collect();
+    repo.record_warnings(&owner, id, &warnings).await.unwrap();
+    let service = ImportServiceImpl::new(
+        repo,
+        no_connections(),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected));
+
+    assert!(service.cancel_notion_import(&owner).await.unwrap());
+    let report = service.current_report(&owner).await.unwrap();
+    assert_eq!(report.status, Some(RunStatus::Dismissed));
+    assert_eq!(report.review_id, Some(review));
+    let confirmed = report.confirmed.unwrap();
+    assert_eq!(confirmed.databases, 0);
+    assert_eq!(confirmed.database_rows, 2);
+    assert_eq!(confirmed.partial_database_rows, 2);
+    assert!(
+        service
+            .end_write(&owner, RunStatus::Dismissed, None)
+            .await
+            .unwrap()
+    );
+
+    let produced = sessions.0.lock().unwrap();
+    assert_eq!(produced.len(), 1);
+    let settlement = settled_import(&produced[0]);
+    assert_eq!(settlement.outcome, ImportOutcome::Cancelled);
+    assert_eq!(settlement.database_rows, 2);
+    assert_eq!(settlement.warnings.len(), MAX_IMPORT_ITEMS);
+    let payload = serde_json::to_value(settlement).unwrap();
+    assert_eq!(payload["partialDatabaseRows"], 2);
+    assert_eq!(payload["failureCount"], 1);
+    assert_eq!(payload["detailsTruncated"], true);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_finished_write_tells_its_session_once_with_the_final_report(pool: PgPool) {
     let owner = user("settled");
-    let (review, session, _) = presented_while_planning(&pool, &owner).await;
+    let (review, session, rows) = presented_while_planning(&pool, &owner).await;
     let repo = PgImportRepo::new(pool.clone());
     repo.transition_run(
         &owner,
@@ -174,6 +329,16 @@ async fn a_finished_write_tells_its_session_once_with_the_final_report(pool: PgP
         &[RunStatus::Running],
         RunStatus::Ready,
         None,
+    )
+    .await
+    .unwrap();
+    repo.record_warnings(
+        &owner,
+        rows[0],
+        &[
+            "View filter approximated".into(),
+            "Notion formula snapshot".into(),
+        ],
     )
     .await
     .unwrap();
@@ -209,6 +374,19 @@ async fn a_finished_write_tells_its_session_once_with_the_final_report(pool: PgP
     assert_eq!(settled.planned, 2);
     assert_eq!(settled.not_written, 0);
     assert!(settled.root_folder_id.is_some());
+    assert_eq!(settled.warnings.len(), 2);
+    assert_eq!(settled.failure_count, Some(0));
+    assert!(!settled.details_truncated);
+    assert!(
+        settled
+            .warnings
+            .contains(&"View filter approximated".to_string())
+    );
+    assert!(
+        settled
+            .warnings
+            .contains(&"Notion formula snapshot".to_string())
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

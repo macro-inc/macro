@@ -23,6 +23,9 @@ mod agent_runtime_directory;
 mod anthropic_gateway;
 mod api;
 mod bots_directory;
+#[cfg(feature = "brain-bench")]
+pub mod brain_bench;
+mod captcha_gateway;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
@@ -31,6 +34,7 @@ mod config;
 mod containers;
 mod conversation_admission;
 mod external_session_requests;
+mod fireworks_gateway;
 mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
@@ -43,6 +47,7 @@ mod routine_sessions;
 mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
+mod solver_runs;
 mod speech_gateway;
 mod trigger;
 mod voice_gateway;
@@ -99,7 +104,6 @@ use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::primary_calendar_time_zones::PrimaryCalendarTimeZones;
-use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
 use agent_harness::outbound::tool_approvals::{
@@ -1387,8 +1391,6 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::clone(&entity_access),
         lexical.clone(),
     );
-    let prompt_mentions =
-        LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context =
         MessagePromptContextAdapter::new(message_service.clone(), Arc::clone(&entity_access));
     let prompt_composer = LexicalAgentPromptComposer::new(
@@ -1519,7 +1521,7 @@ pub async fn run() -> anyhow::Result<()> {
             Arc::clone(&screens),
             service_shutdown.clone(),
         ));
-    // Both brain routes serve only agents with agent teammates on for their
+    // Every brain route serves only agents with agent teammates on for their
     // creator.
     let brain_rollout = feature_flags
         .clone()
@@ -1542,6 +1544,52 @@ pub async fn run() -> anyhow::Result<()> {
         speech_gateway::LIVEKIT_INFERENCE_URL,
         speech_gateway::DEEPGRAM_MODELS_URL,
     )?);
+    let brain_access = anthropic_gateway::brain::BrainAccess {
+        brains: brains.clone(),
+        rollout: brain_rollout.clone(),
+        admission: admission.clone(),
+    };
+    // No CapSolver key turns CAPTCHA solving off: every solve answers
+    // `notConfigured`; no Fireworks key makes every model call a 503. Either
+    // missing, a solver run answers `notConfigured`.
+    let capsolver = match config.capsolver_api_key.value().map(str::trim) {
+        Some(key) if !key.is_empty() => Some(captcha_gateway::Capsolver::new(
+            key,
+            macro_service_urls::CapsolverApiUrl::new()?.as_str(),
+        )?),
+        _ => None,
+    };
+    let firework_api_key = config
+        .firework_api_key
+        .value()
+        .map(str::trim)
+        .filter(|key| !key.is_empty());
+    // CAPTCHA solves and Fireworks slot releases outlive their requests;
+    // shutdown waits for them.
+    let brain_tasks = tokio_util::task::TaskTracker::new();
+    let run_limits = solver_runs::RunLimits::default();
+    let solver_runs = Arc::new(solver_runs::pg::PgSolverRuns::new(pool.clone(), run_limits));
+    let captcha = captcha_gateway::CaptchaGateway::new(
+        brain_access.clone(),
+        capsolver,
+        firework_api_key.is_some(),
+        recorder.clone(),
+        captcha_gateway::Ledgers {
+            runs: solver_runs.clone(),
+            solves: solver_runs.clone(),
+            run_limits,
+            solve_limits: captcha_gateway::SolveLimits::default(),
+            tasks: brain_tasks.clone(),
+        },
+    );
+    let fireworks = fireworks_gateway::FireworksGateway::new(
+        brain_access,
+        recorder.clone(),
+        solver_runs,
+        fireworks_gateway::FIREWORKS_API_URL,
+        firework_api_key,
+        brain_tasks.clone(),
+    )?;
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
@@ -1554,7 +1602,9 @@ pub async fn run() -> anyhow::Result<()> {
         .with_brains(brains, brain_rollout)
         .with_screen_notices(Arc::clone(&screens)),
     )
-    .merge(speech_gateway::router(speech.clone()));
+    .merge(speech_gateway::router(speech.clone()))
+    .merge(captcha_gateway::router(captcha))
+    .merge(fireworks_gateway::router(fireworks));
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
         Arc::new(computers::ComputerPresence::new(
@@ -1598,6 +1648,7 @@ pub async fn run() -> anyhow::Result<()> {
                 service_shutdown.clone(),
             )
             .await,
+            config.environment,
             &computer_tasks,
             service_shutdown.clone(),
         );
@@ -1711,8 +1762,7 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::clone(&tool_approvals),
             ),
             pending_commands,
-            prompt_mentions,
-            // Finished / asking / mentioned reach people through the same
+            // Finished and asking reach people through the same
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
@@ -2103,7 +2153,7 @@ pub async fn run() -> anyhow::Result<()> {
         authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     });
     let gateway_state = RuntimeGatewayState::new(
-        runtimes,
+        Arc::clone(&runtimes),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     // Served to the app by `POST /agent-mode-choice` for the composer's Auto mode.
@@ -2291,6 +2341,10 @@ pub async fn run() -> anyhow::Result<()> {
                 computer_tasks.clone(),
             )),
             waker: Arc::clone(operator) as _,
+            macrod_connection: {
+                let runtimes = Arc::clone(&runtimes);
+                Arc::new(move |harness| runtimes.connection_of(harness))
+            },
             medias: computers::screen::ScreenMedias {
                 vnc: Arc::new(computers::screen::media::VncMedia),
             },
@@ -2810,6 +2864,15 @@ pub async fn run() -> anyhow::Result<()> {
     service_shutdown.cancel();
     computer_tasks.close();
     computer_tasks.wait().await;
+    // Solves under way get a while to finish and be recorded; past that
+    // the ledger replays them as unavailable.
+    brain_tasks.close();
+    if tokio::time::timeout(std::time::Duration::from_secs(30), brain_tasks.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("CAPTCHA solves were still running at shutdown");
+    }
     scheduling_runtime.stop();
     cognition_runtime.stop();
     notification_cancel.cancel();

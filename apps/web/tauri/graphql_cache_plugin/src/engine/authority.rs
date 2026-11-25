@@ -128,6 +128,14 @@ impl EngineHandle {
         Ok(state)
     }
 
+    /// [`Self::snapshot_write`] for work that only removes: it carries no
+    /// fetched content, so the session it was asked under does not matter.
+    pub(super) async fn unfenced_write(&self) -> Result<AccessGuard<'_, EngineState>, String> {
+        let mut state = self.inner.write().await;
+        self.resume_retirement(&mut state).await?;
+        Ok(state)
+    }
+
     pub(super) async fn snapshot_hydration(&self) -> Result<AccessGuard<'_, EngineState>, String> {
         let mut state = self.inner.hydrate().await?;
         self.resume_retirement(&mut state).await?;

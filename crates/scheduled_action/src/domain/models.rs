@@ -18,6 +18,7 @@ use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
+use super::routine_limit::RoutineLimit;
 
 #[cfg(test)]
 mod test;
@@ -290,14 +291,23 @@ pub enum ActionPolicyError {
     NoFutureFirings,
     #[error("event-trigger management is not enabled")]
     EventManagementDisabled,
+    #[error("email label triggers are not enabled")]
+    EmailLabelsDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
     #[error("connect GitHub before enabling a GitHub trigger")]
     GithubNotLinked,
+    #[error("pick only inboxes you have connected or that are shared with you")]
+    UnknownInboxes,
     #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error(
+        "You've reached your plan's limit of {} active routines. Pause or delete a routine to activate another.",
+        .0.max_active()
+    )]
+    RoutineLimitReached(RoutineLimit),
     #[error("{0}")]
     InvalidAppearance(String),
     #[error("only a routine suggestion session may suggest routines")]

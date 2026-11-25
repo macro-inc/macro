@@ -5,15 +5,33 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { For, type JSX, type ParentProps } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  type ParentProps,
+  Show,
+} from 'solid-js';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { EmailHeader } from './components/EmailHeader';
 import { EmailNavigation } from './components/EmailSidebar';
+import { EmailMobileLayout } from './email-view';
 import {
   type EmailViewContext,
   EmailViewProvider,
   useEmailView,
 } from './email-view-context';
+import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
 import { EmailMobileTabs } from './views/mobile/email-tabs';
 
 const mocks = vi.hoisted(() => ({ touch: false }));
@@ -42,12 +60,15 @@ vi.mock('@app/components/view-shell', () => {
       Icon: () => null,
       Toggle: () => null,
       Item: (
-        props: ParentProps<{ active?: boolean; onClick?: () => void }>
+        props: ParentProps<{
+          active?: boolean;
+          onClick?: (event: MouseEvent) => void;
+        }>
       ) => (
         <button
           type="button"
           aria-current={props.active ? 'page' : undefined}
-          onClick={() => props.onClick?.()}
+          onClick={(event) => props.onClick?.(event)}
         >
           {props.children}
         </button>
@@ -55,23 +76,15 @@ vi.mock('@app/components/view-shell', () => {
     },
   };
 });
-vi.mock('@app/components/view-shell/ListHeader', () => ({
+vi.mock('@app/components/view-shell/ListHeader', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@app/components/view-shell/ListHeader')
+  >()),
   ListHeader: (props: ParentProps<{ title: JSX.Element }>) => (
     <header>
       {props.title}
       {props.children}
     </header>
-  ),
-  ListHeaderSearch: (props: {
-    value: string;
-    onValueChange: (value: string) => void;
-  }) => (
-    <input
-      type="search"
-      aria-label="Search email"
-      value={props.value}
-      onInput={(event) => props.onValueChange(event.currentTarget.value)}
-    />
   ),
 }));
 vi.mock('@app/components/view-shell/ViewCreateButton', () => ({
@@ -101,7 +114,46 @@ vi.mock('./views/email-saved-views', () => ({
   EmailSaveViewButton: () => null,
   useEmailSavedViewTitle: () => () => undefined,
 }));
+vi.mock('./components/EmailFilterDrawer', () => ({
+  EmailFilterDrawer: () => null,
+}));
+vi.mock('./components/EmailList', () => ({ EmailList: () => null }));
+vi.mock('./components/EmailReader', () => ({
+  EmailReader: () => null,
+  EmailReaderEmpty: () => null,
+}));
+vi.mock('@app/features/tours/ViewTour', () => ({ ViewTour: () => null }));
+vi.mock('@app/features/saved-views/queries/saved-views', () => ({
+  useSavedView: () => ({}),
+  useSavedViews: () => ({}),
+}));
+vi.mock('@app/features/saved-views/views/saved-view-draft-host', () => ({
+  SavedViewDraftHost: () => null,
+}));
+vi.mock('@app/observability/flow', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/observability/flow')>()),
+  TraceFlow: (props: ParentProps) => <>{props.children}</>,
+}));
+vi.mock('@components/app/split-panel', () => ({ SplitPanel: {} }));
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdownContext: (props: ParentProps) => <>{props.children}</>,
+  })
+);
+vi.mock('@entity', () => ({
+  ListEntityMetadataQueryProvider: (props: ParentProps) => (
+    <>{props.children}</>
+  ),
+}));
 vi.mock('@components/app/mobile/PillTabs', () => ({
+  PillButton: (props: ParentProps<{ onClick?: () => void }>) => (
+    <button
+      type="button"
+      aria-label="Search email"
+      onClick={() => props.onClick?.()}
+    />
+  ),
   PillTabs: (props: {
     items: { value: string; label: string }[];
     value?: string;
@@ -146,6 +198,8 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   useRouteParams: () => ({}),
   useMatches: () => () => [],
   createSearchParams: () => [{ tab: 'important' }],
+  usePane: () => () => 'mail-pane',
+  useSplitRouter: () => ({ entry: () => undefined }),
 }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -168,6 +222,7 @@ vi.mock('@components/app/createPreviewSelectionGuard', () => ({
     Object.assign(() => true, { canSelect: () => true }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitPanel: () => undefined,
   useSplitPanelOrThrow: () => ({
     handle: { id: 'mail-panel' },
     splitHotkeyScope: 'mail-panel',
@@ -176,9 +231,18 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   withSplitPanelOwner: (_slot: string, create: () => unknown) => create(),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+// Mail search's from:/label: suggestions read contacts and labels; these tests
+// are about tab navigation, so they suggest nothing.
+vi.mock('./queries/use-email-search-values', () => ({
+  useEmailSearchValues: () => ({ people: () => [], labels: () => [] }),
+}));
 vi.mock('@property/tags/tag-sets-context', () => ({
   useTagSets: () => () => [],
   useTagSetsReady: () => () => true,
+}));
+vi.mock('@queries/email/label-names', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/email/label-names')>()),
+  useEmailInboxLabels: () => () => [],
 }));
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({ isSuccess: false, data: { links: [] } }),
@@ -187,12 +251,27 @@ vi.mock('./persistence', () => ({ createEmailViewPersistence: () => ({}) }));
 vi.mock('./queries/use-email-query', () => ({
   useEmailDataSource: () => ({ items: () => [] }),
 }));
+vi.mock('./queries/use-email-search-values', () => ({
+  useEmailSearchValues: () => ({ people: () => [], labels: () => [] }),
+}));
 vi.mock('./email-route', () => ({
   emailTabSearch: { namespace: 'mail' },
   emailDetailSearch: { namespace: 'email-detail' },
   emailTabSearchCodec: { serialize: (value: unknown) => value },
 }));
 
+// jsdom has no ResizeObserver; the phone layout measures its header with one.
+beforeAll(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+afterAll(() => vi.unstubAllGlobals());
 afterEach(() => {
   cleanup();
   mocks.touch = false;
@@ -222,9 +301,15 @@ function mount(content: () => JSX.Element) {
   return view;
 }
 
-const searchField = () => screen.getByRole<HTMLInputElement>('searchbox');
-const type = (search: string) =>
-  fireEvent.input(searchField(), { target: { value: search } });
+const searchField = () => screen.queryByRole<HTMLInputElement>('searchbox');
+const press = (name: string) =>
+  fireEvent.click(screen.getByRole('button', { name }));
+const openSearch = () => press('Search email');
+const type = (search: string) => {
+  if (!searchField()) openSearch();
+  searchField()!.focus();
+  fireEvent.input(searchField()!, { target: { value: search } });
+};
 const selectedTab = () =>
   screen
     .getAllByRole<HTMLInputElement>('radio')
@@ -240,14 +325,113 @@ const selectedFolders = () =>
     .filter((button) => button.getAttribute('aria-current') === 'page')
     .map((button) => button.textContent);
 
+/** The header with its wide field, which lists recent searches. */
+function WideSearchHeader() {
+  const { state, setState } = useEmailView();
+  const suggestions = createEmailSearchSuggestions({
+    userId: () => 'user',
+    search: () => state.search,
+    setSearch: (search) => setState('search', search),
+    hasResults: () => false,
+    openedThread: () => undefined,
+    isResult: () => true,
+    scopeAvailable: () => true,
+  });
+  return <EmailHeader tabOnly searchSuggestions={suggestions} />;
+}
+
 describe('desktop header and sidebar', () => {
-  const desktop = () =>
+  const desktop = (wide = true) =>
     mount(() => (
       <>
-        <EmailHeader tabOnly />
+        {wide ? <WideSearchHeader /> : <EmailHeader tabOnly />}
         <EmailNavigation />
       </>
     ));
+
+  describe.each([
+    { field: 'wide', wide: true },
+    { field: 'compact', wide: false },
+  ])('the $field search field', ({ wide }) => {
+    const openEmptyFromNoise = () => {
+      desktop(wide);
+      fireEvent.click(screen.getByRole('radio', { name: 'Noise' }));
+      openSearch();
+    };
+
+    it('offers search tips beside the title only while the wide field is open', () => {
+      desktop(wide);
+      const tips = () =>
+        screen.queryByRole('button', { name: 'All search operators' });
+      expect(tips()).toBeNull();
+
+      openSearch();
+      expect(tips() !== null).toBe(wide);
+      const button = tips();
+      if (button) {
+        // A press keeps the focus in the empty field, which closes on blur.
+        expect(fireEvent.pointerDown(button)).toBe(false);
+        expect(fireEvent.mouseDown(button)).toBe(false);
+      }
+      press('Close search');
+      expect(tips()).toBeNull();
+    });
+
+    it('hides the Inbox tabs as it opens, and says Search while it is empty', () => {
+      openEmptyFromNoise();
+      expect(searchField()?.value).toBe('');
+      expect(inboxTabs()).toBeNull();
+      expect(headerTitle()).toBe('Search');
+      expect(selectedFolders()).toEqual([]);
+
+      type('invoice');
+      expect(headerTitle()).toBe('Search');
+      type('');
+      expect(inboxTabs()).toBeNull();
+      expect(headerTitle()).toBe('Search');
+      expect(selectedFolders()).toEqual([]);
+
+      // A view with no words yet lists the same rows, still under Search.
+      type('in:sent ');
+      expect(headerTitle()).toBe('Search');
+      expect(selectedFolders()).toEqual([]);
+    });
+
+    it.each([
+      { how: 'its X', close: () => press('Close search') },
+      {
+        how: 'Escape',
+        close: () => fireEvent.keyDown(searchField()!, { key: 'Escape' }),
+      },
+    ])(
+      'brings the tabs back on the earlier tab once $how closes it',
+      ({ close }) => {
+        openEmptyFromNoise();
+        close();
+        expect(searchField()).toBeNull();
+        expect(selectedTab()).toBe('Noise');
+        expect(headerTitle()).toBe('Inbox');
+
+        openSearch();
+        type('invoice');
+        press('Close search');
+        expect(searchField()).toBeNull();
+        expect(selectedTab()).toBe('Noise');
+      }
+    );
+
+    it('closes for a view picked before a word is typed', () => {
+      openEmptyFromNoise();
+      press('Sent');
+      expect(searchField()).toBeNull();
+      expect(headerTitle()).toBe('Sent');
+
+      openSearch();
+      press('Inbox');
+      expect(searchField()).toBeNull();
+      expect(inboxTabs()).not.toBeNull();
+    });
+  });
 
   it.each(INBOX_SEARCHES)(
     'shows no Inbox tabs and the view’s name for $search',
@@ -293,7 +477,7 @@ describe('desktop header and sidebar', () => {
     type('in:focus invoice');
     expect(inboxTabs()).toBeNull();
 
-    type('');
+    press('Close search');
     expect(inboxTabs()).not.toBeNull();
     expect(headerTitle()).toBe('Inbox');
     expect(selectedFolders()).toEqual(['Inbox']);
@@ -301,7 +485,7 @@ describe('desktop header and sidebar', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Signal' }));
     expect(selectedTab()).toBe('Signal');
-    expect(searchField().value).toBe('');
+    expect(searchField()).toBeNull();
   });
 });
 
@@ -313,7 +497,7 @@ describe('phone tab strip', () => {
   it.each([
     ...INBOX_SEARCHES,
     { search: 'invoice', title: 'Search' },
-    { search: 'in:', title: 'Noise' },
+    { search: 'in:', title: 'Search' },
   ])(
     'shows the search’s view in place of the pills for $search',
     ({ search, title }) => {
@@ -333,4 +517,93 @@ describe('phone tab strip', () => {
       ).toBe('true');
     }
   );
+
+  it('gives way to the search page as it opens, and comes back on the earlier tab', () => {
+    mocks.touch = true;
+    const view = mount(() => <EmailMobileLayout />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Noise' }));
+
+    openSearch();
+    expect(searchField()?.value).toBe('');
+    expect(view.showsInboxTabs()).toBe(false);
+    expect(pills()).toEqual([]);
+
+    press('Cancel');
+    expect(view.showsInboxTabs()).toBe(true);
+    expect(pills()).toEqual(['Focus', 'Signal', 'Noise']);
+    expect(
+      screen.getByRole('tab', { name: 'Noise' }).getAttribute('aria-selected')
+    ).toBe('true');
+  });
+
+  it('ends the search page for a view picked before a word is typed', () => {
+    mocks.touch = true;
+    const view = mount(() => <EmailMobileLayout />);
+    openSearch();
+
+    view.setTab('sent');
+    expect(searchField()).toBeNull();
+    expect(stripTitle()).toBe('Sent');
+  });
+});
+
+describe('leaving Mail', () => {
+  /**
+   * Reads what the sidebar shows (a memo over a memo of the view's search
+   * state, like a `Show` condition and the content it renders) from a
+   * cleanup, as parts of the view still do while Mail is torn down.
+   */
+  function ReadsWhileLeaving(props: { shown: () => unknown }) {
+    onCleanup(() => {});
+    onCleanup(() => {});
+    onCleanup(() => props.shown());
+    return null;
+  }
+
+  function Mail() {
+    const view = useEmailView();
+    const shownTab = createMemo(() => view.shownTab());
+    const shown = createMemo(() => shownTab());
+    return (
+      <>
+        <Show when={true}>
+          <ReadsWhileLeaving shown={shown} />
+        </Show>
+        <Show when={true}>
+          <EmailHeader tabOnly />
+        </Show>
+      </>
+    );
+  }
+
+  it('leaves for another page while the header holds the search field', () => {
+    const [onMail, setOnMail] = createSignal(true);
+    render(() => (
+      <Show when={onMail()} fallback={<p>Elsewhere</p>}>
+        <EmailViewProvider initialState={{}}>
+          <Mail />
+        </EmailViewProvider>
+      </Show>
+    ));
+    expect(screen.getByRole('banner')).toBeTruthy();
+
+    expect(() => setOnMail(false)).not.toThrow();
+    expect(screen.getByText('Elsewhere')).toBeTruthy();
+  });
+
+  it('leaves for another page with the search field open', () => {
+    const [onMail, setOnMail] = createSignal(true);
+    render(() => (
+      <Show when={onMail()} fallback={<p>Elsewhere</p>}>
+        <EmailViewProvider initialState={{}}>
+          <Mail />
+        </EmailViewProvider>
+      </Show>
+    ));
+    openSearch();
+    expect(searchField()).toBeTruthy();
+
+    expect(() => setOnMail(false)).not.toThrow();
+    expect(screen.getByText('Elsewhere')).toBeTruthy();
+  });
 });

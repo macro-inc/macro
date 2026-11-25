@@ -39,6 +39,7 @@ import {
   useEmailSavedViewTitle,
 } from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
+import { EmailSearchTipsButton } from './EmailSearchTips';
 
 /**
  * What the header gives up, in order, when its actions would overflow it:
@@ -63,7 +64,7 @@ export function EmailViewBreadcrumbItem() {
   const {
     shownTab,
     showsInboxTabs,
-    tagViewTitle,
+    filterViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
@@ -72,7 +73,7 @@ export function EmailViewBreadcrumbItem() {
   const inboxSelected = () => !isTouchDevice() && showsInboxTabs();
   const tabTitle = () =>
     savedViewTitle() ??
-    tagViewTitle() ??
+    filterViewTitle() ??
     emailShownViewTitle(inboxSelected() ? 'inbox' : shownTab());
   const appearance = () => {
     const view = savedViews?.view();
@@ -132,12 +133,18 @@ export function EmailHeader(props: EmailHeaderProps) {
     setTab,
     shownTab,
     showsInboxTabs,
-    tagViewTitle,
+    registerSearchField,
+    filterViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
+  const [searchFieldOpen, setSearchFieldOpen] = createSignal(false);
+  registerSearchField({
+    open: searchFieldOpen,
+    close: () => setSearchFieldOpen(false),
+  });
   let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
@@ -170,7 +177,7 @@ export function EmailHeader(props: EmailHeaderProps) {
   });
   const selectedTabLabel = () =>
     savedViewTitle() ??
-    tagViewTitle() ??
+    filterViewTitle() ??
     emailShownViewTitle(showsInboxTabs() ? 'inbox' : shownTab());
 
   const canSearch = () => canSearchEmailTab(state.tab);
@@ -197,7 +204,10 @@ export function EmailHeader(props: EmailHeaderProps) {
   // The filter menu is unmounted with the other actions, so the search only
   // takes the header while it is closed.
   const searchOwnsHeader = () =>
-    !!props.searchSuggestions?.open() && canSearch() && !filterOpen();
+    !!props.searchSuggestions &&
+    searchFieldOpen() &&
+    canSearch() &&
+    !filterOpen();
 
   return (
     <ListHeader
@@ -227,6 +237,9 @@ export function EmailHeader(props: EmailHeaderProps) {
               </h2>
             </Show>
           </div>
+          <Show when={searchOwnsHeader()}>
+            <EmailSearchTipsButton />
+          </Show>
           <Show when={savedViewActive()}>
             <EmailSavedViewMenu />
           </Show>
@@ -275,7 +288,8 @@ export function EmailHeader(props: EmailHeaderProps) {
           operators={emailSearchTextParts}
           focusResults={props.focusSearchResults}
           wide={!!props.searchSuggestions}
-          onOpenChange={props.searchSuggestions?.setOpen}
+          open={searchFieldOpen()}
+          onOpenChange={setSearchFieldOpen}
           onFocusChange={props.searchSuggestions?.setFocused}
           suggestions={props.searchSuggestions}
           registerFocus={(focus) => {

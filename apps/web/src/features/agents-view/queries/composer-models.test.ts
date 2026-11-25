@@ -106,9 +106,11 @@ describe('composer model discovery', () => {
         runtime: { label: 'Cursor', connected: true },
       }));
       expect(source.models()).toEqual([]);
+      expect(source.available()).toBe(false);
       expect(source.message()).toBe('Loading models…');
       setReady(true);
       expect(source.models()).toEqual(models);
+      expect(source.available()).toBe(true);
       expect(source.currentModel()).toBe('runtime-model');
       dispose();
     });
@@ -134,6 +136,7 @@ describe('composer model discovery', () => {
         harness: 'cursor',
         runtime: { label: 'Cursor', connected: true },
       }));
+      expect(source.available()).toBe(false);
       expect(source.message()).toBe('Could not load models from this machine.');
       setError(
         new ThrownResultError([

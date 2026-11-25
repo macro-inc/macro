@@ -327,6 +327,139 @@ export type CalendarCommitCacheResult =
     }
   | { kind: 'unsupported' };
 
+/** Sort key bound meaning "before the first entry" in channel coverage. */
+export const CHANNEL_TIMELINE_START = '';
+/** Sort key bound meaning "up to the live end" in channel coverage. */
+export const CHANNEL_TIMELINE_HEAD = '\u{10FFFF}';
+export const MAX_CHANNEL_TIMELINE_PAGE = 100;
+export const MAX_EVICTED_CHANNELS = 200;
+
+/**
+ * One page of a channel's timeline, or of one thread's replies, read from the
+ * local index. At most one of `before`, `after` and `around`; none reads the
+ * latest page.
+ */
+export type ChannelTimelineCacheArgs = {
+  channelId: string;
+  /** Reads the replies of this root instead of the channel's roots. */
+  threadRootId?: string;
+  limit: number;
+  /** Server sort key; entries strictly older. */
+  before?: string;
+  /** Server sort key; entries strictly newer. */
+  after?: string;
+  /** `GraphqlChannelMessage:{id}`; in a channel read a reply resolves to its root. */
+  around?: string;
+};
+
+export type ChannelTimelineCacheResult =
+  | {
+      kind: 'page';
+      revision: CacheRevision;
+      /** False when the window was never fully fetched: read it from the server. */
+      covered: boolean;
+      /** Entry keys of the page, newest first. */
+      keys: string[];
+      /** Null at the first entry of the list. */
+      olderCursor: string | null;
+      /** Null at the live end. */
+      newerCursor: string | null;
+      /** Applied change sequence (decimal), null before the first fetched page. */
+      seq: string | null;
+      /** Whether a pending optimistic mutation shaped this result. */
+      optimistic: boolean;
+    }
+  /** The native host predates channel timelines; read channels over REST. */
+  | { kind: 'unsupported' };
+
+/**
+ * How a commit moves the channel's watermark, the sequence up to which its
+ * changes have been applied to what the device holds. `lower` is for a fetched
+ * page: what is held is only known current to the lower of the two. `advance`
+ * applies the changes after `from`, and only when the watermark is not below
+ * it, so a gap is never skipped.
+ */
+export type ChannelWatermarkWire =
+  | { kind: 'lower' }
+  | { kind: 'advance'; from: string };
+
+/** Inclusive stretch of sort keys that was fully fetched and written. */
+export type ChannelCoverageWire = {
+  /** Thread whose replies were fetched; absent for the channel's roots. */
+  threadRootId?: string;
+  start: string;
+  end: string;
+};
+
+/**
+ * What a response proves about a channel, stored in the transaction that
+ * stores the response. Entries need nothing here: the engine stamps every
+ * message and activity row with the `seq` of the response object above it.
+ */
+export type ChannelCommitArgs = {
+  channelId: string;
+  /**
+   * The response's sequence (decimal). Required with everything but
+   * `touchedAtMs` and `droppedThreadRootIds`.
+   */
+  seq?: string;
+  watermark?: ChannelWatermarkWire;
+  /** Stretches the response lists in full; needs `lower` or `reset`. */
+  coverage?: ChannelCoverageWire[];
+  /** Ids of entries that no longer exist on the server, as of `seq`. */
+  removedIds?: string[];
+  /** Threads whose cached replies and coverage are dropped. */
+  droppedThreadRootIds?: string[];
+  /** Drops everything held for the channel first. */
+  reset?: boolean;
+  /** When the channel was last opened or prewarmed; eviction orders by it. */
+  touchedAtMs?: number;
+};
+
+export type ChannelCommitOutcome = {
+  channelId: string;
+  /** The watermark after the commit (decimal), null when none is set. */
+  seq: string | null;
+  /**
+   * `stale`: the watermark already covered the changes, which were taken where
+   * newer than what is held. `gap`: changes before these are missing; they
+   * were taken the same way and the watermark stayed. `unheld`: the device
+   * holds no state of the channel they continue, so nothing of it was stored.
+   */
+  outcome: 'applied' | 'stale' | 'gap' | 'unheld';
+};
+
+export type ChannelTimelineCommitCacheResult =
+  | {
+      kind: 'committed';
+      revision: CacheRevision;
+      /** Records the commit deleted. */
+      changed: string[];
+      channel: ChannelCommitOutcome;
+    }
+  | { kind: 'unsupported' };
+
+/** Removes the channels last touched before `touchedBeforeMs`, oldest first. */
+export type ChannelTimelineEvictArgs = {
+  touchedBeforeMs: number;
+  maxChannels: number;
+};
+
+export type ChannelTimelineEvictCacheResult =
+  | {
+      kind: 'evicted';
+      revision: CacheRevision;
+      changed: string[];
+      channelIds: string[];
+      /** More channels older than the bound remain; run another pass. */
+      hasMore: boolean;
+    }
+  | { kind: 'unsupported' };
+
+export type ChannelTimelineStatsCacheResult =
+  | { kind: 'stats'; channels: number; entries: number }
+  | { kind: 'unsupported' };
+
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
   document: string;
@@ -538,6 +671,107 @@ export function isValidCalendarCommitArgs(
   );
 }
 
+const isChannelId = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 128;
+
+// The engine's rule: non-empty printable ASCII, at most 128 bytes.
+const isChannelSortKey = (value: unknown): value is string =>
+  typeof value === 'string' && /^[\x21-\x7e]{1,128}$/.test(value);
+
+const isChannelSeq = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9]{1,19}$/.test(value);
+
+const isChannelCoverageWire = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyCalendarKeys(value, ['threadRootId', 'start', 'end']) &&
+  (value.threadRootId === undefined || isChannelId(value.threadRootId)) &&
+  (value.start === CHANNEL_TIMELINE_START || isChannelSortKey(value.start)) &&
+  (value.end === CHANNEL_TIMELINE_HEAD || isChannelSortKey(value.end));
+
+const isChannelWatermarkWire = (value: unknown): boolean =>
+  isRecord(value) &&
+  ((value.kind === 'lower' && hasOnlyCalendarKeys(value, ['kind'])) ||
+    (value.kind === 'advance' &&
+      hasOnlyCalendarKeys(value, ['kind', 'from']) &&
+      isChannelSeq(value.from)));
+
+/** Non-throwing channel page validation for wire ingress. */
+export function isValidChannelTimelineArgs(
+  value: unknown
+): value is ChannelTimelineCacheArgs {
+  if (
+    !isRecord(value) ||
+    !hasOnlyCalendarKeys(value, [
+      'channelId',
+      'threadRootId',
+      'limit',
+      'before',
+      'after',
+      'around',
+    ])
+  )
+    return false;
+  const anchors = [value.before, value.after, value.around].filter(
+    (anchor) => anchor !== undefined
+  );
+  return (
+    isChannelId(value.channelId) &&
+    (value.threadRootId === undefined || isChannelId(value.threadRootId)) &&
+    Number.isSafeInteger(value.limit) &&
+    (value.limit as number) >= 1 &&
+    (value.limit as number) <= MAX_CHANNEL_TIMELINE_PAGE &&
+    anchors.length <= 1 &&
+    (value.before === undefined || isChannelSortKey(value.before)) &&
+    (value.after === undefined || isChannelSortKey(value.after)) &&
+    (value.around === undefined || isValidNormalizedRecordKey(value.around))
+  );
+}
+
+/**
+ * Non-throwing channel commit shape validation for wire ingress. The engine
+ * still validates span order, size bounds and which parts need a sequence.
+ */
+export function isValidChannelCommitArgs(
+  value: unknown
+): value is ChannelCommitArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'channelId',
+      'seq',
+      'watermark',
+      'coverage',
+      'removedIds',
+      'droppedThreadRootIds',
+      'reset',
+      'touchedAtMs',
+    ]) &&
+    isChannelId(value.channelId) &&
+    (value.seq === undefined || isChannelSeq(value.seq)) &&
+    (value.watermark === undefined ||
+      isChannelWatermarkWire(value.watermark)) &&
+    isOptionalWireArray(value.coverage, isChannelCoverageWire) &&
+    isOptionalWireArray(value.removedIds, isChannelId) &&
+    isOptionalWireArray(value.droppedThreadRootIds, isChannelId) &&
+    (value.reset === undefined || typeof value.reset === 'boolean') &&
+    (value.touchedAtMs === undefined || Number.isSafeInteger(value.touchedAtMs))
+  );
+}
+
+/** Non-throwing channel eviction validation for wire ingress. */
+export function isValidChannelTimelineEvictArgs(
+  value: unknown
+): value is ChannelTimelineEvictArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, ['touchedBeforeMs', 'maxChannels']) &&
+    Number.isSafeInteger(value.touchedBeforeMs) &&
+    Number.isSafeInteger(value.maxChannels) &&
+    (value.maxChannels as number) >= 1 &&
+    (value.maxChannels as number) <= MAX_EVICTED_CHANNELS
+  );
+}
+
 export function validateRecordSelectionKeys(keys: string[]): string[] {
   if (keys.length > MAX_RECORD_SELECTION_PAGE_SIZE) {
     throw new RangeError(
@@ -668,8 +902,9 @@ export type CacheChangeHints = {
 /** Previous name, kept until the cache worker adopts CacheChangeHints. */
 export type HydrationSearchChanges = CacheChangeHints;
 
-export type HydrationResult = CacheChangeHints &
-  (
+export type HydrationResult = CacheChangeHints & {
+  channel?: ChannelCommitOutcome;
+} & (
     | { kind: 'data'; data: unknown; revision: CacheRevision }
     | { kind: 'void'; revision: CacheRevision }
   );
@@ -685,8 +920,14 @@ export type RecordFieldChange =
 export type WriteResult = CacheChangeHints & {
   /** Effective view changes. Missing metadata requires a conservative reread. */
   fieldChanges?: RecordFieldChange[];
-  /** Bindings omitted while committing an otherwise normalizable response. */
+  /** Bindings omitted while committing a response. */
   identityErrors?: string[];
+  /**
+   * Why a confirmed response's content was not written: it did not normalize,
+   * so its write settled with only the identities it resolved. Nothing is
+   * applied from that response; its queries are revalidated instead.
+   */
+  unwritableResponse?: string;
   mutationUuid?: string;
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
@@ -704,7 +945,20 @@ export type WriteResult = CacheChangeHints & {
   reset: boolean;
   /** Recovery queries for terminal settlement; skip superseded outcomes. */
   revalidations?: QueryRevalidationWire[];
+  /**
+   * What the write's channel commit did. Absent without one, when the write
+   * reset the cache, and from a host without channel commits.
+   */
+  channel?: ChannelCommitOutcome;
+  /**
+   * How long a queued mutation's enqueue or commit waited for the native
+   * engine and then held it. Absent from the browser engine and older binaries.
+   */
+  engine?: EngineLockTiming;
 };
+
+/** A native engine command's wait for the engine lock and its hold of it. */
+export type EngineLockTiming = { lockWaitMs: number; lockHoldMs: number };
 
 /**
  * Result of installing an optimistic layer. `changed`/`affectedOps` reflect
@@ -879,6 +1133,8 @@ export type CacheRequest = {
        * wipes and rebinds the cache atomically (silent restart).
        */
       identity?: string;
+      /** Stored in the response's transaction. */
+      channelCommit?: ChannelCommitArgs;
     }
   | {
       /** Background cache warming; ordinary writes do not publish pushes. */
@@ -889,6 +1145,8 @@ export type CacheRequest = {
       variables?: Record<string, unknown>;
       data: unknown;
       identity?: string;
+      /** Stored in the response's transaction. */
+      channelCommit?: ChannelCommitArgs;
     }
   /** Durably enqueue an optimistic mutation and claim the strict head. */
   | {
@@ -971,6 +1229,20 @@ export type CacheRequest = {
       commit: CalendarCommitArgs;
     }
   | {
+      kind: 'channel-timeline';
+      request: ChannelTimelineCacheArgs;
+    }
+  /** A channel commit that comes with no response. */
+  | {
+      kind: 'channel-timeline-commit';
+      commit: ChannelCommitArgs;
+    }
+  | {
+      kind: 'channel-timeline-evict';
+      eviction: ChannelTimelineEvictArgs;
+    }
+  | { kind: 'channel-timeline-stats' }
+  | {
       kind: 'inspect-query';
       query: string;
       operationName?: string;
@@ -1000,6 +1272,7 @@ export type CacheResponseErrorCode =
   | 'owner-lock-unavailable'
   | 'cache-superseded'
   | 'owner-handoff-blocked'
+  | 'write-not-admitted'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
@@ -1046,6 +1319,13 @@ export function isTypedSearchRowRead(request: CacheRequest): boolean {
 export const OWNER_HANDOFF_BLOCKED_ERROR_CODE: CacheResponseErrorCode =
   'owner-handoff-blocked';
 
+/**
+ * A write waited too long for an owner and was dropped before any engine got
+ * it: nothing of it is stored, and nobody will send it.
+ */
+export const WRITE_NOT_ADMITTED_ERROR_CODE: CacheResponseErrorCode =
+  'write-not-admitted';
+
 /** An admitted enqueue lost its reply and may already be durably queued. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
   'admitted-enqueue-uncertain';
@@ -1058,6 +1338,24 @@ export type CacheResponse =
       error: string;
       errorCode?: CacheResponseErrorCode;
     };
+
+/** What one stored transaction did to a channel's timeline: something in it
+ * changed, everything held was replaced, or everything held was dropped. */
+export type ChannelChange = {
+  channelId: string;
+  kind: 'changed' | 'reset' | 'evicted';
+};
+
+function isChannelChange(value: unknown): value is ChannelChange {
+  return (
+    isWireRecord(value) &&
+    hasOnlyWireKeys(value, ['channelId', 'kind']) &&
+    typeof value.channelId === 'string' &&
+    (value.kind === 'changed' ||
+      value.kind === 'reset' ||
+      value.kind === 'evicted')
+  );
+}
 
 /**
  * Pushed (not request/response) messages from worker to its client(s):
@@ -1086,6 +1384,7 @@ export type CachePush = { authorityGeneration?: string } & (
       revision: CacheRevision;
     } & CacheChangeHints)
   | { kind: 'mutation-settled'; settlement: MutationSettlement }
+  | { kind: 'channels-changed'; changes: ChannelChange[] }
 );
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -1111,6 +1410,7 @@ export const isCacheResponseErrorCode = (
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
   value === CACHE_SUPERSEDED_ERROR_CODE ||
   value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
+  value === WRITE_NOT_ADMITTED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -1120,6 +1420,11 @@ export const isOwnerEpochLostError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
+
+/** Identifies a request no engine got or answered. A later engine serves the
+ * same host. */
+export const isEngineAbsentError = (value: unknown): boolean =>
+  isOwnerEpochLostError(value) || isCacheOutageError(value);
 
 /** Identifies a request refused because another context holds the database,
  * including a newer build that took it over. */
@@ -1132,6 +1437,15 @@ export const isOwnerLockUnavailableError = (
   'errorCode' in value &&
   (value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
     value.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+
+/** Identifies a request refused because nothing can open the database for now.
+ * The host that refused it serves again once something can. */
+export const isCacheOutageError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
 
 /** Identifies a request refused because a newer build took the database over;
  * this page session never gets the cache back. */
@@ -1149,6 +1463,14 @@ export const isOwnerHandoffBlockedError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_HANDOFF_BLOCKED_ERROR_CODE;
+
+/** Identifies a write dropped before any engine got it. */
+export const isWriteNotAdmittedError = (
+  value: unknown
+): value is Error & { errorCode: 'write-not-admitted' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === WRITE_NOT_ADMITTED_ERROR_CODE;
 
 /** Identifies an admitted enqueue whose durable outcome is unknown. */
 export const isAdmittedEnqueueUncertainError = (
@@ -1265,6 +1587,12 @@ export function isCachePush(value: unknown): value is CachePush {
           isWireStringArray(value.unchangedViews)) &&
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
+      );
+    case 'channels-changed':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'changes']) &&
+        Array.isArray(value.changes) &&
+        value.changes.every(isChannelChange)
       );
     case 'mutation-settled': {
       const settlement = value.settlement;

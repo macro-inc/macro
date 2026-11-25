@@ -15,13 +15,24 @@ vi.mock('@service-storage/crm-access-authority', () => ({
 }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@queries/soup/items', () => ({
-  useSoupItemsQuery: (_args: unknown, options: typeof state.companyOptions) => {
+  QUICK_ACCESS_FEED_OPTIONS: { ignoresNotifications: true },
+  useSoupAstItemsQuery: (
+    _args: unknown,
+    options: typeof state.companyOptions
+  ) => {
     state.companyOptions = options;
     return {
-      isSuccess: true,
-      data: [
-        { id: 'company', type: 'crm_company', name: 'Company', hidden: false },
-      ],
+      isPending: false,
+      data: {
+        entities: [
+          {
+            id: 'company',
+            type: 'crm_company',
+            name: 'Company',
+            hidden: false,
+          },
+        ],
+      },
     };
   },
 }));

@@ -79,6 +79,7 @@ fn contentless_settlement_keeps_canonical_identity_and_never_replays_after_resta
                         "__typename": "GraphqlProperty", "id": "server", "displayName": "retired content"
                     }}),
                     identity: None,
+                    channel: None,
                 },
                 Vec::new(),
                 false,
@@ -151,6 +152,7 @@ fn contentless_settlement_preserves_newer_intent_for_a_fresh_attempt() {
                 query: MUTATION, operation_name: None, variables: &Default::default(),
                 data: &json!({"setEntityProperty": {"__typename": "GraphqlProperty", "id": "server", "displayName": "old snapshot"}}),
                 identity: None,
+                channel: None,
             },
             Vec::new(), false,
         ).await.unwrap();
@@ -168,6 +170,7 @@ fn contentless_settlement_preserves_newer_intent_for_a_fresh_attempt() {
                 query: MUTATION, operation_name: None, variables: &Default::default(),
                 data: &json!({"setEntityProperty": {"__typename": "GraphqlProperty", "id": "server", "displayName": "fresh snapshot"}}),
                 identity: None,
+                channel: None,
             },
             Vec::new(), true,
         ).await.unwrap();

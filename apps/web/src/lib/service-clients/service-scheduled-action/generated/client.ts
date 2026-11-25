@@ -27,6 +27,7 @@ import type {
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
   ListSuggestionsParams,
+  NameTopic,
   NewSuggestion,
   RecordSuggestionsSeenParams,
   RegenerateSuggestionsParams,
@@ -37,6 +38,7 @@ import type {
   RewriteSuggestion,
   RoutineCatalogParams,
   RoutineCheck,
+  RoutineLimitErrorBody,
   RoutineSuggestions,
   RoutineTemplate,
   RunReport,
@@ -192,6 +194,11 @@ export type createScheduledActionResponse401 = {
   status: 401;
 };
 
+export type createScheduledActionResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type createScheduledActionResponse403 = {
   data: string;
   status: 403;
@@ -216,6 +223,7 @@ export type createScheduledActionResponseSuccess = (
 export type createScheduledActionResponseError = (
   | createScheduledActionResponse400
   | createScheduledActionResponse401
+  | createScheduledActionResponse402
   | createScheduledActionResponse403
   | createScheduledActionResponse409
   | createScheduledActionResponse500
@@ -1164,6 +1172,11 @@ export type updateScheduledActionResponse401 = {
   status: 401;
 };
 
+export type updateScheduledActionResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type updateScheduledActionResponse404 = {
   data: string;
   status: 404;
@@ -1186,6 +1199,7 @@ export type updateScheduledActionResponseSuccess =
 export type updateScheduledActionResponseError = (
   | updateScheduledActionResponse400
   | updateScheduledActionResponse401
+  | updateScheduledActionResponse402
   | updateScheduledActionResponse404
   | updateScheduledActionResponse409
   | updateScheduledActionResponse500
@@ -1497,6 +1511,11 @@ export type setScheduledActionEnabledResponse401 = {
   status: 401;
 };
 
+export type setScheduledActionEnabledResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type setScheduledActionEnabledResponse404 = {
   data: string;
   status: 404;
@@ -1519,6 +1538,7 @@ export type setScheduledActionEnabledResponseSuccess =
 export type setScheduledActionEnabledResponseError = (
   | setScheduledActionEnabledResponse400
   | setScheduledActionEnabledResponse401
+  | setScheduledActionEnabledResponse402
   | setScheduledActionEnabledResponse404
   | setScheduledActionEnabledResponse409
   | setScheduledActionEnabledResponse500
@@ -1975,6 +1995,11 @@ export type activateScheduledActionTemplateResponse401 = {
   status: 401;
 };
 
+export type activateScheduledActionTemplateResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type activateScheduledActionTemplateResponse403 = {
   data: string;
   status: 403;
@@ -1997,6 +2022,7 @@ export type activateScheduledActionTemplateResponseSuccess =
 export type activateScheduledActionTemplateResponseError = (
   | activateScheduledActionTemplateResponse400
   | activateScheduledActionTemplateResponse401
+  | activateScheduledActionTemplateResponse402
   | activateScheduledActionTemplateResponse403
   | activateScheduledActionTemplateResponse404
   | activateScheduledActionTemplateResponse500
@@ -2699,6 +2725,85 @@ export const recordSuggestionsSeen = async (
     status: res.status,
     headers: res.headers,
   } as recordSuggestionsSeenResponse;
+};
+
+/**
+ * @summary Name a topic suggestions may belong to, from a suggestions generation
+session, or change the name and reason of the one with its key.
+ */
+export type nameSuggestionTopicResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type nameSuggestionTopicResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type nameSuggestionTopicResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type nameSuggestionTopicResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type nameSuggestionTopicResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type nameSuggestionTopicResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type nameSuggestionTopicResponseSuccess =
+  nameSuggestionTopicResponse200 & {
+    headers: Headers;
+  };
+export type nameSuggestionTopicResponseError = (
+  | nameSuggestionTopicResponse400
+  | nameSuggestionTopicResponse401
+  | nameSuggestionTopicResponse403
+  | nameSuggestionTopicResponse404
+  | nameSuggestionTopicResponse500
+) & {
+  headers: Headers;
+};
+
+export type nameSuggestionTopicResponse =
+  | nameSuggestionTopicResponseSuccess
+  | nameSuggestionTopicResponseError;
+
+export const getNameSuggestionTopicUrl = () => {
+  return `/suggestions/topics`;
+};
+
+export const nameSuggestionTopic = async (
+  nameTopic: NameTopic,
+  options?: RequestInit
+): Promise<nameSuggestionTopicResponse> => {
+  const res = await fetch(getNameSuggestionTopicUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nameTopic),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: nameSuggestionTopicResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as nameSuggestionTopicResponse;
 };
 
 /**

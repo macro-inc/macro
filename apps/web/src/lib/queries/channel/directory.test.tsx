@@ -93,7 +93,7 @@ import {
 } from './directory';
 import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
 import type { RemoveUnreadableResult } from './directory-departures';
-import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
+import { CHANNEL_DIRECTORY_LANE } from './directory-lane';
 import { channelKeys } from './keys';
 import { OWN_WRITE_HOLD_MS, ownChannelWrites } from './own-writes';
 import { channelName, channelUuid } from './tests/channel-uuid';
@@ -1154,7 +1154,10 @@ function mountCachedDirectory(
       (async (ids: readonly string[]) => {
         for (const id of ids) cache.records.delete(`GraphqlSoupChannel:${id}`);
         for (const listener of [...generationListeners])
-          listener({ storage: 'preserved' } as CacheGenerationChange);
+          listener({
+            storage: 'preserved',
+            queue: 'preserved',
+          } as CacheGenerationChange);
         return { removed: [...ids], unconfirmed: [] };
       })
   );
@@ -1215,12 +1218,15 @@ function mountCachedDirectory(
     resetStorage(next: string) {
       generation = next;
       for (const listener of [...generationListeners])
-        listener({ storage: 'reset' } as CacheGenerationChange);
+        listener({ storage: 'reset', queue: 'reset' } as CacheGenerationChange);
     },
     /** A new cache engine over the same storage, which reads again. */
     reopen() {
       for (const listener of [...generationListeners])
-        listener({ storage: 'preserved' } as CacheGenerationChange);
+        listener({
+          storage: 'preserved',
+          queue: 'preserved',
+        } as CacheGenerationChange);
     },
   };
 }
@@ -1233,7 +1239,7 @@ function completeLane(generation: string) {
       completed: true,
       completedAt: '2026-11-20T00:00:00Z',
     },
-    CHANNEL_DIRECTORY_CHECKPOINT_ID
+    CHANNEL_DIRECTORY_LANE
   );
 }
 
@@ -1254,7 +1260,7 @@ function lanePass(
       updatedSince: finished ? startedAt : earlier,
       completedAt: finished ? startedAt : earlier,
     },
-    CHANNEL_DIRECTORY_CHECKPOINT_ID
+    CHANNEL_DIRECTORY_LANE
   );
 }
 
@@ -1988,7 +1994,7 @@ describe('cached channel directory', () => {
           pagesFetched: 1,
           scanStartedAt: '2026-11-20T00:00:00Z',
         },
-        CHANNEL_DIRECTORY_CHECKPOINT_ID
+        CHANNEL_DIRECTORY_LANE
       );
 
     it('pages the network once the lane saves nothing for half a minute', async () => {
@@ -2126,7 +2132,7 @@ describe('cached channel directory', () => {
     );
     expect(directory.complete()).toBe(false);
 
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
 
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(pageAll).toHaveBeenCalledOnce();
@@ -2175,7 +2181,7 @@ describe('cached channel directory', () => {
       cache.put(channelRecord('a'));
       await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
 
-      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
 
       await vi.waitFor(() =>
         expect(
@@ -2208,7 +2214,7 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('removed'));
     cache.put(channelRecord('left'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(3));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
 
     // While the pages are read: a removal, a leave, a join and a rename.
@@ -2264,7 +2270,7 @@ describe('cached channel directory', () => {
     // Cached when the viewer lost it, and no removal reached the cache.
     cache.put(channelRecord('stale'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
 
     // A view stamp, or another query's page, rewrites the stale record
@@ -2299,7 +2305,7 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('kept'));
     cache.put(channelRecord('stale'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
       sourceHash: 'stale-2',
@@ -2336,7 +2342,7 @@ describe('cached channel directory', () => {
     // Cached without every field when the viewer lost it.
     cache.put(channelRecord('lost'), { incomplete: true });
     await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     answer([directoryChannel('kept')]);
 
@@ -2365,7 +2371,7 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('kept'));
     cache.put(channelRecord('lost'), { incomplete: true });
     await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     answer([directoryChannel('kept')]);
 
@@ -2394,7 +2400,7 @@ describe('cached channel directory', () => {
     // Cached when the viewer lost it, and no removal reached the cache.
     cache.put(channelRecord('stale'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
       sourceHash: 'stale-2',
@@ -2457,7 +2463,7 @@ describe('cached channel directory', () => {
       await held;
       return { nextCursor: null, entityIds: [] };
     });
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
       sourceHash: 'stale-2',
@@ -2509,7 +2515,7 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('kept'));
     cache.put(channelRecord('gone'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     const names = () => directory.channels().map(({ name }) => name);
     expect(names().sort()).toEqual(['channel gone', 'channel kept']);
@@ -2549,7 +2555,7 @@ describe('cached channel directory', () => {
     );
     cache.put(channelRecord('a'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(1));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(hydrate).not.toHaveBeenCalled();
 
@@ -2616,7 +2622,7 @@ describe('cached channel directory', () => {
       cache.put(channelRecord('a'));
       if (listed) cache.put(channelRecord('x'));
       await vi.waitFor(() => expect(directory.channels()).not.toHaveLength(0));
-      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
       await vi.waitFor(() => expect(directory.complete()).toBe(true));
       if (!listed) {
         // Joined after the walk read its page: shown once a by-id read
@@ -2680,7 +2686,7 @@ describe('cached channel directory', () => {
       cache.put(channelRecord('a'));
       cache.put(channelRecord('x'));
       await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
       await vi.waitFor(() => expect(directory.complete()).toBe(true));
       expect(hydrate).not.toHaveBeenCalled();
       if (renamed) {
@@ -2721,7 +2727,7 @@ describe('cached channel directory', () => {
         directoryChannel('gone', { channelType: 'private' }),
       ],
     });
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
 
     // As the pages listed them until a read says otherwise, and partial
     // until the reads answer.
@@ -2774,7 +2780,7 @@ describe('cached channel directory', () => {
     // Cached when the viewer lost it, and rewritten while the pages are read.
     cache.put(channelRecord('stale'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
       sourceHash: 'stale-2',
@@ -2814,7 +2820,7 @@ describe('cached channel directory', () => {
     // Cached when the viewer lost it, and no removal reached the cache.
     cache.put(channelRecord('stale'));
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     // A view stamp rewrites the stale record while the pages are read.
     cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
@@ -2853,7 +2859,7 @@ describe('cached channel directory', () => {
       hydrate.mockImplementation(async () => {
         throw new Error('offline');
       });
-      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
       await vi.advanceTimersByTimeAsync(1_000);
       expect(ids(directory.channels()).sort()).toEqual(['a', 'gone']);
       // Read once more, then given up on for now: failed, so a reader can
@@ -2895,7 +2901,7 @@ describe('cached channel directory', () => {
       hydrate.mockImplementation(async () => {
         throw new Error('offline');
       });
-      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
       await vi.advanceTimersByTimeAsync(1_000);
       expect(hydrate).toHaveBeenCalledTimes(2);
       const shown = directory.channels();
@@ -2928,7 +2934,7 @@ describe('cached channel directory', () => {
           pageAll: async () => [directoryChannel('a')],
         }
       );
-      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
       await vi.advanceTimersByTimeAsync(9_000);
       expect(directory.channels()).toEqual([]);
       expect(hydrate).not.toHaveBeenCalled();
@@ -2961,7 +2967,7 @@ describe('cached channel directory', () => {
         },
       }
     );
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() =>
       expect(ids(directory.channels()).sort()).toEqual(['a', 'gone'])
     );
@@ -2982,7 +2988,7 @@ describe('cached channel directory', () => {
       [channelRecord('a')],
       { pageAll: async () => [directoryChannel('a')] }
     );
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(pageAll).toHaveBeenCalledOnce();
 
@@ -3006,7 +3012,7 @@ describe('cached channel directory', () => {
         },
       }
     );
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(directory.failed()).toBe(true));
 
     resetStorage('g2');
@@ -3031,7 +3037,7 @@ describe('cached channel directory', () => {
         },
       }
     );
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
 
     setViewer('macro|someone-else@example.com');
@@ -3058,7 +3064,7 @@ describe('cached channel directory', () => {
         return [directoryChannel('a'), directoryChannel('b')];
       },
     });
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
 
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(ids(directory.channels()).sort()).toEqual(['a', 'b']);
@@ -3075,7 +3081,7 @@ describe('cached channel directory', () => {
         completed: true,
         completedAt: '2026-11-19T00:00:00Z',
       },
-      'channel-directory'
+      { ...CHANNEL_DIRECTORY_LANE, checkpointId: 'channel-directory' }
     );
     await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
     expect(directory.complete()).toBe(false);
@@ -3090,7 +3096,7 @@ describe('cached channel directory', () => {
       byIdGate: new Promise(() => {}),
       pageAll: async () => [directoryChannel('a'), directoryChannel('b')],
     });
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() =>
       expect(ids(directory.channels())).toEqual(['a', 'b'])
     );
@@ -3110,7 +3116,7 @@ describe('cached channel directory', () => {
         return [directoryChannel('a')];
       },
     });
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
 
     await vi.waitFor(() => expect(directory.failed()).toBe(true));
     expect(directory.complete()).toBe(false);
@@ -3126,7 +3132,7 @@ describe('cached channel directory', () => {
     const { cache, directory, pageAll } = mountCachedDirectory([], {
       pageAll: () => new Promise(() => {}),
     });
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(pageAll).toHaveBeenCalledOnce());
     const walk = pageAll.mock.calls[0]?.[0];
 
@@ -3143,7 +3149,7 @@ describe('cached channel directory', () => {
         throw new Error('offline');
       },
     });
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(directory.failed()).toBe(true));
 
     cache.put(channelRecord('a'));
@@ -4367,7 +4373,7 @@ describe("the viewer's own channel writes", () => {
     cache.put(channelRecord('kept'));
     cache.put(joined);
     await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
     await vi.waitFor(() => expect(answer).toBeDefined());
     cache.put({ ...joined, viewedAt: VIEWED_2 }, { sourceHash: 'a-2' });
     reopen();

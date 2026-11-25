@@ -7,6 +7,7 @@
 //! `Send`.
 
 use crate::calendar::{CalendarRangeRow, CalendarSpan, CalendarSyncState, project_calendar_range};
+use crate::channel_timeline::{ChannelEntries, ChannelGuard, ChannelGuardQuery, ChannelWrite};
 use crate::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateMembership, PredicateReconciliation, predicate_membership,
     reconcile_predicate_baseline,
@@ -37,6 +38,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod calendar;
+mod channel_timeline;
 
 /// Whether a storage implementation can provide queue diagnostics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -197,6 +199,29 @@ pub trait Storage: MaybeSend {
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
         self.put_batch_with_projections(entries.to_vec(), projections)
     }
+
+    /// Reads what is held of channel entries, sync state and coverage, in one
+    /// read.
+    fn load_channel_guard(
+        &self,
+        query: &ChannelGuardQuery,
+    ) -> impl Future<Output = Result<ChannelGuard, Self::Error>> + MaybeSend;
+
+    /// Reads the keys of one channel's entries.
+    fn load_channel_entries(
+        &self,
+        channel_id: &str,
+        entries: ChannelEntries<'_>,
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
+
+    /// Atomically applies a channel write, then
+    /// [`Self::put_records_with_projections`].
+    fn put_channel_records(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+        channel: &ChannelWrite,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
@@ -392,7 +417,8 @@ pub trait Storage: MaybeSend {
         projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
-    /// Atomically commits authority, removes the strict head, and reconciles shadows.
+    /// Atomically commits authority with its channel write, removes the strict
+    /// head, and reconciles shadows.
     fn complete_mutation_with_shadow(
         &mut self,
         id: MutationId,
@@ -400,10 +426,8 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
         reconciliation: OptimisticShadowReconciliation,
-    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
-        let _ = reconciliation;
-        self.complete_mutation_with_projections(id, claim, entries, projections)
-    }
+        channel: &ChannelWrite,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
     /// Atomically removes a permanently failed mutation and its optimistic
     /// layer. Returns `false` when the claim is stale.
@@ -455,6 +479,7 @@ pub struct InMemoryStorage {
     calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
     calendar_coverage: Vec<CalendarSpan>,
     calendar_sync: CalendarSyncState,
+    channel: channel_timeline::InMemoryChannels,
 }
 
 #[derive(Clone, Debug)]
@@ -494,6 +519,7 @@ impl InMemoryStorage {
                 self.calendar_ranges.remove(&key);
             }
         }
+        self.channel.write_record(&key, &record);
         self.records.insert(key, record);
     }
 
@@ -503,6 +529,7 @@ impl InMemoryStorage {
         self.search_documents
             .retain(|(_, existing_key), _| existing_key != key);
         self.calendar_ranges.remove(key);
+        self.channel.drop_row(key);
     }
 
     fn rebase_projections(&mut self, keys: &[PredicateRecordKey]) {
@@ -694,6 +721,32 @@ impl Storage for InMemoryStorage {
         apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.rebase_projections(&keys);
         Ok(())
+    }
+
+    async fn load_channel_guard(
+        &self,
+        query: &ChannelGuardQuery,
+    ) -> Result<ChannelGuard, Self::Error> {
+        Ok(self.channel.guard(query))
+    }
+
+    async fn load_channel_entries(
+        &self,
+        channel_id: &str,
+        entries: ChannelEntries<'_>,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        Ok(self.channel.entries(channel_id, entries))
+    }
+
+    async fn put_channel_records(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+        channel: &ChannelWrite,
+    ) -> Result<(), Self::Error> {
+        self.apply_channel_write(channel);
+        self.put_records_with_projections(entries, projections)
+            .await
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
@@ -1024,6 +1077,7 @@ impl Storage for InMemoryStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
         reconciliation: OptimisticShadowReconciliation,
+        channel: &ChannelWrite,
     ) -> Result<bool, Self::Error> {
         if reconciliation.validate(id).is_err()
             || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
@@ -1041,6 +1095,7 @@ impl Storage for InMemoryStorage {
                 return Ok(false);
             }
         }
+        self.apply_channel_write(channel);
         for (key, record) in entries {
             self.write_record(key, record);
         }
@@ -1115,6 +1170,7 @@ impl Storage for InMemoryStorage {
         self.calendar_ranges.clear();
         self.calendar_coverage.clear();
         self.calendar_sync = CalendarSyncState::default();
+        self.channel = channel_timeline::InMemoryChannels::default();
         Ok(())
     }
 
