@@ -207,15 +207,16 @@ only for a built-in property whose look-alike breaks something a person would
 expect, not for every system property.
 
 A name that is a built-in property's own (the whole name, any case) is
-different: the server refuses it with a 409, because built-in names are reserved
+different: the server refuses it as a conflict, because built-in names are reserved
 for user and team properties. The dialog reads the built-in definitions
 (`scope: 'system'`), says the name is taken, and disables **Create**. It offers
 **Use …** only when that property applies to the entity being edited, which it
 learns from the same list narrowed by `forEntityType`; `PropertyEditorDialog`
 passes the type the selected entities share, and a draft host supplies it
 through its `PropertiesProvider`. If the list has not loaded and the request
-goes out, the refusal (`isPropertyNameReserved`, a 409 whose reason is
-`RESERVED_NAME`) shows the same sentence in place of the generic create error.
+goes out, the refusal (`isPropertyNameReserved`: a GraphQL error whose
+`extensions.code` is `CONFLICT` and `extensions.reason` is `RESERVED_NAME`)
+shows the same sentence in place of the generic create error.
 The server also refuses a name the owner already uses (`NAME_TAKEN`) and
 repeated option values (`OPTION_VALUE_TAKEN`); the dialog then says "A
 property with that name already exists" or "Duplicate values not allowed".
