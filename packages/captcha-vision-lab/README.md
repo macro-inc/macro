@@ -16,11 +16,12 @@ stealth or evasion. The lab answers only its own quiz, only at
 
 ## Runbook
 
-Run from this directory. On NixOS, first point the runner at a working
-Chromium (Playwright's download can't load there):
+Run from this directory. On NixOS, set `LAB_CHROMIUM_PATH` to a Nix-built
+Chromium or Chrome: Playwright's downloaded headless shell can't load there
+(it lacks `libgbm`). For example:
 
 ```sh
-export LAB_CHROMIUM_PATH=$(readlink -f $(which google-chrome-stable))
+export LAB_CHROMIUM_PATH=$(readlink -f $(which chromium || which google-chrome-stable))
 bun install --frozen-lockfile
 ```
 
@@ -28,7 +29,7 @@ Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
 bun run check
-# … 41 pass, 0 fail
+# … 48 pass, 0 fail
 ```
 
 Mock smoke run. The mock always answers `--mock-choice`, so about one in four
