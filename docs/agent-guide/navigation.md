@@ -150,6 +150,11 @@ optimistic enqueues must not be sent twice. A `graphql_cache.owner` event with
 `ownerEvent: coordinator-restarted` distinguishes this from engine replacement
 or a BFCache restore.
 
+Firefox can stop starting the SharedWorker under its name after the process of the
+page that started it crashes. Open three tabs and crash the first
+(`about:crashcontent`): the others must get their cache back without a reload, at
+times through a coordinator under a new name (`ownerEvent: coordinator-renamed`).
+
 Separately, leaving the creating page while its SharedWorker is still downloading
 can fail the survivor before its first ready frame. In an isolated Safari fixture,
 hold that download, connect a second page, and navigate the creator through a

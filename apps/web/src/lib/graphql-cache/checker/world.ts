@@ -518,10 +518,9 @@ export class Page {
  * ends the coordinator its build runs along with it, and `lose-coordinator` does
  * too, and has its name answer nobody until every page of the build has closed,
  * which is what Firefox does after some of those. `hang-coordinator` stops the
- * coordinators for four minutes. `crash-engine` ends a
- * page's engine worker and tells nobody. `bfcache` navigates away with
- * the page kept, frozen, and `restore` comes back to it. `expire-session` signs
- * a page out for a second. `hold-owner-lock` has another context keep the
+ * coordinators for four minutes. `crash-engine` ends a page's engine worker and
+ * tells nobody. `bfcache` navigates away with the page kept, frozen, and
+ * `restore` comes back to it. `expire-session` signs a page out for a second. `hold-owner-lock` has another context keep the
  * database's lock for 5 s, `hold-files` has one keep its files open for 15 s
  * without the lock (as a terminated worker does while the browser closes
  * them), and `fail-open` makes the next open of the database fail.

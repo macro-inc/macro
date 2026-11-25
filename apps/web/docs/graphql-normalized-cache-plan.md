@@ -473,6 +473,24 @@ request, or while the host waits for an engine, is asked with a `ping`. No
 page's port after a message it could not read (`messageerror`) tells the page
 with `connection-closed`, which is handled the same way.
 
+A browser can also stop answering under a SharedWorker's name: Firefox sometimes
+does after the process of the page that started it crashes, until every page of
+the build is closed. So the name has a *generation* (`CoordinatorGenerations`):
+0 is the plain name, and any other, a time in milliseconds so that it is never
+used twice, is appended to it. A coordinator's lock names its generation, which is
+how a page finds the newest that runs; without one it uses the last it knew. A
+page whose registration is not answered goes to a newer generation if one runs,
+asks the same again while that one's lock is held (it may only be slow), and
+otherwise, or for its last attempt, starts a generation under a Web Lock that
+gives one page at a time the turn. Pages that wait for an answer look once a
+second for a newer generation and go to it at no cost in attempts. A coordinator
+that takes its lock first looks at the others of its scope and build: it ends
+itself under a newer generation, and it ends the older ones by stealing their
+locks, which also tells the pages of one that hangs. An ended coordinator tells
+its pages with `connection-closed` and closes its worker. Through all of it the
+owner lock keeps two engines off one database.
+`ownerEvent: coordinator-renamed` and `coordinator-replaced` record both.
+
 A handshake nobody answers in its startup phase's time is treated like a lost
 connection: the same host connects again, within the same budget, and then ends
 with `request-timeout` and the database kept. `graphql_cache.owner` records each
@@ -494,11 +512,12 @@ Startup phase budgets are relayed to every page, including late joiners: asset
 loading gets five minutes, taking the lock gets the retry window plus five
 seconds, and database opening gets twenty seconds, plus a five-second page
 response grace. Ordinary read deadlines remain ten seconds. Coordinator
-registration gets sixty seconds per attempt, with three attempts separated by
-100 ms and 200 ms waits. Safari can abort a shared worker's download when its
+registration gets sixty seconds per attempt, ten on a page that registered before,
+with three attempts separated by 100 ms and 200 ms waits. Safari can abort a shared worker's download when its
 creating page leaves, then briefly reuse that failed startup for immediate
 retries. These waits let the browser retire it without changing the worker name,
-URL, or storage scope. Navigation and disposal cancel the wait; no new adapter
+URL, or storage scope; only an attempt that nobody answered changes the name, as
+above. Navigation and disposal cancel the wait; no new adapter
 is created by a canceled initialization, even if its timer already fired.
 `graphql_cache.registration_retry` reports the wait duration, retry number,
 triggering error class, and whether the wait completed or was canceled. This is
@@ -556,7 +575,8 @@ a page stopped.
 Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
 from a fixed list (`describeCacheError`), so the message itself never leaves.
 
-A build's coordinator has its build time in the SharedWorker name, so builds
+A build's coordinator has its build time (and its generation, see above) in the
+SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
 This keeps each build's tabs attached to its matching engine and GraphQL schema.
 The database identity stays shared across compatible builds; the newer build
