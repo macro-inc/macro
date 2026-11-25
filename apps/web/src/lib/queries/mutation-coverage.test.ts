@@ -98,6 +98,12 @@ const policies = {
   StopTimer:
     'authoritative: the server clock decides the length, and a long timer needs a choice',
   DiscardTimer: 'authoritative: the server confirms which timer it removed',
+  SendChannelMessage:
+    'custom: client message id, and the root whose thread the reply joins',
+  EditChannelMessage: 'custom: message content, mentions and attachments',
+  DeleteChannelMessage:
+    'custom: deleted message, and the root whose thread loses the reply',
+  ReactToChannelMessage: 'custom: the message’s reactions after the toggle',
 } satisfies Record<
   string,
   | 'resolver'

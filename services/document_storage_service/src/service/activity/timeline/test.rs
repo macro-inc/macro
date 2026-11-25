@@ -38,7 +38,7 @@ async fn queue_groups_one_channels_facts_and_ignores_non_timeline_activity() {
     publisher
         .publish_recorded(&[first.clone(), second.clone(), ignored])
         .await;
-    let (parent, activities) = receiver.try_recv().unwrap();
+    let (parent, activities, _) = receiver.try_recv().unwrap();
     assert_eq!(parent, MessageParent::Channel(CHANNEL));
     assert_eq!(
         activities.iter().map(|a| a.activity.id).collect::<Vec<_>>(),
@@ -70,7 +70,7 @@ async fn timeline_push_carries_each_activitys_committed_sequence() {
             ],
         )
         .await;
-    let (_, activities) = receiver.try_recv().unwrap();
+    let (_, activities, _) = receiver.try_recv().unwrap();
     let payload = serde_json::to_value(activities).unwrap();
     assert_eq!(payload[0]["seq"], 18);
     assert_eq!(payload[1]["seq"], 19);
@@ -154,4 +154,59 @@ async fn live_activity_reaches_watchers_who_can_still_view() {
             .is_empty()
     );
     assert_eq!(*access.asked.lock().unwrap(), asked);
+}
+
+#[tokio::test]
+async fn delivery_continues_the_trace_that_recorded_the_activity() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::Registry::default()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let guard = tracing::subscriber::set_default(subscriber);
+
+    let (sender, mut receiver) = mpsc::channel(QUEUE_CAPACITY);
+    let publisher = TimelinePublisher(sender);
+    let mut origins = Vec::new();
+    for ordinal in 0..2 {
+        let recording = tracing::info_span!("kafka.process");
+        origins.push(recording.context().span().span_context().clone());
+        publisher
+            .publish_recorded(&[picture(CHANNEL, ordinal)])
+            .instrument(recording)
+            .await;
+    }
+    let mut queued = Vec::new();
+    receiver.recv_many(&mut queued, QUEUE_CAPACITY).await;
+    let groups = by_parent_with_origins(queued);
+    assert_eq!(
+        groups.len(),
+        1,
+        "one channel's activity is delivered together"
+    );
+    let (_, activities, span) = groups.into_iter().next().unwrap();
+    assert_eq!(activities.len(), 2);
+    drop(span);
+    drop(guard);
+
+    let delivered = exporter
+        .get_finished_spans()
+        .unwrap()
+        .into_iter()
+        .find(|span| span.name == "timeline_activity.deliver")
+        .expect("delivery span exported");
+    assert_eq!(delivered.span_context.trace_id(), origins[0].trace_id());
+    assert_eq!(delivered.parent_span_id, origins[0].span_id());
+    assert_eq!(
+        delivered
+            .links
+            .iter()
+            .map(|link| link.span_context.clone())
+            .collect::<Vec<_>>(),
+        [origins[1].clone()]
+    );
 }

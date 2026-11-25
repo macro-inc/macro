@@ -1014,6 +1014,7 @@ Returning through split navigation restores the saved message position and expan
 threads. Switching channel tabs and returning restores the Messages position,
 expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.
+Sending a message from the channel composer also brings it into view, from anywhere in the history.
 On touch devices a round **Jump to latest** button sits bottom-right above the
 composer whenever the list is away from the bottom, in either scroll direction;
 tapping it smooth-scrolls to latest and keeps the keyboard open.
@@ -2147,12 +2148,43 @@ and viewer actions; focusing Download explicitly still allows keyboard downloads
 With the video focused, Escape closes the viewer and returns focus to the
 thumbnail that opened it.
 
+## Channels kept on the device
+
+Behind `enable-channel-local-sync` (`VITE_ENABLE_CHANNEL_LOCAL_SYNC=true` in a local
+bundle), a channel opens from the device: its history and threads show without a
+request once the device holds them, and opening the same channel again reads
+nothing from the server while the connection stays up and the device is known to
+hold every change. After a drop, once the device's database was replaced over its
+stored data, or after another tab replaced the channel, it asks the server for
+the changes since the device last heard, or, when the server no longer keeps
+them all, for the latest page, which replaces what the device held. Sends, edits, deletes and reactions go through the
+durable cache mutation queue as `SendChannelMessage`, `EditChannelMessage`,
+`DeleteChannelMessage` and `ReactToChannelMessage`, and go out when the
+connection returns. A view that reads from the device shows a change another tab of
+the same device made. Only a channel's own messages go this way: discussion on
+documents, tasks, projects and calls stays on REST, as does a channel a view opened
+over REST before the flag turned on, and a thread of more than 10,000 replies. Five
+seconds after start, while you leave the app alone, the 40 newest unread and 20 most
+recently viewed channels are fetched ahead; channels unopened for 30 days are
+dropped. Verify a change both ways: flag off must behave as REST always has. The
+code and its gotchas are in
+`apps/web/src/lib/queries/messages/local/AGENTS.md`; the end-to-end suite is
+`apps/web/tests/channels-e2e/README.md`.
+
 ## Pending message drafts
 
 Sending clears the composer immediately while delivery is pending. If delivery
 fails and the composer is still empty, its text, mentions, and attachments return.
-A new draft typed during delivery stays intact if the earlier send fails. Verify
-this with both the Send button on a phone and the desktop composer.
+A new draft typed during delivery stays intact if the earlier send fails. A
+reply composer that closed as it sent puts a failed reply back in the thread's
+stored draft, so reopening the thread shows it, and a newer draft typed in
+another view of the thread is kept. A send that fails after a sign-out, or after
+a sign-in replaced the session it was sent under, restores nothing. A channel kept
+on the device sends through the device's queue only: a message the queue does not
+take fails as not sent, and one whose outcome is unknown goes out under the same id
+when its draft is sent again, so it never posts twice. Verify this with both the
+Send button on a phone and the desktop composer, and for a reply by closing and reopening the
+thread while the reply is pending.
 
 For tab performance QA, switch Attachments → Calls → Participants → Messages
 in both the routed channel and a block split. Each actual selection should

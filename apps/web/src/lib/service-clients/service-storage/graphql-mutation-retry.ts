@@ -15,6 +15,19 @@ const MAX_TRACKED_WRITES = 256;
 // A server fault, or an inbox that stayed locked past its lock timeout: the
 // write rolled back, so sending it again is safe.
 const RETRIED_DRAFT_CODES = ['INTERNAL', 'INBOX_BUSY'];
+// A send carries the message id the client chose and the server answers a
+// replay of it without writing again, and a repeated delete answers with the
+// tombstone: one the server committed but could not read back, or a
+// conversation that stayed busy, is sent again rather than rolled back, which
+// for a send would invite a resend under a new id. Edits and reactions are
+// not: a replay after another device changed the message would undo that
+// change. They are still sent again after a transport failure, like every
+// queued write, since a write made offline must go out once the device is
+// back; a lost response there can replay one over a newer change, which only
+// a precondition the server checks would close. The queue runner bounds how
+// many server failures it retries.
+const CHANNEL_WRITES = ['SendChannelMessage', 'DeleteChannelMessage'];
+const RETRIED_CHANNEL_CODES = ['SERVICE_UNAVAILABLE'];
 /** Server faults in a row for each queued draft write. */
 const draftFaults = new Map<string, number>();
 // Transaction ids restart when the cache is rebuilt; the draft's key does not.
@@ -46,9 +59,22 @@ function retriesDraftServerFault(
   return true;
 }
 
+function retriesChannelWrite(
+  error: CombinedError,
+  mutation: QueuedMutation
+): boolean {
+  return (
+    CHANNEL_WRITES.includes(mutation.operationName ?? '') &&
+    error.graphQLErrors.every((entry) =>
+      RETRIED_CHANNEL_CODES.includes(String(entry.extensions.code))
+    )
+  );
+}
+
 /**
  * Retry transport failures. Application errors release the queue head, except
- * a server fault on an email draft write, which is retried twice in a row.
+ * a server fault on an email draft write, which is retried twice in a row, and
+ * an unavailable server on a channel write.
  */
 export function shouldRetryGraphqlMutation(
   error: CombinedError,
@@ -57,6 +83,7 @@ export function shouldRetryGraphqlMutation(
   const refused = error.graphQLErrors.length > 0;
   if (refused && mutation && retriesDraftServerFault(error, mutation))
     return true;
+  if (refused && mutation && retriesChannelWrite(error, mutation)) return true;
 
   // Any other failure ends the write's run of server faults.
   if (mutation) draftFaults.delete(writeKey(mutation));

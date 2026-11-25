@@ -511,7 +511,6 @@ export function ChannelThread(props: ThreadProps) {
                         replyInputState={props.replyInputState}
                         setReplyInputState={props.setReplyInputState}
                         setIsReplying={props.setIsReplying}
-                        replyInputHandle={props.replyInputHandle}
                         setReplyInputEl={props.setReplyInputEl}
                         setReplyInputHandle={props.setReplyInputHandle}
                         focusRequest={props.replyInputFocusRequest}

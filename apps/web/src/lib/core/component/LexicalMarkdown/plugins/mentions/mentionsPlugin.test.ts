@@ -19,6 +19,7 @@ import {
 } from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  $readItemMentions,
   INSERT_DOCUMENT_MENTION_COMMAND,
   type ItemMention,
   mentionsPlugin,
@@ -273,4 +274,31 @@ describe('mentionsPlugin', () => {
     });
     expect(created).toEqual([]);
   });
+});
+
+it('reads a form card back as the reference inserting it reported', () => {
+  const { editor, created } = composer();
+  discrete(editor, () => {
+    $getRoot().append(
+      $createDocumentCardNode({
+        documentId: 'form-1',
+        documentName: 'Lunch poll',
+        blockName: 'form',
+      }),
+      $createDocumentCardNode({
+        documentId: 'db-1',
+        documentName: 'Roadmap',
+        blockName: 'database',
+      })
+    );
+  });
+  // A restored draft takes its mentions from its text: it must find what the
+  // composer tracked as the cards went in.
+  expect(editor.read(() => $readItemMentions(['database', 'form']))).toEqual(
+    created
+  );
+  // Without forms, as the document mention signal reads them.
+  expect(editor.read(() => $readItemMentions()).map((m) => m.itemId)).toEqual([
+    'db-1',
+  ]);
 });

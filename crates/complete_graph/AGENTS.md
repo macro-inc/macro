@@ -117,6 +117,7 @@ bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-schema/src/li
 
 Email send admission, cancellation and status are exposed by `graphql_email`;
 `agentSessionActivityAppended` checks session view access as the log subscription does and filters correlated activity rows by the session bound in `agent_correlations`. Its first empty frame confirms listening, so clients refetch REST history to close the handoff gap. A lagging stream errors so clients refetch again.
+`channelTimelineUpdates` (`graphql_channel`) streams from the `ChannelTimelineSubscriptions` request data DSS inserts: updates mapped once per process, no read per subscriber. It errors when it falls behind, so clients resubscribe and catch up with `channelChanges`; it answers `SERVICE_UNAVAILABLE` until the process receives updates, and a `truncated` update carries only the position to catch up to.
 `GraphqlUser.pendingEmailSends` lists authorized inbox attempts with cursor pagination.
 Keep this viewer-scoped listing independent of normalized-cache initialization.
 
@@ -152,5 +153,8 @@ primary-backed REST message service in `ChannelGraphqlContext`, with separate
 `GraphqlChannelMessage` identity and composed parity tests in `schema/test/channel_messages.rs`.
 `schema/test/channel_messages/changes.rs` covers change replay, reset boundaries and reading
 the sequence before each page.
+`schema/test/channel_messages/writes.rs` covers the four message mutations: replayed sends,
+edits and deletes, the returned `seq`, the returned roots' thread summaries (a root's own,
+and a reply's root), and the personal-session gate.
 
 - Agent-session activity subscriptions recheck current entity access before emitting CRM activity. Session access alone does not disclose CRM record content after revocation.

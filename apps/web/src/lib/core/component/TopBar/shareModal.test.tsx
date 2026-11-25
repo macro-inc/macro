@@ -57,6 +57,9 @@ vi.mock('@app/lib/queries/calendar/graphql/use-calendar-cache', () => ({
 vi.mock('@app/lib/queries/invalidate-on-reconnect', () => ({
   useInvalidateQueriesOnReconnect: () => {},
 }));
+vi.mock('@app/lib/queries/messages/local/use-channel-prewarm', () => ({
+  useChannelPrewarm: () => {},
+}));
 vi.mock('@app/lib/queries/soup/backfill', () => ({
   useSoupBackfills: () => {},
 }));

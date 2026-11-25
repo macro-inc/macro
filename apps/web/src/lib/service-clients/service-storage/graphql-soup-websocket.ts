@@ -9,6 +9,9 @@ import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
+import { onChannelFlagsChanged } from '../../queries/messages/local/channel-flag';
+import type { ChannelStream } from '../../queries/messages/local/channel-stream';
+import { startChannelStream } from '../../queries/messages/local/channel-sync';
 import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
   revalidateMailAttachmentLists,
@@ -300,6 +303,9 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     host?: CacheHost
   ): void;
   connected(): void;
+  disconnected(): void;
+  /** Updates were off for another reason than the socket. */
+  updatesMissed(): void;
   dispose(): void;
 } {
   let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
@@ -308,6 +314,9 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
+  let channelStream: ChannelStream | undefined;
+  let stopWatchingChannelFlags: (() => void) | undefined;
+  let socketConnected = false;
   let generation = 0;
   let signaledFailure = false;
   let connections = 0;
@@ -332,6 +341,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     activity = undefined;
     channels?.dispose();
     channels = undefined;
+    stopWatchingChannelFlags?.();
+    stopWatchingChannelFlags = undefined;
+    channelStream?.dispose();
+    channelStream = undefined;
   };
 
   const onPagehide = () => {
@@ -352,6 +365,30 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     addEventListener('pageshow', onPageshow);
   }
 
+  // The flag can load after the socket starts, so a host channels may come to
+  // read from waits for it; once followed, a flag refresh never stops it.
+  const startFollowing = (
+    client: Pick<Client, 'subscription' | 'query'>,
+    host: CacheHost
+  ) => {
+    channelStream = startChannelStream(client, host);
+    if (channelStream && socketConnected) channelStream.connected();
+    return channelStream !== undefined;
+  };
+  const followChannelChanges = (
+    client: Pick<Client, 'subscription' | 'query'>,
+    host: CacheHost
+  ) => {
+    if (startFollowing(client, host)) return;
+    stopWatchingChannelFlags = onChannelFlagsChanged(() => {
+      if (channelStream || currentClient !== client || currentHost !== host)
+        return;
+      if (!startFollowing(client, host)) return;
+      stopWatchingChannelFlags?.();
+      stopWatchingChannelFlags = undefined;
+    });
+  };
+
   const lifecycle = {
     replace(client?: Pick<Client, 'subscription' | 'query'>, host?: CacheHost) {
       if (currentClient && currentClient !== client)
@@ -368,6 +405,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       channels = createChannelListUpdatesHandler(client, host);
       const activityHandler = activity;
       const channelHandler = channels;
+      if (host && !host.disabled) followChannelChanges(client, host);
 
       const subscriptions =
         host && !host.disabled
@@ -434,6 +472,15 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       });
     },
     connected: () => {
+      socketConnected = true;
+      lifecycle.updatesMissed();
+      channelStream?.connected();
+    },
+    disconnected: () => {
+      socketConnected = false;
+      channelStream?.disconnected();
+    },
+    updatesMissed: () => {
       signaledFailure = false;
       activity?.reconnect();
       channels?.reconnect();

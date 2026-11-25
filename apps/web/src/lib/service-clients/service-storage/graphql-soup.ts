@@ -100,6 +100,11 @@ import { batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { filter, pipe } from 'wonka';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import { markChannelCachePaused } from '../../queries/messages/local/channel-flag';
+import {
+  existingChannelSyncRuntime,
+  existingChannelWrites,
+} from '../../queries/messages/local/channel-sync';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { forgetSoupNetworkAnswers } from '../../queries/soup/graphql/network-freshness';
@@ -663,7 +668,12 @@ const cacheRecovery = createCacheRecovery(
     }),
   {
     onRelapse: recordCacheRecoveryRelapse,
-    onStopped: recordCacheRecoveryStopped,
+    onStopped: (reason, relapses, error) => {
+      recordCacheRecoveryStopped(reason, relapses, error);
+      // A host kept through an outage has no restart left that would hand its
+      // channel writes to the queue.
+      if (cachedCacheHost) existingChannelWrites(cachedCacheHost)?.retire();
+    },
     onOffPastLimit: recordCacheOffPastLimit,
   }
 );
@@ -743,6 +753,10 @@ async function restartCache(span: Span): Promise<void> {
     throw new CacheRecoverySupersededError();
   cacheInitializationFailed = false;
   setCacheAvailability((version) => version + 1);
+  // A host kept through an outage: its channels catch up, and the writes made
+  // meanwhile go to its queue.
+  existingChannelSyncRuntime(host)?.resumed();
+  existingChannelWrites(host)?.resumed();
 }
 let cacheSessionGeneration = 0;
 
@@ -925,6 +939,20 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
 
+/**
+ * The session's cache host, also while its database is away (`paused`) or is
+ * being proven readable again; undefined once the host is gone or the page
+ * stopped trying to prove it.
+ */
+export function getKeptGraphqlCacheHost(): CacheHost | undefined {
+  cacheAvailability();
+  if (!sessionActive()) return undefined;
+  if (!cachedCacheHost) return undefined;
+  if (isCacheHostGone(cachedCacheHost)) return undefined;
+  if (cacheRecovery.state() === 'recovery-required') return undefined;
+  return cachedCacheHost;
+}
+
 /** Establish the local response generation without gating app startup. */
 export async function initializeGraphqlSoupCache(): Promise<void> {
   await Telemetry.span('graphql.cache_startup', async (span) => {
@@ -1053,7 +1081,7 @@ export function getGraphqlSoupClient(): Client {
       if (!(await startSubscriptions(target))) return;
       // Soup updates were off meanwhile, as while a socket is down, and a
       // query mounted before that shows, and holds cached, what came before.
-      subscriptionsLifecycle.connected();
+      subscriptionsLifecycle.updatesMissed();
       refetchMissed();
       try {
         await cacheRecovery.available();
@@ -1067,6 +1095,10 @@ export function getGraphqlSoupClient(): Client {
       // Unsubscribing emits urql teardown operations; keep the cache host
       // available until those best-effort registration removals are issued.
       subscriptionsLifecycle.dispose();
+      if (host) {
+        existingChannelSyncRuntime(host)?.dispose();
+        existingChannelWrites(host)?.retire();
+      }
       lifetime.abort();
       // Retires the host: operations still running on this client, and any
       // caller that captured the host, fall back to the network from here.
@@ -1077,6 +1109,7 @@ export function getGraphqlSoupClient(): Client {
     /** The client, its socket and its queue stay: the host serves again. */
     const onUnavailable = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
+      markChannelCachePaused(host);
       installCrmCacheHost(host);
       cacheInitializationFailed = true;
       cacheRecovery.failed(error);
@@ -1159,6 +1192,7 @@ export function getGraphqlSoupClient(): Client {
         subscriptionsLifecycle.connected,
         (state) => {
           websocketState = state;
+          if (state === 'disconnected') subscriptionsLifecycle.disconnected();
         }
       );
       websocketClient = graphqlWsClient;

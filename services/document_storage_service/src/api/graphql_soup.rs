@@ -77,6 +77,15 @@ async fn graphql_handler(
             acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
             acting_user.and_then(opaque_viewer_id),
         );
+        // Only a person's own session may write channel messages here;
+        // tokens and agents carry attribution the REST route signs.
+        let request = match acting_user {
+            Some(user) => request.data(graphql_channel::ChannelWriteActor {
+                organization_id: user.user_context.organization_id.map(i64::from),
+                human_session: user.is_human_session(),
+            }),
+            None => request,
+        };
         state.graphql_soup_schema.execute(
             request
                 .data(mail_profile)
@@ -244,6 +253,7 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_soup_item_loader.clone());
     data.insert(state.agent_session_log_subscriptions.clone());
     data.insert(state.agent_session_activity_subscriptions.clone());
+    data.insert(state.channel_timeline_subscriptions.clone());
     // Mutation replies must read their committed state from the primary email
     // service. Ordinary Soup lists and subscriptions retain their own reader.
     data.insert(email_mutation_thread_loader(

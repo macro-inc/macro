@@ -143,6 +143,7 @@ use macro_service_urls::{
     SyncServiceUrl,
 };
 use macro_sha_count_client::Redis;
+use messages::domain::timeline_updates::{ChannelTimelineFanout, ChannelTimelineFanoutError};
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     WebSocketNotificationConsumerService,
@@ -1310,6 +1311,12 @@ async fn run_server() -> anyhow::Result<()> {
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             (*entity_access_service).clone(),
         ),
+        messages::domain::timeline_updates::ChannelActivityUpdates::new(
+            crate::service::activity::ChannelParticipantAudience(PgChannelsRepo::new(db.clone())),
+            messages::outbound::channel_timeline::BrokerChannelTimelinePublisher::new(
+                macro_event_broker.clone(),
+            ),
+        ),
     );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
@@ -1577,9 +1584,10 @@ async fn run_server() -> anyhow::Result<()> {
 
     // One message implementation for channels and documents. Committed changes fan
     // out to the broker, the local agent queue, and the parent's own delivery: channel
-    // messages keep their notifications, activity, and sharing side effects and send
-    // the common `message_update` payload; document discussions get the common
-    // payload and document comment notifications.
+    // messages keep their notifications, activity, and sharing side effects, send
+    // the common `message_update` payload and publish a live timeline update for
+    // `channelTimelineUpdates`; document discussions get the common payload and
+    // document comment notifications.
     let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
         conn_gateway_client.clone(),
     );
@@ -1610,7 +1618,13 @@ async fn run_server() -> anyhow::Result<()> {
         PgChannelsRepo::new(db.clone()),
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
-        message_realtime,
+        messages::domain::timeline_updates::ChannelTimelineRealtime::new(
+            message_realtime,
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::channel_timeline::BrokerChannelTimelinePublisher::new(
+                macro_event_broker.clone(),
+            ),
+        ),
         channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
@@ -1658,7 +1672,8 @@ async fn run_server() -> anyhow::Result<()> {
     let graphql_channel_context = graphql_channel::ChannelGraphqlContext::new(
         message_service.clone(),
         entity_access_service.clone(),
-    );
+    )
+    .with_commands(message_service.clone(), entity_access_service.clone());
     let messages_state = messages::inbound::axum_router::MessagesRouterState {
         service: message_service.clone(),
         access: entity_access_service.clone(),
@@ -2287,6 +2302,48 @@ async fn run_server() -> anyhow::Result<()> {
                     biased;
                     _ = cancellation_token.cancelled() => break,
                     _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
+    // Every replica reads every live channel timeline update and hands it to its
+    // own subscribers from memory: no database read per subscriber. The topic is
+    // opened by the task, not here: this service starts and serves everything
+    // else while the topic cannot be read, and refuses its subscriptions.
+    let channel_timeline_fanout = Arc::new(ChannelTimelineFanout::new(
+        messages::outbound::channel_timeline::ChannelTimelineTopic::new(
+            config.kafka_brokers.as_ref(),
+        ),
+        graphql_channel::GraphqlChannelTimelineUpdate::shared,
+    ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&channel_timeline_fanout);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let retry_after = match &result {
+                    Err(ChannelTimelineFanoutError::Open(_)) => CHANNEL_TIMELINE_REOPEN_INTERVAL,
+                    Err(ChannelTimelineFanoutError::Receive(_)) | Ok(()) => Duration::from_secs(1),
+                };
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(error = ?error, "channel timeline update consumer stopped");
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(retry_after) => {}
                 }
             }
         }
@@ -2939,6 +2996,9 @@ async fn run_server() -> anyhow::Result<()> {
             activity_realtime_service,
             db.clone(),
         ),
+        channel_timeline_subscriptions: graphql_channel::ChannelTimelineSubscriptions::new(
+            move |user_id| channel_timeline_fanout.subscribe(user_id).ok(),
+        ),
         graphql_notification_reader,
         graphql_notification_writer,
         graphql_active_notification_ids_context:
@@ -3140,3 +3200,7 @@ async fn run_server() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long to wait before opening the channel timeline topic again, while it
+/// does not exist or its brokers do not answer.
+const CHANNEL_TIMELINE_REOPEN_INTERVAL: Duration = Duration::from_secs(10);

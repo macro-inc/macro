@@ -192,6 +192,35 @@ function $isMentionNode(
   );
 }
 
+/** Cards that reference their entity the way a mention does. */
+export type ReferenceCard = 'database' | 'form';
+
+/**
+ * The mentions the editor's document holds, in document order, with its
+ * cards of the `cards` kinds. A composer reads form cards too: inserting one
+ * reported it as a reference, which grants the channel View on the form.
+ */
+export function $readItemMentions(
+  cards: readonly ReferenceCard[] = ['database']
+): ItemMention[] {
+  const mentions: ItemMention[] = [];
+  $traverseNodes($getRoot(), (node) => {
+    if ($isMentionNode(node) && !$isUntrackedPullRequestMention(node)) {
+      mentions.push($mentionItemFromNode(node));
+    } else if (
+      node instanceof DocumentCardNode &&
+      cards.some((card) => card === node.getBlockName())
+    ) {
+      mentions.push({
+        itemType: blockItemType(node.getBlockName()),
+        itemId: node.getDocumentId(),
+        documentName: node.getDocumentName(),
+      });
+    }
+  });
+  return mentions;
+}
+
 /** A PR mention authored from a GitHub URL alone has no entity to track. */
 function $isUntrackedPullRequestMention(node: LexicalNode): boolean {
   return $isPullRequestMentionNode(node) && !node.getId();
@@ -432,24 +461,7 @@ function registerMentionsPlugin(
 
   function updateMentionsSignal() {
     if (props.setMentions === undefined) return;
-    const mentions: ItemMention[] = [];
-    editor.read(() => {
-      $traverseNodes($getRoot(), (node) => {
-        if ($isMentionNode(node) && !$isUntrackedPullRequestMention(node)) {
-          mentions.push($mentionItemFromNode(node));
-        } else if (
-          node instanceof DocumentCardNode &&
-          node.getBlockName() === 'database'
-        ) {
-          mentions.push({
-            itemType: 'database',
-            itemId: node.getDocumentId(),
-            documentName: node.getDocumentName(),
-          });
-        }
-      });
-    });
-    props.setMentions(mentions);
+    props.setMentions(editor.read(() => $readItemMentions()));
   }
 
   // Expansion/collapse replaces the node but preserves its tracked reference UUID.

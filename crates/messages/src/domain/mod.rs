@@ -35,3 +35,6 @@ pub mod ports;
 /// Message authorization and use-case orchestration.
 #[cfg(feature = "ports")]
 pub mod service;
+/// Live channel timeline updates, hydrated once and fanned out from memory.
+#[cfg(feature = "ports")]
+pub mod timeline_updates;

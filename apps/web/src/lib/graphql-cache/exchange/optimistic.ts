@@ -1,6 +1,6 @@
 import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
-import type { IdentityBindingWire } from '../protocol';
+import { type IdentityBindingWire, LOCAL_COMMIT_FAILED } from '../protocol';
 /**
  * Typed entry point for durable optimistic GraphQL mutations.
  *
@@ -39,6 +39,8 @@ import { selectRecords } from './record-selection';
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
 // Page-local acknowledgement; deliberately excluded from durable queue data.
 const OPTIMISTIC_ENQUEUED_CONTEXT_KEY = 'normalizedCacheOptimisticEnqueued';
+/** Private operation-context field of a mutation that never passes its queue. */
+const ONLY_QUEUED_CONTEXT_KEY = 'normalizedCacheOnlyQueued';
 /** Private result-extension field carrying the queue disposition. */
 const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
   'normalizedCacheMutationDisposition';
@@ -130,6 +132,11 @@ export type OptimisticMutationOptions = {
   identityBindings?: readonly IdentityBindingWire[];
   /** Runs after durable layer installation, independently of HTTP settlement. */
   onEnqueued?: () => void;
+  /**
+   * Answers with a `MutationNotQueuedError` when the queue does not take the
+   * mutation, instead of sending it straight out past the ones the queue keeps.
+   */
+  onlyQueued?: boolean;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
@@ -169,13 +176,18 @@ export type OptimisticMutationContext<TData = unknown> = {
 /** Caller-facing disposition of one durable optimistic mutation submission. */
 export type OptimisticMutationDisposition<TData> =
   | { kind: 'committed'; data: TData | undefined }
-  | { kind: 'queued'; transactionId: string }
+  | {
+      kind: 'queued';
+      transactionId: string;
+      /** The server's answer, which the device may not have stored yet. */
+      confirmed?: TData;
+    }
   | { kind: 'permanently-failed'; error: CombinedError };
 
 /** Exchange-private metadata attached after queue routing or settlement. */
 export type OptimisticMutationDispositionMetadata =
   | { kind: 'committed'; transactionId?: string }
-  | { kind: 'queued'; transactionId: string }
+  | { kind: 'queued'; transactionId: string; confirmed?: unknown }
   | {
       kind: 'superseded';
       transactionId: string;
@@ -280,7 +292,13 @@ export function optimisticMutationDispositionOf<
 
   const metadata = value as OptimisticMutationDispositionMetadata;
   if (metadata.kind === 'queued' && metadata.transactionId) {
-    return { kind: 'queued', transactionId: metadata.transactionId };
+    return {
+      kind: 'queued',
+      transactionId: metadata.transactionId,
+      ...(metadata.confirmed != null && {
+        confirmed: metadata.confirmed as TData,
+      }),
+    };
   }
   if (metadata.kind === 'superseded' && metadata.replacementTransactionId) {
     return {
@@ -590,7 +608,39 @@ export function optimisticMutationContext<TData>(
     ...(options.onEnqueued
       ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
       : {}),
+    ...(options.onlyQueued ? { [ONLY_QUEUED_CONTEXT_KEY]: true } : {}),
   };
+}
+
+/** Whether a mutation must not pass its queue (`onlyQueued`). */
+export function isOnlyQueued(op: Operation): boolean {
+  return op.context[ONLY_QUEUED_CONTEXT_KEY] === true;
+}
+
+/** An `onlyQueued` mutation's answer: neither the queue nor the server got it. */
+export class MutationNotQueuedError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('the cache queue did not take the mutation', options);
+    this.name = 'MutationNotQueuedError';
+  }
+}
+
+/** The server took the mutation and the device could not store its answer. */
+export class LocalCommitFailedError extends Error {
+  readonly errorCode = LOCAL_COMMIT_FAILED;
+  // Private, so nothing that reports the error reports the answer with it.
+  readonly #confirmed: unknown;
+
+  constructor(message: string, confirmed: unknown) {
+    super(message);
+    this.name = 'LocalCommitFailedError';
+    this.#confirmed = confirmed;
+  }
+
+  /** The server's answer, the mutation's data. */
+  get confirmed(): unknown {
+    return this.#confirmed;
+  }
 }
 
 /** Acknowledge installation without allowing caller code to interrupt queue routing. */

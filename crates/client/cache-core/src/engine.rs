@@ -9,6 +9,7 @@ mod channel_timeline;
 mod channel_write;
 mod hydration;
 mod pass_reads;
+mod pending_sends;
 mod people;
 mod retirement;
 pub use channel_timeline::ChannelEvictionResult;
@@ -444,6 +445,8 @@ struct OptimisticLayer {
     identity_keys: BTreeSet<EntityKey<'static>>,
     id: OptimisticTransactionId,
     uuid: Uuid,
+    /// The earliest sequence this engine knew its message arrived by.
+    arrived: Option<i64>,
     superseded: bool,
     updates: RecordUpdates,
     link_patches: Vec<OptimisticLinkPatch>,
@@ -759,7 +762,7 @@ impl<S: Storage> Engine<S> {
         queued: Vec<QueuedMutation>,
         strict_tail: Option<MutationId>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
-        self.rebuild_queued_layers_with_staged(queued, strict_tail, &StagedRecords::new())
+        self.rebuild_queued_layers_with_staged(queued, strict_tail, &StagedRecords::new(), None)
             .await
     }
 
@@ -770,6 +773,7 @@ impl<S: Storage> Engine<S> {
         queued: Vec<QueuedMutation>,
         strict_tail: Option<MutationId>,
         staged: &StagedRecords,
+        admission: Option<&ChannelAdmission>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
         let mut layers = Vec::with_capacity(queued.len());
         for queued in queued {
@@ -835,7 +839,11 @@ impl<S: Storage> Engine<S> {
             let (candidates, bases) = self
                 .load_link_patch_bases(candidates, &layers, &updates, &patches, staged)
                 .await?;
+            let arrived = self
+                .yield_to_server(queued.uuid, &mut updates, &bases, admission)
+                .await?;
             let composed = effective_records(&bases, &layers, &candidates);
+            pending_sends::drop_names(&mut updates, &composed);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, &updates);
             // Missing query fields after a format wipe are intentionally not
@@ -876,6 +884,7 @@ impl<S: Storage> Engine<S> {
                 identity_bindings: source.identity_bindings,
                 id: queued.id,
                 uuid: queued.uuid,
+                arrived,
                 superseded: queued.superseded,
                 updates,
                 link_patches: patches,
@@ -2019,7 +2028,7 @@ impl<S: Storage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
         let replacement = self
-            .rebuild_queued_layers_with_staged(queued, None, &staged)
+            .rebuild_queued_layers_with_staged(queued, None, &staged, Some(&admission))
             .await?;
         candidates.extend(layer_keys(&replacement));
         let mut staged_bases = self.load_bases(&candidates).await?;
@@ -3419,7 +3428,7 @@ impl<S: Storage> Engine<S> {
             .map_err(EngineError::Storage)?;
         queued.retain(|entry| entry.id != transaction);
         let replacement = self
-            .rebuild_queued_layers_with_staged(queued, None, &staged)
+            .rebuild_queued_layers_with_staged(queued, None, &staged, Some(&admission))
             .await?;
         candidates.extend(layer_keys(&replacement));
         let mut settled_bases = self.load_bases(&candidates).await?;

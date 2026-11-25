@@ -28,6 +28,12 @@ use crate::domain::{
     ports::{ActivityRealtimePublisher, ActivityRepo},
 };
 
+/// Span status for a record that does not decode; the decode error itself can
+/// quote the record.
+const UNDECODABLE: &str = "activity record does not decode";
+/// Span status and error context for a record whose activities were not stored.
+const NOT_STORED: &str = "failed to store activities";
+
 /// Consumer group for activity materialization offsets.
 struct ActivityConsumerGroup;
 
@@ -117,11 +123,11 @@ where
                         }
                     };
                     let kafka_message = message.inner();
-                    let span = tracing::info_span!(
-                        "activity_source_event",
-                        topic = kafka_message.topic(),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
+                    // Continues the trace of the write that produced the event,
+                    // so its materialization and realtime delivery join it.
+                    let span = kafka_util::consumer_span(
+                        kafka_message,
+                        ActivityConsumerGroup::GROUP_NAME,
                     );
                     let decoded = {
                         let _guard = span.enter();
@@ -131,8 +137,10 @@ where
                         Ok(event) => event,
                         Err(_) => {
                             // Poison record: commit so it cannot wedge the
-                            // partition.
-                            commit_logged(&consumer, kafka_message);
+                            // partition. The decode error can quote the
+                            // record, so the span gets only what happened.
+                            kafka_util::record_span_error(&span, UNDECODABLE);
+                            span.in_scope(|| commit_logged(&consumer, kafka_message));
                             continue;
                         }
                     };
@@ -145,11 +153,14 @@ where
                     // the replay idempotent.
                     tokio::select! {
                         _ = &mut shutdown => break,
-                        result = self.apply(event).instrument(span) => {
-                            result.context("failed to store activities")?;
+                        result = self.apply(event).instrument(span.clone()) => {
+                            if result.is_err() {
+                                kafka_util::record_span_error(&span, NOT_STORED);
+                            }
+                            result.context(NOT_STORED)?;
                         }
                     }
-                    commit_logged(&consumer, kafka_message);
+                    span.in_scope(|| commit_logged(&consumer, kafka_message));
                 }
             }
         }

@@ -1,5 +1,16 @@
-use super::HydrationResultWire;
+use super::{HydrationResultWire, commit_settlement};
 use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelCommitStatus};
+
+#[test]
+fn a_commit_the_device_cannot_store_settles_with_its_own_code() {
+    assert_eq!(
+        commit_settlement(true, false),
+        ("permanently-failed", Some("LOCAL_COMMIT_FAILED"))
+    );
+    assert_eq!(commit_settlement(true, true), ("superseded", None));
+    assert_eq!(commit_settlement(false, true), ("superseded", None));
+    assert_eq!(commit_settlement(false, false), ("committed", None));
+}
 
 #[test]
 fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {

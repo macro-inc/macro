@@ -319,7 +319,7 @@ export function MessageThreadById(
   const missing = () => thrownResultErrorHasCode(query.error, 'NOT_FOUND');
   return (
     <Show
-      when={query.isSuccess && !query.data.state.deleted_at}
+      when={query.isSuccess && !query.data?.state.deleted_at}
       fallback={
         <Show when={query.isError}>
           <MessageLoadError

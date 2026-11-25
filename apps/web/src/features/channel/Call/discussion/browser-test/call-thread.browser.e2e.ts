@@ -386,6 +386,32 @@ test('dismissing an explicit reply returns to the unflagged call-thread composer
   expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
 });
 
+test('a message sent while reading older ones is brought into view', async ({
+  page,
+}, testInfo) => {
+  // The touch composer starts collapsed; its own suite covers opening it.
+  test.skip(testInfo.project.name === 'phone');
+  const { posted } = await open(page, 'messages', {
+    status: { state: 'live' },
+    historyCount: 60,
+  });
+  const list = page.getByTestId('messages-tab');
+  await expect(callRow(page)).toBeInViewport({ timeout: 30_000 });
+  await list.hover({ force: true });
+  await page.mouse.wheel(0, -1_200);
+  await expect(callRow(page)).not.toBeInViewport();
+
+  const composer = page.locator('[data-markdown-editable]');
+  await composer.click();
+  await page.keyboard.type('Sent from up here');
+  await page.keyboard.press('Enter');
+
+  await expect.poll(() => posted.length).toBe(1);
+  await expect(
+    list.getByText('Sent from up here', { exact: true })
+  ).toBeInViewport();
+});
+
 test('scrolling up through the channel stays put', async ({
   page,
 }, testInfo) => {

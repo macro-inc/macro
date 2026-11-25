@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AttachmentChangeOneOf } from './attachmentChangeOneOf';
+import type { AttachmentChangeOneOfEight } from './attachmentChangeOneOfEight';
 import type { AttachmentChangeOneOfFive } from './attachmentChangeOneOfFive';
 import type { AttachmentChangeOneOfThree } from './attachmentChangeOneOfThree';
 
@@ -14,4 +15,5 @@ import type { AttachmentChangeOneOfThree } from './attachmentChangeOneOfThree';
 export type AttachmentChange =
   | AttachmentChangeOneOf
   | AttachmentChangeOneOfThree
-  | AttachmentChangeOneOfFive;
+  | AttachmentChangeOneOfFive
+  | AttachmentChangeOneOfEight;

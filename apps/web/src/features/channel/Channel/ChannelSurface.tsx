@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
+import { useChannelMessageResolver } from '@queries/messages/channel-timeline-source';
 import {
-  fetchResolvedChannelMessage,
   findThreadIdInMessageTimeline,
   findTopLevelMessageInMessageTimeline,
 } from '@queries/messages/timeline';
@@ -142,17 +142,16 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
   onCleanup(() => {
     disposed = true;
   });
+  const resolveMessage = useChannelMessageResolver(() => ({
+    type: 'channel',
+    id: props.channelId,
+  }));
 
   async function resolveTarget(
     channelId: string,
     request: Extract<ChannelTargetRequest, { kind: 'message' }>
   ) {
-    const result = await catchToResult(() =>
-      fetchResolvedChannelMessage(
-        { type: 'channel', id: channelId },
-        request.messageId
-      )
-    );
+    const result = await catchToResult(() => resolveMessage(request.messageId));
     if (
       disposed ||
       props.channelId !== channelId ||
@@ -165,7 +164,7 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
         ? {
             kind: 'message',
             request,
-            targetMessageId: resolved.thread_id,
+            targetMessageId: resolved.threadId,
             targetMessageReplyId: request.messageId,
           }
         : {

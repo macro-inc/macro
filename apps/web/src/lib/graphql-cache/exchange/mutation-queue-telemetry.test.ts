@@ -41,7 +41,14 @@ const telemetry = vi.hoisted(() => {
       },
       event: (event: string) => recorded.events.push(event),
       error: (error: unknown) => recorded.errors.push(error),
-      run: <T>(work: () => T) => work(),
+      run: <T>(work: () => T) => {
+        active.push(recorded.name);
+        try {
+          return work();
+        } finally {
+          active.pop();
+        }
+      },
       end: () => {
         recorded.ended = true;
       },
@@ -263,6 +270,27 @@ describe('createMutationQueueTelemetry', () => {
     expect(exported).not.toContain('private draft body');
     expect(exported).not.toContain('a@example.com');
     expect(telemetry.warn).not.toHaveBeenCalled();
+  });
+
+  it('puts a settlement that is repeated in the trace of its attempt', () => {
+    const queue = create();
+    const attempt = queue.attempt(claimed());
+    attempt.sent('live');
+    attempt.finish('ack-lost');
+    queue.attempt(claimed(), attempt).finish('committed');
+
+    expect(telemetry.spans).toMatchObject([
+      { name: 'graphql.mutation_queue.attempt', parent: undefined },
+      {
+        name: 'graphql.mutation_queue.attempt',
+        parent: 'graphql.mutation_queue.attempt',
+        attributes: {
+          'mutation_queue.send_mode': 'none',
+          'mutation_queue.outcome': 'committed',
+        },
+        events: [],
+      },
+    ]);
   });
 
   it("records the native engine's wait and hold for the enqueue and commit", () => {

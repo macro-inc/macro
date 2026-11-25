@@ -663,6 +663,7 @@ describe('CacheWorkerCore', () => {
       settlement: {
         status: 'permanently-failed',
         error: 'missing identity response id',
+        errorCode: 'LOCAL_COMMIT_FAILED',
       },
     },
     {

@@ -1,7 +1,7 @@
 //! Cacheable channel messages and embedded timeline/thread values.
 use async_graphql::{Enum, ID, Json, SimpleObject, Union};
 use chrono::{DateTime, SecondsFormat, Utc};
-use messages::domain::{models::*, ports::*};
+use messages::domain::{changes::ChannelMessageChange, models::*, ports::*};
 use uuid::Uuid;
 
 use crate::inputs::{encode_cursor, encode_reply_cursor};
@@ -100,6 +100,21 @@ pub struct GraphqlChannelThread {
     pub latest_reply_at: Option<String>,
     /// Oldest three live replies in server display order.
     pub preview: Vec<GraphqlChannelMessage>,
+}
+
+/// A channel message mutation's result: the written message, and for a reply
+/// its root with the thread summary that now counts it.
+#[derive(SimpleObject)]
+pub struct GraphqlChannelMessageWrite {
+    /// The message as the reads return it.
+    pub message: GraphqlChannelMessage,
+    /// The reply's root; absent for a root, and when the root could not be
+    /// read back after the write committed.
+    pub root: Option<GraphqlChannelMessage>,
+    /// Channel position both include every change up to, encoded as in
+    /// `channelChanges`: the one this write committed, or, when there was
+    /// nothing left to write, the channel's position before the read.
+    pub seq: String,
 }
 
 /// Canonical channel message, shared by pages, item reads, and change replay.
@@ -247,6 +262,16 @@ impl GraphqlChannelMessage {
         });
         message.call = call.map(Into::into);
         message
+    }
+
+    /// Map a changed message as a changes page and a live update carry it.
+    pub(crate) fn from_change(change: ChannelMessageChange, channel_id: Uuid) -> Self {
+        match change {
+            ChannelMessageChange::Root { message, call } => {
+                Self::from_item(*message, channel_id, call)
+            }
+            ChannelMessageChange::Reply { message } => Self::from_message(*message, channel_id),
+        }
     }
 }
 

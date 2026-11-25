@@ -17,7 +17,7 @@ import {
   refetchSoupEntity,
   type SoupTransaction,
 } from '@queries/soup/normalized-cache';
-import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import { withCallbacks } from '@queries/utils';
 import type { MessageAttachment } from '@service-storage/generated/schemas/messageAttachment';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
@@ -36,7 +36,15 @@ import { useMutation } from '@tanstack/solid-query';
 import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
+import {
+  deleteFromDevice,
+  deviceOrRest,
+  editFromDevice,
+  type MessageWrite,
+  sendFromDevice,
+} from './device-writes';
 import { MessageNonceKeys } from './keys';
+import { channelCacheHostFor } from './local/channel-flag';
 import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
@@ -421,17 +429,13 @@ type SendMessageContext = {
 /**
  * Mutation to send an channel message.
  */
-export function useSendMessageMutation(
-  callbacks?: MutationCallbacks<
-    EntityMessage,
-    Error,
-    SendMessageParams,
-    SendMessageContext
-  >
-) {
+export function useSendMessageMutation(): MessageWrite<
+  SendMessageParams,
+  EntityMessage
+> {
   const analytics = useAnalytics();
 
-  return useMutation(() => ({
+  const rest = useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
       // The server keeps optimisticId as the message id, so the optimistic
@@ -557,10 +561,33 @@ export function useSendMessageMutation(
           );
         },
       },
-      callbacks,
+      undefined,
       (variables) => variables.parentSpan
     ),
   }));
+  return deviceOrRest((vars) => {
+    // The device has no anchored messages.
+    const host = vars.message.anchor
+      ? undefined
+      : channelCacheHostFor(vars.parent);
+    return (
+      host &&
+      sendFromDevice(
+        host,
+        {
+          channelId: vars.parent.id,
+          id: vars.optimisticId,
+          senderId: vars.senderId,
+          message: vars.message,
+        },
+        {
+          analytics,
+          parentSpan: vars.parentSpan,
+          onOptimisticInsert: vars.onOptimisticInsert,
+        }
+      )
+    );
+  }, rest);
 }
 
 type DeleteMessageParams = {
@@ -579,15 +606,11 @@ const deleteNonce = createMutationNonce<DeleteMessageParams>(
 /**
  * Mutation to delete a channel message
  */
-export function useDeleteMessageMutation(
-  callbacks?: MutationCallbacks<
-    EntityMessage,
-    Error,
-    DeleteMessageParams,
-    DeleteMutationContext
-  >
-) {
-  return useMutation(() => ({
+export function useDeleteMessageMutation(): MessageWrite<
+  DeleteMessageParams,
+  EntityMessage | undefined
+> {
+  const rest = useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
       return entityMessagesClient.delete(
@@ -601,46 +624,53 @@ export function useDeleteMessageMutation(
       Error,
       DeleteMessageParams,
       DeleteMutationContext
-    >(
-      {
-        onMutate: async (vars) => {
-          deleteNonce.prepare(vars);
-          await queryClient.cancelQueries({
-            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
-          });
-          return optimisticDeleteMessage({
-            parent: vars.parent,
-            message_id: vars.messageID,
-            threadId: vars.threadID,
-          });
-        },
-        onSuccess(data, _vars, context) {
-          applyRootDeletion(data, context?.threadState);
-          // The deleted message may have referenced a CRM record.
-          fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
-        },
-        onError(error, vars, context) {
-          console.error('failed to delete message', error);
-          toast.failure('Failed to delete message');
-          if (context) {
-            rollbackDeleteMessage(vars.parent, context);
-          }
-        },
-        onSettled: (_data, _error, vars) => {
-          deleteNonce.cleanup(vars);
-          softInvalidateTargetCaches(
-            vars.parent,
-            resolveMessageTarget({
-              parent: vars.parent,
-              messageId: vars.messageID,
-              threadId: vars.threadID,
-            })
-          );
-        },
+    >({
+      onMutate: async (vars) => {
+        deleteNonce.prepare(vars);
+        await queryClient.cancelQueries({
+          queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
+        });
+        return optimisticDeleteMessage({
+          parent: vars.parent,
+          message_id: vars.messageID,
+          threadId: vars.threadID,
+        });
       },
-      callbacks
-    ),
+      onSuccess(data, _vars, context) {
+        applyRootDeletion(data, context?.threadState);
+        // The deleted message may have referenced a CRM record.
+        fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
+      },
+      onError(error, vars, context) {
+        console.error('failed to delete message', error);
+        toast.failure('Failed to delete message');
+        if (context) {
+          rollbackDeleteMessage(vars.parent, context);
+        }
+      },
+      onSettled: (_data, _error, vars) => {
+        deleteNonce.cleanup(vars);
+        softInvalidateTargetCaches(
+          vars.parent,
+          resolveMessageTarget({
+            parent: vars.parent,
+            messageId: vars.messageID,
+            threadId: vars.threadID,
+          })
+        );
+      },
+    }),
   }));
+  return deviceOrRest((vars) => {
+    const host = channelCacheHostFor(vars.parent);
+    return (
+      host &&
+      deleteFromDevice(host, {
+        channelId: vars.parent.id,
+        id: vars.messageID,
+      })
+    );
+  }, rest);
 }
 
 type PatchMessageParams = {
@@ -662,15 +692,11 @@ const patchNonce = createMutationNonce<PatchMessageParams>(
 /**
  * Mutation to patch a channel message
  */
-export function usePatchMessageMutation(
-  callbacks?: MutationCallbacks<
-    EntityMessage,
-    Error,
-    PatchMessageParams,
-    PatchMutationContext
-  >
-) {
-  return useMutation(() => ({
+export function usePatchMessageMutation(): MessageWrite<
+  PatchMessageParams,
+  EntityMessage | undefined
+> {
+  const rest = useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PatchMessageParams) => {
       return entityMessagesClient.patch(vars.parent, vars.messageID, {
@@ -691,47 +717,58 @@ export function usePatchMessageMutation(
       Error,
       PatchMessageParams,
       PatchMutationContext
-    >(
-      {
-        onMutate: async (vars) => {
-          patchNonce.prepare(vars);
-          await queryClient.cancelQueries({
-            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
-          });
-          return optimisticUpdateMessage({
-            parent: vars.parent,
-            message_id: vars.messageID,
-            content: vars.content,
-            attachment_ids_to_delete: vars.attachmentIDsToDelete,
-            attachments_to_add: vars.attachmentsToAdd,
-          });
-        },
-        onSuccess(data) {
-          applyMessage(data, 'edited');
-          // An edit can add or remove a CRM record reference.
-          fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
-        },
-        onError(error, vars, context) {
-          console.error('failed to update message', error);
-          toast.failure('Failed to update message');
-          if (context) {
-            rollbackUpdateMessage(vars.parent, context);
-          }
-        },
-        onSettled: (_data, _error, vars) => {
-          patchNonce.cleanup(vars);
-          softInvalidateTargetCaches(
-            vars.parent,
-            resolveMessageTarget({
-              parent: vars.parent,
-              messageId: vars.messageID,
-            })
-          );
-        },
+    >({
+      onMutate: async (vars) => {
+        patchNonce.prepare(vars);
+        await queryClient.cancelQueries({
+          queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
+        });
+        return optimisticUpdateMessage({
+          parent: vars.parent,
+          message_id: vars.messageID,
+          content: vars.content,
+          attachment_ids_to_delete: vars.attachmentIDsToDelete,
+          attachments_to_add: vars.attachmentsToAdd,
+        });
       },
-      callbacks
-    ),
+      onSuccess(data) {
+        applyMessage(data, 'edited');
+        // An edit can add or remove a CRM record reference.
+        fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
+      },
+      onError(error, vars, context) {
+        console.error('failed to update message', error);
+        toast.failure('Failed to update message');
+        if (context) {
+          rollbackUpdateMessage(vars.parent, context);
+        }
+      },
+      onSettled: (_data, _error, vars) => {
+        patchNonce.cleanup(vars);
+        softInvalidateTargetCaches(
+          vars.parent,
+          resolveMessageTarget({
+            parent: vars.parent,
+            messageId: vars.messageID,
+          })
+        );
+      },
+    }),
   }));
+  return deviceOrRest((vars) => {
+    const host = channelCacheHostFor(vars.parent);
+    return (
+      host &&
+      editFromDevice(host, {
+        channelId: vars.parent.id,
+        id: vars.messageID,
+        content: vars.content,
+        mentions: vars.mentions,
+        removeAttachmentIds: vars.attachmentIDsToDelete ?? [],
+        addAttachments: vars.attachmentsToAdd ?? [],
+      })
+    );
+  }, rest);
 }
 
 export function usePatchThreadMutation() {

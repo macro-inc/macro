@@ -33,7 +33,10 @@ import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
-import { clearComposerStorage } from './clear-composer-storage';
+import {
+  clearComposerStorage,
+  endComposerStorageClear,
+} from './clear-composer-storage';
 import { unregisterPushRegistrationsForLogout } from './push-registration-lifecycle';
 
 const unauthenticatedUserInfo: UserInfoData = {
@@ -58,44 +61,54 @@ export function clearLocalAuthSession(
   cause: 'logout' | 'session-expired' = 'logout'
 ) {
   return clearRegisteredCaches(async (clearCaches) => {
-    const diagnosticsCleared = clearNativeDiagnostics();
-    clearPipedreamCallbacks();
-    document.cookie =
-      'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
-    setEmailOutboxSession(undefined);
-    syncLoginStorage(false);
-    const documentContextsCleared = clearOfflineDocumentContexts();
-    clearDocumentQueryCache(queryClient);
-    clearTeamCalendarQueries();
-    // Start every wipe before waiting, including stores not hydrated this session.
-    const results = await Promise.allSettled([
-      diagnosticsCleared,
-      // Reads the queue before the cache wipe below deletes it.
-      recordGraphqlMutationQueueCleared(cause),
-      Promise.resolve().then(clearComposerStorage),
-      documentContextsCleared,
-      // Publishing a signed-out query can retire the physical cache host.
-      // Keep that publication behind its write drain and storage cleanup.
-      (async () => {
-        try {
-          await clearCaches();
-        } finally {
-          await queryPersistence.clear();
-        }
-      })(),
-      clearLocalDrafts(),
-    ]);
-    if (results.some((result) => result.status === 'rejected')) {
-      await rotateCacheScope();
+    try {
+      await wipeLocalSession(clearCaches, cause);
+    } finally {
+      // Even after a failed wipe: a fence left up would keep every composer
+      // from saving a draft until the page reloads.
+      endComposerStorageClear();
     }
-    // Only after the wipes: clearing the cache needs its registered host.
-    setGraphqlSoupSessionActive(false);
-    resetGraphqlSoupDoneSession();
-    queryClient.setQueryData(
-      authKeys.userInfo.queryKey,
-      unauthenticatedUserInfo
-    );
   });
+}
+
+async function wipeLocalSession(
+  clearCaches: () => Promise<void>,
+  cause: 'logout' | 'session-expired'
+): Promise<void> {
+  const diagnosticsCleared = clearNativeDiagnostics();
+  clearPipedreamCallbacks();
+  document.cookie =
+    'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
+  setEmailOutboxSession(undefined);
+  syncLoginStorage(false);
+  const documentContextsCleared = clearOfflineDocumentContexts();
+  clearDocumentQueryCache(queryClient);
+  clearTeamCalendarQueries();
+  // Start every wipe before waiting, including stores not hydrated this session.
+  const results = await Promise.allSettled([
+    diagnosticsCleared,
+    // Reads the queue before the cache wipe below deletes it.
+    recordGraphqlMutationQueueCleared(cause),
+    Promise.resolve().then(clearComposerStorage),
+    documentContextsCleared,
+    // Publishing a signed-out query can retire the physical cache host.
+    // Keep that publication behind its write drain and storage cleanup.
+    (async () => {
+      try {
+        await clearCaches();
+      } finally {
+        await queryPersistence.clear();
+      }
+    })(),
+    clearLocalDrafts(),
+  ]);
+  if (results.some((result) => result.status === 'rejected')) {
+    await rotateCacheScope();
+  }
+  // Only after the wipes: clearing the cache needs its registered host.
+  setGraphqlSoupSessionActive(false);
+  resetGraphqlSoupDoneSession();
+  queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
 }
 
 export function useLogout() {

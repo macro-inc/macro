@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { createRipeIds } from '@core/util/debounce';
 import {
   isGraphqlServerFault,
   isTransientRequestError,
@@ -21,6 +22,9 @@ import {
   unreadThreads,
 } from './unread-thread-navigation';
 
+/** How long the device path waits for a pushed message to show. */
+const UNREAD_ROOT_SETTLE_MS = 1_000;
+
 /** Data and viewport wiring for the channel's unread navigation affordance. */
 export function createChannelUnreadNavigation(options: {
   channelId: string;
@@ -31,6 +35,11 @@ export function createChannelUnreadNavigation(options: {
   container: Accessor<HTMLElement | undefined>;
   insets: Accessor<{ start: number; end: number }>;
   onDestinationsChanged: () => void;
+  /**
+   * Whether a pushed message reaches `messages` only after a reread (the
+   * device path), so its notification can arrive before it does.
+   */
+  followsPushes?: Accessor<boolean>;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const channelNotifications = createChannelNotificationsQuery(
@@ -66,12 +75,26 @@ export function createChannelUnreadNavigation(options: {
   // A reply's timestamp says nothing about where its parent sits in history.
   // Only the first unloaded unread parent can become the next target.
   // Resolve it without loading entire timelines or every offscreen thread.
+  const unloadedRoots = () => {
+    const loaded = new Set(options.messages().map((message) => message.id));
+    return unread()
+      .map((thread) => thread.threadId)
+      .filter((threadId) => !loaded.has(threadId));
+  };
+  // A pushed message shows once the device has reread it, which its
+  // notification can beat: a parent is asked for only once it has been
+  // missing for a while, or every push fetches its own message again. Each
+  // parent keeps its own clock, so a channel whose pushes never stop still
+  // looks an older parent up.
+  const ripeRoots = createRipeIds(unloadedRoots, UNREAD_ROOT_SETTLE_MS);
+  const unloadedRoot = createMemo(() =>
+    options.followsPushes?.() ? ripeRoots()[0] : unloadedRoots()[0]
+  );
   const unreadRoots = useMessageTimelineByIdsQuery(
     () => ({ type: 'channel', id: options.channelId }),
     () => {
-      const loaded = new Set(options.messages().map((message) => message.id));
-      const target = unread().find((thread) => !loaded.has(thread.threadId));
-      return target ? [target.threadId] : [];
+      const root = unloadedRoot();
+      return root ? [root] : [];
     }
   );
   const unreadChip = createMemo(() => {

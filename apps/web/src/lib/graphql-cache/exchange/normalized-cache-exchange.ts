@@ -86,6 +86,7 @@ import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection
 import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
 import type { CacheHost } from '../host/types';
 import {
+  ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type CacheReadPriority,
   type CacheRevision,
   type ChannelCommitArgs,
@@ -127,6 +128,8 @@ import {
 } from './mutation-queue-telemetry';
 import type { QueryRevalidation } from './optimistic';
 import {
+  isOnlyQueued,
+  MutationNotQueuedError,
   normalizedEntityKey,
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
@@ -475,6 +478,18 @@ function operationCacheEffects(data: unknown): CacheEffect[] {
   );
 }
 
+/**
+ * Storage was replaced while an enqueue was out: the entry may be in either
+ * queue, as when an admitted enqueue loses its reply.
+ */
+function storageChangedDuringEnqueue(cause?: unknown): Error {
+  return Object.assign(
+    new Error('cache storage changed during enqueue', { cause }),
+    { errorCode: ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE }
+  );
+}
+
+/** A mutation's answer when it did not reach the queue, or might not have. */
 function unsentEnqueueResult(op: Operation, error: Error): OperationResult {
   return {
     operation: op,
@@ -1297,10 +1312,19 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         const epoch = mutationQueue.epoch();
-        if (host.disabled) {
-          notifyOptimisticMutationEnqueued(op);
+        /** The queue did not take it: straight out, unless it may not go. */
+        const passQueue = (cause?: unknown): OperationResult | undefined => {
+          if (isOnlyQueued(op))
+            return unsentEnqueueResult(
+              op,
+              new MutationNotQueuedError({ cause })
+            );
           enqueueForward(op);
           return undefined;
+        };
+        if (host.disabled) {
+          if (!isOnlyQueued(op)) notifyOptimisticMutationEnqueued(op);
+          return passQueue();
         }
         // Reconstructed startup retries already have a durable transaction.
         if (queueAttemptOf(op)) {
@@ -1351,12 +1375,7 @@ export function normalizedCacheExchange(
           }
           if (!mutationQueue.isCurrent(epoch)) {
             enqueueTelemetry.failed('storage-changed');
-            return unsentEnqueueResult(
-              op,
-              new Error('cache storage changed during enqueue', {
-                cause: error,
-              })
-            );
+            return unsentEnqueueResult(op, storageChangedDuringEnqueue(error));
           }
           if (isAdmittedEnqueueUncertainError(error)) {
             enqueueTelemetry.failed('uncertain');
@@ -1369,8 +1388,7 @@ export function normalizedCacheExchange(
           // an engine. Send it as a disabled cache would.
           if (isOwnerLockUnavailableError(error)) {
             enqueueTelemetry.failed('owner-lock');
-            enqueueForward(op);
-            return undefined;
+            return passQueue(error);
           }
           // A cached bin/page may disappear between inspect and enqueue. Do
           // not expose a partial relation move: retain entity optimism and
@@ -1378,8 +1396,7 @@ export function normalizedCacheExchange(
           if (args.linkPatches.length === 0) {
             enqueueTelemetry.failed('rejected');
             options.onCacheError?.(error, op);
-            enqueueForward(op);
-            return undefined;
+            return passQueue(error);
           }
           linkPatchesDegraded = true;
           // Deliberately loud: this fallback is durable but invisible until
@@ -1424,9 +1441,7 @@ export function normalizedCacheExchange(
               enqueueTelemetry.failed('storage-changed');
               return unsentEnqueueResult(
                 op,
-                new Error('cache storage changed during enqueue', {
-                  cause: fallbackError,
-                })
+                storageChangedDuringEnqueue(fallbackError)
               );
             }
             options.onCacheError?.(fallbackError, op);
@@ -1435,16 +1450,12 @@ export function normalizedCacheExchange(
               return unsentEnqueueResult(op, fallbackError);
             }
             enqueueTelemetry.failed('rejected');
-            enqueueForward(op);
-            return undefined;
+            return passQueue(fallbackError);
           }
         }
         if (!mutationQueue.isCurrent(epoch)) {
           enqueueTelemetry.failed('storage-changed');
-          return unsentEnqueueResult(
-            op,
-            new Error('cache storage changed during enqueue')
-          );
+          return unsentEnqueueResult(op, storageChangedDuringEnqueue());
         }
         enqueueTelemetry.persisted({
           transactionId: enqueue.transactionId,

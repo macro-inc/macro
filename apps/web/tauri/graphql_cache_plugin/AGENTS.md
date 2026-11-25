@@ -40,6 +40,7 @@ From the repository root:
   the distinct `graphql_cache_hydrate_scoped` command. Never fall back to the
   deployed unscoped command after a guarded-write failure. Register new commands
   in `../src-tauri/src/lib.rs` as well as defining their plugin handler.
+- A mutation settlement carries `errorCode: "LOCAL_COMMIT_FAILED"` when the server took the mutation and the commit failed here (mirrors `protocol.ts`). Older binaries omit it, so new bundles treat its absence as an ordinary failure.
 - Keep `apps/web/tauri/Cargo.lock` current when shared client dependencies change.
 - Preserve the deployed command contract when an older bundle omits `generation`; reject older supplied generations under the shared owner lock. New bundles always stamp response writes and require the transition capability. Cover legacy omission through the registered invoke handler, including a subsequent read. Native build floors protect new bundles on old binaries, not old bundles on new binaries.
 - Resume incomplete retirement before retained live-view reads. Publish generation changes under the owner lock, including recovery and account replacement, so an older notification cannot reactivate a retired generation. First account binding without a stored policy preserves the generation and emits no transition for stamped writes. Publish the shared core's cached authority after the atomic account/authority write; do not turn a committed write into a failure with post-commit storage I/O.

@@ -76,6 +76,7 @@ import {
 } from './normalized-cache-exchange';
 import {
   executeOptimisticMutation,
+  MutationNotQueuedError,
   optimisticContextOf,
   optimisticMutationDispositionOf,
 } from './optimistic';
@@ -5699,7 +5700,11 @@ describe('normalizedCacheExchange', () => {
             optimisticMutationDispositionOf(
               results.find((result) => result.operation.key === 1)!
             )
-          ).toEqual({ kind: 'queued', transactionId: '1' });
+          ).toEqual({
+            kind: 'queued',
+            transactionId: '1',
+            confirmed: { from: 'network' },
+          });
           // A runnable successor is sent immediately, but an unsettled head's
           // existing lease must never be stolen or its network call duplicated.
           expect(forwarded).toHaveLength(committed ? 2 : 1);
@@ -5766,8 +5771,9 @@ describe('normalizedCacheExchange', () => {
         ops.next(makeMutationOp(1, optimistic));
         await vi.advanceTimersByTimeAsync(1);
         ops.next(makeMutationOp(2, optimistic));
-        // The confirmed head is reclaimed once its lease expires.
-        await vi.advanceTimersByTimeAsync(300_000);
+        // This host does not say whose claim the head is, so the confirmed head
+        // is reclaimed at the first poll after its lease expires.
+        await vi.advanceTimersByTimeAsync(330_000);
 
         expect(events).toEqual([
           'admit 1',
@@ -5915,6 +5921,98 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
     });
 
+    it('answers for an only-queued mutation when the host is disabled', async () => {
+      const enqueued = vi.fn();
+      const disabledHost: CacheHost = { ...host, disabled: true };
+      const { ops, forwarded, results } = controlledQueryHarness(disabledHost);
+      const base = makeMutationOp(1, optimistic);
+      ops.next(
+        makeOperation(base.kind, base, {
+          ...base.context,
+          normalizedCacheOptimisticEnqueued: enqueued,
+          normalizedCacheOnlyQueued: true,
+        })
+      );
+      await tick();
+
+      expect(forwarded).toEqual([]);
+      expect(enqueued).not.toHaveBeenCalled();
+      expect(results.map(({ error }) => error?.networkError)).toEqual([
+        expect.any(MutationNotQueuedError),
+      ]);
+    });
+
+    it.each([
+      { refusal: 'owner lock', errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE },
+      { refusal: 'plain', errorCode: undefined },
+      {
+        refusal: 'link patches and their fallback',
+        linkPatches: [
+          {
+            query:
+              'query Group { user { groupSoup { bins { items { id } } } } }',
+            operationName: 'Group',
+            variablesJson: '{}',
+            path: [
+              { field: 'user' },
+              { field: 'groupSoup' },
+              { field: 'bins' },
+            ],
+            operation: {
+              kind: 'remove' as const,
+              entityKey: 'GraphqlSoupItem:task-1',
+            },
+          },
+        ],
+      },
+    ])(
+      'sends a mutation its queue refused straight out, unless only queued ($refusal)',
+      async ({ errorCode, linkPatches = [] }) => {
+        const enqueued = vi.fn();
+        const warn = vi
+          .spyOn(console, 'warn')
+          .mockImplementation(() => undefined);
+        const base = makeMutationOp(1, optimistic);
+        host.enqueueOptimisticMutation = vi
+          .fn()
+          .mockRejectedValue(
+            Object.assign(new Error('refused'), errorCode && { errorCode })
+          );
+        const { ops, forwarded, results } = controlledQueryHarness(host);
+        const send = (onlyQueued: boolean) =>
+          ops.next(
+            makeOperation(base.kind, base, {
+              ...base.context,
+              normalizedCacheOptimistic: {
+                uuid: crypto.randomUUID(),
+                optimisticResponse: optimistic,
+                linkPatches,
+                revalidations: [],
+              },
+              normalizedCacheOptimisticEnqueued: enqueued,
+              normalizedCacheOnlyQueued: onlyQueued,
+            })
+          );
+        try {
+          send(false);
+          await tick();
+          // Sent, and not yet answered.
+          expect(forwarded).toHaveLength(1);
+          expect(results).toEqual([]);
+
+          send(true);
+          await tick();
+          expect(forwarded).toHaveLength(1);
+          expect(results.map(({ error }) => error?.networkError)).toEqual([
+            expect.any(MutationNotQueuedError),
+          ]);
+          expect(enqueued).not.toHaveBeenCalled();
+        } finally {
+          warn.mockRestore();
+        }
+      }
+    );
+
     it('acknowledges cache installation independently of the network result', async () => {
       const acknowledge = vi.fn();
       const enqueue = host.enqueueOptimisticMutation.bind(host);
@@ -5988,6 +6086,25 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded).toHaveLength(0);
       expect(results).toHaveLength(1);
       expect(results[0]?.error?.networkError).toMatchObject({
+        errorCode: 'admitted-enqueue-uncertain',
+      });
+    });
+
+    it('marks an enqueue that storage changed under as uncertain too', async () => {
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = async (args, claim) => {
+        const queued = await enqueue(args, claim);
+        host.pushGeneration({ storage: 'reset', queue: 'reset' });
+        return queued;
+      };
+      const { ops, results, forwarded } = harness(host);
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(forwarded).toHaveLength(0);
+      expect(results[0]?.error?.networkError).toMatchObject({
+        message: 'cache storage changed during enqueue',
         errorCode: 'admitted-enqueue-uncertain',
       });
     });

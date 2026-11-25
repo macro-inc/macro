@@ -19,7 +19,6 @@ type ThreadReplyInputProps = {
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
   setIsReplying: Setter<boolean>;
-  replyInputHandle?: Accessor<InputHandle | undefined>;
   setReplyInputEl?: Setter<HTMLElement | undefined>;
   setReplyInputHandle?: Setter<InputHandle | undefined>;
   focusRequest?: FocusRequest;
@@ -76,7 +75,6 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
               threadId={props.messageId}
               replyInputState={props.replyInputState}
               setReplyInputState={props.setReplyInputState}
-              replyInputHandle={props.replyInputHandle}
               setReplyInputHandle={props.setReplyInputHandle}
               focusRequest={props.focusRequest}
               onReady={setLocalReplyInputHandle}

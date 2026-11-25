@@ -172,6 +172,64 @@ describe('GraphQL mutation retries', () => {
     });
   });
 
+  describe('channel writes', () => {
+    const write = (operationName: string) => ({
+      transactionId: '1',
+      uuid: crypto.randomUUID(),
+      operationName,
+    });
+    const unavailable = new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'the written message could not be read back',
+          extensions: { code: 'SERVICE_UNAVAILABLE' },
+        },
+      ],
+    });
+
+    it.each(['SendChannelMessage', 'DeleteChannelMessage'])(
+      'replays %s the server could not answer',
+      (operationName) => {
+        expect(
+          shouldRetryGraphqlMutation(unavailable, write(operationName))
+        ).toBe(true);
+      }
+    );
+
+    // A replay compares the old request with what another device wrote since
+    // and writes the old content or reaction back.
+    it.each(['EditChannelMessage', 'ReactToChannelMessage'])(
+      'does not replay %s, which could undo a newer write',
+      (operationName) => {
+        expect(
+          shouldRetryGraphqlMutation(unavailable, write(operationName))
+        ).toBe(false);
+      }
+    );
+
+    it.each([
+      'FORBIDDEN',
+      'BAD_USER_INPUT',
+      'CONFLICT',
+      'INTERNAL_SERVER_ERROR',
+    ])('does not retry a %s refusal', (code) => {
+      expect(
+        shouldRetryGraphqlMutation(
+          new CombinedError({
+            graphQLErrors: [{ message: 'refused', extensions: { code } }],
+          }),
+          write('SendChannelMessage')
+        )
+      ).toBe(false);
+    });
+
+    it('does not retry an unavailable server on another mutation', () => {
+      expect(
+        shouldRetryGraphqlMutation(unavailable, write('SetEmailThreadArchived'))
+      ).toBe(false);
+    });
+  });
+
   it('does not retry a response that also contains a permanent rejection', () => {
     expect(
       shouldRetryGraphqlMutation(

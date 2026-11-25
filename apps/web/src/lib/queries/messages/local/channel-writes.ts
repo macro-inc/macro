@@ -1,0 +1,1678 @@
+import { anyAbortSignal } from '@core/util/abort-signal';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import {
+  executeOptimisticMutation,
+  LocalCommitFailedError,
+  MutationNotQueuedError,
+  type OptimisticResponse,
+  optimisticMutationDispositionOf,
+} from '@graphql-cache/exchange/optimistic';
+import type { CacheGenerationChange } from '@graphql-cache/host/types';
+import type { CacheHost } from '@graphql-cache/index';
+import {
+  isAdmittedEnqueueUncertainError,
+  isEngineAbsentError,
+  isWriteNotAdmittedError,
+  LOCAL_COMMIT_FAILED,
+  type MutationSettlement,
+} from '@graphql-cache/protocol';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
+import {
+  ChannelMessageDocument,
+  type ChannelMessageFieldsFragment,
+  type ChannelMessageWriteFieldsFragment,
+  DeleteChannelMessageDocument,
+  type DeleteChannelMessageMutation,
+  EditChannelMessageDocument,
+  type EditChannelMessageMutation,
+  ReactToChannelMessageDocument,
+  type ReactToChannelMessageMutation,
+  SendChannelMessageDocument,
+  type SendChannelMessageMutation,
+} from '@service-storage/graphql/generated/graphql';
+import type { Message, PostMessage } from '@service-storage/messages';
+import type {
+  AnyVariables,
+  Client,
+  CombinedError,
+  OperationResult,
+} from '@urql/core';
+import * as Deferred from 'effect/Deferred';
+import * as Effect from 'effect/Effect';
+import { untrack } from 'solid-js';
+import { createStore, produce, unwrap } from 'solid-js/store';
+import {
+  CHANNEL_MESSAGE_TYPENAME,
+  channelMessageKey,
+  mapChannelMessage,
+  mapChannelTimelineEntry,
+  timestampMicros,
+  unplacedSortKey,
+} from './channel-map';
+import { queryChannelNetwork } from './channel-network';
+import type { ChannelPageEntry } from './channel-pages';
+import { readStoredMessage, readTimelineRecords } from './channel-pages';
+import type { ChannelSyncRuntime } from './channel-sync-runtime';
+
+const WRITE_TYPENAME = 'GraphqlChannelMessageWrite';
+const SEND_OPERATION = 'channel.write.send';
+/** The queue's code for a write it stopped retrying. */
+const RETRY_EXHAUSTED = 'MUTATION_RETRY_EXHAUSTED';
+/** Codes of a write whose queue can no longer say what became of it. */
+const QUEUE_LOST = ['CACHE_RESET', 'CACHE_RETIRED'];
+/**
+ * How long a write the retired host had acknowledged waits for its answer: its
+ * request may be in flight, but nothing promises that it is.
+ */
+const RETIRED_ANSWER_BUDGET_MS = 10_000;
+/**
+ * The longest wait before a write no engine was there for is handed over
+ * again, in case nothing says that one is: doubling from the first to the
+ * second.
+ */
+const NEXT_ENGINE_WAIT_MS = 250;
+const NEXT_ENGINE_WAIT_MAX_MS = 4_000;
+/**
+ * The server's code for a write it could not finish, which it may have
+ * committed before it could not read the answer back.
+ */
+const SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE';
+/** Waits before asking the server again whether it has a send. */
+const SERVER_LOOKUP_RETRIES_MS = [500, 1_000];
+/**
+ * How long one such question waits for the server: an unanswered request is
+ * cancelled, so the next question sends a fresh one rather than joining it.
+ */
+const SERVER_LOOKUP_BUDGET_MS = 10_000;
+/**
+ * How long a server copy of a send then waits to be stored on the device
+ * before it answers anyway; the server's answer is what decides the send.
+ */
+const SERVER_COPY_STORE_BUDGET_MS = 5_000;
+
+/**
+ * Reads one message from the server; null when the server does not have it.
+ * `signal` cancels the request. `storedLate` runs once a copy that answered
+ * before the device stored it is stored after all.
+ */
+export type FetchChannelMessage = (
+  channelId: string,
+  messageId: string,
+  signal: AbortSignal,
+  storedLate?: () => void
+) => Promise<ChannelMessageFieldsFragment | null>;
+
+/** Whether the device stored a read; a failure is reported, not thrown. */
+async function storeOutcome(cached: Promise<unknown>): Promise<boolean> {
+  try {
+    await cached;
+    return true;
+  } catch (error) {
+    Telemetry.error(error, { surface: 'channel-writes' });
+    return false;
+  }
+}
+
+async function whenStoredLate(
+  storing: Promise<boolean>,
+  storedLate: (() => void) | undefined
+): Promise<void> {
+  if (await storing) storedLate?.();
+}
+
+type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
+
+async function settle<T>(promise: Promise<T>): Promise<Settled<T>> {
+  try {
+    return { ok: true, value: await promise };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+const fetchServerMessage: FetchChannelMessage = async (
+  channelId,
+  messageId,
+  signal,
+  storedLate
+) => {
+  // Cancelled when unanswered within the budget: urql would hand the next
+  // question the same request rather than send a new one.
+  const request = new AbortController();
+  const answer = await Effect.runPromise(
+    Effect.timeoutOrElse(
+      Effect.promise(() =>
+        settle(
+          queryChannelNetwork(
+            ChannelMessageDocument,
+            { channelId, messageId },
+            { signal: anyAbortSignal([signal, request.signal]) }
+          )
+        )
+      ),
+      {
+        duration: SERVER_LOOKUP_BUDGET_MS,
+        orElse: () =>
+          Effect.sync(() => {
+            request.abort();
+            return undefined;
+          }),
+      }
+    )
+  );
+  if (!answer) throw new Error('the server did not answer in time');
+  if (!answer.ok) throw answer.error;
+  const { data, cached } = answer.value;
+  const { message } = data.user.channelMessage;
+  // The views reread when the write ends, so the device should hold it then;
+  // a copy that could not be stored, or is still storing after
+  // `SERVER_COPY_STORE_BUDGET_MS`, is still the answer; one stored after that
+  // tells the views again, since their reread came before it.
+  const storing = storeOutcome(cached);
+  const inTime = await Effect.runPromise(
+    Effect.timeoutOrElse(
+      Effect.promise(() => storing),
+      {
+        duration: SERVER_COPY_STORE_BUDGET_MS,
+        orElse: () => Effect.succeed(undefined),
+      }
+    )
+  );
+  // Only a copy found: an empty answer stores nothing the views would show.
+  if (inTime === undefined && message)
+    fireAndForget(whenStoredLate(storing, storedLate), 'channel-writes');
+  return message;
+};
+
+export type ChannelWriteHost = Pick<
+  CacheHost,
+  | 'onMutationSettled'
+  | 'onCacheGenerationChanged'
+  | 'readRecordsByKeys'
+  | 'inspectMutations'
+  | 'paused'
+>;
+
+type Mention = { entity_type: string; entity_id: string };
+type Attachment = Mention & { width?: number | null; height?: number | null };
+type Reaction = { emoji: string; users: string[] };
+
+export interface ChannelSend {
+  channelId: string;
+  /** From `newMessageId`: the message's id, its nonce and its queue identity. */
+  id: string;
+  senderId: string;
+  message: Pick<
+    PostMessage,
+    'content' | 'thread_id' | 'mentions' | 'attachments'
+  >;
+}
+
+export interface ChannelEdit {
+  channelId: string;
+  id: string;
+  content: string;
+  mentions: readonly Mention[];
+  removeAttachmentIds: readonly string[];
+  addAttachments: readonly Attachment[];
+}
+
+export interface ChannelDelete {
+  channelId: string;
+  id: string;
+}
+
+export interface ChannelReaction {
+  channelId: string;
+  id: string;
+  emoji: string;
+  add: boolean;
+  /** The person reacting, to tell whose write it is and whether the device shows it. */
+  userId: string;
+  /** The message's reactions with this change applied, when the caller knows them. */
+  reactions?: readonly Reaction[];
+}
+
+export interface ChannelWritesDeps {
+  host: ChannelWriteHost;
+  runtime: Pick<ChannelSyncRuntime, 'notifyChanged'>;
+  client: () => Pick<Client, 'mutation'>;
+  /** The device clock, read once per write. */
+  now?: () => Date;
+  /** Reads a message from the server, to learn whether a send arrived. */
+  fetchMessage?: FetchChannelMessage;
+  /**
+   * Whether the session has the host in use. A host whose database came back
+   * is not in use again until its queue has been read.
+   */
+  serving?: () => boolean;
+  /**
+   * The sign-in the page is under: it changes when a sign-in replaces the
+   * session on the same host, which must not send, or show, what the old one
+   * asked for. Read reactively by the views of pending writes.
+   */
+  signIn?: () => number;
+  /**
+   * Whether a write asked for now is the signed-in person's, as far as the
+   * page knows: a composer can still act for the person before while a sign-in
+   * has not said who it is. `userId` is whose write it is, when it says.
+   */
+  mayWrite?: (userId: string | undefined) => boolean;
+}
+
+/** A reply this page sent, under its thread root. */
+type UnstoredReply = { rootId: string; message: Message };
+
+type PendingWrite = {
+  /** This write's alone: one asked for again after a sign-in has its uuid. */
+  key: number;
+  uuid: string;
+  /** The sign-in it was asked for under. */
+  signIn: number | undefined;
+  /** The row a send predicts, its replies not counted. */
+  predicted?: ChannelMessageFieldsFragment;
+  /** A root this device sent that the device does not show yet. */
+  unstored?: ChannelPageEntry;
+  /** A reply this device sent, shown in its thread until the device has it. */
+  reply?: UnstoredReply;
+  /** The message this write deletes, which no row kept here shows again. */
+  deletes?: string;
+};
+
+/**
+ * A write on the server answers with the message as it reads with the write;
+ * undefined when nothing here can read that. One that is not there rejects.
+ */
+type Written = Promise<Message | undefined>;
+
+export interface ChannelWrites {
+  send(send: ChannelSend): Promise<Message>;
+  edit(edit: ChannelEdit): Written;
+  remove(deletion: ChannelDelete): Written;
+  react(reaction: ChannelReaction): Written;
+  /** Whether this page is still sending the message. */
+  sending(messageId: string): boolean;
+  /** Writes this page made to the channel that have not reached the server. */
+  pendingCount(channelId: string): number;
+  /**
+   * Roots this page sent that the device has not stored yet, newest first:
+   * the device's queue can take seconds to store a write, and the message is
+   * on screen from the moment it is sent.
+   */
+  unstoredRoots: (channelId: string) => ChannelPageEntry[];
+  /** Replies this page sent to a thread, oldest first, the same way. */
+  unstoredReplies: (channelId: string, rootId: string) => Message[];
+  /**
+   * The host is retiring and will settle nothing more: fail every write still
+   * waiting for the queue, as a queue reset does when the queue cannot be
+   * read, instead of leaving it pending for good.
+   */
+  retire(): void;
+  /** The host's database is back after an outage: hands over the writes it kept. */
+  resumed(): void;
+}
+
+/** The messages that writes waiting here delete. A send's uuid is its message id. */
+const deletedIds = (writes: readonly PendingWrite[]): ReadonlySet<string> =>
+  new Set(writes.flatMap((write) => (write.deletes ? [write.deletes] : [])));
+
+/** Ends a settlement wait with the refusal it carries. */
+type Lost = Deferred.Deferred<never, ThrownResultError>;
+
+const mentionInput = (mention: Mention) => ({
+  entityType: mention.entity_type,
+  entityId: mention.entity_id,
+});
+
+const attachmentInput = (attachment: Attachment) => ({
+  entityType: attachment.entity_type,
+  entityId: attachment.entity_id,
+  width: attachment.width ?? null,
+  height: attachment.height ?? null,
+});
+
+/** The refusal in the shape REST failures reach the message hooks in. */
+function refusal(code: string | undefined, message: string): ThrownResultError {
+  return new ThrownResultError([{ code: code ?? 'UNKNOWN', message }]);
+}
+
+const unknownDelivery = () =>
+  refusal(
+    'DELIVERY_UNKNOWN',
+    'the server could not say whether it has the send'
+  );
+
+const cacheRetired = () => refusal('CACHE_RETIRED', 'device cache was retired');
+
+/** Whether a write never reached the queue, and so goes nowhere. */
+const notQueued = (error: CombinedError | undefined) =>
+  error?.networkError instanceof MutationNotQueuedError ||
+  isWriteNotAdmittedError(error?.networkError);
+
+/**
+ * Whether a write never reached the queue because the engine was lost and the
+ * next one is not there yet. One that had reached the lost engine is instead
+ * an `admitted-enqueue-uncertain`.
+ */
+const foundNoEngine = (error: CombinedError | undefined) =>
+  error?.networkError instanceof MutationNotQueuedError &&
+  isEngineAbsentError(error.networkError.cause);
+
+/** What became of a write nothing more will be heard of. */
+const unanswered = (write: { operation: string }) =>
+  write.operation === SEND_OPERATION ? unknownDelivery() : cacheRetired();
+
+/**
+ * Whether a write that ended in `error` may be on the server all the same:
+ * its answer was lost on the way or not stored, or the server could not read
+ * back what it had committed.
+ */
+function mayHaveArrived(error: CombinedError): boolean {
+  if (notQueued(error)) return false;
+  if (error.networkError) return true;
+  return error.graphQLErrors.some(
+    ({ extensions }) => extensions.code === SERVICE_UNAVAILABLE
+  );
+}
+
+function refusalOf(error: CombinedError): ThrownResultError {
+  if (notQueued(error)) return refusal('NOT_QUEUED', error.message);
+  const code = error.graphQLErrors[0]?.extensions.code;
+  return refusal(
+    typeof code === 'string' ? code : error.networkError && 'NETWORK_ERROR',
+    error.message
+  );
+}
+
+/** First wait before asking an unanswering queue again, doubled up to the cap. */
+const QUEUE_RECHECK_MS = 1_000;
+const QUEUE_RECHECK_MAX_MS = 30_000;
+/**
+ * How long a reply or its delete waits for the device's copy of the root
+ * before it goes without the root: the server's answer brings the root then.
+ */
+const ROOT_READ_BUDGET_MS = 500;
+
+/**
+ * Waits for the queue to settle one write, or the transaction that replaced
+ * it. The write is its transaction and its mutation id: transaction ids
+ * restart when the queue is rebuilt, so a settlement or a queued entry for
+ * another mutation under the same transaction id is not this write's.
+ * Listening starts before the write is handed over, so a settlement that lands
+ * between the queue's answer and the wait is not missed. A retired host
+ * (`retired`, from `ChannelWrites.retire`) reports nothing more, so each wait
+ * races that.
+ *
+ * A page the browser suspended (the back/forward cache) hears no settlement
+ * while away, and another tab can deliver its write meanwhile. A host that
+ * comes back cannot tell what changed while it was frozen and may report its
+ * queue reset with it intact. So after any generation change, heard
+ * before or during the wait, the queue is asked: a write it still holds keeps
+ * waiting, and one that left it unheard ends as `missed`, whose outcome the
+ * caller reads from the device and then the server. A queue that cannot
+ * answer is asked again, backing off, since its settlement may already have
+ * gone by; after a queue reset it loses the write instead (`CACHE_RESET`).
+ * Storage wiped under a kept queue keeps the write in it.
+ */
+function watchSettlements(
+  host: ChannelWriteHost,
+  retired: Lost,
+  mutationUuid: string
+) {
+  const settlements = new Map<string, Deferred.Deferred<MutationSettlement>>();
+  // The transaction a settlement named this write's, for certain, under.
+  let heard: string | undefined;
+  const reset: Lost = Deferred.makeUnsafe();
+  const missed = Deferred.makeUnsafe<'missed'>();
+  let waiting: string | undefined;
+  // A generation change heard before the wait had a transaction to check.
+  let unchecked: CacheGenerationChange['queue'] | undefined;
+  let recheck: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+  const lost = () =>
+    Deferred.doneUnsafe(
+      reset,
+      Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
+    );
+  /**
+   * After the engine comes back, with its queue kept or (as a host that was
+   * suspended conservatively reports) reset, asks the queue: a write it still
+   * holds keeps waiting, and one that left it unheard is `missed`. Without an
+   * answer, a reset queue loses the write and a kept one is asked again later.
+   */
+  const checkQueued = async (
+    queueChange: CacheGenerationChange['queue'],
+    retryMs = QUEUE_RECHECK_MS
+  ) => {
+    const transactionId = waiting;
+    if (!transactionId) {
+      if (queueChange === 'reset' || !unchecked) unchecked = queueChange;
+      return;
+    }
+    let queue: Awaited<
+      ReturnType<NonNullable<ChannelWriteHost['inspectMutations']>>
+    >;
+    try {
+      if (!host.inspectMutations) throw new Error('queue cannot be listed');
+      queue = await host.inspectMutations();
+    } catch (error) {
+      if (queueChange === 'reset') {
+        lost();
+        return;
+      }
+      Telemetry.error(error, { surface: 'channel-writes' });
+      // A host that cannot list its queue never will: wait for the settlement.
+      if (!host.inspectMutations || stopped || waiting !== transactionId)
+        return;
+      clearTimeout(recheck);
+      recheck = setTimeout(
+        () =>
+          fireAndForget(
+            checkQueued(
+              queueChange,
+              Math.min(retryMs * 2, QUEUE_RECHECK_MAX_MS)
+            ),
+            'channel-writes'
+          ),
+        retryMs
+      );
+      return;
+    }
+    if (waiting !== transactionId) return;
+    if (
+      queue.some(
+        (entry) =>
+          entry.transactionId === transactionId && entry.uuid === mutationUuid
+      )
+    )
+      return;
+    Deferred.doneUnsafe(missed, Effect.succeed('missed' as const));
+  };
+  const settlementOf = (transactionId: string) => {
+    let deferred = settlements.get(transactionId);
+    if (!deferred) {
+      deferred = Deferred.makeUnsafe<MutationSettlement>();
+      settlements.set(transactionId, deferred);
+    }
+    return deferred;
+  };
+  const stopSettled = host.onMutationSettled((settlement) => {
+    if (
+      settlement.mutationUuid !== undefined &&
+      settlement.mutationUuid !== mutationUuid
+    )
+      return;
+    if (settlement.mutationUuid !== undefined)
+      heard ??= settlement.transactionId;
+    Deferred.doneUnsafe(
+      settlementOf(settlement.transactionId),
+      Effect.succeed(settlement)
+    );
+  });
+  const stopReset = host.onCacheGenerationChanged((change) => {
+    fireAndForget(checkQueued(change.queue), 'channel-writes');
+  });
+  const settledOrReset = (transactionId: string) =>
+    Effect.raceAllFirst([
+      Deferred.await(settlementOf(transactionId)),
+      Deferred.await(reset),
+      Deferred.await(retired),
+      Deferred.await(missed),
+    ]);
+  const committed = (
+    transactionId: string
+  ): Effect.Effect<'committed' | 'missed', ThrownResultError> =>
+    Effect.gen(function* () {
+      waiting = transactionId;
+      const storage = unchecked;
+      unchecked = undefined;
+      if (storage) fireAndForget(checkQueued(storage), 'channel-writes');
+      const settlement = yield* settledOrReset(transactionId);
+      if (settlement === 'missed') return settlement;
+      if (settlement.status === 'committed') return settlement.status;
+      if (settlement.status === 'permanently-failed') {
+        return yield* Effect.fail(
+          refusal(settlement.errorCode, settlement.error)
+        );
+      }
+      return yield* committed(settlement.replacementTransactionId);
+    });
+  return {
+    stop() {
+      stopped = true;
+      clearTimeout(recheck);
+      stopSettled();
+      stopReset();
+    },
+    heard: () => heard,
+    committed: (transactionId: string): Promise<'committed' | 'missed'> =>
+      Effect.runPromise(committed(transactionId)),
+  };
+}
+
+/**
+ * The row the device shows until the server's copy replaces it. It sorts after
+ * every message the server has placed, where the server will put it too unless
+ * someone else's message arrives first.
+ */
+export function predictedMessage(
+  send: ChannelSend,
+  createdAt: string
+): ChannelMessageFieldsFragment | undefined {
+  const threadId = send.message.thread_id ?? null;
+  const sortKey = unplacedSortKey(createdAt, send.id, threadId !== null);
+  if (!sortKey) return undefined;
+  return {
+    __typename: CHANNEL_MESSAGE_TYPENAME,
+    id: send.id,
+    channelId: send.channelId,
+    threadId,
+    kind: 'MESSAGE',
+    sortKey,
+    senderId: send.senderId,
+    guestName: null,
+    importedAuthorName: null,
+    botProfile: null,
+    mentions: (send.message.mentions ?? []).map(mentionInput),
+    triggeredBy: null,
+    triggeredVia: null,
+    content: send.message.content,
+    createdAt,
+    updatedAt: createdAt,
+    editedAt: null,
+    deletedAt: null,
+    attachments: (send.message.attachments ?? []).map((attachment, index) => ({
+      // The server mints attachment ids; these last until its copy arrives.
+      attachmentId: `${send.id}:${index}`,
+      entityType: attachment.entity_type,
+      entityId: attachment.entity_id,
+      width: attachment.width ?? null,
+      height: attachment.height ?? null,
+      createdAt,
+    })),
+    reactions: [],
+    thread: threadId
+      ? null
+      : {
+          resolved: false,
+          deletedAt: null,
+          createdAt,
+          updatedAt: createdAt,
+          userId: send.senderId,
+          replyCount: 0,
+          latestReplyAt: null,
+          preview: [],
+        },
+    call: null,
+  };
+}
+
+/** The server previews a thread with its oldest live replies, this many. */
+const THREAD_PREVIEW_LIMIT = 3;
+
+/** The root as it will read once the reply is on it. */
+export function predictedRoot(
+  root: ChannelMessageFieldsFragment,
+  reply: ChannelMessageFieldsFragment
+): ChannelMessageFieldsFragment {
+  if (!root.thread) return root;
+  // The preview is the oldest replies: the new one joins it only while the
+  // preview still holds every reply.
+  const { preview, replyCount } = root.thread;
+  const joinsPreview =
+    preview.length === replyCount && replyCount < THREAD_PREVIEW_LIMIT;
+  return {
+    ...root,
+    thread: {
+      ...root.thread,
+      preview: joinsPreview ? [...preview, reply] : preview,
+      replyCount: root.thread.replyCount + 1,
+      latestReplyAt: reply.createdAt,
+      updatedAt: reply.createdAt,
+    },
+  };
+}
+
+/**
+ * What a write of a reply changes of its root: the thread, which names the
+ * replies of its preview. What else is known of the messages stays the
+ * server's while the write is queued.
+ */
+function threadOnly(root: ChannelMessageFieldsFragment) {
+  return {
+    __typename: CHANNEL_MESSAGE_TYPENAME,
+    id: root.id,
+    thread: root.thread && {
+      ...root.thread,
+      preview: root.thread.preview.map(({ id }) => ({
+        __typename: CHANNEL_MESSAGE_TYPENAME,
+        id,
+      })),
+    },
+  };
+}
+
+/** The root as it will read once its live `reply` is deleted. */
+export function predictedRootWithout(
+  root: ChannelMessageFieldsFragment,
+  reply: Pick<ChannelMessageFieldsFragment, 'id' | 'createdAt'>
+): ChannelMessageFieldsFragment {
+  if (!root.thread) return root;
+  const preview = root.thread.preview.filter(({ id }) => id !== reply.id);
+  const replyCount = Math.max(0, root.thread.replyCount - 1);
+  // The server reads the latest live reply. It is known while the preview
+  // holds every reply, or when the deleted one was not the latest; otherwise
+  // it comes with the server's root, as does the reply after the preview in
+  // a longer thread. A queued send sits last in the preview whatever its
+  // time, so the latest is the newest time there, not the last reply's.
+  let { latestReplyAt } = root.thread;
+  if (replyCount === 0) latestReplyAt = null;
+  else if (preview.length === replyCount)
+    latestReplyAt = newestCreatedAt(preview) ?? latestReplyAt;
+  return {
+    ...root,
+    thread: { ...root.thread, preview, replyCount, latestReplyAt },
+  };
+}
+
+/** The newest creation time among `messages`, to the server's microsecond. */
+function newestCreatedAt(
+  messages: readonly Pick<ChannelMessageFieldsFragment, 'createdAt'>[]
+): string | undefined {
+  let newest: { at: string; micros: bigint } | undefined;
+  for (const { createdAt } of messages) {
+    const micros = timestampMicros(createdAt);
+    if (micros === undefined) continue;
+    if (newest === undefined || micros > newest.micros)
+      newest = { at: createdAt, micros };
+  }
+  return newest?.at;
+}
+
+/** A root being sent as it reads with the replies to it being sent too. */
+function pendingRoot(
+  writes: readonly PendingWrite[],
+  rootId: string
+): ChannelMessageFieldsFragment | undefined {
+  const root = writes.find((write) => write.uuid === rootId)?.predicted;
+  if (!root) return undefined;
+  const deleted = deletedIds(writes);
+  return writes.reduce(
+    (counted, { predicted: reply }) =>
+      reply?.threadId === rootId && !deleted.has(reply.id)
+        ? predictedRoot(counted, reply)
+        : counted,
+    root
+  );
+}
+
+interface HandOver {
+  uuid: string;
+  onEnqueued: () => void;
+  /** Straight out, a write would pass the ones the queue keeps. */
+  onlyQueued: true;
+}
+
+/** One write's hand-off: the context it runs in and who hears of it. */
+interface HandOff {
+  /** The write among those pending (`PendingWrite`). */
+  key: number;
+  trace: TraceContext;
+  /** Whether the host and the sign-in it was asked for under still stand. */
+  stands: () => boolean;
+  /** Whether the queue has said what became of it. */
+  settled: () => boolean;
+  onEnqueued: () => void;
+}
+
+interface Write<TData, TVariables extends AnyVariables> {
+  operation: string;
+  channelId: string;
+  messageId: string;
+  uuid: string;
+  /** Whose write it is, when the caller says. */
+  userId?: string;
+  /**
+   * The thread root as it reads with this write, from the device and the
+   * writes asked for before it (`key`).
+   */
+  root?: (key: number) => Promise<ChannelMessageFieldsFragment | undefined>;
+  /** Hands the write to the queue. */
+  run: (
+    client: Pick<Client, 'mutation'>,
+    options: HandOver,
+    root: ChannelMessageFieldsFragment | undefined
+  ) => Promise<OperationResult<TData, TVariables>>;
+  /** The write's answer in a response the server answered directly. */
+  written: (data: TData) => ChannelMessageWriteFieldsFragment;
+  /** The row a delivered send answers with when it cannot be read back. */
+  predicted?: ChannelMessageFieldsFragment;
+  /**
+   * Whether the device's copy shows this write, for one that left the queue
+   * unheard: another tab may have rolled it back. A send is checked against
+   * the server instead.
+   */
+  applied?: (message: ChannelMessageFieldsFragment) => boolean;
+  unstored?: ChannelPageEntry;
+  reply?: UnstoredReply;
+  /** The message this write deletes. */
+  deletes?: string;
+}
+
+/**
+ * Channel writes through the device's durable queue for one cache host. Each
+ * write shows at once (its optimistic record, or until the queue stores it an
+ * in-memory row), resolves once the server has it, and rejects after the queue
+ * has rolled the device's copy back.
+ */
+export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
+  const [pending, setPending] = createStore<Record<string, PendingWrite[]>>({});
+  // By message id, so a row follows only its own send.
+  const [sends, setSends] = createStore<
+    Record<string, Pick<PendingWrite, 'key' | 'signIn'> | undefined>
+  >({});
+  const retired: Lost = Deferred.makeUnsafe();
+  let isRetired = false;
+  /** While the host's database is away: done once it serves again. */
+  let served: Deferred.Deferred<void> | undefined;
+  /**
+   * Per channel and sign-in, done once the last write asked for has been
+   * handed over: a write of an earlier sign-in goes nowhere (`stands`), so
+   * its hand-off holds none of this one's back.
+   */
+  const turns = new Map<string, Deferred.Deferred<void>>();
+  let lastKey = 0;
+
+  const until = (done: Deferred.Deferred<void>): Promise<void> =>
+    Effect.runPromise(
+      Effect.raceFirst(Deferred.await(done), Deferred.await(retired))
+    );
+
+  /**
+   * A write's turn at handing over, taken as it is asked for: however long the
+   * wait for the database or a read takes, the queue gets a channel's writes
+   * in that order, each once it has the one before.
+   */
+  function takeTurn(lane: string) {
+    const before = turns.get(lane);
+    const done = Deferred.makeUnsafe<void>();
+    turns.set(lane, done);
+    return {
+      async come(): Promise<void> {
+        if (before) await until(before);
+      },
+      pass() {
+        Deferred.doneUnsafe(done, Effect.void);
+        if (turns.get(lane) === done) turns.delete(lane);
+      },
+    };
+  }
+
+  /** The pending writes of a channel asked for under the current sign-in. */
+  function pendingIn(channelId: string): PendingWrite[] {
+    const signIn = deps.signIn?.();
+    return (pending[channelId] ?? []).filter(
+      (write) => write.signIn === signIn
+    );
+  }
+
+  /** The writes of a channel asked for before one, under its sign-in. */
+  function pendingBefore(channelId: string, key: number): PendingWrite[] {
+    const writes = unwrap(pending)[channelId] ?? [];
+    const own = writes.find((write) => write.key === key);
+    return writes.filter(
+      (write) => write.key < key && write.signIn === own?.signIn
+    );
+  }
+
+  const addPending = (channelId: string, write: PendingWrite) =>
+    setPending(
+      produce((state) => {
+        state[channelId] = [...(state[channelId] ?? []), write];
+      })
+    );
+  const removePending = (channelId: string, key: number) =>
+    setPending(
+      produce((state) => {
+        const writes = state[channelId]?.filter((entry) => entry.key !== key);
+        if (writes?.length) state[channelId] = writes;
+        else delete state[channelId];
+      })
+    );
+  /** Marks a message as being sent until the returned call. */
+  function markSending(
+    messageId: string,
+    send: Pick<PendingWrite, 'key' | 'signIn'>
+  ): () => void {
+    setSends(messageId, send);
+    return () => {
+      // A resend of the same message marks it anew.
+      if (unwrap(sends)[messageId]?.key === send.key)
+        setSends(messageId, undefined);
+    };
+  }
+
+  /** The device's copy of a message; undefined when it cannot be read. */
+  async function readMessage(
+    id: string
+  ): Promise<ChannelMessageFieldsFragment | undefined> {
+    let records: Awaited<ReturnType<typeof readTimelineRecords>>;
+    try {
+      records = await readTimelineRecords(deps.host, [channelMessageKey(id)]);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'channel-writes' });
+      return undefined;
+    }
+    const record = records?.[0];
+    return record?.__typename === CHANNEL_MESSAGE_TYPENAME ? record : undefined;
+  }
+
+  /**
+   * A root read that gives up after `ROOT_READ_BUDGET_MS`: one that answers
+   * later asks nothing more of the device (`signal`).
+   */
+  function readRoot(
+    read: (
+      signal: AbortSignal
+    ) => Promise<ChannelMessageFieldsFragment | undefined>
+  ): Promise<ChannelMessageFieldsFragment | undefined> {
+    return Effect.runPromise(
+      Effect.timeoutOrElse(Effect.promise(read), {
+        duration: ROOT_READ_BUDGET_MS,
+        orElse: () => Effect.succeed(undefined),
+      })
+    );
+  }
+
+  /**
+   * The root of a live reply on the device as it will read once the reply is
+   * deleted; undefined for anything else.
+   */
+  function rootWithoutReply(
+    deletion: Pick<ChannelDelete, 'channelId' | 'id'>
+  ): Promise<ChannelMessageFieldsFragment | undefined> {
+    return readRoot(async (signal) => {
+      const reply = await readStoredMessage(
+        deps.host,
+        deletion.channelId,
+        deletion.id
+      );
+      if (signal.aborted) return undefined;
+      if (!reply?.threadId || reply.deletedAt !== null) return undefined;
+      const root = await readMessage(reply.threadId);
+      return root && predictedRootWithout(root, reply);
+    });
+  }
+
+  /**
+   * The root of a reply as it will read once the reply is on it. The queue has
+   * the replies sent before, so the device's copy counts them. The device has
+   * nothing yet of a root whose own send is not stored.
+   */
+  async function rootWithReply(
+    send: ChannelSend,
+    key: number,
+    rootId: string,
+    reply: ChannelMessageFieldsFragment
+  ): Promise<ChannelMessageFieldsFragment | undefined> {
+    const root =
+      (await readRoot(() => readMessage(rootId))) ??
+      pendingRoot(pendingBefore(send.channelId, key), rootId);
+    return root && predictedRoot(root, reply);
+  }
+
+  /** A write the queue settled, as the device shows it. */
+  async function stored(
+    write: Pick<Write<unknown, AnyVariables>, 'messageId' | 'predicted'>
+  ): Written {
+    const message = (await readMessage(write.messageId)) ?? write.predicted;
+    return message && mapChannelMessage(message);
+  }
+
+  /**
+   * The server's copy of a message this page sent; null when the server does
+   * not have it, undefined when it could not say. Reading it stores it on the
+   * device, so the views show it.
+   */
+  async function serverCopy(
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>,
+    signal: AbortSignal
+  ): Promise<Message | null | undefined> {
+    try {
+      const message = await (deps.fetchMessage ?? fetchServerMessage)(
+        write.channelId,
+        write.messageId,
+        signal,
+        () => deps.runtime.notifyChanged(write.channelId)
+      );
+      return message && mapChannelMessage(message);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'channel-writes' });
+      return undefined;
+    }
+  }
+
+  /**
+   * A write that left the queue while this page heard nothing, delivered or
+   * rolled back by another tab. A send is delivered when the device or the
+   * server holds it, and unknown otherwise: a request the server has not
+   * answered can still commit, and only the same id makes sending it again
+   * safe. Another write is delivered when the device's copy
+   * shows it (`applied`), which a rollback undoes.
+   */
+  async function missedOutcome(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'channelId' | 'messageId' | 'operation' | 'applied'
+    >,
+    trace: TraceContext
+  ): Promise<Message> {
+    const message = await readMessage(write.messageId);
+    if (message && (write.applied?.(message) ?? true))
+      return mapChannelMessage(message);
+    if (message) {
+      throw refusal('NOT_APPLIED', 'the write was rolled back elsewhere');
+    }
+    if (write.operation !== SEND_OPERATION) {
+      throw refusal('NOT_FOUND', 'the message is not on the device');
+    }
+    const delivered = await askServer(write, trace);
+    if (delivered) return delivered;
+    throw unknownDelivery();
+  }
+
+  /**
+   * A failed send restores its draft, and sending that again would post a
+   * second copy of one that arrived: ask the server more than once, since a
+   * request still in flight can commit after the server said it had none, and
+   * the device again between questions, since a frame or another tab may store
+   * the send meanwhile.
+   */
+  async function askServer(
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>,
+    trace: TraceContext
+  ): Promise<Message | undefined> {
+    // Every question, after a wait too, joins the recovery's trace.
+    const ask = () => trace.run(() => boundedServerCopy(write));
+    const onDevice = async () => {
+      const stored = await trace.run(() => readMessage(write.messageId));
+      return stored && mapChannelMessage(stored);
+    };
+    let delivered = await ask();
+    for (const waitMs of SERVER_LOOKUP_RETRIES_MS) {
+      if (delivered) return delivered;
+      const stored = await onDevice();
+      if (stored) return stored;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      delivered = await ask();
+    }
+    return delivered || (await onDevice());
+  }
+
+  /**
+   * `serverCopy`, answered within `SERVER_LOOKUP_BUDGET_MS` and
+   * `SERVER_COPY_STORE_BUDGET_MS`: a lookup that never answers leaves the
+   * send unknown instead of pending forever, and its request is cancelled.
+   */
+  function boundedServerCopy(
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>
+  ): Promise<Message | null | undefined> {
+    const request = new AbortController();
+    // Started here, in the caller's trace.
+    const copy = serverCopy(write, request.signal);
+    return Effect.runPromise(
+      Effect.timeoutOrElse(
+        Effect.promise(() => copy),
+        {
+          duration: SERVER_LOOKUP_BUDGET_MS + SERVER_COPY_STORE_BUDGET_MS,
+          orElse: () =>
+            Effect.sync(() => {
+              request.abort();
+              return undefined;
+            }),
+        }
+      )
+    );
+  }
+
+  /** Reads a waiting write's outcome from the device and the server. */
+  function recovered<T>(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >,
+    reason:
+      | 'missed'
+      | 'retry_exhausted'
+      | 'commit_failed'
+      | 'enqueue_uncertain'
+      | 'answer_lost',
+    read: (trace: TraceContext) => Promise<T>
+  ): Promise<T> {
+    return Telemetry.span('channel.write.recover', async (span) => {
+      // Taken before any await: the reads that follow one join this span.
+      const trace = Telemetry.captureContext();
+      span.setAttr('channel.id', write.channelId);
+      span.setAttr('message.id', write.messageId);
+      span.setAttr('write.operation', write.operation);
+      span.setAttr('write.recovery', reason);
+      const outcome = await read(trace);
+      span.setAttr('write.recovered', outcome !== undefined);
+      return outcome;
+    });
+  }
+
+  /**
+   * A send the queue gave up on after retrying it may still have reached the
+   * server, or reach it later, and one whose answer the device could not store
+   * did: a restored draft would go out again under a new id. The device's copy
+   * (a frame may have stored the server's row), else the server's, is the
+   * send's answer; without either the send is unknown, so the composer sends
+   * it again under its own id. Another write whose answer the device could not
+   * store is on the server too, whose copy is its answer: the device's is
+   * still the one from before. Undefined for a write that is not there.
+   */
+  async function deliveredAfterAll(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'channelId' | 'messageId' | 'operation' | 'predicted'
+    >,
+    error: unknown,
+    trace: TraceContext
+  ): Promise<{ message: Message | undefined } | undefined> {
+    const uncommitted = thrownResultErrorHasCode(error, LOCAL_COMMIT_FAILED);
+    if (write.operation !== SEND_OPERATION) {
+      if (!uncommitted) return undefined;
+      return { message: (await boundedServerCopy(write)) ?? undefined };
+    }
+    if (!uncommitted && !thrownResultErrorHasCode(error, RETRY_EXHAUSTED))
+      return undefined;
+    // The queue rolled its optimistic record back before it settled: a copy
+    // here is the server's.
+    const copy = await readMessage(write.messageId);
+    if (copy) return { message: mapChannelMessage(copy) };
+    const message = await askServer(write, trace);
+    if (message) return { message };
+    throw unknownDelivery();
+  }
+
+  /**
+   * The transaction the queue holds a write under; undefined when it does
+   * not. A retired host may never answer, so the question ends with it.
+   */
+  async function queuedAs(uuid: string): Promise<string | undefined> {
+    const listed = deps.host.inspectMutations?.();
+    if (!listed) throw new Error('queue cannot be listed');
+    const queue = await Effect.runPromise(
+      Effect.raceFirst(
+        Effect.promise(() => listed),
+        Deferred.await(retired)
+      )
+    );
+    return queue.find((entry) => entry.uuid === uuid)?.transactionId;
+  }
+
+  /**
+   * The write's answer when the queue, the server or the network lost it on
+   * the way, or the device failed to store it; undefined for an answer that
+   * says what became of the write.
+   */
+  async function lostAnswer(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'channelId' | 'messageId' | 'operation' | 'applied' | 'uuid'
+    >,
+    error: CombinedError,
+    trace: TraceContext,
+    settled: (transactionId: string) => Written
+  ): Promise<{ message: Message | undefined } | undefined> {
+    if (isAdmittedEnqueueUncertainError(error.networkError)) {
+      let transactionId: string | undefined;
+      try {
+        transactionId = await trace.run(() =>
+          recovered(write, 'enqueue_uncertain', () => queuedAs(write.uuid))
+        );
+      } catch (failure) {
+        Telemetry.error(failure, { surface: 'channel-writes' });
+        // A copy on the device can be the optimistic record of a queue that
+        // holds the write, so it says nothing about the server.
+        if (write.operation === SEND_OPERATION) throw unknownDelivery();
+        return undefined;
+      }
+      if (transactionId) return { message: await settled(transactionId) };
+      const message = await trace.run(() =>
+        recovered(write, 'missed', (recovery) => missedOutcome(write, recovery))
+      );
+      return { message };
+    }
+    if (write.operation !== SEND_OPERATION || !mayHaveArrived(error))
+      return undefined;
+    const message = await trace.run(() =>
+      recovered(write, 'answer_lost', (recovery) => askServer(write, recovery))
+    );
+    if (message) return { message };
+    throw unknownDelivery();
+  }
+
+  /** Whether the host's queue cannot take a write for now. */
+  const away = () =>
+    Boolean(deps.host.paused) ||
+    served !== undefined ||
+    deps.serving?.() === false;
+
+  /** Waits for the cache, as a span of its own, unless the host retires. */
+  function awaitCache(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >,
+    reason: 'outage' | 'next_engine',
+    waiting: Effect.Effect<void>
+  ): Promise<void> {
+    return Telemetry.span('channel.write.await_cache', async (span) => {
+      span.setAttr('channel.id', write.channelId);
+      span.setAttr('message.id', write.messageId);
+      span.setAttr('write.operation', write.operation);
+      span.setAttr('write.wait', reason);
+      await Effect.runPromise(
+        Effect.raceFirst(waiting, Deferred.await(retired))
+      );
+    });
+  }
+
+  /**
+   * Waits out an outage of the host's database, until its queue has been read
+   * again.
+   */
+  async function untilServed(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >
+  ): Promise<void> {
+    while (away()) {
+      served ??= Deferred.makeUnsafe<void>();
+      await awaitCache(write, 'outage', Deferred.await(served));
+    }
+  }
+
+  /** Waits for the engine after the lost one, at most `maxMs`. */
+  async function untilNextEngine(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >,
+    maxMs: number
+  ): Promise<void> {
+    const replaced = Deferred.makeUnsafe<void>();
+    const stop = deps.host.onCacheGenerationChanged(() => {
+      Deferred.doneUnsafe(replaced, Effect.void);
+    });
+    try {
+      await awaitCache(
+        write,
+        'next_engine',
+        Effect.raceFirst(Deferred.await(replaced), Effect.sleep(maxMs))
+      );
+    } finally {
+      stop();
+    }
+  }
+
+  /**
+   * Hands a write to the queue, and answers what came of that. One whose host
+   * retires meanwhile may already be in the queue or on the server, and
+   * nothing else says so: a send is then unknown, and another write failed.
+   */
+  function handedOver<TData, TVariables extends AnyVariables>(
+    write: Write<TData, TVariables>,
+    root: ChannelMessageFieldsFragment | undefined,
+    handOff: HandOff
+  ): Promise<OperationResult<TData, TVariables>> {
+    let acknowledged = false;
+    // Started here, in the caller's trace.
+    const answer = write.run(
+      deps.client(),
+      {
+        uuid: write.uuid,
+        onEnqueued: () => {
+          acknowledged = true;
+          handOff.onEnqueued();
+        },
+        onlyQueued: true,
+      },
+      root
+    );
+    const gaveUp = Effect.gen(function* () {
+      yield* Effect.exit(Deferred.await(retired));
+      if (acknowledged && !handOff.settled())
+        yield* Effect.sleep(RETIRED_ANSWER_BUDGET_MS);
+      return yield* Effect.fail(unanswered(write));
+    });
+    return Effect.runPromise(
+      Effect.raceFirst(
+        Effect.promise(() => answer),
+        gaveUp
+      )
+    );
+  }
+
+  /**
+   * Hands a write over in its turn, and again when it found the database away,
+   * or no engine to serve it, and waited for that. A write that outlasted its
+   * host or its sign-in is not handed over: `client` then answers for another.
+   * One that does not reach the queue though the database is there goes
+   * nowhere, and fails.
+   */
+  async function handOver<TData, TVariables extends AnyVariables>(
+    write: Write<TData, TVariables>,
+    handOff: HandOff
+  ): Promise<OperationResult<TData, TVariables>> {
+    const { trace } = handOff;
+    let nextEngineWaitMs = NEXT_ENGINE_WAIT_MS;
+    for (;;) {
+      if (!handOff.stands()) throw cacheRetired();
+      await trace.run(() => untilServed(write));
+      const root = await trace.run(() => write.root?.(handOff.key));
+      if (!handOff.stands()) throw cacheRetired();
+      if (away()) continue;
+      // The span covers the hand-off and a direct answer; a queued write can
+      // wait for hours, which is not this operation's duration.
+      const result = await trace.run(() =>
+        Telemetry.span(write.operation, async (span) => {
+          span.setAttr('channel.id', write.channelId);
+          span.setAttr('message.id', write.messageId);
+          const answer = await handedOver(write, root, handOff);
+          span.setAttr(
+            'write.disposition',
+            notQueued(answer.error)
+              ? 'not_queued'
+              : (optimisticMutationDispositionOf(answer)?.kind ?? 'direct')
+          );
+          return answer;
+        })
+      );
+      if (!notQueued(result.error)) return result;
+      if (!handOff.stands()) throw cacheRetired();
+      if (away()) continue;
+      if (!foundNoEngine(result.error)) return result;
+      const waitMs = nextEngineWaitMs;
+      nextEngineWaitMs = Math.min(waitMs * 2, NEXT_ENGINE_WAIT_MAX_MS);
+      await trace.run(() => untilNextEngine(write, waitMs));
+    }
+  }
+
+  async function queuedWrite<TData, TVariables extends AnyVariables>(
+    write: Write<TData, TVariables>
+  ): Written {
+    // A sign-in that names someone else changes `signIn`, so this holds for
+    // as long as the write stands.
+    const mayWrite = deps.mayWrite ?? (() => true);
+    if (!untrack(() => mayWrite(write.userId))) throw cacheRetired();
+    // Taken before any await: recovery after a long wait joins the write's trace.
+    const trace = Telemetry.captureContext();
+    const signIn = untrack(() => deps.signIn?.());
+    lastKey += 1;
+    const key = lastKey;
+    const turn = takeTurn(`${signIn}:${write.channelId}`);
+    const settlements = watchSettlements(deps.host, retired, write.uuid);
+    addPending(write.channelId, {
+      key,
+      uuid: write.uuid,
+      signIn,
+      predicted: write.predicted,
+      unstored: write.unstored,
+      reply: write.reply,
+      deletes: write.deletes,
+    });
+    const sent =
+      write.operation === SEND_OPERATION
+        ? markSending(write.messageId, { key, signIn })
+        : undefined;
+    deps.runtime.notifyChanged(write.channelId);
+    const handOff: HandOff = {
+      key,
+      trace,
+      stands: () => !isRetired && untrack(() => deps.signIn?.()) === signIn,
+      settled: () => settlements.heard() !== undefined,
+      // The optimistic record is on the device: windows read it from here, in
+      // every tab.
+      onEnqueued() {
+        turn.pass();
+        deps.runtime.notifyChanged(write.channelId);
+      },
+    };
+    try {
+      const settled = async (transactionId: string): Written => {
+        let outcome: 'committed' | 'missed';
+        try {
+          outcome = await settlements.committed(transactionId);
+        } catch (error) {
+          // Handed over, the send may be on the server, or still get there
+          // from the queue. A copy on the device can be the queue's own
+          // optimistic record, so it says nothing about the server.
+          if (
+            write.operation === SEND_OPERATION &&
+            QUEUE_LOST.some((code) => thrownResultErrorHasCode(error, code))
+          )
+            throw unknownDelivery();
+          const uncommitted = thrownResultErrorHasCode(
+            error,
+            LOCAL_COMMIT_FAILED
+          );
+          const delivered = await trace.run(() =>
+            recovered(
+              write,
+              uncommitted ? 'commit_failed' : 'retry_exhausted',
+              (recovery) => deliveredAfterAll(write, error, recovery)
+            )
+          );
+          if (delivered) return delivered.message;
+          throw error;
+        }
+        if (outcome === 'missed')
+          return await trace.run(() =>
+            recovered(write, 'missed', (recovery) =>
+              missedOutcome(write, recovery)
+            )
+          );
+        return stored(write);
+      };
+      await turn.come();
+      let result: OperationResult<TData, TVariables>;
+      try {
+        result = await handOver(write, handOff);
+      } catch (error) {
+        // The queue said what became of it before its host retired.
+        const transactionId = settlements.heard();
+        if (transactionId === undefined) throw error;
+        return await settled(transactionId);
+      }
+      turn.pass();
+      const disposition = optimisticMutationDispositionOf(result);
+      if (disposition?.kind === 'queued') {
+        // On the server already; the queue still has to store it.
+        if (disposition.confirmed)
+          return mapChannelMessage(
+            write.written(disposition.confirmed).message
+          );
+        return await settled(disposition.transactionId);
+      }
+      const { error } = result;
+      // On the server, whose answer is the write's: the next frame or catch-up
+      // brings it to the device.
+      if (error?.networkError instanceof LocalCommitFailedError) {
+        const confirmed = error.networkError.confirmed as TData;
+        return mapChannelMessage(write.written(confirmed).message);
+      }
+      if (error) {
+        const answer = await lostAnswer(write, error, trace, settled);
+        if (answer) return answer.message;
+        throw refusalOf(error);
+      }
+      if (!result.data) throw refusal(undefined, 'empty response');
+      return mapChannelMessage(write.written(result.data).message);
+    } finally {
+      turn.pass();
+      settlements.stop();
+      removePending(write.channelId, key);
+      sent?.();
+      // Committed or rolled back, the device's copy changed.
+      deps.runtime.notifyChanged(write.channelId);
+    }
+  }
+
+  const now = () => (deps.now?.() ?? new Date()).toISOString();
+
+  return {
+    async send(send) {
+      const createdAt = now();
+      const predicted = predictedMessage(send, createdAt);
+      const rootId = send.message.thread_id;
+      const entry = predicted && mapChannelTimelineEntry(predicted);
+      const sent = await queuedWrite({
+        operation: SEND_OPERATION,
+        channelId: send.channelId,
+        messageId: send.id,
+        uuid: send.id,
+        userId: send.senderId,
+        predicted,
+        unstored:
+          predicted && entry && !rootId
+            ? {
+                key: channelMessageKey(send.id),
+                sortKey: predicted.sortKey,
+                entry,
+              }
+            : undefined,
+        reply:
+          predicted && rootId
+            ? { rootId, message: mapChannelMessage(predicted) }
+            : undefined,
+        // A reply also moves its root's count; the queue applies both at once.
+        root:
+          predicted && rootId
+            ? (key) => rootWithReply(send, key, rootId, predicted)
+            : undefined,
+        run: (client, options, root) =>
+          executeOptimisticMutation(
+            client as Client,
+            SendChannelMessageDocument,
+            {
+              input: {
+                channelId: send.channelId,
+                id: send.id,
+                content: send.message.content,
+                threadId: rootId ?? null,
+                mentions: (send.message.mentions ?? []).map(mentionInput),
+                attachments: (send.message.attachments ?? []).map(
+                  attachmentInput
+                ),
+                nonce: send.id,
+              },
+            },
+            (predicted
+              ? {
+                  sendChannelMessage: {
+                    __typename: WRITE_TYPENAME,
+                    message: predicted,
+                    root: root ? threadOnly(root) : null,
+                  },
+                }
+              : {}) as OptimisticResponse<SendChannelMessageMutation>,
+            options
+          ).toPromise(),
+        written: (data) => data.sendChannelMessage,
+      });
+      // Only one whose row could not be predicted answers with none.
+      if (!sent) throw unknownDelivery();
+      return sent;
+    },
+
+    edit(edit) {
+      const editedAt = now();
+      return queuedWrite({
+        operation: 'channel.write.edit',
+        channelId: edit.channelId,
+        messageId: edit.id,
+        uuid: crypto.randomUUID(),
+        // The text alone cannot tell an attachment-only edit was undone.
+        applied: (message) =>
+          message.content === edit.content &&
+          edit.removeAttachmentIds.every(
+            (id) =>
+              !message.attachments.some(
+                (attachment) => attachment.attachmentId === id
+              )
+          ) &&
+          edit.addAttachments.every((added) =>
+            message.attachments.some(
+              (attachment) =>
+                attachment.entityType === added.entity_type &&
+                attachment.entityId === added.entity_id
+            )
+          ),
+        run: (client, options) =>
+          executeOptimisticMutation(
+            client as Client,
+            EditChannelMessageDocument,
+            {
+              input: {
+                channelId: edit.channelId,
+                id: edit.id,
+                content: edit.content,
+                mentions: edit.mentions.map(mentionInput),
+                removeAttachmentIds: [...edit.removeAttachmentIds],
+                addAttachments: edit.addAttachments.map(attachmentInput),
+              },
+            },
+            // Attachments change only once the server answers with their ids.
+            {
+              editChannelMessage: {
+                __typename: WRITE_TYPENAME,
+                message: {
+                  __typename: CHANNEL_MESSAGE_TYPENAME,
+                  id: edit.id,
+                  content: edit.content,
+                  mentions: edit.mentions.map(mentionInput),
+                  editedAt,
+                  updatedAt: editedAt,
+                },
+              },
+            } as OptimisticResponse<EditChannelMessageMutation>,
+            options
+          ).toPromise(),
+        written: (data) => data.editChannelMessage,
+      });
+    },
+
+    remove(deletion) {
+      const deletedAt = now();
+      return queuedWrite({
+        operation: 'channel.write.delete',
+        channelId: deletion.channelId,
+        messageId: deletion.id,
+        uuid: crypto.randomUUID(),
+        deletes: deletion.id,
+        applied: (message) => message.deletedAt !== null,
+        // A live reply also leaves its root's preview and count; the queue
+        // applies both at once. The device answers this read in milliseconds,
+        // and a stored message stays on screen until the delete is queued, so
+        // the delete waits for it only briefly.
+        root: () => rootWithoutReply(deletion),
+        run: (client, options, root) =>
+          executeOptimisticMutation(
+            client as Client,
+            DeleteChannelMessageDocument,
+            {
+              input: {
+                channelId: deletion.channelId,
+                id: deletion.id,
+              },
+            },
+            {
+              deleteChannelMessage: {
+                __typename: WRITE_TYPENAME,
+                message: {
+                  __typename: CHANNEL_MESSAGE_TYPENAME,
+                  id: deletion.id,
+                  deletedAt,
+                  updatedAt: deletedAt,
+                },
+                ...(root && { root: threadOnly(root) }),
+              },
+            } as OptimisticResponse<DeleteChannelMessageMutation>,
+            options
+          ).toPromise(),
+        written: (data) => data.deleteChannelMessage,
+      });
+    },
+
+    react(reaction) {
+      return queuedWrite({
+        operation: 'channel.write.react',
+        channelId: reaction.channelId,
+        messageId: reaction.id,
+        uuid: crypto.randomUUID(),
+        userId: reaction.userId,
+        applied: (message) =>
+          message.reactions.some(
+            (entry) =>
+              entry.emoji === reaction.emoji &&
+              entry.users.includes(reaction.userId)
+          ) === reaction.add,
+        run: (client, options) =>
+          executeOptimisticMutation(
+            client as Client,
+            ReactToChannelMessageDocument,
+            {
+              input: {
+                channelId: reaction.channelId,
+                id: reaction.id,
+                emoji: reaction.emoji,
+                add: reaction.add,
+              },
+            },
+            {
+              reactToChannelMessage: {
+                __typename: WRITE_TYPENAME,
+                message: {
+                  __typename: CHANNEL_MESSAGE_TYPENAME,
+                  id: reaction.id,
+                  ...(reaction.reactions && {
+                    reactions: reaction.reactions.map(({ emoji, users }) => ({
+                      emoji,
+                      users: [...users],
+                    })),
+                  }),
+                },
+              },
+            } as OptimisticResponse<ReactToChannelMessageMutation>,
+            options
+          ).toPromise(),
+        written: (data) => data.reactToChannelMessage,
+      });
+    },
+
+    sending(messageId) {
+      const send = sends[messageId];
+      return send !== undefined && send.signIn === deps.signIn?.();
+    },
+    pendingCount: (channelId) => pendingIn(channelId).length,
+    // A message deleted while its send waits stays hidden: the device hides
+    // a deleted root and a deleted reply, and this row would bring it back.
+    unstoredRoots: (channelId) => {
+      const writes = pendingIn(channelId);
+      const deleted = deletedIds(writes);
+      return writes
+        .flatMap((write) => {
+          if (!write.unstored || deleted.has(write.uuid)) return [];
+          if (!writes.some(({ reply }) => reply?.rootId === write.uuid))
+            return [write.unstored];
+          const root = pendingRoot(writes, write.uuid);
+          const entry = root && mapChannelTimelineEntry(root);
+          return [entry ? { ...write.unstored, entry } : write.unstored];
+        })
+        .reverse();
+    },
+    unstoredReplies: (channelId, rootId) => {
+      const writes = pendingIn(channelId);
+      const deleted = deletedIds(writes);
+      return writes.flatMap((write) =>
+        write.reply?.rootId === rootId && !deleted.has(write.reply.message.id)
+          ? [write.reply.message]
+          : []
+      );
+    },
+    resumed() {
+      const waited = served;
+      served = undefined;
+      if (waited) Deferred.doneUnsafe(waited, Effect.void);
+    },
+    retire() {
+      isRetired = true;
+      Deferred.doneUnsafe(retired, Effect.fail(cacheRetired()));
+    },
+  };
+}

@@ -1,5 +1,11 @@
-import type { UseInfiniteQueryResult } from '@tanstack/solid-query';
-import { type Accessor, createSignal, type Setter } from 'solid-js';
+import { until } from '@solid-primitives/promise';
+import {
+  type Accessor,
+  createSignal,
+  onCleanup,
+  runWithOwner,
+  type Setter,
+} from 'solid-js';
 import type { Store } from 'solid-js/store';
 
 export type ThreadPaginator = {
@@ -19,6 +25,8 @@ type PaginateDirectionState = {
   setIs: Setter<boolean>;
   more: Accessor<boolean>;
   setMore: Setter<boolean>;
+  /** The window the queued scroll was asked in. */
+  queuedIn: unknown;
 };
 
 function createPaginateDirectionState(
@@ -35,41 +43,91 @@ function createPaginateDirectionState(
     setIs,
     more,
     setMore,
+    queuedIn: undefined,
   };
 }
 
-export function createThreadPaginator<T>(
-  query: UseInfiniteQueryResult<T>
+/** The paging a timeline offers in each direction, whichever path reads it. */
+export type TimelinePaging = {
+  hasOlder: Accessor<boolean>;
+  hasNewer: Accessor<boolean>;
+  isLoadingOlder: Accessor<boolean>;
+  isLoadingNewer: Accessor<boolean>;
+  loadOlder: () => Promise<void>;
+  loadNewer: () => Promise<void>;
+};
+
+/**
+ * `windowKey` names the window the list shows: a scroll asked in one window
+ * never pages another, which a jump to a target replaces it with while this
+ * paginator lives on. It must change whenever the window is replaced, and only
+ * then (the target controller's `windowKey`).
+ */
+export function createThreadPaginator(
+  paging: TimelinePaging,
+  windowKey: Accessor<unknown> = () => undefined
 ): ThreadPaginator {
   const prependPaginateState = createPaginateDirectionState('prepend');
   const shiftPaginateState = createPaginateDirectionState('shift');
+  // A wait for a load to let go ends with the list too: a timeline disposed
+  // mid-load never lets go.
+  const [disposed, setDisposed] = createSignal(false);
+  onCleanup(() => setDisposed(true));
 
   const paginate = async (state: PaginateDirectionState) => {
     const hasMore = () =>
-      state.direction === 'shift' ? query.hasNextPage : query.hasPreviousPage;
+      state.direction === 'shift' ? paging.hasOlder() : paging.hasNewer();
     const isFetching = () =>
       state.direction === 'shift'
-        ? query.isFetchingNextPage
-        : query.isFetchingPreviousPage;
+        ? paging.isLoadingOlder()
+        : paging.isLoadingNewer();
     const paginateFn =
-      state.direction === 'shift'
-        ? query.fetchNextPage
-        : query.fetchPreviousPage;
+      state.direction === 'shift' ? paging.loadOlder : paging.loadNewer;
 
     state.setMore(hasMore());
 
     if (!hasMore()) return;
-    if (isFetching() || state.is()) {
+    if (state.is()) {
+      state.queuedIn = windowKey();
       state.setIsPending(true);
       return;
     }
 
     state.setIs(true);
+    let askedIn = windowKey();
 
     try {
       do {
+        // A list that went away while a page loaded asks for no more.
+        if (disposed()) return;
+        // A load this paginator did not start holds the direction (a window
+        // read again), before its first page or between two. Ask once it
+        // lets go: the list asks only when it reaches a new edge, so a
+        // request dropped here would wait for the next scroll. Another load
+        // can take the direction before this one resumes: wait again then, or
+        // that load would refuse this one.
+        if (isFetching()) {
+          while (isFetching()) {
+            // Ownerless: a caller's owner going away would reject the wait.
+            await runWithOwner(null, () =>
+              until(() => !isFetching() || disposed())
+            );
+            if (disposed()) return;
+          }
+          state.setMore(hasMore());
+          if (!hasMore()) return;
+        }
+        // The list jumped to another window (a search result) meanwhile: this
+        // request is stale, but a scroll queued in the new window still pages.
+        if (!Object.is(windowKey(), askedIn)) {
+          if (!state.pending() || !Object.is(windowKey(), state.queuedIn))
+            return;
+          askedIn = state.queuedIn;
+          continue;
+        }
         state.setIsPending(false);
         await paginateFn();
+        askedIn = state.queuedIn;
       } while (hasMore() && state.pending());
     } finally {
       state.setIs(false);

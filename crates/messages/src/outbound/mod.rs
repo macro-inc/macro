@@ -1,6 +1,10 @@
 /// Broker envelopes and message publication.
 #[cfg(feature = "broker")]
 pub mod broker;
+
+/// Kafka transport for live channel timeline updates.
+#[cfg(feature = "broker")]
+pub mod channel_timeline;
 /// Authorized websocket delivery.
 #[cfg(feature = "delivery")]
 pub mod connection_gateway;

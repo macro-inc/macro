@@ -373,6 +373,7 @@ const mocks = vi.hoisted(() => {
     onCacheGenerationChanged: vi.fn<CacheHost['onCacheGenerationChanged']>(
       () => () => {}
     ),
+    onChannelChanged: vi.fn<CacheHost['onChannelChanged']>(() => () => {}),
     inspectMutations: vi.fn(async () => []),
     dispose: vi.fn(() => cleanupOrder.push('host')),
     enqueueOptimisticMutation: vi.fn(async () => {
@@ -399,7 +400,7 @@ const mocks = vi.hoisted(() => {
   const plainClient = { kind: 'plain' };
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
-  const subscriptionsConnected = vi.fn();
+  const subscriptionsMissed = vi.fn();
   const platformFetch = vi.fn();
   const toastFailure = vi.fn();
   return {
@@ -446,7 +447,7 @@ const mocks = vi.hoisted(() => {
     plainClient,
     realtimeClient,
     replaceSubscriptions,
-    subscriptionsConnected,
+    subscriptionsMissed,
     initializeCrmCacheOwner: vi.fn(async () => {}),
     cachedQuery: vi.fn(),
     platformFetch,
@@ -647,7 +648,9 @@ vi.mock('./graphql-soup-websocket', () => ({
   }),
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: mocks.replaceSubscriptions,
-    connected: mocks.subscriptionsConnected,
+    connected: vi.fn(),
+    disconnected: vi.fn(),
+    updatesMissed: mocks.subscriptionsMissed,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
 }));
@@ -2220,6 +2223,151 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.getGraphqlCacheHost()).toBeUndefined();
   });
 
+  it('keeps the host whose database is away, until it is gone or the session ends', async () => {
+    const soup = await import('./graphql-soup');
+    const availability = { disabled: true, paused: true };
+    mocks.createWorkerCacheHost.mockImplementationOnce(() =>
+      Object.defineProperties(
+        { ...mocks.host },
+        {
+          disabled: { get: () => availability.disabled },
+          paused: { get: () => availability.paused },
+        }
+      )
+    );
+    expect(soup.getKeptGraphqlCacheHost()).toBeUndefined();
+    soup.getGraphqlSoupClient();
+    const kept = soup.getKeptGraphqlCacheHost();
+    expect(kept).toMatchObject({ disabled: true, paused: true });
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+
+    Object.assign(availability, { disabled: false, paused: false });
+    expect(soup.getKeptGraphqlCacheHost()).toBe(kept);
+    expect(soup.getGraphqlSoupCacheHost()).toBe(kept);
+
+    availability.disabled = true;
+    expect(soup.getKeptGraphqlCacheHost()).toBeUndefined();
+    availability.disabled = false;
+    soup.setGraphqlSoupSessionActive(false);
+    expect(soup.getKeptGraphqlCacheHost()).toBeUndefined();
+  });
+
+  it('hands over what channels kept once a running host is proven readable', async () => {
+    const soup = await import('./graphql-soup');
+    const { channelSyncRuntime, channelWrites } = await import(
+      '@queries/messages/local/channel-sync'
+    );
+    const { CacheHostFailedError } = await import('@graphql-cache/host/errors');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const refused = new CacheHostFailedError(new Error('Failed to fetch'));
+    soup.getGraphqlSoupClient();
+    mocks.failInitialization(refused);
+    mocks.host.inspectMutations.mockRejectedValueOnce(refused);
+    await expect(soup.retryGraphqlCacheInitialization()).rejects.toBe(refused);
+    // Running, but its queue could not be read: the next try proves it again.
+    expect(soup.graphqlCacheEnabled()).toBe(false);
+    const host = soup.getKeptGraphqlCacheHost();
+    if (!host) throw new Error('no host');
+    const runtime = vi.spyOn(channelSyncRuntime(host), 'resumed');
+    const writes = vi.spyOn(channelWrites(host), 'resumed');
+    const inspection = Promise.withResolvers<never[]>();
+    mocks.host.inspectMutations.mockImplementationOnce(
+      () => inspection.promise
+    );
+    const proven = soup.retryGraphqlCacheInitialization();
+    expect(soup.getKeptGraphqlCacheHost()).toBe(host);
+    expect(writes).not.toHaveBeenCalled();
+    inspection.resolve([]);
+    await proven;
+    expect(runtime).toHaveBeenCalledOnce();
+    expect(writes).toHaveBeenCalledOnce();
+    expect(soup.getGraphqlSoupCacheHost()).toBe(host);
+  });
+
+  it("keeps a paused host the channels' host, and hands over what they kept once it serves again", async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const { channelSyncRuntime, channelWrites } = await import(
+      '@queries/messages/local/channel-sync'
+    );
+    const { sessionChannelHost } = await import(
+      '@queries/messages/local/channel-flag'
+    );
+    const queue = Promise.withResolvers<[]>();
+    mocks.host.inspectMutations.mockImplementationOnce(() => queue.promise);
+    const serving = mocks.createWorkerCacheHost.getMockImplementation();
+    const availability = { disabled: false, paused: false };
+    mocks.createWorkerCacheHost.mockImplementationOnce((options) => {
+      serving?.(options);
+      return Object.defineProperties(
+        { ...mocks.host },
+        {
+          disabled: { get: () => availability.disabled },
+          paused: { get: () => availability.paused },
+        }
+      );
+    });
+    const client = soup.getGraphqlSoupClient();
+    const host = soup.getKeptGraphqlCacheHost();
+    if (!host) throw new Error('no host');
+    const runtime = vi.spyOn(channelSyncRuntime(host), 'resumed');
+    const writes = vi.spyOn(channelWrites(host), 'resumed');
+    const retire = vi.spyOn(channelWrites(host), 'retire');
+
+    Object.assign(availability, { disabled: true, paused: true });
+    mocks.unavailable(
+      Object.assign(new Error('owner lock is held by another context'), {
+        errorCode: 'owner-lock-unavailable',
+      })
+    );
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(soup.getKeptGraphqlCacheHost()).toBe(host);
+
+    Object.assign(availability, { disabled: false, paused: false });
+    mocks.available();
+    await vi.waitFor(() =>
+      expect(mocks.host.inspectMutations).toHaveBeenCalled()
+    );
+    // Nothing asked for it while it was away, and its queue is unread yet.
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(sessionChannelHost()).toBe(host);
+    expect(writes).not.toHaveBeenCalled();
+
+    queue.resolve([]);
+    await vi.waitFor(() => expect(writes).toHaveBeenCalledOnce());
+    expect(runtime).toHaveBeenCalledOnce();
+    expect(retire).not.toHaveBeenCalled();
+    expect(soup.getGraphqlSoupCacheHost()).toBe(host);
+    expect(soup.getGraphqlSoupClient()).toBe(client);
+  });
+
+  it('lets go of what channels kept once a running host cannot be proven readable', async () => {
+    const soup = await import('./graphql-soup');
+    const { channelWrites } = await import(
+      '@queries/messages/local/channel-sync'
+    );
+    const { CacheHostFailedError } = await import('@graphql-cache/host/errors');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const refused = new CacheHostFailedError(new Error('Failed to fetch'));
+    soup.getGraphqlSoupClient();
+    mocks.failInitialization(refused);
+    mocks.host.inspectMutations.mockRejectedValueOnce(refused);
+    await expect(soup.retryGraphqlCacheInitialization()).rejects.toBe(refused);
+    const host = soup.getKeptGraphqlCacheHost();
+    if (!host) throw new Error('no host');
+    const retire = vi.spyOn(channelWrites(host), 'retire');
+
+    // Nothing proves the queue readable again before a reload.
+    const unreadable = new Error('the queue is unreadable');
+    mocks.host.inspectMutations.mockRejectedValueOnce(unreadable);
+    await expect(soup.retryGraphqlCacheInitialization()).rejects.toBe(
+      unreadable
+    );
+    expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
+    expect(retire).toHaveBeenCalledOnce();
+    expect(soup.getKeptGraphqlCacheHost()).toBeUndefined();
+  });
+
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');
@@ -2379,7 +2527,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       );
 
       const order: string[] = [];
-      mocks.subscriptionsConnected.mockImplementation(() => {
+      mocks.subscriptionsMissed.mockImplementation(() => {
         order.push('subscribed');
       });
       const refetch = vi.fn(() => {
@@ -2404,14 +2552,14 @@ describe('GraphQL Soup browser cache session gate', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(reconnected).not.toHaveBeenCalled();
       expect(refetch).not.toHaveBeenCalled();
-      expect(mocks.subscriptionsConnected).not.toHaveBeenCalled();
+      expect(mocks.subscriptionsMissed).not.toHaveBeenCalled();
 
       pause(false);
       mocks.available();
       await vi.advanceTimersByTimeAsync(0);
 
       // What arrived meanwhile was missed, as while a socket is down.
-      expect(mocks.subscriptionsConnected).toHaveBeenCalledOnce();
+      expect(mocks.subscriptionsMissed).toHaveBeenCalledOnce();
       expect(throwing).toHaveBeenCalledOnce();
       expect(order).toEqual([
         'subscribed',
@@ -2445,7 +2593,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       unbind?.();
     } finally {
       pause(false);
-      mocks.subscriptionsConnected.mockReset();
+      mocks.subscriptionsMissed.mockReset();
       dispose();
       vi.useRealTimers();
     }

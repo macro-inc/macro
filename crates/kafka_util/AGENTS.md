@@ -42,6 +42,9 @@ environments, with trace propagation and typed grouped/ungrouped consumers.
   size is still fetched whole.
 - Consumer-group lag cannot describe an ungrouped consumer; use application
   positions and explicitly handle unknown offsets and prefetched records.
+- An ungrouped consumer assigned at `InitialOffset::Latest` settles on its start
+  in the background and can skip a record published right after assignment;
+  `assign_topics_from_now` reads the ends before it returns.
 - `position` and `cached_watermarks` read the client's own state without a
   broker request, and the fetcher keeps the watermarks current while the
   application is not receiving, so they work where statistics go stale. A

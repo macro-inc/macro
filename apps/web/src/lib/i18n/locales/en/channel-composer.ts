@@ -12,6 +12,7 @@ export default {
   askMacro: 'Ask Macro',
   joinCall: 'Join call',
   startCall: 'Start a call',
+  notSentYet: 'Not sent yet',
   microphone: 'Dictate or record',
   dictate: 'Dictate',
   voiceMemo: 'Voice memo',

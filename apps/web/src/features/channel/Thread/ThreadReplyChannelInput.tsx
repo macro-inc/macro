@@ -1,4 +1,7 @@
+import { composerStorageGeneration } from '@core/auth/clear-composer-storage';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { replacedBySignIn } from '@queries/auth/account-scope';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -15,24 +18,16 @@ import {
 import type { InputHandle, InputSnapshot } from '../Input';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import { buildPostMessageSendPayload } from '../Input/message-payload';
-import {
-  makeAttachmentTrackerPersistenceKey,
-  makeInputValuePersistenceKey,
-} from '../Input/utils/persistence';
-import { hasSendableInputContent } from '../Input/utils/sendable-content';
+import { createUncertainSends } from '../Input/utils/uncertain-sends';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { FocusRequest } from './focus-request';
+import { replyDraftKeys, restoreFailedReply } from './reply-drafts';
 
 type ThreadReplyChannelInputProps = {
   parent: MessageParent;
   threadId: string;
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
-  /**
-   * Shared handle slot from `ThreadState`; used to restore a failed send's
-   * draft into whichever reply input is mounted by then.
-   */
-  replyInputHandle?: Accessor<InputHandle | undefined>;
   setReplyInputHandle?: Setter<InputHandle | undefined>;
   focusRequest?: FocusRequest;
   /** Exit reply mode. Called on close and (immediately) on send. */
@@ -61,6 +56,24 @@ type ThreadReplyChannelInputProps = {
  */
 const REPORTED_SNAPSHOTS = new WeakSet<InputSnapshot>();
 
+/**
+ * The reply input unmounts as it sends, so the reply whose delivery is
+ * unknown is remembered here, with where it went.
+ */
+const UNCERTAIN_REPLIES = createUncertainSends(() => newMessageId());
+
+/** Sends a reply, handing a failure to `onFailed`; the mutation toasts it. */
+async function sendReply(
+  send: () => Promise<unknown>,
+  onFailed: (error: unknown) => Promise<void>
+): Promise<void> {
+  try {
+    await send();
+  } catch (error) {
+    await onFailed(error);
+  }
+}
+
 export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   onCleanup(() => {
     props.setReplyInputHandle?.(undefined);
@@ -76,11 +89,10 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
     return snapshot && !REPORTED_SNAPSHOTS.has(snapshot) ? snapshot : undefined;
   };
 
+  const draftKeys = () => replyDraftKeys(props.parent, props.threadId);
+
   const tracker = createInputAttachmentTracker({
-    persistenceKey: makeAttachmentTrackerPersistenceKey({
-      channelId: `${props.parent.type}:${props.parent.id}`,
-      threadId: props.threadId,
-    }),
+    persistenceKey: draftKeys().attachments,
     initialAttachments: pendingSnapshot()?.attachments,
   });
 
@@ -132,10 +144,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       autofocus={false}
       bots={channelBotMentionUsers}
       attachmentTracker={tracker}
-      persistenceKey={makeInputValuePersistenceKey({
-        channelId: `${props.parent.type}:${props.parent.id}`,
-        threadId: props.threadId,
-      })}
+      persistenceKey={draftKeys().text}
       markdownNamespace={`thread-reply-input-${props.threadId}-markdown`}
       onReady={onReady}
       onChange={(snapshot) => {
@@ -171,27 +180,45 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
           snapshot,
           threadId: props.threadId,
         });
-
-        sendMessageMutation.mutate(
-          {
-            parent: props.parent,
-            senderId,
-            optimisticId: newMessageId(),
-            ...payload,
-          },
-          {
-            onError: () => {
-              // The user may have started a new draft by now; keep it.
-              const current = props.replyInputState();
-              if (current && hasSendableInputContent(current)) return;
-              // The send cleared the stored draft, so reopening restores it.
-              REPORTED_SNAPSHOTS.delete(snapshot);
-              props.setReplyInputState(snapshot);
-              props.replyInputHandle?.()?.restoreSnapshot(snapshot, {
-                focus: false,
-              });
-            },
-          }
+        // Who sends it, where it goes and what it says: the same text in
+        // another thread, or from another account, is another message.
+        const uncertainKey = {
+          senderId,
+          parent: props.parent,
+          threadId: props.threadId,
+          message: payload.message,
+        };
+        const optimisticId = UNCERTAIN_REPLIES.idFor(uncertainKey);
+        const keys = draftKeys();
+        // Taken as it sends: an input can outlive a sign-in, and a send after
+        // it may restore its draft. One during a sign-out's clear may not,
+        // which `composerStorageWritable` refuses.
+        const storageGeneration = composerStorageGeneration();
+        // Awaited, not `mutate`'s per-call `onError`: the input unmounts as
+        // it sends, and TanStack drops a call's callbacks once its observer
+        // is gone, which would lose the draft.
+        fireAndForget(
+          sendReply(
+            () =>
+              sendMessageMutation.mutateAsync({
+                parent: props.parent,
+                senderId,
+                optimisticId,
+                ...payload,
+              }),
+            async (error) => {
+              // Through the thread's stored draft, not this view's state: the
+              // view may be gone, and another may hold a newer draft. Not for
+              // another account.
+              if (await replacedBySignIn(senderId)) return;
+              if (userId() !== senderId) return;
+              if (!restoreFailedReply(keys, snapshot, storageGeneration))
+                return;
+              // Sent again unchanged, a reply that may have arrived keeps its id.
+              UNCERTAIN_REPLIES.restored(uncertainKey, optimisticId, error);
+            }
+          ),
+          'thread-reply-input'
         );
 
         // Exit right away — the send is optimistic; the mutation's failure

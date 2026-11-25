@@ -2,9 +2,14 @@
  * @vitest-environment jsdom
  */
 
+import {
+  clearComposerStorage,
+  endComposerStorageClear,
+} from '@core/auth/clear-composer-storage';
 import type { MentionsOptions } from '@core/component/LexicalMarkdown/builder/types';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
+import { ThrownResultError } from '@core/util/result';
 import {
   fireEvent,
   render as renderBare,
@@ -12,7 +17,7 @@ import {
 } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
-import { createSignal, type JSX, onMount } from 'solid-js';
+import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -264,6 +269,7 @@ vi.mock(
         getElementByKey: vi.fn(),
         getRootElement: vi.fn(),
         update: vi.fn((callback: () => void) => callback()),
+        read: <T,>(callback: () => T) => callback(),
       };
       const handle = {
         controls,
@@ -322,6 +328,7 @@ vi.mock('@core/component/LexicalMarkdown/plugins', () => ({
   DefaultShortcuts: {},
   INSERT_DOCUMENT_MENTION_COMMAND: 'INSERT_DOCUMENT_MENTION_COMMAND',
   NODE_TRANSFORM: 'NODE_TRANSFORM',
+  $readItemMentions: () => [],
   keyboardShortcutsPlugin: () => () => () => {},
 }));
 
@@ -360,21 +367,36 @@ vi.mock('@core/context/user', async (importOriginal) => ({
   useUserId: () => () => 'macro|me@macro.test',
   useIsAuthenticated: () => () => true,
 }));
-vi.mock('@queries/messages/mutations', () => ({
-  useSendMessageMutation: () => ({ mutate: vi.fn() }),
+const sendMocks = vi.hoisted(() => ({
+  send: vi.fn((_input: { optimisticId: string }) => Promise.resolve()),
+  next: 0,
 }));
+vi.mock('@queries/messages/mutations', async () => {
+  const { useMutation } = await import('@tanstack/solid-query');
+  return {
+    // A real mutation: its per-call callbacks die with the composer, as in the app.
+    useSendMessageMutation: () =>
+      useMutation(() => ({
+        mutationFn: (input: { optimisticId: string }) => sendMocks.send(input),
+      })),
+    newMessageId: () => `message-${++sendMocks.next}`,
+  };
+});
 vi.mock('@queries/messages/typing', () => ({
   usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
 }));
 
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
+import type { MessageParent } from '@service-storage/messages';
 import { codexMentionUser, cursorMentionUser } from '../../macroAi';
+import { currentReplyDraft, replyDraftKeys } from '../../Thread/reply-drafts';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
+import { buildReplyTargetValue } from '../../Thread/utils/message-actions';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
 import { Root } from '../Root';
-import type { InputData, InputHandle } from '../types';
+import type { InputData, InputHandle, InputSnapshot } from '../types';
 
 const baseInput: InputData = {
   mode: 'channel',
@@ -929,5 +951,324 @@ describe('mention people', () => {
     ));
 
     expect(mentionIds()).toContain(CONTACT.id);
+  });
+});
+
+describe('Thread reply sends', () => {
+  const unknown = new ThrownResultError([
+    { code: 'DELIVERY_UNKNOWN', message: 'could not confirm' },
+  ]);
+  const nextFrame = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  /** The next send stays pending until the returned function fails it. */
+  const holdNextSend = () => {
+    let fail: (error: unknown) => void = () => {};
+    sendMocks.send.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        })
+    );
+    return (error: unknown) => fail(error);
+  };
+  const sentIds = () =>
+    sendMocks.send.mock.calls.map(([input]) => input.optimisticId);
+
+  beforeEach(() => {
+    localStorage.clear();
+    sendMocks.send.mockClear();
+    // A test that signs out leaves the sign-out it started finished.
+    endComposerStorageClear();
+  });
+
+  /** One reply input on a thread, opened and closed like a thread's reply. */
+  function mountReply(parent: MessageParent, threadId: string) {
+    const [state, setState] = createSignal<InputSnapshot | undefined>();
+    const [open, setOpen] = createSignal(true);
+    const reply = {
+      handle: undefined as InputHandle | undefined,
+      open,
+      setOpen,
+      state,
+      setState,
+    };
+    const view = () => (
+      <Show when={open()}>
+        <ThreadReplyChannelInput
+          parent={parent}
+          threadId={threadId}
+          replyInputState={state}
+          setReplyInputState={setState}
+          onExit={() => setOpen(false)}
+          onReady={(next) => {
+            reply.handle = next;
+          }}
+        />
+      </Show>
+    );
+    return { reply, view };
+  }
+
+  it('restores a reply of unknown delivery after its composer closed, and sends it again under its id', async () => {
+    const { reply, view } = mountReply(
+      { type: 'channel', id: 'channel-2' },
+      'root-2'
+    );
+    render(view);
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('did this arrive?');
+    expect(await reply.handle?.send()).toBe(true);
+    expect(reply.open()).toBe(false);
+
+    fail(unknown);
+    await nextFrame();
+    reply.setOpen(true);
+    await nextFrame();
+
+    expect(reply.handle?.snapshot().value).toBe('did this arrive?');
+    await reply.handle?.send();
+    expect(sentIds()).toHaveLength(2);
+    expect(sentIds()[1]).toBe(sentIds()[0]);
+  });
+
+  it('keeps a newer draft of the same reply typed in another view', async () => {
+    const parent = { type: 'channel', id: 'channel-3' } as const;
+    const first = mountReply(parent, 'root-3');
+    const second = mountReply(parent, 'root-3');
+    second.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {second.view()}
+      </>
+    ));
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('first reply');
+    expect(await first.reply.handle?.send()).toBe(true);
+    second.reply.setOpen(true);
+    await nextFrame();
+    editorMocks.emitChange?.('new reply in the second view');
+
+    fail(unknown);
+    await nextFrame();
+    first.reply.setOpen(true);
+    await nextFrame();
+
+    expect(second.reply.handle?.snapshot().value).toBe(
+      'new reply in the second view'
+    );
+    expect(first.reply.handle?.snapshot().value).toBe(
+      'new reply in the second view'
+    );
+  });
+
+  it('restores a reply into the thread opened again after its whole channel view closed', async () => {
+    const parent = { type: 'channel', id: 'channel-4' } as const;
+    const [channelOpen, setChannelOpen] = createSignal(true);
+    let latest: ReturnType<typeof mountReply> | undefined;
+    function ChannelView() {
+      latest = mountReply(parent, 'root-4');
+      return latest.view();
+    }
+    render(() => (
+      <Show when={channelOpen()}>
+        <ChannelView />
+      </Show>
+    ));
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('reply before leaving');
+    expect(await latest?.reply.handle?.send()).toBe(true);
+    setChannelOpen(false);
+    setChannelOpen(true);
+    await nextFrame();
+
+    fail(unknown);
+    await nextFrame();
+
+    expect(latest?.reply.handle?.snapshot().value).toBe('reply before leaving');
+  });
+  /** Sends `text` on `reply`, fails it as of unknown delivery, and reopens. */
+  async function failAndReopen(
+    reply: ReturnType<typeof mountReply>['reply'],
+    text: string
+  ) {
+    const fail = holdNextSend();
+    editorMocks.emitChange?.(text);
+    expect(await reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+    reply.setOpen(true);
+    await nextFrame();
+  }
+
+  it('sends the same words under a new id once another reply went to the thread', async () => {
+    const { reply, view } = mountReply(
+      { type: 'channel', id: 'channel-5' },
+      'root-5'
+    );
+    render(view);
+    await nextFrame();
+    await failAndReopen(reply, 'Thanks');
+    expect(reply.handle?.snapshot().value).toBe('Thanks');
+
+    editorMocks.emitChange?.('Something else');
+    await reply.handle?.send();
+    reply.setOpen(true);
+    await nextFrame();
+    editorMocks.emitChange?.('Thanks');
+    await reply.handle?.send();
+
+    expect(sentIds()).toHaveLength(3);
+    expect(new Set(sentIds()).size).toBe(3);
+  });
+
+  it('keeps a reply’s id while a draft is typed in another thread of the channel', async () => {
+    const parent = { type: 'channel', id: 'channel-6' } as const;
+    const first = mountReply(parent, 'root-6a');
+    const other = mountReply(parent, 'root-6b');
+    other.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {other.view()}
+      </>
+    ));
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('first reply');
+    expect(await first.reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+
+    other.reply.setOpen(true);
+    await nextFrame();
+    editorMocks.emitChange?.('draft in another thread');
+    first.reply.setOpen(true);
+    await nextFrame();
+
+    expect(first.reply.handle?.snapshot().value).toBe('first reply');
+    expect(await first.reply.handle?.send()).toBe(true);
+    expect(sentIds()[1]).toBe(sentIds()[0]);
+  });
+
+  it('keeps an unchanged reply’s id with its attachment', async () => {
+    const parent = { type: 'channel', id: 'channel-7' } as const;
+    localStorage.setItem(
+      replyDraftKeys(parent, 'root-7').attachments,
+      JSON.stringify([
+        { id: 'attachment-a', kind: 'document', name: 'notes.md' },
+      ])
+    );
+    const { reply, view } = mountReply(parent, 'root-7');
+    render(view);
+    await nextFrame();
+    await failAndReopen(reply, 'See attachment');
+
+    expect(reply.handle?.snapshot()).toMatchObject({
+      value: 'See attachment',
+      attachments: [{ id: 'attachment-a' }],
+    });
+    expect(await reply.handle?.send()).toBe(true);
+    expect(sentIds()[1]).toBe(sentIds()[0]);
+  });
+
+  it('writes no draft back once composer storage was cleared at sign-out', async () => {
+    const parent = { type: 'channel', id: 'channel-8' } as const;
+    const { reply, view } = mountReply(parent, 'root-8');
+    render(view);
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('private reply');
+    expect(await reply.handle?.send()).toBe(true);
+    clearComposerStorage();
+    fail(unknown);
+    await nextFrame();
+
+    expect(
+      Object.keys(localStorage).filter((key) => key.includes('channel-8'))
+    ).toEqual([]);
+  });
+
+  it('quotes into a restored reply whose composer is closed', async () => {
+    const parent = { type: 'channel', id: 'channel-9' } as const;
+    const { reply, view } = mountReply(parent, 'root-9');
+    render(view);
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('The reply that failed');
+    expect(await reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+
+    // As the channel's quote action builds it, before the composer opens.
+    const before = currentReplyDraft(
+      replyDraftKeys(parent, 'root-9'),
+      reply.state()
+    );
+    expect(before?.value).toBe('The reply that failed');
+    const value = buildReplyTargetValue({
+      channelId: parent.id,
+      message: {
+        id: 'reply-to-quote',
+        thread_id: 'root-9',
+        sender_id: 'macro|someone@example.test',
+        content: 'Quoted text',
+      },
+      renderedText: 'Quoted text',
+      existingValue: before?.value,
+    });
+    expect(value).toContain('reply-to-quote');
+    expect(value).toContain('The reply that failed');
+  });
+
+  it('quotes into the stored draft, not a closed composer’s older snapshot', async () => {
+    const parent = { type: 'channel', id: 'channel-10' } as const;
+    const first = mountReply(parent, 'root-10');
+    const second = mountReply(parent, 'root-10');
+    second.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {second.view()}
+      </>
+    ));
+    await nextFrame();
+    editorMocks.emitChange?.('older words');
+    await nextFrame();
+    const stale = first.reply.state();
+    expect(stale?.value).toBe('older words');
+    first.reply.setOpen(false);
+    second.reply.setOpen(true);
+    await nextFrame();
+    editorMocks.emitChange?.('newer words');
+    await nextFrame();
+
+    const before = currentReplyDraft(replyDraftKeys(parent, 'root-10'), stale);
+    expect(before?.value).toBe('newer words');
+  });
+
+  it('writes no draft back for a reply sent after sign-out cleared composer storage', async () => {
+    const parent = { type: 'channel', id: 'channel-11' } as const;
+    const { reply, view } = mountReply(parent, 'root-11');
+    render(view);
+    await nextFrame();
+    editorMocks.emitChange?.('typed before sign-out');
+    clearComposerStorage();
+    const fail = holdNextSend();
+    expect(await reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+
+    // Sending empties the composer, which may store an empty list; never words.
+    const stored = Object.keys(localStorage)
+      .filter((key) => key.includes('channel-11'))
+      .map((key) => localStorage.getItem(key));
+    expect(stored.filter((value) => value?.includes('sign-out'))).toEqual([]);
+    expect(
+      Object.keys(localStorage).some((key) => key.startsWith('input-value-'))
+    ).toBe(false);
   });
 });

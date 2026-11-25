@@ -3,7 +3,14 @@ import {
   debounce as solidDebounce,
   throttle as solidThrottle,
 } from '@solid-primitives/scheduled';
-import { createEffect, createSignal, onCleanup, untrack } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
@@ -30,6 +37,67 @@ export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
   createEffect(() => schedule(source()));
   onCleanup(() => schedule.clear());
   return debounced;
+}
+
+/**
+ * Calls `func` at the earliest time (`performance.now()` milliseconds) it was
+ * asked for since it last ran; cleared with the caller's owner. `func` may
+ * ask again while it runs.
+ */
+function createWakeUp(func: () => void): (atMs: number) => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let dueMs = Number.POSITIVE_INFINITY;
+  onCleanup(() => clearTimeout(timer));
+  return (atMs) => {
+    if (atMs >= dueMs) return;
+    clearTimeout(timer);
+    dueMs = atMs;
+    timer = setTimeout(
+      () => {
+        dueMs = Number.POSITIVE_INFINITY;
+        func();
+      },
+      Math.max(0, atMs - performance.now())
+    );
+  };
+}
+
+/**
+ * The ids `source` has listed for at least `delay`, in its order. Each id
+ * keeps its own clock from when it joined, on the monotonic clock, so ids
+ * coming and going never postpone one that stays and a wall clock change
+ * moves none; an id that leaves starts again if it returns.
+ */
+export function createRipeIds(
+  source: () => readonly string[],
+  delay: number
+): () => string[] {
+  const since = new Map<string, number>();
+  const [tick, setTick] = createSignal(0);
+  const wakeUp = createWakeUp(() => setTick((n) => n + 1));
+  const state = createMemo(() => {
+    tick();
+    const ids = source();
+    const listed = new Set(ids);
+    const now = performance.now();
+    for (const id of since.keys()) if (!listed.has(id)) since.delete(id);
+    const ripe: string[] = [];
+    let nextMs: number | undefined;
+    for (const id of ids) {
+      const joined = since.get(id) ?? now;
+      since.set(id, joined);
+      if (now - joined >= delay) ripe.push(id);
+      else
+        nextMs = Math.min(nextMs ?? Number.POSITIVE_INFINITY, joined + delay);
+    }
+    return { ripe, nextMs };
+  });
+  createEffect(
+    on(state, ({ nextMs }) => {
+      if (nextMs !== undefined) wakeUp(nextMs);
+    })
+  );
+  return () => state().ripe;
 }
 
 /**

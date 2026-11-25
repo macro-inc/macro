@@ -53,6 +53,11 @@ vi.mock('@macro-inc/collaboration/websocket', async () => {
   };
 });
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: {} }));
+// Every parent reads over REST here.
+vi.mock('../channel-timeline-source', () => ({
+  useChannelReadPath: () => ({ host: () => undefined, mode: () => 'rest' }),
+}));
+vi.mock('../local/channel-sync', () => ({}));
 vi.mock('@tanstack/solid-query', () => ({
   useQuery: (options: () => unknown) => options(),
 }));

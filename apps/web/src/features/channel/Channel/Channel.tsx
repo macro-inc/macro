@@ -41,9 +41,10 @@ import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
-  EntityLoadGate,
-  toEntityLoadError,
-} from '@core/component/EntityLoadGate';
+  composerStorageGeneration,
+  composerStorageWritable,
+} from '@core/auth/clear-composer-storage';
+import { EntityLoadGate } from '@core/component/EntityLoadGate';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -71,9 +72,11 @@ import {
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
+import { replacedBySignIn } from '@queries/auth/account-scope';
 import { recordChannelViewWhenIdle } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
-import { queryReadyGate } from '@queries/gate';
+import { useChannelTimelineSource } from '@queries/messages/channel-timeline-source';
+import { channelCacheHost } from '@queries/messages/local/channel-flag';
 import {
   newMessageId,
   useDeleteMessageMutation,
@@ -85,13 +88,7 @@ import {
   useRemoveReactionMutation,
 } from '@queries/messages/reactions';
 import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
-import {
-  createMessageIndex,
-  getMessageTimelineQueryKey,
-  isMissingMessageError,
-  type MessageTimelineData,
-  useMessageTimelineQuery,
-} from '@queries/messages/timeline';
+import { createMessageIndex } from '@queries/messages/timeline';
 import { timelineEntryKey } from '@queries/messages/timeline-entries';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
@@ -121,12 +118,18 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
+import { createUncertainSends } from '../Input/utils/uncertain-sends';
 import {
   decodeSystemActivityRow,
   mergesSystemActivity,
 } from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
+import {
+  applyQuoteText,
+  currentReplyDraft,
+  replyDraftKeys,
+} from '../Thread/reply-drafts';
 import { ThreadRow } from '../Thread/ThreadRow';
 import { ThreadTypingIndicator } from '../Thread/ThreadTypingIndicator';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
@@ -210,6 +213,12 @@ export type ChannelHandle = {
   focusInput: () => void;
 };
 
+/**
+ * Sends whose delivery is unknown, for every view of a channel: views of one
+ * channel share its draft, so the restored one may be sent from another.
+ */
+const UNCERTAIN_SENDS = createUncertainSends(() => newMessageId());
+
 /** A composer that stays where it is, for a surface with no floating chrome. */
 function InPlaceRegion(props: ParentProps) {
   return <>{props.children}</>;
@@ -273,50 +282,35 @@ export function Channel(props: ChannelProps) {
   const [channelInputHandle, setChannelInputHandle] =
     createSignal<InputHandle>();
 
-  const messagesQuery = useMessageTimelineQuery(
+  const timeline = useChannelTimelineSource(
     () => ({ type: 'channel', id: (() => props.channelId)() }),
     targetMessageController.loadAroundMessageId
   );
-  usePending('channel.messages', () => messagesQuery.isLoading);
-  const isTargetMessageMissing = () =>
-    targetMessageController.loadAroundMessageId() !== undefined &&
-    isMissingMessageError(messagesQuery.error);
+  usePending('channel.messages', timeline.isLoading);
   const messagesLoadResult = {
-    data: () => messagesQuery.data,
+    data: timeline.data,
     // Pagination and background-refresh errors should not replace content that
     // has already loaded. Only initial-loading errors belong to the gate.
-    error: () =>
-      messagesQuery.isLoadingError && !isTargetMessageMissing()
-        ? toEntityLoadError(messagesQuery.error)
-        : undefined,
+    error: timeline.loadError,
     // Keep the loading view mounted while the missing-target handler switches
     // the query back to the latest page.
-    isPending: () => messagesQuery.isPending || isTargetMessageMissing(),
+    isPending: () => timeline.isPending() || timeline.isMissingTarget(),
   };
 
   createEffect(
-    on(
-      [targetMessageController.loadAroundMessageId, () => messagesQuery.error],
-      ([loadAroundMessageId, error]) => {
-        if (!loadAroundMessageId || !isMissingMessageError(error)) return;
+    on(timeline.isMissingTarget, (missing) => {
+      if (!missing) return;
 
-        toast.alert('Message no longer available', {
-          subtext: 'Showing the latest messages instead.',
-        });
-        clearStaleRestoredChannelData(props.channelId);
-        targetMessageController.reset();
-      }
-    )
+      toast.alert('Message no longer available', {
+        subtext: 'Showing the latest messages instead.',
+      });
+      clearStaleRestoredChannelData(props.channelId);
+      targetMessageController.reset();
+    })
   );
 
   // The index reads immediately, before EntityLoadGate's boundary exists.
-  const messageIndex = createMessageIndex(
-    () =>
-      queryReadyGate(messagesQuery)
-        ? (messagesQuery.data as MessageTimelineData)
-        : undefined,
-    mergesSystemActivity
-  );
+  const messageIndex = createMessageIndex(timeline.data, mergesSystemActivity);
 
   const messageById = () => messageIndex.byId;
   // Loaded messages, oldest first; activity rows are not unread targets.
@@ -325,6 +319,7 @@ export function Channel(props: ChannelProps) {
     channelId: props.channelId,
     messages,
     activities: () => messageIndex.activityByKey,
+    followsPushes: () => timeline.mode() === 'local',
     scrollState: threadListScrollState,
     container: threadListContainerEl,
     insets: threadListScrollInsets,
@@ -356,7 +351,7 @@ export function Channel(props: ChannelProps) {
   let entryViewRecorded = false;
   createEffect(
     on(
-      () => queryReadyGate(messagesQuery) && lastViewed().status !== 'pending',
+      () => timeline.isReady() && lastViewed().status !== 'pending',
       (loaded) => {
         // The panel hides what's new in the channel, so it hasn't been seen.
         if (callPanel || !loaded || entryViewRecorded) return;
@@ -382,11 +377,13 @@ export function Channel(props: ChannelProps) {
       () =>
         !!callPanel &&
         !messageById().has(callPanel.rootId) &&
-        messagesQuery.hasNextPage &&
-        !messagesQuery.isFetchingNextPage,
+        timeline.hasOlder() &&
+        !timeline.isLoadingOlder() &&
+        // A failed page is read again after a wait or on reconnect, not in a loop.
+        !timeline.olderFailed(),
       (shouldLoadOlder) => {
         if (shouldLoadOlder) {
-          fireAndForget(messagesQuery.fetchNextPage(), 'channel-call');
+          fireAndForget(timeline.loadOlder(), 'channel-call');
         }
       }
     )
@@ -454,6 +451,8 @@ export function Channel(props: ChannelProps) {
     threadManager.getOrCreateThreadState(threadId).setIsExpanded(true);
     // Reply data and the load-around message window can load in parallel. The
     // mounted query reuses this request and remains the owner of render state.
+    // A channel read from the device loads its threads there instead.
+    if (channelCacheHost()) return;
     queryClient.prefetchQuery(
       threadRepliesQueryOptions(
         { type: 'channel', id: props.channelId },
@@ -466,7 +465,10 @@ export function Channel(props: ChannelProps) {
     prepareTargetReply(props.targetMessageId);
   }
 
-  const threadPaginator = createThreadPaginator(messagesQuery);
+  const threadPaginator = createThreadPaginator(
+    timeline,
+    targetMessageController.windowKey
+  );
   const messageEditor = createMessageEditor({
     parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
 
@@ -491,7 +493,7 @@ export function Channel(props: ChannelProps) {
       activityTracker.isNewMessage,
       // Once there are no older pages left to fetch, the oldest loaded message
       // (index 0) is the true first message in the channel.
-      !messagesQuery.hasNextPage,
+      !timeline.hasOlder(),
       // Only an inline composer extends the rail before a reply exists.
       (message) =>
         !usesUnifiedInput() &&
@@ -568,7 +570,10 @@ export function Channel(props: ChannelProps) {
   ) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
-    const beforeSnapshot = state.replyInputState();
+    const beforeSnapshot = currentReplyDraft(
+      replyDraftKeys({ type: 'channel', id: props.channelId }, threadId),
+      state.replyInputState()
+    );
     const nextSnapshot: InputSnapshot = {
       value: buildReplyTargetValue({
         channelId: props.channelId,
@@ -589,10 +594,7 @@ export function Channel(props: ChannelProps) {
       state.setIsReplying(true);
     }
     requestAnimationFrame(() => {
-      state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot, {
-        focus: false,
-        cursor: 'trailing-paragraph',
-      });
+      applyQuoteText(state.replyInputHandle?.(), nextSnapshot.value);
       state.replyInputFocusRequest.request();
     });
   };
@@ -710,7 +712,12 @@ export function Channel(props: ChannelProps) {
   // A latest request waits for both the query and the rendered list. Keeping
   // its identity prevents a late response from overriding newer navigation.
   let pendingLatest:
-    | { phase: 'loading' | 'waiting-for-layout'; behavior?: ScrollBehavior }
+    | {
+        phase: 'loading' | 'waiting-for-layout';
+        behavior?: ScrollBehavior;
+        /** The message to wait for: scrolling before its row would miss it. */
+        messageId?: string;
+      }
     | undefined;
   const cancelLatestNavigation = () => {
     pendingLatest = undefined;
@@ -720,14 +727,16 @@ export function Channel(props: ChannelProps) {
   const finishLatestNavigation = () => {
     if (
       pendingLatest?.phase !== 'waiting-for-layout' ||
-      messagesQuery.isPending ||
-      messagesQuery.hasPreviousPage
+      timeline.isPending() ||
+      timeline.hasNewer()
     )
       return;
     // Retained data is usable after a pagination error. Wait only if the query
     // has no data yet or the message index still contains the old page.
-    const latestEntry = messagesQuery.data?.pages[0]?.entries[0];
+    const latestEntry = timeline.latestEntry();
+    const { messageId } = pendingLatest;
     if (
+      (messageId === undefined || messageIndex.keys.includes(messageId)) &&
       latestEntry !== undefined &&
       messageIndex.entryKeys.at(-1) === timelineEntryKey(latestEntry) &&
       threadListNavigation()?.scrollToLatest(pendingLatest.behavior)
@@ -735,28 +744,29 @@ export function Channel(props: ChannelProps) {
       cancelLatestNavigation();
   };
 
-  const goToLatest: ChannelHandle['goToLatest'] = async (behavior) => {
-    const request: NonNullable<typeof pendingLatest> = {
-      phase: 'loading',
-      behavior,
-    };
+  // The list reports no scroll for a row added out of sight, so a send waits
+  // for its row here.
+  createEffect(
+    on(() => messageIndex.entryKeys.at(-1), finishLatestNavigation, {
+      defer: true,
+    })
+  );
+
+  const showLatest = async (
+    request: NonNullable<typeof pendingLatest>,
+    /** A page that has to load waits for this. */
+    ready?: Promise<unknown>
+  ) => {
     pendingLatest = request;
     try {
       const needsLatestPage =
-        messagesQuery.hasPreviousPage ||
-        !!targetMessageController.loadAroundMessageId();
-      targetMessageController.reset();
-      if (needsLatestPage) {
-        await queryClient.resetQueries(
-          {
-            queryKey: getMessageTimelineQueryKey(
-              { type: 'channel', id: props.channelId },
-              null
-            ),
-          },
-          { throwOnError: true }
-        );
+        timeline.hasNewer() || !!targetMessageController.loadAroundMessageId();
+      if (needsLatestPage && ready) {
+        await ready;
+        if (pendingLatest !== request) return;
       }
+      targetMessageController.reset();
+      if (needsLatestPage) await timeline.toLatest();
       if (pendingLatest !== request) return;
       request.phase = 'waiting-for-layout';
       finishLatestNavigation();
@@ -765,6 +775,17 @@ export function Channel(props: ChannelProps) {
       if (pendingLatest === request) cancelLatestNavigation();
     }
   };
+
+  const goToLatest: ChannelHandle['goToLatest'] = (behavior) =>
+    showLatest({ phase: 'loading', behavior });
+
+  // What the person sends comes into view, however far up they read. REST
+  // lists it once the server has it; the device lists a pending send itself.
+  const showSend = (messageId: string, delivery: Promise<unknown>) =>
+    showLatest(
+      { phase: 'loading', messageId },
+      timeline.mode() === 'rest' ? delivery : undefined
+    );
 
   const onThreadListScroll = (
     state: ThreadListScrollState,
@@ -825,7 +846,11 @@ export function Channel(props: ChannelProps) {
       snapshot,
     });
 
-    const optimisticId = newMessageId();
+    // Who sends it, where it goes and what it says: the same text in another
+    // channel, or from another account, is another message.
+    const uncertainKey = { senderId, channelId, message: payload.message };
+    const optimisticId = UNCERTAIN_SENDS.idFor(uncertainKey);
+    const storageGeneration = composerStorageGeneration();
     // Send to the optimistic message's paint; channel.send follows delivery.
     const sendUi = startUiOperation('message.send', {
       attributes: { 'channel.id': channelId, 'message.id': optimisticId },
@@ -835,7 +860,7 @@ export function Channel(props: ChannelProps) {
         span.setAttr('message.id', optimisticId);
         span.setAttr('channel.id', channelId);
         try {
-          await sendMessageMutation.mutateAsync({
+          const delivery = sendMessageMutation.mutateAsync({
             parentSpan: span,
             parent: { type: 'channel', id: channelId },
             senderId,
@@ -843,16 +868,22 @@ export function Channel(props: ChannelProps) {
             onOptimisticInsert: sendUi.afterPaint,
             ...payload,
           });
+          fireAndForget(showSend(optimisticId, delivery), 'channel-input');
+          await delivery;
           span.setAttr('composer.outcome', 'succeeded');
-        } catch {
+        } catch (error) {
           sendUi.finish('error');
           span.error('Channel send failed');
+          const replaced = await replacedBySignIn(senderId);
           const handle = channelInputHandle();
           if (
             !handle ||
+            replaced ||
             sendSurfaceDisposed ||
             props.channelId !== channelId ||
-            userId() !== senderId
+            userId() !== senderId ||
+            // Nothing goes back to a composer its sign-out has emptied.
+            !composerStorageWritable(storageGeneration)
           ) {
             span.setAttr('composer.outcome', 'unmounted');
             return;
@@ -863,6 +894,8 @@ export function Channel(props: ChannelProps) {
             return;
           }
           handle.restoreSnapshot(snapshot);
+          // Sent again unchanged, a send that may have arrived keeps its id.
+          UNCERTAIN_SENDS.restored(uncertainKey, optimisticId, error);
           span.setAttr('composer.outcome', 'restored');
         }
       }),
@@ -900,13 +933,11 @@ export function Channel(props: ChannelProps) {
         result={messagesLoadResult}
         loadingFallback={<ChannelLoading />}
         loadErrorTitle="Unable to load this channel"
-        onRetry={() => fireAndForget(messagesQuery.refetch(), 'channel')}
+        onRetry={() => fireAndForget(timeline.retry(), 'channel')}
         unauthorized={
           <ChannelAccessDenied
             channelId={props.channelId}
-            onRefreshChannel={() =>
-              fireAndForget(messagesQuery.refetch(), 'channel')
-            }
+            onRefreshChannel={() => fireAndForget(timeline.retry(), 'channel')}
           />
         }
       >
@@ -939,7 +970,7 @@ export function Channel(props: ChannelProps) {
                       fallback={
                         <Show
                           when={
-                            messagesQuery.isSuccess &&
+                            timeline.isReady() &&
                             channelType() === ChannelTypeEnum.DirectMessage &&
                             !channel()?.agentDm
                           }
@@ -971,7 +1002,7 @@ export function Channel(props: ChannelProps) {
                                   : undefined
                               }
                               insets={threadListScrollInsets()}
-                              followOnAppend={!messagesQuery.hasPreviousPage}
+                              followOnAppend={!timeline.hasNewer()}
                               onScrollNearTop={threadPaginator.shiftPaginate}
                               onScrollNearBottom={
                                 threadPaginator.prependPaginate
@@ -1160,9 +1191,6 @@ export function Channel(props: ChannelProps) {
                                               }
                                               setReplyInputEl={
                                                 state.setReplyInputEl
-                                              }
-                                              replyInputHandle={
-                                                state.replyInputHandle
                                               }
                                               setReplyInputHandle={
                                                 state.setReplyInputHandle

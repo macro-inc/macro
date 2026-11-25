@@ -103,6 +103,10 @@ import { readEmailSendIntents } from '@queries/email/send-queue';
 import { authServiceClient } from '@service-auth/client';
 import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { confirmDialog } from '@ui';
+import {
+  composerStorageGeneration,
+  composerStorageWritable,
+} from './clear-composer-storage';
 import { clearLocalAuthSession, useLogout } from './logout';
 
 describe('logout GraphQL session teardown', () => {
@@ -122,6 +126,21 @@ describe('logout GraphQL session teardown', () => {
     await clearLocalAuthSession();
     expect(order).toEqual(['wipe', 'teardown']);
     expect(setGraphqlSoupSessionActive).toHaveBeenCalledWith(false);
+    client.current.clear();
+  });
+
+  it('lets composers save drafts again when a wipe fails', async () => {
+    client.current = new QueryClient();
+    vi.mocked(clearRegisteredCaches).mockImplementationOnce(
+      async (clearSession) => {
+        await clearSession?.(async () => {});
+      }
+    );
+    vi.mocked(setGraphqlSoupSessionActive).mockImplementationOnce(() => {
+      throw new Error('teardown failed');
+    });
+    await expect(clearLocalAuthSession()).rejects.toThrow('teardown failed');
+    expect(composerStorageWritable(composerStorageGeneration())).toBe(true);
     client.current.clear();
   });
 });
