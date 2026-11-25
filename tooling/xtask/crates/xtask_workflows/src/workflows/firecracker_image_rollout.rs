@@ -26,6 +26,9 @@ use gh_workflow::{
 use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps, vars};
 
+#[cfg(test)]
+mod test;
+
 const VALIDATE: JobHandle<()> = JobHandle::new("validate", ());
 const BUILD: JobHandle<()> = JobHandle::new("build", ());
 
