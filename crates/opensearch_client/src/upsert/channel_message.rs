@@ -33,7 +33,7 @@ pub struct UpsertChannelMessageArgs {
 #[cfg(test)]
 mod test;
 
-#[tracing::instrument(skip(client))]
+#[tracing::instrument(skip_all)]
 pub(crate) async fn upsert_channel_message(
     client: &opensearch::OpenSearch,
     args: &UpsertChannelMessageArgs,

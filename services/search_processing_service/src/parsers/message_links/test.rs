@@ -4,11 +4,11 @@ use super::message_links;
 fn a_link_is_found_whatever_its_label() {
     assert_eq!(
         message_links(
-            "Designs <m-link>{\"url\":\"https://app.sketchpad.design/file/0ABC\",\"text\":\"https://app.sketchpad.design/file/0ABC\",\"title\":\"\"}</m-link> and <m-link>{\"url\":\"https://docs.example.com/d/1AbC/edit?usp=sharing\",\"text\":\"the spec\",\"title\":\"\"}</m-link>"
+            "Designs <m-link>{\"url\":\"https://app.sketchpad.example/file/0ABC\",\"text\":\"https://app.sketchpad.example/file/0ABC\",\"title\":\"\"}</m-link> and <m-link>{\"url\":\"https://docs.example.com/d/1AbC/edit?usp=sharing\",\"text\":\"the spec\",\"title\":\"\"}</m-link>"
         ),
         [
-            "https://app.sketchpad.design/file/0ABC",
-            "https://docs.example.com/d/1AbC/edit?usp=sharing"
+            "https://app.sketchpad.example/file/0ABC",
+            "https://docs.example.com/d/1AbC/edit"
         ]
     );
 }
@@ -60,6 +60,10 @@ fn the_punctuation_around_a_url_is_not_part_of_it() {
         ),
         ("<https://example.com/a>", "https://example.com/a"),
         ("HTTPS://Example.com/A", "HTTPS://Example.com/A"),
+        ("（https://example.com/a）", "https://example.com/a"),
+        ("“https://example.com/a”", "https://example.com/a"),
+        ("https://example.com/a。次に", "https://example.com/a"),
+        ("https://example.com/café", "https://example.com/café"),
     ] {
         assert_eq!(message_links(text), [link], "{text}");
     }
@@ -98,4 +102,38 @@ fn markup_that_does_not_parse_still_shares_its_links() {
         ),
         ["https://example.com/x"]
     );
+}
+
+#[test]
+fn a_link_is_indexed_up_to_its_query_and_fragment() {
+    for (text, link) in [
+        (
+            "https://docs.example.com/d/1/edit?usp=sharing#heading=h.1",
+            "https://docs.example.com/d/1/edit",
+        ),
+        ("https://example.com/a#section", "https://example.com/a"),
+        ("(https://example.com/a?x=(1))", "https://example.com/a"),
+        ("https://example.com?q=1", "https://example.com"),
+    ] {
+        assert_eq!(message_links(text), [link], "{text}");
+    }
+    assert!(message_links("https://?q=1").is_empty());
+}
+
+/// The analyzer of `links` never splits a long run of letters, and a token
+/// over 32,766 bytes would fail the message's whole document.
+#[test]
+fn a_long_link_keeps_its_start() {
+    let path = "é".repeat(20_000);
+    let links = message_links(&format!("see https://example.com/{path} now"));
+    assert_eq!(links.len(), 1);
+    assert!(links[0].len() <= 2048, "{}", links[0].len());
+    assert!(links[0].starts_with("https://example.com/éé"));
+}
+
+/// A run of closing brackets after a link is trimmed in one pass.
+#[test]
+fn a_run_of_closing_brackets_is_trimmed_at_once() {
+    let text = format!("https://example.com/a{}", ").".repeat(200_000));
+    assert_eq!(message_links(&text), ["https://example.com/a"]);
 }

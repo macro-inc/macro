@@ -195,7 +195,7 @@ fn a_link_stands_in_for_text_that_did_not_match() {
         title_key: "name",
         content_key: "content",
     };
-    let link = "https://app.<macro_em>sketchpad</macro_em>.design/file/0ABC".to_string();
+    let link = "https://app.<macro_em>sketchpad</macro_em>.example/file/0ABC".to_string();
     let text = "the <macro_em>sketchpad</macro_em> designs".to_string();
 
     let link_only = parse_highlight_hit(

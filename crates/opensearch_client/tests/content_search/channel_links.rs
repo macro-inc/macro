@@ -41,8 +41,8 @@ const MESSAGES: [Message; 4] = [
     // A link whose label is its URL, on a host with a subdomain.
     Message {
         n: 1,
-        content: "These are the latest designs https://app.sketchpad.design/file/0ABC",
-        links: &["https://app.sketchpad.design/file/0ABC"],
+        content: "These are the latest designs https://app.sketchpad.example/file/0ABC",
+        links: &["https://app.sketchpad.example/file/0ABC"],
     },
     // A link behind a label, whose URL the text does not hold.
     Message {
@@ -76,17 +76,17 @@ const CASES: [Case; 12] = [
         expected: &[1, 3],
     },
     Case {
-        terms: &["sketchpad.design"],
+        terms: &["sketchpad.example"],
         match_type: "partial",
         expected: &[1],
     },
     Case {
-        terms: &["https://app.sketchpad.design/file"],
+        terms: &["https://app.sketchpad.example/file"],
         match_type: "partial",
         expected: &[1],
     },
     Case {
-        terms: &["sketchpad design"],
+        terms: &["sketchpad example"],
         match_type: "exact",
         expected: &[1],
     },
@@ -239,7 +239,7 @@ async fn seed_and_search(
         for (n, snippet) in [
             (
                 1,
-                "https://app.<macro_em>sketchpad</macro_em>.design/file/0ABC",
+                "https://app.<macro_em>sketchpad</macro_em>.example/file/0ABC",
             ),
             (
                 3,

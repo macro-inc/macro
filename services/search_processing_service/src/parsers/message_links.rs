@@ -3,6 +3,8 @@
 //! shows instead, and every URL written out as text (pasted bare, in a
 //! Markdown link, or inside a paste).
 
+use std::collections::HashSet;
+
 use mention_utils::parse::{ParsedXmlText, TextSegment, XmlTag};
 use nom::{
     IResult, Parser,
@@ -15,24 +17,54 @@ use nom::{
 
 use super::message_text::with_pastes_as_content;
 
+/// The longest link indexed whole, in bytes; a longer one keeps its start.
+/// The `pattern` analyzer, unlike `standard`, never splits a long run of
+/// letters and digits, and a token over 32,766 bytes fails the document.
+const MAX_LINK_BYTES: usize = 2048;
+
 /// Every web link in the message `markup`, in the order it shares them and
-/// each once, as written.
+/// each once ([`indexed_link`]).
 pub(crate) fn message_links(markup: &str) -> Vec<String> {
     let text = with_pastes_as_content(markup, with_link_urls);
-    let found = fold_many0(piece, Vec::<&str>::new, |mut links, piece| {
-        if let Some(url) = piece.map(without_closing_punctuation)
-            && is_url(url)
-            && !links.contains(&url)
-        {
-            links.push(url);
-        }
-        links
-    })
+    let found = fold_many0(
+        piece,
+        || (Vec::new(), HashSet::new()),
+        |(mut links, mut seen), piece| {
+            if let Some(link) = piece.and_then(indexed_link)
+                && seen.insert(link)
+            {
+                links.push(link);
+            }
+            (links, seen)
+        },
+    )
     .parse(&text);
     match found {
-        Ok((_, links)) => links.into_iter().map(str::to_owned).collect(),
+        Ok((_, (links, _))) => links.into_iter().map(str::to_owned).collect(),
         Err(_) => Vec::new(),
     }
+}
+
+/// The part of a URL found in text that search indexes: as written, up to its
+/// query or fragment, which hold parameters and tokens (`?usp=sharing`)
+/// rather than words a person remembers, without the punctuation that closes
+/// around it, and at most [`MAX_LINK_BYTES`]. `None` when nothing is left
+/// after its scheme.
+fn indexed_link(url: &str) -> Option<&str> {
+    let url = url.split(['?', '#']).next().unwrap_or(url);
+    let url = without_closing_punctuation(url);
+    let url = url
+        .get(..floor_char_boundary(url, MAX_LINK_BYTES))
+        .unwrap_or(url);
+    is_url(url).then_some(url)
+}
+
+/// The largest index at most `index` that starts a character of `text`.
+fn floor_char_boundary(text: &str, index: usize) -> usize {
+    (0..=index.min(text.len()))
+        .rev()
+        .find(|&boundary| text.is_char_boundary(boundary))
+        .unwrap_or(0)
 }
 
 /// `markup` with each `<m-link>` written as its URL and every other tag left
@@ -85,9 +117,14 @@ fn url(input: &str) -> IResult<&str, &str> {
     .parse(input)
 }
 
+/// A URL holds printable ASCII but for the characters text puts around one,
+/// and letters and digits of any script; other punctuation (`）`, `”`, `。`)
+/// ends it.
 fn is_url_char(c: char) -> bool {
-    !c.is_whitespace()
-        && !c.is_control()
+    if !c.is_ascii() {
+        return c.is_alphanumeric();
+    }
+    c.is_ascii_graphic()
         && !matches!(
             c,
             '<' | '>' | '"' | '`' | '[' | ']' | '{' | '}' | '|' | '\\' | '^'
@@ -102,20 +139,25 @@ fn is_url(candidate: &str) -> bool {
 /// A URL without the punctuation of the sentence it ends, or the bracket that
 /// closes around it: `(see https://example.com/a).` is
 /// `https://example.com/a`, while a bracket the URL opened stays
-/// (`https://en.wikipedia.org/wiki/Rust_(language)`).
+/// (`https://en.wikipedia.org/wiki/Rust_(language)`). One pass from the end,
+/// so a run of closing brackets costs its length.
 fn without_closing_punctuation(url: &str) -> &str {
-    let mut url = url;
-    loop {
-        let trimmed = url.trim_end_matches(['.', ',', ';', ':', '!', '?', '\'', '*', '_', '~']);
-        let trimmed = match trimmed.strip_suffix(')') {
-            Some(inner) if trimmed.matches(')').count() > trimmed.matches('(').count() => inner,
-            _ => trimmed,
-        };
-        if trimmed.len() == url.len() {
-            return url;
+    let mut unopened = url
+        .matches(')')
+        .count()
+        .saturating_sub(url.matches('(').count());
+    let mut end = url.len();
+    for (index, c) in url.char_indices().rev() {
+        match c {
+            '.' | ',' | ';' | ':' | '!' | '?' | '\'' | '*' | '_' | '~' => end = index,
+            ')' if unopened > 0 => {
+                unopened -= 1;
+                end = index;
+            }
+            _ => break,
         }
-        url = trimmed;
     }
+    url.get(..end).unwrap_or(url)
 }
 
 #[cfg(test)]

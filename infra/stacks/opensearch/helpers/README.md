@@ -64,10 +64,13 @@ for future imports. Running `create_indices.ts` alone does not clear an existing
 built-in `pattern` analyzer, so `create_indices.ts` adds it to the live index
 in place (no close, no new index version). Apply it with
 `DRY_RUN=false bun scripts/create_indices.ts` and check it with
-`verify_mappings.ts`, before or after the search code deploys: until messages
-carry the field, the search finds nothing in it. New and edited messages are
-written with their links; existing ones gain them when search-processing
-backfills their channels (`POST /internal/backfill/channels`).
+`verify_mappings.ts` before search-processing deploys the code that writes
+it: the index has `dynamic: false`, so a message written before the mapping
+keeps `links` in its source unindexed until it is written again. Search
+code that queries the field is safe either side of the mapping; an unmapped
+field matches nothing. From the mapping on, new and edited messages are found
+by their links; earlier ones gain them when search-processing backfills their
+channels (`POST /internal/backfill/channels`).
 
 ## Manual provisioning
 

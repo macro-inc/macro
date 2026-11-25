@@ -164,29 +164,33 @@ pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType
     )
 }
 
-/// Words nearly every link URL holds, which a link query leaves out: a term
-/// of only these would match nearly every message that shares a link.
+/// Words nearly every link URL holds, which a link query leaves out.
 const LINK_BOILERPLATE_WORDS: [&str; 3] = ["http", "https", "www"];
 
-/// Endings most hosts share, which name no site on their own; beside other
-/// words (`example.com`) they still narrow a link query.
-const GENERIC_TLDS: [&str; 3] = ["com", "org", "net"];
+/// Words that name no site on their own: the link boilerplate and the
+/// endings most hosts share. A term whose words are only these, or the start
+/// of one (`htt`, `co`, typed on the way to `https://` or `company`), matches
+/// no link; beside other words (`example.com`) they still narrow it.
+const NO_SITE_WORDS: [&str; 6] = ["http", "https", "www", "com", "org", "net"];
 
 /// The query a content term runs against a field of link URLs, which the
 /// built-in `pattern` analyzer splits at every character that is not an ASCII
-/// letter, digit or `_`: `https://app.example.design/a` is `https`, `app`,
-/// `example`, `design`, `a`. The term is split the same way and matched by
+/// letter, digit or `_`: `https://app.sketchpad.example/a` is `https`, `app`,
+/// `sketchpad`, `example`, `a`. The term is split the same way and matched by
 /// [`create_query`]'s rules for those words, as message text is: one word as
-/// a prefix, several in order with the last a prefix (`example.design` finds
-/// `app.example.design`, `example.com` no `github.com/example`). `http`,
-/// `https` and `www` are left out of the term; a term of only those, of only
-/// `com`, `org` or `net`, or a regexp term matches no link.
+/// a prefix, several in order with the last a prefix (`sketchpad.example`
+/// finds `app.sketchpad.example`, `example.com` no `github.com/example`).
+/// `http`, `https` and `www` are left out of the term. A term that names no
+/// site ([`NO_SITE_WORDS`]), one with a letter or digit outside ASCII, which
+/// the analyzer would split into looser ASCII pieces (`über` into `ber`), and
+/// a regexp term match no link.
 pub(crate) fn link_query<'a>(
     query_key: QueryKey,
     field: &str,
     term: &str,
 ) -> Option<QueryType<'a>> {
-    if query_key == QueryKey::Regexp {
+    let non_ascii = term.chars().any(|c| !c.is_ascii() && c.is_alphanumeric());
+    if query_key == QueryKey::Regexp || non_ascii {
         return None;
     }
     let words: Vec<&str> = term
@@ -199,9 +203,11 @@ pub(crate) fn link_query<'a>(
         })
         .collect();
     let names_no_site = words.iter().all(|word| {
-        GENERIC_TLDS
-            .iter()
-            .any(|tld| word.eq_ignore_ascii_case(tld))
+        NO_SITE_WORDS.iter().any(|no_site| {
+            no_site
+                .get(..word.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(word))
+        })
     });
     if names_no_site {
         return None;

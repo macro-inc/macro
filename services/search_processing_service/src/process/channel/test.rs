@@ -171,15 +171,15 @@ fn indexed_links(content: &str) -> Vec<String> {
 /// label hides.
 #[test]
 fn a_message_indexes_the_links_it_shares_beside_its_text() {
-    let content = "Mostly the team's designs <m-link>{\"url\":\"https://app.sketchpad.design/file/0ABC\",\"text\":\"https://app.sketchpad.design/file/0ABC\",\"title\":\"\"}</m-link>, notes in <m-link>{\"url\":\"https://docs.example.com/d/1\",\"text\":\"the spec\",\"title\":\"\"}</m-link>";
+    let content = "Mostly the team's designs <m-link>{\"url\":\"https://app.sketchpad.example/file/0ABC\",\"text\":\"https://app.sketchpad.example/file/0ABC\",\"title\":\"\"}</m-link>, notes in <m-link>{\"url\":\"https://docs.example.com/d/1\",\"text\":\"the spec\",\"title\":\"\"}</m-link>";
     assert_eq!(
         indexed_content(content),
-        "Mostly the team's designs https://app.sketchpad.design/file/0ABC, notes in the spec"
+        "Mostly the team's designs https://app.sketchpad.example/file/0ABC, notes in the spec"
     );
     assert_eq!(
         indexed_links(content),
         [
-            "https://app.sketchpad.design/file/0ABC",
+            "https://app.sketchpad.example/file/0ABC",
             "https://docs.example.com/d/1"
         ]
     );
