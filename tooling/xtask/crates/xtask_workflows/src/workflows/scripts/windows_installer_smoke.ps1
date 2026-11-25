@@ -3,10 +3,10 @@ Set-StrictMode -Version Latest
 
 # Installs the built installer the way a user's machine would run it and
 # checks what it registered. With LAUNCH=true it then launches Macro, checks
-# that WebView2 starts, and uninstalls. With DEVTOOLS_PORT set (the unsigned
-# pull request build, which opens WebView2's DevTools port) it also checks the
-# page loaded; without it, a build that may be released, Macro and WebView2
-# must stay up for 30 seconds and the port must stay closed. INSTALLER is the
+# that it and WebView2 start and stay up for 30 seconds, and uninstalls. With
+# DEVTOOLS_PORT set (the unsigned pull request build, which opens WebView2's
+# DevTools port) it also checks the page loaded; without it, a build that may
+# be released, WebView2 must have started without a debugging port. INSTALLER is the
 # installer's path, which may be a wildcard matching one file;
 # EXPECT_SIGNED=true also requires a valid Authenticode signature on it and on
 # what it installs.
@@ -90,13 +90,6 @@ try {
 
   if (-not $env:DEVTOOLS_PORT) {
     if ($browser.CommandLine -match '--remote-debugging') { throw 'This build opens the WebView2 DevTools port, which only the pull request build may' }
-    $until = (Get-Date).AddSeconds(30)
-    while ((Get-Date) -lt $until) {
-      Start-Sleep -Seconds 2
-      if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after WebView2 started" }
-      if (-not (Get-Process -Id $browser.ProcessId -ErrorAction SilentlyContinue)) { throw 'WebView2 exited while Macro ran' }
-    }
-    Write-Output 'Macro and WebView2 stayed up for 30 seconds'
   } else {
     $port = [int]$env:DEVTOOLS_PORT
     if ($browser.CommandLine -notmatch "--remote-debugging-port=$port\b") { throw "WebView2 did not get --remote-debugging-port=$port" }
@@ -170,10 +163,15 @@ try {
       $socket.Dispose()
       $timeout.Dispose()
     }
-
-    Start-Sleep -Seconds 5
-    if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after loading" }
   }
+
+  $until = (Get-Date).AddSeconds(30)
+  while ((Get-Date) -lt $until) {
+    Start-Sleep -Seconds 2
+    if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after WebView2 started" }
+    if (-not (Get-Process -Id $browser.ProcessId -ErrorAction SilentlyContinue)) { throw 'WebView2 exited while Macro ran' }
+  }
+  Write-Output 'Macro and WebView2 stayed up for 30 seconds'
 } catch {
   # Whether WebView2 started, with which switches, and what it listens on.
   try {

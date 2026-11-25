@@ -31,6 +31,11 @@ configs=(--config "$(cygpath -w "$PWD/windows-input/tauri.release.json")" --conf
 # build_windows_frontend.sh). Nothing else that is merged may open it, so a
 # build that can be signed or published never does.
 for config in "$app/tauri.conf.json" "$app/tauri.windows.conf.json" windows-input/tauri.release.json "$signing_config"; do
+  # grep cannot tell a missing file from one without the switch.
+  if [ ! -f "$config" ]; then
+    echo "Missing Tauri config $config" >&2
+    exit 1
+  fi
   if grep -q remote-debugging "$config"; then
     echo "$config opens the WebView2 DevTools port" >&2
     exit 1
