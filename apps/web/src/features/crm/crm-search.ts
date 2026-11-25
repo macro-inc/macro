@@ -1,4 +1,7 @@
-import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+import {
+  crmAccessAllowed,
+  crmAccessAuthority,
+} from '@service-storage/crm-access-authority';
 
 export { materializeCachedGraphqlCrmCompanies } from './queries/graphql';
 
@@ -54,8 +57,9 @@ export function useCrmCompanyPickerSearch(search: Accessor<string>) {
     () => search().trim(),
     COMPANY_PICKER_SEARCH_DEBOUNCE_MS
   );
+  // Records, not an entry point: read only once access is proven.
   const enabled = () =>
-    crmAccessAllowed() &&
+    crmAccessAuthority.allowed() &&
     query().length > 0 &&
     validateSearchServiceText(query());
   const source = useCrmCompanySearchSource(query, enabled);
