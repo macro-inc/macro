@@ -79,7 +79,7 @@ fn read(connection: &Db, scope: &str, pending: Option<SalvagedQueue>, now_ms: i6
         }
     };
     let held = match held {
-        Held::Queue(held) => held,
+        Held::Queue(held) => *held,
         Held::Nothing => {
             return QueueRead {
                 queue: pending,
@@ -187,7 +187,9 @@ fn holds(connection: &Db, pending: &SalvagedQueue) -> Result<bool, TursoStorageE
 }
 
 enum Held {
-    Queue(HeldQueue),
+    /// Boxed: the stored schema the queue carries makes it far larger than
+    /// the other variants.
+    Queue(Box<HeldQueue>),
     /// No cache was made of this database since it was wiped or created.
     Nothing,
     /// No queue this build can read.
@@ -289,7 +291,7 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
     }
     held.complete = rows.is_ok();
     if held.queue.is_empty() {
-        return Ok(Held::Queue(held));
+        return Ok(Held::Queue(Box::new(held)));
     }
     let authority = metadata_record(connection, AUTHORITY_META_KEY)?;
     for (key, value) in [
@@ -313,7 +315,7 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
         .collect::<Result<HashSet<_>, _>>()?;
     // Projections only place a pending write in lists before it settles.
     held.queue.shadows = shadows(connection, &owners).unwrap_or_default();
-    Ok(Held::Queue(held))
+    Ok(Held::Queue(Box::new(held)))
 }
 
 /// The account an identity record names.

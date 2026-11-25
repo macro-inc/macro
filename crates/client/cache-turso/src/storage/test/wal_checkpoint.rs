@@ -526,7 +526,7 @@ fn a_reset_tier_on_an_owned_wal_stands_through_a_crash_before_any_copy() {
     );
     drop(storage);
 
-    let mut reopened = open(&io, path, false);
+    let reopened = open(&io, path, false);
     assert_eq!(
         adopt(&reopened, ROOTS, &ProjectionInputs::none()).change,
         None,
