@@ -5,6 +5,7 @@
  * with no further planner call or action.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -127,34 +128,71 @@ const isMainFrame = (request: Request, page: Page): boolean => {
   }
 };
 
+type LabResponse = {
+  status: number;
+  headers: Record<string, string>;
+  body: Buffer;
+};
+
 /**
- * Sends an allowed request from the runner itself, never following a
- * redirect: a redirect is recorded and the request fails.
+ * One request straight to the lab origin over `node:http`. Not `fetch`:
+ * Bun's fetch sends even loopback requests through HTTP_PROXY, and this one
+ * carries the capability. `node:http` neither uses a proxy nor follows
+ * redirects nor decodes the body, so the headers it returns
+ * (content-encoding included) describe the bytes as they are.
+ */
+const labRequest = (
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: Buffer | null
+): Promise<LabResponse> =>
+  new Promise((resolve, reject) => {
+    const outgoing = httpRequest(url, { method, headers }, (incoming) => {
+      const chunks: Buffer[] = [];
+      incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+      incoming.on('error', reject);
+      incoming.on('end', () => {
+        const flat: Record<string, string> = {};
+        for (const [name, value] of Object.entries(incoming.headers)) {
+          if (value !== undefined) {
+            flat[name] = Array.isArray(value) ? value.join(', ') : value;
+          }
+        }
+        resolve({
+          status: incoming.statusCode ?? 502,
+          headers: flat,
+          body: Buffer.concat(chunks),
+        });
+      });
+    });
+    outgoing.on('error', reject);
+    outgoing.end(body ?? undefined);
+  });
+
+/**
+ * Sends an allowed request from the runner itself (the browser's own
+ * network is a dead proxy; only the lab origin reaches this point), never
+ * following a redirect: a redirect is recorded and the request fails.
  */
 const forward = async (
   route: Route,
   headers: Record<string, string>,
   observed: Observations
 ) => {
-  // The runner's own fetch, not the browser's (whose network is a dead
-  // proxy): the lab is the only origin that reaches this point.
   const request = route.request();
-  const response = await fetch(request.url(), {
-    method: request.method(),
+  const response = await labRequest(
+    request.url(),
+    request.method(),
     headers,
-    body: request.postDataBuffer() ?? undefined,
-    redirect: 'manual',
-  });
+    request.postDataBuffer()
+  );
   if (response.status >= 300 && response.status < 400) {
     observed.redirects += 1;
     await route.abort('blockedbyclient');
     return;
   }
-  await route.fulfill({
-    status: response.status,
-    headers: Object.fromEntries(response.headers),
-    body: Buffer.from(await response.arrayBuffer()),
-  });
+  await route.fulfill(response);
 };
 
 type Session = {
