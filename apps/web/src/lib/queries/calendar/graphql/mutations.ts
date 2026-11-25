@@ -127,6 +127,104 @@ const landedReplies = new Map<string, CalendarOccurrenceItem>();
 const LANDED_REPLY_LIMIT = 16;
 const landedListeners = new Set<(localId: string, serverId: string) => void>();
 
+/** One occurrence of one event: the pair the calendar keys its chips by. */
+export interface CalendarOccurrenceRef {
+  eventId: string;
+  occurrenceKey: string;
+}
+
+const occurrenceRef = (eventId: string, occurrenceKey: string) =>
+  JSON.stringify([eventId, occurrenceKey]);
+
+/** Occurrences a move made here is replacing, until its answer is read. */
+const movingOccurrences = new Set<string>();
+/**
+ * The occurrence each of the latest moves' answers put in place of the one it
+ * moved: a moved event keeps its id, but its occurrence takes the key of its
+ * new start. Open details follow it there, as they follow a create to its
+ * server copy. Sign-out reloads the app, which drops them.
+ */
+const movedOccurrences = new Map<string, CalendarOccurrenceRef>();
+const MOVED_OCCURRENCE_LIMIT = 16;
+const movedListeners = new Set<() => void>();
+
+/** Whether a move made here of this occurrence still waits for its answer. */
+export function isCalendarOccurrenceMoving(
+  eventId: string,
+  occurrenceKey: string
+): boolean {
+  return movingOccurrences.has(occurrenceRef(eventId, occurrenceKey));
+}
+
+/** The occurrence a move made here put in place of this one, once answered. */
+export function movedCalendarOccurrence(
+  eventId: string,
+  occurrenceKey: string
+): CalendarOccurrenceRef | undefined {
+  return movedOccurrences.get(occurrenceRef(eventId, occurrenceKey));
+}
+
+/** Calls `listener` when a move made here is answered or fails. */
+export function onCalendarOccurrenceMoved(listener: () => void): () => void {
+  movedListeners.add(listener);
+  return () => movedListeners.delete(listener);
+}
+
+/**
+ * The occurrence a time change moves: the one it addresses, or a standalone
+ * event's only one. A series moves every instance, so none is followed.
+ */
+function movedOccurrence(
+  event: EventRecord | undefined,
+  occurrences: readonly OccurrenceRecord[],
+  occurrenceKey: string | undefined,
+  { oneOccurrence, recurring }: { oneOccurrence: boolean; recurring: boolean }
+): OccurrenceRecord | undefined {
+  if (oneOccurrence)
+    return occurrences.find(
+      (occurrence) => occurrence.occurrenceKey === occurrenceKey
+    );
+  if (!event || recurring) return undefined;
+  const standalone = occurrences.filter((occurrence) =>
+    isStandalone(event, occurrence)
+  );
+  return standalone.length === 1 ? standalone[0] : undefined;
+}
+
+/**
+ * The occurrence an answer put in place of `moved`: a series instance keeps
+ * its provider's original start, and a standalone event has one occurrence.
+ */
+function replacingOccurrence(
+  payload: Payload,
+  moved: OccurrenceRecord
+): OccurrenceRecord | undefined {
+  const live = payload.occurrences.filter(
+    (occurrence) => !occurrence.isCancelled
+  );
+  if (moved.recurrenceId !== null)
+    return live.find(
+      (occurrence) => occurrence.recurrenceId === moved.recurrenceId
+    );
+  return live.length === 1 ? live[0] : undefined;
+}
+
+function recordMove(moved: OccurrenceRecord, replacing: OccurrenceRecord) {
+  const from = occurrenceRef(moved.eventId, moved.occurrenceKey);
+  const to = occurrenceRef(replacing.eventId, replacing.occurrenceKey);
+  if (from === to) return;
+  // The occurrence moved to is current again, whatever an older move said.
+  movedOccurrences.delete(to);
+  movedOccurrences.delete(from);
+  movedOccurrences.set(from, {
+    eventId: replacing.eventId,
+    occurrenceKey: replacing.occurrenceKey,
+  });
+  const oldest = movedOccurrences.keys().next().value;
+  if (movedOccurrences.size > MOVED_OCCURRENCE_LIMIT && oldest !== undefined)
+    movedOccurrences.delete(oldest);
+}
+
 /** Whether `eventId` is a local event the server has not confirmed yet. */
 export function isCalendarEventCreating(eventId: string): boolean {
   return pendingCreates.has(eventId);
@@ -525,7 +623,14 @@ export async function executeGraphqlUpdate(
     !oneOccurrence &&
     recurring &&
     (patch.time != null || patch.recurrenceLines != null);
-  const result = await executeOptimisticMutation(
+  const moved = time
+    ? movedOccurrence(event, occurrences, args.occurrenceKey, {
+        oneOccurrence,
+        recurring,
+      })
+    : undefined;
+  const movedRef = moved && occurrenceRef(moved.eventId, moved.occurrenceKey);
+  const sent = executeOptimisticMutation(
     client,
     UpdateCalendarEventDocument,
     {
@@ -600,13 +705,35 @@ export async function executeGraphqlUpdate(
     } as OptimisticResponse<UpdateCalendarEventMutation>,
     {
       uuid: uuidv4(),
-      onEnqueued: args.onAccepted,
+      onEnqueued: () => {
+        if (movedRef) movingOccurrences.add(movedRef);
+        args.onAccepted?.();
+      },
       ...(uncertain
         ? { uncertainCalendarEventKeys: [eventKey(args.eventId)] }
         : {}),
     }
   ).toPromise();
-  return settle(host, result, result.data?.updateCalendarEvent ?? undefined);
+  try {
+    const result = await sent;
+    const payload = result.data?.updateCalendarEvent ?? undefined;
+    // Recorded before the answer replaces the event's occurrences, so the
+    // moved occurrence leaves the calendar only once its details can follow.
+    const replacing =
+      moved &&
+      payload &&
+      !result.error &&
+      optimisticMutationDispositionOf(result)?.kind !== 'queued'
+        ? replacingOccurrence(payload, moved)
+        : undefined;
+    if (moved && replacing) recordMove(moved, replacing);
+    return await settle(host, result, payload);
+  } finally {
+    if (movedRef) {
+      movingOccurrences.delete(movedRef);
+      for (const listener of [...movedListeners]) listener();
+    }
+  }
 }
 
 /** Deletes an event, one occurrence, or an occurrence onward. */

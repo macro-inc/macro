@@ -5,6 +5,8 @@ import {
   createdCalendarEventId,
   createdCalendarOccurrence,
   isCalendarEventCreating,
+  isCalendarOccurrenceMoving,
+  movedCalendarOccurrence,
 } from '@queries/calendar/graphql/mutations';
 import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
 import {
@@ -34,15 +36,25 @@ interface CalendarDisplaySettings {
   readonly timeFormat: CalendarTimeFormat;
 }
 
+/**
+ * Reports the event the open details name. A selection that lands on what
+ * replaced it also names the occurrence it landed on, which a moved event
+ * changes: a link's locator for the one it replaced no longer leads to it.
+ */
+type FocusedEventIdChange = (
+  eventId: string | undefined,
+  landedOccurrenceKey?: string
+) => void;
+
 type CalendarViewContextProps = ParentProps<{
   periodView?: CalendarPeriodView;
   focusedEventId?: string;
   onPeriodViewChange?: (periodView: CalendarPeriodView) => void;
-  onFocusedEventIdChange?: (eventId: string | undefined) => void;
+  onFocusedEventIdChange?: FocusedEventIdChange;
 }>;
 
 export function createCalendarEventSelection(
-  onFocusedEventIdChange?: (eventId: string | undefined) => void
+  onFocusedEventIdChange?: FocusedEventIdChange
 ) {
   const [event, setEvent] = createSignal<CalendarEvent>();
   const [anchor, setAnchor] = createSignal<HTMLElement>();
@@ -78,14 +90,17 @@ export function createCalendarEventSelection(
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
   };
-  /** Moves the selection from a created event's local id to its server id. */
+  /**
+   * Moves the selection to what replaced it: a created event's server copy,
+   * or the occurrence a move put in place of the selected one.
+   */
   const land = (nextEvent: CalendarEvent, nextChip?: HTMLElement) => {
     batch(() => {
       setEvent(() => nextEvent);
       // A list selection stays on its row, as in `reanchor`.
       if (nextChip && origin() === 'grid') setAnchor(nextChip);
     });
-    onFocusedEventIdChange?.(nextEvent.eventId);
+    onFocusedEventIdChange?.(nextEvent.eventId, nextEvent.occurrenceKey);
   };
   // A grid selection follows its chip when the grid replaces it. A list
   // selection stays on its row, so a chip mounting late never moves it.
@@ -144,6 +159,27 @@ function landedEvent(
     onPage.find((event) => event.occurrenceKey === selected.occurrenceKey) ??
     answered(selected.eventId) ??
     sameOccurrence(selected, onPage)
+  );
+}
+
+/**
+ * The page's copy of the occurrence a move made here put in place of the
+ * selected one. Until the page draws it, the selection stays on what the page
+ * draws, so a later move of the event back never leads to an old answer.
+ */
+function movedEvent(
+  selected: OccurrenceRef,
+  eventsById: ReadonlyMap<string, CalendarEvent>
+): CalendarEvent | undefined {
+  const moved = movedCalendarOccurrence(
+    selected.eventId,
+    selected.occurrenceKey
+  );
+  if (!moved) return undefined;
+  return [...eventsById.values()].find(
+    (event) =>
+      event.eventId === moved.eventId &&
+      event.occurrenceKey === moved.occurrenceKey
   );
 }
 
@@ -272,7 +308,9 @@ export const [CalendarViewContextProvider, useCalendarView] =
       ) => {
         const selected = selection.event();
         if (!selected) return;
-        const landed = landedEvent(selected, eventsById, answeredEvent);
+        const landed =
+          landedEvent(selected, eventsById, answeredEvent) ??
+          movedEvent(selected, eventsById);
         const event = landed ? undefined : eventsById.get(selected.id);
         if (landed) {
           if (isCalendarEventVisible(landed, isSourceVisible))
@@ -284,11 +322,16 @@ export const [CalendarViewContextProvider, useCalendarView] =
           else closeEventDetails();
         } else if (
           isCalendarEventCreating(selected.eventId) ||
+          isCalendarOccurrenceMoving(
+            selected.eventId,
+            selected.occurrenceKey
+          ) ||
           selectionOnPage(selected, eventsById)
         ) {
           // The server's copy replaces a created event's local one; its
           // details stay open until the server's id is known, and then
-          // until the page draws the server's copy.
+          // until the page draws the server's copy. A moved occurrence's
+          // stay open until the move's answer names what replaced it.
           return;
         } else if (
           (rangeIsCurrent || selected.teamProjection) &&

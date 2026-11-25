@@ -1,6 +1,7 @@
 // Real production worker/WASM/OPFS and mutation queue with a scripted server:
 // a calendar create is saved locally before the server answers, lands under
-// the server's id, or leaves the calendar when the server refuses it.
+// the server's id, or leaves the calendar when the server refuses it; a
+// created event moved an hour lands on the occurrence the server keys anew.
 import { CalendarOccurrenceItemFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
 import {
   createClient,
@@ -13,7 +14,10 @@ import {
   createdCalendarEventId,
   createdCalendarOccurrence,
   executeGraphqlCreate,
+  executeGraphqlUpdate,
   isCalendarEventCreating,
+  isCalendarOccurrenceMoving,
+  movedCalendarOccurrence,
   trackCalendarCreateSettlements,
 } from '../../../queries/calendar/graphql/mutations';
 import {
@@ -35,6 +39,7 @@ declare global {
   interface Window {
     calendarCreate: {
       run: (answer: Answer, options?: RunOptions) => Promise<unknown>;
+      move: () => Promise<unknown>;
     };
   }
 }
@@ -55,12 +60,18 @@ const TIME = {
   endsAt: '2026-11-28T16:00:00+00:00',
   timeZone: 'UTC',
 };
+/** An hour later, where a drag drops the event. */
+const MOVED_TIME = {
+  ...TIME,
+  startsAt: '2026-11-28T16:00:00+00:00',
+  endsAt: '2026-11-28T17:00:00+00:00',
+};
 
 /** Releases the held server answer; set once the request arrives. */
 let release: (() => void) | undefined;
 const requestArrived = () => release !== undefined;
 const answerRequest = () => release?.();
-let answer: Answer = 'create';
+let answer: Answer | 'move' = 'create';
 let serverRequests = 0;
 
 function respond(body: unknown) {
@@ -70,13 +81,50 @@ function respond(body: unknown) {
   });
 }
 
+/**
+ * The moved event as the provider answers: same id, its occurrence keyed by
+ * its new start.
+ */
+function movedAnswer(eventId: string) {
+  const event = graphqlEvent({
+    id: eventId,
+    title: 'Offsite move',
+    eventType: 'DEFAULT',
+    recurrenceLines: [],
+    time: MOVED_TIME,
+  });
+  return respond({
+    data: {
+      updateCalendarEvent: {
+        __typename: 'GraphqlCalendarMutationPayload',
+        event,
+        occurrences: [
+          graphqlOccurrence({
+            id: `${eventId}:${MOVED_TIME.startsAt}`,
+            eventId,
+            occurrenceKey: MOVED_TIME.startsAt,
+            time: MOVED_TIME,
+            event,
+          }),
+        ],
+        deletedEventId: null,
+      },
+    },
+  });
+}
+
 /** Answers the create once the test releases it, as the provider would. */
 async function server(_input: RequestInfo | URL, init?: RequestInit) {
   serverRequests += 1;
   const request = JSON.parse(String(init?.body ?? '{}'));
+  // The move's event is created first, and answered at once.
+  if (answer === 'move' && request.operationName !== 'UpdateCalendarEvent')
+    return createdAnswer(request);
   await new Promise<void>((resolve) => {
     release = resolve;
   });
+  if (request.operationName === 'UpdateCalendarEvent')
+    return movedAnswer(request.variables.input.eventId);
   if (answer === 'refuse')
     return respond({
       data: null,
@@ -87,6 +135,10 @@ async function server(_input: RequestInfo | URL, init?: RequestInit) {
         },
       ],
     });
+  return createdAnswer(request);
+}
+
+function createdAnswer(request: { variables: { input: { title: string } } }) {
   const serverId = `server-${serverRequests}`;
   const event = graphqlEvent({
     id: serverId,
@@ -284,8 +336,82 @@ async function run(next: Answer, options: RunOptions = {}) {
   };
 }
 
+/**
+ * Creates an event, then moves it an hour as a grid drag does, holding the
+ * server's answer to the move.
+ */
+async function move() {
+  await coverTheDay();
+  answer = 'move';
+  const created = await executeGraphqlCreate(
+    {
+      title: 'Offsite move',
+      calendarId: 'calendar-1',
+      emailLinkId: 'link-1',
+      time: { kind: 'timed', startsAt: TIME.startsAt, endsAt: TIME.endsAt },
+    },
+    client,
+    host
+  );
+  const eventId = created.event?.id ?? '';
+  const occurrenceAt = (start: string) =>
+    `GraphqlCalendarOccurrence:${eventId}:${start}`;
+  await until(
+    async () => (await eventsOnTheDay()).includes(occurrenceAt(TIME.startsAt)),
+    'the created event on the calendar'
+  );
+
+  release = undefined;
+  const moved = executeGraphqlUpdate(
+    host,
+    {
+      eventId,
+      calendarId: 'calendar-1',
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: MOVED_TIME.startsAt,
+          endsAt: MOVED_TIME.endsAt,
+        },
+      },
+    },
+    client
+  );
+  await until(async () => requestArrived(), 'the move');
+  // The local move keeps the occurrence's id; only its time changes.
+  const beforeAnswer = {
+    moving: isCalendarOccurrenceMoving(eventId, TIME.startsAt),
+    shown: (await eventsOnTheDay()).filter((key) =>
+      key.startsWith(`GraphqlCalendarOccurrence:${eventId}:`)
+    ),
+  };
+
+  answerRequest();
+  await moved;
+  await until(async () => {
+    const keys = await eventsOnTheDay();
+    return (
+      keys.includes(occurrenceAt(MOVED_TIME.startsAt)) &&
+      !keys.includes(occurrenceAt(TIME.startsAt))
+    );
+  }, 'the saved occurrence to replace the moved one');
+  return {
+    beforeAnswer: {
+      ...beforeAnswer,
+      shown: beforeAnswer.shown.map((key) =>
+        key === occurrenceAt(TIME.startsAt) ? 'moved occurrence' : key
+      ),
+    },
+    // Open details follow the moved occurrence to the one the answer keyed.
+    movedTo:
+      movedCalendarOccurrence(eventId, TIME.startsAt)?.occurrenceKey ===
+      MOVED_TIME.startsAt,
+    moving: isCalendarOccurrenceMoving(eventId, TIME.startsAt),
+  };
+}
+
 // The app stamps its writes with the owner's generation; the engine refuses
 // optimistic content stamped with any other.
 cacheSessionGeneration.initialize((await host.authority!.current()).generation);
-window.calendarCreate = { run };
+window.calendarCreate = { run, move };
 result.dataset.status = 'ready';

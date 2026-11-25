@@ -10,15 +10,22 @@ const mocks = vi.hoisted(() => ({
   markRead: vi.fn(async () => {}),
   setSearch: vi.fn(),
   notificationSource: { id: 'notification-source' },
-  focusEvent: (_eventId: string | undefined) => {},
+  focusEvent: (
+    _eventId: string | undefined,
+    _landedOccurrenceKey?: string
+  ) => {},
   isInlinePreview: false,
   contentParams: undefined as Record<string, unknown> | undefined,
   searchEventId: '',
+  searchOccurrenceKey: '',
 }));
 
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
   CalendarViewContextProvider: (props: {
-    onFocusedEventIdChange: (eventId: string | undefined) => void;
+    onFocusedEventIdChange: (
+      eventId: string | undefined,
+      landedOccurrenceKey?: string
+    ) => void;
     children: JSX.Element;
   }) => {
     mocks.focusEvent = props.onFocusedEventIdChange;
@@ -38,7 +45,7 @@ vi.mock('@app/lib/split-router', () => ({
   createSearchParams: () => [
     {
       eventId: mocks.searchEventId,
-      occurrenceKey: '',
+      occurrenceKey: mocks.searchOccurrenceKey,
       startDate: '',
       endDate: '',
     },
@@ -100,6 +107,7 @@ beforeEach(() => {
   mocks.isInlinePreview = false;
   mocks.contentParams = undefined;
   mocks.searchEventId = '';
+  mocks.searchOccurrenceKey = '';
 });
 
 afterEach(cleanup);
@@ -166,5 +174,34 @@ describe('marking an event read when Calendar lands on it', () => {
       mocks.notificationSource,
       { type: 'calendar_event', id: 'next-event' }
     );
+  });
+});
+
+describe('the URL of details that followed a moved event', () => {
+  const FROM = '2026-11-28T15:00:00+00:00';
+
+  it('drops a link’s locator for the occurrence the move replaced', () => {
+    mocks.searchEventId = 'event';
+    mocks.searchOccurrenceKey = FROM;
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', '2026-11-28T16:00:00+00:00');
+
+    expect(mocks.setSearch).toHaveBeenCalledExactlyOnceWith(
+      { eventId: 'event' },
+      { mode: 'replace', history: 'replace' }
+    );
+  });
+
+  it('keeps a link’s locator for the occurrence it still names', () => {
+    mocks.searchEventId = 'event';
+    mocks.searchOccurrenceKey = FROM;
+    openCalendar();
+    mocks.focusEvent('event');
+
+    mocks.focusEvent('event', FROM);
+
+    expect(mocks.setSearch).not.toHaveBeenCalled();
   });
 });
