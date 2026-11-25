@@ -38,6 +38,21 @@ export const fixturePage = (path: string): Response => {
         <div class="g-recaptcha" data-sitekey="${recaptchaTestKey}"></div>
         <textarea name="g-recaptcha-response" style="display:none"></textarea>
       </form>`);
+  if (path === '/recaptcha-method-callback')
+    return html(`
+      <form id="contact">
+        <div class="g-recaptcha" data-sitekey="${recaptchaTestKey}" data-callback="widget.onSuccess"></div>
+        <textarea name="g-recaptcha-response" style="display:none"></textarea>
+      </form>
+      <script>
+        window.widget = {
+          name: 'contact-widget',
+          onSuccess(token) {
+            document.body.dataset.calledOn = this.name;
+            document.body.dataset.token = token;
+          },
+        };
+      </script>`);
   if (path === '/recaptcha-v3')
     return html(`
       <script type="text/plain" src="https://www.google.com/recaptcha/api.js?render=${recaptchaTestKey}"></script>
