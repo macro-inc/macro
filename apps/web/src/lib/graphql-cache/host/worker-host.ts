@@ -1135,6 +1135,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    */
   function leave(mode: 'leaving' | 'navigation'): void {
     state = 'disposing';
+    stopPing?.();
     releaseTransportWaiters();
     disposalMode = mode;
     clearSubscribers();
@@ -1167,6 +1168,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // every already-admitted RPC has a response or its existing read timer.
     // Mutations deliberately have no arbitrary disposal timeout.
     state = 'disposing';
+    stopPing?.();
     disposalMode = 'draining';
     clearSubscribers();
     // Keep pagehide armed through coordinator retirement so navigation can

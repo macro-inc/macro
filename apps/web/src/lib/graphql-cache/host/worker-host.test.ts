@@ -1350,6 +1350,33 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('ends an authority read whose host is disposed while hidden', async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    const adapters: FakePageAdapter[] = [];
+    configureAdapter = (fake) => adapters.push(fake);
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const [lost] = adapters;
+    lost.ignoredKinds.add('current-authority');
+    lost.ping.mockImplementation(() => true);
+    visibility.mockReturnValue('hidden');
+    await vi.advanceTimersByTimeAsync(1);
+    const failed = vi.fn();
+    const authority = host.authority?.current().catch(failed);
+    await vi.advanceTimersByTimeAsync(
+      COORDINATOR_CONNECT_TIMEOUT_MS + PING_TIMEOUT_MS
+    );
+    expect(lost.ping).toHaveBeenCalledOnce();
+    expect(failed).not.toHaveBeenCalled();
+
+    host.dispose();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failed).toHaveBeenCalledOnce();
+    await authority;
+    visibility.mockRestore();
+  });
+
   it('ends an authority read a ready owner never answers', async () => {
     vi.useFakeTimers();
     const host = createWorkerCacheHost({
