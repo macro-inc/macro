@@ -70,14 +70,30 @@ read their code, and follow that pattern rather than inventing a new one.
   long press and use `hapticImpact('light')` for valid message/AI sends. Navigation
   acts on click so held or cancelled touches do nothing. `glass` and `island`
   controls and channel inputs get iOS-app-only press animation from
-  `installGlassPress`; reuse it and keep Android and web free of the effect.
+  `installGlassPress`; reuse it and keep Android and production web free of
+  the effect (`GLASS_EFFECTS_EVERYWHERE` turns it on in iOS Safari in dev and
+  on web previews). Holding the dock's Search runs it into the navigation
+  island through a goo filter (`DockGoo`).
+- Touch `glass` is one material: a toned 10px backdrop blur under the
+  `bg-glass` veil, a 1px gleam and faint sheen, and no cast shadow. Tune it
+  through the `--glass-*` theme tokens in `index.css`; never give an `island`
+  its own fill (`bg-chrome`, a surface), which hides the backdrop. A component
+  whose base class sets a fill (`Surface`) adds `touch:bg-glass`.
+- Move touch chrome only with scrolling or `transform`/`scale`/`opacity`
+  transitions: iOS runs those on the compositor at 120 Hz, while touch events,
+  `requestAnimationFrame`, layout and custom-property transitions are capped
+  at 60 Hz. Something that follows a finger is scrolled content, as the dock's
+  tab lens is (`DockTabLens`: a snap-point scroller whose buttons stay sticky).
 
 ## Sheets, menus, and dialogs
 
 - Use `@ui` `Dialog` and `ConfirmDialog`; they become drawers on phones.
   Build other sheets from `MobileDrawer` (`components/app/mobile`), never raw
   `@corvu/drawer`, with content in `MobileDrawer.ScrollBody` and height from
-  `maxHeight` / `targetHeight`, never hand-set.
+  `maxHeight` / `targetHeight`, never hand-set. Bottom sheets are native
+  scroll-snap containers (swipe, momentum and detents are scrolling), so keep
+  `touch-action` off sheet chrome, and pass `swipeable={false}` to a sheet
+  only its own controls close. Sheets are opaque and their scrim has no blur.
 - Phone drawers have a handle and no X; drag, backdrop, or Escape dismiss,
   and focus returns to the opener. No submenus at phone width: drill in
   place with a back row.

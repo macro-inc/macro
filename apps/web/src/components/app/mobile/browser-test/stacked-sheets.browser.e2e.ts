@@ -6,17 +6,46 @@ async function tap(page: Page, target: Locator) {
   await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
 }
 
-/** Corvu starts the opening slide a frame after mount, so wait for it to end. */
+/** A bottom sheet's panel inside its full-screen scroll container. */
+const panelOf = (sheet: Locator) =>
+  sheet
+    .locator('[data-sheet-panel]')
+    .or(sheet.locator(':scope:not([data-side="bottom"])'));
+
+/** The sheet slides up a frame after mount, so wait for it to come to rest. */
 async function settled(sheet: Locator) {
-  await expect(sheet).toBeInViewport({ ratio: 1 });
+  await expect(panelOf(sheet).first()).toBeInViewport({ ratio: 1 });
+  await expect(sheet).not.toHaveAttribute('data-opening');
   await expect(sheet).not.toHaveAttribute('data-transitioning');
 }
 
 const pressed = (page: Page) => page.getByRole('status', { name: 'Pressed' });
 
+/** A finger dragging the sheet by its top edge, `distance` px down (or up). */
+async function dragBy(page: Page, sheet: Locator, distance: number) {
+  const box = await panelOf(sheet).first().boundingBox();
+  if (!box) throw new Error('The sheet is not rendered');
+  const x = box.x + box.width / 2;
+  const y = box.y + 24;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y }],
+  });
+  for (let step = 1; step <= 10; step += 1)
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y + (distance * step) / 10 }],
+    });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+}
+
 /** A finger dragging the sheet down by its top edge, past the break point. */
 async function dragDown(page: Page, sheet: Locator) {
-  const box = await sheet.boundingBox();
+  const box = await panelOf(sheet).first().boundingBox();
   if (!box) throw new Error('The sheet is not rendered');
   const x = box.x + box.width / 2;
   const y = box.y + 12;
@@ -360,6 +389,39 @@ test.describe('a persistent prompt', () => {
     await expect(pressed(page)).toHaveText('Enable, Due date, Enable');
   });
 
+  test('a picker reopened as it closes still shows its list', async ({
+    page,
+  }) => {
+    await page.goto('/?scenario=prompt');
+    const properties = await openProperties(page);
+    const picker = page.getByRole('dialog', { name: 'Assignee' });
+    const search = picker.getByRole('textbox', { name: 'Search people' });
+    const assignee = properties.getByRole('button', { name: 'Assignee' });
+    await tap(page, assignee);
+    await settled(picker);
+
+    // Reopened before the closing slide has moved at all…
+    await picker
+      .getByRole('button', { name: 'Cancel' })
+      .evaluate((cancel: HTMLButtonElement) => {
+        cancel.click();
+        document
+          .querySelectorAll<HTMLButtonElement>('button')
+          .forEach((button) => {
+            if (button.textContent === 'Assignee') button.click();
+          });
+      });
+    await settled(picker);
+    await expect(search).toBeVisible();
+
+    // …and partway through it.
+    await tap(page, picker.getByRole('button', { name: 'Cancel' }));
+    await page.waitForTimeout(80);
+    await assignee.evaluate((button: HTMLButtonElement) => button.click());
+    await settled(picker);
+    await expect(search).toBeVisible();
+  });
+
   test('moves up to clear a notice, and back when it goes', async ({
     page,
   }) => {
@@ -399,4 +461,56 @@ test.describe('a persistent prompt', () => {
       await receivesTapsAt(notice(page), await middleOf(notice(page)))
     ).toBe(true);
   });
+});
+
+test('a sheet with detents opens at half height and swipes to full and away', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=detents');
+  await tap(page, page.getByRole('button', { name: 'Open discussion' }));
+  const discussion = page.getByRole('dialog', { name: 'Discussion' });
+  const panel = panelOf(discussion).first();
+  await expect(discussion).not.toHaveAttribute('data-opening');
+  await expect(page.getByRole('status', { name: 'Snap point' })).toHaveText(
+    '0.5'
+  );
+  // Half of the sheet shows; the rest waits below the screen.
+  const viewport = page.viewportSize();
+  const half = await panel.boundingBox();
+  expect(half?.y ?? 0).toBeGreaterThan((viewport?.height ?? 0) * 0.4);
+  expect(half?.y ?? 0).toBeLessThan((viewport?.height ?? 0) * 0.7);
+
+  await dragBy(page, discussion, -((viewport?.height ?? 0) * 0.45));
+  await expect(page.getByRole('status', { name: 'Snap point' })).toHaveText(
+    '1'
+  );
+  await expect(panel).toBeInViewport({ ratio: 1 });
+
+  await dragDown(page, discussion);
+  await expect(discussion).toHaveCount(0);
+
+  // Opened again, it starts back at half height.
+  await tap(page, page.getByRole('button', { name: 'Open discussion' }));
+  await expect(discussion).not.toHaveAttribute('data-opening');
+  await expect(page.getByRole('status', { name: 'Snap point' })).toHaveText(
+    '0.5'
+  );
+});
+
+test('a forced-mounted sheet stays hidden while closed and opens again on screen', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=forced');
+  const chat = page.getByRole('dialog', { name: 'Chat', includeHidden: true });
+  await expect(chat).toBeHidden();
+  // Nothing covers the page while it is closed.
+  await tap(page, page.getByRole('button', { name: 'Page control' }));
+  await expect(pressed(page)).toHaveText('Page control');
+
+  for (let round = 0; round < 2; round += 1) {
+    await tap(page, page.getByRole('button', { name: 'Open chat' }));
+    await settled(chat);
+    await tap(page, chat.getByRole('button', { name: 'Close chat' }));
+    await expect(chat).toBeHidden();
+  }
 });

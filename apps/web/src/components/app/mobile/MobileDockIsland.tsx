@@ -28,12 +28,20 @@ export function MobileDockIsland(
     class?: string;
     ref?: (element: HTMLDivElement) => void;
     style?: JSX.CSSProperties;
+    /** A press starts on the island (pointerdown). */
+    onPointerDown?: () => void;
+    /** That press ends: lifted, cancelled, or slid off the island. */
+    onPointerEnd?: () => void;
   }>
 ) {
   return (
     <div
       ref={props.ref}
       style={props.style}
+      onPointerDown={() => props.onPointerDown?.()}
+      onPointerUp={() => props.onPointerEnd?.()}
+      onPointerCancel={() => props.onPointerEnd?.()}
+      onPointerLeave={() => props.onPointerEnd?.()}
       data-mobile-dock-island
       class={cn(
         'island pointer-events-auto flex items-center rounded-full',

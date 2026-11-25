@@ -487,6 +487,10 @@ The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+Its `dock-lens.browser.e2e.ts` drags the real dock island's tab lens: the lens
+follows the finger as scrolled content while the buttons stay put, a drag
+presses the tab it ends on, a tap presses its tab once, and holding Search
+runs it into the dock (`DockGoo`) until it is released.
 Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
 conversation and a pinned favorite), Home, a Soup list, the Notifications
 inbox, Agents (sidebar and phone list), Projects and Search on phone and

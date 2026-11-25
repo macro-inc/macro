@@ -82,7 +82,6 @@ export function NavigationSheet(props: JSX.HTMLAttributes<HTMLDivElement>) {
             );
           }}
           aria-label="Sidebar"
-          opaque
           style={{
             left: `${bounds()?.left ?? 0}px`,
             top: `${bounds()?.top ?? 0}px`,

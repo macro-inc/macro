@@ -20,7 +20,7 @@ The owning surface supplies `EntityConversation` presentation and permissions.
 - Center the shared icon-and-title empty state above the pinned sheet input; hide it during loading, failures, or linked-message navigation.
 - Call entity conversation content messages and replies, with Add to the discussion… for the composer; preserve comment wording in anchored annotations and the legacy PR review renderer.
 - Keep the composer draft when closing the sheet, and focus only after a user opens an empty discussion.
-- Open at the half-height snap point with `MobileDrawer.FixedContent fitSnapPoint` and `KeyboardFooter`; drag the handle/header between half, full, and dismissed without remounting the thread.
+- Open at the half-height snap point with `MobileDrawer.FixedContent fitSnapPoint` and `KeyboardFooter`; swipe between half, full, and dismissed (anywhere at half height; from the header or the thread's top at full) without remounting the thread.
 - Expand to full height while the keyboard is open, retaining full height after it closes; reserve the translated sheet area so the pinned input remains visible.
 - Never force the thread to the bottom on resize or paging; reserve that for opening, sending, and keyboard changes without a linked target.
 - Keep desktop discussion inline; only phone entry compositions use this component.

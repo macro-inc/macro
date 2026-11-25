@@ -115,12 +115,6 @@ function Root(props: {
         // the drawer's first control (Cancel) and dropping the keyboard.
         onInitialFocus={(event) => {
           event.preventDefault();
-          // Without a slide (reduced motion) there is no transition to end.
-          if (
-            content &&
-            parseFloat(getComputedStyle(content).transitionDuration) === 0
-          )
-            settle();
         }}
       >
         <MobileDrawer.Portal>
@@ -128,14 +122,12 @@ function Root(props: {
           <MobileDrawer.Content
             ref={(element: HTMLElement) => {
               content = element;
-              // A listener beside the drawer's own: an onTransitionEnd prop
-              // would replace the handler that finishes its slides.
-              element.addEventListener('transitionend', (event) => {
-                if (event.target === element && props.open) settle();
-              });
+            }}
+            onOpened={() => {
+              if (props.open) settle();
             }}
             targetHeight={92}
-            data-corvu-no-drag
+            swipeable={false}
           >
             {props.children}
           </MobileDrawer.Content>

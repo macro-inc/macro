@@ -462,6 +462,11 @@ body.tauri-ios {
   --color-task-status-completed: var(--color-accent);
   --color-task-status-canceled: var(--color-content-1);
   --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
+  /* Touch glass (see `glass`): the veil over the toned backdrop, the solid
+     tone where nothing shows through, and the selected-tab pill. */
+  --color-glass: var(--glass-veil);
+  --color-glass-solid: var(--glass-solid);
+  --color-glass-pill: var(--glass-pill);
 
   /* Generated compatibility tokens. */
   --color-accent-bg: color-mix(in oklch, var(--color-accent) 8%, transparent);
@@ -770,9 +775,17 @@ body.tauri-ios {
     /* Dark desktop glass separates by its outline; light adds a cast shadow. */
     --glass-desktop-cast-alpha: 0;
     --elevated-control-scale: 0.4;
-    /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
-    --island-rim-strong: 28%;
-    --island-rim-soft: 12%;
+    /* Touch glass, matched to rida.dev's Liquid Glass tab bar: the backdrop
+       shows through blurred and toned (darkened, compressed and saturated)
+       under a thin white veil; a 1px gleam and glint, a faint sheen, and
+       almost no cast shadow. */
+    --glass-veil: oklch(1 0 0 / 0.13);
+    --glass-solid: rgb(42 41 40);
+    --glass-pill: oklch(0 0 0 / 0.69);
+    --glass-tone: brightness(0.5) saturate(2.2);
+    --glass-gleam: 0.17;
+    --glass-sheen: 0.055;
+    --glass-hairline: 0;
   }
 
   /* Preserve the darker thread rail only on an explicitly dark document. */
@@ -836,8 +849,15 @@ body.tauri-ios {
        shadow, and give controls a full 1px edge like a bordered input. */
     --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
     --elevated-control-scale: 1;
-    --island-rim-strong: 75%;
-    --island-rim-soft: 40%;
+    /* Light touch glass lifts the backdrop toward white and outlines its
+       flanks with a fine dark hairline. */
+    --glass-veil: oklch(1 0 0 / 0.59);
+    --glass-solid: rgb(253 253 253);
+    --glass-pill: oklch(0 0 0 / 0.075);
+    --glass-tone: saturate(2.2);
+    --glass-gleam: 0.125;
+    --glass-sheen: 0.075;
+    --glass-hairline: 0.34;
 
     &:not([data-touch-device='true']) {
       --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
@@ -950,29 +970,8 @@ html:not([data-touch-device='true']) {
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  /* Both themes share the diagonal rim; light mode keeps a soft cast shadow. */
-  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink glass light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
-
-  --glass-blur: 18px;
-  --glass-saturate: 1.5;
-
-  @variant light-mode {
-    --glass-backdrop: none;
-    --glass-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
-      var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  /* Keep a bright rim around most of the shape, with short soft gaps at the
-     top-right and bottom-left, including wide pills. Glass owns the mask. */
-  --glass-rim-background: linear-gradient(
-    to bottom right,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 42%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 49%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 51%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 58%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
-  );
+  /* The touch glass material over a thin veil, with no fill of its own. */
+  @apply min-h-[40px] min-w-[40px] bg-glass text-ink glass;
 }
 
 /* Glass chrome: backdrop blur, a soft cast shadow, and a specular rim drawn as a 1px
@@ -1009,10 +1008,25 @@ html:not([data-touch-device='true']) {
     inset 0 -1px 0 color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
     0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
       oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+  /* Touch: rida.dev's glass. A 10px blur of the toned backdrop, a 1px gleam
+     on the top edge and glint on the bottom, a 6px sheen inside both, and a
+     barely-there cast shadow. The rim is a hairline weighted to the flanks. */
   @variant touch {
+    --glass-backdrop: blur(10px) var(--glass-tone);
     --glass-shadow:
-      0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
-        oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+      inset 0 1px 0 oklch(1 0 0 / var(--glass-gleam)),
+      inset 0 -1px 0 oklch(1 0 0 / var(--glass-gleam)),
+      inset 0 6px 6px -6px oklch(1 0 0 / var(--glass-sheen)),
+      inset 0 -6px 6px -6px oklch(1 0 0 / var(--glass-sheen)),
+      0 7px 4px oklch(0 0 0 / 0.012);
+    --glass-rim-background: linear-gradient(
+      to right,
+      oklch(0 0 0 / var(--glass-hairline)),
+      oklch(0 0 0 / calc(var(--glass-hairline) * 0.3)) 30%,
+      oklch(0 0 0 / calc(var(--glass-hairline) * 0.3)) 70%,
+      oklch(0 0 0 / var(--glass-hairline))
+    );
+    --glass-rim-shade-base: 0%;
   }
   backdrop-filter: var(--glass-backdrop);
   box-shadow: var(--glass-shadow);
@@ -1095,6 +1109,56 @@ html:not([data-touch-device='true']) {
 @utility scrim-glass {
   background-color: oklch(0 0 0 / 0.1);
   backdrop-filter: blur(2px) saturate(1.05);
+}
+
+/* Phone sheet scrim: a plain dim, no backdrop blur. It fades in as a sheet
+   opens; a bottom sheet's scrim instead follows the sheet's scroll position
+   (see MobileDrawer), so it dims and clears with the swipe on the compositor. */
+@utility mobile-sheet-scrim {
+  background-color: oklch(0 0 0 / 0.2);
+  animation: mobile-sheet-scrim-in 250ms ease-out both;
+
+  @supports (animation-timeline: scroll()) {
+    :where(.mobile-sheet-scroller) > & {
+      animation: mobile-sheet-scrim-in linear both;
+      animation-timeline: --mobile-sheet;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes mobile-sheet-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The dock's search field grows out of the Search button it replaces, as a
+   liquid-glass pill widening leftward from the right edge. Mounting it this
+   way, in the tap, keeps the keyboard (a view transition would update the
+   page after the tap). */
+@utility mobile-search-grow {
+  animation: mobile-search-grow 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes mobile-search-grow {
+  from {
+    clip-path: inset(0 0 0 calc(100% - var(--mobile-chrome-button-size)) round 999px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 22px);
+  }
+}
+
+/* A bottom sheet's scroll container: offset 0 is closed, the end is open. */
+@utility mobile-sheet-scroller {
+  scroll-timeline: --mobile-sheet block;
 }
 
 /* Shared phone sheet geometry: match the screen curve with an even outer
@@ -1239,20 +1303,17 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   initial-value: 0.45;
 }
 
-@property --press-expansion {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
 /* Native iOS press paint layers belong to the material, including channel inputs.
    ::before paints the live fill, shadow and tap-centered sheen; ::after keeps
    the glass rim. No child nodes, computed-style snapshots or release cleanup.
+   Every moving part is a `scale` transition, which iOS animates on the
+   compositor at 120 Hz; only the sheen's brightness fades on the main thread.
    Keep this scope in sync with glassPress.ts's surface selection.
    Only iOS WebKit knows -webkit-touch-callout, so other browsers drop the block
-   instead of testing every element against it on each restyle. */
+   instead of testing every element against it on each restyle. iOS Safari gets
+   it too while GLASS_EFFECTS_EVERYWHERE is on (dev and web previews). */
 @supports (-webkit-touch-callout: none) {
-  html[data-platform='ios'][data-touch-device='true'] :is(
+  html:is([data-platform='ios'], [data-glass-everywhere])[data-touch-device='true'] :is(
     [data-glass-input],
     [data-input] [data-composer-collapsed],
     [data-mobile-dock-island],
@@ -1262,7 +1323,6 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   ) {
     /* The shimmer replaces native tap feedback only on these press surfaces. */
     -webkit-tap-highlight-color: transparent;
-    --press-expansion: 0px;
     position: relative;
     isolation: isolate;
     overflow: visible;
@@ -1271,8 +1331,7 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
     box-shadow: none;
     scale: 1;
     transform-origin: center;
-    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1),
-      --press-expansion 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
 
     & button {
       scale: 1 !important;
@@ -1286,7 +1345,7 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
       background-color: color-mix(in oklch, var(--glass-press-tint) calc(8% * var(--press-light)), var(--glass-fill));
       background-image: radial-gradient(
         circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
-        at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
+        at var(--press-x, 50%) var(--press-y, 50%),
         color-mix(in oklch, var(--glass-press-tint) calc(28% * var(--press-light)), transparent),
         color-mix(in oklch, var(--glass-press-tint) calc(12% * var(--press-light)), transparent) 45%,
         transparent 100%
@@ -1294,12 +1353,18 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
       backdrop-filter: var(--glass-backdrop, none);
       box-shadow: var(--glass-shadow, none);
       transition: --press-light 220ms ease-out,
-        --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1);
+        --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1),
+        scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     &::before, &::after {
-      inset: calc(-1 * var(--press-expansion));
+      inset: 0;
       border-radius: inherit;
+      scale: 1;
+    }
+
+    &::after {
+      transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     & svg {
@@ -1318,7 +1383,9 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
         scale: var(--press-scale);
       }
       &[data-glass-press='wide'] {
-        --press-expansion: var(--press-outset);
+        &::before, &::after {
+          scale: var(--press-scale-x, 1) var(--press-scale-y, 1);
+        }
 
         & svg {
           scale: 1.18;
