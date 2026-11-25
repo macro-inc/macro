@@ -541,7 +541,7 @@ Email is the second consumer (`kind: "email"`, `version: 1`). Its definition is 
   no viewer-relative “Me”, so someone who wants their own mail adds their own
   address. The builder picks people and companies in one field, listing
   companies (the team's CRM companies, then the viewer's contact domains)
-  before people; people, subject and tags show first, and the other conditions sit
+  before people; people, subject, tags and labels show first, and the other conditions sit
   under Advanced settings. Email views are private (no team sharing), so their menus
   omit Copy link. `receivedWithinDays` resolves to a day boundary so the
   query stays stable while open.
@@ -570,5 +570,6 @@ Email is the second consumer (`kind: "email"`, `version: 1`). Its definition is 
   migrations (the index builds concurrently on `email_messages`), deploy the
   backend (reorder mutation, `Subject` and `Attachment` literals),
   and run `email_service`'s `backfill_attachment_flags` before turning on the
-  flag. Only saved views send the attachment-kind filter; built-in tabs keep
-  refining attachments on the client, so they don't depend on the backfill.
+  flag. Saved views and Mail's Inbox and All mail tabs send the attachment-kind
+  filter, so both miss threads stored before the flags until the backfill has
+  run.

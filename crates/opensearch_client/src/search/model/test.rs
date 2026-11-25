@@ -186,3 +186,30 @@ fn window_real_world_email_fragment() {
         visible_before
     );
 }
+
+/// A message found only through a link it shares shows that link as its
+/// snippet; one whose text matched keeps its text.
+#[test]
+fn a_link_stands_in_for_text_that_did_not_match() {
+    let keys = || Keys {
+        title_key: "name",
+        content_key: "content",
+    };
+    let link = "https://app.<macro_em>sketchpad</macro_em>.example/file/0ABC".to_string();
+    let text = "the <macro_em>sketchpad</macro_em> designs".to_string();
+
+    let link_only = parse_highlight_hit(
+        HashMap::from([("links".to_string(), vec![link.clone()])]),
+        keys(),
+    );
+    assert_eq!(link_only.content, [link.clone()]);
+
+    let both = parse_highlight_hit(
+        HashMap::from([
+            ("content".to_string(), vec![text.clone()]),
+            ("links".to_string(), vec![link]),
+        ]),
+        keys(),
+    );
+    assert_eq!(both.content, [text]);
+}

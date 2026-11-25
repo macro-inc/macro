@@ -1,4 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useDialogContext } from '@kobalte/core/dialog';
 import {
   type Accessor,
   createEffect,
@@ -103,4 +105,19 @@ export function createCloseOnNavigation(options: {
       )
     );
   });
+}
+
+/**
+ * Closes the Kobalte dialog it is rendered in on touch devices, as
+ * `createCloseOnNavigation` does, for a full-screen dialog built on Kobalte
+ * rather than `@ui` `Dialog` (media viewers, the create menu). Render it inside
+ * the dialog's root; it works whether the owner or Kobalte holds the open state.
+ */
+export function DialogClosesOnNavigation(): null {
+  const dialog = useDialogContext();
+  createCloseOnNavigation({
+    open: () => isTouchDevice() && dialog.isOpen(),
+    close: () => dialog.close(),
+  });
+  return null;
 }

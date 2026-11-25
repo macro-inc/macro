@@ -177,6 +177,7 @@ pub(crate) fn email_run(action: &ScheduledAction) -> AuthorizedEventRun {
             revision: action.configuration_revision,
             event,
             admitted_at: Utc::now(),
+            traceparent: None,
         },
     }
 }
@@ -442,6 +443,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
             revision: ConfigurationRevision::INITIAL,
             event,
             admitted_at: at,
+            traceparent: None,
         },
     };
     let mut handle = ExecutionHandle::default();

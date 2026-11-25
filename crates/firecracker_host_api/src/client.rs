@@ -21,7 +21,7 @@ use crate::exec::{ExecRequest, Frame, FrameError};
 mod moves;
 use crate::{
     Action, Computer, ComputerId, CreateComputer, ErrorCode, ErrorResponse, GoldenImage, GoldenKey,
-    HostInfo, HostLimits, SetEnrollment,
+    HostInfo, HostLimits, ReplaceSystemDisk, SetEnrollment, StageImage, StagedImage,
 };
 
 /// Where the agent is and how to authenticate to it.
@@ -291,6 +291,32 @@ impl HostClient {
         self.json(Method::POST, ACTION, &path, NO_BODY).await
     }
 
+    /// Boot the computer from a system disk of another image (or back to
+    /// its previous one), keeping its `/home` and identity; see
+    /// [`ReplaceSystemDisk`].
+    pub async fn replace_system_disk(
+        &self,
+        computer_id: ComputerId,
+        request: &ReplaceSystemDisk,
+    ) -> Result<Computer, ClientError> {
+        let path = format!("/v1/computers/{computer_id}/system-disk");
+        self.json(Method::POST, SYSTEM_DISK, &path, Some(request))
+            .await
+    }
+
+    /// Every image on the host and where its staging stands.
+    pub async fn images(&self) -> Result<Vec<StagedImage>, ClientError> {
+        self.json(Method::GET, "/v1/images", "/v1/images", NO_BODY)
+            .await
+    }
+
+    /// Stage an image unless it is in place with these contents; see
+    /// [`StageImage`]. Answers at once; poll [`HostClient::images`].
+    pub async fn stage_image(&self, request: &StageImage) -> Result<StagedImage, ClientError> {
+        self.json(Method::POST, "/v1/images", "/v1/images", Some(request))
+            .await
+    }
+
     /// Start `request` in the guest over the exec WebSocket.
     pub async fn exec(
         &self,
@@ -354,6 +380,8 @@ const NO_BODY: Option<&()> = None;
 const COMPUTER: &str = "/v1/computers/{computer_id}";
 const ENROLLMENT: &str = "/v1/computers/{computer_id}/enrollment";
 const ACTION: &str = "/v1/computers/{computer_id}/{action}";
+/// `POST` route of a system disk replacement.
+const SYSTEM_DISK: &str = "/v1/computers/{computer_id}/system-disk";
 
 type Socket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;

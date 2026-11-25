@@ -76,12 +76,15 @@ pub trait InboxSyncDeleteTransaction: InboxSyncTransaction {
 /// One atomic addition or removal of a message's provider labels.
 pub trait InboxSyncLabelTransaction: InboxSyncTransaction {
     /// Insert the provider labels, without staging an outbound Gmail write.
+    /// Returns the user labels the thread gained: none of its other messages,
+    /// drafts aside, carried them.
     fn add_labels(
         &mut self,
         link_id: Uuid,
         message_id: Uuid,
+        thread_id: Uuid,
         labels: &[String],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Delete the provider labels from this message.
     fn remove_labels(

@@ -47,7 +47,7 @@ export function ComposeSubjectField(props: {
               aria-label="Subject"
               value={props.value}
               placeholder="Subject"
-              class="w-full resize-none bg-transparent text-base text-ink placeholder:text-ink-placeholder outline-none"
+              class="w-full resize-none text-ellipsis bg-transparent text-base text-ink placeholder:text-ink-placeholder outline-none"
               onInput={(e) => props.onChange(e.currentTarget.value)}
               onKeyDown={blurOnEscape}
               disabled={props.disabled}

@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { internalDrag } from '@core/directive/internalDragState';
 
 false && internalDrag;
@@ -124,6 +125,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         else setClickedIndex(0);
       }}
     >
+      <DialogClosesOnNavigation />
       <div class={props.wrapperClass ?? 'flex flex-row flex-wrap gap-2'}>
         <For each={props.images}>
           {(image, index) => (

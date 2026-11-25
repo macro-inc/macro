@@ -1,5 +1,6 @@
 use super::*;
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::{models::mailbox_action::MailboxAction, ports::EmailRepo};
 use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -15,11 +16,13 @@ async fn setup(
 ) {
     let (sync, link) = fixture(db).await;
     let stream = sync
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync
         .claim_message(macro_uuid::generate_uuid_v7())
         .await

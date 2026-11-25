@@ -444,6 +444,7 @@ function setupSuggestions(initial: string[]) {
   const [active, setActive] = createSignal(-1);
   const [open, setOpen] = createSignal(false);
   const picked: number[] = [];
+  const commit = vi.fn();
   let list!: HTMLDivElement;
 
   const view = render(() => (
@@ -464,6 +465,7 @@ function setupSuggestions(initial: string[]) {
             picked.push(index);
             setSearch(initial[index] ?? '');
           },
+          commit,
         }}
       />
       <div ref={list} tabIndex={0} />
@@ -479,6 +481,7 @@ function setupSuggestions(initial: string[]) {
     active,
     open,
     picked,
+    commit,
     list: () => list,
   };
 }
@@ -512,6 +515,19 @@ it('runs the active suggestion on Enter and moves to its results', () => {
   expect(document.activeElement).toBe(list());
 });
 
+it('runs the typed search on Enter, and not on a suggestion picked with it', () => {
+  const { field, commit, list } = setupSuggestions(['budget']);
+
+  type(field, 'Enter');
+  expect(commit).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(list());
+
+  field.focus();
+  type(field, 'ArrowDown');
+  type(field, 'Enter');
+  expect(commit).toHaveBeenCalledOnce();
+});
+
 it('reports a wide field open, and closed once it is left empty', () => {
   const { view, field, setSearch, open } = setupSuggestions([]);
   expect(open()).toBe(true);
@@ -520,6 +536,35 @@ it('reports a wide field open, and closed once it is left empty', () => {
   fireEvent.blur(field);
 
   expect(open()).toBe(false);
+  expect(view.queryByRole('searchbox')).toBeNull();
+});
+
+it('keeps an empty wide field open while focus moves to another header control', async () => {
+  const [search, setSearch] = createSignal('');
+  const view = render(() => (
+    <div>
+      <header data-view-shell-header="">
+        <button type="button">Search tips</button>
+        <ListHeaderSearch
+          label="Search email"
+          value={search()}
+          onValueChange={setSearch}
+          registerFocus={() => {}}
+          wide
+        />
+      </header>
+      <button type="button">Outside</button>
+    </div>
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Search email' }));
+  await Promise.resolve();
+  const field = view.getByRole('searchbox', { name: 'Search email' });
+  expect(document.activeElement).toBe(field);
+
+  view.getByRole('button', { name: 'Search tips' }).focus();
+  expect(view.queryByRole('searchbox')).not.toBeNull();
+
+  view.getByRole('button', { name: 'Outside' }).focus();
   expect(view.queryByRole('searchbox')).toBeNull();
 });
 
@@ -535,7 +580,7 @@ it('closes a wide field when the view clears its search from outside', () => {
   expect(view.queryByRole('searchbox')).toBeNull();
 });
 
-it('reports closed and unfocused when it unmounts while open', () => {
+it('reports closed and unfocused once it has unmounted while open', async () => {
   const [shown, setShown] = createSignal(true);
   const [open, setOpen] = createSignal(false);
   const [focused, setFocused] = createSignal(false);
@@ -557,6 +602,7 @@ it('reports closed and unfocused when it unmounts while open', () => {
   expect(focused()).toBe(true);
 
   setShown(false);
+  await Promise.resolve();
 
   expect(open()).toBe(false);
   expect(focused()).toBe(false);

@@ -17,6 +17,7 @@ const TASK: &str = include_str!("prompt.md");
 pub const SYMBOLS: &[&str] = &[
     "SuggestionNamespace.review",
     "SuggestionNamespace.suggest",
+    "SuggestionNamespace.nameTopic",
     "Suggestion.rewrite",
     "Suggestion.retire",
     "UserNamespace.me",

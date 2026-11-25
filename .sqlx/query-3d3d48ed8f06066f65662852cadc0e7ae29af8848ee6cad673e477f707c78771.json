@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT action_id, event_id, configuration_revision, event_context, admitted_at, traceparent\n            FROM scheduled_action_event_run\n            WHERE action_id = $1 AND state = 'pending'\n            ORDER BY admission_order LIMIT 1 FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_context",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "admitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3d3d48ed8f06066f65662852cadc0e7ae29af8848ee6cad673e477f707c78771"
+}

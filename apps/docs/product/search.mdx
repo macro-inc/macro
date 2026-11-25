@@ -10,17 +10,76 @@ Search is the easiest way to find specific files in Macro. When using search for
 
 > Use the <kbd>/</kbd> shortcut to open up search or the <kbd>cmd</kbd>+<kbd>k</kbd> menu to search by name.
 
-Open **Type** to limit results to one kind of Block, such as channels, documents, tasks, or email.
+Type [search operators](#search-operators) such as `type:task` or `tag:finance` to narrow results.
 
 To further narrow search results, combine your keywords with an @mention of a specific person.
 
 Search covers more than titles: document bodies, email threads, channel messages, call transcripts, and file contents are all indexed. You can also ask an [agent](/product/agents) to find things for you; agents use the same index.
 
-## Filtering by tags
+## Search operators
 
-Open the filter menu and select the **Tags** chip to narrow results to items carrying specific [tags](/concepts/properties). Once you've selected two or more tags, a match-mode toggle appears on the chip:
+The Search field reads search operators: a name, a colon, and a value that narrows the search. Combine as many as you like with ordinary words, in any order. For example, `launch type:task status:in_progress assignee:me` finds your tasks in progress that mention "launch". Operators on their own list everything they match, most recently updated first.
 
-- **Any** — return items that have any of the selected tags. This is the default.
-- **All** — return items that have every selected tag.
+As you type, the field suggests operators, their values, people, tags, and channels. On a computer, a word such as `tasks` or `unread`, or the start of a person's name, also offers the operator it stands for. Hover the info button beside the **Search** title for a few examples; on a phone, tap it in the empty search field. On a phone, the **From**, **Type**, **Tag**, **Date**, and **Unread** buttons above the results start an operator for you.
 
-Use **All** to zero in on the intersection of several tags (for example, everything tagged both `urgent` and `finance`), and **Any** to cast a wider net across related tags.
+| Operator | Finds |
+| --- | --- |
+| `type:task` | One kind of item: `task`, `doc`, `email`, `channel`, `call`, `folder`, `agent`, or `calendar` |
+| `status:in_progress` | Tasks with a status: `not_started`, `in_progress`, `in_review`, `completed`, or `canceled`. Calls that were `missed`, `attended`, or `unattended` |
+| `priority:high` | Tasks with a priority: `urgent`, `high`, `medium`, or `low` |
+| `assignee:me` | Tasks assigned to you, or to someone by address, such as `assignee:ana@example.com` |
+| `author:me` | Tasks you created, or that someone created, by address |
+| `tag:finance` | Items with the tag Finance |
+| `inbox:ana@example.com` | Email in one of your connected inboxes |
+| `in:#launch` | Messages and calls in a channel you're in |
+| `from:ana` | Mail from Ana, as in [Search mail](#search-mail). With `type:channel` or `type:call`, who sent the message or spoke: `from:me` or an address |
+| `"q3 plan"` | Containing the exact phrase "q3 plan" |
+
+The operators in [Search mail](#search-mail), such as `subject:lunch`, `is:unread`, `has:attachment`, and `newer_than:7d`, work here too, and keep the results to email.
+
+A few details:
+
+- Put `OR` between two values of the same operator to match either one: `tag:finance OR tag:legal`, `status:completed OR status:canceled`. Without `OR`, every operator must match, so `tag:finance tag:legal` finds items with both tags.
+- `assignee:` and `author:` take `me` or a full address, and `inbox:` takes the address of one of your inboxes. A bare name such as `assignee:ana` is left out of the search until you pick someone from the suggestions or type their full address.
+- Put a minus before a word or a quoted phrase to leave out the results that contain it: `budget -draft` finds items about the budget that don't mention "draft", and `-"team lunch"` leaves out the exact phrase. A minus inside a word, as in `e-mail`, is part of the word. A minus word on its own waits for a word to search for, unless the search is limited to email.
+- Quote a value that has a space in it: `tag:"team offsite"`, `in:#"team lunch"`.
+- Each operator keeps the results to the kinds of item it applies to. `status:` and `priority:` find tasks (or calls, for a call status), `tag:` finds items that can have tags, and `in:#` finds channels and calls.
+- A sender on its own, such as `type:channel from:me`, needs a word beside it.
+- `@ana` finds items that mention Ana. `from:ana` finds what Ana sent.
+- Operator names are not case sensitive, so `Type:Task` works too.
+- An operator with a value it can't read, such as `type:tasks` or `priority:critical`, is searched as ordinary words.
+
+## Search mail
+
+Macro Mail's search field reads search operators, as Gmail does: a name, a colon, and a value that narrows the search. Combine as many as you like with ordinary words, in any order. For example, `budget from:ana has:attachment newer_than:30d` finds mail from Ana with an attachment, sent in the last 30 days, that mentions "budget".
+
+| Operator | Finds mail |
+| --- | --- |
+| `from:ana` | From Ana, by the sender's name, or by a full address such as `from:ana@example.com` |
+| `to:ben` | Sent to Ben, in To, Cc or Bcc |
+| `cc:ben`, `bcc:ben` | With Ben in the Cc, or in the Bcc |
+| `subject:lunch` | With "lunch" in the subject |
+| `"team lunch"` | Containing the exact phrase "team lunch" |
+| `subject:"team lunch"` | Whose subject contains the exact phrase |
+| `label:travel` | With the mailbox label or Macro tag Travel |
+| `in:sent` | In a view: `inbox`, `signal`, `noise`, `favorites`, `sent`, `drafts`, `calendar`, `shared` or `archived` |
+| `in:travel` | With the label or tag Travel, when no view has that name |
+| `is:unread`, `is:read` | Unread, or read |
+| `is:starred` | Starred |
+| `is:shared` | In threads shared with you |
+| `has:attachment` | With an attachment |
+| `after:2026/06/01` | Sent on or after a date |
+| `before:2026/07/01` | Sent before a date |
+| `newer_than:7d` | Sent in the last 7 days |
+| `older_than:1m` | Sent more than a month ago |
+
+Put a minus before a word or an operator to leave matching mail out: `-newsletter` skips mail containing "newsletter", and `-from:ana` skips mail from Ana. Every view but Signal and Noise can be left out with `-in:`, such as `-in:archived`.
+
+A few details:
+
+- Words match from their start: `subject:lunch` also finds "lunchtime", and `from:ana` finds Ana and Anabel but not Diana. A full address matches only that address.
+- Quote a value that has a space in it: `subject:"team lunch"`, `label:"Q3 planning"`.
+- Write dates as `2026/06/01` or `2026-06-01`. They are read in your time zone.
+- `newer_than:` and `older_than:` take a number and a unit: `d` for days, `w` for weeks, `m` for months, `y` for years.
+- Operator names are not case sensitive, so `From:ana` works too.
+- An operator with a value it can't read, such as `is:important`, is searched as an ordinary word.

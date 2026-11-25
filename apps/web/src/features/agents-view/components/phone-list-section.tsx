@@ -2,6 +2,7 @@ import { formatLocale } from '@app/lib/i18n';
 import { cn } from '@ui/utils/classname';
 import { type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { PhoneListLeading } from './phone-list-leading';
 
 function Root(props: { title: string; card?: boolean; children: JSX.Element }) {
   return (
@@ -30,12 +31,12 @@ function Heading(props: {
       class={cn(
         'flex shrink-0 gap-2 px-3',
         props.card
-          ? 'h-9 items-center gap-1.5 text-sm text-ink-muted'
+          ? 'h-9 items-center text-sm text-ink-muted'
           : 'items-baseline py-3'
       )}
     >
       <Show when={props.icon}>
-        <span class="flex w-5 shrink-0 justify-center">{props.icon}</span>
+        <PhoneListLeading>{props.icon}</PhoneListLeading>
       </Show>
       <Dynamic
         component={props.card ? 'h2' : 'h1'}

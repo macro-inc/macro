@@ -117,6 +117,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         content: DocumentContent,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Finalize a pending imported body with the source's original edited time.
+    fn ready_imported_document(
+        &self,
+        document_id: &str,
+        edited_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Get the latest document version ID (for editable files: js, py).
     /// Returns (version_id, uploaded).
     fn get_latest_document_version_id(

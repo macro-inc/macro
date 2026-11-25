@@ -18,7 +18,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
-use super::super::notion_workspace::{notice_import_ids, report};
+use super::super::notion_workspace::{confirmed_import_ids, notice_import_ids, report};
 use crate::domain::models::{
     ImportSource, ImportStatus, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
     WrittenKind,
@@ -50,7 +50,7 @@ where
     ) -> Result<bool> {
         // Read before the run moves: once it has, the rows still claimed go
         // back to staged and no longer say they were part of this write.
-        let report = self.current_report(user).await?;
+        let report = self.report_with_write_counts(user, true).await?;
         let root_folder = self.repo.root_folder(user).await?;
         let source = self.workspace_source;
         let moved = self
@@ -114,6 +114,14 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<NotionImportReport> {
+        self.report_with_write_counts(user, false).await
+    }
+
+    async fn report_with_write_counts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        settling_write: bool,
+    ) -> Result<NotionImportReport> {
         let run = self
             .repo
             .list_runs(user)
@@ -127,6 +135,21 @@ where
         let ids = notice_import_ids(run.as_ref(), &rows);
         let notices = self.repo.task_notice_counts(user, &ids).await?;
         let mut report = report(run.as_ref(), &rows, &notices)?;
+        if self.workspace_source == ImportSource::Notion
+            && let Some(writes) = self
+                .confirmed_report_writes(run.as_ref(), user, &rows, settling_write)
+                .await?
+        {
+            report.imported = writes
+                .documents
+                .saturating_add(writes.databases)
+                .saturating_add(writes.task_lists);
+            report.documents = writes.documents;
+            report.databases = writes.databases;
+            report.database_rows = writes.database_rows;
+            report.task_rows = writes.tasks;
+            report.confirmed = Some(writes);
+        }
         report.on_team = self.repo.user_team_id(user).await?.is_some();
         if let Some(hubspot) = report.hubspot.as_mut() {
             // A record this import created carries its CRM marker; one it
@@ -153,6 +176,27 @@ where
                 u32::try_from(imported.len().saturating_sub(created)).unwrap_or(u32::MAX);
         }
         Ok(report)
+    }
+
+    async fn confirmed_report_writes(
+        &self,
+        run: Option<&crate::domain::models::ImportRun>,
+        user: &MacroUserIdStr<'static>,
+        rows: &[crate::domain::models::ImportEntity],
+        settling_write: bool,
+    ) -> Result<Option<crate::domain::models::ConfirmedNotionWrites>> {
+        let finished = settling_write || run.is_some_and(|run| run.status == RunStatus::Completed);
+        let stopped = run.is_some_and(|run| {
+            run.review_id.is_some()
+                && matches!(run.status, RunStatus::Failed | RunStatus::Dismissed)
+        });
+        if !(finished || stopped) {
+            return Ok(None);
+        }
+        let ids = confirmed_import_ids(run, rows);
+        let writes = self.repo.confirmed_notion_writes(user, &ids).await?;
+        // A failed or dismissed planning run can have a review but no write receipts.
+        Ok((finished || writes != Default::default()).then_some(writes))
     }
 }
 
@@ -201,7 +245,13 @@ fn settlement(
         RunStatus::Dismissed => ImportOutcome::Cancelled,
         RunStatus::Running | RunStatus::Ready | RunStatus::Importing => return None,
     };
+    let failures = items(&report.failures);
+    let hand_items = items(&report.hand_items);
+    let details_truncated = report.settlement_lists_truncated
+        || (report.failure_count as usize) > failures.len()
+        || report.hand_items.len() > hand_items.len();
     Some(ImportSettlement {
+        warnings: report.warnings.clone(),
         source: workspace(source)?,
         outcome,
         error: run.error.as_deref().map(bounded),
@@ -210,7 +260,14 @@ fn settlement(
         documents: report.documents,
         databases: report.databases,
         database_rows: report.database_rows,
-        task_lists: report.tasks,
+        partial_database_rows: report
+            .confirmed
+            .as_ref()
+            .map_or(0, |writes| writes.partial_database_rows),
+        task_lists: report
+            .confirmed
+            .as_ref()
+            .map_or(report.tasks, |writes| writes.task_lists),
         task_rows: report.task_rows,
         skipped: report.skip,
         not_written: report.waiting + report.writing,
@@ -218,8 +275,10 @@ fn settlement(
         already_in_macro: report.already_in_macro,
         waiting_on_teammates: report.waiting_on_teammates,
         root_folder_id: root_folder,
-        failures: items(&report.failures),
-        hand_items: items(&report.hand_items),
+        failures,
+        failure_count: Some(report.failure_count),
+        details_truncated,
+        hand_items,
     })
 }
 

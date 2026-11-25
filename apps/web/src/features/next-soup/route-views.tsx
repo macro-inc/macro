@@ -1,5 +1,6 @@
 import { CallsView } from '@app/features/calls-view/views/calls-view';
 import { MobileSearchResults } from '@app/features/command/mobile/MobileSearchResults';
+import type { SearchOperatorBinding } from '@app/features/next-soup/core/search-operators';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -78,6 +79,7 @@ export const FoldersRouteView = withAuth(() => {
 
 type SearchRouteViewParams = {
   initialQuery?: string;
+  initialBindings?: SearchOperatorBinding[];
   initialFilters?: Query;
   initialClientFilters?: SetPredicatesInput<string>;
 };
@@ -104,6 +106,7 @@ export const SearchRouteView = withAuth(() => {
             params().initialClientFilters ?? preset?.clientFilters
           }
           initialSearchText={params().initialQuery}
+          initialSearchBindings={params().initialBindings}
         />
       }
     >

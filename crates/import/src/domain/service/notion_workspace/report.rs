@@ -1,22 +1,32 @@
 //! The report on a workspace import: what the current plan holds and how far
 //! writing it got.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use import_notion::domain::databases::DatabaseLoss;
 
 use crate::domain::ports::{
     FolderSeparation, Result, TaskImportNoticeCount, TaskImportNoticeReason,
 };
 
 use crate::domain::models::{
-    ImportEntity, ImportKind, ImportRun, ImportStatus, NotionDecision, NotionDocMeta,
-    NotionImportReport, NotionImporter, NotionReportItem, RunStatus,
+    FidelityWarning, ImportEntity, ImportKind, ImportNotice, ImportNoticeKind, ImportRun,
+    ImportSource, ImportStatus, NotionDecision, NotionDocMeta, NotionImportReport, NotionImporter,
+    NotionReportItem, NotionReviewOmission, NotionReviewOmissionKind, RunStatus,
 };
 
+mod details;
 #[cfg(test)]
 mod test;
 
-/// Failures and by-hand items a report lists, at most.
+/// Maximum sample size for each kind of report detail.
 const REPORT_LIST_LIMIT: usize = 50;
+
+/// Explain the unfinished objects when a write has finished processing its plan.
+pub(super) fn partial_write_error(failed: usize) -> String {
+    let noun = if failed == 1 { "item" } else { "items" };
+    format!("{failed} {noun} couldn’t be imported.")
+}
 
 /// Summarize the ledger for the current plan: the rows tied to the newest
 /// review, plus staged rows not yet tied to one. Objects a teammate already
@@ -42,16 +52,89 @@ pub(in crate::domain::service) fn report(
         ..NotionImportReport::default()
     };
     let mut importers: HashMap<&str, u32> = HashMap::new();
+    let mut unique_warnings = HashSet::new();
+    let mut details = (run.is_some_and(|run| run.source == ImportSource::Notion)
+        || current
+            .iter()
+            .any(|(row, _)| row.source == ImportSource::Notion))
+    .then(details::Details::default);
     for (row, meta) in &current {
-        if let Some(warnings) = row
-            .metadata
-            .get("warnings")
-            .and_then(serde_json::Value::as_array)
-        {
-            for warning in warnings.iter().filter_map(serde_json::Value::as_str) {
-                if !report.warnings.iter().any(|existing| existing == warning) {
-                    report.warnings.push(warning.to_string());
+        if let Some(warnings) = row.metadata.get("warnings") {
+            let warnings = FidelityWarning::merge(FidelityWarning::decode_entries(warnings));
+            let page_losses: HashSet<_> = warnings
+                .iter()
+                .filter_map(|warning| match warning {
+                    FidelityWarning::Notice {
+                        notice:
+                            ImportNotice {
+                                kind:
+                                    ImportNoticeKind::PageDatabaseOccurrence {
+                                        loss: loss @ DatabaseLoss::SourceUnavailable { .. },
+                                        ..
+                                    },
+                                ..
+                            },
+                    } => Some(loss),
+                    _ => None,
+                })
+                .collect();
+            for warning in &warnings {
+                // Match the source ID and reason, which survive title changes.
+                if matches!(
+                    warning,
+                    FidelityWarning::Notice {
+                        notice: ImportNotice {
+                            kind: ImportNoticeKind::DatabaseOccurrence { loss },
+                            ..
+                        },
+                    } if page_losses.contains(loss)
+                ) {
+                    continue;
                 }
+                let (counted, deduplicate) = match warning {
+                    FidelityWarning::References { .. } | FidelityWarning::OmittedOptions { .. } => {
+                        (true, false)
+                    }
+                    FidelityWarning::Text(_)
+                    | FidelityWarning::Notice {
+                        notice:
+                            ImportNotice {
+                                kind: ImportNoticeKind::MissingContainerIdentity,
+                                ..
+                            },
+                    } => (false, true),
+                    FidelityWarning::SourceStopped { .. }
+                    | FidelityWarning::UnmappedPeople { .. }
+                    | FidelityWarning::ViewLoss(_)
+                    | FidelityWarning::PropertySnapshot { .. }
+                    | FidelityWarning::PropertyOmitted { .. }
+                    | FidelityWarning::Notice { .. }
+                    | FidelityWarning::UnsupportedEntries { .. } => (false, false),
+                };
+                let rendered = if counted {
+                    format!("{}: {}", meta.title, warning.render())
+                } else {
+                    warning.render()
+                };
+                if deduplicate && !unique_warnings.insert(rendered.clone()) {
+                    continue;
+                }
+                if let Some(details) = &mut details {
+                    details.warning(warning, &rendered);
+                }
+                // Tab choices are useful context outside the loss totals.
+                if matches!(
+                    warning,
+                    FidelityWarning::Notice {
+                        notice: ImportNotice {
+                            kind: ImportNoticeKind::TabChosen { .. },
+                            ..
+                        },
+                    }
+                ) {
+                    continue;
+                }
+                add_warning(&mut report, rendered);
             }
         }
         let Some(plan) = &meta.plan else { continue };
@@ -62,10 +145,14 @@ pub(in crate::domain::service) fn report(
                 .and_then(serde_json::Value::as_str)
                 .is_some()
         {
-            report.warnings.push(format!(
-                "{} was kept in Notion (personal) to avoid inherited folder sharing.",
-                meta.title
-            ));
+            add_note(
+                &mut report,
+                &mut details,
+                format!(
+                    "{} was kept in Notion (personal) to avoid inherited folder sharing.",
+                    meta.title
+                ),
+            );
         }
 
         let separation = row.metadata.get("separateFolder");
@@ -83,22 +170,34 @@ pub(in crate::domain::service) fn report(
         };
         match reason {
             Some(FolderSeparation::SharedAfterGrantRemoval) => {
-                report.warnings.push(format!(
-                    "{}: created a separate shared folder because the existing folder's sharing was removed.",
-                    meta.title,
-                ));
+                add_note(
+                    &mut report,
+                    &mut details,
+                    format!(
+                        "{}: created a separate shared folder because the existing folder's sharing was removed.",
+                        meta.title,
+                    ),
+                );
             }
             Some(FolderSeparation::SharedFromPersonal) => {
-                report.warnings.push(format!(
-                    "{}: created a separate shared folder because the existing one holds personal items.",
-                    meta.title,
-                ));
+                add_note(
+                    &mut report,
+                    &mut details,
+                    format!(
+                        "{}: created a separate shared folder because the existing one holds personal items.",
+                        meta.title,
+                    ),
+                );
             }
             Some(FolderSeparation::PersonalFromShared) => {
-                report.warnings.push(format!(
-                    "{}: created a separate personal folder to keep it apart from the existing shared folder.",
-                    meta.title,
-                ));
+                add_note(
+                    &mut report,
+                    &mut details,
+                    format!(
+                        "{}: created a separate personal folder to keep it apart from the existing shared folder.",
+                        meta.title,
+                    ),
+                );
             }
             None => {}
         }
@@ -159,6 +258,28 @@ pub(in crate::domain::service) fn report(
             url: meta.url.clone(),
             reason: plan.reason.clone(),
         };
+        let choice = match decision {
+            NotionDecision::Skip => Some(NotionReviewOmissionKind::LeftOut),
+            NotionDecision::Hand => Some(NotionReviewOmissionKind::ByHand),
+            _ if row.status == ImportStatus::Discarded => Some(NotionReviewOmissionKind::Excluded),
+            _ => None,
+        };
+        if let (Some(details), Some(kind)) = (&mut details, choice) {
+            let mut item = reported();
+            if kind == NotionReviewOmissionKind::Excluded {
+                item.reason = None;
+            }
+            details.omission(NotionReviewOmission { kind, item });
+        }
+        if decision == NotionDecision::Hand
+            && matches!(row.status, ImportStatus::Staged | ImportStatus::Discarded)
+        {
+            if report.hand_items.len() < REPORT_LIST_LIMIT {
+                report.hand_items.push(reported());
+            } else {
+                report.settlement_lists_truncated = true;
+            }
+        }
         match row.status {
             ImportStatus::Imported => report.imported += 1,
             ImportStatus::Importing if row.waiting_on.is_some() => {
@@ -166,20 +287,17 @@ pub(in crate::domain::service) fn report(
             }
             ImportStatus::Importing => report.writing += 1,
             ImportStatus::Staged => {
-                if decision == NotionDecision::Hand {
-                    if report.hand_items.len() < REPORT_LIST_LIMIT {
-                        report.hand_items.push(reported());
-                    }
-                } else if decision != NotionDecision::Skip {
+                if !matches!(decision, NotionDecision::Hand | NotionDecision::Skip) {
                     report.waiting += 1;
                 }
-                if let Some(error) = &row.last_error
-                    && report.failures.len() < REPORT_LIST_LIMIT
-                {
-                    report.failures.push(NotionReportItem {
-                        reason: Some(error.clone()),
-                        ..reported()
-                    });
+                if let Some(error) = &row.last_error {
+                    report.failure_count += 1;
+                    if report.failures.len() < REPORT_LIST_LIMIT {
+                        report.failures.push(NotionReportItem {
+                            reason: Some(error.clone()),
+                            ..reported()
+                        });
+                    }
                 }
             }
             ImportStatus::Discarded => {}
@@ -207,9 +325,11 @@ pub(in crate::domain::service) fn report(
         } else {
             "assignees"
         };
-        report.warnings.push(format!(
-            "{omitted} teammate {assignees} omitted to keep tasks owner-only."
-        ));
+        add_note(
+            &mut report,
+            &mut details,
+            format!("{omitted} teammate {assignees} omitted to keep tasks owner-only."),
+        );
     }
     let mut importers: Vec<NotionImporter> = importers
         .into_iter()
@@ -219,12 +339,50 @@ pub(in crate::domain::service) fn report(
         })
         .collect();
     importers.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.by.cmp(&b.by)));
+    importers.truncate(REPORT_LIST_LIMIT);
     report.already_imported_by = importers;
+    report.details = details.map(details::Details::finish);
+    // A settled run can still carry the completion summary from an older writer.
+    if run.is_some_and(|run| {
+        run.source != ImportSource::Hubspot && run.status == RunStatus::Completed
+    }) && let Some(error) = report.error.as_deref()
+        && let Some((count, summary)) = error.split_once(' ')
+        && let Ok(count) = count.parse::<usize>()
+        && (error == partial_write_error(count)
+            || matches!(
+                summary,
+                "objects could not be fully imported. See the report for details."
+                    | "objects could not be imported. Plan again to retry them."
+            ))
+    {
+        report.error = report
+            .failures
+            .is_empty()
+            .then(|| partial_write_error(count));
+    }
     report.hubspot =
         super::super::hubspot_workspace::report(review_id, current.iter().map(|(row, _)| *row));
     Ok(report)
 }
 
+fn add_note(
+    report: &mut NotionImportReport,
+    details: &mut Option<details::Details>,
+    message: String,
+) {
+    if let Some(details) = details {
+        details.other(message.clone());
+    }
+    add_warning(report, message);
+}
+
+fn add_warning(report: &mut NotionImportReport, message: String) {
+    if report.warnings.len() < REPORT_LIST_LIMIT {
+        report.warnings.push(message);
+    } else {
+        report.settlement_lists_truncated = true;
+    }
+}
 struct CurrentPlan<'a> {
     review_id: Option<uuid::Uuid>,
     items: Vec<(&'a ImportEntity, NotionDocMeta)>,
@@ -275,5 +433,29 @@ pub(in crate::domain::service) fn notice_import_ids(
         .items
         .into_iter()
         .filter_map(|(row, meta)| meta.plan.filter(|plan| !plan.shared).map(|_| row.id))
+        .collect()
+}
+
+/// Write candidates, including unfinished sources with surviving row receipts.
+pub(in crate::domain::service) fn confirmed_import_ids(
+    run: Option<&ImportRun>,
+    rows: &[ImportEntity],
+) -> Vec<uuid::Uuid> {
+    current_plan(run, rows)
+        .items
+        .into_iter()
+        .filter_map(|(row, meta)| {
+            let plan = meta.plan?;
+            (row.status != ImportStatus::Discarded
+                && run
+                    .and_then(|run| run.review_id)
+                    .is_none_or(|review| row.review_id == Some(review))
+                && plan.already_imported.is_none()
+                && matches!(
+                    plan.decision,
+                    Some(NotionDecision::Copy | NotionDecision::Tasks)
+                ))
+            .then_some(row.id)
+        })
         .collect()
 }

@@ -1,6 +1,7 @@
-//! Email search words, and the conditions typed Mail search operators
-//! become, against a real OpenSearch: each runs inside the unified request,
-//! with its sort and highlighter, and keeps exactly the messages it names.
+//! Email search words, the conditions typed Mail search operators become,
+//! and the inboxes a search reaches, against a real OpenSearch: each runs
+//! inside the unified request, with its sort and highlighter, and keeps
+//! exactly the messages it names.
 
 use std::{collections::BTreeSet, sync::LazyLock};
 
@@ -26,6 +27,8 @@ const LINK: &str = "5ea4c400-0000-4000-8000-00000000e000";
 /// The inbox of the other person's mail, which can reach the viewer only as a
 /// thread shared with them.
 const OTHER_LINK: &str = "5ea4c400-0000-4000-8000-00000000e001";
+/// The other person's second inbox, which they delegated to the viewer.
+const DELEGATED_LINK: &str = "5ea4c400-0000-4000-8000-00000000e002";
 const TAG_DEFINITION: &str = "5ea4c400-0000-4000-8000-00000000e0de";
 const TAG_OPTION: &str = "5ea4c400-0000-4000-8000-00000000e0e0";
 
@@ -39,9 +42,30 @@ fn thread(n: u128) -> Uuid {
     Uuid::from_u128(0x5ea4_c400_0000_4000_8000_0000_0000_e100 + n)
 }
 
+/// An inbox the index files mail under: its link and the owner of the link.
+#[derive(Clone, Copy)]
+struct Inbox {
+    link: &'static str,
+    owner: &'static str,
+}
+
+const VIEWER_INBOX: Inbox = Inbox {
+    link: LINK,
+    owner: VIEWER,
+};
+/// Two inboxes of one other person, the second delegated to the viewer.
+const OTHER_INBOX: Inbox = Inbox {
+    link: OTHER_LINK,
+    owner: OTHER,
+};
+const DELEGATED_INBOX: Inbox = Inbox {
+    link: DELEGATED_LINK,
+    owner: OTHER,
+};
+
 struct Message {
     thread: Uuid,
-    owner: &'static str,
+    inbox: Inbox,
     subject: &'static str,
     content: &'static str,
     sender: (&'static str, &'static str),
@@ -62,7 +86,7 @@ fn messages() -> Vec<Message> {
     vec![
         Message {
             thread: thread(1),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "Team lunch on Friday",
             content: "menu attached",
             sender: ANA,
@@ -75,7 +99,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(2),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "Quarterly numbers",
             content: "the lunch was great",
             sender: BO,
@@ -88,7 +112,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(3),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "lunch menu",
             content: "weekly",
             sender: CY,
@@ -101,7 +125,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(4),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "Hiring plan",
             content: "team plans later",
             sender: DI,
@@ -114,7 +138,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(5),
-            owner: OTHER,
+            inbox: OTHER_INBOX,
             subject: "lunch",
             content: "lunch",
             sender: ANA,
@@ -124,6 +148,19 @@ fn messages() -> Vec<Message> {
             labels: vec!["travel"],
             sent_at_millis: Some(MARCH_2025),
             tagged: true,
+        },
+        Message {
+            thread: thread(6),
+            inbox: DELEGATED_INBOX,
+            subject: "lunch rota",
+            content: "who brings lunch",
+            sender: DI,
+            recipients: vec![BO],
+            cc: Vec::new(),
+            bcc: Vec::new(),
+            labels: vec!["INBOX"],
+            sent_at_millis: Some(MARCH_2025),
+            tagged: false,
         },
     ]
 }
@@ -144,13 +181,8 @@ fn upsert_args(message: &Message) -> anyhow::Result<UpsertEmailArgs> {
         bcc: addresses(&message.bcc),
         bcc_names: names(&message.bcc),
         labels: message.labels.iter().map(|l| l.to_string()).collect(),
-        link_id: if message.owner == VIEWER {
-            LINK
-        } else {
-            OTHER_LINK
-        }
-        .to_string(),
-        user_id: message.owner.to_string(),
+        link_id: message.inbox.link.to_string(),
+        user_id: message.inbox.owner.to_string(),
         updated_at_millis: EpochMillis::new(message.sent_at_millis.unwrap_or(JUNE_2024))?,
         subject: Some(message.subject.to_string()),
         sent_at_millis: message.sent_at_millis.map(EpochMillis::new).transpose()?,
@@ -203,7 +235,7 @@ fn case(name: &str, terms: &[&str], expected: &'static [u128]) -> Case {
         name: name.to_string(),
         args: UnifiedEmailSearchArgs {
             terms: terms.iter().map(|t| t.to_string()).collect(),
-            user_ids: vec![VIEWER.to_string()],
+            inbox_link_ids: vec![LINK.to_string()],
             label_link_ids: vec![LINK.to_string()],
             ..Default::default()
         },
@@ -378,6 +410,72 @@ fn cases() -> Vec<Case> {
     cases
 }
 
+/// Thread 5 is in the other person's own inbox and thread 6 in the inbox they
+/// delegated to the viewer. Both are filed under that person, so only the
+/// inbox tells them apart.
+fn inbox_cases() -> Vec<Case> {
+    let mut cases = Vec::new();
+    let mut with = |mut case: Case, set: &dyn Fn(&mut UnifiedEmailSearchArgs)| {
+        set(&mut case.args);
+        cases.push(case);
+    };
+    with(
+        case(
+            "lunch in the viewer's and a delegated inbox",
+            &["lunch"],
+            &[1, 2, 3, 6],
+        ),
+        &|args| {
+            args.inbox_link_ids = vec![LINK.to_string(), DELEGATED_LINK.to_string()];
+        },
+    );
+    with(
+        case(
+            "lunch with a thread shared from another inbox",
+            &["lunch"],
+            &[1, 2, 3, 5],
+        ),
+        &|args| {
+            args.thread_ids = vec![thread(5).to_string()];
+        },
+    );
+    with(
+        case("lunch in shared threads alone", &["lunch"], &[5]),
+        &|args| {
+            args.inbox_link_ids = Vec::new();
+            args.thread_ids = vec![thread(5).to_string()];
+        },
+    );
+    with(
+        case(
+            "lunch in an inbox the viewer does not read",
+            &["lunch"],
+            &[],
+        ),
+        &|args| {
+            args.inbox_link_ids = vec![LINK.to_string(), DELEGATED_LINK.to_string()];
+            args.link_ids = vec![OTHER_LINK.to_string()];
+        },
+    );
+    with(
+        case(
+            "lunch shared from an inbox the search names",
+            &["lunch"],
+            &[5],
+        ),
+        &|args| {
+            args.thread_ids = vec![thread(5).to_string()];
+            args.link_ids = vec![OTHER_LINK.to_string()];
+        },
+    );
+    cases
+}
+
+#[tokio::test]
+async fn a_search_reaches_mail_by_its_inbox_not_its_owner() -> anyhow::Result<()> {
+    search_seeded(messages(), inbox_cases()).await
+}
+
 #[tokio::test]
 async fn typed_email_conditions_keep_exactly_the_messages_they_name() -> anyhow::Result<()> {
     search_seeded(messages(), cases()).await
@@ -390,7 +488,7 @@ const MARY_JANE: (&str, &str) = ("Mary-Jane Watts", "mj@probe.example");
 fn hyphenated_messages() -> Vec<Message> {
     let message = |n, subject, content, sender| Message {
         thread: thread(n),
-        owner: VIEWER,
+        inbox: VIEWER_INBOX,
         subject,
         content,
         sender,
@@ -455,7 +553,7 @@ async fn a_hyphenated_word_finds_the_mail_that_holds_it() -> anyhow::Result<()> 
 fn punctuated_messages() -> Vec<Message> {
     let message = |n, subject, content, sender| Message {
         thread: thread(n),
-        owner: VIEWER,
+        inbox: VIEWER_INBOX,
         subject,
         content,
         sender,
@@ -526,7 +624,7 @@ async fn a_term_matches_by_its_words_whatever_punctuation_it_carries() -> anyhow
 fn address_and_text_messages() -> Vec<Message> {
     let message = |n, subject, content, sender, recipient| Message {
         thread: thread(n),
-        owner: VIEWER,
+        inbox: VIEWER_INBOX,
         subject,
         content,
         sender,
@@ -654,7 +752,7 @@ async fn an_address_beside_a_word_finds_the_mail_that_holds_both() -> anyhow::Re
 fn message_holding(n: u128, text: &'static str) -> Message {
     Message {
         thread: thread(n),
-        owner: VIEWER,
+        inbox: VIEWER_INBOX,
         subject: text,
         content: text,
         sender: (text, BO.1),
