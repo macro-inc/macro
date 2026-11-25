@@ -477,8 +477,9 @@ A handshake nobody answers in its startup phase's time is treated like a lost
 connection: the same host connects again, within the same budget, and then ends
 with `request-timeout` and the database kept. `graphql_cache.owner` records each
 as `ownerEvent: startup-unanswered`. An authority read a ready owner leaves
-unanswered is asked again, twice, and then ends with `request-timeout`, so the page
-can start over on a new host.
+unanswered waits for a `ping` that is out, whose five seconds count only while the
+page is visible, and is then asked again, twice, before it ends with
+`request-timeout`, so the page can start over on a new host.
 
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS

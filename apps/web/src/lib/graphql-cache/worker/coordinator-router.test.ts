@@ -2172,10 +2172,16 @@ describe('CoordinatorRouter', () => {
       clientId: 'other-build',
       action: 'open-existing',
     },
+    {
+      holder: 'another build, for a moment,',
+      clientId: 'other-build',
+      leaves: true,
+      action: 'open-existing',
+    },
     { holder: 'nobody', clientId: undefined, action: 'wipe-before-open' },
   ])(
     'replaces a dead engine whose lock $holder holds and then would $action',
-    async ({ clientId, action }) => {
+    async ({ clientId, leaves, action }) => {
       vi.useFakeTimers();
       let holder: string | undefined = TEST_ENGINE_CLIENT_ID;
       const lockName = databaseOwnerLockName('scope');
@@ -2214,7 +2220,9 @@ describe('CoordinatorRouter', () => {
       expect(messagesOfKind(tab, 'terminate-engine')).toEqual([]);
 
       holder = clientId;
-      await vi.advanceTimersByTimeAsync(5 + 7 + 5 + 100);
+      await vi.advanceTimersByTimeAsync(5 + 7);
+      if (leaves) holder = undefined;
+      await vi.advanceTimersByTimeAsync(5 + 100);
 
       expect(messagesOfKind(tab, 'terminate-engine')).toEqual([
         expect.objectContaining({

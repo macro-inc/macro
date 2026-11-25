@@ -1858,7 +1858,7 @@ export class CoordinatorRouter {
     // Nothing that arrives now keeps this engine: an answer it sent before it
     // died, or a drain asked of it.
     this.clearHeartbeatTimers();
-    this.endUnlockedOwner(route);
+    this.endUnlockedOwner(core.scope, route);
   }
 
   /** Ends the wait of a write no engine takes. A parked cache keeps its work. */
@@ -2016,14 +2016,16 @@ export class CoordinatorRouter {
   /** The engine of a page that is leaving frees its lock, the page frees its
    * own and says goodbye, and these can arrive in any order. Give the rest
    * time. */
-  private endUnlockedOwner(route: EngineRoute): void {
+  private endUnlockedOwner(scope: string, route: EngineRoute): void {
+    // Another build may be done with the database by the time the rest is in.
+    const takenBefore = this.ownerLockHeld(scope);
     this.setTimeoutFn(() => {
       this.endSilentOwner(
         route.tabId,
         route.ownerEpoch,
         'engine owner lock was released',
         () => this.engineRoute === route,
-        true
+        takenBefore
       ).catch(reportCoordinatorTaskFailure);
     }, this.heartbeatIntervalMs);
   }
@@ -2038,7 +2040,7 @@ export class CoordinatorRouter {
     ownerEpoch: number,
     reason: string,
     silent: () => boolean,
-    lockReleased = false,
+    takenBefore?: Promise<boolean>,
     probes = 1
   ): Promise<void> {
     const core = this.coreValue;
@@ -2058,7 +2060,7 @@ export class CoordinatorRouter {
             ownerEpoch,
             reason,
             silent,
-            lockReleased,
+            takenBefore,
             probes + 1
           ).catch(reportCoordinatorTaskFailure);
         }, this.heartbeatIntervalMs);
@@ -2072,7 +2074,9 @@ export class CoordinatorRouter {
       this.loseTab(tabId, 'tab liveness lock was released');
       return;
     }
-    const takenOver = lockReleased && (await this.ownerLockHeld(core.scope));
+    const takenOver =
+      takenBefore !== undefined &&
+      ((await takenBefore) || (await this.ownerLockHeld(core.scope)));
     if (!silent()) return;
     this.failOwner(tabId, ownerEpoch, reason, undefined, undefined, takenOver);
   }
