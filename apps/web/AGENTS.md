@@ -506,6 +506,14 @@ tap highlight. `long-press-tap.browser.e2e.ts` long-presses a row of Mail's
 phone list (the real context menu and action drawer), dismisses the drawer and
 taps other rows, recording every press marker change: only the tapped row is
 ever pressed.
+`side-safe-area.browser.e2e.ts` frames a channel pane like the app with and
+without a right safe area (the folded iPhone Duo's clock column): the top fade
+continues across the column in the same colour, the jump-to-latest button sits
+one gutter in from the pane, and the channel scroll bar runs between the
+floating header and the bottom chrome. It also parks a hidden pane under the
+channel, as a stacked collection does, turns the phone over, and measures the
+pane while a swipe's transform still moves it: only the visible pane's fade
+continues, on the side the column moved to, where the pane rests.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,

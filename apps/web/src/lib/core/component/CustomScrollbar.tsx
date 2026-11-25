@@ -30,6 +30,12 @@ interface CustomScrollbarProps {
    * events over an enlarged gutter are forwarded to the container.
    */
   gutterSize?: number;
+  /**
+   * Space kept clear at each end of the track, for chrome drawn over the
+   * container (a floating header, a composer and the dock). The track and its
+   * thumb run only between them.
+   */
+  insets?: { start: number; end: number };
 }
 
 const MIN_THUMB_SIZE = 24;
@@ -100,7 +106,10 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
   const maxScroll = () => Math.max(0, scrollSize() - clientSize());
 
-  const trackSize = () => Math.max(0, clientSize() - THUMB_INSET * 2);
+  const insetStart = () => props.insets?.start ?? 0;
+  const insetEnd = () => props.insets?.end ?? 0;
+  const trackSize = () =>
+    Math.max(0, clientSize() - insetStart() - insetEnd() - THUMB_INSET * 2);
 
   const thumbSize = () => {
     const ts = trackSize();
@@ -126,7 +135,10 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     return THUMB_INSET + (scrollOffset() / max) * maxTop();
   };
 
-  const isVisible = () => scrollSize() > clientSize();
+  // A track squeezed shorter than the smallest thumb (insets taking most of a
+  // short container) has no room to scroll in.
+  const isVisible = () =>
+    scrollSize() > clientSize() && trackSize() >= MIN_THUMB_SIZE;
 
   createEffect(() => {
     const container = props.scrollContainer();
@@ -264,10 +276,18 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         style={
           horiz()
             ? {
+                ...(props.insets && {
+                  left: `${insetStart()}px`,
+                  right: `${insetEnd()}px`,
+                }),
                 height: `${props.gutterSize ?? GUTTER_SIZE}px`,
                 'touch-action': 'none',
               }
             : {
+                ...(props.insets && {
+                  top: `${insetStart()}px`,
+                  bottom: `${insetEnd()}px`,
+                }),
                 width: `${props.gutterSize ?? GUTTER_SIZE}px`,
                 'touch-action': 'none',
               }

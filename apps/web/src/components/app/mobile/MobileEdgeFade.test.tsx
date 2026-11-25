@@ -13,6 +13,17 @@ vi.mock('@ui', () => ({
   Layer: (props: ParentProps) => props.children,
 }));
 
+// jsdom has no ResizeObserver; the side safe-area columns are covered by the
+// mobile browser suite (side-safe-area.browser.e2e.ts).
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
 afterEach(cleanup);
 
 it('draws the top fade on a touch device outside the native iOS app', () => {
