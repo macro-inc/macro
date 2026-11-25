@@ -792,25 +792,30 @@ describe('phone Month recovery', () => {
     expect(pager().activeDate().getMonth()).toBe(11);
   });
 
-  it('does not align while native momentum moves without main-thread scroll events', async () => {
-    const { pager, viewport } = mountCalendar('dayGridMonth');
-    Object.defineProperty(viewport, 'onscrollend', { value: null });
-    viewport.dispatchEvent(new Event('touchstart'));
-    viewport.scrollLeft = 230;
-    viewport.dispatchEvent(new Event('scroll'));
-    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-    for (const left of [240, 250, 260, 275, 290, 300]) {
-      await vi.advanceTimersByTimeAsync(100);
-      viewport.scrollLeft = left;
+  it.each([true, false])(
+    'tracks silent native momentum (initial scroll event=%s)',
+    async (observed) => {
+      const { pager, viewport } = mountCalendar('dayGridMonth');
+      Object.defineProperty(viewport, 'onscrollend', { value: null });
+      viewport.dispatchEvent(new Event('touchstart'));
+      if (observed) {
+        viewport.scrollLeft = 230;
+        viewport.dispatchEvent(new Event('scroll'));
+      }
+      window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+      for (const left of [240, 250, 260, 275, 290, 300]) {
+        await vi.advanceTimersByTimeAsync(100);
+        viewport.scrollLeft = left;
+        expect(pager().pager.position()).toBe(0);
+      }
+      await vi.advanceTimersByTimeAsync(250);
+      expect(viewport.scrollLeft).toBe(300);
       expect(pager().pager.position()).toBe(0);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(pager().pager.position()).toBe(1);
+      expect(pager().pager.phase()).toBe('idle');
     }
-    await vi.advanceTimersByTimeAsync(250);
-    expect(viewport.scrollLeft).toBe(300);
-    expect(pager().pager.position()).toBe(0);
-    await vi.advanceTimersByTimeAsync(200);
-    expect(pager().pager.position()).toBe(1);
-    expect(pager().pager.phase()).toBe('idle');
-  });
+  );
 });
 
 describe('phone month/year selector alignment', () => {
@@ -867,6 +872,7 @@ describe('phone month/year selector alignment', () => {
     expect(picker.year()).toBe(2026);
     expect(pager().navigationDate().getFullYear()).toBe(2026);
     expect(year.scrollTop).toBe((2026 - 1970) * WHEEL_ROW_HEIGHT);
+    expect(year.style.scrollSnapType).toBe('');
 
     picker.selectYear(2040);
     fireEvent.scroll(year);
@@ -874,6 +880,7 @@ describe('phone month/year selector alignment', () => {
     expect(picker.year()).toBe(2040);
     expect(pager().activeDate().getFullYear()).toBe(2040);
     expect(year.scrollTop).toBe((2040 - 1970) * WHEEL_ROW_HEIGHT);
+    expect(year.style.scrollSnapType).toBe('');
   });
 
   it('keeps the last month and year selection when native momentum delays navigation', async () => {

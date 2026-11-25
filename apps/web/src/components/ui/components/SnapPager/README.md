@@ -30,6 +30,8 @@ stable `key`, `position`, and relative `offset`.
 - Native touch scrolling owns momentum until settlement. Native `scrollend`
   settles promptly; 350ms of observed positional stillness also recovers missing
   events, including when the browser exposes the API but does not deliver one.
+  A no-event release recovers after 150ms only while its position is unchanged;
+  silent movement during that window starts the same native-momentum watcher.
 - Controlled slides and final alignment take 140ms with the shared Pager ease-out
   curve. Their frame completion owns settlement; delayed scrollend cannot finish
   another controlled slide. Reduced motion is immediate.

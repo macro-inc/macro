@@ -250,13 +250,13 @@ export function createSnapPager(
     // takes native ownership back before any further command can run.
     noScrollTimer = setTimeout(() => {
       noScrollTimer = undefined;
-      if (
-        attached !== element ||
-        gestureHeld() ||
-        scrollObserved ||
-        element?.scrollLeft !== left
-      )
+      if (attached !== element || gestureHeld() || scrollObserved) return;
+      if (element.scrollLeft !== left) {
+        // The compositor moved without a scroll event. Keep native ownership
+        // and observe its actual position until momentum stops.
+        watchNativeEnd();
         return;
+      }
       nativeScroll = false;
       rapidNavigation = false;
       recoveredWithoutScroll = true;
