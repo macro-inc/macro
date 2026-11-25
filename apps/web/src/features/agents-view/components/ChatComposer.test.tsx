@@ -1153,9 +1153,10 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   });
   const [open, setOpen] = createSignal(false);
   const [scopeOpen, setScopeOpen] = createSignal(false);
-  const [model, setModel] = createSignal('openai/gpt-5.6');
+  const [model, setModel] = createSignal('auto');
   const [hidden, setHidden] = createSignal(false);
   const models = [
+    { id: 'auto', label: 'Auto' },
     { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
     { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
   ];
@@ -1200,7 +1201,6 @@ it('keeps the list composer expanded across model selection and dismisses an orp
     name: 'Choose an agent or model',
   });
   fireEvent.click(trigger);
-  fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
   let search = await screen.findByRole('textbox');
   const sheet = search.closest<HTMLElement>('[data-corvu-drawer-content]')!;
   search.focus();
@@ -1234,7 +1234,7 @@ it('keeps the list composer expanded across model selection and dismisses an orp
     ).not.toBeNull()
   );
   expect(open()).toBe(true);
-  fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Auto' }));
   search = await screen.findByRole('textbox');
   fireEvent.focusOut(input, { relatedTarget: search });
   fireEvent.pointerDown(search);

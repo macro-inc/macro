@@ -18,7 +18,8 @@ export function DesktopModelSelector() {
       if (open) state.onFocusScopeChange?.(true);
       state.onOpenChange?.(open);
     },
-    () => trigger
+    () => trigger,
+    () => state.model
   );
   let disposed = false;
   onCleanup(() => {

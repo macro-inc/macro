@@ -3,7 +3,7 @@ import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigat
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup, Show, untrack } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
 import { ModelSelectionList } from '../shared/model-selection-list';
@@ -13,12 +13,17 @@ import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 export function MobileModelSelector() {
   const state = useUnifiedModelSelector();
   let trigger: HTMLButtonElement | undefined;
+  const [sheetPresent, setSheetPresent] = createSignal(false);
   const nav = createModelSelectorNavigation(
     (open) => {
-      if (open) state.onFocusScopeChange?.(true);
+      if (open) {
+        if (untrack(nav.page) !== 'card') setSheetPresent(true);
+        state.onFocusScopeChange?.(true);
+      }
       state.onOpenChange?.(open);
     },
-    () => trigger
+    () => trigger,
+    () => state.model
   );
   let disposed = false;
   const releaseFocusScope = () =>
@@ -30,7 +35,6 @@ export function MobileModelSelector() {
     state.onFocusScopeChange?.(false);
   });
   const sheetOpen = () => nav.open() && nav.page() !== 'card';
-  const [sheetPresent, setSheetPresent] = createSignal(false);
   const openSheet = (page: 'list' | 'agentModels') => {
     setSheetPresent(true);
     nav.setPage(page);

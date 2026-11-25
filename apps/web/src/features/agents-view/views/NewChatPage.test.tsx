@@ -611,6 +611,116 @@ describe('agent-led new conversation', () => {
     ).toBeNull();
     expect(screen.queryByRole('button', { name: 'Repository' })).toBeNull();
   });
+  it.each([false, true])(
+    'opens the Auto model directly in the list and returns real models to cards (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      const user = userEvent.setup();
+      const [model, setModel] = createSignal('auto');
+      const onOpenChange = vi.fn();
+      const models = [
+        { id: 'auto', label: 'Auto' },
+        { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+      ];
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            get model() {
+              return model();
+            },
+            models,
+            suggestedModels: models,
+            onModel: (next) => {
+              setModel(next);
+            },
+            onEffort: () => {},
+            onSpeed: () => {},
+            onOpenChange,
+          }}
+        />
+      ));
+      const trigger = screen.getByRole('button', {
+        name: 'Choose an agent or model',
+      });
+      await user.click(trigger);
+      const search = await screen.findByRole('textbox', {
+        name: 'Search agents and models',
+      });
+      const dialog = search.closest<HTMLElement>('[role="dialog"]')!;
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(true);
+      if (touch)
+        expect(dialog.hasAttribute('data-corvu-drawer-content')).toBe(true);
+      else {
+        expect(dialog.classList.contains('w-[400px]')).toBe(true);
+        await waitFor(() => expect(document.activeElement).toBe(search));
+      }
+      await user.click(within(dialog).getByRole('button', { name: 'GPT-5.6' }));
+      expect(model()).toBe('openai/gpt-5.6');
+      if (touch) {
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      } else {
+        await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+        await user.keyboard('{Escape}');
+        await waitFor(() =>
+          expect(trigger.getAttribute('aria-expanded')).toBe('false')
+        );
+      }
+      await user.click(trigger);
+      const card = await screen.findByRole('dialog');
+      expect(within(card).queryByRole('textbox')).toBeNull();
+      expect(
+        within(card).getByRole('button', { name: 'GPT-5.6' })
+      ).toBeTruthy();
+    }
+  );
+  it.each([false, true])(
+    'keeps the custom-agent Auto pin reachable through Back (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      const user = userEvent.setup();
+      const onKeepModel = vi.fn();
+      const agent = buildAgentRoster({
+        agents: [],
+        runtimes: [],
+        cursorConnected: true,
+        cursorNeedsConnection: false,
+      }).find((entry) => entry.id === CURSOR_BOT_ID)!;
+      const models = [
+        { id: 'auto', label: 'Auto' },
+        { id: 'other', label: 'Other' },
+      ];
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            model: 'auto',
+            agent,
+            models,
+            suggestedModels: models,
+            onKeepModel,
+            speeds: ['standard', 'priority'],
+            onModel: () => {},
+            onEffort: () => {},
+            onSpeed: () => {},
+          }}
+        />
+      ));
+      await user.click(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+      );
+      const search = await screen.findByRole('textbox');
+      await user.click(
+        within(search.closest('[role="dialog"]')!).getAllByRole('button')[0]
+      );
+      const pin = await screen.findByRole('button', {
+        name: 'Keep Auto for Cursor',
+      });
+      expect(screen.queryByRole('slider')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Speed' })).toBeNull();
+      await user.click(pin);
+      expect(onKeepModel).toHaveBeenCalledWith(true);
+    }
+  );
   it('offers only Chat and Code without the Auto flag', () => {
     mocks.autoEnabled = false;
     const send = page();

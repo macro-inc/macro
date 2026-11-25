@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   onStart: undefined as ((start: StartConversation) => void) | undefined,
   editor: undefined as LexicalEditor | undefined,
   realPage: false,
+  initialModel: 'chat-default',
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: mocks.start,
@@ -47,7 +48,7 @@ vi.mock('../agents-view/queries/agent-roster-source', () => ({
         runtimes: [],
         cursorConnected: true,
         cursorNeedsConnection: false,
-        macroDefaultModel: 'chat-default',
+        macroDefaultModel: mocks.initialModel,
         cursorDefaultModel: 'cursor-default',
       }),
     loading: () => false,
@@ -138,8 +139,9 @@ vi.mock('@queries/agents/models', () => ({
     isError: false,
     data: {
       status: 'available',
-      currentModel: 'chat-default',
+      currentModel: mocks.initialModel,
       models: [
+        { id: 'auto', name: 'Auto' },
         { id: 'chat-default', name: 'Chat Default' },
         { id: 'claude-sonnet-4', name: 'Sonnet 4' },
       ],
@@ -208,6 +210,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
   mocks.realPage = false;
+  mocks.initialModel = 'chat-default';
 });
 afterEach(cleanup);
 
@@ -256,62 +259,74 @@ it('keeps a cleared Home draft empty on the next visit', () => {
 });
 
 // Keep the real host, composer, selector, and focus scope in the regression.
-it('keeps the Home model menu open while searching and reopening', async () => {
-  mocks.realPage = true;
-  const user = userEvent.setup();
-  const styles = document.createElement('style');
-  styles.textContent =
-    '[role="menu"] { animation-name: none; transition-duration: 0s; }';
-  document.head.append(styles);
-  vi.stubGlobal('scrollTo', vi.fn());
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+it.each(['chat-default', 'auto'])(
+  'keeps the Home model menu open while searching and reopening from %s',
+  async (initialModel) => {
+    mocks.initialModel = initialModel;
+    mocks.realPage = true;
+    const user = userEvent.setup();
+    const styles = document.createElement('style');
+    styles.textContent =
+      '[role="menu"] { animation-name: none; transition-duration: 0s; }';
+    document.head.append(styles);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    const originalScrollTo = Element.prototype.scrollTo;
+    Element.prototype.scrollTo = vi.fn();
+    try {
+      render(() => <HomeAgentComposer />);
+      const editor = screen.getByRole('textbox', { name: 'Message the agent' });
+      editor.focus();
+      const trigger = screen.getByRole('button', {
+        name: 'Choose an agent or model',
+      });
+      await user.click(trigger);
+      const card = await screen.findByRole('dialog');
+      if (initialModel !== 'auto') {
+        await user.click(
+          within(card).getByRole('button', { name: 'Chat Default' })
+        );
+      }
+      const search = await screen.findByRole('textbox', {
+        name: 'Search agents and models',
+      });
+      await waitFor(() => expect(document.activeElement).toBe(search));
+      await user.type(search, 'Sonnet');
+      expect(screen.getByRole('button', { name: 'Sonnet 4' })).toBeTruthy();
+      expect(screen.getByRole('dialog')).toBe(card);
+      expect(document.activeElement).toBe(search);
+      await user.click(trigger);
+      await waitFor(() =>
+        expect(trigger.getAttribute('aria-expanded')).toBe('false')
+      );
+      await user.click(trigger);
+      await waitFor(() =>
+        expect(trigger.getAttribute('aria-expanded')).toBe('true')
+      );
+      expect(await screen.findByRole('dialog')).toBeTruthy();
+      expect(editor.isConnected).toBe(true);
+      if (initialModel === 'auto') {
+        expect(
+          screen.getByRole('textbox', { name: 'Search agents and models' })
+        ).toBeTruthy();
+      } else {
+        expect(
+          within(screen.getByRole('dialog')).getByRole('button', {
+            name: 'Chat Default',
+          })
+        ).toBeTruthy();
+      }
+    } finally {
+      Element.prototype.scrollTo = originalScrollTo;
+      styles.remove();
+      vi.unstubAllGlobals();
     }
-  );
-  const originalScrollTo = Element.prototype.scrollTo;
-  Element.prototype.scrollTo = vi.fn();
-  try {
-    render(() => <HomeAgentComposer />);
-    const editor = screen.getByRole('textbox', { name: 'Message the agent' });
-    editor.focus();
-    const trigger = screen.getByRole('button', {
-      name: 'Choose an agent or model',
-    });
-    await user.click(trigger);
-    const card = await screen.findByRole('dialog');
-    await user.click(
-      within(card).getByRole('button', { name: 'Chat Default' })
-    );
-    const search = await screen.findByRole('textbox', {
-      name: 'Search agents and models',
-    });
-    await waitFor(() => expect(document.activeElement).toBe(search));
-    await user.type(search, 'Sonnet');
-    expect(screen.getByRole('button', { name: 'Sonnet 4' })).toBeTruthy();
-    expect(screen.getByRole('dialog')).toBe(card);
-    expect(document.activeElement).toBe(search);
-    await user.click(trigger);
-    await waitFor(() =>
-      expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    );
-    await user.click(trigger);
-    await waitFor(() =>
-      expect(trigger.getAttribute('aria-expanded')).toBe('true')
-    );
-    expect(await screen.findByRole('dialog')).toBeTruthy();
-    expect(editor.isConnected).toBe(true);
-    expect(
-      within(screen.getByRole('dialog')).getByRole('button', {
-        name: 'Chat Default',
-      })
-    ).toBeTruthy();
-  } finally {
-    Element.prototype.scrollTo = originalScrollTo;
-    styles.remove();
-    vi.unstubAllGlobals();
   }
-});
+);

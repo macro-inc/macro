@@ -1,4 +1,4 @@
-import { batch, createEffect, onCleanup } from 'solid-js';
+import { batch, createEffect, onCleanup, untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 export type ModelSelectorPage =
@@ -11,7 +11,8 @@ export type ModelSelectorPage =
 /** The phone sheet and desktop popover share one navigation lifetime. */
 export function createModelSelectorNavigation(
   onOpenChange?: (open: boolean) => void,
-  anchor?: () => HTMLElement | undefined
+  anchor?: () => HTMLElement | undefined,
+  model?: () => string | undefined
 ) {
   const [state, setState] = createStore({
     open: false,
@@ -20,8 +21,12 @@ export function createModelSelectorNavigation(
   });
   const changeOpen = (open: boolean) => {
     if (open === state.open) return;
+    // Choose the entry once; model updates must not reroute an open selector.
+    const page: ModelSelectorPage = open
+      ? untrack(() => (model?.()?.toLowerCase() === 'auto' ? 'list' : 'card'))
+      : 'card';
     batch(() => {
-      setState(open ? { open } : { open, query: '', page: 'card' });
+      setState(open ? { open, page } : { open, query: '', page });
       onOpenChange?.(open);
     });
   };

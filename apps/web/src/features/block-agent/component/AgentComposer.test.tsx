@@ -2,9 +2,17 @@ import { Model } from '@core/component/AI/constant/model';
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import type { DiscoverAgentCapabilitiesRequest } from '@service-agent-harness/generated/schemas';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, mergeProps } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import type { UnifiedModelSelectorState } from '../../agents-view/components/unified-model-selector/root';
 import type { SelectSessionConfigOption } from '../state/session-config';
 import type { AgentInputProps } from '../ui/AgentInput';
@@ -41,6 +49,7 @@ const mocks = vi.hoisted(() => ({
     undefined as { model: string; configOptions: unknown[] } | undefined,
   input: undefined as AgentInputProps | undefined,
   model: undefined as UnifiedModelSelectorState | undefined,
+  realSelector: false,
   capabilityTarget: undefined as
     | (() => DiscoverAgentCapabilitiesRequest | undefined)
     | undefined,
@@ -116,12 +125,21 @@ vi.mock('../ui', () => ({
   },
   ComposerNotice: () => null,
 }));
-vi.mock('@app/features/agents-view/model-selector', () => ({
-  UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
-    mocks.model = mergeProps(() => props.state);
-    return null;
-  },
-}));
+vi.mock('@app/features/agents-view/model-selector', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@app/features/agents-view/model-selector')
+    >();
+  return {
+    UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
+      mocks.model = mergeProps(() => props.state);
+      return mocks.realSelector ? (
+        <actual.UnifiedModelSelector {...props} />
+      ) : null;
+    },
+  };
+});
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 
 beforeEach(() => {
@@ -129,6 +147,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
+  mocks.realSelector = false;
   mocks.capabilityTarget = undefined;
   mocks.capabilities = () => ({ configOptions: [] });
   mocks.session = () => ({ canEdit: false });
@@ -141,6 +160,31 @@ it('passes opening context to the composer without issuing it', () => {
   render(() => <AgentComposer />);
   expect(mocks.input?.initialInput).toBe('Document context');
   expect(mocks.issue).not.toHaveBeenCalled();
+});
+
+it('opens Auto directly from the session composer', async () => {
+  mocks.realSelector = true;
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.metadata = () => ({ model: 'auto', configOptions: [] });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+  });
+  render(() => <AgentComposer />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose an agent or model' })
+  );
+  expect(
+    await screen.findByRole('textbox', { name: 'Search agents and models' })
+  ).toBeTruthy();
+  expect(mocks.model?.model).toBe('auto');
 });
 
 it('keeps the advertised default separate from confirmed session effort and scopes it to the model', () => {
