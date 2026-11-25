@@ -138,12 +138,32 @@ function columnPlacement(
   const rect = fade.getBoundingClientRect();
   if (rect.height === 0) return undefined;
   if (getComputedStyle(fade).visibility !== 'visible') return undefined;
+  // Where the pane rests: a swipe moves panes with transforms, and the one it
+  // reveals turns active (and is measured) before its transform is cleared,
+  // which nothing would report.
+  const shift = ancestorTranslation(fade);
+  const restingLeft = rect.left - shift.x;
+  const restingRight = rect.right - shift.x;
   const sides: SafeColumn[] = [];
-  if (left > 0 && rect.left <= left + 1) sides.push({ left: 0, width: left });
-  if (right > 0 && rect.right >= window.innerWidth - right - 1)
+  if (left > 0 && restingLeft <= left + 1) sides.push({ left: 0, width: left });
+  if (right > 0 && restingRight >= window.innerWidth - right - 1)
     sides.push({ left: window.innerWidth - right, width: right });
   if (sides.length === 0) return undefined;
-  return { top: rect.top, height: rect.height, sides };
+  return { top: rect.top - shift.y, height: rect.height, sides };
+}
+
+/** The translation the element and its ancestors' transforms add. */
+function ancestorTranslation(element: HTMLElement) {
+  let x = 0;
+  let y = 0;
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    const transform = getComputedStyle(node).transform;
+    if (!transform || transform === 'none') continue;
+    const matrix = new DOMMatrixReadOnly(transform);
+    x += matrix.e;
+    y += matrix.f;
+  }
+  return { x, y };
 }
 
 /** Spans the bottom-chrome host plus a falloff above it. */

@@ -147,24 +147,33 @@ test('turning the phone over moves the column fade to the other side', async ({
   );
 });
 
-test('a pane sliding back into place picks the column fade back up', async ({
+test('a pane measured mid-swipe gets the column of where it rests', async ({
   page,
 }) => {
-  await page.goto(`/side-safe-area.html?safeLeft=${SAFE_RIGHT}`);
+  await page.goto(`/side-safe-area.html?safeRight=${SAFE_RIGHT}`);
   await scrollUp(page);
   const columns = page.locator('[data-mobile-top-edge-fade-column]');
   await expect(columns).toHaveCount(1);
-  const slide = (transform: string) =>
-    page.evaluate((transform) => {
-      const pane = document.querySelector<HTMLElement>('[data-pane]');
-      if (pane) pane.style.transform = transform;
-    }, transform);
-  // A swipe back moves the revealed pane with a transform, never resizing it.
-  await slide('translateX(200px)');
-  await expect(columns).toHaveCount(0);
-  await slide('');
+  // A swipe back moves the pane it reveals with a transform, and that pane is
+  // measured as it turns active, before the transform clears.
+  await page.evaluate((inset) => {
+    const pane = document.querySelector<HTMLElement>('[data-pane]');
+    if (pane) pane.style.transform = 'translateX(200px)';
+    const style = document.documentElement.style;
+    style.setProperty('--safe-right', '0px');
+    style.setProperty('--safe-left', `${inset}px`);
+  }, SAFE_RIGHT);
+  await expect
+    .poll(() => rect(page, '[data-mobile-top-edge-fade-column]'))
+    .toMatchObject({ left: 0, width: SAFE_RIGHT });
+  await page.evaluate(() => {
+    const pane = document.querySelector<HTMLElement>('[data-pane]');
+    if (pane) pane.style.transform = '';
+  });
+  await page.waitForTimeout(300);
+  expect(await rect(page, '[data-mobile-top-edge-fade-column]')).toMatchObject({
+    left: 0,
+    width: SAFE_RIGHT,
+  });
   await expect(columns).toHaveCount(1);
-  const column = await rect(page, '[data-mobile-top-edge-fade-column]');
-  expect(column?.left).toBe(0);
-  expect(column?.width).toBe(SAFE_RIGHT);
 });
