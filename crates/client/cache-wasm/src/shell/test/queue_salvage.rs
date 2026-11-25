@@ -15,7 +15,14 @@ async fn owner(scope: &str) -> OpfsOwner {
         .expect("owner")
 }
 
+/// Every frame of the side file, without the room it keeps after them.
 async fn read_side_file(scope: &str) -> Vec<u8> {
+    let mut bytes = read_whole_side_file(scope).await;
+    bytes.truncate(SalvageFile::decode(&bytes).end() as usize);
+    bytes
+}
+
+async fn read_whole_side_file(scope: &str) -> Vec<u8> {
     let owner = owner(scope).await;
     let bytes = owner.sidecar().read().await.expect("side file");
     owner.release().await.expect("release");
@@ -74,8 +81,8 @@ async fn refuse_queue_frames(refuse: bool) {
           handle.writeAnything = handle.write;
           handle.write = function (bytes, options) {
             const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-            const body = bytes.byteLength - 13;
-            if (body > 0 && view.getUint32(0, true) === body && view.getUint8(12) === 1)
+            const room = bytes.byteLength < 14 ? -1 : bytes.byteLength - 13 - view.getUint32(0, true);
+            if ((room === 0 || room === 35) && view.getUint8(12) === 1)
               throw new DOMException('full', 'QuotaExceededError');
             return this.writeAnything(bytes, options);
           };
@@ -573,6 +580,33 @@ async fn a_disk_with_room_for_no_more_than_the_attempt_still_says_what_is_lost()
          if (at + bytes.byteLength > self.sideFileRoom)
            throw new DOMException('full', 'QuotaExceededError');
          return original(...args);",
+    )
+    .await;
+    wipe_and_die(SCOPE).await;
+    restore_side_files().await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_full_disk_still_says_what_is_lost_behind_a_copy() {
+    const SCOPE: &str = "cache-wasm-salvage-full-copy";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let older = read_whole_side_file(SCOPE).await;
+    closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+    write_side_file(SCOPE, &older).await;
+    break_side_files(
+        "write",
+        &format!(
+            "const [bytes, {{ at }}] = args;
+             if (at + bytes.byteLength > {})
+               throw new DOMException('full', 'QuotaExceededError');
+             return original(...args);",
+            older.len()
+        ),
     )
     .await;
     wipe_and_die(SCOPE).await;

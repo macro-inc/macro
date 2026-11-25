@@ -143,6 +143,12 @@ impl SalvageFile {
         [0; RESERVED]
     }
 
+    /// Blank bytes to write after a queue, then overwritten by the read attempt
+    /// and the loss of a later wipe.
+    pub fn reserved_for_wipe() -> [u8; FRAME_HEADER + RESERVED] {
+        [0; FRAME_HEADER + RESERVED]
+    }
+
     /// The frame that says a database is wiped whose queue is not all here.
     pub fn loss(loss: QueueLoss) -> Vec<u8> {
         let mut body = vec![u8::from(loss.abandoned)];

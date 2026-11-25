@@ -342,6 +342,7 @@ fn a_loss_fits_in_what_a_read_attempt_reserves() {
     let mut told = reserved;
     told[attempt.len()..].copy_from_slice(&SalvageFile::loss(LOSS));
     assert!(SalvageFile::decode(&told).lost());
+    assert_eq!(told.len(), SalvageFile::reserved_for_wipe().len());
 }
 
 #[test]

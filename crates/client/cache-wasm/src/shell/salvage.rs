@@ -140,8 +140,7 @@ pub(super) async fn wipe_keeping_queue(
     };
     // A full disk has room again.
     if let (true, Some(queue)) = (unwritten, &queue) {
-        let written = sidecar.write_tail(read.end, &queue.to_frame()).await;
-        unwritten = written.is_err();
+        unwritten = write_queue(&sidecar, read.end, queue).await.is_none();
     }
     Ok((
         owner,
@@ -189,6 +188,16 @@ async fn or_release<T>(
     }
 }
 
+/// Writes `queue` with room for what a later wipe may have to say after it, or
+/// without. Returns where its frame ends.
+async fn write_queue(sidecar: &Sidecar, end: u64, queue: &SalvagedQueue) -> Option<u64> {
+    let frame = queue.to_frame();
+    let reserved = [&frame[..], &SalvageFile::reserved_for_wipe()].concat();
+    let written = sidecar.write_tail(end, &reserved).await.is_ok()
+        || sidecar.write_tail(end, &frame).await.is_ok();
+    written.then_some(frame.len() as u64)
+}
+
 struct ReadBeforeWipe {
     /// A queue that is new to the side file.
     queue: Option<SalvagedQueue>,
@@ -222,9 +231,8 @@ impl ReadBeforeWipe {
         let Some(queue) = self.queue.as_ref().filter(|_| self.unwritten) else {
             return;
         };
-        let frame = queue.to_frame();
-        if sidecar.write_tail(self.end, &frame).await.is_ok() {
-            self.end += frame.len() as u64;
+        if let Some(written) = write_queue(sidecar, self.end, queue).await {
+            self.end += written;
             self.unwritten = false;
         }
     }
