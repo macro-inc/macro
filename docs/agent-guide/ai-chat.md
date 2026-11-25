@@ -2449,7 +2449,8 @@ must stay hidden; subsequent live messages must still appear.
   Down walks back and past the bottom row returns to the input. The queued-message
   fixture at `apps/web/src/features/block-agent/browser-test/queued.html` renders
   these rows over the real composer, with `?count=N` entries. With an empty composer the
-  busy action is Stop, and Enter does nothing; the queue drains in order, oldest first,
+  busy action is Stop, and a plain Enter steers the top (newest) row, once per press;
+  otherwise the queue drains in order, oldest first,
   as each turn ends. Steer on a queued row is the interrupt for that one message. Each
   Steer shows its message as a pending bubble at once and drops its row; consecutive
   ones never wait on each other in the UI. Their steer requests go out one at a time in press order, each after the

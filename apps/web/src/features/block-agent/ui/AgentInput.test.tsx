@@ -295,6 +295,19 @@ describe('Enter on an empty draft', () => {
     expect(onStop).not.toHaveBeenCalled();
   });
 
+  it('treats a whitespace-only draft as empty and steers', () => {
+    const onSend = vi.fn();
+    const onEnterEmpty = vi.fn();
+    render(() => (
+      <AgentInput busy onSend={onSend} onEnterEmpty={onEnterEmpty} />
+    ));
+
+    editor.change?.('  \n ');
+    editor.enter?.();
+    expect(onEnterEmpty).toHaveBeenCalledOnce();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
   it('sends typed text instead of steering', () => {
     const onSend = vi.fn();
     const onEnterEmpty = vi.fn();
@@ -333,7 +346,7 @@ describe('Enter on an empty draft', () => {
     expect(onEnterEmpty).not.toHaveBeenCalled();
   });
 
-  it('leaves whitespace-only drafts, still-uploading files, and view-only sessions alone', () => {
+  it('leaves still-uploading files and view-only sessions alone', () => {
     const onEnterEmpty = vi.fn();
     const { unmount } = render(() => (
       <AgentInput
