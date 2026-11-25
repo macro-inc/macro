@@ -98,6 +98,19 @@ export function clearLocalAuthSession(
   });
 }
 
+/**
+ * Ends this browser's session without leaving the page: the auth service
+ * clears its cookies and this page forgets the account. The identity
+ * provider's own session stays, so signing in again can take one tap.
+ */
+export async function endSessionInPlace(): Promise<boolean> {
+  const [, ended] = await Promise.all([
+    clearLocalAuthSession(),
+    authServiceClient.logout(),
+  ]);
+  return ended.isOk();
+}
+
 export function useLogout() {
   const analytics = useAnalytics();
   const owner = getOwner();

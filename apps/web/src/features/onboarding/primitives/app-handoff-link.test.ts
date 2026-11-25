@@ -76,3 +76,49 @@ describe('createAppHandoffLink', () => {
     expect(mint).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('createAppHandoffLink in a hidden page', () => {
+  let visibility: DocumentVisibilityState = 'visible';
+  beforeEach(() => {
+    vi.useFakeTimers();
+    visibility = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+      () => visibility
+    );
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const show = (state: DocumentVisibilityState) => {
+    visibility = state;
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+
+  it('mints nothing while hidden, and a fresh code on return', async () => {
+    const { handoff, mint, dispose } = setup(['one', 'two', 'three']);
+    await vi.advanceTimersByTimeAsync(0);
+    // The app opened: the browser went to the background.
+    handoff.opened();
+    show('hidden');
+    await vi.advanceTimersByTimeAsync(REMINT_AFTER_MS * 3);
+    expect(mint).toHaveBeenCalledTimes(1);
+
+    show('visible');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(handoff.link()).toEqual({ t: 'ready', href: hrefFor('two') });
+    expect(mint).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+
+  it('keeps a code that is still fresh when the page comes back', async () => {
+    const { mint, dispose } = setup(['one', 'two']);
+    await vi.advanceTimersByTimeAsync(0);
+    show('hidden');
+    show('visible');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mint).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+});

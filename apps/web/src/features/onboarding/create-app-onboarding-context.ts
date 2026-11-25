@@ -1,7 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useLogout } from '@core/auth/logout';
+import { endSessionInPlace } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
@@ -44,6 +44,7 @@ import {
   userTeamsQueryOptions,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import { useNavigate } from '@solidjs/router';
 import { match } from 'ts-pattern';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
 import type {
@@ -170,7 +171,7 @@ function toViewerState(result: UserInfoResult): ViewerState {
 export function createAppOnboardingContext(): OnboardingContext {
   const analytics = useAnalytics();
   const userInfo = useUserInfoQuery();
-  const logout = useLogout();
+  const navigate = useNavigate();
   const startAddInbox = useAddInboxFlow();
   const createTeam = useCreateTeamWithInvitesMutation();
   const joinTeam = useJoinTeamMutation();
@@ -429,7 +430,12 @@ export function createAppOnboardingContext(): OnboardingContext {
       ),
     createRoutinesStep: createAppRoutinesStep,
     mintAppSessionCode,
-    signOut: () => logout(),
+    // In place, keeping this tab's app handoff: the hosted sign-out would
+    // land on the marketing site, away from the sign-up the app waits on.
+    signOut: async () => {
+      if (await endSessionInPlace()) navigate('/signup', { replace: true });
+      else toast.failure("Couldn't sign out. Please try again.");
+    },
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();
     },

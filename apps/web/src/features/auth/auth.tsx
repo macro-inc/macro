@@ -1,6 +1,7 @@
 import { APP_HANDOFF_PARAMS } from '@app/features/onboarding/core/app-handoff';
 import {
   clearSignupDraft,
+  forgetAppHandoff,
   Onboarding,
   OnboardingAppHandoff,
   OnboardingPending,
@@ -10,14 +11,17 @@ import {
 } from '@app/features/onboarding/onboarding';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { endSessionInPlace } from '@core/auth/logout';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { deepEqual } from '@core/util/compareUtils';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getNativeMobilePlatform } from '@core/util/platform';
-import { useNavigate, useSearchParams } from '@solidjs/router';
-import { createMemo, onMount } from 'solid-js';
+import { type Params, useNavigate, useSearchParams } from '@solidjs/router';
+import { ResultAsync } from 'neverthrow';
+import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
@@ -37,15 +41,62 @@ import { NativeWelcomeView } from './views/native-welcome-view';
  * into the app.
  */
 export function Login(props: { signupMode?: boolean }) {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  const webSignup = () =>
+    props.signupMode === true && !isNativeMobilePlatform();
+  // A sign-up the native app opened starts signed out: the browser hands the
+  // app whichever account signs in here, and an account this browser already
+  // held was not chosen for the app that opened the link (which may not even
+  // be Macro). The link's parameters go, so a reload mid-sign-up keeps the
+  // new session.
+  const startingAppSignup = webSignup() && rememberAppHandoff(params);
+  const [signedOutForApp, setSignedOutForApp] = createSignal(
+    !startingAppSignup
+  );
+  if (startingAppSignup) {
+    setParams(
+      {
+        [APP_HANDOFF_PARAMS.challenge]: undefined,
+        [APP_HANDOFF_PARAMS.handoffId]: undefined,
+      },
+      { replace: true }
+    );
+    fireAndForget(
+      startAppSignupSignedOut(() => setSignedOutForApp(true)),
+      'auth'
+    );
+  }
+  return (
+    <Show when={signedOutForApp()} fallback={<OnboardingPending />}>
+      <LoginView
+        params={params}
+        signupMode={props.signupMode}
+        webSignup={webSignup()}
+      />
+    </Show>
+  );
+}
+
+/**
+ * Signs out whatever session the browser held. If that fails, the sign-up
+ * goes on without handing its session to the app.
+ */
+async function startAppSignupSignedOut(onDone: () => void) {
+  const ended = await ResultAsync.fromPromise(endSessionInPlace(), () => false);
+  if (!ended.unwrapOr(false)) forgetAppHandoff();
+  onDone();
+}
+
+function LoginView(props: {
+  params: Partial<Params>;
+  signupMode: boolean | undefined;
+  webSignup: boolean;
+}) {
+  const params = props.params;
   const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
   const microsoftSignup = useFeatureFlag(enableMicrosoftSignup);
-  const webSignup = () =>
-    props.signupMode === true && !isNativeMobilePlatform();
-  // Before anything renders: a signed-in visitor goes straight to the gate,
-  // which reads it.
-  if (!isNativeMobilePlatform()) rememberAppHandoff(params);
+  const webSignup = () => props.webSignup;
   return (
     <AuthProvider value={createAppAuthContext()}>
       <AuthView

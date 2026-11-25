@@ -90,18 +90,21 @@ export function createAppAuthContext(): AuthContext {
     verifyEmailCode,
     redeemSessionToken: async (token, appHandoffId) => {
       // A code a browser sign-up handed back redeems only with the verifier
-      // this app kept when it started that sign-up.
-      const verifier = appHandoffId
-        ? appSignupVerifier(appHandoffId)
-        : undefined;
-      const redeemed =
-        appHandoffId && verifier
-          ? await exchangeAppSignupCode({
-              token,
-              handoffId: appHandoffId,
-              verifier,
-            })
-          : await exchangeSessionCode(token);
+      // this app kept when it started that sign-up. Without it (another
+      // install, or the sign-up was forgotten) the code cannot sign in.
+      let redeemed: boolean;
+      if (appHandoffId) {
+        const verifier = appSignupVerifier(appHandoffId);
+        redeemed =
+          verifier !== undefined &&
+          (await exchangeAppSignupCode({
+            token,
+            handoffId: appHandoffId,
+            verifier,
+          }));
+      } else {
+        redeemed = await exchangeSessionCode(token);
+      }
       if (!redeemed) return false;
       if (appHandoffId) finishAppSignups();
       // The cookies are HttpOnly or in the native jar: leave the hint now,

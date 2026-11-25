@@ -19,9 +19,10 @@ export const REMINT_AFTER_OPEN_MS = 1000;
  * on a link: the browser asks whether to open the app only for a navigation
  * the user started, and minting on the tap would put a request between the
  * two. A code redeems once and lives five minutes, so a new one replaces it
- * before it lapses, when the page comes back after a long time hidden (timers
- * pause in a hidden tab), and shortly after each open, in case the first
- * open never reached the app.
+ * before it lapses and shortly after each open, in case the first open never
+ * reached the app. A hidden page mints nothing: a replacement that falls due
+ * while it is hidden (as it is once the app opens) is minted when it comes
+ * back, so a page left open does not mint forever.
  */
 export function createAppHandoffLink(
   context: Pick<OnboardingContext, 'mintAppSessionCode'>,
@@ -29,19 +30,28 @@ export function createAppHandoffLink(
   now: () => number = Date.now
 ) {
   const [link, setLink] = createSignal<AppHandoffLink>({ t: 'minting' });
-  let mintedAt: number | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
+  // The shown code may be spent, or lapsed: mint on the next return. Timers
+  // are throttled in a hidden page, so the deadline is checked then too.
+  let due = false;
+  let lapsesAt: number | undefined;
+
+  const mintWhenVisible = () => {
+    if (document.visibilityState === 'hidden') due = true;
+    else fireAndForget(mint(), 'onboarding');
+  };
 
   const schedule = (delay: number) => {
     clearTimeout(timer);
-    timer = setTimeout(() => fireAndForget(mint(), 'onboarding'), delay);
+    timer = setTimeout(mintWhenVisible, delay);
   };
 
   async function mint() {
     clearTimeout(timer);
     const attempt = ++generation;
-    mintedAt = undefined;
+    due = false;
+    lapsesAt = undefined;
     setLink({ t: 'minting' });
     const code = await context.mintAppSessionCode(handoff);
     // A newer mint started meanwhile (a retry, a return to the page).
@@ -50,15 +60,15 @@ export function createAppHandoffLink(
       setLink({ t: 'failed' });
       return;
     }
-    mintedAt = now();
+    lapsesAt = now() + REMINT_AFTER_MS;
     setLink({ t: 'ready', href: appSignInUrl(code, handoff.handoffId) });
     schedule(REMINT_AFTER_MS);
   }
 
   const onVisibilityChange = () => {
     if (document.visibilityState !== 'visible') return;
-    if (mintedAt !== undefined && now() - mintedAt >= REMINT_AFTER_MS)
-      fireAndForget(mint(), 'onboarding');
+    const lapsed = lapsesAt !== undefined && now() >= lapsesAt;
+    if (due || lapsed) fireAndForget(mint(), 'onboarding');
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
   onCleanup(() => {

@@ -199,7 +199,10 @@ export type OnboardingContext = {
    * could not be minted.
    */
   mintAppSessionCode(handoff: AppHandoff): Promise<string | undefined>;
-  /** Signs this browser out, so another account can sign up or in. */
+  /**
+   * Signs this browser out in place and returns to sign-up, so another
+   * account can sign up or in. Reports its own failure.
+   */
   signOut(): Promise<void>;
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;

@@ -12,7 +12,11 @@ import { parseCheckoutReturn } from './core/checkout';
 import { phoneStorePlatform } from './core/desktop-handoff';
 import { parseOnboardingStepParam } from './core/steps';
 import { createAppOnboardingContext } from './create-app-onboarding-context';
-import { readAppHandoff, saveAppHandoff } from './primitives/flow-storage';
+import {
+  clearAppHandoff,
+  readAppHandoff,
+  saveAppHandoff,
+} from './primitives/flow-storage';
 import { AppHandoffView } from './views/app-handoff-view';
 import { DesktopHandoffView } from './views/desktop-handoff-view';
 import { OnboardingFlowView } from './views/onboarding-flow-view';
@@ -117,12 +121,17 @@ type OnboardingEnding =
 /**
  * Remembers the native app that sent this tab to sign up (`/signup` carries
  * its challenge), so the sign-up can end by handing the session back to it.
- * A link without one leaves an earlier handoff in place.
+ * Returns whether the link carried one; a link without one leaves an earlier
+ * handoff in place.
  */
-export function rememberAppHandoff(params: Record<string, unknown>) {
+export function rememberAppHandoff(params: Record<string, unknown>): boolean {
   const handoff = appHandoffFromParams(params, Date.now());
   if (handoff) saveAppHandoff(handoff);
+  return handoff !== undefined;
 }
+
+/** This tab's sign-up no longer hands back to an app. */
+export const forgetAppHandoff = clearAppHandoff;
 
 /** The native app this tab's sign-up hands its session back to, if any. */
 export const pendingAppHandoff = readAppHandoff;
