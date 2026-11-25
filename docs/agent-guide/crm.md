@@ -207,7 +207,8 @@ favorites, and CRM discussion notifications. A contact opens under People, so it
 breadcrumb returns to People. A split already showing that record is brought
 forward instead. The old id of a company or contact merged into another (an
 old link, mention or bookmark) opens the record it went into under that
-record's own id, replacing the old entry so Back skips it, on desktop and touch;
+record's own id, on the tab and Discussion message the link named, replacing
+the old entry so Back skips it, on desktop and touch;
 when another split already shows that record, the split with the old id steps
 back (or closes) and that one comes up. Touch devices keep the standalone
 record pages; a Customers record URL redirects there unless it opens a linked
@@ -790,7 +791,11 @@ rules/history and withdraw with the single **Stop sharing my emails** action.
 
 Any member can add a team domain; only team admins/owners can remove one, and
 only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
-**Remove** instead of pushing it onto its own line. Personal domains affect
+**Remove** instead of pushing it onto its own line. Archiving a company lists
+its domains there until it is restored. Admins see that the row's company is
+archived and get **Open company** (where **Restore** is) instead of **Remove**;
+members, who can't see archived companies, get a plain row. A remove refused
+because the company was archived meanwhile says the same in its toast. Personal domains affect
 only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
 Blocking hides previously shared matching threads on subsequent CRM reads.

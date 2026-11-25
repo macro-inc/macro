@@ -97,7 +97,17 @@ function CompanyContent(props: CompanyProps) {
     if (current && current.id.toLowerCase() !== props.companyId.toLowerCase())
       untrack(() => props.onMerged?.(current.id));
   });
-  createOpenTracker('company', () => company()?.id);
+  // A merged company's open is recorded by the page it moves to.
+  createOpenTracker(
+    'company',
+    () => {
+      const id = company()?.id;
+      return id?.toLowerCase() === props.companyId.toLowerCase()
+        ? id
+        : undefined;
+    },
+    { ownBlock: true }
+  );
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {

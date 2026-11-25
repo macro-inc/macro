@@ -299,6 +299,44 @@ describe('GraphQL Soup subscription lifecycle', () => {
     unregister();
   });
 
+  it('refetches mounted attachment-filtered Mail lists after a reconnect, not on the first connection', async () => {
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() => ({
+        subscribe: () => ({ unsubscribe: vi.fn() }),
+      })),
+    };
+    const attachmentList = vi.fn(async () => {});
+    const otherList = vi.fn(async () => {});
+    const unregisterAttachments = registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      refresh: attachmentList,
+      body: () => ({ ef: { l: { Attachment: 'pdf' } } }),
+    });
+    const unregisterOther = registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      refresh: otherList,
+      body: () => ({ ef: { l: { Importance: true } } }),
+    });
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(
+      client as never,
+      { disabled: false, onCacheGenerationChanged: () => () => {} } as never
+    );
+
+    lifecycle.connected();
+    await Promise.resolve();
+    expect(attachmentList).not.toHaveBeenCalled();
+
+    lifecycle.connected();
+    await vi.waitFor(() => expect(attachmentList).toHaveBeenCalledOnce());
+    expect(otherList).not.toHaveBeenCalled();
+
+    lifecycle.dispose();
+    unregisterAttachments();
+    unregisterOther();
+  });
+
   it('pauses subscriptions for navigation and reconnects in place exactly once per restore', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const client = {

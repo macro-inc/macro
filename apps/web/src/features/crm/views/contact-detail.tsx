@@ -88,7 +88,17 @@ function ContactContent(props: ContactProps) {
     if (current && current.id.toLowerCase() !== props.contactId.toLowerCase())
       untrack(() => props.onMerged?.(current.id));
   });
-  createOpenTracker('contact', () => contact()?.id);
+  // A merged contact's open is recorded by the page it moves to.
+  createOpenTracker(
+    'contact',
+    () => {
+      const id = contact()?.id;
+      return id?.toLowerCase() === props.contactId.toLowerCase()
+        ? id
+        : undefined;
+    },
+    { ownBlock: true }
+  );
   onCleanup(
     context.registerTaskComposerRecord(() => ({
       type: 'contact',

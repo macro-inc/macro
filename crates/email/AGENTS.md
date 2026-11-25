@@ -169,7 +169,9 @@ tools — hexagonal, heavily feature-gated.
   `has_thread_literals` mirror, so a page's LIMIT never counts threads the
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
-  `email_db_client` maintains.
+  `email_db_client` maintains, from partial indexes in page order: All Mail the
+  `idx_email_threads_*_attachment_view` ones and Inbox, which sorts by its own
+  timestamp, the `idx_email_threads_*_attachment_inbox_view` ones.
 - `Label(id)` matches a thread with a message carrying the label, by
   `email_effective_message_labels`' rules, in an inbox the viewer owns or
   manages; another inbox's label never matches, so a shared thread can't be

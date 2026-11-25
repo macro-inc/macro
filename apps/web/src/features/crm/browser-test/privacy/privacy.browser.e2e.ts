@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 // All API data is local to this fixture; rich previews use its seeded cache.
 test.beforeEach(async ({ page }) => {
@@ -307,6 +307,77 @@ test('banner opens review using the device input mode', async ({
       exact: true,
     })
   ).toBeEnabled();
+});
+
+async function openTeamBlacklist(page: Page, query: string) {
+  await page.goto(query);
+  const open = page.getByRole('button', {
+    name: 'Email settings',
+    exact: true,
+  });
+  await open.waitFor();
+  await open.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  return {
+    dialog,
+    team: dialog
+      .getByRole('heading', { name: 'Team blacklist', exact: true })
+      .locator('xpath=ancestor::section'),
+  };
+}
+
+const archivedCompanyId = '00000000-0000-4000-8000-000000000060';
+
+test('an archived company’s team domain points an admin at the company instead of Remove', async ({
+  page,
+}, testInfo) => {
+  const { dialog, team } = await openTeamBlacklist(
+    page,
+    '/?admin&archived-domain'
+  );
+  await expect(
+    team.getByText(
+      'Its company is archived. Restore the company first to remove this domain.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  await expect(
+    team.getByRole('button', {
+      name: 'Remove archived.example.com',
+      exact: true,
+    })
+  ).toHaveCount(0);
+  await expect(
+    team.getByRole('button', { name: 'Remove team.example.com', exact: true })
+  ).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath('archived-domain.png') });
+  await team
+    .getByRole('button', {
+      name: 'Open the archived company for archived.example.com',
+      exact: true,
+    })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.locator(`[data-testid=pane][data-content="${archivedCompanyId}"]`)
+  ).toHaveCount(1);
+  await expect(page.getByTestId('last-change')).toHaveText('');
+});
+
+test('a refused removal from a stale list says to restore the company', async ({
+  page,
+}) => {
+  const { team } = await openTeamBlacklist(page, '/?admin&stale-archived');
+  await team
+    .getByRole('button', { name: 'Remove archived.example.com', exact: true })
+    .click();
+  await expect(page.getByTestId('toast')).toHaveText(
+    'This domain’s company is archived. Restore the company first to remove this domain.'
+  );
+  await expect(
+    team.getByText('archived.example.com', { exact: true })
+  ).toBeVisible();
 });
 
 test('owner can inspect and remove a private-thread exception', async ({

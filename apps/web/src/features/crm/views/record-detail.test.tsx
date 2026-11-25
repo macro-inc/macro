@@ -422,6 +422,17 @@ it('hands a company read answering another id to its host, once', async () => {
     </>
   ));
   expect(merged).toHaveBeenCalledExactlyOnceWith('company-1');
+  // The merged company's page leaves the open to the one it moves to.
+  expect(
+    createOpenTracker.mock.calls.map(([block, item, options]) => [
+      block,
+      item(),
+      options,
+    ])
+  ).toEqual([
+    ['company', undefined, { ownBlock: true }],
+    ['company', 'company-1', { ownBlock: true }],
+  ]);
 });
 
 it('hands a contact read answering another id to its host, once', async () => {
@@ -439,6 +450,17 @@ it('hands a contact read answering another id to its host, once', async () => {
     </>
   ));
   expect(merged).toHaveBeenCalledExactlyOnceWith('contact-1');
+  // The merged contact's page leaves the open to the one it moves to.
+  expect(
+    createOpenTracker.mock.calls.map(([block, item, options]) => [
+      block,
+      item(),
+      options,
+    ])
+  ).toEqual([
+    ['contact', undefined, { ownBlock: true }],
+    ['contact', 'contact-1', { ownBlock: true }],
+  ]);
 });
 
 it('registers the actual company detail while mounted and clears it on unmount', async () => {
