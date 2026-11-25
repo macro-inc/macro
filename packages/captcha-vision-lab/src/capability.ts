@@ -44,8 +44,12 @@ export const verifyCapability = (
     return undefined;
   }
 
-  const parsed = CapabilityClaims.safeParse(
-    JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
-  );
+  let claims: unknown;
+  try {
+    claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch {
+    return undefined;
+  }
+  const parsed = CapabilityClaims.safeParse(claims);
   return parsed.success ? parsed.data : undefined;
 };
