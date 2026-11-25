@@ -13,10 +13,19 @@ const START_DELAY_S = 0.01;
 /** A blocked resume or device switch must not queue a cue for the next gesture. */
 const MAX_CUE_DELAY_MS = 250;
 
-/** Calls own an output; notifications keep using the system-default output. */
+/**
+ * Calls own an output; notifications keep using the system-default output.
+ *
+ * A chosen speaker is reached through a media element (the same output API
+ * as LiveKit, which also covers browsers with HTMLMediaElement.setSinkId but
+ * not AudioContext.setSinkId). A playing media element makes WebKit take the
+ * iOS audio session for playback, which pauses other apps' music, while a bare
+ * AudioContext only mixes with it. So the element plays only while a call has
+ * a speaker chosen, and cues go straight to the default output otherwise.
+ */
 export function createSoundPlayer(outputDeviceId?: () => string | null) {
   let context: AudioContext | undefined;
-  let destination: AudioNode | undefined;
+  let stream: MediaStreamAudioDestinationNode | undefined;
   let output: HTMLAudioElement | undefined;
   let routing: Promise<void> | undefined;
   let disposed = false;
@@ -26,25 +35,39 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     if (context) return context;
     if (typeof AudioContext === 'undefined') return undefined;
     context = new AudioContext();
-    destination = context.destination;
-
-    // Use the same output API as LiveKit, including browsers that support
-    // HTMLMediaElement.setSinkId but not AudioContext.setSinkId.
-    if (outputDeviceId && 'setSinkId' in HTMLMediaElement.prototype) {
-      const stream = context.createMediaStreamDestination();
-      destination = stream;
-      output = new Audio();
-      output.srcObject = stream.stream;
-    }
     return context;
   }
 
+  /** The speaker cues must reach, or null for the default output. */
+  function chosenOutput(): string | null {
+    if (!outputDeviceId || !('setSinkId' in HTMLMediaElement.prototype)) {
+      return null;
+    }
+    return outputDeviceId() || null;
+  }
+
+  /** The element feeding the chosen speaker, created on first use. */
+  function routedOutput(current: AudioContext): HTMLAudioElement {
+    if (!stream || !output) {
+      stream = current.createMediaStreamDestination();
+      output = new Audio();
+      output.srcObject = stream.stream;
+    }
+    return output;
+  }
+
   async function routeOutput(): Promise<void> {
-    if (!output || !outputDeviceId) return;
     // Serialize switches and re-read the selection after each await so an old
     // switch can never overwrite the newest speaker selection.
-    while (!disposed && output.sinkId !== (outputDeviceId() ?? '')) {
-      await output.setSinkId(outputDeviceId() ?? '');
+    while (!disposed && output) {
+      const deviceId = chosenOutput();
+      if (!deviceId) {
+        // Hand the audio session back once no speaker is chosen.
+        output.pause();
+        return;
+      }
+      if (output.sinkId === deviceId) return;
+      await output.setSinkId(deviceId);
     }
   }
 
@@ -62,10 +85,11 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
   async function unlock(): Promise<void> {
     const current = audioContext();
     if (!current || current.state === 'closed') return;
+    const element = chosenOutput() ? routedOutput(current) : undefined;
     // Start both gated APIs before awaiting either. "interrupted" also needs
     // resume on Safari after the OS temporarily takes the audio device.
     const resume = current.state === 'running' ? undefined : current.resume();
-    const play = output?.paused ? output.play() : undefined;
+    const play = element?.paused ? element.play() : undefined;
     await Promise.all([resume, play, syncOutput()]);
   }
 
@@ -89,9 +113,13 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
         clearTimeout(timeout);
       }
       const current = context;
-      if (disposed || !current || !destination) return;
+      if (disposed || !current) return;
+      const routed = chosenOutput() !== null;
+      const destination = routed ? stream : current.destination;
+      if (!destination) return;
       const expired = performance.now() - requestedAt >= MAX_CUE_DELAY_MS;
-      const outputReady = !output || (!output.paused && !routing);
+      const outputReady =
+        !routed || (output !== undefined && !output.paused && !routing);
       if (expired || current.state !== 'running' || !outputReady) {
         span.setAttr('audio.outcome', 'not-ready');
         return;
