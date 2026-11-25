@@ -23,7 +23,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a2e4819a9ba3cc754b7204ac1a651ede9f39f12c0b217592b94c5fa39937326b
+        checksum/config: d4609b21db4545672cdcb23c09517bd378167a5930ad536fb02b51da50650999
         storage/size: 10Gi
       labels:
         app.kubernetes.io/component: ingester
@@ -50,7 +50,7 @@ spec:
             - -config.file=/conf/tempo.yaml
           env:
             - name: GOMEMLIMIT
-              value: 1740MiB
+              value: 3481MiB
             - name: GOGC
               value: "80"
           image: docker.io/grafana/tempo:2.10.7
@@ -80,10 +80,10 @@ spec:
             timeoutSeconds: 1
           resources:
             limits:
-              memory: 2Gi
+              memory: 4Gi
             requests:
               cpu: 50m
-              memory: 1Gi
+              memory: 2Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

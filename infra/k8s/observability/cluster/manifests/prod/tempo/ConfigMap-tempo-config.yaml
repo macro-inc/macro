@@ -121,6 +121,11 @@ data:
     multitenancy_enabled: false
     overrides:
       defaults:
+        ingestion:
+          burst_size_bytes: 40000000
+          max_traces_per_user: 50000
+          rate_limit_bytes: 30000000
+          rate_strategy: local
         metrics_generator:
           processors:
           - local-blocks
@@ -128,7 +133,7 @@ data:
     querier:
       frontend_worker:
         frontend_address: tempo-query-frontend-discovery:9095
-      max_concurrent_queries: 20
+      max_concurrent_queries: 5
       search:
         query_timeout: 30s
       trace_by_id:

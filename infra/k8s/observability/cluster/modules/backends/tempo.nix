@@ -50,6 +50,15 @@ let
     resources = resources request limit;
   };
 
+  # The Go runtime collects harder as it nears this, before the kernel kills
+  # the container at `limit`.
+  goMemLimit = limit: [
+    {
+      name = "GOMEMLIMIT";
+      value = "${toString (limit * 85 / 100)}MiB";
+    }
+  ];
+
   volume = {
     enabled = true;
     size = "10Gi";
@@ -125,10 +134,16 @@ in
               }
             ];
           };
-          resources = resources "1Gi" "2Gi";
+          extraEnv = goMemLimit 4096;
+          resources = resources "2Gi" "4Gi";
         };
         distributor = stateless "distributor" 2 "128Mi" "512Mi";
-        querier = stateless "querier" 2 "512Mi" "1536Mi";
+        # Each search job can read a block's largest traces, so a querier runs
+        # few at once (the chart's 20 ran out of memory on one wide search).
+        querier = stateless "querier" 2 "1Gi" "3Gi" // {
+          config.max_concurrent_queries = 5;
+          extraEnv = goMemLimit 3072;
+        };
         queryFrontend = stateless "query-frontend" 2 "128Mi" "512Mi";
         compactor = stateless "compactor" 1 "4Gi" "6Gi" // {
           livenessProbe = {

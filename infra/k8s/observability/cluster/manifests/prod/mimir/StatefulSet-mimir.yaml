@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a7f030e1fe691d42929cd6f36bcf3951498f27f57eab94e794e3eda4a77b0897
+        checksum/config: 18539f1bb56d7856c677e1121e75f5777b9e851eec0a76ae5d9f0cfabb75c1c5
       labels:
         app.kubernetes.io/instance: mimir
         app.kubernetes.io/name: mimir
@@ -34,7 +34,7 @@ spec:
             - -config.file=/etc/mimir/mimir.yaml
           env:
             - name: GOMEMLIMIT
-              value: 1740MiB
+              value: 2611MiB
           image: docker.io/grafana/mimir:3.2.5
           name: mimir
           ports:
@@ -52,10 +52,10 @@ spec:
             periodSeconds: 10
           resources:
             limits:
-              memory: 2048Mi
+              memory: 3072Mi
             requests:
               cpu: 100m
-              memory: 1Gi
+              memory: 1536Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
