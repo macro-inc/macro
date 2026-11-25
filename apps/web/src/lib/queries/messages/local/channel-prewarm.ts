@@ -129,8 +129,10 @@ export interface ChannelPrewarmOutcome {
 }
 
 /**
- * A write the cache engine has been sent. Nothing recalls it, so a pass that is
- * replaced ends only once it has: the next pass must not queue another behind it.
+ * An eviction or a page the cache engine has been sent. Nothing recalls it, so a
+ * pass that is replaced ends only once it has: the next pass must not queue
+ * another behind it. A touch is too short to wait for, and a catch-up is the
+ * runtime's, which channels on screen share.
  */
 const engineWrite = <T>(run: () => Promise<T>): Effect.Effect<T, unknown> =>
   Effect.uninterruptible(

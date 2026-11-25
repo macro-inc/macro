@@ -86,8 +86,9 @@ with the watermark after it.
   person is idle, and evicts channels untouched for 30 days. The engine
   runs its writes one at a time and people's own wait behind them, so each
   channel and each eviction pass starts once the person is idle, with a pause
-  after the one before, and a pass that replaces another only after the engine
-  write that one had sent.
+  after the one before, and a pass that replaces another only after the
+  eviction or page that one had sent to be stored. Its touch, or a catch-up it
+  joined (the runtime's), may still be running.
 
 ### How a write ends
 
