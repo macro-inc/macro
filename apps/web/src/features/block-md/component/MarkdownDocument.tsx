@@ -133,7 +133,7 @@ async function ingestLocalSnapshot(
     walUpdates: walEntries.map((entry) => entry.update),
   });
 
-  if (walEntries.length >= 1) {
+  if (seeded && walEntries.length >= 1 && !loroManager.disposed) {
     const doc = loroManager.doc;
     const snapshot = doc.export({
       mode: 'shallow-snapshot',
