@@ -46,6 +46,7 @@ it('shows the first letter of the name as the picture, and adds the agent with t
       purchaseKey="example"
       onCancel={noop}
       onSubmit={onSubmit}
+      onResume={() => {}}
       onRetryStart={noop}
       onEdit={noop}
       onBilling={noop}
@@ -123,6 +124,7 @@ it('adds Macronaught when the name is left as it starts', () => {
       purchaseKey="example"
       onCancel={noop}
       onSubmit={onSubmit}
+      onResume={() => {}}
       onRetryStart={noop}
       onEdit={noop}
       onBilling={noop}
@@ -171,6 +173,7 @@ it('starts from the name a retry passes in, such as after Update card', () => {
       initialName="Émile Zola"
       onCancel={noop}
       onSubmit={noop}
+      onResume={() => {}}
       onRetryStart={noop}
       onEdit={noop}
       onBilling={noop}
@@ -211,6 +214,7 @@ it('marks the name instead of adding when it is cleared', () => {
       purchaseKey="example"
       onCancel={noop}
       onSubmit={onSubmit}
+      onResume={() => {}}
       onRetryStart={noop}
       onEdit={noop}
       onBilling={noop}
@@ -256,6 +260,7 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
       purchaseKey="example"
       onCancel={noop}
       onSubmit={onSubmit}
+      onResume={() => {}}
       onRetryStart={noop}
       onEdit={noop}
       onBilling={noop}

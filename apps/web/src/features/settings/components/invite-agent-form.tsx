@@ -69,6 +69,7 @@ export function InviteAgentForm(props: {
   onSubmit: (request: CreateTeamAgent, size: ComputerSize) => void;
   /** Start a computer that didn't start again, with no new charge. */
   onRetryStart: (agent: TeamAgent) => void;
+  onResume: () => void;
   /** The name or size changed after a refusal. */
   onEdit: () => void;
   /** Update card after a decline, with what was typed so it can come back. */
@@ -92,6 +93,7 @@ export function InviteAgentForm(props: {
   let nameInput: HTMLInputElement | undefined;
 
   const adding = () => props.state.kind === 'adding';
+  const waiting = () => props.state.kind === 'waiting';
   // A size with no room right now reads as sold out until the sizes reload.
   const noRoomSize = () =>
     props.state.kind === 'no_room' ? props.state.size : undefined;
@@ -158,12 +160,17 @@ export function InviteAgentForm(props: {
             : t('teamAgents.tryAgain'),
         };
       })
+      .with('waiting', () => ({ before: t('teamAgents.checkAgain') }))
       .with('not_started', () => ({ before: t('teamAgents.retryStart') }))
       .otherwise(() => addLabel());
 
   const submit = () => {
     if (adding()) return;
     const state = props.state;
+    if (state.kind === 'waiting') {
+      props.onResume();
+      return;
+    }
     if (state.kind === 'not_started') {
       props.onRetryStart(state.agent);
       return;
@@ -204,7 +211,7 @@ export function InviteAgentForm(props: {
       value={name()}
       onChange={edit(setName)}
       // Read-only, not disabled, so the name keeps its ink while adding.
-      readOnly={adding()}
+      readOnly={adding() || waiting()}
       validationState={nameInvalid() ? 'invalid' : 'valid'}
     >
       <div class="flex flex-col gap-1.5">
@@ -295,6 +302,23 @@ export function InviteAgentForm(props: {
       class="flex flex-col gap-3 empty:hidden"
     >
       <Switch>
+        <Match
+          when={
+            props.state.kind === 'adding' && props.state.phase !== 'purchase'
+          }
+        >
+          <p role="status" class="text-sm text-ink-muted">
+            {props.state.kind === 'adding' &&
+            props.state.phase === 'conversation'
+              ? t('teamAgents.openingConversation')
+              : t('teamAgents.startingTeammate')}
+          </p>
+        </Match>
+        <Match when={waiting()}>
+          <p role="status" class="text-sm text-ink-muted">
+            {t('teamAgents.conversationPending')}
+          </p>
+        </Match>
         <Match when={props.state.kind === 'declined'}>
           <FailureNotice
             actions={
@@ -355,7 +379,9 @@ export function InviteAgentForm(props: {
           type="button"
           variant="ghost"
           class="shrink-0"
-          disabled={adding()}
+          disabled={
+            props.state.kind === 'adding' && props.state.phase === 'purchase'
+          }
           onClick={() => props.onCancel()}
         >
           {t('common.cancel')}

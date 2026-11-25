@@ -208,6 +208,15 @@ async function fetchMessageTimelinePage(
   return normalizeMessageTimelinePageSenders(page);
 }
 
+/** A fresh read through the same message access check used when opening a channel. */
+export async function checkChannelTimelineAccess(channelId: string) {
+  const page = await entityMessagesClient.timeline(
+    { type: 'channel', id: channelId },
+    { limit: 1 }
+  );
+  normalizeMessageTimelinePageSenders(page);
+}
+
 export function messageTimelineQueryOptions(
   parent: MessageParent,
   loadAroundMessageId: string | null

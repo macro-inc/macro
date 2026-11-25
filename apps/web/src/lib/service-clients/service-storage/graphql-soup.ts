@@ -2927,12 +2927,25 @@ export async function fetchGraphqlSoup<
   const useCache = graphqlCacheEnabled();
   const requestPolicy =
     options.requestPolicy ?? (useCache ? 'cache-and-network' : undefined);
-  const result = await client
-    .query<Data, Variables>(document, variables, {
-      ...(requestPolicy ? { requestPolicy } : {}),
-      ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
-    })
-    .toPromise();
+  const source = client.query<Data, Variables>(document, variables, {
+    ...(requestPolicy ? { requestPolicy } : {}),
+  });
+  const read = async () => {
+    if (!options.signal) return source.toPromise();
+    // Leaving the operation's source cancels urql's own fetch signal.
+    const settled = await firstOrAborted(
+      pipe(
+        source,
+        filter((result) => !result.stale && !result.hasNext)
+      ),
+      options.signal
+    );
+    options.signal.throwIfAborted();
+    if (settled.kind === 'value') return settled.value;
+    throw new Error('GraphQL Soup query ended without an answer');
+  };
+  options.signal?.throwIfAborted();
+  const result = await read();
 
   if (result.error) {
     // Offline replay: a network failure falls back to the last cached page.

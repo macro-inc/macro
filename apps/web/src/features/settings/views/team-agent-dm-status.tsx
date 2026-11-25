@@ -5,13 +5,13 @@ import {
 import { t } from '@app/lib/i18n';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { useUserId } from '@core/context/user';
-import { isAgentAccount, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Button, cn, Spinner } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { directMessageTeammate } from '../core/team-agent-greeting';
 import type { TeamAgentRunState } from '../core/team-agent-setup';
 import {
   useRetryTeamAgentSetup,
@@ -22,13 +22,7 @@ import {
 function useDmAgentAccount(channelId: () => string) {
   const userId = useUserId();
   const participants = useChannelParticipants(channelId);
-  return () => {
-    const ids = participants.ids();
-    const other = ids.find((id) => id !== userId());
-    // A DM has two people; only an agent account can be a team agent.
-    if (!other || ids.length !== 2) return undefined;
-    return isAgentAccount(tryMacroId(other)) ? other : undefined;
-  };
+  return () => directMessageTeammate(userId(), participants.ids());
 }
 
 export type NotRunning = Exclude<TeamAgentRunState, 'running'>;

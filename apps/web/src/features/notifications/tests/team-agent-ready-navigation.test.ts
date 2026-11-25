@@ -55,17 +55,14 @@ vi.mock('../notification-resolvers', () => ({
   DefaultNotificationBlockNameResolver: vi.fn(),
 }));
 
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { getOrCreateDirectMessage: mocks.getOrCreate },
+vi.mock('@queries/channel/get-or-create-dm', () => ({
+  getOrCreateDirectMessageChannel: mocks.getOrCreate,
 }));
 // Signed in as the agent's inviter.
 vi.mock('@queries/auth/account-scope', () => ({
   currentQueryAccount: () => ({ userId: 'macro|maya@example.com', session: 1 }),
   isCurrentQueryAccount: (account?: { userId: string }) =>
     account?.userId === 'macro|maya@example.com',
-}));
-vi.mock('@queries/channel/channels', () => ({
-  invalidateListChannels: () => Promise.resolve(),
 }));
 
 import { ok } from 'neverthrow';
@@ -92,7 +89,7 @@ beforeEach(() => {
 });
 
 it("opens a ready agent teammate's real DM, where its greeting lands", async () => {
-  mocks.getOrCreate.mockResolvedValue(ok({ channel_id: 'channel-ada' }));
+  mocks.getOrCreate.mockResolvedValue(ok('channel-ada'));
   const openWithSplit = vi.fn(() => ({ status: 'opened' }));
   const layout = { openWithSplit } as unknown as SplitManager;
 
@@ -102,7 +99,7 @@ it("opens a ready agent teammate's real DM, where its greeting lands", async () 
     { type: 'channel', id: 'channel-ada' },
     expect.objectContaining({ activate: true })
   );
-  expect(mocks.getOrCreate).toHaveBeenCalledWith({
-    recipient_id: 'macro|ada@agents.macro.invalid',
-  });
+  expect(mocks.getOrCreate).toHaveBeenCalledWith(
+    'macro|ada@agents.macro.invalid'
+  );
 });

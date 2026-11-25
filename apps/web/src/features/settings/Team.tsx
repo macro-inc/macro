@@ -592,7 +592,7 @@ export function InviteToTeamDialog(props: {
             />
           )}
         </Show>
-        <Show when={!sent() && kind() === 'agent'}>
+        <Show when={props.open && !sent() && kind() === 'agent'}>
           <InviteAgentPanel
             teamId={props.teamId}
             onCancel={close}

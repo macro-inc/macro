@@ -5,6 +5,8 @@ import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
+import { sandboxedFrameBundle } from '../../../../../scripts/sandboxed-frame-bundle';
+
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const web = fileURLToPath(new URL('../../../../../', import.meta.url));
 const workspace = fileURLToPath(
@@ -16,6 +18,7 @@ export default defineConfig({
   root: directory,
   cacheDir: `${directory}/.vite`,
   plugins: [
+    sandboxedFrameBundle({ root: web, minify: false }),
     solid(),
     solidSvg({ defaultAsComponent: true }),
     tsconfigPaths({ projects: [`${web}/tsconfig.json`] }),

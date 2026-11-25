@@ -4,23 +4,35 @@ import { analytics } from '@app/lib/analytics/analytics';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
+import { CallProvider } from '@channel/Call/CallContext';
+import { Channel } from '@channel/Channel/Channel';
+import { ChannelTabProvider } from '@channel/Channel/ChannelTabContext';
+import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import type {
   SplitContent,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
+import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
+import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type { BlockOrchestrator } from '@core/orchestrator';
+import { EntityProvider } from '@entity';
+import type { NotificationSource } from '@notifications';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { teamKeys } from '@queries/team/keys';
 import type { Team } from '@service-auth/generated/schemas/team';
 import type { ComputerSetupMetadata } from '@service-notification/generated/schemas';
 import { QueryClientProvider } from '@tanstack/solid-query';
+import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { ImperativeDialogHost } from '@ui';
 import { Layer } from '@ui/components/Layer';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
@@ -34,7 +46,8 @@ import {
 } from '../../views/team-agent-dm-status';
 
 // `?dark` renders the page in the dark theme.
-const dark = new URLSearchParams(window.location.search).has('dark');
+const params = new URLSearchParams(window.location.search);
+const dark = params.has('dark');
 for (const [key, token] of Object.entries(
   themeCssVars(dark ? macroDarkTheme : macroLightTheme)
 ))
@@ -74,8 +87,7 @@ const team: Team = {
 // The viewer comes from the page's URL (`?viewer=macro|sam@example.com`), an
 // owner by default. The roster, invites and agents come from the spec's
 // scripted auth service, so a refetch after an invite reads its new state.
-const viewer =
-  new URLSearchParams(window.location.search).get('viewer') ?? team.owner_id;
+const viewer = params.get('viewer') ?? team.owner_id;
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: viewer,
   email: viewer.replace('macro|', ''),
@@ -128,13 +140,16 @@ window.teamAgentsFixture = {
 };
 setGlobalSplitManager({
   activeSplitId: () => undefined,
+  activeSplit: () => undefined,
   openWithSplit(content: SplitContent) {
     window.teamAgentsFixture.opened.push(content);
+    if (content.type === 'component' && content.id === 'settings')
+      setDmWith(undefined);
     return { status: 'unavailable' };
   },
 } as SplitManager);
 
-/** The parts of a DM that say whether its agent teammate is running. */
+/** A minimal DM shell for the agent header and composer status checks. */
 function DirectMessage(props: { userId: string }) {
   return (
     <section
@@ -155,6 +170,75 @@ function DirectMessage(props: { userId: string }) {
         </div>
       </div>
     </section>
+  );
+}
+
+const noNotifications = {
+  notificationsByEntity: () => ({}),
+  bulkMarkAsRead: async () => undefined,
+} as unknown as NotificationSource;
+const noBlocks = {} as BlockOrchestrator;
+
+/** The real channel timeline with a scripted directory and message service. */
+function GreetingConversation(props: { userId: string }) {
+  useHotKeyRoot();
+  const channelId = `dm-${props.userId}`;
+  const date = '2026-11-11T09:00:00Z';
+  const directory = staticChannelDirectory(() => [
+    {
+      id: channelId,
+      name: 'Ada',
+      channelType: 'direct_message',
+      ownerId: props.userId,
+      organizationId: null,
+      teamId: null,
+      autoJoinTeam: false,
+      createdAt: date,
+      updatedAt: date,
+      viewedAt: null,
+      interactedAt: null,
+      isParticipant: true,
+      frecencyScore: null,
+      participants: [
+        { userId: props.userId, role: 'owner', joinedAt: date, leftAt: null },
+        { userId: viewer, role: 'member', joinedAt: date, leftAt: null },
+      ],
+      botParticipants: [],
+      agentDm: null,
+      latestMessage: null,
+      latestNonThreadMessage: null,
+    },
+  ]);
+
+  return (
+    <EntityProvider>
+      <ChannelDirectoryProvider directory={directory}>
+        <CallProvider>
+          <QuickAccessProvider>
+            <GlobalAppStateProvider
+              notificationSource={noNotifications}
+              blockOrchestrator={noBlocks}
+            >
+              <DragDropProvider>
+                <ChannelTabProvider
+                  activeTab={() => 'messages'}
+                  setActiveTab={() => {}}
+                >
+                  <section
+                    aria-label="Direct message"
+                    class="flex h-screen min-h-0 flex-col"
+                  >
+                    <Suspense>
+                      <Channel channelId={channelId} autofocus={false} />
+                    </Suspense>
+                  </section>
+                </ChannelTabProvider>
+              </DragDropProvider>
+            </GlobalAppStateProvider>
+          </QuickAccessProvider>
+        </CallProvider>
+      </ChannelDirectoryProvider>
+    </EntityProvider>
   );
 }
 
@@ -183,7 +267,13 @@ if (root)
                       </div>
                     }
                   >
-                    {(userId) => <DirectMessage userId={userId()} />}
+                    {(userId) =>
+                      params.has('greeting') ? (
+                        <GreetingConversation userId={userId()} />
+                      ) : (
+                        <DirectMessage userId={userId()} />
+                      )
+                    }
                   </Show>
                   <ImperativeDialogHost />
                   <ToastRegion />

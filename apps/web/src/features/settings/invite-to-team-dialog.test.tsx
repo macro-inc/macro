@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +16,10 @@ const mocks = vi.hoisted(() => ({
   fetchAgents: vi.fn(),
   retryComputer: vi.fn(),
   openDm: vi.fn(),
+  resolveDm: vi.fn(),
+  readMembership: vi.fn(),
+  readTimeline: vi.fn(),
+  account: { userId: 'macro|owner@example.com', session: 1 },
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -128,8 +133,32 @@ vi.mock('./primitives/team-agent-status', () => ({
   retryTeamAgentComputer: mocks.retryComputer,
 }));
 vi.mock('../notifications/computer-setup-toast', () => ({
-  openAgentDirectMessage: mocks.openDm,
   openBilling: vi.fn(),
+}));
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useOptionalSplitRouter: () => ({
+    entry: () => undefined,
+    pending: pendingNavigation,
+  }),
+}));
+vi.mock('@app/signal/splitLayout', () => ({
+  globalSplitManager: () => layout,
+}));
+vi.mock('@queries/auth/account-scope', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  currentQueryAccount: () => mocks.account,
+  isCurrentQueryAccount: (account: typeof mocks.account) =>
+    account === mocks.account,
+}));
+vi.mock('@queries/channel/get-or-create-dm', () => ({
+  getOrCreateDirectMessageChannel: mocks.resolveDm,
+}));
+vi.mock('@queries/channel/selection-by-id', () => ({
+  fetchChannelSelectionById: mocks.readMembership,
+}));
+vi.mock('@queries/messages/timeline', () => ({
+  checkChannelTimelineAccess: mocks.readTimeline,
 }));
 vi.mock('./TeamInviteLinkSection', () => ({
   TeamInviteLinkSection: () => null,
@@ -149,6 +178,13 @@ const [computersFlag, setComputersFlag] = createSignal({
 const [harnesses, setHarnesses] = createSignal<unknown[]>([]);
 const [agents, setAgents] = createSignal<unknown[]>([]);
 
+const [pendingNavigation, setPendingNavigation] = createSignal<object>();
+const [activeContent, setActiveContent] = createSignal({ type: 'settings' });
+const layout = {
+  activeSplit: () => ({ id: 'active', content: activeContent }),
+  openWithSplit: mocks.openDm,
+};
+
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
@@ -164,6 +200,12 @@ beforeEach(() => {
   setComputersFlag({ enabled: false, loading: false });
   setHarnesses([]);
   setAgents([]);
+  setActiveContent({ type: 'settings' });
+  setPendingNavigation(undefined);
+  mocks.account = { userId: 'macro|owner@example.com', session: 1 };
+  mocks.resolveDm.mockResolvedValue(ok('channel-ada'));
+  mocks.readMembership.mockResolvedValue({ isParticipant: true });
+  mocks.readTimeline.mockResolvedValue(undefined);
   mocks.flag = flag;
   mocks.computersFlag = computersFlag;
   mocks.harnesses = harnesses;
@@ -180,6 +222,9 @@ afterEach(() => {
   mocks.fetchAgents.mockReset();
   mocks.retryComputer.mockReset();
   mocks.openDm.mockReset();
+  mocks.resolveDm.mockReset();
+  mocks.readMembership.mockReset();
+  mocks.readTimeline.mockReset();
   vi.useRealTimers();
 });
 
@@ -236,14 +281,18 @@ describe('InviteToTeamDialog', () => {
 /** Invite Agent's dialog, gated the way Members gates it. */
 function AgentInviteDialog(props: { admin: boolean; onClose: () => void }) {
   const canInviteAgents = useCanInviteAgents(() => props.admin);
+  const [open, setOpen] = createSignal(true);
   return (
     <InviteToTeamDialog
       teamId="team-1"
       canManageLink={props.admin}
       kind="agent"
       canInviteAgents={canInviteAgents()}
-      open
-      onClose={props.onClose}
+      open={open()}
+      onClose={() => {
+        setOpen(false);
+        props.onClose();
+      }}
     />
   );
 }
@@ -304,6 +353,7 @@ describe('InviteToTeamDialog agent teammates', () => {
     }) as HTMLButtonElement;
 
   it('adds an agent by name and size, waits until it is online, and lands in its DM', async () => {
+    vi.useFakeTimers();
     setFlag({ enabled: true, loading: false });
     setComputersFlag({ enabled: true, loading: false });
     const onClose = vi.fn();
@@ -333,8 +383,12 @@ describe('InviteToTeamDialog agent teammates', () => {
     fireEvent.click(addButton());
     expect(screen.getByRole('button', { name: /Adding Ada/ })).toBeTruthy();
 
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-    expect(mocks.openDm).toHaveBeenCalledWith(ada.userId);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mocks.openDm).toHaveBeenCalledWith(
+      { type: 'channel', id: 'channel-ada' },
+      { activate: true, referredFrom: null }
+    );
     expect(mocks.createAgent.mock.calls[0][0]).toMatchObject({
       teamId: 'team-1',
       request: {
@@ -350,7 +404,130 @@ describe('InviteToTeamDialog agent teammates', () => {
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
-  it('closes into the DM with the agent still starting after five seconds', async () => {
+  it('keeps the invite open until the canonical DM passes both fresh reads', async () => {
+    vi.useFakeTimers();
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    const onClose = vi.fn();
+    mocks.createAgent.mockResolvedValue(ada);
+    mocks.fetchAgents.mockResolvedValue({ agents: [ada] });
+    mocks.readMembership
+      .mockRejectedValueOnce(new Error('Channel missing from detail'))
+      .mockResolvedValueOnce({ isParticipant: false });
+    mocks.readTimeline.mockRejectedValueOnce(new Error('Forbidden'));
+    openAsAdmin(onClose);
+    startAdding();
+    fireEvent.click(addButton());
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(mocks.resolveDm).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    mocks.fetchAgents.mockResolvedValue({
+      agents: [{ ...ada, status: 'running' }],
+    });
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(mocks.readMembership).toHaveBeenCalledWith(
+      'channel-ada',
+      expect.any(AbortSignal)
+    );
+    expect(mocks.readTimeline).not.toHaveBeenCalled();
+    expect(mocks.openDm).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.readTimeline).toHaveBeenCalledWith('channel-ada');
+    expect(mocks.openDm).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.resolveDm).toHaveBeenCalledTimes(1);
+    expect(mocks.openDm).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['dismissal', 'navigation', 'pending navigation', 'account change'])(
+    'discards a late successful read after %s',
+    async (departure) => {
+      vi.useFakeTimers();
+      setFlag({ enabled: true, loading: false });
+      setComputersFlag({ enabled: true, loading: false });
+      mocks.createAgent.mockResolvedValue(ada);
+      mocks.fetchAgents.mockResolvedValue({
+        agents: [{ ...ada, status: 'running' }],
+      });
+      const read = Promise.withResolvers<void>();
+      mocks.readTimeline.mockReturnValue(read.promise);
+      openAsAdmin();
+      startAdding();
+      fireEvent.click(addButton());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.readTimeline).toHaveBeenCalled();
+
+      if (departure === 'dismissal') {
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      } else if (departure === 'navigation') {
+        const initial = activeContent();
+        setActiveContent({ type: 'channel' });
+        setActiveContent(initial);
+      } else if (departure === 'pending navigation') {
+        setPendingNavigation({});
+      } else {
+        mocks.account = { ...mocks.account, session: 2 };
+      }
+
+      read.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.openDm).not.toHaveBeenCalled();
+    }
+  );
+
+  it('resumes a timed out wait without rebuying or restarting the computer', async () => {
+    vi.useFakeTimers();
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    mocks.createAgent.mockResolvedValue(ada);
+    mocks.fetchAgents.mockResolvedValue({ agents: [ada] });
+    openAsAdmin();
+    startAdding();
+    fireEvent.click(addButton());
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(mocks.openDm).not.toHaveBeenCalled();
+    mocks.fetchAgents.mockResolvedValue({
+      agents: [{ ...ada, status: 'running' }],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.openDm).toHaveBeenCalledTimes(1);
+    expect(mocks.createAgent).toHaveBeenCalledTimes(1);
+    expect(mocks.retryComputer).not.toHaveBeenCalled();
+  });
+
+  it('times out even when the message read never settles, ignoring its late success', async () => {
+    vi.useFakeTimers();
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    mocks.createAgent.mockResolvedValue(ada);
+    mocks.fetchAgents.mockResolvedValue({
+      agents: [{ ...ada, status: 'running' }],
+    });
+    const read = Promise.withResolvers<void>();
+    mocks.readTimeline.mockReturnValue(read.promise);
+    openAsAdmin();
+    startAdding();
+    fireEvent.click(addButton());
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.readTimeline).toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy();
+
+    read.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.openDm).not.toHaveBeenCalled();
+  });
+
+  it('cannot resume the original purchase after the account session changes', async () => {
     vi.useFakeTimers();
     setFlag({ enabled: true, loading: false });
     setComputersFlag({ enabled: true, loading: false });
@@ -361,11 +538,16 @@ describe('InviteToTeamDialog agent teammates', () => {
     startAdding();
     fireEvent.click(addButton());
 
-    await vi.advanceTimersByTimeAsync(4_000);
-    expect(onClose).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1_500);
+    await vi.advanceTimersByTimeAsync(120_000);
+    mocks.fetchAgents.mockClear();
+    mocks.account = { ...mocks.account, session: 2 };
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await vi.advanceTimersByTimeAsync(0);
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(mocks.openDm).toHaveBeenCalledWith(ada.userId);
+    expect(mocks.fetchAgents).not.toHaveBeenCalled();
+    expect(mocks.resolveDm).not.toHaveBeenCalled();
+    expect(mocks.openDm).not.toHaveBeenCalled();
   });
 
   it('keeps the dialog on a declined card, and tries again with a new purchase', async () => {

@@ -1646,30 +1646,32 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   );
 
-  it('leaves a hydration request once its signal aborts', async () => {
-    let left = false;
-    // Like urql's, the request ends only when its subscriber leaves: urql
-    // replaces a fetch signal with its own.
-    const held = make<never>(() => () => {
-      left = true;
-    });
-    mocks.cachedQuery.mockReturnValue(
-      Object.assign(held, { toPromise: () => pipe(held, toPromise) })
-    );
-    const soup = await import('./graphql-soup');
-    const controller = new AbortController();
+  it.each(['hydrateGraphqlSoup', 'fetchGraphqlSoup'] as const)(
+    '%s leaves a pending query when its signal aborts',
+    async (read) => {
+      let left = false;
+      // Like urql's, the request ends only when its subscriber leaves.
+      const held = make<never>(() => () => {
+        left = true;
+      });
+      mocks.cachedQuery.mockReturnValue(
+        Object.assign(held, { toPromise: () => pipe(held, toPromise) })
+      );
+      const soup = await import('./graphql-soup');
+      const controller = new AbortController();
 
-    const hydrated = soup.hydrateGraphqlSoup(
-      parse('query Page { user { id } }'),
-      {},
-      { signal: controller.signal }
-    );
-    const settled = expect(hydrated).rejects.toThrow('deadline');
-    controller.abort(new Error('deadline'));
+      const result = soup[read](
+        parse('query Page { user { id } }'),
+        {},
+        { signal: controller.signal }
+      );
+      const settled = expect(result).rejects.toThrow('deadline');
+      controller.abort(new Error('deadline'));
 
-    await vi.waitFor(() => expect(left).toBe(true));
-    await settled;
-  });
+      await settled;
+      expect(left).toBe(true);
+    }
+  );
 
   it('latches an activated client through a flag change until navigation', async () => {
     const apiStarted = mocks.apiStarted();

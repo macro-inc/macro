@@ -3,23 +3,9 @@ import type { ComputerSize } from '@service-auth/computers';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { match } from 'ts-pattern';
 import { purchaseRefusalOf } from '../computers/core/purchase-refusal';
-import { PURCHASE_WAIT_MS } from '../computers/core/purchase-wait';
-
-/**
- * How long Add waits in its dialog. Past it, the dialog closes to the DM and
- * the agent's setup carries on there.
- */
-export const ADD_AGENT_WAIT_MS = PURCHASE_WAIT_MS;
-
-/**
- * What ends Add's wait: `online`, the agent reported itself online (its
- * greeting follows in the DM), or `computer_up`, its computer is up and the
- * agent is still starting. A switch for the online-wait experiment: flip to
- * `computer_up` if measurements show waiting for online is too slow.
- */
-export type AddAgentWaitsFor = 'online' | 'computer_up';
-
-export const ADD_AGENT_WAITS_FOR: AddAgentWaitsFor = 'online';
+// Bound automatic polling while giving the computer time to start. The
+// inviter can resume checking without making another purchase.
+export const ADD_AGENT_WAIT_MS = 120_000;
 
 /**
  * Where a just-added agent is, for the dialog that waits on it: still
@@ -34,30 +20,23 @@ export type AddedAgentProgress = 'waiting' | 'online' | 'failed' | 'gone';
  */
 export function addedAgentProgress(
   agents: readonly Pick<TeamAgent, 'userId' | 'status'>[],
-  userId: string,
-  waitsFor: AddAgentWaitsFor = ADD_AGENT_WAITS_FOR
+  userId: string
 ): AddedAgentProgress {
   const agent = agents.find((item) => item.userId === userId);
   if (!agent) return 'gone';
   return (
     match(agent.status)
       .returnType<AddedAgentProgress>()
-      .with('provisioning', () => 'waiting')
-      .with('starting', () =>
-        waitsFor === 'computer_up' ? 'online' : 'waiting'
-      )
+      .with('provisioning', 'starting', () => 'waiting')
       .with('running', () => 'online')
       .with('released', () => 'gone')
       // Not answering yet, but coming back by itself.
       .with('unhealthy', () => 'waiting')
       .with('failed', 'paused', () => 'failed')
-      // A status a newer server sends keeps waiting, into the slow path.
+      // A status a newer server sends keeps waiting.
       .exhaustive(() => 'waiting')
   );
 }
-
-/** What the Add dialog ends in once the wait is over. */
-export type AddAgentEnding = Exclude<AddedAgentProgress, 'waiting'> | 'slow';
 
 /**
  * Where the Add dialog is. Every failure keeps the dialog open with the name
@@ -72,7 +51,8 @@ export type AddAgentEnding = Exclude<AddedAgentProgress, 'waiting'> | 'slow';
  */
 export type AddAgentState =
   | { kind: 'editing' }
-  | { kind: 'adding' }
+  | { kind: 'adding'; phase: 'purchase' | 'startup' | 'conversation' }
+  | { kind: 'waiting'; agent: TeamAgent; attempt: number }
   | { kind: 'declined' }
   | { kind: 'no_room'; size: ComputerSize }
   | { kind: 'not_started'; agent: TeamAgent }

@@ -9,7 +9,12 @@ import {
   createChannelNotificationGutter,
 } from '@app/features/channel-notification-stacks/channel-notification-gutter';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import {
+  directMessageTeammate,
+  firstTeammateMessage,
+} from '@app/features/settings/core/team-agent-greeting';
 import { TeamAgentDmBanner } from '@app/features/settings/views/team-agent-dm-status';
+import { TeamAgentGreetingAction } from '@app/features/settings/views/team-agent-greeting-action';
 import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
@@ -511,6 +516,21 @@ export function Channel(props: ChannelProps) {
 
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
+  const teammateId = createMemo(() =>
+    channelType() === ChannelTypeEnum.DirectMessage
+      ? directMessageTeammate(userId(), participants.ids())
+      : undefined
+  );
+  const teammateGreeting = createMemo(() => {
+    const teammate = teammateId();
+    if (teammate)
+      return firstTeammateMessage(
+        messageIndex.entries,
+        teammate,
+        !messagesQuery.hasNextPage
+      );
+  });
+
   const { popoverSplit } = useSplitLayout();
 
   // Placeholder name: channels render as "#name", a group chat named for its
@@ -1079,9 +1099,24 @@ export function Channel(props: ChannelProps) {
                                                 />
                                               }
                                               afterMessage={
-                                                <AgentConversationMessageStatus
-                                                  messageId={item.id}
-                                                />
+                                                <>
+                                                  <AgentConversationMessageStatus
+                                                    messageId={item.id}
+                                                  />
+                                                  <Show
+                                                    when={
+                                                      teammateGreeting() ===
+                                                        item.id && teammateId()
+                                                    }
+                                                    keyed
+                                                  >
+                                                    {(teammate) => (
+                                                      <TeamAgentGreetingAction
+                                                        userId={teammate}
+                                                      />
+                                                    )}
+                                                  </Show>
+                                                </>
                                               }
                                               hideTriggeredBy={
                                                 !!channel()?.agentDm

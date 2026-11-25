@@ -457,10 +457,11 @@ up", with the failure reason the computer's status shows). They carry the
 computer id, name, and outcome; opening one reopens that computer's setup
 dialog on Bring your AI (see the Macro computers walkthrough in
 [settings.md](settings.md)). An agent teammate's computer notifies its
-inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
-with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
-"<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
-Team → Members (see Agent teammates in [settings.md](settings.md)).
+inviter with the agent instead (`agent { userId, name }`). **<name> is ready**
+appears in the inbox and opens the DM. A failed setup shows
+**<name> couldn't be set up** with **Retry** in the in-app notice and opens
+**Team → Members** from the inbox. See [Agent teammates](settings.md#agent-teammates)
+for invite progress and the Claude action in the DM.
 
 ## Pings
 

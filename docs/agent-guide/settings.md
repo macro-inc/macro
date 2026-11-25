@@ -279,11 +279,13 @@ Add is always enabled: with no name it marks the name field invalid, says
 "Give your agent a name to continue.", and moves the caret there; a name too
 long is marked the same way; either sends nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
-in the dialog (**Adding <name>…**) reading
-`GET /team_agents` every 500 ms until the agent reports itself online, and
-closes into the agent's DM, where it has said hi; no toast. Past five seconds
-it closes into the DM anyway, where the banner says it is still being set up
-and its Members row shows the setup step. Every failure stays in the dialog
+in the dialog (**Adding <name>…**). It shows startup progress until the runtime
+reports online, then **Getting your conversation ready…** while it checks the
+canonical DM as the signed-in inviter. It opens the DM only after its channel
+detail and message timeline both confirm access, and only while this invite and
+its original navigation are still active. Leaving or dismissing the invite
+stops the handoff. After two minutes, **Check again** resumes the same invite
+without buying another computer. Every failure stays in the dialog
 with the name and size kept: a declined card (402 `payment_declined`;
 nothing was bought) with **Update card** (Settings → Billing; the name and size are kept in
 the tab's sessionStorage, so the next Invite an agent for that team starts
@@ -310,23 +312,21 @@ the row's ⋯ (**Change voice**), which also holds **Remove agent**: **Save voic
 agent's repository and applies from its next call; a failed save keeps the
 pick for retry.
 
-When the agent itself first reports online (not when its computer connects),
-its inviter (the team agent's `created_by`) gets the `computer_setup` notification with the agent's
-`agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
-with **Message <name>** and, for owners and admins (who own the computer's runtime), **Connect
-Claude plan**. A failed first setup notifies "<name> couldn't be set up" with the
-reason and **Retry**. Clicking the notification opens the DM (ready) or
-**Team → Members** (failed). **Message <name>**, the notification, and the end
-of adding an agent all open the agent's real DM, created if it doesn't exist
-yet (`openTeamAgentDirectMessage`, `POST /channels/get_or_create_dm`), because
-the agent says hi first; a person's DM would wait for the viewer's first
-message (see [Empty direct messages](channels.md#empty-direct-messages)). If it
-can't be opened, a "Couldn't open the conversation. Try again." toast says so.
-The agent flow has no **Chat with <agent>**; that stays in
-the computer purchase flow. With `enable-macro-computers` on, **Connect
-<name> to your Claude plan** is the Claude sign-in for the agent's computer,
-opened from the notification or the row, never as a step of the invite. One
-screen, two steps: **Open claude.ai** (a button with "Preparing the sign-in
+When the agent first reports online, its inviter gets a **<name> is ready**
+notification in the inbox. Opening it opens the real DM. The ready state
+does not show a bottom-right toast. A failed first setup still notifies
+**<name> couldn't be set up** with the reason and **Retry**. Opening that
+notification goes to **Team → Members**. The invite and inbox use the
+canonical DM from `POST /channels/get_or_create_dm` so the agent's greeting
+appears in the same conversation. A person's DM waits for the viewer's first
+message (see [Empty direct messages](channels.md#empty-direct-messages)).
+The computer purchase flow still has **Chat with <agent>**.
+
+With `enable-macro-computers` on, **Connect Claude plan** appears on the first
+message the teammate sends its inviter while the inviter owns the connected
+runtime and the agent is using Macro credits. This button opens the same
+**Connect <name> to your Claude plan** dialog as the Members row.
+The dialog has two steps: **Open claude.ai** (a button with "Preparing the sign-in
 link…" until the computer has made the link, then the link; **Open again**
 once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
@@ -349,7 +349,7 @@ Connect Claude plan** (offered only while the computer is connected),
 **Claude: your plan · Switch to Macro credits** (a confirmation, then
 sign-out), or
 **Claude sign-in expired · Reconnect Claude plan**. The sign-in spans carry
-`claude.sign_in.entry` (`team_agent_row`, `notification`).
+`claude.sign_in.entry` (`team_agent_row`, `team_agent_dm`).
 
 A DM with an agent teammate that isn't running says so in its header (a
 short chip) and above the composer; messages still send. **Setting up** (also

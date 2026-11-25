@@ -35,6 +35,11 @@ export default {
   nameRequired: 'Give your agent a name to continue.',
   add: 'Add {{name}}',
   addPriced: 'Add {{name}} · {{price}}',
+  startingTeammate: 'Starting your agent’s computer…',
+  openingConversation: 'Getting your conversation ready…',
+  conversationPending:
+    'Your conversation isn’t ready yet. Check again to keep waiting.',
+  checkAgain: 'Check again',
   adding: 'Adding {{name}}…',
   tryAgainPriced: 'Try again · {{price}}',
   declined:
@@ -67,11 +72,9 @@ export default {
   statusNotRunning: 'Not running',
   retrySetup: 'Retry',
   retryFailed: "Couldn't retry setting up {{name}}. Try again.",
-  readyNotice: '{{name}} is ready',
   readyNoticeBody: 'Message {{name}} to get started.',
   failedNotice: "{{name}} couldn't be set up",
   failedNoticeBody: "Retry from {{name}}'s row in Members.",
-  messageAgent: 'Message {{name}}',
   openDirectMessageFailed: "Couldn't open the conversation. Try again.",
   connectClaude: 'Connect Claude plan',
   reconnectClaude: 'Reconnect Claude plan',
