@@ -143,9 +143,11 @@ async fn an_expired_submit_lease_allows_other_mail_but_never_resends_the_unknown
     assert_eq!(fixture.transport.submissions.load(Ordering::Acquire), 1);
 
     fixture.control.released.add_permits(1);
-    assert!(
-        sending.await.unwrap().is_err(),
-        "the expired first lease cannot overwrite newer state"
+    let expired_outcome = sending.await.unwrap().unwrap();
+    assert_eq!(
+        serde_json::from_value::<SubmissionOutcome>(expired_outcome).unwrap(),
+        SubmissionOutcome::Unknown,
+        "the expired first lease must leave the send available for confirmation only"
     );
     let after = second_repository
         .read_scoped(
