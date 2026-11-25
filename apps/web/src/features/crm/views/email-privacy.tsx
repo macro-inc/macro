@@ -6,6 +6,7 @@ import {
   enableCrmThreadExclusions,
 } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { Button, Dialog, Panel } from '@ui';
 import {
   createSignal,
@@ -82,10 +83,14 @@ function DomainBlocklist(props: {
     props.scope === 'team'
       ? settings()?.archivedTeamDomains?.[domain]
       : undefined;
-  const openCompany = (id: string) => {
-    props.onOpenCompany?.();
-    navigation.openWithSplit({ type: 'company', id }, { activate: true });
-  };
+  const openCompany = (id: string) =>
+    useSplitNavigationHandler<HTMLButtonElement>((event) => {
+      props.onOpenCompany?.();
+      navigation.openWithSplit(
+        { type: 'company', id },
+        { activate: true, preferNewSplit: event.shiftKey }
+      );
+    });
   const rowDescription = (domain: string) =>
     archivedCompany(domain)
       ? t('crm.privacyArchivedCompanyDomain')
@@ -96,17 +101,20 @@ function DomainBlocklist(props: {
   const rowAction = (domain: string) => {
     if (!canRemove()) return undefined;
     const company = archivedCompany(domain);
-    if (company)
+    if (company) {
+      const open = openCompany(company);
       return (
         <Button
           variant="ghost"
           size="sm"
           aria-label={t('crm.privacyOpenArchivedCompanyLabel', { domain })}
-          onClick={() => openCompany(company)}
+          onMouseDown={open.onMouseDown}
+          onClick={open.onClick}
         >
           {t('crm.privacyOpenArchivedCompany')}
         </Button>
       );
+    }
     return (
       <Button
         variant="ghost"
