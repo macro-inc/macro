@@ -66,6 +66,9 @@ pub const MAX_TIMELINE_PAGE: u16 = 100;
 pub const MAX_CHANNEL_COMMIT_ITEMS: usize = 5_000;
 /// Most channels one eviction pass removes.
 pub const MAX_EVICTED_CHANNELS: u16 = 200;
+/// Entries one eviction pass removes before it leaves the next channel to another
+/// pass: the pass holds the engine, and people's own writes wait for it.
+pub const MAX_EVICTED_ENTRIES: usize = 200;
 
 /// The ordered list an entry belongs to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -315,7 +318,8 @@ pub struct ChannelTimelineResult {
 pub struct ChannelEviction {
     /// Channels last touched before this Unix millisecond are removed.
     pub touched_before_ms: i64,
-    /// Most channels removed by this pass, 1 to [`MAX_EVICTED_CHANNELS`].
+    /// Most channels removed by this pass, 1 to [`MAX_EVICTED_CHANNELS`]. It
+    /// stops sooner at [`MAX_EVICTED_ENTRIES`].
     pub max_channels: u16,
 }
 
@@ -326,6 +330,14 @@ impl ChannelEviction {
             return Err(ChannelTimelineError::InvalidLimit);
         }
         Ok(())
+    }
+
+    /// Whether a pass that took `channels` channels with `entries` entries also
+    /// takes one with `next` entries. The first channel always goes, whole.
+    #[must_use]
+    pub fn takes(&self, channels: usize, entries: usize, next: usize) -> bool {
+        channels == 0
+            || (channels < usize::from(self.max_channels) && entries + next <= MAX_EVICTED_ENTRIES)
     }
 }
 

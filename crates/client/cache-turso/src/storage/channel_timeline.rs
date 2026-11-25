@@ -731,7 +731,7 @@ fn apply_eviction(
 ) -> Result<ChannelEvictionOutcome, TursoStorageError> {
     let max_channels = usize::from(eviction.max_channels);
     let limit = max_channels + 1 + kept.len();
-    let mut channel_ids = driver::query(
+    let mut stale = driver::query(
         connection,
         SYNC_STALE,
         vec![
@@ -742,14 +742,20 @@ fn apply_eviction(
     .iter()
     .map(|row| required_text(row, 0))
     .collect::<Result<Vec<_>, _>>()?;
-    channel_ids.retain(|channel_id| !kept.contains(channel_id));
-    let has_more = channel_ids.len() > max_channels;
-    channel_ids.truncate(max_channels);
+    stale.retain(|channel_id| !kept.contains(channel_id));
+    let mut channel_ids = Vec::new();
     let mut doomed = BTreeSet::new();
-    for channel_id in &channel_ids {
-        doomed.extend(load_entries(connection, channel_id, ChannelEntries::All)?);
-        driver::execute(connection, COVERAGE_DELETE_CHANNEL, vec![text(channel_id)])?;
-        driver::execute(connection, SYNC_DELETE, vec![text(channel_id)])?;
+    let mut has_more = false;
+    for channel_id in stale {
+        let entries = load_entries(connection, &channel_id, ChannelEntries::All)?;
+        if !eviction.takes(channel_ids.len(), doomed.len(), entries.len()) {
+            has_more = true;
+            break;
+        }
+        doomed.extend(entries);
+        driver::execute(connection, COVERAGE_DELETE_CHANNEL, vec![text(&channel_id)])?;
+        driver::execute(connection, SYNC_DELETE, vec![text(&channel_id)])?;
+        channel_ids.push(channel_id);
     }
     Ok(ChannelEvictionOutcome {
         deleted_keys: delete_entries(connection, doomed.iter().map(String::as_str))?,
