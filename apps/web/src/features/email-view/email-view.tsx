@@ -288,6 +288,7 @@ function EmailLayout(props: {
     <ViewShell.Root
       contentLayout="collection"
       asidePreferenceKey="email"
+      title={t('nav.email')}
       resizable
       aside={{ preserveDuringResize: false }}
       main={{

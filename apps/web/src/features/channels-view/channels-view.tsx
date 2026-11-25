@@ -14,6 +14,7 @@ import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { TutorialPill } from '@app/features/video-tutorials';
+import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { ChannelDetailLayout } from '@channel/Channel/ChannelDetailLayout';
@@ -255,6 +256,7 @@ type ChannelsAsideList = ViewShellRootProps['asideList'];
 
 function ChannelsViewRoot(props: {
   registerAsideList: (list: (() => ChannelsAsideList) | undefined) => void;
+  registerEmpty: (empty: (() => boolean) | undefined) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const {
@@ -284,6 +286,8 @@ function ChannelsViewRoot(props: {
         }
   );
   onCleanup(() => props.registerAsideList(undefined));
+  props.registerEmpty(() => selectedChannel() === undefined);
+  onCleanup(() => props.registerEmpty(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
   const localChannels = useChannelListSearchPool();
 
@@ -585,12 +589,15 @@ export function ChannelsView(props: ChannelsViewProps) {
   const inlinePreviewLayout = useInlinePreviewLayout();
   // The selection lives in the provider, which needs the shell around it.
   const [asideList, setAsideList] = createSignal<() => ChannelsAsideList>();
+  const [empty, setEmpty] = createSignal<() => boolean>();
   return (
     <DebugSuspense name="ChannelsView.root">
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
             asidePreferenceKey="channels"
+            title={t('nav.chat')}
+            mainEmpty={empty()?.()}
             aside={
               inlinePreviewLayout() ? { preserveDuringResize: false } : false
             }
@@ -601,6 +608,7 @@ export function ChannelsView(props: ChannelsViewProps) {
             <ChannelsViewProvider initialState={props.initialState}>
               <ChannelsViewRoot
                 registerAsideList={(list) => setAsideList(() => list)}
+                registerEmpty={(next) => setEmpty(() => next)}
               />
             </ChannelsViewProvider>
           </ViewShell.Root>

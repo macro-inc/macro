@@ -123,6 +123,7 @@ function HomeViewRoot() {
           <SplitPanel.Body>
             <HomeViewLayout
               inlinePreview={inlinePreviewLayout()}
+              empty={previewTarget() === undefined && !calendarOpen()}
               list={
                 <DebugSuspense name="HomeView.list-pane">
                   <HomeListPane

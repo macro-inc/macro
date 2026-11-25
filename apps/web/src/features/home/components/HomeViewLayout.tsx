@@ -1,15 +1,20 @@
 import { ViewShell } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { type JSX, Show } from 'solid-js';
 
 /** Notifications docks its feed beside details at the shared workspace breakpoint. */
 export function HomeViewLayout(props: {
   inlinePreview: boolean;
+  /** No notification or event is open beside the feed. */
+  empty?: boolean;
   list: JSX.Element;
   children: JSX.Element;
 }) {
   return (
     <ViewShell.Root
       asidePreferenceKey="home"
+      title={t('nav.notifications')}
+      mainEmpty={props.empty}
       aside={props.inlinePreview ? { preserveDuringResize: false } : false}
       main={{ preferredWidth: 640, min: 224 }}
       resizable
