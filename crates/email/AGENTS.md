@@ -179,9 +179,15 @@ tools — hexagonal, heavily feature-gated.
   computes a label per row, so it scans every pending change. Read provider
   rows by label and pending changes by attribute (`MESSAGE_CARRIES_LABEL`,
   `build_label_superset`), and the viewer's inboxes as `= ANY(ARRAY(...))`,
-  never an `IN` subquery, which the planner hashes the inbox's messages for. An owned All Mail page whose filter has one top-level OR-tree of labels
-  and no message term is read by `OwnedRead` too: the label rows are the
-  superset (`build_label_superset`). The label tree stays out of the inbox
+  never an `IN` subquery, which the planner hashes the inbox's messages for.
+  An owned page of All Mail, Inbox, Sent, Drafts, Starred, Important or Other
+  (`walks_threads`) whose filter has one top-level OR-tree of labels and no
+  message term is read by `OwnedRead` too: the label rows are the superset
+  (`build_label_superset`). On the views other than All Mail the view's thread
+  restriction (`build_view_thread_filter`) leads the terms every stream
+  applies, so the inbox windows, the label rows and the window end keep it.
+  Spam, Trash and user-label views sort by their folder's date and stay on
+  the general builder. The label tree stays out of the inbox
   windows' terms and is tested on each walked thread before the preview pick
   (`walked_match`): inside the window it would stretch the window to that
   many labeled threads, and after the pick it would pay a pick for every

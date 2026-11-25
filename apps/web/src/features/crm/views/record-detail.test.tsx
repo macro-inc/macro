@@ -52,6 +52,15 @@ vi.mock('../context/crm-context', () => ({
     listsEnabled: () => () => false,
     isTeamAdmin: () => () => false,
     openCreateContact: vi.fn(),
+    RecordActivity: (props: {
+      record: { type: string; id: string };
+      order: number;
+    }) => (
+      <div
+        data-record-activity={`${props.record.type}:${props.record.id}`}
+        data-order={props.order}
+      />
+    ),
     registerTaskComposerRecord: (source: () => CrmTaskRecord) => {
       taskContext.records.push(source);
       return () => {
@@ -496,6 +505,18 @@ it('lists Properties before References in both information panels', async () => 
   company.unmount();
   render(() => <Contact contactId="contact-1" section="files" />);
   expect(order('Properties')).toBeLessThan(order('References'));
+});
+
+it('shows the company’s Activity in its side panel', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  render(() => <Company companyId="company-1" section="files" />);
+  const section = document.querySelector('[data-record-activity]');
+  expect(section?.getAttribute('data-record-activity')).toBe(
+    'company:company-1'
+  );
 });
 
 it('records an open of a company once it has loaded', async () => {

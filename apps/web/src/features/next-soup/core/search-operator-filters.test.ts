@@ -123,6 +123,15 @@ describe('searchOperatorFilters', () => {
     ]);
     expect(boundQuery.include?.channelId).toEqual(['dm-ana']);
 
+    // A name that reaches nothing asks the feed for nothing.
+    const missing = searchOperatorQuery(compile('tag:missing'));
+    expect(missing.include?.documentId).toEqual([
+      '00000000-0000-0000-0000-000000000000',
+    ]);
+    expect(missing.include?.threadId).toEqual([
+      '00000000-0000-0000-0000-000000000000',
+    ]);
+
     const calendar = searchOperatorQuery(compile('type:calendar tag:finance'));
     expect(calendar.include?.tagFilters).toEqual([
       { propertyId: 'tags-1', type: 'select', value: 'finance-1' },

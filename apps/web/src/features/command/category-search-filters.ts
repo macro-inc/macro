@@ -1,16 +1,8 @@
 import type { SearchIndexId } from '@app/features/next-soup/core/search-filters';
-import { SEARCH_INDEX_SEEDS } from '@app/features/next-soup/core/search-query';
-import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
-import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import type { EntitySearchCategory } from './queries/entity-search';
 
-type CategorySearchFilters = {
-  filters: Query;
-  clientFilters: SetPredicatesInput<string>;
-};
-
 // Each Cmd+K category maps to a search-view index type: the `type:` the
-// Search field opens with, and the type the phone's search narrows to. Cmd+K DMs
+// Search field opens with. Cmd+K DMs
 // maps to the same channels index as Channels for now; channelType-based
 // narrowing (DMs vs non-DMs) is left for a follow-up once the search
 // backend honors it.
@@ -33,14 +25,16 @@ export function categorySearchIndex(
   return CATEGORY_TO_INDEX[category];
 }
 
-export function getCategorySearchFilters(
-  category: EntitySearchCategory | 'commands'
-): CategorySearchFilters | undefined {
-  const indexValue = CATEGORY_TO_INDEX[category];
-  if (!indexValue) return undefined;
-
-  return {
-    filters: SEARCH_INDEX_SEEDS[indexValue],
-    clientFilters: { and: ['search-supported'], or: [indexValue] },
+/** The name results each `type:` narrows the phone's search to. */
+const INDEX_TO_CATEGORY: Partial<Record<SearchIndexId, EntitySearchCategory>> =
+  {
+    email: 'email',
+    channels: 'channels',
+    'document-or-file': 'documents',
+    task: 'tasks',
+    agent: 'chats',
   };
-}
+
+/** The name-search category that lists exactly a Search view type, if any. */
+export const searchIndexCategory = (index: SearchIndexId) =>
+  INDEX_TO_CATEGORY[index];

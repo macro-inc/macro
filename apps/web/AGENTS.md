@@ -1294,7 +1294,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
-- Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
+- Browser storage schema 12 enables covering-index search through a fresh versioned cache; native caches run registered storage upgrade steps in place, keeping queued writes; a native file still resets without a complete chain, when a step or the final schema check fails, or when another scope or an unmigratable format wrote it, and a browser build resets an older version it finds under its own name. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 or later (5 and 6 refuse them); the first search on a host goes without and is resent once it answers. On policy 8, among names that start with the query (exact and word-prefix) the list group decides first, then exact before word-prefix, then recency; contains-only and address matches follow, each by group. Policy 7 hosts (native builds before the release that brings 8) rank by name stage before group, and their windows are kept as they come. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
@@ -1491,8 +1491,21 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
-- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
-  bump its checkpoint version when changing the hydration input contract.
+- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill.
+- Soup backfill checkpoints are keyed by each lane's contract
+  (`queries/soup/backfill-contract.ts`): changing a lane's operation, input or
+  pass flags restarts that lane alone, and a tab runs a lane only while holding
+  its locks (`soupBackfillLaneLocks`), leaving a lane another tab holds until
+  its other lanes are done. The app runs lanes only in the tab that leads
+  backfill, and leading takes the browser's Locks API too; a direct
+  `runSoupBackfill` call without it runs the lane unlocked. Bump the lane's
+  `contractVersion` when it must refetch for a reason those do not show (a
+  projection that needs fields the cache lacks, a page size that must reach
+  scans in flight); bump
+  `BACKFILL_VERSION` only for a runner change every lane shares. Never edit
+  `V19_CONTRACTS`. Read and write a lane's checkpoint through
+  `queries/soup/backfill-checkpoint.ts` with the lane itself, never a
+  checkpoint id: the channel directory reads `CHANNEL_DIRECTORY_LANE`.
 - Refresh the channel list's bounded unread and mention edges when opening a
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to

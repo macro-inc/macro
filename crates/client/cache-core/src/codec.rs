@@ -8,6 +8,10 @@
 //! browser reopen with matching versions preserves records, queued mutations,
 //! and optimistic layers. A compatibility/format mismatch or abrupt/uncertain
 //! browser owner loss physically resets the database and discards all three.
+//! Native files keep one path, so there an older storage version with
+//! registered upgrade steps is upgraded in place instead (`cache-turso`'s
+//! `storage/migration.rs`), and a format in
+//! [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is carried forward.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { labelNamesOf, shownLabelsOf } from './label-names';
+import { inboxLabelsOf, labelNamesOf, shownLabelsOf } from './label-names';
 
 const made = (id: string, linkId: string, name: string) => ({
   id,
@@ -98,5 +98,27 @@ describe('shownLabelsOf', () => {
         ])
       )[0]
     ).toMatchObject({ name: 'Larkspur', fullName: 'Customers / Larkspur' });
+  });
+});
+
+describe('inboxLabelsOf', () => {
+  it('lists each inbox as a tree, inboxes in their order, and leaves out others', () => {
+    const labels = [
+      made('outlook-board', 'outlook', 'Board/2026'),
+      made('larkspur', 'gmail', 'Customers/Larkspur'),
+      made('customers', 'gmail', 'Customers'),
+      made('gone', 'disconnected', 'Old'),
+    ];
+
+    expect(
+      inboxLabelsOf(labels, [
+        { id: 'outlook', provider: 'OUTLOOK' },
+        { id: 'gmail', provider: 'GMAIL' },
+      ]).map(({ id, fullName, storedName }) => [id, fullName, storedName])
+    ).toEqual([
+      ['outlook-board', 'Board/2026', 'Board/2026'],
+      ['customers', 'Customers', 'Customers'],
+      ['larkspur', 'Customers / Larkspur', 'Customers/Larkspur'],
+    ]);
   });
 });

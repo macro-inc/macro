@@ -27,6 +27,15 @@ vi.mock('./use-email-list-refresh', () => ({
 }));
 
 const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
+// A test can swap in signals for the label list.
+const labelCatalog = vi.hoisted(() => ({
+  fetched: (): boolean => true,
+  labels: (): { id: string; storedName: string }[] => [],
+}));
+vi.mock('@queries/email/label-names', () => ({
+  useEmailInboxLabels: () => () => labelCatalog.labels(),
+  useEmailLabelsFetched: () => () => labelCatalog.fetched(),
+}));
 vi.mock('@queries/email/local-draft-source', async () => ({
   ...(await import('@queries/email/local-draft-entities')),
   createLocalDraftSource: (enabled: () => boolean) => ({
@@ -765,6 +774,38 @@ describe('Email list query transitions', () => {
       setSearchEntities([email('pdf-invite-hit')]);
     });
     expect(ids(source)).toEqual(['pdf-invite-hit']);
+  });
+
+  it('holds a search with ticked labels until it can name them', () => {
+    const [fetched, setFetched] = createSignal(false);
+    labelCatalog.fetched = fetched;
+    labelCatalog.labels = () =>
+      fetched() ? [{ id: 'larkspur', storedName: 'Customers/Larkspur' }] : [];
+    try {
+      const { source, setState } = mount('invoice');
+      setState('facets', { labels: ['larkspur'] });
+      const discovery = searchQueryMock.mock.results[0].value;
+      expect(discovery.isEnabled).toBe(false);
+      expect(ids(source)).toEqual([]);
+
+      setFetched(true);
+      expect(discovery.isEnabled).toBe(true);
+      expect(
+        searchQueryMock.mock.calls[0][0]().body.filters.email_filters
+          .include_labels
+      ).toEqual(['Customers/Larkspur']);
+      expect(ids(source)).toEqual(['search']);
+    } finally {
+      labelCatalog.fetched = () => true;
+      labelCatalog.labels = () => [];
+    }
+  });
+
+  it('lists no hit when it can name none of the ticked labels', () => {
+    const { source, setState } = mount('invoice');
+    setState('facets', { labels: ['deleted-label'] });
+    expect(searchQueryMock.mock.results[0].value.isEnabled).toBe(true);
+    expect(ids(source)).toEqual([]);
   });
 
   it('still drops list rows without the selected attachment kind', () => {

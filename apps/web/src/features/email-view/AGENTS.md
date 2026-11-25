@@ -66,6 +66,10 @@ the Soup-backed thread list, and saved email views.
 - `filters/use-email-filters.tsx`: the Filters model shared by the desktop menu
   and the mobile drawer; each group is a field read from and written into the
   list's filters, active once it differs from what Clear returns to.
+  `filters/use-label-filter-group.tsx` is its Labels group (the labels people
+  made, by whole name, each inbox's together, with the inbox's avatar when
+  there are several), stored under the `labels` facet that
+  `filters/email-label-facet.ts` turns into the `Label` condition.
 - `components/EmailFilterFields.tsx`: the builder's People and Subject
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
@@ -91,14 +95,20 @@ loading/refetch branch changes preserve the chooser and IMAP form.
 - Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.
 - Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
-  sidebar; filter changes stay on the current tab.
+  sidebar; filter changes stay on the current tab. Labels sit after Tags in
+  both, except on Reminders, whose read has no label filter.
+- A search narrows by a selected label's stored name (`include_labels`), as
+  `label:` does: hits carry no labels to check on the client, and a same-named
+  label in another of the viewer's inboxes matches too. It waits for the label
+  list while labels are ticked; a label it cannot name matches nothing, as its
+  id matches no row of the list.
 - A saveable tab is a built-in view: it starts from its own restrictions
   (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query
   while those restrictions stand; otherwise the list queries as a view. Write
   filters through `setFilters`/`clearFilters`, never by emptying facets.
-- A saved view opens on All. Its Read status, Done, attachment, calendar, tag and
-  inbox filters live in the normal state so the Filters menu, inbox picker,
+- A saved view opens on All. Its Read status, Done, attachment, calendar, tag,
+  label and inbox filters live in the normal state so the Filters menu, inbox picker,
   and read admission keep working; its other conditions live in
   `state.conditions`.
 - Never query while a selected view is loading or unavailable: that lists all

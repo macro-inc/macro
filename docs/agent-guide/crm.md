@@ -147,14 +147,24 @@ Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
 domains must still be rejected as company domains.
 
-Merging duplicate companies has no screen yet: team admins and owners merge
-through `POST /crm/merges/preview` then `POST /crm/merges`, the SDK's
-`crm.merges`, or the agent's PreviewMerge and MergeRecords tools, while
-`enable-crm-merge` is on for them. Verify with two throwaway companies: the
-review lists the domains, the people and deals that move, and values that
-differ. After the commit, the company that stays has every domain, person,
-deal, task reference and discussion message, and the merged company's old link
-opens it.
+Team admins and owners merge duplicate companies while `enable-crm-merge` is
+on for them. Select two or more companies in a Companies list and press Merge
+in the selection toolbar, or choose Merge companies (several selected) or Merge
+with… (one) from a row's menu; on a phone, long-press a row for Merge with….
+Merge with… first asks for the other companies (search by name or domain, tick
+them). Then choose the company to keep and review: its domains, what moves to
+it, pipelines where it ends up with several entries (kept separate), values
+that differ (the kept company's win), what email sync does, and, when a
+teammate's email sharing names a merged company, Keep sharing the same mail or
+Stop sharing it (Keep is unavailable when it wouldn't fit). People under
+different companies with the same address block the merge, archived ones
+included. A review that changed before the confirm is fetched again with a
+notice. After the merge a toast offers Open, the merged companies' old links and
+chips open the company that stays, and its Activity section (side panel) shows
+one "merged … into this" entry with the team-visible values it dropped. The same
+merge is available through `POST /crm/merges/preview` then `POST /crm/merges`,
+the SDK's `crm.merges`, and the agent's PreviewMerge and MergeRecords tools.
+Verify with two throwaway companies on desktop and at phone width.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
@@ -794,8 +804,11 @@ only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
 **Remove** instead of pushing it onto its own line. Archiving a company lists
 its domains there until it is restored. Admins see that the row's company is
 archived and get **Open company** (where **Restore** is) instead of **Remove**;
-members, who can't see archived companies, get a plain row. A remove refused
-because the company was archived meanwhile says the same in its toast. Personal domains affect
+shift-click opens it in a new split, and a company already open in another split
+is brought to the front instead. Members, who can't see
+archived companies, get a plain row. A remove refused because the company was
+archived meanwhile says the same in its toast, and the row then shows the
+archived company. Personal domains affect
 only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
 Blocking hides previously shared matching threads on subsequent CRM reads.
