@@ -195,7 +195,7 @@ export function ListHeaderSearch(props: {
             // Focus moving to another control in the header (Email's search
             // tips) keeps the empty field open until it leaves the header.
             const header = input?.closest<HTMLElement>(
-              '[data-view-shell-header]'
+              '[data-view-shell-top-bar]'
             );
             const next = event.relatedTarget;
             if (!(header && next instanceof Node && header.contains(next))) {

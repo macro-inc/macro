@@ -14,7 +14,7 @@ import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import { fireEvent, render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ListHeaderSearch } from './ListHeader';
+import { ListHeader, ListHeaderSearch } from './ListHeader';
 import { clearListSearch, hasListSearch } from './list-search-escape';
 
 afterEach(() => setActiveScope('global'));
@@ -541,18 +541,30 @@ it('reports a wide field open, and closed once it is left empty', () => {
 
 it('keeps an empty wide field open while focus moves to another header control', async () => {
   const [search, setSearch] = createSignal('');
+  // As Email does: the view keeps the open state and shows its tips only then.
+  const [open, setOpen] = createSignal(false);
   const view = render(() => (
     <div>
-      <header data-view-shell-header="">
-        <button type="button">Search tips</button>
+      <ListHeader
+        title={
+          <div>
+            <h2>Search</h2>
+            <Show when={open()}>
+              <button type="button">Search tips</button>
+            </Show>
+          </div>
+        }
+      >
         <ListHeaderSearch
           label="Search email"
           value={search()}
           onValueChange={setSearch}
           registerFocus={() => {}}
           wide
+          open={open()}
+          onOpenChange={setOpen}
         />
-      </header>
+      </ListHeader>
       <button type="button">Outside</button>
     </div>
   ));
@@ -562,10 +574,13 @@ it('keeps an empty wide field open while focus moves to another header control',
   expect(document.activeElement).toBe(field);
 
   view.getByRole('button', { name: 'Search tips' }).focus();
+  expect(open()).toBe(true);
   expect(view.queryByRole('searchbox')).not.toBeNull();
 
   view.getByRole('button', { name: 'Outside' }).focus();
+  expect(open()).toBe(false);
   expect(view.queryByRole('searchbox')).toBeNull();
+  expect(view.queryByRole('button', { name: 'Search tips' })).toBeNull();
 });
 
 it('closes a wide field when the view clears its search from outside', () => {
