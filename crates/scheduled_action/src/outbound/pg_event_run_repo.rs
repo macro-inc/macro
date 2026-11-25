@@ -84,6 +84,7 @@ struct PendingRow {
     configuration_revision: i64,
     event_context: Value,
     admitted_at: DateTime<Utc>,
+    traceparent: Option<String>,
 }
 
 impl TryFrom<PendingRow> for PendingEventRun {
@@ -96,6 +97,7 @@ impl TryFrom<PendingRow> for PendingEventRun {
             revision: row.configuration_revision.try_into()?,
             event: serde_json::from_value(row.event_context)?,
             admitted_at: row.admitted_at,
+            traceparent: row.traceparent,
         })
     }
 }
@@ -149,7 +151,7 @@ impl EventRunRepository for PgEventRunRepo {
             event.event_name().as_str(),
             event.entity_id().map(|id| id.to_string()),
             i64::from(limit.get()),
-            event.event_name().general_event().map(|name| name.as_str()),
+            event.general_event().map(|name| name.as_str()),
             github_event(event),
         )
         .fetch_all(&self.pool)
@@ -216,7 +218,7 @@ impl EventRunRepository for PgEventRunRepo {
             event.published_at(),
             event.event_name().as_str(),
             event.entity_id().map(|id| id.to_string()),
-            event.event_name().general_event().map(|name| name.as_str()),
+            event.general_event().map(|name| name.as_str()),
             github_event(event),
         )
         .fetch_optional(&mut *tx)
@@ -231,13 +233,14 @@ impl EventRunRepository for PgEventRunRepo {
         }
         let inserted = sqlx::query!(
             r#"
-            INSERT INTO scheduled_action_event_run (action_id, event_id, configuration_revision, event_context)
-            VALUES ($1, $2, $3, $4) ON CONFLICT (action_id, event_id) DO NOTHING
+            INSERT INTO scheduled_action_event_run (action_id, event_id, configuration_revision, event_context, traceparent)
+            VALUES ($1, $2, $3, $4, $5) ON CONFLICT (action_id, event_id) DO NOTHING
             "#,
             action_id,
             event.event_id().as_uuid(),
             revision.get(),
             context,
+            crate::trace_context::current(),
         )
         .execute(&mut *tx)
         .await?;
@@ -255,10 +258,10 @@ impl EventRunRepository for PgEventRunRepo {
         let rows = sqlx::query_as!(
             PendingRow,
             r#"
-            SELECT r.action_id, r.event_id, r.configuration_revision, r.event_context, r.admitted_at
+            SELECT r.action_id, r.event_id, r.configuration_revision, r.event_context, r.admitted_at, r.traceparent
             FROM scheduled_action a
             CROSS JOIN LATERAL (
-                SELECT action_id, event_id, configuration_revision, event_context, admitted_at, admission_order
+                SELECT action_id, event_id, configuration_revision, event_context, admitted_at, admission_order, traceparent
                 FROM scheduled_action_event_run
                 WHERE action_id = a.id AND state = 'pending'
                 ORDER BY admission_order LIMIT 1
@@ -324,7 +327,7 @@ impl EventRunRepository for PgEventRunRepo {
         let pending = sqlx::query_as!(
             PendingRow,
             r#"
-            SELECT action_id, event_id, configuration_revision, event_context, admitted_at
+            SELECT action_id, event_id, configuration_revision, event_context, admitted_at, traceparent
             FROM scheduled_action_event_run
             WHERE action_id = $1 AND state = 'pending'
             ORDER BY admission_order LIMIT 1 FOR UPDATE

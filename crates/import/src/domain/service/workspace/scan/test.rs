@@ -12,6 +12,10 @@ use crate::domain::ports::{PlanRow, Result};
 struct Recorder(mpsc::UnboundedSender<(Instant, ScanCounts)>);
 
 impl NotionPlanRepo for Recorder {
+    async fn dependency_ids(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<Vec<Uuid>> {
+        unreachable!("scan does not review dependencies")
+    }
+
     async fn require_replan(&self, _: &MacroUserIdStr<'static>, _: Uuid, _: &str) -> Result<bool> {
         unreachable!("recording a scan never defers objects")
     }

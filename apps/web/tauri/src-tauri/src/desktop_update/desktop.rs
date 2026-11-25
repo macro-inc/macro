@@ -206,6 +206,14 @@ pub fn setup<R: Runtime>(
     let Some(store) = store else {
         return Ok(());
     };
+    // A newer update the last launch was still downloading beside a ready
+    // one; nothing is ready yet in this launch, so its check downloads into
+    // the store itself.
+    store
+        .staging()
+        .remove()
+        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove a staged native update download"))
+        .ok();
     app.handle()
         .plugin(tauri_plugin_updater::Builder::new().build())?;
     let notify = coordinator.clone();
@@ -237,14 +245,7 @@ pub fn setup<R: Runtime>(
                     tracing::warn!(error=?error, "native update check failed");
                     failures = failures.saturating_add(1);
                     report(&handle, &coordinator, &timing, error.outcome(failures));
-                    publish(
-                        &handle,
-                        &coordinator,
-                        Status::Error {
-                            message: "Could not download the app update. Will retry automatically."
-                                .into(),
-                        },
-                    );
+                    fail(&handle, &coordinator);
                     let delay = retry;
                     retry = (retry * 2).min(MAX_RETRY_INTERVAL);
                     delay
@@ -293,7 +294,26 @@ fn publish<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, status: St
         state.status = status;
         state.snapshot()
     };
-    app.emit(EVENT, &snapshot)
+    emit(app, &snapshot);
+}
+
+/// Shows a failed check, unless a ready update or an install owns the status.
+fn fail<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator) {
+    let snapshot = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if !state.fail("Could not download the app update. Will retry automatically.".into()) {
+            return;
+        }
+        state.snapshot()
+    };
+    emit(app, &snapshot);
+}
+
+fn emit<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
+    app.emit(EVENT, snapshot)
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update status"))
         .ok();
 }
@@ -332,21 +352,29 @@ fn report_outcome<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, rep
 /// Checks the feed and downloads a newer version, resuming a download an
 /// earlier launch or attempt saved. `Ok(false)` when the state refused to
 /// start a check, so no request was made.
+///
+/// A ready update stays ready while the feed is checked again. A newer
+/// release downloads to the store's staging directory and replaces it only
+/// once verified, so a restart or quit meanwhile still installs the ready one.
 async fn check<R: Runtime>(
     app: &AppHandle<R>,
     coordinator: &Coordinator,
     store: &Store,
     timing: &Timing,
 ) -> Result<bool, CheckError> {
-    if !coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .begin_check()
-    {
-        return Ok(false);
+    let ready = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if !state.begin_check() {
+            return Ok(false);
+        }
+        state.ready_version().map(str::to_owned)
+    };
+    if ready.is_none() {
+        publish(app, coordinator, Status::Checking);
     }
-    publish(app, coordinator, Status::Checking);
     let Some(mut update) = app
         .updater_builder()
         .timeout(REQUEST_TIMEOUT)
@@ -356,6 +384,10 @@ async fn check<R: Runtime>(
         .await
         .map_err(CheckError::Check)?
     else {
+        // A ready update installs as before the feed was checked again.
+        if ready.is_some() {
+            return Ok(true);
+        }
         // A saved download is for a version this app already runs, or one
         // the feed withdrew.
         remove_saved(store);
@@ -367,10 +399,6 @@ async fn check<R: Runtime>(
     // macOS refuses to open, so stay on this one.
     if let Some(minimum) = unsupported_minimum(&update.raw_json, os_version()) {
         tracing::info!(version = %update.version, minimum, "native update needs a newer OS");
-        // A saved download is for this release or an older one, which this
-        // release supersedes; it would otherwise stay on disk until the OS is
-        // upgraded.
-        remove_saved(store);
         report(
             app,
             coordinator,
@@ -380,10 +408,26 @@ async fn check<R: Runtime>(
                 minimum_system_version: minimum,
             },
         );
+        // A ready update was checked against this Mac when it downloaded.
+        if ready.is_some() {
+            return Ok(true);
+        }
+        // A saved download is for this release or an older one, which this
+        // release supersedes; it would otherwise stay on disk until the OS is
+        // upgraded.
+        remove_saved(store);
         publish(app, coordinator, Status::Idle);
         return Ok(true);
     }
     let version = update.version.clone();
+    // Only a newer release replaces a ready update, so a feed rolled back to
+    // an older one never trades it for that.
+    if ready
+        .as_deref()
+        .is_some_and(|ready| !is_newer(&version, ready))
+    {
+        return Ok(true);
+    }
     report(
         app,
         coordinator,
@@ -392,18 +436,23 @@ async fn check<R: Runtime>(
             target_version: version.clone(),
         },
     );
-    publish(
-        app,
-        coordinator,
-        Status::Downloading {
-            version: version.clone(),
-        },
-    );
+    let destination = if ready.is_none() {
+        publish(
+            app,
+            coordinator,
+            Status::Downloading {
+                version: version.clone(),
+            },
+        );
+        store.clone()
+    } else {
+        store.staging()
+    };
     update.timeout = Some(DOWNLOAD_TIMEOUT);
     let download_started = Instant::now();
     // The store verifies the whole file before returning; partial or
     // unverified bytes never become ready.
-    let downloaded = store
+    let downloaded = destination
         .download(&update)
         .await
         .map_err(|error| CheckError::Download {
@@ -411,6 +460,39 @@ async fn check<R: Runtime>(
             download_ms: duration_ms(download_started.elapsed()),
             error,
         })?;
+    let snapshot = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if ready.is_some() {
+            // An install that took the ready update meanwhile reads the
+            // store, so the newer bytes wait for the next launch's check.
+            if state.ready_version().is_none() {
+                return Ok(true);
+            }
+            store
+                .adopt(&destination)
+                .map_err(|error| CheckError::Download {
+                    version: version.clone(),
+                    download_ms: duration_ms(download_started.elapsed()),
+                    error: error.into(),
+                })?;
+            // The newer release is a new update, not another try at the one
+            // the previous launch failed to install.
+            if state.failed_install_version.as_deref() != Some(version.as_str()) {
+                state.failed_install_version = None;
+            }
+        }
+        state.downloaded(
+            version.clone(),
+            Download {
+                update,
+                store: store.clone(),
+            },
+        );
+        state.snapshot()
+    };
     report(
         app,
         coordinator,
@@ -422,24 +504,20 @@ async fn check<R: Runtime>(
             resumed_bytes: downloaded.resumed_bytes,
         },
     );
-    let snapshot = {
-        let mut state = coordinator
-            .state
-            .lock()
-            .expect("native update state poisoned");
-        state.downloaded(
-            version,
-            Download {
-                update,
-                store: store.clone(),
-            },
-        );
-        state.snapshot()
-    };
-    app.emit(EVENT, &snapshot)
-        .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
-        .ok();
+    emit(app, &snapshot);
     Ok(true)
+}
+
+/// Whether `offered` is a later version than `ready`. A version that doesn't
+/// parse never replaces a ready update.
+fn is_newer(offered: &str, ready: &str) -> bool {
+    match (
+        semver::Version::parse(offered),
+        semver::Version::parse(ready),
+    ) {
+        (Ok(offered), Ok(ready)) => offered > ready,
+        _ => false,
+    }
 }
 
 fn remove_saved(store: &Store) {

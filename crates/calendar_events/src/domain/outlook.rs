@@ -78,6 +78,18 @@ impl OutlookCalendar {
                 .as_deref()
                 .is_some_and(|owner| owner.eq_ignore_ascii_case(mailbox_address))
     }
+
+    /// Whether the mailbox subscribed to this calendar from the web (an
+    /// internet calendar), which shows as a subscription as Google's
+    /// calendars added by URL do. Graph lists one as read-only with no owner,
+    /// while it names the mailbox as owner of its own calendars, holidays and
+    /// Birthdays included, and the sharer as owner of a calendar someone
+    /// shared.
+    pub fn is_web_subscription(&self) -> bool {
+        self.calendar.access_role.as_deref() == Some("reader")
+            && !self.calendar.is_primary
+            && self.owner_address.is_none()
+    }
 }
 
 /// What a claim changed about the account's calendars, for their viewers: a

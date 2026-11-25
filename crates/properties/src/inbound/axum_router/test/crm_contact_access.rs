@@ -34,7 +34,7 @@ impl JwtValidator for TokenIsUser {
     }
 }
 
-async fn insert_user(pool: &PgPool, user_id: &str) -> sqlx::Result<()> {
+pub(super) async fn insert_user(pool: &PgPool, user_id: &str) -> sqlx::Result<()> {
     let macro_user_id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
@@ -67,7 +67,7 @@ async fn insert_contact(pool: &PgPool, team_id: Uuid, hidden: bool) -> sqlx::Res
     Ok(contact_id)
 }
 
-fn contact_router(pool: &PgPool) -> Router {
+pub(super) fn contact_router(pool: &PgPool) -> Router {
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));

@@ -15,7 +15,7 @@ use crate::{
         },
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
-            ChannelMessageSearchConfig,
+            ChannelMessageSearchConfig, LINKS_KEY,
         },
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
@@ -93,6 +93,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
             sub_types: args.document_search_args.sub_types,
+            excluded_sub_types: args.document_search_args.excluded_sub_types,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
             tag_option_ids: args.document_search_args.tag_option_ids,
@@ -107,7 +108,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
         EmailSearchArgs {
             terms: args.email_search_args.terms,
             user_id: args.user_id,
-            user_ids: args.email_search_args.user_ids,
+            inbox_link_ids: args.email_search_args.inbox_link_ids,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
@@ -247,6 +248,8 @@ pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    /// Sub types left out, such as tasks for a search of documents alone.
+    pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
@@ -257,11 +260,14 @@ pub struct UnifiedDocumentSearchArgs {
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
-    pub user_ids: Vec<String>,
-    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// The inboxes the caller reads, by link id: their own and those
+    /// delegated to them. Mail matches by the inbox holding it, not by its
+    /// owner, whose other inboxes may not be delegated.
+    pub inbox_link_ids: Vec<String>,
+    /// Threads reachable besides the `inbox_link_ids` inboxes, or, with
     /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
-    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    /// Search only `thread_ids`, not the `inbox_link_ids` inboxes.
     pub ids_only: bool,
     /// When non-empty, every hit's thread must be one of these, on top of
     /// the access filter.
@@ -895,6 +901,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .require_field_match(true)
         .max_analyzer_offset(super::HIGHLIGHT_MAX_ANALYZER_OFFSET)
         .field("content", em_field().number_of_fragments(1))
+        .field(LINKS_KEY, em_field().number_of_fragments(1))
         .field("document_name", em_field().number_of_fragments(0))
         .field("name", em_field().number_of_fragments(0))
         .field("source_names", em_field().number_of_fragments(0))

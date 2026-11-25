@@ -504,12 +504,16 @@ export function useEventEditor(props: UseEventEditorProps) {
 
     try {
       if (!event) {
+        const calendar = writableCalendars().find(
+          (candidate) => candidate.id === values.calendarId
+        );
         // The server mints the call and writes its link into the event, so
         // the one invitation attendees receive already carries it.
         const created = await create.mutateAsync({
           title: values.title,
           time: values.time,
           calendarId: values.calendarId,
+          ...(calendar ? { calendar } : {}),
           recurrenceLines: values.recurrenceLines ?? [],
           location:
             cleanContent.location === '' ? undefined : cleanContent.location,

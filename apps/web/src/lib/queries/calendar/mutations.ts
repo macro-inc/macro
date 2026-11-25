@@ -9,6 +9,7 @@ import type { CalendarGuestInputBody } from '@service-calendar/generated/schemas
 import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
 import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
 import type { UpdateCalendarEventRequest } from '@service-calendar/generated/schemas/updateCalendarEventRequest';
+import type { VisibleCalendar } from '@service-calendar/generated/schemas/visibleCalendar';
 import {
   type CalendarDeletionScope,
   type CalendarInviteScope,
@@ -859,6 +860,14 @@ export type CreateCalendarEventArgs = CreateCalendarEventRequest & {
    * and queued, before the server answers. Never runs over REST.
    */
   onAccepted?: (event: CalendarEventEntity) => void;
+  /**
+   * The calendar `calendarId` names, as the caller already holds it, so the
+   * local copy is built without reading the calendar list. Never sent.
+   */
+  calendar?: Pick<
+    VisibleCalendar,
+    'id' | 'emailLinkId' | 'emailAddress' | 'capabilities'
+  >;
 };
 
 type CreateCallbacks = MutationCallbacks<
@@ -880,7 +889,7 @@ export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
     mutationFn: async (args: CreateCalendarEventArgs) => {
       if (answeringGraphqlCalendarHost())
         return (await executeGraphqlCreate(args)).event;
-      const { onAccepted: _localOnly, ...request } = args;
+      const { onAccepted: _accepted, calendar: _calendar, ...request } = args;
       return await throwOnErr(() => emailClient.createCalendarEvent(request));
     },
     ...withCallbacks<

@@ -147,6 +147,25 @@ Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
 domains must still be rejected as company domains.
 
+Team admins and owners merge duplicate companies while `enable-crm-merge` is
+on for them. Select two or more companies in a Companies list and press Merge
+in the selection toolbar, or choose Merge companies (several selected) or Merge
+with… (one) from a row's menu; on a phone, long-press a row for Merge with….
+Merge with… first asks for the other companies (search by name or domain, tick
+them). Then choose the company to keep and review: its domains, what moves to
+it, pipelines where it ends up with several entries (kept separate), values
+that differ (the kept company's win), what email sync does, and, when a
+teammate's email sharing names a merged company, Keep sharing the same mail or
+Stop sharing it (Keep is unavailable when it wouldn't fit). People under
+different companies with the same address block the merge, archived ones
+included. A review that changed before the confirm is fetched again with a
+notice. After the merge a toast offers Open, the merged companies' old links and
+chips open the company that stays, and its Activity section (side panel) shows
+one "merged … into this" entry with the team-visible values it dropped. The same
+merge is available through `POST /crm/merges/preview` then `POST /crm/merges`,
+the SDK's `crm.merges`, and the agent's PreviewMerge and MergeRecords tools.
+Verify with two throwaway companies on desktop and at phone width.
+
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
 the field; Close or Escape clears the query and returns to the icon.
@@ -196,8 +215,14 @@ Customers too: `/app/company/<uuid>` and `/app/contact/<uuid>` links (which
 **Copy link** still copies), `@` mentions, search and Command-K results,
 favorites, and CRM discussion notifications. A contact opens under People, so its
 breadcrumb returns to People. A split already showing that record is brought
-forward instead. Touch devices keep the standalone record pages; a Customers
-record URL redirects there unless it opens a linked item inside Customers.
+forward instead. The old id of a company or contact merged into another (an
+old link, mention or bookmark) opens the record it went into under that
+record's own id, on the tab and Discussion message the link named, replacing
+the old entry so Back skips it, on desktop and touch;
+when another split already shows that record, the split with the old id steps
+back (or closes) and that one comes up. Touch devices keep the standalone
+record pages; a Customers record URL redirects there unless it opens a linked
+item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
 opening a person's company from its company pill gives `People > <contact> > <company>`. Opening a record
@@ -284,6 +309,9 @@ open the shared **Switch view** bottom drawer: every available section
 has an icon and label, with a check beside the current section. Choosing a section
 closes the drawer and updates the header label; Escape, backdrop tap, and drag
 also dismiss it. Focus returns to the section trigger. Contacts do not show Team.
+A Customers record link with a section (`/app/companies/company/<id>/team`)
+opens on a phone on that section of the record's own page; a section the
+record type lacks opens Overview.
 The workspace's scrollable mobile view strip is unchanged. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
@@ -736,9 +764,12 @@ access is denied; no CRM record data is required. Restoring access returns
 Stages and Email sync.
 
 CRM access does not require contributing email. The banner **Your emails aren’t
-contributing to CRM** opens **Review and opt in**. The dialog shows the exact
-connected primary mailbox, **Team blacklist**, and **My blacklist** before
-**Share my emails with CRM**. Opt-in shares full content from all available
+contributing to CRM** opens **Review and opt in**. The dialog's **Your email
+contribution** row shows the exact connected primary mailbox and its status,
+with **Share my emails with CRM** (or **Stop sharing my emails**) beside it; on
+phones the button wraps under the status. The line above the row says what
+opting in shares and asks the member to review **Team blacklist** and **My
+blacklist**, below it, first. Opt-in shares full content from all available
 historical and future messages, excluding blocked threads. The same controls
 are in CRM settings and **Email contribution settings** on a company. A
 changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
@@ -749,8 +780,9 @@ dialog, if one is open, and opens the app's add-inbox provider picker; in
 place without a reload, the row shows it with sharing still off until the
 member opts in.
 
-When selective contribution is enabled, **Sharing rules** sits below **Your
-email contribution** and above the blacklists and excluded threads. **Edit JSON**,
+When selective contribution is enabled, the contribution row holds **Change**
+and, while sharing, **Stop sharing my emails**, and **Sharing rules** sits below
+**Your email contribution** and above the blacklists and excluded threads. **Edit JSON**,
 **Preview counts**, and **History** open separate settings pages, including inside
 the phone settings sheet. Opening these pages never initializes consent.
 **Save and share** validates the JSON first and shows server validation problems,
@@ -770,8 +802,17 @@ opens immutable saved JSON separately. With the selective gate off, all-mail
 members retain the existing controls; selected contributors can still inspect
 rules/history and withdraw with the single **Stop sharing my emails** action.
 
-Any member can add a team domain; only team admins/owners can remove one.
-Personal domains affect only that member's mailbox. Domains include subdomains;
+Any member can add a team domain; only team admins/owners can remove one, and
+only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
+**Remove** instead of pushing it onto its own line. Archiving a company lists
+its domains there until it is restored. Admins see that the row's company is
+archived and get **Open company** (where **Restore** is) instead of **Remove**;
+shift-click opens it in a new split, and a company already open in another split
+is brought to the front instead. Members, who can't see
+archived companies, get a plain row. A remove refused because the company was
+archived meanwhile says the same in its toast, and the row then shows the
+archived company. Personal domains affect
+only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
 Blocking hides previously shared matching threads on subsequent CRM reads.
 Another teammate's permitted copy may still appear when only a personal block

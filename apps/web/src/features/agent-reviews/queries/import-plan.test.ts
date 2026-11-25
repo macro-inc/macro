@@ -147,6 +147,51 @@ it('decodes tracker tasks and projects while isolating review ids', () => {
   ]);
 });
 
+it('labels dependencies from current-review objects without reviving older titles', () => {
+  const entries = decodePlanEntries(
+    [
+      {
+        ...row,
+        id: 'page',
+        kind: 'page',
+        foreign_id: 'notion-page',
+        metadata: { title: 'Project', plan: { decision: 'copy' } },
+      },
+      {
+        ...row,
+        id: 'dependency',
+        metadata: {
+          title: 'Work',
+          plan: { decision: 'copy', dependencyOf: ['notion-page'] },
+        },
+      },
+      {
+        ...row,
+        id: 'inline-source',
+        metadata: {
+          title: 'Selected database',
+          plan: { decision: 'copy', inlineOn: ['notion-page'] },
+        },
+      },
+      {
+        ...row,
+        id: 'old-page',
+        kind: 'page',
+        foreign_id: 'notion-page',
+        review_id: 'older',
+        metadata: { title: 'Old project', plan: { decision: 'copy' } },
+      },
+    ],
+    'review'
+  );
+  expect(
+    entries.find((entry) => entry.id === 'dependency')?.linkedFrom
+  ).toEqual(['Project']);
+  expect(
+    entries.find((entry) => entry.id === 'inline-source')?.inlineOn
+  ).toEqual(['Project']);
+});
+
 it('decodes HubSpot pipelines, companies, contacts and deals', () => {
   const kinds = decodePlanEntries(
     [

@@ -50,13 +50,14 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
     Ok(total_flagged)
 }
 
-/// Walks `email_attachments` from `config.start_block`, one short transaction
-/// per batch. Prints the block to resume at, and stops there if a batch keeps
-/// failing.
+/// Walks `email_attachments` from `config.start_block` to `config.end_block`
+/// or the table's end, one short transaction per batch. Prints the block to
+/// resume at, and stops there if a batch keeps failing.
 pub async fn run_pass(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()> {
-    let end = email_attachments_block_count(pool).await?;
+    let table_end = email_attachments_block_count(pool).await?;
+    let end = config.end_block.map_or(table_end, |end| end.min(table_end));
     println!(
-        "Walking {end} blocks of email_attachments from block {}, {} per batch",
+        "Walking blocks {}..{end} of the {table_end} in email_attachments, {} per batch",
         config.start_block, config.blocks_per_batch
     );
 
@@ -86,6 +87,12 @@ pub async fn run_pass(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()
     }
 
     println!("\n=== {updates} thread updates, {skips} skipped as locked ===");
+    if end < table_end {
+        println!(
+            "Stopped at END_BLOCK; continue with START_BLOCK={end} and END_BLOCK unset \
+             (to the table's end) or raised (for another bounded run)"
+        );
+    }
     if skips > 0 {
         println!(
             "Some threads were being written by mail sync or another session; \

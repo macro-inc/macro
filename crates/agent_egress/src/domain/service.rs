@@ -158,7 +158,6 @@ where
         destination = ?target,
         method = %request.method(),
         session = tracing::field::Empty,
-        owner = tracing::field::Empty,
         upstream_status = tracing::field::Empty,
     ))]
     async fn proxy(
@@ -196,7 +195,6 @@ where
         let grant = self.sessions.authorize(token).await?;
         let span = tracing::Span::current();
         span.record("session", tracing::field::display(&grant.session));
-        span.record("owner", tracing::field::display(&grant.owner));
 
         if self.actor_mcp.is_some()
             && matches!(&target, EgressTarget::McpServer(destination) if !matches!(destination, McpDestination::Preview))
@@ -369,7 +367,6 @@ where
 
         tracing::info!(
             session = %grant.session,
-            owner = %grant.owner,
             upstream = %target.name(),
             method = %request.method(),
             "proxying",

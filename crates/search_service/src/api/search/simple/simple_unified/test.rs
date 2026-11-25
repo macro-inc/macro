@@ -4,6 +4,8 @@ use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 use sqlx::types::Uuid;
 
+mod delegated_inbox;
+
 /// Helper to create a TaggedSearchHit for testing
 fn make_tagged_hit(
     entity_id: Uuid,
@@ -1609,4 +1611,123 @@ fn operators_count_toward_the_term_cap() {
         limited_terms(&mut every_kind(), false, terms, MatchType::Partial, clock()),
         Err(SearchError::TooManyTerms)
     ));
+}
+
+const SEARCHER: &str = "macro|searcher@example.com";
+/// The id that leaves a kind out of a search.
+const LEFT_OUT: &str = "00000000-0000-0000-0000-000000000000";
+
+/// A search of every kind, agent sessions included, as the Search view sends.
+fn every_kind_and_sessions() -> SearchEntityFilters {
+    SearchEntityFilters::from(item_filters::EntityFilters {
+        agent_session_filters: item_filters::AgentSessionFilters {
+            include: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+}
+
+fn read(filters: &mut SearchEntityFilters, query: &str) -> Result<ReadQuery, SearchError> {
+    read_query(
+        filters,
+        true,
+        split_search_terms(&[query.to_string()]),
+        MatchType::Partial,
+        clock(),
+        SEARCHER,
+    )
+}
+
+#[test]
+fn typed_operators_leave_words_for_the_search_and_its_names() {
+    let mut filters = every_kind_and_sessions();
+
+    let read = read(&mut filters, "type:doc launch plan").unwrap();
+
+    assert_eq!(read.terms, ["launch", "plan"]);
+    assert_eq!(read.conditions.excluded_sub_types, ["task"]);
+    assert!(!read.include_crm, "CRM companies can't meet an operator");
+    assert_eq!(
+        name_search_term("type:doc launch plan", &read.typed, &read.terms),
+        "launch plan"
+    );
+}
+
+#[test]
+fn a_query_without_typed_operators_is_read_as_before() {
+    let mut filters = every_kind_and_sessions();
+
+    let read = read(&mut filters, "\"launch plan\" notes").unwrap();
+
+    assert_eq!(read.terms, ["launch plan", "notes"]);
+    assert!(read.include_crm);
+    assert!(read.conditions.property_filters.is_empty());
+    assert_eq!(
+        name_search_term("\"launch plan\" notes", &read.typed, &read.terms),
+        "\"launch plan\" notes",
+        "names match the query as typed"
+    );
+}
+
+#[test]
+fn task_operators_become_property_filters() {
+    let mut filters = every_kind_and_sessions();
+
+    let read = read(&mut filters, "status:in_progress assignee:me launch").unwrap();
+
+    let definitions: Vec<&str> = read
+        .conditions
+        .property_filters
+        .iter()
+        .map(|filter| filter.definition_id.as_str())
+        .collect();
+    assert_eq!(
+        definitions,
+        [
+            "00000001-0000-0000-0000-000000000002",
+            "00000001-0000-0000-0000-000000000001"
+        ]
+    );
+    assert_eq!(read.conditions.property_filters[1].values, [SEARCHER]);
+}
+
+#[test]
+fn operators_alone_need_a_word_unless_they_search_email_alone() {
+    let refused = read(
+        &mut every_kind_and_sessions(),
+        "type:task status:in_progress",
+    );
+    assert!(matches!(refused, Err(SearchError::OperatorsNeedAWord)));
+
+    let email = read(&mut every_kind_and_sessions(), "type:email is:unread").unwrap();
+    assert!(email.terms.is_empty());
+    assert!(email.email_query.is_some());
+
+    let read_before = read(&mut every_kind_and_sessions(), "is:unread").unwrap();
+    assert!(
+        read_before.terms.is_empty(),
+        "email operators alone still search"
+    );
+}
+
+#[test]
+fn in_hash_in_a_mail_search_is_the_email_label_operator() {
+    let mut filters = SearchEntityFilters::from(item_filters::EntityFilters {
+        channel_filters: item_filters::ChannelFilters {
+            channel_ids: vec![LEFT_OUT.to_string()],
+            ..Default::default()
+        },
+        call_filters: item_filters::CallFilters {
+            call_ids: vec![LEFT_OUT.to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let read = read(&mut filters, "in:#travel").unwrap();
+
+    assert_eq!(read.typed.operators, 0);
+    let email_query = read.email_query.expect("the email operators read it");
+    assert_eq!(email_query.filters.label_names[0].name, "#travel");
 }

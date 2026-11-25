@@ -953,6 +953,9 @@ impl BootStubEnv {
         // Doppler; real provider calls still fail on the dummy keys.
         // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
         env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        // Empty turns the harness's CAPTCHA solving off (`notConfigured`): a
+        // placeholder key would send real tasks to CapSolver and fail them.
+        env.insert("CAPSOLVER_API_KEY".into(), String::new());
         env.insert("CEREBRAS_API_KEY".into(), "local-cerebras-key".into());
         env.insert(
             super::model_emulator::API_KEY_VAR.into(),

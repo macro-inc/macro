@@ -18,6 +18,9 @@ pub struct Config {
     pub concurrency: usize,
     /// Block of `email_attachments` to start at; an interrupted pass prints it.
     pub start_block: i64,
+    /// Block to stop before, to bound a canary run; defaults to the table's
+    /// end. Only for the block pass.
+    pub end_block: Option<i64>,
     /// Heap blocks of `email_attachments` each batch reads. Defaults to 50.
     pub blocks_per_batch: i64,
     /// Pause between batches, so the run stays in the background. Defaults
@@ -33,6 +36,7 @@ maybe_env_vars! {
     struct MacroIds;
     struct Concurrency;
     struct StartBlock;
+    struct EndBlock;
     struct BlocksPerBatch;
     struct PauseMs;
 }
@@ -53,6 +57,21 @@ impl Config {
             None => 0,
         };
         anyhow::ensure!(start_block >= 0, "START_BLOCK must not be negative");
+        let end_block = match EndBlock::new() {
+            Some(v) => Some(v.parse::<i64>().context("END_BLOCK is not a number")?),
+            None => None,
+        };
+        if let Some(end_block) = end_block {
+            anyhow::ensure!(
+                end_block > start_block,
+                "END_BLOCK must be after START_BLOCK"
+            );
+        }
+        let macro_ids = MacroIds::new().map(|v| v.to_string());
+        anyhow::ensure!(
+            macro_ids.is_none() || end_block.is_none(),
+            "END_BLOCK bounds the block pass; unset MACRO_IDS to use it"
+        );
         let blocks_per_batch = match BlocksPerBatch::new() {
             Some(v) => v
                 .parse::<i64>()
@@ -66,12 +85,13 @@ impl Config {
         };
 
         Ok(Self {
-            macro_ids: MacroIds::new().map(|v| v.to_string()),
+            macro_ids,
             database_url: DatabaseUrl::new()
                 .context("DATABASE_URL not set")?
                 .to_string(),
             concurrency,
             start_block,
+            end_block,
             blocks_per_batch,
             pause,
         })

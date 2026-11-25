@@ -7,8 +7,7 @@ import { Button, Dropdown, Input } from '@ui';
 import { parseISO } from 'date-fns';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { EntryForm } from '../components/entry-form';
-import { EntryList } from '../components/entry-list';
-import type { PersonLabel } from '../components/time-key-label';
+import { EntryList, type EntryPerson } from '../components/entry-list';
 import { GridLength } from '../components/week-grid';
 import { useTimeTracking } from '../context/time-tracking-context';
 import { formatLength } from '../core/format-length';
@@ -24,7 +23,7 @@ type CellProps = {
   day: string;
   today: string;
   minutes: number | undefined;
-  person: PersonLabel;
+  person: EntryPerson;
   editAccess: TaskEditAccess;
   /** After a write lands, so the week reads it again at once. */
   onWritten(): void;
@@ -232,7 +231,7 @@ export function WeekCell(props: CellProps): JSX.Element {
         <GridLength minutes={props.minutes} />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="menu-surface z-modal flex max-h-[min(480px,calc(100dvh-24px))] w-72 flex-col gap-1 overflow-y-auto p-1 outline-none">
+        <Popover.Content class="menu-surface z-modal flex max-h-[min(480px,calc(100dvh-24px))] w-80 flex-col gap-1 overflow-y-auto p-1 outline-none">
           <Popover.Title class="truncate px-2 pt-1 text-xs font-medium text-ink-muted">
             {t('timeTracking.cellTitle', {
               task: props.taskName,

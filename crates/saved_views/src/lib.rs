@@ -1,4 +1,5 @@
 pub mod domain;
+pub mod merge;
 mod pgsql;
 mod storage;
 use chrono::{DateTime, Utc};

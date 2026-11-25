@@ -142,36 +142,54 @@ where
 
     let has_label_changes = !labels_to_add.is_empty() || !labels_to_delete.is_empty();
 
+    let mut gained_label_ids = Vec::new();
     if !labels_to_add.is_empty() {
-        add_message_labels(
+        gained_label_ids = add_message_labels(
             &ctx.repository,
             link,
             db_message.db_id,
             db_message.thread_db_id,
             &labels_to_add,
         )
-        .await?
+        .await?;
     }
 
-    if !labels_to_delete.is_empty() {
-        remove_message_labels(
+    if !labels_to_delete.is_empty()
+        && let Err(error) = remove_message_labels(
             &ctx.repository,
             link,
             db_message.db_id,
             db_message.thread_db_id,
             &labels_to_delete,
         )
-        .await?
+        .await
+    {
+        // The additions are committed, so a retry won't find their gains
+        // again: report them now, and the removal when the retry makes it.
+        if !gained_label_ids.is_empty() {
+            publish_label_diff_events(
+                ctx,
+                link,
+                &db_message,
+                &labels_to_add,
+                &[],
+                &db_message_labels,
+                gained_label_ids,
+            )
+            .await;
+        }
+        return Err(error);
     }
 
     if has_label_changes {
         publish_label_diff_events(
             ctx,
             link,
-            db_message.thread_db_id,
+            &db_message,
             &labels_to_add,
             &labels_to_delete,
             &db_message_labels,
+            gained_label_ids,
         )
         .await;
 
@@ -220,20 +238,6 @@ fn label_diff(
     }
 }
 
-/// System labels that never appear in a `thread_labels_updated` event:
-/// INBOX/TRASH/UNREAD/STARRED/SPAM map to dedicated thread-state events, and
-/// IMPORTANT/SENT/DRAFT changes only request the thread's reindex.
-const NON_USER_LABELS: [&str; 8] = [
-    service::label::system_labels::INBOX,
-    service::label::system_labels::SPAM,
-    service::label::system_labels::TRASH,
-    service::label::system_labels::UNREAD,
-    service::label::system_labels::STARRED,
-    service::label::system_labels::IMPORTANT,
-    service::label::system_labels::SENT,
-    service::label::system_labels::DRAFT,
-];
-
 fn build_provider_spam_changed_metadata(
     link_id: Uuid,
     owner: &MacroUserIdStr<'static>,
@@ -260,8 +264,12 @@ fn build_provider_spam_changed_metadata(
     })
 }
 
+/// Labels someone made. Gmail's own never appear in a `thread_labels_updated`
+/// event: INBOX/TRASH/UNREAD/STARRED/SPAM map to dedicated thread-state events,
+/// and IMPORTANT/SENT/DRAFT and category changes only request the thread's
+/// reindex.
 fn is_user_label(label: &str) -> bool {
-    !NON_USER_LABELS.contains(&label) && !label.starts_with("CATEGORY_")
+    !service::label::system_labels::is_system(label)
 }
 
 /// Publish semantic macro.email events for a provider-side label diff, all
@@ -275,13 +283,16 @@ fn is_user_label(label: &str) -> bool {
 /// For the read/archived states the payload carries the *thread row* state
 /// (recomputed by `update_thread_metadata` inside the label ops), so the
 /// repeated events are accurate and idempotent rather than message-inferred.
+/// The user-label event names the labels the thread gained (`labels_gained`),
+/// which only one message's diff can report.
 async fn publish_label_diff_events<L, R, G, Q, E>(
     ctx: &InboxSyncService<L, R, G, Q, E>,
     link: &link::Link,
-    thread_db_id: Uuid,
+    message: &service::message::SimpleMessage,
     labels_to_add: &[String],
     labels_to_delete: &[String],
     db_message_labels: &[models_email::db::label::Label],
+    labels_gained: Vec<Uuid>,
 ) where
     L: GmailOpsLinks,
     R: InboxSyncRepository,
@@ -289,6 +300,7 @@ async fn publish_label_diff_events<L, R, G, Q, E>(
     Q: InboxSyncQueue,
     E: MacroEventBroker + InboxSyncRefresher,
 {
+    let thread_db_id = message.thread_db_id;
     let added = |label: &str| labels_to_add.iter().any(|l| l == label);
     let removed = |label: &str| labels_to_delete.iter().any(|l| l == label);
 
@@ -408,6 +420,9 @@ async fn publish_label_diff_events<L, R, G, Q, E>(
                 added: added_user,
                 removed: removed_user,
                 origin: EmailEventOrigin::ProviderSync,
+                message_id: Some(message.db_id),
+                labels_gained,
+                automated: false,
             },
         ));
     }
