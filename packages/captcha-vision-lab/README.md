@@ -66,7 +66,7 @@ Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh
 bun run check
-# … 104 pass, 0 fail
+# … 113 pass, 0 fail
 ```
 
 Mock smoke run. The mock always answers `--mock-choice`, so about one in four

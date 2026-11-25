@@ -151,9 +151,14 @@ Tests job.
 ### Families
 
 2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, 10 attempts
-per family, one model call and one action each. Run B is the current code
-(uncompressed images, the three-minute deadline, server-side text checks);
-run A was the first families code.
+per family, one model call and one action each. Run B added uncompressed
+images, the three-minute deadline and server-side text checks; run A was the
+first families code; run C (below) is the current code.
+
+Run C, the current code (Chromium driven from the Node browser host), 3
+attempts per family: relation 3/3, count 3/3, order 3/3, transcription 2/3,
+rotation 3/3, so 14 of 15 solved, no errors. Planner latency was 1.0–3.5 s
+except one count call at 32 s; tokens per call as below.
 
 Run B:
 
