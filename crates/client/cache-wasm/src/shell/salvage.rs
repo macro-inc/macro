@@ -288,22 +288,23 @@ async fn read_before_wipe(
     if file.reads() >= MAX_ATTEMPTS {
         return Ok((owner, read.unreadable(file)));
     }
+    let mut start = file.end();
+    let owner = if owner.is_torn().await {
+        let doubted = doubt(sidecar, start, &file).await;
+        let (owner, written) = or_release(owner, doubted).await?;
+        start += written;
+        read.end = start;
+        owner
+    } else {
+        owner
+    };
     let attempt = SalvageFile::read_attempt();
-    let start = file.end();
     let reserved = [&attempt[..], &SalvageFile::reserved()].concat();
     if sidecar.write_tail(start, &reserved).await.is_ok()
         || sidecar.write_tail(start, &attempt).await.is_ok()
     {
         read.end += attempt.len() as u64;
     }
-    let owner = if owner.is_torn().await {
-        let doubted = doubt(sidecar, read.end, &file).await;
-        let (owner, written) = or_release(owner, doubted).await?;
-        read.end += written;
-        owner
-    } else {
-        owner
-    };
     let session = match owner.open().await {
         Ok(OpenResult::Ready(session)) => session,
         // One file of the pair alone is a wipe or a creation cut short.

@@ -690,6 +690,28 @@ async fn a_torn_database_is_not_opened_while_its_side_file_is_busy() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_torn_database_says_so_after_a_wipe_that_found_it_busy() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-wal-busy";
+    closed_with_queue(SCOPE).await;
+    remove_opfs_file(&database_identity(SCOPE)).await;
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          const entry = await root.getFileHandle(name);
+          self.heldWal = await entry.createSyncAccessHandle();
+        })()",
+        &format!("{}-wal", database_identity(SCOPE)),
+    )
+    .await;
+    let busy = open_cache_inner(SCOPE.into(), None, true, None, false).await;
+    run_js("self.heldWal.close(); return Promise.resolve();", "").await;
+    assert!(busy.is_err());
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn a_torn_database_says_so_when_its_doubt_does_not_fit() {
     const SCOPE: &str = "cache-wasm-salvage-torn-blank";
     for recovery in [false, true] {
