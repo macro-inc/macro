@@ -33,6 +33,7 @@ import {
   type ResponseSpec,
   type TokenUsage,
 } from './planner.ts';
+import { proxyVariables } from './proxy.ts';
 import {
   CAPABILITY_HEADER,
   LAB_HOST,
@@ -413,6 +414,14 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
   };
   const attestation = () =>
     input.lab.attest(input.runId, input.challengeId, input.sessionNonce);
+
+  // The command refuses proxies too; this keeps any other caller from
+  // skipping that check.
+  if (proxyVariables().length > 0) {
+    const reason = 'proxy_configured';
+    record.gate.push({ stage: 'before_navigation', allowed: false, reason });
+    return finish('provenance_rejected', reason);
+  }
 
   const targetRejection = rejectedBy(
     checkTarget(input.targetUrl, input.capability)

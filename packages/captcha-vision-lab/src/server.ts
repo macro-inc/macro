@@ -14,6 +14,7 @@ import {
   TEXT_PATTERN,
 } from './families.ts';
 import { renderPage } from './page.ts';
+import { proxyVariables } from './proxy.ts';
 import { cryptoRandom, type Random } from './random.ts';
 import {
   CAPABILITY_HEADER,
@@ -361,6 +362,13 @@ export type Lab = ReturnType<typeof createLab>;
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
-/** Serves a handler on the registered loopback origin only. */
-export const serveLab = (handler: FetchHandler) =>
-  Bun.serve({ hostname: LAB_HOST, port: LAB_PORT, fetch: handler });
+/** Serves a handler on the registered loopback origin only, never with a proxy configured. */
+export const serveLab = (handler: FetchHandler) => {
+  const proxies = proxyVariables();
+  if (proxies.length > 0) {
+    throw new Error(
+      `refusing to serve the lab with proxy variables set (${proxies.join(', ')})`
+    );
+  }
+  return Bun.serve({ hostname: LAB_HOST, port: LAB_PORT, fetch: handler });
+};

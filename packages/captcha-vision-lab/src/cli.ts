@@ -15,6 +15,7 @@ import {
   type Planner,
   type PlannerInput,
 } from './planner.ts';
+import { proxyVariables } from './proxy.ts';
 import { FIREWORKS_BASE_URL, KIMI_MODEL, LAB_URL } from './registry.ts';
 import { runChallenge } from './run.ts';
 import { createLab, serveLab } from './server.ts';
@@ -44,12 +45,9 @@ if (!values['lab-run']) {
   fail('refusing to run: pass --lab-run to run the CAPTCHA vision lab');
 }
 
-// Bun may apply an operator proxy to node:http even for loopback requests.
-const proxyVariables = Object.keys(process.env).filter((name) =>
-  /^(?:https?|all)_proxy$/i.test(name)
-);
-if (proxyVariables.length > 0) {
-  fail(`refusing to run: unset proxy variables (${proxyVariables.join(', ')})`);
+const proxies = proxyVariables();
+if (proxies.length > 0) {
+  fail(`refusing to run: unset proxy variables (${proxies.join(', ')})`);
 }
 
 const challenges = Number(values.challenges);
