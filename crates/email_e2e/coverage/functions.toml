@@ -1146,7 +1146,7 @@ by = ["http POST /email/init"]
 
 [F-175]  # Feed mail events to activity, routines and suggestions
 by = ["kafka macro.email:MessageReceived", "kafka macro.email:MessageSent"]
-also = ["http GET /internal/recent_messages/{user_id}"]
+also = ["http GET /internal/recent_messages/{user_id}", "kafka macro.email:ThreadLabelsUpdated"]
 
 [F-176]  # Enrich CRM contacts from mail and clean up after removal
 by = [

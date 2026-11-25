@@ -1,4 +1,5 @@
 import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
+import { searchTypeOperator } from '@app/features/next-soup/core/search-operator-filters';
 import { createGlobalSearchOpener } from '@app/features/next-soup/open-search';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { t } from '@app/lib/i18n';
@@ -14,7 +15,7 @@ import { openExternalUrl } from '@core/util/url';
 import { isGithubPrEntity } from '@entity';
 import { projectRouteId } from '../projects/core/route';
 import { routineContent } from '../routines/routine-navigation';
-import { getCategorySearchFilters } from './category-search-filters';
+import { categorySearchIndex } from './category-search-filters';
 import {
   type CommandMenuItem,
   isAskAiItem,
@@ -84,15 +85,20 @@ export function createCommandResultOpener(
     item: Extract<CommandMenuItem, { kind: 'search' }>,
     openInNewSplit: boolean
   ) => {
-    // Fall back to the search preset (not `{}`) so uncategorized searches
-    // keep the search view's baseline exclusions (foreign entities, CRM).
+    // The category becomes a typed type: in the Search field, which shows
+    // the whole search; the preset (not `{}`) keeps the view's baseline
+    // exclusions (foreign entities, CRM).
     const preset = getViewPreset('search');
-    const overrides = getCategorySearchFilters(item.category);
-    const filters = overrides?.filters ?? preset?.filters ?? {};
-    const clientFilters =
-      overrides?.clientFilters ?? preset?.clientFilters ?? {};
+    const index = categorySearchIndex(item.category);
+    const query = [index && searchTypeOperator(index), item.query.trim()]
+      .filter(Boolean)
+      .join(' ');
     navigateSearch(
-      { query: item.query, filters, clientFilters },
+      {
+        query,
+        filters: preset?.filters ?? {},
+        clientFilters: preset?.clientFilters ?? {},
+      },
       openInNewSplit
     );
     return true;

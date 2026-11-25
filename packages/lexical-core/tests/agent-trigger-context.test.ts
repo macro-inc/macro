@@ -736,6 +736,46 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('renders a routine fired by a label with the labels the thread gained', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'File the invoice.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-5',
+        name: 'Invoices',
+        owner: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        instructions: 'File labeled invoices.',
+        triggers: [{ type: 'events', events: ['email.labeled'] }],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'email_labeled',
+            labels: ['Finance/Invoices', 'Q4 & later'],
+            email: {
+              thread_id: 'e-1',
+              subject: 'Invoice #42',
+              from: 'billing@acme.test',
+              to: ['julia@example.com'],
+              received_at: '2026-10-08T08:15:00Z',
+              body: 'Please find invoice #42 attached.',
+            },
+          },
+        },
+      },
+    });
+
+    const context = hiddenContext(markdown);
+    expect(context).toContain('  <event type="email_labeled">');
+    expect(context).toContain(
+      '    <labels>\n      <label>Finance/Invoices</label>\n      <label>Q4 &amp; later</label>\n    </labels>'
+    );
+    expect(context).toContain('    <email thread="e-1" subject="Invoice #42"');
+  });
+
   it('renders a routine fired by a channel attachment without claiming the reply goes there', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'File the attachment.',

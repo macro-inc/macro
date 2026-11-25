@@ -12,6 +12,7 @@ mod imap;
 mod imap_startup;
 mod import_pacing;
 mod import_reads;
+mod label_gains;
 mod live_pass;
 mod lock_timeouts;
 mod no_mailbox;

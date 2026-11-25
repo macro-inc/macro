@@ -41,7 +41,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
-import { onCalendarEventCreated } from '@queries/calendar/graphql/mutations';
+import {
+  onCalendarEventCreated,
+  onCalendarOccurrenceMoved,
+} from '@queries/calendar/graphql/mutations';
 import {
   isGuestEditRefused,
   useUpdateCalendarEventMutation,
@@ -466,11 +469,12 @@ function CalendarPageHost(props: {
     })
   );
 
-  // A create can land after the page already shows the server's copy.
-  const [landedCreates, setLandedCreates] = createSignal(0);
-  onCleanup(
-    onCalendarEventCreated(() => setLandedCreates((count) => count + 1))
-  );
+  // A create or a move can land after the page already shows the server's
+  // copy.
+  const [landings, setLandings] = createSignal(0);
+  const landed = () => setLandings((count) => count + 1);
+  onCleanup(onCalendarEventCreated(landed));
+  onCleanup(onCalendarOccurrenceMoved(landed));
   createEffect(
     on(
       () =>
@@ -478,7 +482,7 @@ function CalendarPageHost(props: {
           isActive(),
           calendarView.selectedEvent()?.id,
           props.eventsById(),
-          landedCreates(),
+          landings(),
         ] as const,
       ([active, selectedEventId, eventsById]) => {
         if (!active || !selectedEventId) return;

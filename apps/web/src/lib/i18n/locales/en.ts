@@ -39,6 +39,7 @@ import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import routinesList from './en/routines-list';
 import runtimeSharing from './en/runtime-sharing';
+import searchOperators from './en/search-operators';
 import searchResults from './en/search-results';
 import settingsBilling from './en/settings-billing';
 import settingsDownloads from './en/settings-downloads';
@@ -105,6 +106,7 @@ export default {
   settingsBilling,
   settingsEmail,
   runtimeSharing,
+  searchOperators,
   searchResults,
   settingsLanguage,
   settingsNativeApp,

@@ -148,6 +148,27 @@ pub struct StagedLabelWrite {
     pub write_id: Uuid,
 }
 
+/// What staging a label write changed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StagedMessageLabels {
+    /// Changed messages Gmail knows about, which the queued write sends.
+    pub provider_messages: Vec<(Uuid, String)>,
+    /// Threads that gained a label someone made: none of their messages,
+    /// drafts aside, carried it before.
+    pub gaining: Vec<GainingThread>,
+}
+
+/// A thread that gained a label, and the message it was put on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GainingThread {
+    /// Database identifier of the thread.
+    pub thread_id: Uuid,
+    /// Database identifier of the message.
+    pub message_id: Uuid,
+    /// Database identifier of the label.
+    pub label_id: Uuid,
+}
+
 /// Caller-scoped reads, atomic staging, and compensation for message labels.
 pub trait MessageLabelRepository: Send + Sync + 'static {
     /// Persistence failure, retaining its cause for callers.
@@ -180,11 +201,11 @@ pub trait MessageLabelRepository: Send + Sync + 'static {
         caller_fusionauth_user_id: &str,
     ) -> impl Future<Output = Result<Vec<MessageLabelTarget>, Self::Err>> + Send;
 
-    /// Lock, mark, apply, and commit a label write, returning changed provider messages.
+    /// Lock, mark, apply, and commit a label write, returning what it changed.
     fn stage(
         &self,
         write: StagedLabelWrite,
-    ) -> impl Future<Output = Result<Vec<(Uuid, String)>, StageFailure>> + Send;
+    ) -> impl Future<Output = Result<StagedMessageLabels, StageFailure>> + Send;
 
     /// Restore an unqueued write under the threads' label-write locks.
     fn revert_unsent(
@@ -285,7 +306,10 @@ where
         let pending_write_id = macro_uuid::generate_uuid_v7();
         let provider_label_id = label.provider_label_id.clone();
         let is_adding = request.add;
-        let provider_messages = self
+        let StagedMessageLabels {
+            provider_messages,
+            gaining,
+        } = self
             .repository
             .stage(StagedLabelWrite {
                 link_id: link.id,
@@ -298,7 +322,9 @@ where
             .await?;
 
         let actor = Some(link.macro_id.clone());
+        let automated = agent_correlation::context::by_program();
         for thread_id in &thread_ids {
+            let gained = gaining.iter().find(|gained| gained.thread_id == *thread_id);
             let event = EmailMacroEvent::thread_label_change(
                 link.id,
                 link.macro_id.clone(),
@@ -311,6 +337,11 @@ where
                 },
                 is_adding,
                 EmailEventOrigin::UserAction,
+            )
+            .with_labels_gained(
+                gained.map(|gained| gained.message_id),
+                gained.map(|gained| gained.label_id).into_iter().collect(),
+                automated,
             );
             let _ = self.broker.send_event(&event).inspect_err(|e| {
                 tracing::error!(error=?e, "failed to publish email macro event");

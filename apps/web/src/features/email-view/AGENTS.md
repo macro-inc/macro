@@ -138,6 +138,11 @@ loading/refetch branch changes preserve the chooser and IMAP form.
   asked (`keepRowsWhileSearching`) and reports it as `showsPreviousRows`; they
   never cross a tab change, and `isLoading` stays false while they show, so
   gate "loading" UI on both.
+- A list page can arrive without a row but with a cursor (a label read that
+  walked old mail). `emptyListPages` reads on from the server's own rows
+  (`rawEntities`, so a page the client's filters empty doesn't count) until a
+  row shows or the list ends, at most 50 pages a load, and the list reads as
+  loading meanwhile: never show the empty state for such a page.
 - Unread dots are presence in a small first unread page per view, never a count.
 - The search field also says it was left (`setFocused(false)`) as it
   unmounts, inside the teardown of the view leaving Mail. Reading the list's

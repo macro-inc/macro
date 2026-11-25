@@ -3,9 +3,14 @@
  * origin. Hostile pages are made by wrapping the lab's own handler, so each
  * negative case still holds a genuine, consumed capability where it can.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import * as browser from '../src/browser.ts';
+import { relation } from '../src/families.ts';
 import { mockPlanner, type PlannerInput } from '../src/planner.ts';
-import { generateShapesQuiz, seededRandom } from '../src/quiz.ts';
+import { seededRandom } from '../src/random.ts';
 import { LAB_ORIGIN, LAB_PATH, LAB_URL } from '../src/registry.ts';
 import { runChallenge } from '../src/run.ts';
 import { createLab, type Lab, serveLab } from '../src/server.ts';
@@ -43,9 +48,10 @@ const run = (
   deadlineMs?: number
 ) => {
   const sessionNonce = crypto.randomUUID();
-  const issued = lab.issue(sessionNonce);
+  const issued = lab.issue('relation', sessionNonce);
   return runChallenge({
     lab,
+    family: 'relation',
     planner,
     runId: issued.runId,
     challengeId: issued.challengeId,
@@ -73,9 +79,7 @@ const injecting =
 
 const correctLabel = (seed: number): string =>
   LABELS[
-    generateShapesQuiz(seededRandom(seed)).options.findIndex(
-      (option) => option.correct
-    )
+    relation(seededRandom(seed)).options.findIndex((option) => option.correct)
   ]!;
 
 describe('a lab run with the mock planner', () => {
@@ -100,17 +104,15 @@ describe('a lab run with the mock planner', () => {
     ]);
     expect(record.gate.every((decision) => decision.allowed)).toBe(true);
     expect(inputs).toHaveLength(1);
-    expect(inputs[0]!.labels).toEqual(LABELS);
-    expect(inputs[0]!.prompt).toBe(
-      generateShapesQuiz(seededRandom(SEED)).prompt
-    );
+    expect(inputs[0]!.response).toEqual({ kind: 'choice', labels: LABELS });
+    expect(inputs[0]!.prompt).toBe(relation(seededRandom(SEED)).prompt);
     expect(lab.stats().submissions).toBe(1);
 
     // Neither the planner's input nor the record carries the seed or any
     // answer-bearing field; the record holds no option ids at all.
     const plannerText = JSON.stringify({
       prompt: inputs[0]!.prompt,
-      labels: inputs[0]!.labels,
+      response: inputs[0]!.response,
     });
     const recordText = JSON.stringify(record);
     for (const text of [plannerText, recordText]) {
@@ -136,9 +138,10 @@ describe('a lab run with the mock planner', () => {
     const lab = createLab();
     handler = lab.fetch;
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue(sessionNonce);
+    const issued = lab.issue('relation', sessionNonce);
     const input = {
       lab,
+      family: 'relation' as const,
       runId: issued.runId,
       challengeId: issued.challengeId,
       capabilityId: issued.capabilityId,
@@ -209,6 +212,16 @@ describe('the provenance gate fails closed', () => {
       'blocked_navigation',
     ],
     [
+      'a navigation to about:blank',
+      (lab) =>
+        injecting(
+          lab,
+          `<script>setTimeout(() => { location.href = 'about:blank'; }, 100);</script>`
+        ),
+      {},
+      'main_frame_url',
+    ],
+    [
       'a popup',
       (lab) =>
         injecting(
@@ -275,12 +288,13 @@ describe('the provenance gate fails closed', () => {
     const lab = createLab({ now: () => now });
     handler = lab.fetch;
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue(sessionNonce);
+    const issued = lab.issue('relation', sessionNonce);
     const { planner, inputs } = recordingPlanner('A');
     now += 30_001;
 
     const record = await runChallenge({
       lab,
+      family: 'relation',
       planner,
       ...issued,
       sessionNonce,
@@ -298,7 +312,7 @@ describe('the provenance gate fails closed', () => {
   test("another run's capability: zero planner calls and zero actions", async () => {
     const lab = createLab();
     handler = lab.fetch;
-    const other = lab.issue(crypto.randomUUID());
+    const other = lab.issue('relation', crypto.randomUUID());
     const { planner, inputs } = recordingPlanner('A');
 
     const record = await run(lab, planner, { capability: other.capability });
@@ -380,6 +394,44 @@ describe('the provenance gate fails closed', () => {
 });
 
 describe('the per-challenge deadline', () => {
+  test('a deadline during the post-capture observe prevents the planner call', async () => {
+    const lab = createLab();
+    handler = lab.fetch;
+    const { planner, inputs } = recordingPlanner('A');
+    const deadline = new AbortController();
+    const timeout = spyOn(AbortSignal, 'timeout').mockReturnValue(
+      deadline.signal
+    );
+    const startBrowserHost = browser.startBrowserHost;
+    const startHost = spyOn(browser, 'startBrowserHost').mockImplementation(
+      () => {
+        const host = startBrowserHost();
+        if (typeof host === 'string') return host;
+
+        return {
+          ...host,
+          request: async (message) => {
+            const pending = host.request(message);
+            if (message.type === 'observe') deadline.abort();
+            return pending;
+          },
+        };
+      }
+    );
+
+    try {
+      const record = await run(lab, planner);
+
+      expect(record.outcome).toBe('timeout');
+      expect(record.detail).toBe('challenge_deadline');
+      expect(record.plannerCalls).toBe(0);
+      expect(inputs).toHaveLength(0);
+    } finally {
+      startHost.mockRestore();
+      timeout.mockRestore();
+    }
+  });
+
   test('a planner that never answers ends in a kept timeout, no action', async () => {
     const lab = createLab();
     handler = lab.fetch;
@@ -393,11 +445,12 @@ describe('the per-challenge deadline', () => {
       },
     };
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue(sessionNonce);
+    const issued = lab.issue('relation', sessionNonce);
 
     const record = await runChallenge({
       lab,
       planner,
+      family: 'relation',
       ...issued,
       sessionNonce,
       targetUrl: LAB_URL,
@@ -430,7 +483,16 @@ describe('the per-challenge deadline', () => {
     expect(record.plannerCalls).toBe(0);
     expect(inputs).toHaveLength(0);
     expect(record.actions).toHaveLength(0);
-  }, 30_000);
+    // The record is final, and no Chromium of the attempt outlives it.
+    expect(Object.isFrozen(record)).toBe(true);
+    expect(Object.isFrozen(record.actions)).toBe(true);
+    const left = Bun.spawnSync([
+      'pgrep',
+      '-f',
+      `--user-data-dir=${join(tmpdir(), 'captcha-vision-lab-')}`,
+    ]);
+    expect(left.stdout.toString()).toBe('');
+  }, 60_000);
 });
 
 test('a browser that cannot start is a kept browser_error, no planner call', async () => {
@@ -438,11 +500,12 @@ test('a browser that cannot start is a kept browser_error, no planner call', asy
   handler = lab.fetch;
   const { planner, inputs } = recordingPlanner('A');
   const sessionNonce = crypto.randomUUID();
-  const issued = lab.issue(sessionNonce);
+  const issued = lab.issue('relation', sessionNonce);
 
   const record = await runChallenge({
     lab,
     planner,
+    family: 'relation',
     ...issued,
     sessionNonce,
     targetUrl: LAB_URL,
@@ -455,4 +518,37 @@ test('a browser that cannot start is a kept browser_error, no planner call', asy
   expect(record.actions).toHaveLength(0);
   expect(inputs).toHaveLength(0);
   expect(lab.stats().submissions).toBe(0);
+});
+
+test('Node older than 22.18 is rejected before starting the host', async () => {
+  const bin = await mkdtemp(join(tmpdir(), 'captcha-vision-node-test-'));
+  const node = join(bin, 'node');
+  const hostStarted = `${node}.started`;
+  const previousPath = process.env.PATH;
+  const lab = createLab();
+  handler = lab.fetch;
+  const { planner, inputs } = recordingPlanner('A');
+
+  try {
+    await writeFile(
+      node,
+      '#!/bin/sh\n' +
+        'if [ "$1" = "--version" ]; then printf "v22.17.1\\n"; exit 0; fi\n' +
+        ': > "$0.started"\n' +
+        'exit 1\n'
+    );
+    await chmod(node, 0o755);
+    process.env.PATH = `${bin}:${previousPath ?? ''}`;
+
+    const record = await run(lab, planner);
+
+    expect(record.outcome).toBe('browser_error');
+    expect(record.detail).toBe('browser_launch_failed');
+    expect(inputs).toHaveLength(0);
+    expect(await Bun.file(hostStarted).exists()).toBe(false);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    await rm(bin, { recursive: true, force: true });
+  }
 });

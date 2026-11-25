@@ -5,10 +5,14 @@
 export const LAB_HOST = '127.0.0.1';
 export const LAB_PORT = 47831;
 export const LAB_ORIGIN = `http://${LAB_HOST}:${LAB_PORT}`;
-export const LAB_PATH = '/lab/shapes-quiz';
+export const LAB_PATH = '/lab/quiz';
 export const LAB_URL = `${LAB_ORIGIN}${LAB_PATH}`;
 export const LAB_SUBMIT_PATH = '/lab/api/submit';
 export const LAB_ASSET_PATH_PREFIX = '/lab/asset/';
+
+/** The transcription family's own controls. */
+export const TEXT_INPUT_ID = 'typed-text';
+export const TEXT_SUBMIT_ID = 'submit';
 
 /** Header carrying the one-time run capability, on the page request only. */
 export const CAPABILITY_HEADER = 'x-lab-capability';

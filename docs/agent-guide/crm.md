@@ -147,6 +147,15 @@ Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
 domains must still be rejected as company domains.
 
+Merging duplicate companies has no screen yet: team admins and owners merge
+through `POST /crm/merges/preview` then `POST /crm/merges`, the SDK's
+`crm.merges`, or the agent's PreviewMerge and MergeRecords tools, while
+`enable-crm-merge` is on for them. Verify with two throwaway companies: the
+review lists the domains, the people and deals that move, and values that
+differ. After the commit, the company that stays has every domain, person,
+deal, task reference and discussion message, and the merged company's old link
+opens it.
+
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
 the field; Close or Escape clears the query and returns to the icon.
@@ -196,8 +205,13 @@ Customers too: `/app/company/<uuid>` and `/app/contact/<uuid>` links (which
 **Copy link** still copies), `@` mentions, search and Command-K results,
 favorites, and CRM discussion notifications. A contact opens under People, so its
 breadcrumb returns to People. A split already showing that record is brought
-forward instead. Touch devices keep the standalone record pages; a Customers
-record URL redirects there unless it opens a linked item inside Customers.
+forward instead. The old id of a company or contact merged into another (an
+old link, mention or bookmark) opens the record it went into under that
+record's own id, replacing the old entry so Back skips it, on desktop and touch;
+when another split already shows that record, the split with the old id steps
+back (or closes) and that one comes up. Touch devices keep the standalone
+record pages; a Customers record URL redirects there unless it opens a linked
+item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
 opening a person's company from its company pill gives `People > <contact> > <company>`. Opening a record
@@ -774,8 +788,10 @@ opens immutable saved JSON separately. With the selective gate off, all-mail
 members retain the existing controls; selected contributors can still inspect
 rules/history and withdraw with the single **Stop sharing my emails** action.
 
-Any member can add a team domain; only team admins/owners can remove one.
-Personal domains affect only that member's mailbox. Domains include subdomains;
+Any member can add a team domain; only team admins/owners can remove one, and
+only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
+**Remove** instead of pushing it onto its own line. Personal domains affect
+only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
 Blocking hides previously shared matching threads on subsequent CRM reads.
 Another teammate's permitted copy may still appear when only a personal block

@@ -50,7 +50,10 @@ code, not in its prompt. The harness also signs the scope into the credential
   credential signs (`current_scope`)); capture before spawning,
   scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
-  on routine writes. `may_share` says whether the request may change who can
+  on routine writes. `by_program()` is true for any credential signed for an
+  agent or a routine (`program`, set by `propagate`) or a correlated call, and
+  inside `as_program`, which in-process agent tools use; email label events
+  carry it as `automated` so labels a program adds start no routine. `may_share` says whether the request may change who can
   see an item. `entity_access_db_utils::scoped_grants` checks it wherever
   access grants are written, so creation, filing in a folder, assignment and
   imports need no route check. `refuse_sharing` is the body check for sharing

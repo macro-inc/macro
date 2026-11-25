@@ -30,25 +30,25 @@ graphql	CompleteMutationRoot.setEmailThreadState	both		crates/graphql_email/src/
 graphql	CompleteMutationRoot.setEmailThreadsArchived	both		crates/graphql_email/src/mutation.rs:832
 graphql	CompleteMutationRoot.updateEmailThreadLabel	both		crates/graphql_email/src/mutation.rs:878
 graphql	GraphqlEmailLink.sendAs	both		crates/graphql_email/src/user_objects/senders.rs:18
-graphql	GraphqlSoupEmailThread.focus	both		crates/complete_graph/src/edges.rs:607
-graphql	GraphqlSoupEmailThread.hasReceivedMail	both		crates/complete_graph/src/edges.rs:588
-graphql	GraphqlSoupEmailThread.latestContentMessage	both		crates/complete_graph/src/edges.rs:706
-graphql	GraphqlSoupEmailThread.latestInboundMessageTs	both		crates/complete_graph/src/edges.rs:576
-graphql	GraphqlSoupEmailThread.latestNonSpamMessageTs	both		crates/complete_graph/src/edges.rs:628
-graphql	GraphqlSoupEmailThread.latestOutboundMessageTs	both		crates/complete_graph/src/edges.rs:616
-graphql	GraphqlSoupEmailThread.linkId	both		crates/complete_graph/src/edges.rs:570
-graphql	GraphqlSoupEmailThread.mailAllPreview	both		crates/complete_graph/src/edges.rs:651
-graphql	GraphqlSoupEmailThread.mailDraftPreview	both		crates/complete_graph/src/edges.rs:664
-graphql	GraphqlSoupEmailThread.mailDraftState	both		crates/complete_graph/src/edges.rs:639
-graphql	GraphqlSoupEmailThread.mailSentPreview	both		crates/complete_graph/src/edges.rs:677
-graphql	GraphqlSoupEmailThread.messages	both		crates/complete_graph/src/edges.rs:690
-graphql	GraphqlSoupEmailThread.reminderReturnedAt	both		crates/complete_graph/src/edges.rs:594
-graphql	GraphqlUser.emailFocus	both		crates/complete_graph/src/schema.rs:1144
+graphql	GraphqlSoupEmailThread.focus	both		crates/complete_graph/src/edges.rs:616
+graphql	GraphqlSoupEmailThread.hasReceivedMail	both		crates/complete_graph/src/edges.rs:597
+graphql	GraphqlSoupEmailThread.latestContentMessage	both		crates/complete_graph/src/edges.rs:715
+graphql	GraphqlSoupEmailThread.latestInboundMessageTs	both		crates/complete_graph/src/edges.rs:585
+graphql	GraphqlSoupEmailThread.latestNonSpamMessageTs	both		crates/complete_graph/src/edges.rs:637
+graphql	GraphqlSoupEmailThread.latestOutboundMessageTs	both		crates/complete_graph/src/edges.rs:625
+graphql	GraphqlSoupEmailThread.linkId	both		crates/complete_graph/src/edges.rs:579
+graphql	GraphqlSoupEmailThread.mailAllPreview	both		crates/complete_graph/src/edges.rs:660
+graphql	GraphqlSoupEmailThread.mailDraftPreview	both		crates/complete_graph/src/edges.rs:673
+graphql	GraphqlSoupEmailThread.mailDraftState	both		crates/complete_graph/src/edges.rs:648
+graphql	GraphqlSoupEmailThread.mailSentPreview	both		crates/complete_graph/src/edges.rs:686
+graphql	GraphqlSoupEmailThread.messages	both		crates/complete_graph/src/edges.rs:699
+graphql	GraphqlSoupEmailThread.reminderReturnedAt	both		crates/complete_graph/src/edges.rs:603
+graphql	GraphqlUser.emailFocus	both		crates/complete_graph/src/schema.rs:1168
 graphql	GraphqlUser.emailLabels	both		crates/graphql_email/src/user_query.rs:45
 graphql	GraphqlUser.emailLinks	both		crates/graphql_email/src/user_query.rs:62
-graphql	GraphqlUser.emailSendAttempt	both		crates/complete_graph/src/schema.rs:1105
-graphql	GraphqlUser.emailThread	both		crates/complete_graph/src/schema.rs:1116
-graphql	GraphqlUser.pendingEmailSends	both		crates/complete_graph/src/schema.rs:1094
+graphql	GraphqlUser.emailSendAttempt	both		crates/complete_graph/src/schema.rs:1129
+graphql	GraphqlUser.emailThread	both		crates/complete_graph/src/schema.rs:1140
+graphql	GraphqlUser.pendingEmailSends	both		crates/complete_graph/src/schema.rs:1118
 http	DELETE /email/backfill/gmail	gmail		services/email_service/src/api/email/backfill.rs:12
 http	DELETE /email/drafts/scheduled/{message_id}	both		services/email_service/src/api/email/drafts/scheduled.rs:10
 http	DELETE /email/drafts/{id}	both		services/email_service/src/api/email/drafts.rs:24
@@ -73,8 +73,8 @@ http	GET /email/drafts/{id}/operation	both		crates/email/src/inbound/axum/draft_
 http	GET /email/filters	both		crates/email/src/inbound/axum/email_filter_router.rs:130
 http	GET /email/labels	both		crates/email/src/inbound/axum/list_labels_router.rs:56
 http	GET /email/links	both		services/email_service/src/api/email/links.rs:14
-http	GET /email/links/suggestion	imap		services/email_service/src/api/imap.rs:22
-http	GET /email/links/{link_id}/imap/settings	imap		services/email_service/src/api/imap.rs:25
+http	GET /email/links/suggestion	imap		services/email_service/src/api/imap.rs:24
+http	GET /email/links/{link_id}/imap/settings	imap		services/email_service/src/api/imap.rs:27
 http	GET /email/messages/{id}	both		services/email_service/src/api/email/messages.rs:23
 http	GET /email/messages/{id}/eml	both		services/email_service/src/api/email/messages.rs:24
 http	GET /email/settings/operations	both		services/email_service/src/api/email/settings.rs:15
@@ -91,7 +91,7 @@ http	GET /internal/recent_messages/{user_id}	both		services/email_service/src/ap
 http	GET /internal/threads/{id}/messages	both		services/email_service/src/api/internal.rs:26
 http	GET /internal/threads/{id}/owner	both		services/email_service/src/api/internal.rs:34
 http	GET /opens/{token}	both		services/email_service/src/api.rs:138
-http	PATCH /email/links/{link_id}/imap/settings	imap		services/email_service/src/api/imap.rs:25
+http	PATCH /email/links/{link_id}/imap/settings	imap		services/email_service/src/api/imap.rs:27
 http	PATCH /email/messages/labels	both		services/email_service/src/api/email/messages.rs:21
 http	PATCH /email/settings	both		services/email_service/src/api/email/settings.rs:13
 http	PATCH /email/threads/archived	both		services/email_service/src/api/email/threads.rs:26
@@ -112,8 +112,8 @@ http	POST /email/drafts/{id}/transfer	both		services/email_service/src/api/email
 http	POST /email/init	both		services/email_service/src/api/email.rs:41
 http	POST /email/labels	both		services/email_service/src/api/email/labels.rs:17
 http	POST /email/links/health-check	both		services/email_service/src/api/email/links.rs:15
-http	POST /email/links/imap	imap		services/email_service/src/api/imap.rs:24
-http	POST /email/links/imap/discover	imap		services/email_service/src/api/imap.rs:23
+http	POST /email/links/imap	imap		services/email_service/src/api/imap.rs:26
+http	POST /email/links/imap/discover	imap		services/email_service/src/api/imap.rs:25
 http	POST /email/links/{link_id}/resync	both		services/email_service/src/api/email/links.rs:21
 http	POST /email/messages	both		crates/email/src/inbound/axum/send_router.rs:33
 http	POST /email/messages/batch	both		services/email_service/src/api/email/messages.rs:22
@@ -129,24 +129,24 @@ http	POST /internal/threads/histories	both		services/email_service/src/api/inter
 http	POST /outlook/webhook/{attempt}	outlook		services/email_service/src/api/outlook.rs:22
 http	PUT /email/drafts/scheduled/{message_id}	both		services/email_service/src/api/email/drafts/scheduled.rs:10
 http	PUT /email/filters	both		crates/email/src/inbound/axum/email_filter_router.rs:129
-kafka	macro.email:LinkConnected	both	/event_type=email.link_connected	crates/email/src/domain/events.rs:440
-kafka	macro.email:LinkDisconnected	both	/event_type=email.link_disconnected	crates/email/src/domain/events.rs:444
-kafka	macro.email:LinkReauthRequired	both	/event_type=email.link_reauth_required	crates/email/src/domain/events.rs:448
-kafka	macro.email:MessageDeleted	gmail	/event_type=email.message_deleted	crates/email/src/domain/events.rs:469
-kafka	macro.email:MessageDraftSynced	both	/event_type=email.message_draft_synced	crates/email/src/domain/events.rs:459
-kafka	macro.email:MessageReceived	both	/event_type=email.message_received	crates/email/src/domain/events.rs:455
-kafka	macro.email:MessageSendCancelled	both	/event_type=email.message_send_cancelled	crates/email/src/domain/events.rs:479
-kafka	macro.email:MessageSendQueued	both	/event_type=email.message_send_queued	crates/email/src/domain/events.rs:475
-kafka	macro.email:MessageSent	both	/event_type=email.message_sent	crates/email/src/domain/events.rs:465
-kafka	macro.email:ThreadArchived	both	/event_type=email.thread_archived	crates/email/src/domain/events.rs:484
-kafka	macro.email:ThreadBackfilled	both	/event_type=email.thread_backfilled	crates/email/src/domain/events.rs:518
-kafka	macro.email:ThreadLabelsUpdated	both	/event_type=email.thread_labels_updated	crates/email/src/domain/events.rs:514
-kafka	macro.email:ThreadProjectChanged	both	/event_type=email.thread_project_changed	crates/email/src/domain/events.rs:508
-kafka	macro.email:ThreadRead	both	/event_type=email.thread_read	crates/email/src/domain/events.rs:494
-kafka	macro.email:ThreadSpamChanged	both	/event_type=email.thread_spam_changed	crates/email/src/domain/events.rs:504
-kafka	macro.email:ThreadStarred	both	/event_type=email.thread_starred	crates/email/src/domain/events.rs:499
-kafka	macro.email:ThreadTrashed	both	/event_type=email.thread_trashed	crates/email/src/domain/events.rs:489
-kafka	macro.email:ThreadsReindexRequested	both	/event_type=email.threads_reindex_requested	crates/email/src/domain/events.rs:523
+kafka	macro.email:LinkConnected	both	/event_type=email.link_connected	crates/email/src/domain/events.rs:455
+kafka	macro.email:LinkDisconnected	both	/event_type=email.link_disconnected	crates/email/src/domain/events.rs:459
+kafka	macro.email:LinkReauthRequired	both	/event_type=email.link_reauth_required	crates/email/src/domain/events.rs:463
+kafka	macro.email:MessageDeleted	gmail	/event_type=email.message_deleted	crates/email/src/domain/events.rs:485
+kafka	macro.email:MessageDraftSynced	both	/event_type=email.message_draft_synced	crates/email/src/domain/events.rs:475
+kafka	macro.email:MessageReceived	both	/event_type=email.message_received	crates/email/src/domain/events.rs:471
+kafka	macro.email:MessageSendCancelled	both	/event_type=email.message_send_cancelled	crates/email/src/domain/events.rs:495
+kafka	macro.email:MessageSendQueued	both	/event_type=email.message_send_queued	crates/email/src/domain/events.rs:491
+kafka	macro.email:MessageSent	both	/event_type=email.message_sent	crates/email/src/domain/events.rs:481
+kafka	macro.email:ThreadArchived	both	/event_type=email.thread_archived	crates/email/src/domain/events.rs:500
+kafka	macro.email:ThreadBackfilled	both	/event_type=email.thread_backfilled	crates/email/src/domain/events.rs:535
+kafka	macro.email:ThreadLabelsUpdated	both	/event_type=email.thread_labels_updated	crates/email/src/domain/events.rs:531
+kafka	macro.email:ThreadProjectChanged	both	/event_type=email.thread_project_changed	crates/email/src/domain/events.rs:524
+kafka	macro.email:ThreadRead	both	/event_type=email.thread_read	crates/email/src/domain/events.rs:510
+kafka	macro.email:ThreadSpamChanged	both	/event_type=email.thread_spam_changed	crates/email/src/domain/events.rs:520
+kafka	macro.email:ThreadStarred	both	/event_type=email.thread_starred	crates/email/src/domain/events.rs:515
+kafka	macro.email:ThreadTrashed	both	/event_type=email.thread_trashed	crates/email/src/domain/events.rs:505
+kafka	macro.email:ThreadsReindexRequested	both	/event_type=email.threads_reindex_requested	crates/email/src/domain/events.rs:540
 lambda	email_refresh_handler	gmail		services/email_refresh_handler/src/handler.rs:9
 lambda	email_scheduled_handler	both		services/email_scheduled_handler/src/handler.rs:6
 lambda	email_sfs_delete_handler	both		services/email_sfs_delete_handler/src/handler.rs:9
@@ -168,7 +168,7 @@ loop	mailbox_sync_worker::run_projections	both		services/email_service/src/mailb
 loop	mailbox_sync_worker::run_settings	both		services/email_service/src/mailbox_sync_worker.rs:339
 loop	mailbox_sync_worker::run_transfers	both		services/email_service/src/mailbox_sync_worker.rs:370
 loop	mailbox_sync_worker::run_watches	both		services/email_service/src/mailbox_sync_worker.rs:354
-loop	outlook_flags::run	outlook		services/email_service/src/outlook_flags.rs:72
+loop	outlook_flags::run	outlook		services/email_service/src/outlook_flags.rs:69
 provider	gmail:calendarList.list	gmail		crates/gmail_emulator/src/fault.rs:131
 provider	gmail:channels.stop	gmail		crates/gmail_emulator/src/fault.rs:158
 provider	gmail:drafts.create	gmail		crates/gmail_emulator/src/fault.rs:86

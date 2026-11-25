@@ -96,7 +96,8 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
     }
 
     /// The id of the entity a discussion belongs to now, which for a merged
-    /// company's old id is the company it was merged into. Grants nothing.
+    /// company's or contact's old id is the record it was merged into. Grants
+    /// nothing.
     async fn current_parent_id(
         &self,
         parent: &MessageParent,

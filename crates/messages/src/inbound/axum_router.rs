@@ -209,8 +209,8 @@ async fn receipt_with_sender<
         message_sender_entity_access_receipt, principal_entity_access_receipt,
     };
     let receipt = async {
-        // A merged company's discussion moved with it, so its old id reads and
-        // writes the discussion of the company it was merged into.
+        // A merged company's or contact's discussion moved with it, so its old
+        // id reads and writes the discussion of the record it was merged into.
         let parent_id = access.current_entity_id(&path.parent_id, kind).await?;
         if as_sender {
             message_sender_entity_access_receipt::<P>(access, &user.authorization, &parent_id, kind)

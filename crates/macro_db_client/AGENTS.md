@@ -274,7 +274,8 @@ foreign keys; the broker deletes expired rows.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
-`hosted_runtimes`.
+`hosted_runtimes`. So are `image_upgrade` and `image_upgrade_computer`
+(operator image upgrades); their rows go with their computer.
 
 `password_item_entities`, `password_folders`, `password_activity`,
 `password_write_intents`, `password_totp_enrollments`, `password_team_lifecycle`,

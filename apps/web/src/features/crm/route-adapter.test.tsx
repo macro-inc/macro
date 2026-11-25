@@ -220,6 +220,126 @@ it('follows a link to a record in place when no other split shows it', async () 
   expect(canGo(-1)).toBe(true);
 });
 
+it("shows the company a merged one went into in the merged one's place", async () => {
+  const { url, shows, canGo } = renderCustomers('/companies/company/merged');
+  await shows('tab:active section:- records:company:merged:');
+
+  route.openMerged({ type: 'company', id: 'acme' });
+  await shows('tab:active section:- records:company:acme:');
+  expect(url()).toBe('/companies/company/acme');
+  expect(canGo(-1)).toBe(false);
+});
+
+it('goes back to the company that stays when the trail already passed it', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme, maya, { type: 'company', id: 'merged', name: '' }]);
+  await shows(
+    'tab:active section:- records:company:acme:Acme,contact:maya:Maya,company:merged:'
+  );
+
+  route.openMerged({ type: 'company', id: 'acme' });
+  await shows('tab:active section:- records:company:acme:Acme');
+  expect(url()).toBe('/companies/company/acme');
+});
+
+it('steps back to where a merged company was opened from when another split shows the one it went into', async () => {
+  const { activated, paneAt, settled } = renderCustomers(
+    '/companies/company/acme/~/companies/contact/maya'
+  );
+  const panes = () =>
+    screen.getAllByTestId('customers').map((pane) => pane.textContent);
+  await vi.waitFor(() => expect(panes()).toHaveLength(2));
+  mounted[1]!.open([{ type: 'company', id: 'merged', name: '' }]);
+  await vi.waitFor(() =>
+    expect(panes()[1]).toBe('tab:active section:- records:company:merged:')
+  );
+
+  mounted.at(-1)!.openMerged({ type: 'company', id: 'acme' });
+  await settled();
+
+  await vi.waitFor(() =>
+    expect(panes()).toEqual([
+      'tab:active section:- records:company:acme:',
+      'tab:active section:- records:contact:maya:',
+    ])
+  );
+  expect(activated.at(-1)).toBe(paneAt(0));
+});
+
+it('closes a split opened only for a merged company when another shows the one it went into', async () => {
+  const { activated, paneAt, settled } = renderCustomers(
+    '/companies/company/acme/~/companies/company/merged'
+  );
+  const panes = () =>
+    screen.getAllByTestId('customers').map((pane) => pane.textContent);
+  await vi.waitFor(() => expect(panes()).toHaveLength(2));
+
+  mounted[1]!.openMerged({ type: 'company', id: 'acme' });
+  await settled();
+
+  await vi.waitFor(() =>
+    expect(panes()).toEqual(['tab:active section:- records:company:acme:'])
+  );
+  expect(activated.at(-1)).toBe(paneAt(0));
+});
+
+it("shows the contact a merged one went into in the merged one's place", async () => {
+  const { url, shows, canGo } = renderCustomers('/companies/contact/merged');
+  await shows('tab:active section:- records:contact:merged:');
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows('tab:active section:- records:contact:maya:');
+  expect(url()).toBe('/companies/contact/maya');
+  expect(canGo(-1)).toBe(false);
+});
+
+it('goes back to the contact that stays when the trail already passed it', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme, maya, { type: 'contact', id: 'merged', name: '' }]);
+  await shows(
+    'tab:active section:- records:company:acme:Acme,contact:maya:Maya,contact:merged:'
+  );
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows(
+    'tab:active section:- records:company:acme:Acme,contact:maya:Maya'
+  );
+  expect(url()).toBe('/companies/contact/maya');
+});
+
+it('keeps a company of the same id as the contact a merged one went into in the trail', async () => {
+  const { shows } = renderCustomers('/companies');
+  route.open([
+    { type: 'company', id: 'maya', name: 'Maya Co' },
+    { type: 'contact', id: 'merged', name: '' },
+  ]);
+  await shows(
+    'tab:active section:- records:company:maya:Maya Co,contact:merged:'
+  );
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows(
+    'tab:active section:- records:company:maya:Maya Co,contact:maya:'
+  );
+});
+
+it('closes a split opened only for a merged contact when another shows the one it went into', async () => {
+  const { activated, paneAt, settled } = renderCustomers(
+    '/companies/contact/maya/~/companies/contact/merged'
+  );
+  const panes = () =>
+    screen.getAllByTestId('customers').map((pane) => pane.textContent);
+  await vi.waitFor(() => expect(panes()).toHaveLength(2));
+
+  mounted[1]!.openMerged({ type: 'contact', id: 'maya' });
+  await settled();
+
+  await vi.waitFor(() =>
+    expect(panes()).toEqual(['tab:active section:- records:contact:maya:'])
+  );
+  expect(activated.at(-1)).toBe(paneAt(0));
+});
+
 it('shows a record link on its own, without a trail', async () => {
   const { url, shows, canGo } = renderCustomers('/companies/company/acme/team');
   await shows('tab:active section:team records:company:acme:');

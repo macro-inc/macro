@@ -132,9 +132,23 @@ not shared across `zfs send`.
   the secret scan and the golden checks. A warm-Chromium golden is refused on a
   non-Intel host, where Chromium starts after restore.
 - **Who moves**: new purchases always restore the newest golden for their size.
-  Existing computers move at their next stop/start, or in an operator's rolling
-  upgrade, which waits for idle computers. Hibernated computers wake on their
-  own image and upgrade at their next cold start.
+  An existing computer keeps its image until an operator's rolling upgrade
+  moves it: the **Firecracker image rollout** workflow (dev only for now;
+  inputs: the immutable version, the `main` commit it is built from, the
+  computer ids, batch size, idle wait and reconnect timeout). It builds
+  `.#macro-box-firecracker`, publishes the files with their SHA-256 to the Nix
+  cache bucket, and records the upgrade from the in-VPC migrator runner. The
+  harness's upgrade pass stages the image on each host (checked by hash),
+  then gives each idle computer (no agent turn under way or queued, no screen
+  open; terminal shells are not seen) a fresh
+  system disk of it with its own `/home` and identity, a batch at a time. A
+  failed boot, or no macrod within the timeout, rolls that computer back to
+  its previous system disk and pauses the upgrade; a host that refuses, or
+  fails before the computer left its own disk, leaves it there (failed) and
+  pauses it too. A computer still busy at the idle deadline is skipped, never
+  forced. Hibernated computers are skipped. Two hours after the idle
+  deadline whatever is unfinished stops: waiting computers are skipped, and
+  one still mid-upgrade is logged for an operator.
 - **The agent runtime ships in the image**: an agent teammate runs
   `packages/muppet` and its dependencies from the image's
   `macro-agent-runtime` (`nix/macro-box/_agent-runtime.nix`). A harness deploy
@@ -143,17 +157,17 @@ not shared across `zfs send`.
   `packages/starter-agent` and the image together (a starter-agent `bun.lock`
   the image doesn't match fails the agent's boot).
 - **What persists**: the system disk is replaced on upgrade. `/home`, macrod and
-  harnessd state, docker data and the `/nix` overlay live on the state disk and
-  survive.
+  harnessd state and docker data live on the state disk and survive; `/etc`,
+  `/root` and anything added to `/nix` do not (there is no `/nix` overlay yet).
 - **Service rollback**: a new `computer_timer_kind` or `Failure` value (such
   as `agent_redeliver` or `AgentUnsupported`) can't be decoded by an older
   service. Roll forward instead of back past one, or first clear the rows
   that hold it: the due timers of the new kind, and the computers that
   failed with the new failure.
 - **Rollback**: unpublish the bad image (no new purchases), then run a rolling
-  upgrade back to the previous one. Each host keeps the two newest goldens per
-  size, plus any golden a computer still uses. Goldens are deleted only at
-  refcount 0 outside that window.
+  upgrade back to the previous version (one the workflow published): each computer gets its previous system
+  disk itself back (it is kept until the next upgrade). Nothing deletes
+  goldens or images on a host yet.
 
 ## 5. Incus teardown
 

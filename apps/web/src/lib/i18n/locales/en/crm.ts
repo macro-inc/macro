@@ -122,6 +122,9 @@ export default {
   policyActionWithdraw: 'Sharing stopped',
   policyActionRevoke: 'Mailbox access revoked',
   policyActionTargets: 'Live rule targets changed',
+  policyActionMerged: 'Companies merged',
+  emailSharingChangedBody:
+    'Companies your sharing rules named were merged, so your rules were updated.',
   policyActionUnknown: 'Sharing changed',
   policyActorMember: 'You',
   policyActorAgent: 'Your agent',

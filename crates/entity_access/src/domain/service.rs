@@ -825,6 +825,14 @@ where
         self.repo.get_merged_crm_company_ids(company_ids).await
     }
 
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all)]
+    async fn merged_crm_contact_ids(
+        &self,
+        contact_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Uuid>, AccessError> {
+        self.repo.get_merged_crm_contact_ids(contact_ids).await
+    }
+
     #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_users_by_entity(
         &self,

@@ -5858,6 +5858,7 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 name = "crm"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent_correlation",
  "ai_toolset",
  "anyhow",
@@ -5870,6 +5871,7 @@ dependencies = [
  "databases",
  "entity_access",
  "entity_access_db_utils",
+ "favorites",
  "feature_flags",
  "filter_ast",
  "futures",
@@ -5882,18 +5884,22 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "messages",
+ "model-entity",
  "model-error-response",
+ "model_notifications",
  "model_user",
  "models_databases",
  "models_pagination",
  "models_permissions",
  "models_properties",
+ "notification",
  "opentelemetry",
  "properties",
  "psl",
  "rdkafka",
  "readonly_pool",
  "rootcause",
+ "saved_views",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -8863,11 +8869,13 @@ dependencies = [
  "memchr",
  "opentelemetry",
  "pinned_tls",
+ "reqwest 0.13.4",
  "rootcause",
  "rustix 1.1.6",
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "tempfile",
  "thiserror 2.0.18",
@@ -8881,6 +8889,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+ "zstd",
 ]
 
 [[package]]
@@ -18706,6 +18715,8 @@ dependencies = [
  "model-entity",
  "model_owner",
  "models_properties",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "properties",
  "rdkafka",
  "reqwest 0.13.4",
@@ -18724,6 +18735,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "trigger_context",
  "utoipa",
@@ -24732,6 +24744,9 @@ dependencies = [
  "zerocopy",
  "zeroize",
  "zip",
+ "zstd",
+ "zstd-safe",
+ "zstd-sys",
 ]
 
 [[package]]

@@ -5,6 +5,7 @@ import {
   ContactVisibilityButton,
 } from '@app/features/crm/crm-contact';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
+import { useOpenMergedRecord } from '@app/features/crm/crm-merged-record';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -43,6 +44,12 @@ export function ContactBlockAdapter() {
     // entry, which is when entry state is otherwise captured.
     panel.handle.captureEntryState();
   };
+  const openMerged = useOpenMergedRecord((survivor) =>
+    panel.handle.replace({
+      next: { type: survivor.type, id: survivor.id },
+      mergeHistory: true,
+    })
+  );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: params.navigate,
   });
@@ -82,7 +89,11 @@ export function ContactBlockAdapter() {
         </SplitHeaderRight>
       </Show>
       <ParamsProvider state={params}>
-        <Contact contactId={contactId} section={section()} />
+        <Contact
+          contactId={contactId}
+          section={section()}
+          onMerged={(id) => openMerged({ type: 'contact', id })}
+        />
       </ParamsProvider>
     </>
   );

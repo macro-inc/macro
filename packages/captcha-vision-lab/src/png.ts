@@ -26,7 +26,11 @@ const chunk = (type: string, data: Uint8Array): Uint8Array => {
 
 /**
  * Encodes an RGB raster as an 8-bit truecolor PNG with no ancillary chunks,
- * so the file carries pixels only: no text, time or other metadata.
+ * so the file carries pixels only: no text, time or other metadata. The
+ * pixels are stored uncompressed: a compressed file's size depends on what
+ * it shows (a big flat shape compresses well), which would give answers
+ * away to anything that only sees file sizes. Stored, every image of one
+ * size has the same byte length.
  */
 export const encodePng = (raster: Raster): Uint8Array => {
   const header = new Uint8Array(13);
@@ -49,7 +53,7 @@ export const encodePng = (raster: Raster): Uint8Array => {
   const parts = [
     PNG_SIGNATURE,
     chunk('IHDR', header),
-    chunk('IDAT', deflateSync(scanlines)),
+    chunk('IDAT', deflateSync(scanlines, { level: 0 })),
     chunk('IEND', new Uint8Array(0)),
   ];
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
