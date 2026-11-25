@@ -12,7 +12,7 @@ import { createEffect, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { markChannelCacheUnsupported } from '../channel-flag';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
-import { DEVICE_RETRIES, VIEW_RETRY_MS } from '../channel-network';
+import { VIEW_RETRY_MS, viewRetryWait } from '../channel-network';
 import type { ChannelViewChange } from '../channel-sync-runtime';
 import {
   createLocalChannelThread,
@@ -593,7 +593,7 @@ describe('createLocalChannelThread', () => {
     }
   });
 
-  it('asks a device that does not store a thread again a few times, then follows it once stored', async () => {
+  it('asks a device that does not store a thread again after a wait that doubles', async () => {
     vi.useFakeTimers();
     let stores = false;
     let covered = false;
@@ -622,19 +622,19 @@ describe('createLocalChannelThread', () => {
     }));
     try {
       await vi.advanceTimersByTimeAsync(0);
-      for (let retry = 0; retry < DEVICE_RETRIES; retry += 1) {
+      for (let retry = 0; retry < 6; retry += 1) {
+        await vi.advanceTimersByTimeAsync(viewRetryWait(retry + 1) - 1);
         expect(fetchPage).toHaveBeenCalledTimes(1 + retry);
-        await vi.advanceTimersByTimeAsync(VIEW_RETRY_MS * 2 ** retry);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchPage).toHaveBeenCalledTimes(2 + retry);
       }
-      expect(fetchPage).toHaveBeenCalledTimes(1 + DEVICE_RETRIES);
-      expect(vi.getTimerCount()).toBe(0);
       expect(thread.replies()).toHaveLength(2);
 
       stores = true;
       onlineManager.setOnline(false);
       onlineManager.setOnline(true);
       await vi.advanceTimersByTimeAsync(0);
-      expect(fetchPage).toHaveBeenCalledTimes(2 + DEVICE_RETRIES);
+      expect(fetchPage).toHaveBeenCalledTimes(8);
       expect(thread.replies()).toHaveLength(1);
       keys = [channelMessageKey(second.id), ...keys];
       sync.change();

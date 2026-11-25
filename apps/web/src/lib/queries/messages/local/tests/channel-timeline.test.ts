@@ -20,7 +20,7 @@ import {
   rootSortKey,
 } from '../channel-map';
 import type * as ChannelNetwork from '../channel-network';
-import { DEVICE_RETRIES, storeResult, VIEW_RETRY_MS } from '../channel-network';
+import { storeResult, VIEW_RETRY_MS, viewRetryWait } from '../channel-network';
 import type {
   ChannelPageEntry,
   FetchChannelServerPage,
@@ -1726,7 +1726,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     }
   });
 
-  it('asks a device that does not store a window again a few times, each after a longer wait', async () => {
+  it('asks a device that does not store a window again after a wait that doubles', async () => {
     const rows = messages(2);
     let stores = false;
     const { fetchPage, requests } = serverOver(
@@ -1741,20 +1741,19 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     try {
       await vi.advanceTimersByTimeAsync(0);
       expect(requests).toHaveLength(1);
-      for (let retry = 0; retry < DEVICE_RETRIES; retry += 1) {
-        await vi.advanceTimersByTimeAsync(VIEW_RETRY_MS * 2 ** retry - 1);
+      for (let retry = 0; retry < 6; retry += 1) {
+        await vi.advanceTimersByTimeAsync(viewRetryWait(retry + 1) - 1);
         expect(requests).toHaveLength(1 + retry);
         await vi.advanceTimersByTimeAsync(1);
         expect(requests).toHaveLength(2 + retry);
       }
-      expect(vi.getTimerCount()).toBe(0);
 
-      // Left until the connection returns, then followed once stored.
+      // At once as the connection returns, then followed once stored.
       stores = true;
       onlineManager.setOnline(false);
       onlineManager.setOnline(true);
       await vi.advanceTimersByTimeAsync(0);
-      expect(requests).toHaveLength(DEVICE_RETRIES + 2);
+      expect(requests).toHaveLength(8);
       mounted.addRow(graphqlMessage(3));
       mounted.runtime.changed();
       await vi.advanceTimersByTimeAsync(0);

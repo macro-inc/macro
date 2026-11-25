@@ -155,9 +155,9 @@ lost; of those the server refused, only sends and deletes answered
   (`watchReconnect`, started before each request), and nothing else retries a
   window or thread that shows nothing. One that is shown but not held follows
   nothing, so it is also read again after a wait that doubles from
-  `VIEW_RETRY_MS`: while the server fails, as long as it does; while the device
-  does (it lost, refused or could not read it), `DEVICE_RETRIES` times, then when
-  the connection or the device's database returns. A failed page waits for a scroll, the
+  `VIEW_RETRY_MS`, whether the server failed or the device lost, refused or
+  could not read it, and at once when the connection or the device's database
+  returns. A failed page waits for a scroll, the
   connection, or the same wait (`olderFailed`), so the call panel, which pages
   whenever paging is idle, asks at a bounded rate.
 - The server's copy of a page or thread lacks what this device has queued: once

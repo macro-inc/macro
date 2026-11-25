@@ -90,7 +90,8 @@ type ChannelState = {
   checking: boolean;
   /**
    * The newest sequence the server said it was at, asked since the socket
-   * connected; past `LISTENING_MS`, every later change arrives as a frame.
+   * connected; past `LISTENING_MS`, every later change is taken to arrive as
+   * a frame.
    */
   serverSeq: bigint | undefined;
   /** The newest frame seen since the socket connected, held or not. */

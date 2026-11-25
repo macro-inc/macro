@@ -14,7 +14,6 @@ import {
 } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import {
-  deviceRetryWait,
   graphqlErrorCode,
   isMissingMessage,
   type ReconnectWatch,
@@ -650,7 +649,7 @@ export function createLocalChannelTimeline(
       if (reloads > 0) {
         setState({ loadingOlder: false, loadingNewer: false });
         failures += 1;
-        readLater(around, trace, watch, viewRetryWait(failures));
+        watch.failed(readAgain(around, trace), viewRetryWait(failures));
         return;
       }
       setState({ phase: 'failed', error });
@@ -688,13 +687,13 @@ export function createLocalChannelTimeline(
         await currentLoad;
         return;
       }
-      deviceFailed(around, trace);
+      readLater(around, trace);
       return;
     }
     // A page given up meanwhile left the device without what it shows.
     held = settled === 'held' && givenUp === givenUpBefore;
     if (!held) {
-      deviceFailed(around, trace);
+      readLater(around, trace);
       return;
     }
     const fromServer = loaded.some(({ source }) => source === 'server');
@@ -714,28 +713,21 @@ export function createLocalChannelTimeline(
       ? undefined
       : (anchorId ?? middleMessageId(state.entries));
 
-  /** Reads the window again after `wait`, or as the connection returns. */
-  const readLater = (
-    around: string | undefined,
-    trace: TraceContext,
-    watch: ReconnectWatch,
-    wait: number | undefined
-  ) =>
-    watch.failed(
-      () =>
-        trace.run(() => {
-          currentLoad = loadWindow(around, 1);
-          fireAndForget(currentLoad, 'channel-local-sync');
-        }),
-      wait
-    );
+  const readAgain = (around: string | undefined, trace: TraceContext) => () =>
+    trace.run(() => {
+      currentLoad = loadWindow(around, 1);
+      fireAndForget(currentLoad, 'channel-local-sync');
+    });
 
-  /** The window shown follows nothing until it is read again. */
-  const deviceFailed = (around: string | undefined, trace: TraceContext) => {
+  /**
+   * The window shown follows nothing until it is read again: after a wait
+   * that doubles, or as the connection returns.
+   */
+  const readLater = (around: string | undefined, trace: TraceContext) => {
     failures += 1;
     reconnect?.stop();
     reconnect = watchReconnect();
-    readLater(around, trace, reconnect, deviceRetryWait(failures));
+    reconnect.failed(readAgain(around, trace), viewRetryWait(failures));
   };
 
   const reread = async (trace: TraceContext) => {
@@ -772,11 +764,11 @@ export function createLocalChannelTimeline(
       // ever: every load's own store reports a change.
       if (failures >= SESSION_CHANGE_RELOADS) {
         held = false;
-        deviceFailed(shownAround(), trace);
+        readLater(shownAround(), trace);
         return;
       }
       failures += 1;
-      currentLoad = loadWindow(shownAround(), 1);
+      currentLoad = trace.run(() => loadWindow(shownAround(), 1));
       await currentLoad;
       return;
     }
@@ -911,7 +903,7 @@ export function createLocalChannelTimeline(
     for (const direction of ['older', 'newer'] as const)
       if (state.unstored[direction] !== null) pageReconnects[direction]?.stop();
     setState('unstored', { older: null, newer: null });
-    deviceFailed(shownAround(), trace);
+    readLater(shownAround(), trace);
   };
 
   /**

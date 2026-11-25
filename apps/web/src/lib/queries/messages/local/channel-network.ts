@@ -177,15 +177,9 @@ export async function storeResult(
  */
 export const VIEW_RETRY_MS = 2_000;
 export const VIEW_RETRY_MAX_MS = 60_000;
-/** Times in a row a view asks a device that does not hold what it stores. */
-export const DEVICE_RETRIES = 5;
 
 export const viewRetryWait = (failures: number) =>
   Math.min(VIEW_RETRY_MAX_MS, VIEW_RETRY_MS * 2 ** (failures - 1));
-
-/** The wait after a device failed a view, or none: it is asked no more. */
-export const deviceRetryWait = (failures: number) =>
-  failures > DEVICE_RETRIES ? undefined : viewRetryWait(failures);
 
 /** The connection, watched from the start of one load. */
 export interface ReconnectWatch {

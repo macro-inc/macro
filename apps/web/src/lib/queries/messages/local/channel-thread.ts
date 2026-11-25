@@ -36,7 +36,6 @@ import {
   type ChannelQueryOptions,
   type ChannelStoreResult,
   cacheSessionChanged,
-  deviceRetryWait,
   isMissingMessage,
   queryChannelNetwork,
   type ReconnectWatch,
@@ -443,25 +442,19 @@ export function createLocalChannelThread(
   const show = (thread: MessageThread) =>
     setState('thread', reconcile(thread, { key: 'id' }));
 
-  /** Loads the thread again after `wait`, or as the connection returns. */
-  const loadLater = (
-    root: string,
-    trace: TraceContext,
-    watch: ReconnectWatch,
-    wait: number | undefined
-  ) =>
-    watch.failed(
-      () => trace.run(() => fireAndForget(load(root), 'channel-thread')),
-      wait
-    );
-
-  /** The thread shown follows nothing until it is loaded again. */
-  const deviceFailed = (root: string, trace: TraceContext) => {
+  /**
+   * The thread shown follows nothing until it is loaded again: after a wait
+   * that doubles, or as the connection returns.
+   */
+  const loadLater = (root: string, trace: TraceContext) => {
     failures += 1;
     reconnect?.stop();
     reconnect = watchReconnect();
-    loadLater(root, trace, reconnect, deviceRetryWait(failures));
+    reconnect.failed(loadAgain(root, trace), viewRetryWait(failures));
   };
+
+  const loadAgain = (root: string, trace: TraceContext) => () =>
+    trace.run(() => fireAndForget(load(root), 'channel-thread'));
 
   const load = async (root: string, reloads = 0): Promise<void> => {
     const current = ++token;
@@ -503,7 +496,7 @@ export function createLocalChannelThread(
       if (loaded.stored === 'session-changed') {
         // The new session can store what the old one could not.
         if (reloads < SESSION_CHANGE_RELOADS) await load(root, reloads + 1);
-        else deviceFailed(root, trace);
+        else loadLater(root, trace);
         return;
       }
       deps.runtime.noteServerRead(channelId, {
@@ -511,7 +504,7 @@ export function createLocalChannelThread(
         epoch,
       });
       if (loaded.stored === 'unheld') {
-        deviceFailed(root, trace);
+        loadLater(root, trace);
         return;
       }
       // A server thread lacks what this device has not sent yet.
@@ -533,10 +526,8 @@ export function createLocalChannelThread(
       // nothing until it is read again: after a wait, too.
       const shown = untrack(() => state.thread !== undefined);
       if (shown) failures += 1;
-      loadLater(
-        root,
-        trace,
-        watch,
+      watch.failed(
+        loadAgain(root, trace),
         shown ? viewRetryWait(failures) : undefined
       );
     }
@@ -583,7 +574,7 @@ export function createLocalChannelThread(
     // load's own store reports a change.
     held = false;
     if (failures >= SESSION_CHANGE_RELOADS) {
-      deviceFailed(root, trace);
+      loadLater(root, trace);
       return;
     }
     failures += 1;
@@ -606,7 +597,7 @@ export function createLocalChannelThread(
       } catch (error) {
         span.setAttr('thread.device_error', deviceErrorCode(error));
         if (current === token && rereadAgain) return { kind: undefined, trace };
-        if (current === token) deviceFailed(root, trace);
+        if (current === token) loadLater(root, trace);
         throw error;
       }
       span.setAttr('thread.source', device.kind);
@@ -625,13 +616,15 @@ export function createLocalChannelThread(
     on([rootId, enabled], ([root, on]) => {
       if (!on) return;
       const release = deps.runtime.open(channelId);
-      const stop = deps.runtime.onChanged(channelId, (change) =>
+      const stop = deps.runtime.onChanged(channelId, (change) => {
+        const resumed = change === 'resumed';
+        if (resumed) failures = 0;
         fireAndForget(
           // After an outage, a thread the device could not store is loaded.
-          change === 'resumed' && !held ? loadAfresh(root) : reread(root),
+          resumed && !held ? load(root) : reread(root),
           'channel-thread'
-        )
-      );
+        );
+      });
       onCleanup(() => {
         token += 1;
         abort?.abort();
