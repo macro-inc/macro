@@ -107,7 +107,7 @@ export function ChatComposer(props: {
   const [content, setContent] = createSignal<HTMLDivElement>();
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
-  const [addMenuOpen, setAddMenuOpen] = createSignal(false);
+  const [addControlsActive, setAddControlsActive] = createSignal(false);
   createResizeObserver(content, (_, element) => {
     // Content held offscreen by a pending Suspense reports 0; pinning that
     // would animate the surface up from nothing once it attaches.
@@ -115,13 +115,24 @@ export function ChatComposer(props: {
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
+  const controlsOpen = () => Boolean(props.controlsOpen || addControlsActive());
   const { focused, hasFocused, collapsed, focus, blur } =
-    createComposerExpansion(
-      () => props.collapseOnBlur,
-      () => props.controlsOpen || addMenuOpen()
-    );
+    createComposerExpansion(() => props.collapseOnBlur, controlsOpen);
+  createEffect(
+    on(controlsOpen, (active, previous) => {
+      if (active || !previous) return;
+      // A null-target iOS blur can precede the opening click. Reconcile with
+      // the DOM only after every control finishes its final focus restoration.
+      if (container?.contains(document.activeElement)) focus();
+      else blur();
+    })
+  );
   const drawerOpen = () => props.drawerOpen && !collapsed();
-  useTouchOutsideToDismissKeyboard(() => container);
+  // Portaled controls own their keyboard and outside-dismissal behavior.
+  // The composer's DOM-only boundary must not blur their editor on touchstart.
+  useTouchOutsideToDismissKeyboard(() =>
+    controlsOpen() ? undefined : container
+  );
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   // The editor reports a host draft back as its own export, which can differ
   // (a code block loses trailing blank lines). Passing that on would rewrite
@@ -274,6 +285,9 @@ export function ChatComposer(props: {
     // composer (the paste viewer) through here; cancelling them blocks
     // selecting their text.
     if (!(event.currentTarget as Node).contains(target)) return;
+    // An outside pointer can clear interaction focus without moving DOM focus.
+    // Pressing the same editor must still expand it without a new focus event.
+    focus();
     if (editor.lexical.getRootElement()?.contains(target)) return;
     event.preventDefault();
     if (event.type === 'pointerdown') editor.controls.focus();
@@ -370,7 +384,7 @@ export function ChatComposer(props: {
           getEditor={() => editor.lexical.getRootElement()}
           session={!!props.session}
           disabled={disabled()}
-          onOpenChange={setAddMenuOpen}
+          onFocusScopeChange={setAddControlsActive}
         />
       )}
     />
@@ -442,15 +456,22 @@ export function ChatComposer(props: {
           'touch:island': !props.phoneLayout,
         }}
         onFocusIn={(event) => {
-          // Focusing a control before its click must not move it into the
-          // expanded layout midway through a tap.
+          if (
+            !(event.target instanceof Node) ||
+            !event.currentTarget.contains(event.target)
+          )
+            return;
+          // Portaled events are not physical focus inside this root. Local
+          // controls retain an existing interaction without moving a first tap.
           if (
             event.target instanceof Element &&
             event.target.closest(
               '[data-composer-controls], button, input, select, a'
             )
-          )
+          ) {
+            if (hasFocused()) focus();
             return;
+          }
           focus();
           fireAndForget(preloadAgentFold(), 'agents-view');
         }}
@@ -458,8 +479,14 @@ export function ChatComposer(props: {
           // iOS control taps can blur with no relatedTarget before click.
           // Collapse only for a known outside focus or pointer interaction.
           if (
-            event.relatedTarget instanceof Node &&
-            !event.currentTarget.contains(event.relatedTarget)
+            !(event.target instanceof Node) ||
+            !event.currentTarget.contains(event.target)
+          )
+            return;
+          if (
+            (event.relatedTarget instanceof Node &&
+              !event.currentTarget.contains(event.relatedTarget)) ||
+            (event.relatedTarget === null && controlsOpen())
           )
             blur();
         }}

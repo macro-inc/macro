@@ -251,6 +251,9 @@ vi.mock('./persistence', () => ({ createEmailViewPersistence: () => ({}) }));
 vi.mock('./queries/use-email-query', () => ({
   useEmailDataSource: () => ({ items: () => [] }),
 }));
+vi.mock('./queries/use-email-search-values', () => ({
+  useEmailSearchValues: () => ({ people: () => [], labels: () => [] }),
+}));
 vi.mock('./email-route', () => ({
   emailTabSearch: { namespace: 'mail' },
   emailDetailSearch: { namespace: 'email-detail' },
