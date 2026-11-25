@@ -186,8 +186,13 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
         // The previous disk is dropped from the record before its file goes,
         // so the record never names a deleted disk; the dataset then has
         // room for the clone beside the current one.
-        if record.previous_system_disk.take().is_some() {
-            self.save(record).await?;
+        if let Some(previous) = record.previous_system_disk.take()
+            && let Err(error) = self.save(record).await
+        {
+            // The stored record still names it: so must this one, or a
+            // retry would delete a disk the record keeps.
+            record.previous_system_disk = Some(previous);
+            return Err(error);
         }
         crash_point::reach(CrashPoint::SystemDiskPreviousDropped);
         self.remove_leftover_system_disks(record).await?;

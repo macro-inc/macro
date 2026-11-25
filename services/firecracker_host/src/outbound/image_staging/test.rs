@@ -224,3 +224,25 @@ async fn an_image_in_place_by_hand_with_the_same_contents_is_ready_once_hashed()
         "{state:?}"
     );
 }
+
+#[tokio::test]
+async fn a_failed_download_never_reports_its_url() {
+    let images = images();
+    let files = contents();
+    let base = serve(&files).await;
+    let mut request = request(&base, &files);
+    for file in &mut request.files {
+        if file.name == ImageFileName::Vmlinux {
+            file.url = SourceUrl(format!("{base}/missing.zst?X-Amz-Signature=secret"));
+        }
+    }
+
+    let state = stage(&images, request).await;
+
+    let ImageState::Failed { reason } = state else {
+        panic!("not failed: {state:?}");
+    };
+    assert!(reason.contains("vmlinux"), "{reason}");
+    assert!(!reason.contains("secret"), "{reason}");
+    assert!(!reason.contains("missing.zst"), "{reason}");
+}

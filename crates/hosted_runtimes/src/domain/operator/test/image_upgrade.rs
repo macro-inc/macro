@@ -63,6 +63,13 @@ impl HostImages for FakeFleet {
     ) -> Result<StagedImage, FakeFleetError> {
         assert_eq!(sources.len(), 3);
         self.calls.lock().unwrap().push(format!("stage {image}"));
+        {
+            let mut failures = self.stage_failures.lock().unwrap();
+            if *failures > 0 {
+                *failures -= 1;
+                return Err(FakeFleetError::Unavailable);
+            }
+        }
         Ok(StagedImage::Staging)
     }
 
@@ -831,4 +838,25 @@ async fn a_rollback_cut_short_before_its_host_call_is_sent_again() {
             .logged(&format!("replace {id} {BASE_IMAGE}")),
         1
     );
+}
+
+#[tokio::test]
+async fn a_staging_request_the_host_never_took_is_sent_again() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    *operator.fleet.home.stage_failures.lock().unwrap() = 1;
+    // An older failed staging of this image is what the host would report.
+    *operator.fleet.home.staged.lock().unwrap() =
+        vec![StagedImage::Failed("an earlier attempt".to_owned())];
+
+    assert!(operator.advance_image_upgrade().await.is_err());
+    // Asked again, not polled: the old failure never ends the upgrade.
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(operator.fleet.home.logged(&format!("stage {NEW_IMAGE}")), 2);
+    assert_eq!(upgrade_state(&operator).0, UpgradeState::Staging);
 }

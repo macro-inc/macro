@@ -321,7 +321,12 @@ impl ImageStaging {
         }
         // Never over an image someone put there meanwhile: rename refuses a
         // non-empty target directory.
+        sync_directory(staging)?;
         std::fs::rename(staging, target).map_err(io("install", target))?;
+        // The rename is durable only once its parent is synced.
+        if let Some(parent) = target.parent() {
+            sync_directory(parent)?;
+        }
         // Only once the checked files are in place: a digests file never
         // vouches for files it did not check. Without one (a crash here),
         // the next request hashes the image.
@@ -331,9 +336,10 @@ impl ImageStaging {
     }
 
     async fn fetch(&self, source: &ImageFileSource, path: &Path) -> Result<(), StagingError> {
-        let download = |error| StagingError::Download {
+        // reqwest names the URL in its errors, and it may be presigned.
+        let download = |error: reqwest::Error| StagingError::Download {
             name: source.name,
-            source: error,
+            source: error.without_url(),
         };
         let response = self
             .http
@@ -487,6 +493,13 @@ fn write_digests(path: &Path, files: &[ImageFileDigest]) -> Result<(), StagingEr
     })?;
     std::fs::write(&staged, text).map_err(io("write", &staged))?;
     std::fs::rename(&staged, path).map_err(io("replace", path))
+}
+
+/// fsync a directory, so the entries in it survive a host crash.
+fn sync_directory(path: &Path) -> Result<(), StagingError> {
+    std::fs::File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(io("sync", path))
 }
 
 fn read_only(path: &Path) -> Result<(), StagingError> {

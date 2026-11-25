@@ -220,19 +220,28 @@ where
             let host = HostId::new(host);
             let fleet = self.fleet_for(host).await?;
             self.renew_lease().await?;
-            let first_ask = self
+            let asked = self
                 .staging_requested
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert((upgrade.id, host));
-            let staged = if first_ask {
-                // Restarts a staging that failed before this upgrade, and
-                // has the host check an image put there by hand.
-                fleet.stage_image(&upgrade.image, &sources).await
+                .contains(&(upgrade.id, host));
+            let staged = if asked {
+                fleet.staged_image(&upgrade.image).await.map_err(internal)?
             } else {
-                fleet.staged_image(&upgrade.image).await
-            }
-            .map_err(internal)?;
+                // Restarts a staging that failed before this upgrade, and
+                // has the host check an image put there by hand. Noted only
+                // once the host took it: a request that never arrived is
+                // sent again.
+                let staged = fleet
+                    .stage_image(&upgrade.image, &sources)
+                    .await
+                    .map_err(internal)?;
+                self.staging_requested
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert((upgrade.id, host));
+                staged
+            };
             match staged {
                 StagedImage::Ready(Some(files)) if upgrade.files.held_by(&files) => {}
                 StagedImage::Ready(Some(_)) | StagedImage::Conflict(_) => {

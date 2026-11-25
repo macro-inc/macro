@@ -21,8 +21,12 @@ use crate::domain::ports::{
 #[error("fake failure")]
 pub(super) struct FakeError;
 
+/// Records in memory; `.1` is how many of the next saves fail.
 #[derive(Clone, Default)]
-pub(super) struct FakeStore(pub(super) Arc<Mutex<HashMap<ComputerId, ComputerRecord>>>);
+pub(super) struct FakeStore(
+    pub(super) Arc<Mutex<HashMap<ComputerId, ComputerRecord>>>,
+    pub(super) Arc<Mutex<u32>>,
+);
 
 impl Store for FakeStore {
     type Err = FakeError;
@@ -30,6 +34,13 @@ impl Store for FakeStore {
         Ok(self.0.lock().unwrap().values().cloned().collect())
     }
     async fn save(&self, record: &ComputerRecord) -> Result<(), FakeError> {
+        {
+            let mut failures = self.1.lock().unwrap();
+            if *failures > 0 {
+                *failures -= 1;
+                return Err(FakeError);
+            }
+        }
         self.0
             .lock()
             .unwrap()

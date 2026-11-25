@@ -229,3 +229,29 @@ async fn a_failed_clone_boots_the_old_disk_again() {
     assert_eq!(record.system_disk, SystemDisk(0));
     assert_eq!(launches(&host), [BootSource::Golden, BootSource::ColdBoot]);
 }
+
+#[tokio::test]
+async fn a_failed_save_dropping_the_previous_disk_keeps_it_in_the_record() {
+    let host = running_host().await;
+    host.service
+        .replace_system_disk(computer_id(), image(NEXT))
+        .await
+        .unwrap();
+    let stopped = host
+        .service
+        .power(computer_id(), Action::Stop)
+        .await
+        .unwrap();
+    assert_eq!(stopped.state, PowerState::Stopped);
+
+    // The save that drops the previous disk fails.
+    *host.store.1.lock().unwrap() = 1;
+    host.service
+        .replace_system_disk(computer_id(), image("macro-box/2026-11-25a"))
+        .await
+        .unwrap_err();
+
+    let computer = host.service.get(computer_id()).await.unwrap();
+    assert_eq!(computer.previous_image, Some(image(CREATED)));
+    assert_eq!(files(&host), [0, 1]);
+}

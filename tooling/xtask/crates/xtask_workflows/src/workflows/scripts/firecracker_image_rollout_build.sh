@@ -37,7 +37,16 @@ done
 files=$(IFS=,; echo "[${entries[*]}]")
 nix shell "${tools[@]}" -c jq -S . <<<"$files" >"$FILES_DIR/files.json"
 
-if nix shell "${tools[@]}" -c aws s3api head-object --bucket "$bucket" --key "$prefix/files.json" >/dev/null 2>&1; then
+# Published already, or definitely not? Anything else (a throttle, a network
+# error) stops here rather than overwrite a version it could not check.
+published=yes
+if ! nix shell "${tools[@]}" -c aws s3api head-object --bucket "$bucket" --key "$prefix/files.json" \
+  >/dev/null 2>"$work/head.err"; then
+  grep -qE '\(404\)|Not Found' "$work/head.err" \
+    || fail "could not tell whether $IMAGE_VERSION is published: $(cat "$work/head.err")"
+  published=no
+fi
+if [ "$published" = yes ]; then
   nix shell "${tools[@]}" -c aws s3 cp --only-show-errors "s3://$bucket/$prefix/files.json" "$work/published.json"
   if ! cmp -s <(nix shell "${tools[@]}" -c jq -S . "$work/published.json") "$FILES_DIR/files.json"; then
     echo "published:"; cat "$work/published.json"

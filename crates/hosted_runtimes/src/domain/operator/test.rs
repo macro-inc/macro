@@ -73,6 +73,8 @@ struct FakeFleet {
     instances: Mutex<Vec<FleetInstance>>,
     /// The host name it registers; `runtime-dev-1` when unset.
     host_name: Option<&'static str>,
+    /// `stage_image` requests that fail before reaching the host.
+    stage_failures: Mutex<u32>,
     /// What `staged_image` answers, first to last; the last one repeats.
     staged: Mutex<Vec<crate::domain::image_upgrade::StagedImage>>,
     /// Images whose system disk does not boot.

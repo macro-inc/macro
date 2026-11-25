@@ -137,6 +137,11 @@ impl ImageUpgrades for PgComputerRepo {
     ) -> Result<Result<ImageUpgrade, StartUpgradeError>, PgComputerError> {
         let files_json = serde_json::to_value(files)?;
         let mut tx = self.pool.begin().await?;
+        // Starts serialize here, so two of one version can't both pass the
+        // history check below. Operators only: the table is tiny.
+        sqlx::query!("LOCK TABLE image_upgrade IN SHARE ROW EXCLUSIVE MODE")
+            .execute(&mut *tx)
+            .await?;
         // A version is immutable: an earlier upgrade of it must have rolled
         // out these very files.
         let earlier = sqlx::query_scalar!(
