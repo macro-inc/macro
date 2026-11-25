@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT setup.team_id FROM password_vault_setup setup\n               WHERE setup.state='setting_up' AND setup.next_attempt_at<=now()\n                 AND EXISTS(SELECT 1 FROM team WHERE team.id=setup.team_id)\n                 AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle closed WHERE closed.team_id=setup.team_id)\n               ORDER BY setup.next_attempt_at LIMIT 50",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d7845e02643e9f4544035982ed69186bd43298a3e4497ae3f81946e70d1597dc"
+}

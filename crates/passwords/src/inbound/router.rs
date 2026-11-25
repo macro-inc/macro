@@ -53,6 +53,7 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
             post(super::import::match_names::<A>),
         )
         .route("/teams", get(teams::<A>))
+        .route("/teams/{team}/vault", get(vault_readiness::<A>))
         .route("/teams/{team}/items", get(list::<A>).post(create::<A>))
         .route(
             "/teams/{team}/items/{item}",
@@ -184,6 +185,12 @@ pub enum FailureCode {
     VaultUnavailable,
     /// The team's vault has not been set up; retrying cannot help.
     VaultNotProvisioned,
+    /// Automatic setup of the team's vault is in progress; retry shortly.
+    VaultSettingUp,
+    /// The team's vault exists with a configuration setup must not change.
+    VaultSetupFailed,
+    /// The team's vault existed and is now missing; an operator must recover it.
+    VaultNeedsRecovery,
 }
 
 /// Sanitized vault failure shared with generated HTTP clients.
@@ -217,6 +224,9 @@ impl ApiError {
                 FailureCode::VaultUnavailable,
             ),
             Error::NotProvisioned => (StatusCode::CONFLICT, FailureCode::VaultNotProvisioned),
+            Error::SettingUp => (StatusCode::CONFLICT, FailureCode::VaultSettingUp),
+            Error::SetupFailed => (StatusCode::CONFLICT, FailureCode::VaultSetupFailed),
+            Error::NeedsRecovery => (StatusCode::CONFLICT, FailureCode::VaultNeedsRecovery),
         }
     }
 }
@@ -516,6 +526,21 @@ pub async fn share<A: MacroAuthorizationService>(
         .share(&actor(user)?, TeamId(team), ItemId(item), body.grants)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+#[utoipa::path(operation_id = "passwords_vault_readiness",get,path="/passwords/teams/{team}/vault",params(("team"=Uuid,Path)),responses((status=200,body=VaultReadiness),(status=403,body=Failure),(status=404,body=Failure)),tag="passwords")]
+/// How far automatic setup of the team's vault has come. Read-only: it never
+/// starts a setup; the team's first save does.
+pub async fn vault_readiness<A: MacroAuthorizationService>(
+    State(state): State<PasswordRouterState<A>>,
+    user: MacroAuthorizationExtractor<A, UserOnly>,
+    Path(team): Path<Uuid>,
+) -> Result<Json<VaultReadiness>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .vault_readiness(&actor(user)?, TeamId(team))
+            .await?,
+    ))
 }
 #[utoipa::path(operation_id = "passwords_folders",get,path="/passwords/teams/{team}/folders",params(("team"=Uuid,Path)),responses((status=200,body=Vec<Folder>),(status=403,body=Failure),(status=409,body=Failure,description="`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up")),tag="passwords")]
 /// List the authenticated team’s folders.

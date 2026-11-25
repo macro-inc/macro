@@ -136,7 +136,12 @@ is retried once; a freshly issued token that is denied is a policy failure and i
 not retried.
 Runtime tokens cannot create namespaces, policies, or auth roles. A
 separate provisioning identity owns those operations; never ship a root token
-to the browser or use it for hosted runtime requests. Agents may become typed
+to the browser or use it for hosted runtime requests. That identity's root
+policy (`openbao-provisioner`) may create `team-*` namespaces and their pinned
+mounts, keys, policy and roles, but cannot read values, delete, or write root
+policies. A team's first write asks it, through DSS only, to create what is
+missing; a namespace that existed and vanished is recorded for recovery, never
+recreated (`crates/passwords` AGENTS.md). Agents may become typed
 grantees later, but v1 exposes no agent tool, requests, approvals, or agent UI.
 
 OpenBao's encrypted storage barrier provides envelope encryption. Namespaces are
@@ -203,7 +208,8 @@ rotation, and monitored availability. This change does not deploy OpenBao or
 alter production. Disable discovery until the backing environment is ready.
 Provision team namespaces explicitly before use. Namespace erasure uses a separate
 parent JWT role, `auth/macro-lifecycle/role/team-<team-id>`, bound to the lifecycle
-subject/audience and exact team claim. Its token may read/delete only that team's
+subject/audience and exact team claim. Its token, through the templated `passwords-lifecycle`
+policy keyed on the team claim, may read/delete only that team's
 namespace and expires within 60 seconds; the normal values role gains no parent
 privileges. Local bootstrap provisions it idempotently. Hosted deployment must
 provision the same role before deploying this deletion path; missing roles fail

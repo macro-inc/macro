@@ -24,6 +24,7 @@ fn fixture() -> (
         .unwrap()
         .insert(actor.user_id.to_string(), vec![team]);
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),

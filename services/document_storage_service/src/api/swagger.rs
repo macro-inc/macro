@@ -265,6 +265,7 @@ use email_policy::EmailPolicySchemas;
         passwords::inbound::router::activity,
         passwords::inbound::router::grants,
         passwords::inbound::router::share,
+        passwords::inbound::router::vault_readiness,
         passwords::inbound::router::folders,
         passwords::inbound::router::create_folder,
         passwords::inbound::router::remove_folder,

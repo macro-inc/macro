@@ -67,6 +67,7 @@ async fn metadata_never_decrypts_and_disclosure_checks_membership_and_grants() {
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),
@@ -261,6 +262,7 @@ async fn accepted_provider_write_recovers_metadata_and_deletion_remains_resumabl
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),
@@ -342,6 +344,7 @@ async fn cancelling_a_create_with_accepted_provider_values_erases_values_and_pre
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),
@@ -412,6 +415,7 @@ async fn delayed_write_recovery_preserves_later_grant_revocation_and_metadata_ed
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),
@@ -541,6 +545,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),
@@ -836,6 +841,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
 async fn a_creators_initial_favorite_is_not_shared_with_a_viewer() {
     let repository = Arc::new(FakeRepository::new());
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: Arc::new(FakeProvider::new()),
         availability: Arc::new(FakeAvailability),

@@ -14,6 +14,7 @@ async fn can_edit_matches_http_value_and_totp_write_authorization() {
         true,
     );
     let seed = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider,
         availability: Arc::new(FakeAvailability),

@@ -95,6 +95,7 @@ pub(crate) fn vault() -> Vault {
     });
     let service = AgentVaultService {
         vault: Arc::new(PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository: items.clone(),
             provider: provider.clone(),
             availability: Arc::new(FakeAvailability),

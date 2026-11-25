@@ -246,6 +246,7 @@ async fn import_performance() {
                     .expect("provider"),
                 );
                 let service = PasswordService {
+                    setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
                     repository: repository.clone(),
                     provider,
                     availability: Arc::new(FakeAvailability),

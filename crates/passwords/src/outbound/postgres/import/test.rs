@@ -20,6 +20,7 @@ async fn batch_excludes_other_writers_and_releases_after_completion_or_cancellat
         let gate = Arc::new(WriteGate::new());
         *provider.all_writes_gate.lock().unwrap() = Some(gate.clone());
         let service = PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository: repository.clone(),
             provider: provider.clone(),
             availability: Arc::new(FakeAvailability),
@@ -110,6 +111,7 @@ async fn real_import_retries_preserve_provider_version_folder_grants_and_totp(po
     );
     let repository = Arc::new(repository);
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(FakeAvailability),
@@ -216,6 +218,7 @@ async fn imports_progress_with_only_a_lease_and_one_query_connection(pool: PgPoo
         .unwrap();
     let (repository, actor, record) = folder_fixture(limited.clone()).await;
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: Arc::new(repository),
         provider: Arc::new(crate::domain::service::test::fakes::FakeProvider::new()),
         availability: Arc::new(FakeAvailability),

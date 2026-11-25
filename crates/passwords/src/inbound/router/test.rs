@@ -91,6 +91,7 @@ fn flagged_app(
     let app = router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository: repository.clone(),
             provider: provider.clone(),
             availability: Arc::new(PasswordAvailability {
@@ -113,6 +114,7 @@ fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
     create["expectedVersion"] = serde_json::Value::Null;
     let mut routes = vec![
         ("GET", "/teams".into(), serde_json::json!({})),
+        ("GET", format!("/teams/{team}/vault"), serde_json::json!({})),
         ("GET", format!("/teams/{team}/items"), serde_json::json!({})),
         ("POST", format!("/teams/{team}/items"), create),
         (
@@ -413,6 +415,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
     let app: Router = router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository: repository.clone(),
             provider: provider.clone(),
             availability: Arc::new(Enabled),
@@ -420,6 +423,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
     });
     let item = record.metadata.id.0;
     let interaction_service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(Enabled),
@@ -736,6 +740,7 @@ async fn lifecycle_routes_reject_human_agent_and_api_credentials_before_any_muta
     let app: Router = internal_router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository: repository.clone(),
             provider: Arc::new(UnavailableProvider),
             availability: Arc::new(Disabled),

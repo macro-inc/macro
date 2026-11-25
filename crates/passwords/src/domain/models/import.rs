@@ -137,6 +137,12 @@ pub enum ImportErrorCode {
     VaultUnavailable,
     /// The team's vault has not been set up; retrying cannot help.
     VaultNotProvisioned,
+    /// Automatic setup of the team's vault is in progress; retry shortly.
+    VaultSettingUp,
+    /// The team's vault exists with a configuration setup must not change.
+    VaultSetupFailed,
+    /// The team's vault existed and is now missing; an operator must recover it.
+    VaultNeedsRecovery,
 }
 impl From<Error> for ImportErrorCode {
     fn from(value: Error) -> Self {
@@ -149,6 +155,9 @@ impl From<Error> for ImportErrorCode {
             Error::Busy => Self::Busy,
             Error::Unavailable => Self::VaultUnavailable,
             Error::NotProvisioned => Self::VaultNotProvisioned,
+            Error::SettingUp => Self::VaultSettingUp,
+            Error::SetupFailed => Self::VaultSetupFailed,
+            Error::NeedsRecovery => Self::VaultNeedsRecovery,
         }
     }
 }

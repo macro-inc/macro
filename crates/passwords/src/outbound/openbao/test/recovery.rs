@@ -225,6 +225,7 @@ async fn accepted_create_survives_postwrite_lookup_interruption_and_same_operati
         .expect("provider"),
     );
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(Available),

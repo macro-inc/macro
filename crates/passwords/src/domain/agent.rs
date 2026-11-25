@@ -704,6 +704,15 @@ pub enum AgentError {
     #[error("team vault is not provisioned")]
     /// The team's vault has not been set up; retrying cannot help.
     NotProvisioned,
+    #[error("team vault is being set up")]
+    /// Automatic setup of the team's vault is in progress; retry shortly.
+    SettingUp,
+    #[error("team vault setup failed")]
+    /// The team's vault exists with a configuration setup must not change.
+    SetupFailed,
+    #[error("team vault needs recovery")]
+    /// The team's vault existed and is now missing.
+    NeedsRecovery,
 }
 impl From<Error> for AgentError {
     fn from(error: Error) -> Self {
@@ -715,6 +724,9 @@ impl From<Error> for AgentError {
             Error::Busy => Self::Busy,
             Error::Unavailable => Self::Unavailable,
             Error::NotProvisioned => Self::NotProvisioned,
+            Error::SettingUp => Self::SettingUp,
+            Error::SetupFailed => Self::SetupFailed,
+            Error::NeedsRecovery => Self::NeedsRecovery,
         }
     }
 }

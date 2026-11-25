@@ -27,6 +27,7 @@ impl Fixture {
             .unwrap()
             .insert(actor.user_id.to_string(), vec![team]);
         let service = PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository: repository.clone(),
             provider: provider.clone(),
             availability: Arc::new(FakeAvailability),
@@ -165,6 +166,7 @@ async fn empty_maintenance_needs_neither_flags_nor_provider_configuration() {
     use crate::outbound::availability::PasswordAvailability;
     let provider = Arc::new(FakeProvider::new());
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: Arc::new(FakeRepository::new()),
         provider: provider.clone(),
         availability: Arc::new(PasswordAvailability {

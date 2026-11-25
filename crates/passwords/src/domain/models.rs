@@ -367,6 +367,85 @@ pub enum Error {
     #[error("team vault is not provisioned")]
     /// The team's provider namespace does not exist yet; retrying cannot help.
     NotProvisioned,
+    #[error("team vault is being set up; retry the request")]
+    /// Automatic setup of the team's vault has started and not finished yet.
+    SettingUp,
+    #[error("team vault setup failed")]
+    /// The team's vault exists with a configuration setup must not change.
+    SetupFailed,
+    #[error("team vault needs recovery")]
+    /// The team's vault existed and is now missing; only an operator recovers it.
+    NeedsRecovery,
+}
+
+/// How far automatic setup of a team's vault has come. Without a row the
+/// team's vault has never been needed; its first save sets it up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultSetupState {
+    /// Setup was requested and has not finished; the resume worker retries it.
+    SettingUp,
+    /// Setup confirmed the vault.
+    Ready,
+    /// The vault exists with a configuration setup must not change.
+    Failed,
+    /// The vault existed and is now missing.
+    NeedsRecovery,
+}
+
+/// A team's vault readiness, as the API reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = PasswordVaultReadiness)]
+pub struct VaultReadiness {
+    /// Setup progress.
+    pub state: VaultReadinessState,
+    /// Why setup failed; present only when `state` is `failed`.
+    pub reason: Option<VaultFailureReason>,
+}
+
+/// Setup progress of a team's vault.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+#[schema(as = PasswordVaultReadinessState)]
+pub enum VaultReadinessState {
+    /// No vault yet; the team's first save sets it up automatically.
+    NotStarted,
+    /// Setup has started; saves succeed once it finishes.
+    SettingUp,
+    /// The vault is set up.
+    Ready,
+    /// Setup cannot finish without an operator.
+    Failed,
+}
+
+/// Why a team's vault setup failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+#[schema(as = PasswordVaultFailureReason)]
+pub enum VaultFailureReason {
+    /// The vault exists with a configuration setup must not change.
+    Incompatible,
+    /// The vault existed and is now missing.
+    NeedsRecovery,
+}
+
+impl From<Option<VaultSetupState>> for VaultReadiness {
+    fn from(state: Option<VaultSetupState>) -> Self {
+        let (state, reason) = match state {
+            None => (VaultReadinessState::NotStarted, None),
+            Some(VaultSetupState::SettingUp) => (VaultReadinessState::SettingUp, None),
+            Some(VaultSetupState::Ready) => (VaultReadinessState::Ready, None),
+            Some(VaultSetupState::Failed) => (
+                VaultReadinessState::Failed,
+                Some(VaultFailureReason::Incompatible),
+            ),
+            Some(VaultSetupState::NeedsRecovery) => (
+                VaultReadinessState::Failed,
+                Some(VaultFailureReason::NeedsRecovery),
+            ),
+        };
+        Self { state, reason }
+    }
 }
 
 /// A metadata-only change never reads or writes a secret value.

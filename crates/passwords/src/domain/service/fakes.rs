@@ -49,6 +49,10 @@ pub struct FakeRepository {
     /// Answer `ensure_folder` without keeping the folder, as if it were
     /// deleted right after.
     pub forget_ensured_folders: AtomicBool,
+    /// Vault setup rows: state and failed attempts.
+    pub vault_setups: Mutex<HashMap<Uuid, (VaultSetupState, u32)>>,
+    /// Teams `vault_setup_due` returns while their row is still `SettingUp`.
+    pub setup_due: Mutex<Vec<TeamId>>,
 }
 impl FakeRepository {
     pub fn new() -> Self {
@@ -78,6 +82,8 @@ impl FakeRepository {
             reconciled: Mutex::new(vec![]),
             team_lookups: AtomicUsize::new(0),
             forget_ensured_folders: AtomicBool::new(false),
+            vault_setups: Mutex::new(HashMap::new()),
+            setup_due: Mutex::new(vec![]),
         }
     }
 }
@@ -145,7 +151,74 @@ impl Repository for FakeRepository {
                 .unwrap()
                 .iter()
                 .any(|entry| entry.0 == team)
-            || self.folders.lock().unwrap().keys().any(|key| key.0 == team))
+            || self.folders.lock().unwrap().keys().any(|key| key.0 == team)
+            || self.vault_setups.lock().unwrap().contains_key(&team.0))
+    }
+    async fn has_vault_values(&self, team: TeamId) -> Result<bool, Error> {
+        Ok(self
+            .records
+            .lock()
+            .unwrap()
+            .values()
+            .any(|record| record.metadata.team_id == team)
+            || self
+                .staged
+                .lock()
+                .unwrap()
+                .values()
+                .any(|record| record.metadata.team_id == team)
+            || self
+                .enrollments
+                .lock()
+                .unwrap()
+                .values()
+                .any(|entry| entry.team_id == team))
+    }
+    async fn vault_setup(&self, team: TeamId) -> Result<Option<VaultSetupState>, Error> {
+        Ok(self
+            .vault_setups
+            .lock()
+            .unwrap()
+            .get(&team.0)
+            .map(|(state, _)| *state))
+    }
+    async fn request_vault_setup(&self, team: TeamId) -> Result<bool, Error> {
+        let mut setups = self.vault_setups.lock().unwrap();
+        if setups.contains_key(&team.0) {
+            return Ok(false);
+        }
+        setups.insert(team.0, (VaultSetupState::SettingUp, 0));
+        Ok(true)
+    }
+    async fn record_vault_setup(&self, team: TeamId, state: VaultSetupState) -> Result<(), Error> {
+        let mut setups = self.vault_setups.lock().unwrap();
+        match state {
+            VaultSetupState::SettingUp => {
+                if let Some((VaultSetupState::SettingUp, attempts)) = setups.get_mut(&team.0) {
+                    *attempts += 1;
+                }
+            }
+            state => {
+                let attempts = setups.get(&team.0).map_or(0, |(_, attempts)| *attempts);
+                setups.insert(team.0, (state, attempts));
+            }
+        }
+        Ok(())
+    }
+    async fn vault_setup_due(&self) -> Result<Vec<TeamId>, Error> {
+        let setups = self.vault_setups.lock().unwrap();
+        let closed = self.closed_teams.lock().unwrap();
+        Ok(self
+            .setup_due
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|team| {
+                matches!(setups.get(&team.0), Some((VaultSetupState::SettingUp, _)))
+                    && !closed.contains(&team.0)
+            })
+            .copied()
+            .collect())
     }
 
     async fn close_team(&self, team: TeamId) -> Result<(), Error> {
@@ -155,6 +228,7 @@ impl Repository for FakeRepository {
     }
     async fn purge_team_metadata(&self, team: TeamId) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.vault_setups.lock().unwrap().remove(&team.0);
         self.records
             .lock()
             .unwrap()
@@ -951,6 +1025,53 @@ impl SecretProvider for FakeProvider {
         })
     }
 }
+/// A provisioner double. A successful provision creates the provider's
+/// namespace, so the provider's next login succeeds.
+pub struct FakeVaultSetup {
+    pub configured: bool,
+    pub provider: Arc<FakeProvider>,
+    pub outcome: Mutex<Result<Provisioned, SetupError>>,
+    pub calls: AtomicUsize,
+    /// Deadlines the domain passed, in call order.
+    pub deadlines: Mutex<Vec<std::time::Duration>>,
+    pub namespace_exists: AtomicBool,
+}
+impl FakeVaultSetup {
+    pub fn new(provider: Arc<FakeProvider>) -> Self {
+        Self {
+            configured: true,
+            provider,
+            outcome: Mutex::new(Ok(Provisioned { created: true })),
+            calls: AtomicUsize::new(0),
+            deadlines: Mutex::new(vec![]),
+            namespace_exists: AtomicBool::new(false),
+        }
+    }
+}
+#[async_trait]
+impl VaultSetup for FakeVaultSetup {
+    fn configured(&self) -> bool {
+        self.configured
+    }
+    async fn provision(
+        &self,
+        _team: TeamId,
+        deadline: std::time::Duration,
+    ) -> Result<Provisioned, SetupError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.deadlines.lock().unwrap().push(deadline);
+        let outcome = *self.outcome.lock().unwrap();
+        if outcome.is_ok() {
+            self.provider.unprovisioned.store(false, Ordering::SeqCst);
+            self.namespace_exists.store(true, Ordering::SeqCst);
+        }
+        outcome
+    }
+    async fn namespace_exists(&self, _team: TeamId) -> Result<bool, SetupError> {
+        Ok(self.namespace_exists.load(Ordering::SeqCst))
+    }
+}
+
 pub struct FakeAvailability;
 #[async_trait]
 impl Availability for FakeAvailability {

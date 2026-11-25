@@ -459,6 +459,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         .await
         .expect("metadata");
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(Available),

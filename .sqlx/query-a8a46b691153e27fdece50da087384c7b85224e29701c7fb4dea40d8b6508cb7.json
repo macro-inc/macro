@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_vault_setup SET attempts=attempts+1, next_attempt_at=now()+LEAST(interval '10 minutes', interval '5 seconds'*power(2, LEAST(attempts, 10))), updated_at=now() WHERE team_id=$1 AND state='setting_up'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a8a46b691153e27fdece50da087384c7b85224e29701c7fb4dea40d8b6508cb7"
+}

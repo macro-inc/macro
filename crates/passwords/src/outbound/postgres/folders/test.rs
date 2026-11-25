@@ -409,6 +409,7 @@ async fn contended_item_lease_returns_busy_result_and_still_records_batch_audit(
     let repository = Arc::new(repository);
     let held = repository.lock(team, record.metadata.id).await.unwrap();
     let service = PasswordService {
+        setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
         repository: repository.clone(),
         provider: Arc::new(FakeProvider::new()),
         availability: Arc::new(FakeAvailability),

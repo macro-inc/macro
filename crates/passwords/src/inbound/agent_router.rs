@@ -165,6 +165,12 @@ pub enum AgentFailureCode {
     VaultUnavailable,
     /// The team's vault has not been set up; retrying cannot help.
     VaultNotProvisioned,
+    /// Automatic setup of the team's vault is in progress; retry shortly.
+    VaultSettingUp,
+    /// The team's vault exists with a configuration setup must not change.
+    VaultSetupFailed,
+    /// The team's vault existed and is now missing; an operator must recover it.
+    VaultNeedsRecovery,
 }
 
 /// Sanitized agent vault failure.
@@ -238,6 +244,9 @@ impl IntoResponse for AgentApiError {
                 None,
             ),
             AgentError::NotProvisioned => (StatusCode::CONFLICT, Code::VaultNotProvisioned, None),
+            AgentError::SettingUp => (StatusCode::CONFLICT, Code::VaultSettingUp, None),
+            AgentError::SetupFailed => (StatusCode::CONFLICT, Code::VaultSetupFailed, None),
+            AgentError::NeedsRecovery => (StatusCode::CONFLICT, Code::VaultNeedsRecovery, None),
         };
         failure(status, code, retry)
     }
