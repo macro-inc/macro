@@ -58,6 +58,25 @@ test('ArrowDown moves through rows that are on screen, and Enter picks one', asy
   await expect(page.getByTestId('opened-results')).toHaveText('0');
 });
 
+test('a plain word offers the filter it stands for, on screen', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/?operator-searchbar');
+  if (errors.length) throw new Error(errors.join('\n'));
+  const field = page.getByRole('textbox', { name: 'Operator search' });
+  await field.click();
+  await page.keyboard.type('budget tasks');
+  const row = page.getByRole('option', { name: /Only tasks/ });
+  await expectOnScreen(page, row);
+  await row.click();
+  await expect(page.getByTestId('operator-query')).toHaveText(
+    'budget type:task'
+  );
+  await expect(page.getByTestId('opened-results')).toHaveText('0');
+});
+
 test('keeps the rows clickable inside the Cmd+K dialog', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

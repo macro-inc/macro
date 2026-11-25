@@ -1,5 +1,6 @@
 import {
   type SearchOperatorCompletion,
+  searchNameBeingTyped,
   searchOperatorBeingTyped,
   searchOperatorCompletions,
   searchTokenAtEnd,
@@ -187,16 +188,20 @@ export function SearchbarInput(
   const typing = createMemo(() =>
     props.operators ? searchOperatorBeingTyped(fieldText()) : undefined
   );
+  const [focused, setFocused] = createSignal(false);
   const personTyped = () => {
     const typed = typing();
-    if (!typed || !('name' in typed)) return undefined;
+    if (!typed) return undefined;
+    // A plain word may start someone's name, offered as from them or
+    // assigned to them; it is looked up only while the field is focused.
+    if ('prefix' in typed)
+      return focused() ? searchNameBeingTyped(fieldText()) : undefined;
     const names = ['assignee', 'author', 'from'];
     return names.includes(typed.name) ? typed.value : undefined;
   };
   const operatorValues = props.operators
     ? createSearchOperatorValues(personTyped)
     : undefined;
-  const [focused, setFocused] = createSignal(false);
   const [dismissedFor, setDismissedFor] = createSignal<string>();
   const operatorRows = createMemo(() =>
     operatorValues && focused() && dismissedFor() !== fieldText()
