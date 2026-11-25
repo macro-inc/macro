@@ -11,7 +11,7 @@ import {
 } from '@components/app/split-layout/entry-persistence';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect, on } from 'solid-js';
 import { z } from 'zod';
 import {
   DEFAULT_EMAIL_FOCUS_SORT,
@@ -100,6 +100,27 @@ export const DEFAULT_EMAIL_LIST_STATE: EmailListStateSnapshot = {
   scrollOffset: DEFAULT_EMAIL_LIST_ENTRY_STATE.scrollOffset,
 };
 
+// An open view's filters come back from its definition, so the entry keeps
+// the tab it was opened from, as local state does.
+function selectEmailEntryState(state: EmailViewState): EmailEntryState {
+  const scope = state.beforeSavedView ?? state;
+  return {
+    version: 1,
+    tab: scope.tab,
+    search: state.search,
+    aliasFilter: scope.aliasFilter,
+    facets: state.beforeSavedView ? {} : normalizeFacetSelection(state.facets),
+    ...(state.beforeSavedView || !state.conditions
+      ? {}
+      : { conditions: state.conditions }),
+  };
+}
+
+function selectInboxIdsEntryState(state: EmailViewState): string[] | undefined {
+  const { inboxIds } = state.beforeSavedView ?? state;
+  return inboxIds === undefined ? undefined : [...inboxIds];
+}
+
 function createEmailEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
@@ -129,23 +150,7 @@ function createEmailEntryStorage(options: {
         ),
       };
     },
-    // An open view's filters come back from its definition, so the entry
-    // keeps the tab it was opened from, as local state does.
-    select: (state): EmailEntryState => {
-      const scope = state.beforeSavedView ?? state;
-      return {
-        version: 1,
-        tab: scope.tab,
-        search: state.search,
-        aliasFilter: scope.aliasFilter,
-        facets: state.beforeSavedView
-          ? {}
-          : normalizeFacetSelection(state.facets),
-        ...(state.beforeSavedView || !state.conditions
-          ? {}
-          : { conditions: state.conditions }),
-      };
-    },
+    select: selectEmailEntryState,
   });
 }
 
@@ -269,10 +274,7 @@ function createInboxIdsEntryStorage(options: {
             : undefined,
       };
     },
-    select: (state): string[] | undefined => {
-      const { inboxIds } = state.beforeSavedView ?? state;
-      return inboxIds === undefined ? undefined : [...inboxIds];
-    },
+    select: selectInboxIdsEntryState,
   });
 }
 
@@ -302,38 +304,47 @@ export function createEmailListEntryStorage(
 /**
  * A view can mount again without leaving its split entry: when a newer build
  * takes the local cache over, an older tab drops its queries and every route
- * view mounts once sign-in is back. The split manager writes the entry only
- * before a navigation, so record it as soon as the tab or filters change, and
- * once after mounting; the view then comes back on this tab's own filters,
- * not the user-level copy another tab saved last.
+ * view mounts once sign-in is back. The split manager writes an entry only
+ * before a navigation leaves it, so record the entry the view mounts in, each
+ * entry it moves to while mounted (a thread, another tab), and every change to
+ * what the entry keeps. The view then comes back on this tab's own state, not
+ * the user-level copy another tab saved last.
  */
-function createEntryRecorder(
-  handle: Pick<SplitHandle, 'captureEntryState'>
-): PersistenceStorage<EmailViewState> {
+function createEntryRecorder(options: {
+  handle: Pick<SplitHandle, 'captureEntryState'>;
+  entryId: Accessor<string | undefined>;
+}): PersistenceStorage<EmailViewState> {
   let recorded: string | undefined;
   const serialize = (state: EmailViewState) =>
-    JSON.stringify(selectLocalState(state));
+    JSON.stringify([
+      selectEmailEntryState(state),
+      selectInboxIdsEntryState(state),
+    ]);
 
   return {
     restore: () => undefined,
     initialize: (state) => {
       recorded = serialize(state);
-      // After setup, so the split's other captors are registered and this one
-      // doesn't write the layout while the view is still being created.
-      queueMicrotask(() => handle.captureEntryState());
+      // The entry lives in the split manager, outside Solid. The first run
+      // comes after setup, once the entry captors are registered.
+      createEffect(
+        on(options.entryId, () => options.handle.captureEntryState())
+      );
     },
     write: (state) => {
       const serialized = serialize(state);
       if (serialized === recorded) return;
 
       recorded = serialized;
-      handle.captureEntryState();
+      options.handle.captureEntryState();
     },
   };
 }
 
 export type CreateEmailViewPersistenceOptions = {
   handle: EntryPersistenceHandle & Pick<SplitHandle, 'captureEntryState'>;
+  /** The pane's current router entry, which a push or Back replaces. */
+  entryId: Accessor<string | undefined>;
   userId: Accessor<string | undefined>;
   restoreEntryState?: boolean;
   restoreLocalState?: boolean;
@@ -363,7 +374,7 @@ export function createEmailViewPersistence(
       }),
       createEmailEntryStorage({ handle: options.handle, restore }),
       createInboxIdsEntryStorage({ handle: options.handle, restore }),
-      createEntryRecorder(options.handle),
+      createEntryRecorder(options),
     ],
   };
 }
