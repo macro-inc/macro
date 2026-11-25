@@ -132,7 +132,7 @@ describe('CRM record previews', () => {
     expect(await fetchCrmRecordPreviews(previewRecords, [], [])).toEqual({
       previews: [],
       failed: new Map(),
-      merged: [],
+      merged: { companies: [], contacts: [] },
     });
     expect(requests).toEqual([]);
   });
@@ -168,7 +168,47 @@ describe('CRM record previews', () => {
       }),
       expect.objectContaining({ id: COMPANY_NAMED, name: 'Acme' }),
     ]);
-    expect(result.merged).toEqual([COMPANY_HIDDEN]);
+    expect(result.merged).toEqual({
+      companies: [COMPANY_HIDDEN],
+      contacts: [],
+    });
+  });
+
+  it('titles a merged contact after the one it was merged into, and names it once among the merged', async () => {
+    const { previewRecords } = recording(
+      ok({
+        companies: [],
+        contacts: [
+          {
+            id: CONTACT_OTHER_TEAM,
+            mergedInto: CONTACT_NAMED,
+            name: 'Ada Lovelace',
+            email: 'ada@acme.example',
+            updatedAt: '2025-01-05T00:00:00.000Z',
+          },
+          previews.contacts[0]!,
+        ],
+      })
+    );
+
+    const result = await fetchCrmRecordPreviews(
+      previewRecords,
+      [],
+      [CONTACT_OTHER_TEAM, CONTACT_OTHER_TEAM.toUpperCase(), CONTACT_NAMED]
+    );
+
+    expect(result.previews).toEqual([
+      expect.objectContaining({ id: CONTACT_OTHER_TEAM, name: 'Ada Lovelace' }),
+      expect.objectContaining({
+        id: CONTACT_OTHER_TEAM.toUpperCase(),
+        name: 'Ada Lovelace',
+      }),
+      expect.objectContaining({ id: CONTACT_NAMED, name: 'Ada Lovelace' }),
+    ]);
+    expect(result.merged).toEqual({
+      companies: [],
+      contacts: [CONTACT_OTHER_TEAM],
+    });
   });
 
   it('sends ids in each spelling the server parses, once, and answers each spelling', async () => {

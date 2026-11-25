@@ -7,8 +7,8 @@ import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
-import { forgetMergedCrmCompanies } from '@service-storage/crm-company-merge';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import { forgetMergedCrmRecords } from '@service-storage/crm-record-merge';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
@@ -54,7 +54,10 @@ function companyQueryOptions(deps: CrmRecordDependencies, companyId: string) {
         if (deps.client.getQueryData(survivor) === undefined)
           deps.client.setQueryData(survivor, company);
         fireAndForget(
-          forgetMergedCrmCompanies([companyId.toLowerCase()]),
+          forgetMergedCrmRecords({
+            companies: [companyId.toLowerCase()],
+            contacts: [],
+          }),
           'crm'
         );
       }

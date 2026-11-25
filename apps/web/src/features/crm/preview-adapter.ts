@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { storageServiceClient } from '@service-storage/client';
-import { forgetMergedCrmCompanies } from '@service-storage/crm-company-merge';
+import { forgetMergedCrmRecords } from '@service-storage/crm-record-merge';
 import {
   fetchCrmPipelinePreviews as fetchPipelines,
   fetchCrmRecordPreviews as fetchRecords,
@@ -16,7 +16,7 @@ export async function fetchCrmRecordPreviews(
     companyIds,
     contactIds
   );
-  fireAndForget(forgetMergedCrmCompanies(previews.merged), 'crm');
+  fireAndForget(forgetMergedCrmRecords(previews.merged), 'crm');
   return previews;
 }
 
