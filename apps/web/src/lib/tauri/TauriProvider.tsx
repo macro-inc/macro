@@ -8,6 +8,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
 import {
   hasAutomaticReloadHolds,
+  isEditingText,
   syncNativeReloadHold,
 } from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
@@ -85,6 +86,26 @@ function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
     status.status === 'ClearRequired' ||
     status.status === 'NativeUpdateRequired'
   );
+}
+
+/**
+ * Only ask native to apply a bundle update on page hide when an update is
+ * actually ready to apply and reloading will not interrupt held work or active
+ * text editing. Calling `perform_update` on every hide while idle also hits
+ * iOS storage setup unnecessarily while the app is backgrounding.
+ */
+export function shouldPerformBundleUpdateOnHide(
+  status: BundleUpdateStatus,
+  context: {
+    hidden: boolean;
+    hasHolds: boolean;
+    editingText: boolean;
+  }
+): boolean {
+  if (!context.hidden || context.hasHolds || context.editingText) {
+    return false;
+  }
+  return status.status === 'Completed' || status.status === 'ClearRequired';
 }
 
 function TauriProvider(props: { children: JSX.Element }) {
@@ -174,8 +195,15 @@ function TauriProvider(props: { children: JSX.Element }) {
       // Use it to ask Rust to apply a completed bundle before suspension;
       // native Ready/Resumed handlers cover cases where this window is missed.
       // Leaving the app does not mean nothing is running: switching to Gmail
-      // for a sign-in code hides the page while its auth sheet is still open.
-      if (document.hidden && !hasAutomaticReloadHolds()) {
+      // for a sign-in code hides the page while its auth sheet is still open,
+      // and glancing away mid-draft should not reload active input.
+      if (
+        shouldPerformBundleUpdateOnHide(bundleUpdateStatus(), {
+          hidden: document.hidden,
+          hasHolds: hasAutomaticReloadHolds(),
+          editingText: isEditingText(),
+        })
+      ) {
         performBundleUpdate();
       }
     };
