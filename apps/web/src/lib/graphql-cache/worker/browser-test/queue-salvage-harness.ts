@@ -1,4 +1,5 @@
 import { deepEqual } from '@core/util/compareUtils';
+import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../../protocol';
 import { databaseOwnerLockName } from '../coordinator-protocol';
 import type {
@@ -75,6 +76,8 @@ async function loadedWorker(): Promise<Worker> {
   }
 }
 
+type Opened = Extract<QueueSalvageEvent, { kind: 'opened' }>;
+
 class Engine {
   private readonly waiting = new Map<
     number,
@@ -82,7 +85,8 @@ class Engine {
   >();
   private nextId = 1;
   readonly locked: Promise<void>;
-  readonly opened: Promise<Extract<QueueSalvageEvent, { kind: 'opened' }>>;
+  /** Rejects nobody: a terminated engine is never waited on again. */
+  private readonly opening: Promise<Opened | Error>;
 
   static async start(scope: string, recovery: boolean): Promise<Engine> {
     return new Engine(await loadedWorker(), scope, recovery);
@@ -94,21 +98,27 @@ class Engine {
     recovery: boolean
   ) {
     const locked = Promise.withResolvers<void>();
-    const opened =
-      Promise.withResolvers<Extract<QueueSalvageEvent, { kind: 'opened' }>>();
+    const opening = Promise.withResolvers<Opened | Error>();
     this.locked = locked.promise;
-    this.opened = opened.promise;
-    // A terminated engine is never waited on again.
-    this.opened.catch(() => undefined);
+    this.opening = opening.promise;
     this.worker.onerror = ({ message, filename }) =>
-      opened.reject(new Error(`engine worker failed: ${message} ${filename}`));
-    this.worker.onmessage = ({ data }: MessageEvent<QueueSalvageEvent>) => {
-      if (data.kind === 'owner-lock') locked.resolve();
-      if (data.kind === 'opened') opened.resolve(data);
-      if (data.kind === 'open-failed') opened.reject(new Error(data.error));
-      if (data.kind === 'response')
-        this.waiting.get(data.response.id)?.(data.response);
-    };
+      opening.resolve(
+        new Error(`engine worker failed: ${message} ${filename}`)
+      );
+    this.worker.onmessage = ({ data }: MessageEvent<QueueSalvageEvent>) =>
+      match(data)
+        .with({ kind: 'owner-lock' }, () => locked.resolve())
+        .with({ kind: 'opened' }, (opened) => opening.resolve(opened))
+        .with({ kind: 'open-failed' }, ({ error }) =>
+          opening.resolve(new Error(error))
+        )
+        .with({ kind: 'response' }, ({ response }) =>
+          this.waiting.get(response.id)?.(response)
+        )
+        .with({ kind: 'loaded' }, { kind: 'closed' }, () => undefined)
+        .exhaustive((unknown) => {
+          throw new Error(`unknown engine event: ${JSON.stringify(unknown)}`);
+        });
     this.send({ kind: 'open', scope, recovery });
   }
 
@@ -116,18 +126,28 @@ class Engine {
     this.worker.postMessage(command);
   }
 
-  async request(request: RequestWithoutId): Promise<unknown> {
+  async opened(): Promise<Opened> {
+    const opened = await this.opening;
+    if (opened instanceof Error) throw opened;
+    return opened;
+  }
+
+  /** Asks without waiting: the engine may die with the request. */
+  post(request: RequestWithoutId): number {
     const id = this.nextId++;
-    const answer = Promise.withResolvers<CacheResponse>();
-    this.waiting.set(id, answer.resolve);
     this.send({
       kind: 'request',
       request: { ...request, id } as CacheRequest,
     });
-    const response = await Promise.race([
-      answer.promise,
-      pause(STEP_TIMEOUT_MS).then(() => undefined),
-    ]);
+    return id;
+  }
+
+  async request(request: RequestWithoutId): Promise<unknown> {
+    const answer = Promise.withResolvers<CacheResponse | undefined>();
+    this.waiting.set(this.post(request), answer.resolve);
+    const timer = setTimeout(() => answer.resolve(undefined), STEP_TIMEOUT_MS);
+    const response = await answer.promise;
+    clearTimeout(timer);
     if (!response) throw new Error(`${request.kind} was never answered`);
     if (!response.ok) throw new Error(response.error);
     return response.result;
@@ -384,14 +404,12 @@ async function abandonRequest(
   const stamp = await engine.stamp();
   if (commits && lease) {
     model.uncertain.add(lease.uuid);
-    engine.request(commitRequest(lease, lease.uuid)).catch(() => undefined);
+    engine.post(commitRequest(lease, lease.uuid));
     return;
   }
   const uuid = crypto.randomUUID();
   model.uncertain.add(uuid);
-  engine
-    .request(enqueueRequest(uuid, stamp, Date.now()))
-    .catch(() => undefined);
+  engine.post(enqueueRequest(uuid, stamp, Date.now()));
 }
 
 /**
@@ -414,7 +432,7 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
     violations: [],
   };
   let engine = await Engine.start(scope, false);
-  await engine.opened;
+  await engine.opened();
   // A page asks for the generation when it looks for a hydration checkpoint.
   if (next() < 0.5)
     await engine.request({ kind: 'current-storage-generation' });
@@ -441,7 +459,7 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
       report.kills.push(await landing(scope));
     }
     engine = await Engine.start(scope, true);
-    const opened = await engine.opened;
+    const opened = await engine.opened();
     report.wipes += 1;
     report.outcomes.push(`${opened.outcome}/${opened.queue}`);
     const queue = await engine.queue();
@@ -474,13 +492,13 @@ async function measureRecovery(): Promise<number> {
   const scope = `queue-salvage-${crypto.randomUUID()}`;
   const model = new Model();
   const first = await Engine.start(scope, false);
-  await first.opened;
+  await first.opened();
   for (let write = 0; write < 4; write += 1) await enqueue(first, model);
   first.kill();
   const recovering = await Engine.start(scope, true);
   await recovering.locked;
   const started = performance.now();
-  await recovering.opened;
+  await recovering.opened();
   const elapsed = performance.now() - started;
   recovering.kill();
   return elapsed;
