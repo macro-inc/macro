@@ -52,7 +52,7 @@
 @media (max-width: 699px) {
   .homepage-founder-letter {
     width: min(524px, calc(100% - 48px));
-    margin: 40px auto 56px;
+    margin: 36px auto 48px;
   }
 
   .homepage-founder-letter-body {

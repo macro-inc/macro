@@ -73,7 +73,7 @@
   .macro-homepage #pricing { display: none; }
 }
 @media (max-width: 699px) {
-  .macro-homepage .feature-page[data-product-spacing=true] .feature-page-section { padding-block: 60px; }
+  .macro-homepage .feature-page[data-product-spacing=true] .feature-page-section { padding-block: 48px; }
   .macro-homepage .product-feature-intro { margin-bottom: 24px; }
   .macro-homepage .product-feature-intro h2 { font-size: clamp(22px, 6.2vw, 27px); margin-bottom: 14px; }
   .macro-homepage .product-feature-intro p,
