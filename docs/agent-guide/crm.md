@@ -147,14 +147,19 @@ Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
 domains must still be rejected as company domains.
 
-Merging duplicate companies has no screen yet: team admins and owners merge
-through `POST /crm/merges/preview` then `POST /crm/merges`, the SDK's
-`crm.merges`, or the agent's PreviewMerge and MergeRecords tools, while
-`enable-crm-merge` is on for them. Verify with two throwaway companies: the
-review lists the domains, the people and deals that move, and values that
-differ. After the commit, the company that stays has every domain, person,
-deal, task reference and discussion message, and the merged company's old link
-opens it.
+Merging duplicate companies or duplicate people has no screen yet: team admins
+and owners merge through `POST /crm/merges/preview` then `POST /crm/merges`
+(`recordType` `company` or `contact`), the SDK's `crm.merges`, or the agent's
+PreviewMerge and MergeRecords tools, while `enable-crm-merge` is on for them.
+Verify with two throwaway companies: the review lists the domains, the people
+and deals that move, and values that differ. After the commit, the company that
+stays has every domain, person, deal, task reference and discussion message,
+and the merged company's old link opens it. Verify people with two throwaway
+contacts: the review lists the addresses that join and values that differ, and
+a contact under another company with a work address blocks the merge
+(`different_companies`). After the commit, the contact that stays has every
+address, pipeline entry, task reference and discussion message, and the merged
+contact's old link opens it.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
