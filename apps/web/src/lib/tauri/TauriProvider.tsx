@@ -161,9 +161,11 @@ function TauriProvider(props: { children: JSX.Element }) {
   };
 
   onMount(() => {
+    let receivedStatusEvent = false;
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',
       (ev) => {
+        receivedStatusEvent = true;
         receiveBundleUpdateStatus(ev.payload);
       }
     );
@@ -175,10 +177,13 @@ function TauriProvider(props: { children: JSX.Element }) {
       );
     }
     fireAndForget(syncNativeReloadHold(), 'bundle-update');
-    // Fetch current status since events emitted before the listener registered are missed
+    // Fetch current status since events emitted before the listener registered are missed,
+    // without letting a stale snapshot response overwrite a newer status event.
     invoke<BundleUpdateStatus>('get_bundle_update_status')
       .then((status) => {
-        receiveBundleUpdateStatus(status);
+        if (!receivedStatusEvent) {
+          receiveBundleUpdateStatus(status);
+        }
       })
       .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
     onCleanup(() => {

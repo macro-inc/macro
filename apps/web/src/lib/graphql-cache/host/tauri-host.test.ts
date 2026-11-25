@@ -377,7 +377,6 @@ describe('createTauriCacheHost', () => {
       scope: 'scope-1',
       hotCapacity: 42,
       schemaSdl: expect.stringContaining('type GraphqlUser'),
-      clientId: host.clientId,
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read', {
       opId: `${host.clientId}:7`,
@@ -386,52 +385,6 @@ describe('createTauriCacheHost', () => {
       variables: undefined,
       entityResolvers,
     });
-    host.dispose();
-  });
-
-  it('tears down native client operations once on dispose or pagehide', async () => {
-    const first = createTauriCacheHost({ scope: 'scope-1' });
-    await first.readQuery({ opKey: 1, query: '{ x }' });
-    invokeMock.mockClear();
-
-    first.dispose();
-    first.dispose();
-    await vi.waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith('graphql_cache_teardown_client', {
-        clientId: first.clientId,
-      })
-    );
-    expect(
-      invokeMock.mock.calls.filter(
-        ([command, payload]) =>
-          command === 'graphql_cache_teardown_client' &&
-          (payload as { clientId?: string } | undefined)?.clientId ===
-            first.clientId
-      )
-    ).toHaveLength(1);
-
-    const second = createTauriCacheHost({ scope: 'scope-1' });
-    await second.readQuery({ opKey: 2, query: '{ x }' });
-    invokeMock.mockClear();
-    invokeMock.mockRejectedValueOnce(
-      'Command graphql_cache_teardown_client not found'
-    );
-
-    window.dispatchEvent(new Event('pagehide'));
-    await vi.waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith('graphql_cache_teardown_client', {
-        clientId: second.clientId,
-      })
-    );
-    second.dispose();
-    expect(
-      invokeMock.mock.calls.filter(
-        ([command, payload]) =>
-          command === 'graphql_cache_teardown_client' &&
-          (payload as { clientId?: string } | undefined)?.clientId ===
-            second.clientId
-      )
-    ).toHaveLength(1);
   });
 
   it('reports asynchronous native initialization failures', async () => {

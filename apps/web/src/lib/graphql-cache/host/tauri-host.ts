@@ -132,7 +132,6 @@ const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
 const ABANDON_COMMAND = 'graphql_cache_abandon';
-const TEARDOWN_CLIENT_COMMAND = 'graphql_cache_teardown_client';
 
 // The only commands a caller stops waiting for: a read falls back to the
 // network, and a hung init would block every request. Tauri cannot cancel a
@@ -530,7 +529,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         scope: options.scope,
         hotCapacity: options.hotCapacity,
         schemaSdl,
-        clientId,
       });
     } catch (error) {
       if (isMissingCommand(error, INIT_COMMAND)) {
@@ -550,22 +548,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
-  let clientTornDown = false;
-  function teardownClient() {
-    if (clientTornDown) return;
-    clientTornDown = true;
-    // Best effort: older native binaries lack this command and reject it.
-    fireAndForget(
-      invoke<void>(TEARDOWN_CLIENT_COMMAND, { clientId }).catch(
-        () => undefined
-      ),
-      'graphql-cache-host'
-    );
-  }
-  const onPageHide = () => teardownClient();
-  if (typeof window !== 'undefined') {
-    window.addEventListener('pagehide', onPageHide);
-  }
   fireAndForget(
     (async () => {
       try {
@@ -1239,10 +1221,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     dispose() {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('pagehide', onPageHide);
-      }
-      teardownClient();
       clearTimeout(affectedTimer);
       pendingAffected.clear();
       pendingReads.clear();

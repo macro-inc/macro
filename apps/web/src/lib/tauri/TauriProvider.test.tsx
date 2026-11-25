@@ -213,4 +213,41 @@ describe('TauriProvider hidden bundle update gating', () => {
         .mock.calls.filter(([command]) => command === 'perform_update')
     ).toHaveLength(2);
   });
+
+  it('does not let a late initial status snapshot overwrite a newer bundle-update-status event', async () => {
+    let resolveInitialStatus:
+      | ((status: BundleUpdateStatus) => void)
+      | undefined;
+    vi.mocked(invoke).mockImplementation((command) => {
+      if (command === 'get_bundle_update_status') {
+        return new Promise<BundleUpdateStatus>((resolve) => {
+          resolveInitialStatus = resolve;
+        });
+      }
+      return Promise.resolve(false);
+    });
+
+    render(() => (
+      <MaybeTauriProvider>
+        <div>app</div>
+      </MaybeTauriProvider>
+    ));
+    await waitFor(() => {
+      expect(statusListener).toBeDefined();
+      expect(resolveInitialStatus).toBeDefined();
+    });
+
+    // A live Completed event arrives before the initial snapshot resolves with Idle.
+    statusListener?.({ payload: { status: 'Completed' } });
+    resolveInitialStatus?.({ status: 'Idle' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    setDocumentHidden(true);
+    expect(
+      vi
+        .mocked(invoke)
+        .mock.calls.filter(([command]) => command === 'perform_update')
+    ).toHaveLength(1);
+  });
 });
