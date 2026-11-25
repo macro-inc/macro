@@ -37,7 +37,17 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `_agent-runtime.nix` builds its `node_modules` from the starter agent's own
   `bun.lock` (one fixed-output fetch), with `@macro-inc/muppet` and
   `@macro-inc/observability` (TypeScript source) and `@macro-inc/sdk` (built
-  against those packages) beside them.
+  against those packages) beside them. The runtime also supplies the starter
+  dependency manifest for service-only compatibility checks. The
+  `macro-agent-runtime-update` root helper stages immutable bundles and
+  keeps the atomic selection and recovery journal in `/home/.macro-agent-runtime`.
+  The ordered boot unit reconciles interruptions before the agent starts.
+  The launcher preloads Muppet's `host/maintenance.ts` when present in the
+  selected runtime. The starter's optional bridge calls into it after
+  `markHealthy` and registers detached work. Earlier images and agent repos
+  can still boot, and the updater requires the current invocation's
+  bridge receipt before it sets a fence.
+  See the [rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md).
   `_computer-use-linux.nix` builds computer-use-linux (MIT) from source at a
   pinned release.
 - `files/` holds the enrollment probe script, the agent's `start-agent`,
@@ -418,6 +428,9 @@ existing credentials: no new pairing and no Claude login.
   `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
   muppet API check (the code's `muppetApi` against the image's `apiLevel`), and
   agent-stopped's failure count, against local git repositories.
+- `tests/runtime-bundles/run.sh [image]` boots a disposable Docker agent
+  computer with synthetic input and exercises the systemd update
+  transaction, bridge, rollback and recovery.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;

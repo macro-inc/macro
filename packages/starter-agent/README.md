@@ -168,7 +168,7 @@ intake) and `OTEL_DEPLOYMENT_ENVIRONMENT` (its name), which the image exports as
 
 Exit codes of `run`: `0` stopped; `75` restart after a land; `78` a setting or
 credential is missing or invalid. The launcher (`start-agent`) adds: `78` when
-landed code needs a newer muppet than the image's (`muppetApi` above its
+landed code needs a newer muppet than the selected runtime has (`muppetApi` above its
 `apiLevel`) and last-good would run, so it rolls back; and `79` when there
 is nothing that would run to roll back to (a new agent, last-good itself, or a
 last-good that needs more too), which the service doesn't restart until the
@@ -179,3 +179,8 @@ and three in a row roll the workspace back to the last good HEAD, recorded as
 a commit so it stays rolled back. Any stop of last-good's code starts the
 count again. A lock that differs from the image's is adopted unless the
 agent changed `package.json`.
+
+The hosted launcher optionally preloads a maintenance bridge. The starter
+reports its normal chat readiness and registers detached work through that
+bridge. Earlier images run the same starter with its existing Muppet API
+requirement. See the [dev rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md#service-only-runtime-updates-in-dev).
