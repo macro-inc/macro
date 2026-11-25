@@ -925,7 +925,18 @@ data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\
         });
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
         drop(chunks);
-        pump(finished_answer(), None, Some(watch), caller).await;
+        pump(
+            finished_answer(),
+            {
+                let (mut meter, mut parser) = (None, SseUsage::default());
+                move |chunk: &reqwest::Result<axum::body::Bytes>| {
+                    observe(&mut meter, &mut parser, chunk)
+                }
+            },
+            Some(watch),
+            caller,
+        )
+        .await;
         assert_eq!(waiting(&screens, &agent).await, 2);
 
         // Gone with the whole answer still buffered, unread.
@@ -941,7 +952,17 @@ data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\
             claims,
         });
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
-        let pumped = tokio::spawn(pump(finished_answer(), None, Some(watch), caller));
+        let pumped = tokio::spawn(pump(
+            finished_answer(),
+            {
+                let (mut meter, mut parser) = (None, SseUsage::default());
+                move |chunk: &reqwest::Result<axum::body::Bytes>| {
+                    observe(&mut meter, &mut parser, chunk)
+                }
+            },
+            Some(watch),
+            caller,
+        ));
         drop((chunks, tail));
         pumped.await.unwrap();
         assert_eq!(waiting(&screens, &agent).await, 2);

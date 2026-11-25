@@ -99,6 +99,26 @@ for (const admin of [false, true]) {
     await expect(
       dialog.getByText('member@example.com', { exact: true })
     ).toBeInViewport();
+    const share = dialog
+      .getByText('Sharing off', { exact: true })
+      .locator('xpath=ancestor::section')
+      .getByRole('button', { name: 'Share my emails with CRM', exact: true });
+    await expect(share).toBeInViewport();
+    // Beside the status on desktop, wrapped right under it on a phone, and
+    // above both blacklists either way.
+    const status = await dialog
+      .getByText('Sharing off', { exact: true })
+      .boundingBox();
+    const shareBox = await share.boundingBox();
+    const teamHeading = await dialog
+      .getByRole('heading', { name: 'Team blacklist', exact: true })
+      .boundingBox();
+    expect(
+      status && shareBox && shareBox.y < status.y + status.height + 16
+    ).toBe(true);
+    expect(
+      shareBox && teamHeading && shareBox.y + shareBox.height < teamHeading.y
+    ).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('privacy-review.png') });
     const teamRemove = dialog.getByRole('button', {
       name: 'Remove team.example.com',
@@ -133,9 +153,7 @@ for (const admin of [false, true]) {
     await page.screenshot({
       path: testInfo.outputPath('privacy-controls.png'),
     });
-    await dialog
-      .getByRole('button', { name: 'Share my emails with CRM', exact: true })
-      .click();
+    await share.click();
     await expect(page.getByTestId('last-change')).toHaveText(
       JSON.stringify({
         action: 'set_consent',
@@ -299,9 +317,7 @@ test('owner can inspect and remove a private-thread exception', async ({
   await expect(
     dialog.getByText('Private conversation', { exact: true })
   ).toBeVisible();
-  await expect(
-    dialog.getByText(/A teammate’s contributed copy can still be visible/)
-  ).toBeVisible();
+  await expect(dialog.getByText(/Only your copy is hidden/)).toBeVisible();
   expect(
     await dialog.evaluate(
       (element) => element.scrollWidth <= element.clientWidth

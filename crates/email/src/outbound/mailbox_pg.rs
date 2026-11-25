@@ -1,5 +1,6 @@
 //! Postgres implementation of durable mailbox stream and reconciliation leases.
 
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::live_pass::{FolderPass, StreamKind};
 use crate::domain::mailbox::progress::ImportCompleted;
 use crate::domain::mailbox::schedule::PollIntervals;
@@ -109,15 +110,6 @@ impl From<&sqlx::Error> for DatabaseFailure {
     }
 }
 
-/// How far ahead of finished folders' polls a mail folder's import round is
-/// claimed. Polls of every finished folder of every mailbox share the sync
-/// workers, so they run minutes late; an import round that waited behind them
-/// would read a page only every few minutes and leave its import idle. Import
-/// rounds read at most a page per hundred imported messages (`pace_import`),
-/// so going first costs the polls little, and a poll due longer than this
-/// still goes ahead of every round that came due after it.
-const IMPORT_ROUND_HEAD_START_SECONDS: u32 = 300;
-
 /// The stream row a claim returns, from either kind's claim.
 struct ClaimedStream {
     id: Uuid,
@@ -175,24 +167,25 @@ impl MailboxSyncRepository for PgMailboxSync {
     async fn claim_stream(
         &self,
         lease_id: Uuid,
-        kind: StreamKind,
+        claim: StreamClaim,
     ) -> Result<Option<StreamLease>, MailboxError> {
-        let row = match kind {
-            // The longest-due import round goes ahead as if it had come due
-            // IMPORT_ROUND_HEAD_START_SECONDS earlier, so the next page of an
-            // import is read as soon as its mailbox has room instead of behind
-            // every finished folder's poll. A poll due longer than that comes
-            // first again. Each candidate is one row off its own index.
-            StreamKind::MailFolder => sqlx::query_as!(ClaimedStream, r#"
+        let kind = match claim {
+            StreamClaim::LivePass => StreamKind::LivePass,
+            StreamClaim::LongestDue | StreamClaim::ImportFirst => StreamKind::MailFolder,
+        };
+        let row = match claim {
+            // The longest-due import round, else the longest-due folder. Each
+            // candidate is one row off its own index.
+            StreamClaim::ImportFirst => sqlx::query_as!(ClaimedStream, r#"
                 WITH import_round AS (
-                    SELECT s.id, s.notified_traceparent, s.next_run_at - make_interval(secs => $2) AS claim_order
+                    SELECT s.id, s.notified_traceparent, 0 AS preference
                     FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
                     WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                         AND s.kind = 'mail_folder' AND NOT s.initial_complete AND s.next_run_at <= now()
                         AND (s.lease_until IS NULL OR s.lease_until < now())
                     ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
                 ), longest_due AS (
-                    SELECT s.id, s.notified_traceparent, s.next_run_at AS claim_order
+                    SELECT s.id, s.notified_traceparent, 1 AS preference
                     FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
                     WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                         AND s.kind = 'mail_folder' AND s.next_run_at <= now()
@@ -201,7 +194,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 ), candidate AS (
                     SELECT c.id, c.notified_traceparent FROM (
                         SELECT * FROM import_round UNION ALL SELECT * FROM longest_due
-                    ) c ORDER BY c.claim_order, c.id LIMIT 1
+                    ) c ORDER BY c.preference LIMIT 1
                 )
                 -- The trace context is handed over once: retries get traces of
                 -- their own, so a long deferral can't grow the webhook's trace.
@@ -211,8 +204,8 @@ impl MailboxSyncRepository for PgMailboxSync {
                 RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
                     s.position, s.initial_complete, s.fence, s.next_run_at, s.notified_at, c.notified_traceparent,
                     s.import_started_at
-            "#, lease_id, f64::from(IMPORT_ROUND_HEAD_START_SECONDS)).fetch_optional(&self.db).await,
-            StreamKind::LivePass => sqlx::query_as!(ClaimedStream, r#"
+            "#, lease_id).fetch_optional(&self.db).await,
+            StreamClaim::LongestDue | StreamClaim::LivePass => sqlx::query_as!(ClaimedStream, r#"
             WITH candidate AS (
                 SELECT s.id, s.notified_traceparent FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
                 WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation

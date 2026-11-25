@@ -66,8 +66,28 @@ export function reportTask(
   };
 }
 
-/** Stand-ins for the host's read-only priority, status and timer, naming their task. */
+function optionOf(task: ReportTask, definitionId: string): string | undefined {
+  const value = task.properties.find(
+    (property) => property.propertyDefinitionId === definitionId
+  )?.value;
+  return value?.__typename === 'GraphqlSelectOptionPropertyValue'
+    ? value.optionIds[0]
+    : undefined;
+}
+
+/**
+ * Stand-ins for the host's read-only priority, status and timer, naming their
+ * task and carrying the status and priority they were given.
+ */
 export const TEST_TASK_PARTS: TaskLabelParts = {
-  Lead: (props) => <button type="button">Status of {props.task.id}</button>,
+  Lead: (props) => (
+    <button
+      type="button"
+      data-status={optionOf(props.task, SYSTEM_PROPERTY_IDS.STATUS)}
+      data-priority={optionOf(props.task, SYSTEM_PROPERTY_IDS.PRIORITY)}
+    >
+      Status of {props.task.id}
+    </button>
+  ),
   Timer: (props) => <span>Timer on {props.taskId}</span>,
 };

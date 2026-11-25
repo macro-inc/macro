@@ -538,6 +538,33 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
+- An Outlook draft is a conflict when its content was edited outside Macro, or
+  when its version moved with no baseline recorded for it (below)
+  (`DraftChange::between` in `domain/mailbox/drafts/models.rs`): a mailbox
+  stamps drafts on its own (an add-in, a label policy) and Macro's own archive
+  moves them, which move the version and keep the content fingerprint. Compare
+  Outlook's copy with Outlook's earlier copy, never with what Macro submitted,
+  because Outlook rewrites whitespace as it stores a body. `base_content`
+  is that earlier copy once a new revision clears the checkpoint, always the
+  content of `base_version`: `settle_draft` writes it from the draft read,
+  `ingest` from the sync read (`MailboxMessage::draft_content`, the same digests
+  of the same fields), and a resolution clears it. It records the version it
+  was read at and counts only while that equals `base_version`, so a writer
+  that moves one without the other (a process from before it, during a deploy
+  or after a rollback) leaves no baseline; Macro's own move
+  (`record_write_version`) keeps the content and moves both. Without one, a
+  moved version conflicts. The fingerprint leaves attachments out, so a step
+  that acts on a moved version checks the approved files itself (`attached`). A refused PATCH
+  (412) is written again at most `UPDATE_ATTEMPTS` times, after a read that
+  shows no edit.
+- Every stopped draft logs `email_send.draft_failed` with its link, message,
+  waiting send attempts, code and the names (never values) of the raw Graph
+  fields that changed (`base_content` keeps each field's digest for that), and a
+  moved version it goes on with logs `email_send.draft_version_moved`. A send
+  admitted onto a stopped draft logs `email_send.admitted_stopped`, since no
+  worker takes that send up. Each
+  claimed draft step is one `outlook.draft.step` span, the parent of its Graph
+  requests. Stop a draft through `MailboxDraftService::fail`.
 - Each `email_message_mailbox_facts` probe rebuilds a message's facts from its
   labels and pending state. In the dynamic preview query, give a view's facts
   condition to `view_mailbox_fact` so it shares the presence/trash probe in
@@ -674,19 +701,28 @@ tools — hexagonal, heavily feature-gated.
   import, and any message that waited for room, behind its whole backlog.
   Gmail's backfill lists its next page behind the threads it queued for the
   same reason. Live folder streams are never paced.
-  A mail folder claim takes an import round ahead of finished folders that
-  came due less than five minutes before it (`IMPORT_ROUND_HEAD_START_SECONDS`
-  in `claim_stream`, which picks the earlier of two one-row candidates). The
+  Every other mail folder claim of a sync loop takes the longest-due import
+  round first, or the longest-due folder when no round is due
+  (`StreamClaim::ImportFirst`); the other claims take the longest-due folder
+  of either kind (`LongestDue`), where rounds and polls compete by how long
+  they have been due. `domain/mailbox/claim.rs`'s `ClaimTurns` counts the
+  claims (a turn that claims a live pass counts none), and
+  `IMPORT_FIRST_EVERY` caps the rounds' head start. Polls of every finished
+  folder share the sync loops and run minutes late, and a round that waited
+  behind them read a page only every few minutes while its import sat empty;
+  the import-first claims keep an import reading once its mailbox has room,
+  whatever the line's length, and the cap keeps a large import from taking
+  every claim. The
   import round comes off the partial index
   `email_sync_streams_import_round_claim`; keep its predicate and the query's
-  identical, or each claim reads every due finished folder. Polls of every
-  finished folder share the sync loops and run minutes late, and a round that
-  waited behind them read a page only every few minutes while its import sat
-  empty. A round waiting for room reads nothing: paced, or its page refused
-  by the request gate while its mailbox's message reads hold the import
-  slots, which waits the 10 s pace too. `enumerate_once` then goes on to the
-  next due stream (up to `PACED_CLAIMS_PER_TURN`); otherwise a large import's
-  waiting rounds, due again within seconds, would take the polls' turns.
+  identical, or each claim reads every due finished folder. Enumerate spans
+  record the claim in `outlook.claim` (`import_first`, `longest_due`,
+  `live_pass`). A round waiting for room reads nothing: paced, or its page
+  refused by the request gate while its mailbox's message reads hold the
+  import slots, which waits the 10 s pace too. `enumerate_once` then goes on
+  to the next due stream of the same claim (up to `PACED_CLAIMS_PER_TURN`);
+  otherwise a large import's waiting rounds, due again within seconds, would
+  take the polls' turns.
   The discovery that creates a folder's stream makes its first round due a
   little early by role (`import_round_lead_seconds`: Inbox, then Sent, then
   the rest): the rounds that read an import's first pages stay ahead of those
@@ -786,8 +822,12 @@ tools — hexagonal, heavily feature-gated.
   which held each import's end for about 90 s. So every live enqueue clears
   `is_import` on a row it merges into (`ON CONFLICT ... is_import = false`, or
   `AND EXCLUDED.is_import` for folder pages); keep that in a new one.
-- Outlook sync claims (catalog, folder streams, messages, contacts) skip a
-  link with `needs_reauth`; clearing the flag resumes them.
+- Outlook sync claims (folder streams, messages, contacts) skip a link with
+  `needs_reauth`; clearing the flag resumes them. Discovery still claims it, as
+  the probe that asks for a token again, and waits an hour after a refusal
+  (`REAUTHORIZATION_PROBE_SECONDS`); the token that works clears the flag
+  (`credentials.rs`), so a refusal that clears at Microsoft resumes sync
+  without a reconnect.
 - A folder discovery that Graph answers 404 at the Inbox
   (`MailFolderCatalog::NoMailbox`: the account has no mailbox Graph serves)
   marks the link `mailbox_unavailable_at` (`defer_reason=no_mailbox`, the

@@ -34,6 +34,10 @@ the Soup-backed thread list, and saved email views.
   `components/EmailRowStylePreview.tsx` draws Settings' inert sample of it
   with the real row, restoring Mail's list tokens that the settings card
   overrides.
+- `primitives/create-email-row-labels.ts`: the labels each row shows after its
+  tags (`ListEntity.labels`), named from the viewer's label list once per list
+  through `@queries/email/label-names`, which the open thread's pill and side
+  panel share.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the
@@ -127,6 +131,12 @@ the Soup-backed thread list, and saved email views.
   never cross a tab change, and `isLoading` stays false while they show, so
   gate "loading" UI on both.
 - Unread dots are presence in a small first unread page per view, never a count.
+- The search field also says it was left (`setFocused(false)`) as it
+  unmounts, inside the teardown of the view leaving Mail. Reading the list's
+  data source (`source`) there runs computations being disposed again,
+  which fails the navigation: leaving reads it in a microtask, and a field
+  without the focus has nothing to leave. Releases from a cleanup wait the
+  same way (`registerSearchField`).
 - Cmd+F is registered for the whole desktop view in
   `use-email-search-hotkeys.ts` and focuses the list header's field through
   `registerListSearch`; while a thread or a new email has replaced that
