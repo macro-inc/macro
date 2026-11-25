@@ -158,6 +158,10 @@ fn push_candidate_uuid(ids: &mut Vec<Uuid>, entity: &Entity<'_>, leg: &'static s
     }
 }
 
+/// Where an email list goes on below a page its read cut short: the sort
+/// value and id of the last thread it walked.
+type EmailContinuation = (chrono::DateTime<chrono::Utc>, uuid::Uuid);
+
 impl Identify for SoupCandidate {
     type Id = String;
 
@@ -1325,7 +1329,7 @@ where
     ) -> Result<
         (
             impl Iterator<Item = SoupCandidate>,
-            Option<(chrono::DateTime<chrono::Utc>, uuid::Uuid)>,
+            Option<EmailContinuation>,
         ),
         SoupErr,
     > {

@@ -1064,14 +1064,14 @@ pub(super) fn build_label_superset(
     // Two branches a label, its provider rows and the labels just put on in
     // Macro, each read by the label: the effective-labels view can't take a
     // label predicate, since its pending side computes the label per row.
-    let scoped = |mut f: SqlFragment| {
+    // One predicate on the message's inbox: two `ANY`s on the same column
+    // leave the planner guessing an inbox of a few thousand messages, so it
+    // probes the label once per message of a big one.
+    let scoped = |mut f: SqlFragment, message: &str| {
         f.push_raw(format!(
-            " AND {LABEL_NOT_BEING_DELETED} AND lm.link_id = ANY("
+            " AND {LABEL_NOT_BEING_DELETED} AND {message}.link_id = "
         ));
-        f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
-        // As the condition itself: only inboxes the viewer owns or manages.
-        f.push_raw(") AND lm.link_id = ");
-        f.extend(viewer_links());
+        f.extend(viewer_links_within(links));
         f
     };
     let branches = labels
@@ -1083,18 +1083,18 @@ pub(super) fn build_label_superset(
             provider.extend(SqlFragment::bind_uuid(label));
             provider.push_raw(format!(" AND {PENDING_LABEL_NOT_TAKEN_OFF}"));
             // Pending changes are few and have no index by attribute: read
-            // them first (the fence keeps the planner from walking the
-            // inbox's messages and probing each), then their messages.
+            // them first, then each one's message by its key. Both fences keep
+            // the planner from hashing every message of the inbox to join them.
             let mut pending = SqlFragment::raw(
-                "SELECT lm.thread_id FROM (SELECT p.message_id FROM email_pending_mailbox_state p WHERE p.desired = 'true'::jsonb AND p.attribute = 'tag:' || (SELECT pl.provider_label_id FROM email_labels pl WHERE pl.id = ",
+                "SELECT m.thread_id FROM (SELECT p.message_id FROM email_pending_mailbox_state p WHERE p.desired = 'true'::jsonb AND p.attribute = 'tag:' || (SELECT pl.provider_label_id FROM email_labels pl WHERE pl.id = ",
             );
             pending.extend(SqlFragment::bind_uuid(label));
             pending.push_raw(
-                ") OFFSET 0) put_on JOIN email_messages lm ON lm.id = put_on.message_id JOIN email_labels l ON l.link_id = lm.link_id AND l.id = ",
+                ") OFFSET 0) put_on CROSS JOIN LATERAL (SELECT lm.thread_id, lm.link_id FROM email_messages lm WHERE lm.id = put_on.message_id OFFSET 0) m JOIN email_labels l ON l.link_id = m.link_id AND l.id = ",
             );
             pending.extend(SqlFragment::bind_uuid(label));
             pending.push_raw(" WHERE TRUE");
-            [scoped(provider), scoped(pending)]
+            [scoped(provider, "lm"), scoped(pending, "m")]
         })
         .collect::<Vec<_>>();
     Some(AddressSuperset {
@@ -1131,6 +1131,22 @@ const PENDING_LABEL_NOT_TAKEN_OFF: &str = "NOT EXISTS (SELECT 1 FROM email_pendi
 /// provider row or a pending change putting it on, and no pending change
 /// taking it off.
 const MESSAGE_CARRIES_LABEL: &str = "(EXISTS (SELECT 1 FROM email_message_labels ml WHERE ml.message_id = lm.id AND ml.label_id = l.id) OR EXISTS (SELECT 1 FROM email_pending_mailbox_state p WHERE p.message_id = lm.id AND p.attribute = 'tag:' || l.provider_label_id)) AND NOT EXISTS (SELECT 1 FROM email_pending_mailbox_state p WHERE p.message_id = lm.id AND p.attribute = 'tag:' || l.provider_label_id AND p.desired <> 'true'::jsonb)";
+
+/// `ANY` of `links` the viewer owns or manages, read once.
+fn viewer_links_within(links: &[Uuid]) -> SqlFragment {
+    let mut f = SqlFragment::raw(
+        "ANY(ARRAY(SELECT x FROM (SELECT el.id FROM email_links el WHERE el.macro_id = ",
+    );
+    f.extend(SqlFragment::bind_viewer());
+    f.push_raw(
+        " UNION ALL SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = ",
+    );
+    f.extend(SqlFragment::bind_viewer());
+    f.push_raw(") AS own(x) WHERE x = ANY(");
+    f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+    f.push_raw(")))");
+    f
+}
 
 /// `ANY` of the inboxes the viewer owns or manages, read once: as an `IN`
 /// subquery the planner hashes every message of the inbox to match it.
