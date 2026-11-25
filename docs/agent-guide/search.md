@@ -15,7 +15,7 @@ operators, the search service's (`type:task`, `status:in_progress`,
 `is:unread`, `in:inbox`); `OR` between two of the same operator joins them. The
 field draws every whole operator in the accent colour and offers operator
 names, then their values (types, statuses, priorities, `me` and people, the
-person's tags, inboxes and channels), under it as they are typed: arrow keys
+person's tags, inboxes, and channels and DMs, a DM by the other person's name as `in:#"Ana Lima"`), under it as they are typed: arrow keys
 move, Enter or a click writes the row, Escape hides them. As in Mail, a plain word
 offers the filter it stands for first (`tasks` gives `type:task`, also `email`,
 `docs`, `unread`), and a word of three letters or more that starts a person's

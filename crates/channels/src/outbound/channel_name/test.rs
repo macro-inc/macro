@@ -377,14 +377,22 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
         sqlx::raw_sql(&format!("SET plan_cache_mode = {plan_cache_mode}"))
             .execute(&mut *connection)
             .await?;
-        for (patterns, excluded) in [
-            (vec!["%person%"], vec![]),
-            (vec!["%zzz%"], vec![]),
-            (vec!["%zzz%", "%person%", "%plan%"], vec![]),
-            (vec!["%person%"], vec!["%plan%", "%bot%"]),
+        for (channel_types, regex, patterns, excluded) in [
+            ("", false, vec!["%person%"], vec![]),
+            ("", false, vec!["%zzz%"], vec![]),
+            ("", false, vec!["%zzz%", "%person%", "%plan%"], vec![]),
+            ("", false, vec!["%person%"], vec!["%plan%", "%bot%"]),
+            // The search service's `in:#` lookup: every type named, DMs
+            // included, and one anchored name that matches nothing.
+            (
+                "public,private,team,direct_message",
+                true,
+                vec!["^zzz$"],
+                vec![],
+            ),
         ] {
             let row = sqlx::raw_sql(&format!(
-                "EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT JSON) EXECUTE match_channel_names('{VIEWER}', '{{}}', '{{}}', NULL, NULL, '{{{}}}', false, '{{{system_bot_ids}}}', '{{{system_bot_names}}}', 51, '{{{}}}')",
+                "EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT JSON) EXECUTE match_channel_names('{VIEWER}', '{{}}', '{{{channel_types}}}', NULL, NULL, '{{{}}}', {regex}, '{{{system_bot_ids}}}', '{{{system_bot_names}}}', 51, '{{{}}}')",
                 patterns.join(","),
                 excluded.join(",")
             ))
@@ -395,7 +403,7 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
             let mut nodes = Vec::new();
             plan_nodes(&explain[0]["Plan"], &mut nodes);
             let context = format!(
-                "{plan_cache_mode}, {patterns:?} leaving out {excluded:?}:\n{}",
+                "{plan_cache_mode}, {channel_types:?}, {patterns:?} leaving out {excluded:?}:\n{}",
                 serde_json::to_string_pretty(&explain)?
             );
 

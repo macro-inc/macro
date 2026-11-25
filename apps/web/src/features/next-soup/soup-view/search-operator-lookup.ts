@@ -9,7 +9,7 @@ import type { createTagFilter } from './filters-bar/tag-filter-state';
 /**
  * What the names typed into Search operators reach, from what the app
  * already holds for the Search filters: the caller's tag options, their
- * inboxes, and the named channels they are in. Names match ignoring case,
+ * inboxes, and the channels and DMs they are in. Names match ignoring case,
  * the whole name, as the search service matches them.
  */
 export function createSearchOperatorLookup(
@@ -17,8 +17,8 @@ export function createSearchOperatorLookup(
 ): Accessor<SearchOperatorLookup> {
   const userId = useUserId();
   const linksQuery = useMailAccountsQuery();
-  // The channel bucket leaves DMs out, as `in:#` does.
-  const channels = useQuickAccess().useList('channel').items;
+  // A DM goes by the other person's name, as the channel list shows it.
+  const channels = useQuickAccess().useList('channel', 'dm').items;
 
   return createMemo(() => {
     const tags = tagFilter.options();
