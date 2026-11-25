@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::models::mailbox_action::MailboxActionTarget;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_modern_command_that_cannot_fit_a_fresh_budget_fails_loudly(db: PgPool) {
+async fn a_modern_command_that_cannot_fit_a_fresh_budget_is_quarantined(db: PgPool) {
     let (sync, _, work, thread) = setup(&db).await;
     let targets = super::action_groups::targets(&db, work.mailbox.link_id, thread, 65).await;
     let id = command(&db, work.mailbox.link_id, &targets, -60.0).await;
@@ -14,9 +14,23 @@ async fn a_modern_command_that_cannot_fit_a_fresh_budget_fails_loudly(db: PgPool
     .await
     .unwrap();
     assert!(matches!(
-        sync.claim_command(Uuid::now_v7()).await,
-        Err(MailboxError::Persistence)
+        sync.claim_command(Uuid::now_v7()).await.unwrap(),
+        SyncClaim::Progress
     ));
+    let quarantined = sqlx::query!(
+        r#"
+        SELECT c.status, q.reason
+        FROM email_mailbox_commands c
+        JOIN email_mailbox_work_quarantine q ON q.work = 'commands' AND q.work_id = c.id
+        WHERE c.id = $1
+        "#,
+        id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(quarantined.status, "failed");
+    assert_eq!(quarantined.reason, "probe_budget");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

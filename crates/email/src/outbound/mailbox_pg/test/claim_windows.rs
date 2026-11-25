@@ -457,7 +457,7 @@ async fn a_claim_routes_legacy_rows_by_the_link_without_background_repair(db: Pg
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn renewing_a_fresh_stream_lease_does_not_rewrite_its_indexed_deadline(db: PgPool) {
+async fn renewing_a_fresh_stream_lease_extends_its_deadline(db: PgPool) {
     let (repo, _) = fixture(&db).await;
     let lease = repo
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
@@ -466,7 +466,8 @@ async fn renewing_a_fresh_stream_lease_does_not_rewrite_its_indexed_deadline(db:
         .into_lease()
         .unwrap();
     let before = sqlx::query_scalar!(
-        r#"SELECT xmin::text AS "version!" FROM email_sync_streams WHERE id=$1"#,
+        r#"UPDATE email_sync_streams SET lease_until=now()+interval '170 seconds'
+        WHERE id=$1 RETURNING lease_until AS "deadline!""#,
         lease.id
     )
     .fetch_one(&db)
@@ -474,13 +475,13 @@ async fn renewing_a_fresh_stream_lease_does_not_rewrite_its_indexed_deadline(db:
     .unwrap();
     repo.renew(SyncLease::Stream(&lease)).await.unwrap();
     let after = sqlx::query_scalar!(
-        r#"SELECT xmin::text AS "version!" FROM email_sync_streams WHERE id=$1"#,
+        r#"SELECT lease_until AS "deadline!" FROM email_sync_streams WHERE id=$1"#,
         lease.id
     )
     .fetch_one(&db)
     .await
     .unwrap();
-    assert_eq!(before, after);
+    assert!(after > before);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -722,7 +723,7 @@ async fn maintenance_only_windows_park_at_most_64_rows_and_do_not_report_idle(db
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn message_renewals_write_only_when_the_owned_lease_needs_an_extension(db: PgPool) {
+async fn message_renewals_extend_owned_leases_and_reject_stale_owners(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     sqlx::query!(
         "INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES ($1,1,'renew-message',false)",
@@ -735,15 +736,19 @@ async fn message_renewals_write_only_when_the_owned_lease_needs_an_extension(db:
         .into_lease()
         .unwrap();
     let before = sqlx::query_scalar!(
-        r#"SELECT xmin::text AS "version!" FROM email_message_reconciliation WHERE link_id=$1 AND provider_id='renew-message'"#,
+        r#"UPDATE email_message_reconciliation SET lease_until=now()+interval '170 seconds'
+        WHERE link_id=$1 AND provider_id='renew-message' RETURNING lease_until AS "deadline!""#,
         link,
-    ).fetch_one(&db).await.unwrap();
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     repo.renew(SyncLease::Message(&lease)).await.unwrap();
     let fresh = sqlx::query_scalar!(
-        r#"SELECT xmin::text AS "version!" FROM email_message_reconciliation WHERE link_id=$1 AND provider_id='renew-message'"#,
+        r#"SELECT lease_until AS "deadline!" FROM email_message_reconciliation WHERE link_id=$1 AND provider_id='renew-message'"#,
         link,
     ).fetch_one(&db).await.unwrap();
-    assert_eq!(before, fresh);
+    assert!(fresh > before);
 
     // Advance the persisted lease age without sleeping or changing its owner.
     sqlx::query!(
