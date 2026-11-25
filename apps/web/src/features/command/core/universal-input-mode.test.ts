@@ -41,3 +41,12 @@ it('keeps a shorter edited draft in composer mode until cleared', () => {
   expect(shouldUseUniversalInput('email julia', true)).toBe(true);
   expect(shouldUseUniversalInput(' \n ', true)).toBe(false);
 });
+
+it("doesn't count an opener's bound token toward the composer length", () => {
+  const binding = {
+    token: 'tag:🎉',
+    tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+  };
+  const text = 'tag:🎉 quarterly planning review notes';
+  expect(shouldUseUniversalInputForSearch(text, false, [binding])).toBe(false);
+});

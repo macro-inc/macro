@@ -4169,7 +4169,7 @@ export type ParticipantAction = 'add' | 'remove';
 /**
  * The kind of record merged.
  */
-export type ToolMergeRecordType = 'company';
+export type ToolMergeRecordType = 'company' | 'contact';
 /**
  * What happens to teammates' email sharing that names a merged record.
  */
@@ -13479,16 +13479,16 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Merge duplicate CRM companies into the one that stays, exactly as a PreviewMerge review showed: people, domains, pipeline entries, references, discussions, favorites and lists move to it and the merged companies are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the company that stays. Refused with merge_preview_stale when anything changed since the review: preview again.
+ * Merge duplicate CRM companies, or duplicate people (contacts), into the one that stays, exactly as a PreviewMerge review showed: for companies, people, domains and lists move to it; for contacts, addresses and mailbox sources; for both, pipeline entries, references, discussions and favorites. The merged records are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the record that stays. Refused with merge_preview_stale when anything changed since the review: preview again.
  */
 export interface MergeRecords {
   recordType: ToolMergeRecordType;
   /**
-   * The company that stays, as reviewed.
+   * The record that stays, as reviewed.
    */
   survivorId: string;
   /**
-   * The companies merged into it, as reviewed.
+   * The records merged into it, as reviewed.
    */
   sourceIds: string[];
   /**
@@ -13652,16 +13652,16 @@ export interface OpenDirectMessageResponse {
   summary: string;
 }
 /**
- * Review merging duplicate CRM companies into the one that stays, without changing anything. Returns what moves (people, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged company, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging.
+ * Review merging duplicate CRM companies, or duplicate people (contacts), into the one that stays, without changing anything. Returns what moves (people, addresses, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged record, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging.
  */
 export interface PreviewMerge {
   recordType: ToolMergeRecordType;
   /**
-   * The company that stays; its name, domains and values win.
+   * The record that stays: its name and values win, and a company keeps its domains, a contact its company and primary address.
    */
   survivorId: string;
   /**
-   * The companies merged into it and deleted, at most ten.
+   * The records of the same kind merged into it and deleted, at most ten.
    */
   sourceIds: string[];
 }

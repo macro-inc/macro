@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   createEmailSearchSuggestions,
   type EmailSearchSuggestions,
+  emailSearchNameBeingTyped,
 } from './create-email-search-suggestions';
 import { emailSearchCompletionText } from './email-search-operators';
 
@@ -28,6 +29,7 @@ const recentListed = (suggestions: EmailSearchSuggestions) =>
         { kind: 'value' },
         { kind: 'person' },
         { kind: 'label' },
+        { kind: 'word' },
         (completion) => emailSearchCompletionText(completion)
       )
       .exhaustive()
@@ -262,6 +264,97 @@ it('puts a picked recent search first', () => {
     ]);
     dispose();
   });
+});
+
+it('offers the filter a plain word stands for, and picking it replaces the words', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('invoice attachment');
+    expect(recentListed(suggestions)).toEqual(['has:attachment ']);
+    // Enter still searches the word: no row is picked out until an arrow is.
+    expect(suggestions.active()).toBe(-1);
+    expect(suggestions.editsQuery?.(0)).toBe(true);
+    suggestions.pick(0);
+    expect(search()).toBe('invoice has:attachment ');
+
+    setSearch('budget this week');
+    expect(recentListed(suggestions)[0]).toBe('newer_than:7d ');
+    suggestions.pick(0);
+    expect(search()).toBe('budget newer_than:7d ');
+
+    // A view alone would search nothing, so `sent` needs other words.
+    setSearch('sent');
+    expect(recentListed(suggestions)).toEqual([]);
+    setSearch('invoice sent');
+    expect(recentListed(suggestions)).toEqual(['in:sent ']);
+    dispose();
+  });
+});
+
+it('offers mail from and to someone a plain word names', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('budget ana');
+    expect(recentListed(suggestions)).toEqual([
+      'from:ana@example.com ',
+      'to:ana@example.com ',
+    ]);
+    suggestions.pick(1);
+    expect(search()).toBe('budget to:ana@example.com ');
+
+    // Someone known only by address, or a word starting none of a name.
+    for (const typed of ['budget bo', 'budget xyz']) {
+      setSearch(typed);
+      expect(recentListed(suggestions)).toEqual([]);
+    }
+    dispose();
+  });
+});
+
+it('matches the people found by name without accents or apostrophe spelling', () => {
+  createRoot((dispose) => {
+    const [search, setSearch] = createSignal('');
+    const suggestions = createEmailSearchSuggestions({
+      userId: () => 'user-a',
+      search,
+      setSearch,
+      hasResults: () => true,
+      openedThread: () => undefined,
+      isResult: () => true,
+      scopeAvailable: () => true,
+      people: () => [
+        { id: 'u3', email: 'jose@example.com', name: 'José Ruiz' },
+        { id: 'u4', email: 'oneil@example.com', name: "Ana O'Neil" },
+      ],
+    });
+    suggestions.setFocused(true);
+    setSearch('jose');
+    expect(recentListed(suggestions)).toEqual([
+      'from:jose@example.com ',
+      'to:jose@example.com ',
+    ]);
+    setSearch('o’neil');
+    expect(recentListed(suggestions)).toEqual([
+      'from:oneil@example.com ',
+      'to:oneil@example.com ',
+    ]);
+    dispose();
+  });
+});
+
+it('reads a plain word of three letters or more as a name being typed', () => {
+  expect(emailSearchNameBeingTyped('budget ana')).toBe('ana');
+  expect(emailSearchNameBeingTyped("o'neil")).toBe("o'neil");
+  // An accent typed as a combining mark is still a name.
+  expect(emailSearchNameBeingTyped('Jose\u0301')).toBe('Jose\u0301');
+  expect(emailSearchNameBeingTyped('o’neil')).toBe('o’neil');
+  for (const text of ['an', 'ana ', 'from:ana', '-ana', '"ana', 'q3x']) {
+    expect(emailSearchNameBeingTyped(text)).toBeUndefined();
+  }
 });
 
 it('lists recent searches only while the field has focus', () => {

@@ -295,7 +295,11 @@ function MobileFullTextResults(props: {
 }) {
   const state = props.session;
   const category = () => 'all' as const;
-  const search = createMobileFullTextSearch(state.query, props.operatorLookup);
+  const search = createMobileFullTextSearch(
+    state.query,
+    props.operatorLookup,
+    state.bindings
+  );
   usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>
     !!search.error() && !isTransientRequestError(search.error());
@@ -461,7 +465,9 @@ function MobileFullTextResults(props: {
  */
 export function MobileSearchResults() {
   const session = createMobileSearchEntry();
-  const parts = createMemo(() => searchQueryParts(session.query()));
+  const parts = createMemo(() =>
+    searchQueryParts(session.query(), session.bindings())
+  );
   const names = createMemo(() => nameSearch(parts()));
   const operatorLookup = createSearchOperatorLookup(createTagOptions());
   const suggestions = createMobileSearchSuggestions(
@@ -483,6 +489,7 @@ export function MobileSearchResults() {
         <MobileSearchStarters
           query={session.query}
           setQuery={session.setQuery}
+          bindings={session.bindings}
         />
         <Show when={authenticated() === true ? accountId() : undefined} keyed>
           {(id) => (

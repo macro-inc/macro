@@ -112,6 +112,8 @@ export type {
 export {
   type CrmCompanyMerge,
   type CrmCompanyMergeCommit,
+  type CrmContactMerge,
+  type CrmContactMergeCommit,
   CrmMergeNamespace,
   type CrmMergeOutcome,
   type CrmMergePreview,

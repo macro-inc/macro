@@ -5,11 +5,15 @@
 # ingest and queries up; one compactor, which only works in the background.
 #
 # The compactor and queriers hold whole traces, so a few large ones set their
-# memory: at 1Gi both ran out on dev traffic alone, and the compactor never
-# finished a cycle, so blocks piled up unmerged and past retention. The
-# compactor also merges fewer traces per output block than Tempo's default.
-# Its request reserves most of what it may use: the m7g.large nodes have
-# little room above their requests, and a second compactor would double that.
+# memory: at 1Gi both ran out on dev traffic alone, and at 2.5Gi the
+# compactor still ran out within seconds of starting to compact, so blocks
+# piled up unmerged and past retention. The compactor also merges fewer traces
+# per output block than Tempo's default. It runs on the m7g.xlarge nodes'
+# headroom; a second compactor would double its reservation.
+#
+# The compactor waits a minute for its ring and then reads the whole
+# blocklist before /ready answers, which outlasted the chart's liveness
+# probe (60s delay, three misses), so its probe waits longer.
 #
 # The metrics generator turns spans into span metrics and service graphs
 # and writes them to Mimir, and keeps recent blocks for TraceQL metrics.
@@ -117,7 +121,16 @@ in
         distributor = stateless "distributor" 2 "128Mi" "512Mi";
         querier = stateless "querier" 2 "512Mi" "1536Mi";
         queryFrontend = stateless "query-frontend" 2 "128Mi" "512Mi";
-        compactor = stateless "compactor" 1 "1536Mi" "2560Mi";
+        compactor = stateless "compactor" 1 "4Gi" "6Gi" // {
+          livenessProbe = {
+            httpGet = {
+              path = "/ready";
+              port = "http-metrics";
+            };
+            initialDelaySeconds = 180;
+            timeoutSeconds = 5;
+          };
+        };
 
         metricsGenerator = stateless "metrics-generator" 2 "256Mi" "1Gi" // {
           enabled = true;

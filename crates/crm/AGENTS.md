@@ -160,8 +160,19 @@ tools/HTTP/GraphQL surfaces over them.
   a merged company never point at the survivor: keep turns them into its
   domains, stop removes them, each as a new revision with a `records_merged`
   entry in the owner's sharing history. Delete the merged rows last, after
-  everything that would cascade from them has moved. Contact merges plug a
-  contact store in beside the company one.
+  everything that would cascade from them has moved. The owners' moves are
+  one step for every record type (`move_owned_rows`); each type brings its
+  own records' locks, state and fold (`companies_repo/merge.rs`,
+  `companies_repo/contact_merge.rs`).
+- A contact merge locks every address's domain, keeps the survivor's name,
+  company and primary address (one without a primary takes its oldest after
+  the merged contacts are deleted), adds the others' addresses after its own
+  and each mailbox source once, and spans their interaction dates. Someone
+  under another company with a work address (or no address) blocks it
+  (`different_companies`), as a contact edit couldn't move them. Sharing
+  rules naming a merged contact become rules for its addresses with keep,
+  and lose that contact with stop; their other selectors stay. CRM lists
+  hold companies only, so contact merges leave them alone.
 - A company merged away keeps answering to its old id through
   `crm_company_aliases`: the `/crm/companies/{company_id}` routes, the company and
   pipeline tools, a contact's company, record associations and `/crm/previews`.

@@ -83,10 +83,16 @@ flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
 Signal; selecting it while in Focus or Noise keeps that tab.
 By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
 `Scheduled`, and `Reminders` (when enabled), followed by **Library** (`All mail`,
-`Archived`, `Shared`, `Spam`, and `Trash`) and **Saved views** (flagged, see
-[Saved email views](#saved-email-views)). Drag the Library or Saved views
-heading before or after the unnamed Inbox/Favorites/Drafts/Sent group to change
-their shared local order. The unnamed group has no grip or keyboard move control.
+`Archived`, `Shared`, `Spam`, and `Trash`), **Labels** and **Saved views**
+(flagged, see [Saved email views](#saved-email-views)). Labels lists the labels
+people made in the inboxes the account picker shows, a row per inbox when it
+shows several, nested Gmail labels as a tree; each inbox shows eight, then
+`N more`, which also holds the labels Gmail hides from its own list. It shows no
+counts and is missing while there are no labels. A label opens `All mail`
+filtered to it alone, and the header names it; choosing the open label again
+shows `All mail` without it. On phone the section comes last in the sheet. Drag
+the Library, Labels or Saved views heading before or after the unnamed
+Inbox/Favorites/Drafts/Sent group to change their shared local order. The unnamed group has no grip or keyboard move control.
 Accounts stays pinned at the top and is not a drop target. Section order is per
 account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
 tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or
@@ -182,11 +188,22 @@ operator's name list that operator above the recent searches (`su` gives
 found and ranked as the composer's recipient picker finds them, and finish
 with their address; `label:` lists the person's tags and their inboxes' own
 labels (not system labels such as Inbox), quoting a name with a space.
+A plain word that stands for a filter offers it as the first row
+(`unread`, `starred`, `attachment`, `today`, `this week`, and `sent` beside
+other words, since a view alone searches nothing), and a word of three or
+more letters that starts part of someone's name, accents aside, offers mail
+from them and to them; picking either replaces the word with the operator,
+and `Enter` still searches the word as typed. While the field is open, an
+info button beside the **Search** title lists nine operators with what each
+finds when hovered, and **All search operators** (or pressing the button)
+opens the operator list on the docs site's Search page; a press keeps the
+focus in the field, since an empty one closes on blur.
 People and labels are read only while the field has focus and such an
-operator is typed. Picking one finishes it the same way. A row is the
+operator is typed (people also for a plain word of three letters or more). Picking one finishes it the same way. A row is the
 filter's text, drawn as an operator, with a few words beside it only when
 they say something the text does not (`to:` also covers Cc and Bcc;
-`after:` counts its day, `before:` does not). Typing changes the rows, so it
+`after:` counts its day, `before:` does not). A row a plain word offers
+instead names what it finds, with its operator beside it to learn. Typing changes the rows, so it
 also clears the row the arrow keys picked out. Operators stay ordinary text (caret,
 selection, `Backspace`, paste), and every one the search service would read,
 once complete and valid (`in:sent`, `subject:"team lunch"`, `-from:ana`,
@@ -213,7 +230,9 @@ menu and keeps the keyboard up, and the list
 below shows the results as ordinary email rows, updating as you type and
 keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
-keeps the keyboard; Cancel (or Android Back) clears the search and returns to
+keeps the keyboard, and while the field is empty an info button in its place
+opens a **Search tips** sheet with the same operator list; Cancel (or Android
+Back) clears the search and returns to
 the mailbox. Opening a result and coming back returns to the search page with
 its results. If the flag turns off, the tab changes to one that cannot be
 searched, or a view is picked before a word is typed while the page is open,
@@ -2003,7 +2022,11 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   a comma, or leaving the field), Match from (From/To/Cc/Bcc toggle buttons, at
   least one on), Subject contains, Tags (a chip picker over the same team and
   personal tags as Filters, shown when any exist; a tag the viewer can no
-  longer see reads Unavailable tag and stays), and an **Advanced settings** toggle that
+  longer see reads Unavailable tag and stays), Labels (a chip picker over the
+  labels people made, by whole name as Filters' Labels group lists them, with
+  each inbox's avatar when labels span several, shown when any exist; a label
+  the viewer can no longer see reads Unavailable label and stays), and an
+  **Advanced settings** toggle that
   reveals Importance, Read status, Done, Latest activity, Inboxes (with two or more
   linked), and **Has** (Starred, Calendar invite, PDFs, Images, Documents); it starts
   open when the view already sets one of them. Values within one
