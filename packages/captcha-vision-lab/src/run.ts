@@ -308,6 +308,7 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
       checkPage('before_planner', observationsOf(afterCapture), attestation())
     );
     if (inputRejection !== undefined) return inputRejection;
+    if (deadline.aborted) return finish('timeout', 'challenge_deadline');
 
     // Exactly one planner call per challenge.
     record.plannerCalls += 1;

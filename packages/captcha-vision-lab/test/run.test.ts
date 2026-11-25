@@ -3,10 +3,11 @@
  * origin. Hostile pages are made by wrapping the lab's own handler, so each
  * negative case still holds a genuine, consumed capability where it can.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import * as browser from '../src/browser.ts';
 import { relation } from '../src/families.ts';
 import { mockPlanner, type PlannerInput } from '../src/planner.ts';
 import { seededRandom } from '../src/random.ts';
@@ -393,6 +394,44 @@ describe('the provenance gate fails closed', () => {
 });
 
 describe('the per-challenge deadline', () => {
+  test('a deadline during the post-capture observe prevents the planner call', async () => {
+    const lab = createLab();
+    handler = lab.fetch;
+    const { planner, inputs } = recordingPlanner('A');
+    const deadline = new AbortController();
+    const timeout = spyOn(AbortSignal, 'timeout').mockReturnValue(
+      deadline.signal
+    );
+    const startBrowserHost = browser.startBrowserHost;
+    const startHost = spyOn(browser, 'startBrowserHost').mockImplementation(
+      () => {
+        const host = startBrowserHost();
+        if (typeof host === 'string') return host;
+
+        return {
+          ...host,
+          request: async (message) => {
+            const pending = host.request(message);
+            if (message.type === 'observe') deadline.abort();
+            return pending;
+          },
+        };
+      }
+    );
+
+    try {
+      const record = await run(lab, planner);
+
+      expect(record.outcome).toBe('timeout');
+      expect(record.detail).toBe('challenge_deadline');
+      expect(record.plannerCalls).toBe(0);
+      expect(inputs).toHaveLength(0);
+    } finally {
+      startHost.mockRestore();
+      timeout.mockRestore();
+    }
+  });
+
   test('a planner that never answers ends in a kept timeout, no action', async () => {
     const lab = createLab();
     handler = lab.fetch;
