@@ -14,6 +14,7 @@ import {
 import {
   keepPreviousData,
   type QueryClient,
+  MutationObserver as QueryMutationObserver,
   queryOptions,
   type Updater,
   useMutation,
@@ -256,63 +257,81 @@ async function listViewInCachedHistory(
   });
 }
 
+type UpsertToHistoryCallbacks = MutationCallbacks<
+  void,
+  Error,
+  UpsertToHistoryParams,
+  UpsertToHistoryContext
+>;
+
+async function upsertToHistory(params: UpsertToHistoryParams): Promise<void> {
+  const upserted = throwOnErr(
+    async () =>
+      await storageServiceClient.upsertItemToUserHistory({
+        itemId: params.itemId,
+        itemType: params.itemType,
+      })
+  );
+  fireAndForget(
+    listViewInCachedHistory(params, upserted),
+    'history-cached-view'
+  );
+  await upserted;
+}
+
+const UPSERT_TO_HISTORY_CALLBACKS: UpsertToHistoryCallbacks = {
+  onMutate: async () => {
+    await queryClient.cancelQueries({
+      queryKey: historyQueryOptions.queryKey,
+    });
+
+    const previousData = getHistoryItems();
+
+    return { previousData };
+  },
+  onError: (_err, _params, context) => {
+    if (context?.previousData) {
+      setHistoryData(context.previousData);
+    }
+  },
+  onSettled: () => {
+    queryClient.invalidateQueries({
+      queryKey: historyQueryOptions.queryKey,
+    });
+  },
+};
+
+function upsertToHistoryMutationOptions(callbacks?: UpsertToHistoryCallbacks) {
+  return {
+    mutationFn: upsertToHistory,
+    ...withCallbacks(UPSERT_TO_HISTORY_CALLBACKS, callbacks),
+  };
+}
+
 export function useUpsertToHistoryMutation(
-  callbacks?: MutationCallbacks<
-    void,
-    Error,
-    UpsertToHistoryParams,
-    UpsertToHistoryContext
-  >,
+  callbacks?: UpsertToHistoryCallbacks,
   client?: Accessor<QueryClient>
 ) {
-  return useMutation(
-    () => ({
-      mutationFn: async (params: UpsertToHistoryParams) => {
-        const upserted = throwOnErr(
-          async () =>
-            await storageServiceClient.upsertItemToUserHistory({
-              itemId: params.itemId,
-              itemType: params.itemType,
-            })
-        );
-        fireAndForget(
-          listViewInCachedHistory(params, upserted),
-          'history-cached-view'
-        );
-        await upserted;
-      },
-      ...withCallbacks<
-        void,
-        Error,
-        UpsertToHistoryParams,
-        UpsertToHistoryContext
-      >(
-        {
-          onMutate: async () => {
-            await queryClient.cancelQueries({
-              queryKey: historyQueryOptions.queryKey,
-            });
+  return useMutation(() => upsertToHistoryMutationOptions(callbacks), client);
+}
 
-            const previousData = getHistoryItems();
-
-            return { previousData };
-          },
-          onError: (_err, _params, context) => {
-            if (context?.previousData) {
-              setHistoryData(context.previousData);
-            }
-          },
-          onSettled: () => {
-            queryClient.invalidateQueries({
-              queryKey: historyQueryOptions.queryKey,
-            });
-          },
-        },
-        callbacks
-      ),
-    }),
-    client
+/**
+ * Records a view of an item in the user's history as
+ * `useUpsertToHistoryMutation` does, for code that runs without a Solid owner
+ * (after an await, in a browser callback). A mutation hook called there
+ * creates computations nothing disposes, and each one keeps the views whose
+ * signals it reads alive.
+ */
+export async function recordHistoryView(
+  params: UpsertToHistoryParams
+): Promise<void> {
+  const observer = new QueryMutationObserver(
+    queryClient,
+    upsertToHistoryMutationOptions()
   );
+  // The hook's `mutate` drops the failure too: onError already rolled history
+  // back, and a missed view is not worth reporting.
+  void (await catchToResult(async () => await observer.mutate(params)));
 }
 
 /**
