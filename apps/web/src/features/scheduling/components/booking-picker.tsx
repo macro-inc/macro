@@ -9,6 +9,10 @@ import {
   Show,
 } from 'solid-js';
 import {
+  availabilityMonth,
+  shiftAvailabilityMonth,
+} from '../core/availability-month';
+import {
   type BookingReceipt,
   meetingPlaceLabel,
   type PublicEvent,
@@ -20,8 +24,32 @@ import {
 } from '../primitives/booking-flow';
 import { Field, TextArea, TextInput, TimeZoneInput } from './fields';
 
-function dateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+/** Guest-local calendar day, zero-padded, without shifting across time zones. */
+function zonedDay(timeZone: string, now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function dayLabel(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString([], {
+    timeZone: 'UTC',
+    dateStyle: 'full',
+  });
+}
+
+function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString([], {
+    timeZone: 'UTC',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 /**
@@ -62,37 +90,14 @@ export function BookingPicker(props: {
       { defer: true }
     )
   );
-  const today = () => {
-    const parts = new Intl.DateTimeFormat('en', {
-      timeZone: zone(),
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(new Date());
-    return ['year', 'month', 'day']
-      .map((k) => parts.find((p) => p.type === k)?.value)
-      .join('-');
-  };
-  const currentMonth = () => new Date(`${today().slice(0, 7)}-01T00:00:00Z`);
+  const today = () => zonedDay(zone());
+  const currentMonth = () => today().slice(0, 7);
   const [month, setMonth] = createSignal(currentMonth());
   const shiftMonth = (by: number) =>
-    setMonth(
-      new Date(
-        Date.UTC(month().getUTCFullYear(), month().getUTCMonth() + by, 1)
-      )
-    );
-  const days = () =>
-    Array.from(
-      {
-        length: new Date(
-          Date.UTC(month().getUTCFullYear(), month().getUTCMonth() + 1, 0)
-        ).getUTCDate(),
-      },
-      (_, i) =>
-        new Date(
-          Date.UTC(month().getUTCFullYear(), month().getUTCMonth(), i + 1)
-        )
-    );
+    setMonth(shiftAvailabilityMonth(`${month()}-01`, by).slice(0, 7));
+  // Complete weeks, including the neighboring month, so a week that crosses
+  // the boundary stays selectable.
+  const days = () => availabilityMonth(`${month()}-01`);
   const choose = (value: string) => {
     setDate(value);
     fireAndForget(flow.chooseDate(event().id, value, zone()), 'scheduling');
@@ -284,11 +289,7 @@ export function BookingPicker(props: {
                 <div class="min-w-0">
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-sm font-medium">
-                      {month().toLocaleDateString([], {
-                        timeZone: 'UTC',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
+                      {monthLabel(month())}
                     </span>
                     <div class="flex gap-1">
                       <Button
@@ -320,26 +321,18 @@ export function BookingPicker(props: {
                         </span>
                       )}
                     </For>
-                    <For each={Array.from({ length: month().getUTCDay() })}>
-                      {() => <span />}
-                    </For>
                     <For each={days()}>
-                      {(d) => (
+                      {(day) => (
                         <Button
                           type="button"
-                          variant={
-                            date() === dateKey(d) ? 'secondary' : 'ghost'
-                          }
+                          variant={date() === day ? 'secondary' : 'ghost'}
                           class="h-auto w-full aspect-square"
-                          aria-pressed={date() === dateKey(d)}
-                          disabled={dateKey(d) < today()}
-                          aria-label={d.toLocaleDateString([], {
-                            timeZone: 'UTC',
-                            dateStyle: 'full',
-                          })}
-                          onClick={() => choose(dateKey(d))}
+                          aria-pressed={date() === day}
+                          disabled={day < today()}
+                          aria-label={dayLabel(day)}
+                          onClick={() => choose(day)}
                         >
-                          {d.getUTCDate()}
+                          {Number(day.slice(8))}
                         </Button>
                       )}
                     </For>
