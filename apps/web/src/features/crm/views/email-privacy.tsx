@@ -23,6 +23,7 @@ import {
   SettingsCard,
   SettingsRow,
   SettingsSection,
+  SettingsSections,
 } from '../../settings/primitives';
 import {
   EmailPolicyRules,
@@ -118,24 +119,31 @@ function DomainBlocklist(props: {
         >
           {(item) => (
             <SettingsRow
-              label={item}
+              label={<span class="wrap-anywhere">{item}</span>}
               description={domainWarningText(warnings()?.[item])}
+              // A long domain wraps beside Remove instead of pushing it onto
+              // its own line in the phone settings sheet.
+              class="flex-nowrap"
             >
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!canRemove() || busy()}
-                aria-label={t('crm.privacyRemoveDomain', { domain: item })}
-                onClick={() =>
-                  props.source.update.mutate({
-                    action: 'remove_domain',
-                    scope: props.scope,
-                    domain: item,
-                  })
-                }
-              >
-                {t('crm.privacyRemove')}
-              </Button>
+              {/* A conditional child, not <Show>: SettingsRow renders its
+                  control column for any truthy child, and Show is one. */}
+              {canRemove() ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy()}
+                  aria-label={t('crm.privacyRemoveDomain', { domain: item })}
+                  onClick={() =>
+                    props.source.update.mutate({
+                      action: 'remove_domain',
+                      scope: props.scope,
+                      domain: item,
+                    })
+                  }
+                >
+                  {t('crm.privacyRemove')}
+                </Button>
+              ) : undefined}
             </SettingsRow>
           )}
         </For>
@@ -749,12 +757,14 @@ export function CrmEmailPrivacyDialog(props: {
             {t('crm.privacyClose')}
           </Dialog.CloseButton>
         </Panel.Header>
-        <Panel.Body scroll class="p-4 flex flex-col gap-4">
-          <CrmEmailPrivacySettings
-            onOptIn={() => props.onOpenChange(false)}
-            onConnectEmail={() => props.onOpenChange(false)}
-            onOpenThread={() => props.onOpenChange(false)}
-          />
+        <Panel.Body scroll class="p-4">
+          <SettingsSections>
+            <CrmEmailPrivacySettings
+              onOptIn={() => props.onOpenChange(false)}
+              onConnectEmail={() => props.onOpenChange(false)}
+              onOpenThread={() => props.onOpenChange(false)}
+            />
+          </SettingsSections>
         </Panel.Body>
       </Panel>
     </Dialog>

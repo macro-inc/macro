@@ -1123,6 +1123,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
   consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
   settings page that spans nearly the full width, for its list columns.
+  Settings sections shown outside a `SettingsPage`, such as in a dialog, go in
+  `SettingsSections` so they keep the page's spacing.
 - Preserve email signature HTML through import, preview, and source editing;
   mount Quill only for explicit Rich text editing and confirm custom-layout
   conversion. Keep the settings and composer preview on the same sanitized HTML
