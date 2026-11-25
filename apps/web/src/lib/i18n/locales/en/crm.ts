@@ -482,6 +482,7 @@ export default {
   mergePeopleSearchLabel: 'Search people',
   mergePeopleSearchPlaceholder: 'Search by name or email',
   mergePeopleNoMatches: 'No other people match.',
+  mergeSearchFailed: 'Couldn’t search people.',
   mergePeopleTooMany: { other: 'A merge takes at most {{count}} people.' },
   mergePeopleKeepTitle: 'Merge people',
   mergePeopleKeepDescription:

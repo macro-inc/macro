@@ -28,6 +28,8 @@ const fixture = vi.hoisted(() => ({
   searches: [] as string[],
   hasMore: false,
   loadMore: vi.fn(async () => {}),
+  searchError: undefined as unknown,
+  retry: vi.fn(async () => {}),
 }));
 
 vi.mock('../context/crm-context', () => ({
@@ -55,6 +57,8 @@ vi.mock('../context/crm-context', () => ({
       hasMore: () => fixture.hasMore,
       isLoadingMore: () => false,
       loadMore: fixture.loadMore,
+      error: () => fixture.searchError,
+      retry: fixture.retry,
     }),
   }),
 }));
@@ -214,6 +218,8 @@ beforeEach(() => {
   fixture.searches = [];
   fixture.hasMore = false;
   fixture.loadMore.mockClear();
+  fixture.searchError = undefined;
+  fixture.retry.mockClear();
   fixture.commandsFor = undefined;
 });
 afterEach(cleanup);
@@ -731,6 +737,7 @@ it('finds a person beyond Quick Access through the server, and reads more pages'
   fixture.searched = [
     { id: 'pat', name: 'Pat Lee', email: 'pat@acme.example.com' },
     { id: 'old-pat', name: 'Pat Leigh', email: 'pleigh@acme.example.com' },
+    { id: 'other-pat', name: 'P. Leigh', email: 'pleigh@acme.example.com' },
   ];
   fixture.hasMore = true;
   fixture.commands = {
@@ -753,6 +760,24 @@ it('finds a person beyond Quick Access through the server, and reads more pages'
     'a match in both is listed once'
   ).toHaveLength(1);
   expect(screen.getByText('Pat Leigh')).toBeTruthy();
+  expect(
+    screen.getByText('P. Leigh'),
+    'two people holding one address both list'
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
   expect(fixture.loadMore).toHaveBeenCalled();
+});
+
+it('says a failed search failed, with Retry, instead of no one matching', async () => {
+  fixture.searchError = new Error('offline');
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([PAT_L], 'contact');
+
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'nobody cached' },
+  });
+  expect(screen.getByText('Couldn’t search people.')).toBeTruthy();
+  expect(screen.queryByText('No other people match.')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(fixture.retry).toHaveBeenCalled();
 });

@@ -113,7 +113,7 @@ import {
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
 import {
-  useCrmContactDiscovery,
+  useCrmContactSearch,
   useQuickAccessCrmContactsQuery,
 } from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
@@ -384,7 +384,7 @@ export function createAppCrmContext(): CrmContext {
       fetchCrmExportCompanies(deps.storage, ...args),
     createCompanySuggestions: useQuickAccessCrmCompaniesQuery,
     createContactSuggestions: useQuickAccessCrmContactsQuery,
-    createContactSearch: (search) => useCrmContactDiscovery(search, () => true),
+    createContactSearch: useCrmContactSearch,
     hydrateCompany(company) {
       if (company.properties) return company;
       const cached = getSoupEntityById(company.id);

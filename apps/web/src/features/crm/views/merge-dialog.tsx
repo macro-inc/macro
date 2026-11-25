@@ -521,6 +521,9 @@ type PickSource = {
   hasMore: () => boolean;
   loadingMore: () => boolean;
   loadMore: () => Promise<void>;
+  /** A failed search, so an empty list isn't read as no one matching. */
+  failed: () => boolean;
+  retry: () => Promise<void>;
 };
 
 /** The first records Quick Access holds that match `search`, by any name, address or company. */
@@ -566,6 +569,8 @@ function usePickSource(
         hasMore: () => false,
         loadingMore: () => false,
         loadMore: async () => {},
+        failed: () => false,
+        retry: async () => {},
       };
     })
     .with('contact', (): PickSource => {
@@ -605,6 +610,8 @@ function usePickSource(
         hasMore: () => searching() && server.hasMore(),
         loadingMore: () => server.isLoadingMore(),
         loadMore: server.loadMore,
+        failed: () => searching() && server.error() !== undefined,
+        retry: server.retry,
       };
     })
     .exhaustive();
@@ -647,7 +654,26 @@ function PickStep(props: {
       <Show
         when={matches().length > 0 || source.loading()}
         fallback={
-          <p class="text-sm text-ink-muted">{props.copy.noMatches()}</p>
+          <Show
+            when={source.failed()}
+            fallback={
+              <p class="text-sm text-ink-muted">{props.copy.noMatches()}</p>
+            }
+          >
+            <div
+              class="flex items-center gap-2 text-sm text-ink-muted"
+              role="alert"
+            >
+              <span>{t('crm.mergeSearchFailed')}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fireAndForget(source.retry(), 'crm')}
+              >
+                {t('common.retry')}
+              </Button>
+            </div>
+          </Show>
         }
       >
         <div class="flex flex-col gap-1">

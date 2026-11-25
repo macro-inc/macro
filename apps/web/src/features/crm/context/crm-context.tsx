@@ -219,8 +219,8 @@ export type CrmContext = {
     query: { readonly isLoading: boolean };
   };
   /**
-   * People matching a typed query beyond the suggestions: cached matches at
-   * once, then the server's pages across the viewer's CRM teams.
+   * Every person the server matches for a typed query, across the viewer's
+   * CRM teams, page by page; two people holding one address stay two.
    */
   createContactSearch(search: Accessor<string>): {
     contacts: Accessor<
@@ -235,6 +235,8 @@ export type CrmContext = {
     hasMore: () => boolean;
     isLoadingMore: () => boolean;
     loadMore: () => Promise<void>;
+    error: () => unknown;
+    retry: () => Promise<void>;
   };
   exportCompanies(
     signal: AbortSignal,
