@@ -444,7 +444,7 @@ fn browser() -> Job {
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
         .add_step(run_agent_screen_browser_tests())
-        .add_step(run_captcha_vision_lab_tests())
+        .add_step(run_captcha_vision_lab_gate())
         .add_step(steps::teardown_nix())
 }
 
@@ -800,21 +800,18 @@ fn run_agent_screen_browser_tests() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
-const CAPTCHA_LAB_CHECK: &str = indoc::indoc! {r#"
+const CAPTCHA_LAB_GATE: &str = indoc::indoc! {r#"
     bun install --frozen-lockfile
-    ./node_modules/.bin/playwright install --with-deps chromium
-    env -u LD_LIBRARY_PATH -u BASH_ENV bun run check
+    bun run check:gate
 "#};
 
-/// The CAPTCHA vision lab is outside the root workspace: its own install and
-/// its own Playwright's Chromium, then its typecheck and tests with the mock
-/// planner and the loopback provider stand-in only. Clear BASH_ENV as well as
-/// LD_LIBRARY_PATH because Bun's script shell would restore the Nix libraries,
-/// which are incompatible with Playwright's Chromium.
-/// Run on every browser job so the lab's isolation test scans the whole repo.
-fn run_captcha_vision_lab_tests() -> Step<Run> {
-    Step::new("CAPTCHA Vision Lab Tests")
-        .run(CAPTCHA_LAB_CHECK.trim_end())
+/// The CAPTCHA vision lab's checks that start no browser. The lab is outside
+/// the root workspace, so it has its own install. Run on every browser job so
+/// the lab's isolation test scans the whole repo. Its browser tests run in
+/// `captcha_vision_lab.rs`, which gates nothing.
+fn run_captcha_vision_lab_gate() -> Step<Run> {
+    Step::new("CAPTCHA Vision Lab Checks")
+        .run(CAPTCHA_LAB_GATE.trim_end())
         .working_directory(xtask_paths::repo_dir!("packages/captcha-vision-lab"))
 }
 
