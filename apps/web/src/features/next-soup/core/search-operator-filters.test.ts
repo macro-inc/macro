@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
 import {
   type SearchOperatorLookup,
+  searchFiltersOperatorText,
   searchOperatorFilters,
   searchOperatorQuery,
   withSearchOperatorQuery,
@@ -106,5 +107,58 @@ describe('withSearchOperatorQuery', () => {
     expect(merged.include.fileType).toEqual(['pdf']);
     expect(merged.include.subType).toEqual(['task']);
     expect(merged.exclude.subType).toEqual(['template', 'draft']);
+  });
+});
+
+describe('searchFiltersOperatorText', () => {
+  const NAMES = {
+    userId: 'macro|me@example.com',
+    tag: (id: string) =>
+      ({ 'finance-1': 'Finance', 'offsite-1': 'Team offsite' })[id],
+    channel: (id: string) => ({ 'channel-1': 'Q3 launch' })[id],
+    inbox: (id: string) => ({ 'link-1': 'ana@example.com' })[id],
+  };
+
+  it('writes what picked filters ask for as operators', () => {
+    const text = searchFiltersOperatorText(
+      {
+        ...compile('').state,
+        type: 'task',
+        task: {
+          status: [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS],
+          priority: [],
+          assignees: ['macro|me@example.com', 'macro|bo@example.com'],
+          createdBy: [],
+        },
+        tags: [
+          { propertyId: 'tags-1', type: 'select', value: 'finance-1' },
+          { propertyId: 'tags-1', type: 'select', value: 'offsite-1' },
+        ],
+        tagMode: 'any',
+      },
+      NAMES
+    );
+
+    expect(text).toBe(
+      'type:task status:in_progress assignee:me OR assignee:bo@example.com tag:Finance OR tag:"Team offsite"'
+    );
+  });
+
+  it('reads back as the same filters', () => {
+    const state = {
+      ...compile('').state,
+      type: 'channels' as const,
+      channels: { in: ['channel-1'], from: ['macro|ana@example.com'] },
+    };
+    const text = searchFiltersOperatorText(state, NAMES);
+    expect(text).toBe('type:channel in:#"Q3 launch" from:ana@example.com');
+    const read = searchOperatorFilters(
+      readSearchOperators(splitSearchTerms(text)),
+      {
+        ...LOOKUP,
+        channels: (name) => (name === 'Q3 launch' ? ['channel-1'] : []),
+      }
+    );
+    expect(read.state.channels).toEqual(state.channels);
   });
 });

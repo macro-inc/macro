@@ -1,11 +1,11 @@
 import { toEmailSearchPeople } from '@app/features/email-view/queries/use-email-search-values';
 import type { SearchOperatorValues } from '@app/features/next-soup/core/search-operator-completions';
 import { useQuickAccess } from '@core/context/quickAccess';
-import { useTagOptionSummaries } from '@property/tags/tag-sets-context';
 import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
 import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
+import { createTagOptions } from './tag-filter-state';
 
 /** Who an operator being typed names, by the value typed so far. */
 export type SearchOperatorPersonTyping = Accessor<string | undefined>;
@@ -27,7 +27,7 @@ export function createSearchOperatorValues(
     senderDomain: () => undefined,
     includeSelf: () => false,
   });
-  const tags = useTagOptionSummaries();
+  const tags = createTagOptions().options;
   const linksQuery = useMailAccountsQuery();
   const channels = useQuickAccess().useList('channel').items;
 

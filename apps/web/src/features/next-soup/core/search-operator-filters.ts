@@ -256,3 +256,105 @@ export function withSearchOperatorQuery(
     exclude,
   };
 }
+
+/** The `type:` value for each of the Search view's types. */
+const INDEX_TYPES: Record<SearchIndexId, string> = {
+  'document-or-file': 'doc',
+  task: 'task',
+  email: 'email',
+  channels: 'channel',
+  calls: 'call',
+  folders: 'folder',
+  agent: 'agent',
+  calendar: 'calendar',
+};
+
+/** The `tag:` operator that asks for the tag named `label`. */
+export const searchTagOperator = (label: string) =>
+  `tag:${/\s/.test(label) ? `"${label}"` : label}`;
+
+/** The `type:` operator that narrows a search to `index`. */
+export const searchTypeOperator = (index: SearchIndexId) =>
+  `type:${INDEX_TYPES[index]}`;
+
+/** What ids in a filter state are called, to write them as operators. */
+export type SearchFilterNames = {
+  /** Who `me` is, so the searcher's own id is written as `me`. */
+  userId?: string;
+  tag: (optionId: string) => string | undefined;
+  channel: (channelId: string) => string | undefined;
+  inbox: (linkId: string) => string | undefined;
+};
+
+/** `value` as an operator's value: quoted when it holds whitespace. */
+const asValue = (value: string) => (/\s/.test(value) ? `"${value}"` : value);
+
+const invert = (map: Record<string, string>) =>
+  new Map(Object.entries(map).map(([name, id]) => [id, name]));
+const STATUS_NAMES = invert(TASK_STATUS_IDS);
+const PRIORITY_NAMES = invert(PRIORITY_IDS);
+const CALL_STATUS_NAMES = invert(CALL_STATUSES);
+
+/** One operator per value, joined by `OR` so any of them matches. */
+const anyOf = (name: string, values: (string | undefined)[]) => {
+  const written = values.filter((value): value is string => Boolean(value));
+  return written.length
+    ? [written.map((value) => `${name}:${value}`).join(' OR ')]
+    : [];
+};
+
+/**
+ * The operators that ask for what `state` filters, to write into the Search
+ * field in place of picked filters, so the field shows the whole search. An
+ * id with no name to write is left out.
+ */
+export function searchFiltersOperatorText(
+  state: SearchFiltersState,
+  names: SearchFilterNames
+): string {
+  const person = (id: string) => {
+    if (names.userId && id.toLowerCase() === names.userId.toLowerCase())
+      return 'me';
+    return id.startsWith('macro|') ? id.slice('macro|'.length) : undefined;
+  };
+  const scope = state.type === 'calls' ? state.calls : state.channels;
+  const parts = [
+    ...(state.type === 'all' ? [] : [searchTypeOperator(state.type)]),
+    ...anyOf(
+      'status',
+      state.task.status.map((id) => STATUS_NAMES.get(id))
+    ),
+    ...anyOf(
+      'priority',
+      state.task.priority.map((id) => PRIORITY_NAMES.get(id))
+    ),
+    ...anyOf('assignee', state.task.assignees.map(person)),
+    ...anyOf('author', state.task.createdBy.map(person)),
+    ...(state.type === 'calls' && state.calls.status
+      ? [`status:${CALL_STATUS_NAMES.get(state.calls.status)}`]
+      : []),
+    ...(state.type === 'channels' || state.type === 'calls'
+      ? [
+          ...anyOf(
+            'in',
+            scope.in.map((id) => {
+              const name = names.channel(id);
+              return name ? `#${asValue(name)}` : undefined;
+            })
+          ),
+          ...anyOf('from', scope.from.map(person)),
+        ]
+      : []),
+    ...anyOf('inbox', (state.email.inboxIds ?? []).map(names.inbox)),
+  ];
+  const tags = state.tags.map((tag) => {
+    const label = names.tag(tag.value);
+    return label ? asValue(label) : undefined;
+  });
+  if (state.tagMode === 'all') {
+    for (const tag of tags) if (tag) parts.push(`tag:${tag}`);
+  } else {
+    parts.push(...anyOf('tag', tags));
+  }
+  return parts.join(' ');
+}

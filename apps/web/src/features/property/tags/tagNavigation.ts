@@ -1,8 +1,4 @@
-import type {
-  PropertyFilter,
-  Query,
-} from '@app/features/next-soup/filters/filter-store';
-import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import { searchTagOperator } from '@app/features/next-soup/core/search-operator-filters';
 import type {
   OpenWithSplitOptions,
   SplitContent,
@@ -11,42 +7,17 @@ import type {
 export type TagNavigationTarget = {
   optionId: string;
   propertyDefinitionId: string;
+  label: string;
 };
 
-export function tagToPropertyFilter(tag: TagNavigationTarget): PropertyFilter {
-  return {
-    propertyId: tag.propertyDefinitionId,
-    type: 'select',
-    value: tag.optionId,
-  };
-}
-
-export function buildTaggedItemsQuery(tag: TagNavigationTarget): Query {
-  const baseline = getViewPreset('search')?.filters ?? {};
-  return {
-    ...baseline,
-    include: {
-      ...baseline.include,
-      tagFilters: [tagToPropertyFilter(tag)],
-      tagFilterMode: 'any',
-    },
-    exclude: { ...baseline.exclude },
-  };
-}
-
+/** Search, opened on the items carrying `tag`, its query naming the tag. */
 export function buildTaggedItemsSplitContent(
   tag: TagNavigationTarget
 ): SplitContent {
-  const searchPreset = getViewPreset('search');
   return {
     type: 'component',
     id: 'search',
-    // Entry state outranks the user's persisted Search filters during Soup
-    // initialization, so this explicit navigation always opens on the tag.
-    state: {
-      'search.filters': buildTaggedItemsQuery(tag),
-      'search.predicates': searchPreset?.clientFilters,
-    },
+    state: { 'search.text': searchTagOperator(tag.label) },
   };
 }
 

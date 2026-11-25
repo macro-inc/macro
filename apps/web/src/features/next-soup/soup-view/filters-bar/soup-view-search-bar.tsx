@@ -56,6 +56,14 @@ const variantStyles: Record<SearchbarVariant, string> = {
   secondary: 'text-ink-muted hover:text-ink focus-within:text-ink',
 };
 
+/**
+ * The field's text as typed: its markdown flattened, with the backslashes
+ * markdown puts before punctuation taken back out, so `status:in_progress`
+ * reaches the search as typed rather than as `in\\_progress`.
+ */
+export const searchTextOf = (markdown: string) =>
+  markdownToSearchText(markdown).replace(/\\([!-/:-@[-`{-~])/g, '$1');
+
 /** Split-owned history, focus shortcuts and navigation around the shared search input. */
 export function SoupSearchbar(props: SoupSearchbarProps) {
   const {
@@ -145,10 +153,10 @@ export function SearchbarInput(
   const [markdown, setMarkdown] = createSignal(
     untrack(() => props.initialValue ?? props.value)
   );
-  let acknowledgedQuery = markdownToSearchText(props.value).trim();
+  let acknowledgedQuery = searchTextOf(props.value).trim();
 
   // The operator rows offered for what is typed at the field's end.
-  const fieldText = createMemo(() => markdownToSearchText(markdown()));
+  const fieldText = createMemo(() => searchTextOf(markdown()));
   const typing = createMemo(() =>
     props.operators ? searchOperatorBeingTyped(fieldText()) : undefined
   );
@@ -181,7 +189,7 @@ export function SearchbarInput(
   const publish = (value: string) => {
     setMarkdown(value);
     if (editor.controls.isInlineMenuOpen()) return;
-    const text = markdownToSearchText(value).trim();
+    const text = searchTextOf(value).trim();
     acknowledgedQuery = text;
     if (text !== props.value) props.onChange(text);
   };
@@ -189,7 +197,7 @@ export function SearchbarInput(
     on(
       () => props.value,
       (value) => {
-        const query = markdownToSearchText(value).trim();
+        const query = searchTextOf(value).trim();
         if (query === acknowledgedQuery) return;
         acknowledgedQuery = query;
         setMarkdown(value);
