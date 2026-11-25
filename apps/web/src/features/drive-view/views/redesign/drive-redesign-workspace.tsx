@@ -7,6 +7,7 @@ import { DriveFileDropzone } from '../../components/drive-file-dropzone';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import { driveLocationBreadcrumbs } from '../../core/breadcrumbs';
+import { effectiveDesktopViewMode } from '../../core/drive-view-mode';
 import { useDriveDetailNavigation } from '../../drive-detail-navigation';
 import { DriveBreadcrumbs } from '../drive-breadcrumbs';
 import { DriveLoading } from '../drive-workspace';
@@ -26,7 +27,7 @@ import { DriveRedesignTrash } from './drive-redesign-trash';
  */
 export function DriveRedesignWorkspace(props: { tour?: JSX.Element }) {
   const { state, sidebar, actions } = useDriveView();
-  const { preferences, inlineEdit } = useDriveRedesign();
+  const { preferences, inlineEdit, host } = useDriveRedesign();
   const navigation = useDriveDetailNavigation();
 
   const breadcrumbs = createMemo(() =>
@@ -47,13 +48,24 @@ export function DriveRedesignWorkspace(props: { tour?: JSX.Element }) {
     return loc.kind === 'tab' && loc.tab === 'starred';
   };
 
-  const isRecent = () => {
-    const loc = location();
-    return loc.kind === 'tab' && loc.tab === 'recent';
+  const effectiveViewMode = () => {
+    const current = state.value();
+    const hasFilters =
+      current.scope !== 'default' ||
+      Object.values(current.facets).some((values) => (values?.length ?? 0) > 0);
+    return effectiveDesktopViewMode(preferences.viewMode(), {
+      location: current.location,
+      rootMode: preferences.rootMode(),
+      isSearching: current.search.trim().length > 0,
+      hasFilters,
+    });
   };
 
   const startInlineFolder = () => {
-    const mode = preferences.viewMode();
+    if (isTrash() || isStarred()) {
+      state.selectTab('owned');
+    }
+    const mode = effectiveViewMode();
     const surface =
       mode === 'grid' ? 'grid' : mode === 'columns' ? 'columns' : 'list';
     inlineEdit.startCreateFolder({
@@ -91,7 +103,10 @@ export function DriveRedesignWorkspace(props: { tour?: JSX.Element }) {
                     <div class="flex size-full min-h-0 min-w-0 flex-row overflow-hidden">
                       <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                         <Suspense fallback={<DriveLoading />}>
-                          <FolderDropZone folderId={state.projectId()}>
+                          <FolderDropZone
+                            folderId={state.projectId()}
+                            onMove={host.moveEntitiesWithUndo}
+                          >
                             <DriveFileDropzone onDrop={actions.dropFiles}>
                               <Switch>
                                 <Match when={isTrash()}>
@@ -100,15 +115,10 @@ export function DriveRedesignWorkspace(props: { tour?: JSX.Element }) {
                                 <Match when={isStarred()}>
                                   <DriveRedesignStarred />
                                 </Match>
-                                <Match
-                                  when={
-                                    preferences.viewMode() === 'columns' &&
-                                    !isRecent()
-                                  }
-                                >
+                                <Match when={effectiveViewMode() === 'columns'}>
                                   <DriveRedesignColumns />
                                 </Match>
-                                <Match when={preferences.viewMode() === 'grid'}>
+                                <Match when={effectiveViewMode() === 'grid'}>
                                   <DriveRedesignGrid
                                     onStartInlineFolder={startInlineFolder}
                                   />

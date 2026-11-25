@@ -185,11 +185,16 @@ export function createDriveDataSource(options: {
     });
   });
 
+  const isDedicatedTab = () => {
+    const loc = selection().location;
+    return loc.kind === 'tab' && (loc.tab === 'starred' || loc.tab === 'trash');
+  };
+
   const search = createSearchState({
     surface: () => 'drive',
     text: () => selection().search,
 
-    enabled: facetsReady,
+    enabled: () => facetsReady() && !isDedicatedTab(),
     localPool,
 
     buildRequest: (request) =>

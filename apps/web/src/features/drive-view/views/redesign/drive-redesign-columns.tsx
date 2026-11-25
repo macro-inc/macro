@@ -21,7 +21,15 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, cn, Tooltip } from '@ui';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { InlineNameInput } from '../../components/redesign/inline-name-input';
 import { driveKindLabel } from '../../components/redesign/kind-label';
 import { useDriveView } from '../../context/drive-context';
@@ -34,7 +42,7 @@ import {
   splitOwnedAndSharedFolders,
   topLevelFolders,
 } from '../../core/drive-items';
-import { folderToProjectEntity } from './use-drive-display-items';
+import { folderToProjectEntity } from '../shared/use-drive-display-items';
 
 function MillerColumnPane(props: {
   folderId: string | null;
@@ -43,8 +51,11 @@ function MillerColumnPane(props: {
   selectedFileId: string | undefined;
   splitId: string;
   createDropTarget?: ReturnType<typeof createFolderDropTargets>;
+  onItemsChange: (columnKey: string, items: readonly EntityData[]) => void;
+  onCleanupColumn: (columnKey: string) => void;
   onSelectFolder: (folderId: string) => void;
   onSelectFile: (entity: EntityData) => void;
+  onPreviewEntity: (entity: EntityData) => void;
   onOpenFile: (entity: EntityData, event?: MouseEvent) => void;
 }) {
   const { state, sidebar, actions } = useDriveView();
@@ -52,6 +63,7 @@ function MillerColumnPane(props: {
     useDriveRedesign();
   const folderSource = createFolderContents(() => props.folderId);
   const columnDropTarget = props.createDropTarget?.(() => props.folderId);
+  const columnKey = () => props.folderId ?? '__root__';
 
   const columnTitle = () => {
     if (props.folderId === null) return t('drive.columnRootTitle');
@@ -87,6 +99,13 @@ function MillerColumnPane(props: {
       sort: state.value().sort,
       direction: preferences.sortDirection(),
     });
+  });
+
+  createEffect(() => {
+    props.onItemsChange(columnKey(), items());
+  });
+  onCleanup(() => {
+    props.onCleanupColumn(columnKey());
   });
 
   const isCreatingHere = () => {
@@ -178,113 +197,171 @@ function MillerColumnPane(props: {
           }
         >
           <Show
-            when={items().length > 0 || isCreatingHere()}
+            when={!folderSource.error() || items().length > 0}
             fallback={
-              <div class="px-3 py-8 text-center text-xs text-ink-subtle">
-                {t('drive.columnEmpty')}
+              <div class="flex flex-col items-center gap-2 px-3 py-8 text-center text-xs text-ink-muted">
+                <span>{t('drive.loadFailed')}</span>
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  onClick={() =>
+                    fireAndForget(folderSource.refresh(), 'drive-columns-retry')
+                  }
+                >
+                  {t('drive.tryAgain')}
+                </Button>
               </div>
             }
           >
-            <ul class="flex flex-col gap-0.5">
-              <For each={items()}>
-                {(entity) => {
-                  const isFolder = entity.type === 'project';
-                  const isActiveFolder = () =>
-                    isFolder && props.selectedChildFolderId === entity.id;
-                  const isActiveFile = () =>
-                    !isFolder && props.selectedFileId === entity.id;
-                  const rowDropTarget = isFolder
-                    ? props.createDropTarget?.(() => entity.id)
-                    : undefined;
-                  const attachDrag = createEntityDraggable({
-                    entity,
-                    splitId: props.splitId,
-                  });
-                  const isRenamingHere = () => {
-                    const target = inlineEdit.renaming();
-                    return (
-                      target?.surface === 'columns' && target.id === entity.id
-                    );
-                  };
+            <Show
+              when={items().length > 0 || isCreatingHere()}
+              fallback={
+                <div class="px-3 py-8 text-center text-xs text-ink-subtle">
+                  {t('drive.columnEmpty')}
+                </div>
+              }
+            >
+              <ul class="flex flex-col gap-0.5">
+                <For each={items()}>
+                  {(entity) => {
+                    const isFolder = entity.type === 'project';
+                    const isActiveFolder = () =>
+                      isFolder && props.selectedChildFolderId === entity.id;
+                    const isActiveFile = () =>
+                      !isFolder && props.selectedFileId === entity.id;
+                    const rowDropTarget = isFolder
+                      ? props.createDropTarget?.(() => entity.id)
+                      : undefined;
+                    const attachDrag = createEntityDraggable({
+                      entity,
+                      splitId: props.splitId,
+                      instanceKey: `column-${props.folderId ?? 'root'}`,
+                    });
+                    const isRenamingHere = () => {
+                      const target = inlineEdit.renaming();
+                      return (
+                        target?.surface === 'columns' && target.id === entity.id
+                      );
+                    };
 
-                  return (
-                    <li>
-                      <div
-                        ref={(el) => {
-                          rowDropTarget?.ref(el);
-                          attachDrag(el);
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        data-drive-column-item={entity.id}
-                        aria-current={
-                          isActiveFolder() || isActiveFile()
-                            ? 'true'
-                            : undefined
-                        }
-                        class={cn(
-                          'group/col-row flex h-9 min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors select-none outline-none focus-visible:outline-2 focus-visible:outline-accent',
-                          isActiveFolder() || isActiveFile()
-                            ? 'bg-accent/14 font-medium text-ink'
-                            : 'text-ink hover:bg-hover',
-                          rowDropTarget?.isOver() &&
-                            'bg-accent/18 outline-2 -outline-offset-2 outline-accent'
-                        )}
-                        onClick={() => {
-                          if (isFolder) props.onSelectFolder(entity.id);
-                          else props.onSelectFile(entity);
-                        }}
-                        onDblClick={(event) => {
-                          if (!isFolder) props.onOpenFile(entity, event);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
+                    return (
+                      <li>
+                        <div
+                          ref={(el) => {
+                            rowDropTarget?.ref(el);
+                            attachDrag(el);
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          data-drive-column-item={entity.id}
+                          aria-current={
+                            isActiveFolder() || isActiveFile()
+                              ? 'true'
+                              : undefined
+                          }
+                          class={cn(
+                            'group/col-row flex h-9 min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors select-none outline-none focus-visible:outline-2 focus-visible:outline-accent',
+                            isActiveFolder() || isActiveFile()
+                              ? 'bg-accent/14 font-medium text-ink'
+                              : 'text-ink hover:bg-hover',
+                            rowDropTarget?.isOver() &&
+                              'bg-accent/18 outline-2 -outline-offset-2 outline-accent'
+                          )}
+                          onClick={() => {
                             if (isFolder) props.onSelectFolder(entity.id);
-                            else props.onOpenFile(entity);
-                          }
-                        }}
-                      >
-                        <span class="flex size-4 shrink-0 items-center justify-center">
-                          <EntityRowIcon entity={entity} />
-                        </span>
-                        <Show
-                          when={isRenamingHere()}
-                          fallback={
-                            <Tooltip label={entity.name} class="min-w-0 flex-1">
-                              <span class="min-w-0 flex-1 truncate">
-                                {entity.name}
-                              </span>
-                            </Tooltip>
-                          }
-                        >
-                          <InlineNameInput
-                            initialValue={entity.name}
-                            isFolder={isFolder}
-                            ariaLabel={t('drive.renameInputLabel', {
-                              name: entity.name,
-                            })}
-                            disabled={inlineEdit.isPending()}
-                            onCommit={(nextName) =>
-                              inlineEdit.runCommit(async () => {
-                                await host.renameEntityInline(entity, nextName);
-                              })
+                            else props.onSelectFile(entity);
+                          }}
+                          onDblClick={(event) => {
+                            if (!isFolder) props.onOpenFile(entity, event);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (isFolder) props.onSelectFolder(entity.id);
+                              else props.onOpenFile(entity);
+                            } else if (event.key === ' ') {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (!isFolder) props.onSelectFile(entity);
+                              props.onPreviewEntity(entity);
                             }
-                            onCancel={inlineEdit.cancelRename}
-                          />
-                        </Show>
-                        <Show when={isFolder}>
-                          <CaretRightIcon
-                            class="size-3 shrink-0 text-ink-subtle"
-                            aria-hidden="true"
-                          />
-                        </Show>
-                      </div>
-                    </li>
-                  );
-                }}
-              </For>
-            </ul>
+                          }}
+                        >
+                          <span class="flex size-4 shrink-0 items-center justify-center">
+                            <EntityRowIcon entity={entity} />
+                          </span>
+                          <Show
+                            when={isRenamingHere()}
+                            fallback={
+                              <Tooltip
+                                label={entity.name}
+                                class="min-w-0 flex-1"
+                              >
+                                <span class="min-w-0 flex-1 truncate">
+                                  {entity.name}
+                                </span>
+                              </Tooltip>
+                            }
+                          >
+                            <InlineNameInput
+                              initialValue={entity.name}
+                              isFolder={isFolder}
+                              ariaLabel={t('drive.renameInputLabel', {
+                                name: entity.name,
+                              })}
+                              disabled={inlineEdit.isPending()}
+                              onCommit={(nextName) =>
+                                inlineEdit.runCommit(async () => {
+                                  await host.renameEntityInline(
+                                    entity,
+                                    nextName
+                                  );
+                                })
+                              }
+                              onCancel={inlineEdit.cancelRename}
+                            />
+                          </Show>
+                          <Show when={isFolder}>
+                            <CaretRightIcon
+                              class="size-3 shrink-0 text-ink-subtle"
+                              aria-hidden="true"
+                            />
+                          </Show>
+                        </div>
+                      </li>
+                    );
+                  }}
+                </For>
+              </ul>
+            </Show>
+            <Show when={folderSource.isLoadingMore()}>
+              <div
+                role="status"
+                class="flex items-center justify-center gap-1.5 py-2 text-xs text-ink-muted"
+              >
+                <SpinnerIcon class="size-3 animate-spin" aria-hidden="true" />
+                <span>{t('drive.loadingMore')}</span>
+              </div>
+            </Show>
+            <Show
+              when={folderSource.hasMore() && !folderSource.isLoadingMore()}
+            >
+              <div class="flex justify-center py-2">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() =>
+                    fireAndForget(
+                      folderSource.loadMore(),
+                      'drive-columns-load-more'
+                    )
+                  }
+                >
+                  {t('drive.loadMore')}
+                </Button>
+              </div>
+            </Show>
           </Show>
         </Show>
       </div>
@@ -299,24 +376,82 @@ function MillerColumnPane(props: {
  */
 export function DriveRedesignColumns() {
   const { state, sidebar, actions } = useDriveView();
-  const { inlineEdit, inspector, host, setInspectedEntity } =
-    useDriveRedesign();
+  const {
+    inlineEdit,
+    inspector,
+    host,
+    setInspectedEntity,
+    setSelectedEntities,
+  } = useDriveRedesign();
   const panel = useSplitPanelOrThrow();
-  const createDropTarget = createFolderDropTargets();
+  const createDropTarget = createFolderDropTargets({
+    onMove: host.moveEntitiesWithUndo,
+  });
 
-  const [selectedFile, setSelectedFile] = createSignal<
-    EntityData | undefined
+  const [selectedFileId, setSelectedFileId] = createSignal<
+    string | undefined
   >();
+  const [columnItems, setColumnItems] = createSignal<
+    ReadonlyMap<string, readonly EntityData[]>
+  >(new Map());
   let scrollerRef: HTMLDivElement | undefined;
 
   const columnFolderIds = createMemo(() =>
     buildMillerColumnPath(sidebar.folders(), state.projectId() ?? null)
   );
 
+  // Resolve the selected file against live column rows so renames update the
+  // preview immediately and moves/deletions clear it without stale snapshots.
+  const selectedFile = createMemo<EntityData | undefined>(() => {
+    const id = selectedFileId();
+    if (!id) return undefined;
+    for (const rows of columnItems().values()) {
+      const match = rows.find((item) => item.id === id);
+      if (match) return match;
+    }
+    return undefined;
+  });
+
+  // Sync the live resolved file into the inspector when it changes or disappears.
+  createEffect(() => {
+    const id = selectedFileId();
+    const live = selectedFile();
+    if (id && !live) {
+      setSelectedFileId(undefined);
+      setInspectedEntity(undefined);
+    } else if (live) {
+      setInspectedEntity(live);
+    }
+  });
+
+  // Columns operates on a single previewed file, never a stale multi-selection.
+  createEffect(() => {
+    setSelectedEntities([]);
+  });
+
+  const locationKey = createMemo(() => {
+    const loc = state.value().location;
+    return loc.kind === 'folder'
+      ? `folder:${loc.id ?? 'root'}`
+      : `tab:${loc.tab}`;
+  });
+
+  // Clear previewed file only when navigating to a different location key.
+  createEffect(
+    on(
+      locationKey,
+      () => {
+        setSelectedFileId(undefined);
+        setInspectedEntity(undefined);
+      },
+      { defer: true }
+    )
+  );
+
   // Smoothly scroll newly revealed columns into view on navigation.
   createEffect(() => {
     columnFolderIds();
-    selectedFile();
+    selectedFileId();
     requestAnimationFrame(() => {
       if (scrollerRef) {
         scrollerRef.scrollTo({
@@ -328,10 +463,18 @@ export function DriveRedesignColumns() {
   });
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (inlineEdit.isEditing() || isEditableInput(event.target as Element)) {
+    if (
+      event.defaultPrevented ||
+      inlineEdit.isEditing() ||
+      isEditableInput(event.target as Element)
+    ) {
       return;
     }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === 'z'
+    ) {
       event.preventDefault();
       fireAndForget(host.undoLatestWithToast(), 'drive-columns-undo');
       return;
@@ -340,19 +483,39 @@ export function DriveRedesignColumns() {
       const path = columnFolderIds();
       if (path.length <= 1) return;
       event.preventDefault();
-      setSelectedFile(undefined);
+      setSelectedFileId(undefined);
       const parentId = path[path.length - 2];
       if (parentId) state.selectFolder(parentId);
       else state.selectTab('owned');
       return;
     }
-    if (event.key === ' ') {
+    if (event.key === ' ' && event.target === event.currentTarget) {
       const file = selectedFile();
       if (!file) return;
       event.preventDefault();
       setInspectedEntity(file);
       inspector.toggle();
     }
+  };
+
+  const handleColumnItemsChange = (
+    key: string,
+    items: readonly EntityData[]
+  ) => {
+    setColumnItems((current) => {
+      const next = new Map(current);
+      next.set(key, items);
+      return next;
+    });
+  };
+
+  const handleCleanupColumn = (key: string) => {
+    setColumnItems((current) => {
+      if (!current.has(key)) return current;
+      const next = new Map(current);
+      next.delete(key);
+      return next;
+    });
   };
 
   return (
@@ -369,18 +532,24 @@ export function DriveRedesignColumns() {
             folderId={folderId}
             columnIndex={index()}
             selectedChildFolderId={columnFolderIds()[index() + 1] ?? undefined}
-            selectedFileId={selectedFile()?.id}
+            selectedFileId={selectedFileId()}
             splitId={panel.handle.id}
             createDropTarget={createDropTarget}
+            onItemsChange={handleColumnItemsChange}
+            onCleanupColumn={handleCleanupColumn}
             onSelectFolder={(id) => {
-              setSelectedFile(undefined);
+              setSelectedFileId(undefined);
               const folder = sidebar.folders().find((f) => f.id === id);
               if (folder) setInspectedEntity(folderToProjectEntity(folder));
               state.selectFolder(id);
             }}
             onSelectFile={(entity) => {
-              setSelectedFile(entity);
+              setSelectedFileId(entity.id);
               setInspectedEntity(entity);
+            }}
+            onPreviewEntity={(entity) => {
+              setInspectedEntity(entity);
+              inspector.toggle();
             }}
             onOpenFile={(entity, event) => actions.openEntity(entity, event)}
           />
@@ -503,7 +672,8 @@ export function DriveRedesignColumns() {
                     class="text-failure-ink hover:text-failure-ink"
                     onClick={() => {
                       const target = file();
-                      setSelectedFile(undefined);
+                      setSelectedFileId(undefined);
+                      setInspectedEntity(undefined);
                       fireAndForget(
                         host.trashEntitiesWithUndo([target]),
                         'drive-columns-trash'

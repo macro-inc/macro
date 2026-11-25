@@ -87,6 +87,7 @@ export function createDriveRedesignHost(options: {
   userId: Accessor<string | undefined>;
   projectId: Accessor<string | undefined>;
   folders: Accessor<DriveFolderMetadata[]>;
+  items?: Accessor<readonly { entity: EntityData }[]>;
   baseActions: DriveHostActions;
   onFolderCreated?: (folderId: string, parentId: string | null) => void;
   onTrashCompleted?: (ids: readonly string[]) => void;
@@ -135,18 +136,48 @@ export function createDriveRedesignHost(options: {
     });
   };
 
+  const currentObservedState = (
+    entity: Pick<UndoableEntityRef, 'id' | 'type'>
+  ): { name: string; projectId: string | null } | undefined => {
+    if (entity.type === 'project') {
+      const folder = options.folders().find((f) => f.id === entity.id);
+      if (folder) {
+        return { name: folder.name, projectId: folder.parentId ?? null };
+      }
+    }
+    const row = options.items?.().find((item) => item.entity.id === entity.id);
+    if (row) {
+      return {
+        name: row.entity.name,
+        projectId: getEntityProjectId(row.entity) || null,
+      };
+    }
+    return undefined;
+  };
+
   const undo = createDriveUndoManager({
-    undoMove: async (items: readonly MoveUndoItem[]) => {
-      let allSucceeded = true;
+    undoMove: async (
+      items: readonly MoveUndoItem[],
+      destinationFolderId: string | null
+    ) => {
+      const failedItems: MoveUndoItem[] = [];
+      let movedAny = false;
+      let skippedAny = false;
       let touchedFolders = false;
       for (const item of items) {
+        const observed = currentObservedState(item.entity);
+        if (observed && observed.projectId !== destinationFolderId) {
+          skippedAny = true;
+          continue;
+        }
         if (item.entity.type === 'project') touchedFolders = true;
         const ref = toGraphqlMoveRef(item.entity);
         if (ref) {
           try {
             await moveEntity(ref, item.previousProjectId);
+            movedAny = true;
           } catch {
-            allSucceeded = false;
+            failedItems.push(item);
           }
           continue;
         }
@@ -171,32 +202,53 @@ export function createDriveRedesignHost(options: {
               entities: [{ ...stub, name: stub.name || stub.id }],
             });
           }
+          movedAny = true;
         } catch {
-          allSucceeded = false;
+          failedItems.push(item);
         }
       }
-      await refreshDriveQueries(touchedFolders);
-      return allSucceeded;
+      if (movedAny) {
+        await refreshDriveQueries(touchedFolders);
+      }
+      return {
+        failedItems,
+        skipped: !movedAny && skippedAny && failedItems.length === 0,
+      };
     },
 
     undoTrash: async (items: readonly UndoableEntityRef[]) => {
-      const refs = items.flatMap((item) => {
+      const pairs = items.flatMap((item) => {
         const ref = toGraphqlTrashRef(item);
-        return ref ? [ref] : [];
+        return ref ? [{ item, ref }] : [];
       });
-      if (refs.length === 0) return false;
+      if (pairs.length === 0) return false;
       const outcomes = await Promise.allSettled(
-        refs.map((ref) => restoreEntity(ref))
+        pairs.map(({ ref }) => restoreEntity(ref))
       );
-      const ok = outcomes.every((outcome) => outcome.status === 'fulfilled');
-      await Promise.allSettled([
-        invalidateDeletedItems(),
-        refreshDriveQueries(items.some((item) => item.type === 'project')),
-      ]);
-      return ok;
+      const failedItems: UndoableEntityRef[] = [];
+      let restoredAny = false;
+      outcomes.forEach((outcome, index) => {
+        if (outcome.status === 'fulfilled') restoredAny = true;
+        else failedItems.push(pairs[index].item);
+      });
+      if (restoredAny) {
+        await Promise.allSettled([
+          invalidateDeletedItems(),
+          refreshDriveQueries(items.some((item) => item.type === 'project')),
+        ]);
+      }
+      return { failedItems };
     },
 
-    undoRename: async (entity: UndoableEntityRef, previousName: string) => {
+    undoRename: async (
+      entity: UndoableEntityRef,
+      previousName: string,
+      expectedCurrentName: string
+    ) => {
+      const observed = currentObservedState(entity);
+      if (observed && observed.name !== expectedCurrentName) {
+        return 'skipped';
+      }
       try {
         const result = await renameMutation.mutateAsync({
           entity: {
@@ -217,6 +269,10 @@ export function createDriveRedesignHost(options: {
   const reportUndoOutcome = (
     result: Awaited<ReturnType<DriveUndoManager['undoLatest']>>
   ) => {
+    if (result.status === 'skipped') {
+      toast.alert(t('drive.toastUndoSkipped'));
+      return;
+    }
     if (result.status === 'failed') {
       toast.failure(t('drive.toastUndoFailed'));
       return;
@@ -321,43 +377,61 @@ export function createDriveRedesignHost(options: {
   ): Promise<boolean> => {
     if (entities.length === 0) return false;
     const mutable = [...entities];
-    const undoItems: MoveUndoItem[] = [];
-    for (const entity of mutable) {
-      const undoType = toUndoableType(entity.type);
-      if (!undoType) continue;
-      undoItems.push({
-        entity: { id: entity.id, type: undoType, name: entity.name },
-        previousProjectId: getEntityProjectId(entity) || null,
-      });
-    }
+    const succeededUndoItems: MoveUndoItem[] = [];
+    let movedCount = 0;
+    let failedCount = 0;
+    let movedAnyFolder = false;
 
-    try {
-      if (destinationFolderId === null) {
-        await removeFromProject.mutateAsync({
-          entities: mutable.map((entity) => ({
-            ...entity,
-            name: entity.name || entity.id,
-          })),
-        });
-      } else {
-        await moveEntities(mutable, {
-          id: destinationFolderId,
-          name: destinationName,
+    // Execute per item through Macro's shared move/remove mutations so every
+    // entity type (documents, folders, chats, emails, databases, forms) keeps
+    // full GraphQL + REST Soup cache invalidation AND preserves per-item Undo
+    // even when a mixed batch partially fails.
+    const outcomes = await Promise.allSettled(
+      mutable.map(async (entity) => {
+        if (destinationFolderId === null) {
+          await removeFromProject.mutateAsync({
+            entities: [{ ...entity, name: entity.name || entity.id }],
+          });
+        } else {
+          await moveEntities([entity], {
+            id: destinationFolderId,
+            name: destinationName,
+          });
+        }
+        return entity;
+      })
+    );
+
+    outcomes.forEach((outcome, index) => {
+      if (outcome.status !== 'fulfilled') {
+        failedCount += 1;
+        return;
+      }
+      const entity = mutable[index];
+      movedCount += 1;
+      if (entity.type === 'project') movedAnyFolder = true;
+      const undoType = toUndoableType(entity.type);
+      const previousProjectId = getEntityProjectId(entity) || null;
+      if (undoType && previousProjectId !== destinationFolderId) {
+        succeededUndoItems.push({
+          entity: { id: entity.id, type: undoType, name: entity.name },
+          previousProjectId,
         });
       }
-      await refreshDriveQueries(
-        mutable.some((entity) => entity.type === 'project')
-      );
+    });
+
+    if (movedCount > 0) {
+      await refreshDriveQueries(movedAnyFolder);
       const message =
         destinationFolderId === null
-          ? t('drive.toastMovedToRoot', { count: mutable.length })
+          ? t('drive.toastMovedToRoot', { count: movedCount })
           : t('drive.toastMoved', {
-              count: mutable.length,
+              count: movedCount,
               destination: destinationName,
             });
-      if (undoItems.length > 0) {
+      if (succeededUndoItems.length > 0) {
         const undoId = undo.recordMove({
-          items: undoItems,
+          items: succeededUndoItems,
           destinationFolderId,
           destinationName,
         });
@@ -365,11 +439,13 @@ export function createDriveRedesignHost(options: {
       } else {
         toast.success(message);
       }
-      return true;
-    } catch {
-      toast.failure(t('entityActions.toastMoveToFolderFailed'));
-      return false;
     }
+
+    if (failedCount > 0) {
+      toast.failure(t('entityActions.toastMoveToFolderFailed'));
+    }
+
+    return movedCount > 0;
   };
 
   const openMoveDialog = (entities: readonly EntityData[]) => {
@@ -397,13 +473,16 @@ export function createDriveRedesignHost(options: {
         );
       },
       onMoved: (folder) => {
+        const changedUndoItems = undoItems.filter(
+          (item) => item.previousProjectId !== folder.id
+        );
         const message = t('drive.toastMoved', {
-          count: snapshot.length,
+          count: changedUndoItems.length || snapshot.length,
           destination: folder.name,
         });
-        if (undoItems.length > 0) {
+        if (changedUndoItems.length > 0) {
           const undoId = undo.recordMove({
-            items: undoItems,
+            items: changedUndoItems,
             destinationFolderId: folder.id,
             destinationName: folder.name,
           });

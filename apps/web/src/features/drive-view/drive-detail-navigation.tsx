@@ -262,6 +262,12 @@ export function DriveDetailNavigationProvider(
   return <Context.Provider value={value}>{props.children}</Context.Provider>;
 }
 
+export function useOptionalDriveDetailNavigation():
+  | DriveDetailNavigation
+  | undefined {
+  return useContext(Context);
+}
+
 export function useDriveDetailNavigation(): DriveDetailNavigation {
   const context = useContext(Context);
   if (!context) throw new Error('DriveDetailNavigationProvider is required');

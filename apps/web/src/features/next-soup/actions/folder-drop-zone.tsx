@@ -44,6 +44,17 @@ export type CreateFolderDropTarget = (
   options?: FolderDropOptions
 ) => FolderDropTarget;
 
+export type FolderDropMoveHandler = (
+  entities: EntityData[],
+  folderId: string | null,
+  folderName: string
+) => Promise<boolean>;
+
+export type CreateFolderDropTargetsOptions = {
+  /** Optional custom move executor (for example, Drive's undo-aware move). */
+  onMove?: FolderDropMoveHandler;
+};
+
 /**
  * Drop handling for one surface's folders, under the same rules as Move to
  * folder. Its targets share one folder list and mutation, so a long folder tree
@@ -54,7 +65,9 @@ export type CreateFolderDropTarget = (
  * dragged within that split is not a move, as the split already shows where it
  * lives.
  */
-export function createFolderDropTargets(): CreateFolderDropTarget | undefined {
+export function createFolderDropTargets(
+  options?: CreateFolderDropTargetsOptions
+): CreateFolderDropTarget | undefined {
   const context = useDragDropContext();
   if (!context) return undefined;
   const [state, { onDragEnd }] = context;
@@ -87,12 +100,19 @@ export function createFolderDropTargets(): CreateFolderDropTarget | undefined {
     folderId: string | null,
     clearSelection: () => void
   ) => {
+    const name =
+      folderId === null
+        ? t('drive.myDrive')
+        : (folders().get(folderId)?.name ?? folderId);
+    if (options?.onMove) {
+      if (await options.onMove(entities, folderId, name)) clearSelection();
+      return;
+    }
     if (folderId === null) {
       // Reports its own success and failure.
       if (await removeFromProjectAction.execute(entities)) clearSelection();
       return;
     }
-    const name = folders().get(folderId)?.name ?? folderId;
     try {
       await moveEntities(entities, { id: folderId, name });
       clearSelection();
@@ -159,10 +179,15 @@ export function createFolderRowDropTarget(
 
 /** The body of a split showing a folder: dragged rows dropped here move into it. */
 export function FolderDropZone(
-  props: ParentProps<{ folderId: string | undefined }>
+  props: ParentProps<{
+    folderId: string | undefined;
+    onMove?: FolderDropMoveHandler;
+  }>
 ) {
   const panel = useSplitPanel();
-  const createTarget = createFolderDropTargets();
+  const createTarget = createFolderDropTargets({
+    onMove: props.onMove,
+  });
   const target = createTarget?.(() => props.folderId, {
     ownSplitId: () => panel?.handle.id,
   });

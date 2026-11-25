@@ -11,6 +11,7 @@ import { channelKeys } from '../channel/keys';
 import { forgetOwnChannelWrites } from '../channel/own-writes';
 import { queryClient } from '../client';
 import { emailKeys } from '../email/keys';
+import { storageKeys } from '../storage/keys';
 import { authKeys } from './keys';
 
 const ACCOUNT_SOURCE_PREFIXES = [
@@ -21,6 +22,7 @@ const ACCOUNT_SOURCE_PREFIXES = [
   emailKeys.userLabels._def,
   authKeys.userNameSelf._def,
   scheduledActionKeys.draftJobs.queryKey,
+  storageKeys.deleted.list.queryKey,
 ];
 
 /** Captured before async work; a new login fences even a return to the same account. */

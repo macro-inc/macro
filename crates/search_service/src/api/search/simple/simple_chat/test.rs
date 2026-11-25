@@ -40,3 +40,36 @@ async fn the_name_search_span_leaves_out_the_term() {
         !value.contains("severance") && !value.contains("redundancy") && !value.contains('@')
     }));
 }
+
+/// Narrowing chats to an empty id set (for example, folder-scoped search in a
+/// folder with no chats) returns Done without calling the database.
+#[tokio::test]
+async fn empty_ids_only_returns_empty_without_querying_db() {
+    let (_fields, _guard) = SpanFields::install();
+    let db = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://localhost/unused")
+        .expect("a lazy pool never connects");
+    let user_id = MacroUserId::parse_from_str("macro|user@example.com")
+        .expect("valid user id")
+        .lowercase();
+
+    let (hits, cursor) = search_names(
+        &db,
+        &user_id,
+        &FilterChatResponse {
+            chat_ids: vec![],
+            ids_only: true,
+        },
+        "handbook".to_string(),
+        &[],
+        &[],
+        false,
+        10,
+        SearchCursorOption::NotDone(None),
+    )
+    .await
+    .expect("empty ids_only should short-circuit as empty");
+
+    assert!(hits.is_empty());
+    assert!(cursor.is_done());
+}

@@ -9,6 +9,8 @@ import {
   useInfiniteQuery,
   useQuery,
 } from '@tanstack/solid-query';
+import { assertQueryAccount, type QueryAccount } from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import { storageKeys } from './keys';
 
@@ -34,12 +36,15 @@ async function fetchDeletedItems(): Promise<DeletedItemsQueryResponse> {
 }
 
 async function fetchDeletedItemsPage(
-  cursor: string | undefined
+  cursor: string | undefined,
+  account: QueryAccount | undefined
 ): Promise<DeletedItemsPage> {
+  assertQueryAccount(account);
   const result = await storageServiceClient.getDeletedItems({
     limit: DELETED_PAGE_SIZE,
     cursor,
   });
+  assertQueryAccount(account);
   if (result.isErr()) {
     throw new Error('Failed to fetch deleted items');
   }
@@ -49,20 +54,31 @@ async function fetchDeletedItemsPage(
   };
 }
 
-export function deletedItemsInfiniteQueryOptions(enabled: boolean) {
+export function deletedItemsInfiniteQueryOptions(
+  enabled: boolean,
+  account: QueryAccount | undefined
+) {
   return infiniteQueryOptions({
-    queryKey: [...storageKeys.deleted.list.queryKey, 'pages'] as const,
-    queryFn: ({ pageParam }) => fetchDeletedItemsPage(pageParam),
+    queryKey: [
+      ...storageKeys.deleted.list.queryKey,
+      'pages',
+      account?.userId ?? 'anonymous',
+      account?.session ?? -1,
+    ] as const,
+    queryFn: ({ pageParam }) => fetchDeletedItemsPage(pageParam, account),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: DELETED_STALE_TIME,
     gcTime: DELETED_GC_TIME,
-    enabled,
+    enabled: enabled && Boolean(account),
   });
 }
 
 export function useDeletedItemsInfiniteQuery(enabled: () => boolean) {
-  return useInfiniteQuery(() => deletedItemsInfiniteQueryOptions(enabled()));
+  const account = useQueryAccount();
+  return useInfiniteQuery(() =>
+    deletedItemsInfiniteQueryOptions(enabled(), account())
+  );
 }
 
 function deletedItemsQueryOptions() {

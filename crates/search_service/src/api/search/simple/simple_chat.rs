@@ -125,6 +125,12 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         models_search_cursor::SearchCursorOption::NotDone(c) => c,
     };
 
+    // When chat filters narrowed the allowed set to nothing (e.g. searching inside
+    // a folder with no chats), skip name_search rather than failing with empty ids.
+    if filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty() {
+        return Ok((vec![], models_search_cursor::SearchCursorOption::Done));
+    }
+
     let chat_uuids = filter_chat_response
         .chat_ids
         .iter()

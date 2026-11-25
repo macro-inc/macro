@@ -66,7 +66,7 @@ import type { DriveSort } from '../../core/types';
 import {
   type DriveDisplayRow,
   useDriveDisplayItems,
-} from './use-drive-display-items';
+} from '../shared/use-drive-display-items';
 
 const MAX_INLINE_EXPAND_DEPTH = 3;
 
@@ -165,36 +165,88 @@ function InlineExpandedFolderChildren(props: {
         }
       >
         <Show
-          when={childRows().length > 0}
+          when={!childSource.error() || childRows().length > 0}
           fallback={
             <div
-              class="flex h-9 items-center text-xs text-ink-subtle"
+              class="flex h-9 items-center gap-2 text-xs text-ink-muted"
               style={{ 'padding-left': `${indentPx() + 44}px` }}
             >
-              {t('drive.columnEmpty')}
+              <span>{t('drive.loadFailed')}</span>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() =>
+                  fireAndForget(childSource.refresh(), 'drive-expanded-retry')
+                }
+              >
+                {t('drive.tryAgain')}
+              </Button>
             </div>
           }
         >
-          <For each={childRows()}>
-            {(row) => (
-              <DriveListRowItem
-                row={row}
-                depth={props.depth}
-                expandedIds={props.expandedIds}
-                onToggleExpand={props.onToggleExpand}
-                showLocationColumn={props.showLocationColumn}
-                isRecent={props.isRecent}
-                sort={props.sort}
-                focused={props.focusedId === row.id}
-                selected={props.selectedIds.has(row.id)}
-                onFocus={props.onFocus}
-                onToggleSelect={props.onToggleSelect}
-                onActivate={props.onActivate}
-                createDropTarget={props.createDropTarget}
-                splitId={props.splitId}
-              />
-            )}
-          </For>
+          <Show
+            when={childRows().length > 0}
+            fallback={
+              <div
+                class="flex h-9 items-center text-xs text-ink-subtle"
+                style={{ 'padding-left': `${indentPx() + 44}px` }}
+              >
+                {t('drive.columnEmpty')}
+              </div>
+            }
+          >
+            <For each={childRows()}>
+              {(row) => (
+                <DriveListRowItem
+                  row={row}
+                  depth={props.depth}
+                  expandedIds={props.expandedIds}
+                  onToggleExpand={props.onToggleExpand}
+                  showLocationColumn={props.showLocationColumn}
+                  isRecent={props.isRecent}
+                  sort={props.sort}
+                  focused={props.focusedId === row.id}
+                  selected={props.selectedIds.has(row.id)}
+                  selectedEntities={() => []}
+                  onClearSelection={() => {}}
+                  onFocus={props.onFocus}
+                  onToggleSelect={props.onToggleSelect}
+                  onActivate={props.onActivate}
+                  createDropTarget={props.createDropTarget}
+                  splitId={props.splitId}
+                />
+              )}
+            </For>
+          </Show>
+          <Show when={childSource.isLoadingMore()}>
+            <div
+              role="status"
+              class="flex h-9 items-center gap-2 text-xs text-ink-muted"
+              style={{ 'padding-left': `${indentPx() + 44}px` }}
+            >
+              <SpinnerIcon class="size-3 animate-spin" aria-hidden="true" />
+              <span>{t('drive.loadingMore')}</span>
+            </div>
+          </Show>
+          <Show when={childSource.hasMore() && !childSource.isLoadingMore()}>
+            <div
+              class="flex h-9 items-center"
+              style={{ 'padding-left': `${indentPx() + 40}px` }}
+            >
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() =>
+                  fireAndForget(
+                    childSource.loadMore(),
+                    'drive-expanded-load-more'
+                  )
+                }
+              >
+                {t('drive.loadMore')}
+              </Button>
+            </div>
+          </Show>
         </Show>
       </Show>
     </div>
@@ -211,6 +263,8 @@ function DriveListRowItem(props: {
   sort: DriveSort;
   focused: boolean;
   selected: boolean;
+  selectedEntities: () => EntityData[];
+  onClearSelection: () => void;
   onFocus: (entity: EntityData) => void;
   onToggleSelect: (id: string, shiftKey: boolean) => void;
   onActivate: (entity: EntityData, event?: MouseEvent) => void;
@@ -249,6 +303,15 @@ function DriveListRowItem(props: {
       return props.row.entity;
     },
     splitId: props.splitId,
+    instanceKey: props.depth > 0 ? `list-nested-${props.depth}` : 'list',
+    selection: {
+      entities: () =>
+        props.depth === 0 && props.selected
+          ? props.selectedEntities()
+          : [props.row.entity],
+      selected: () => (props.depth === 0 ? props.selectedEntities() : []),
+      clear: props.onClearSelection,
+    },
   });
 
   const ownerId = () =>
@@ -607,7 +670,9 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
   } = useDriveRedesign();
   const display = useDriveDisplayItems();
   const panel = useSplitPanelOrThrow();
-  const createDropTarget = createFolderDropTargets();
+  const createDropTarget = createFolderDropTargets({
+    onMove: host.moveEntitiesWithUndo,
+  });
 
   const [gridRef, setGridRef] = createSignal<HTMLDivElement>();
   const [viewportRef, setViewportRef] = createSignal<HTMLDivElement>();
@@ -668,6 +733,9 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
     setSelectionAnchorId(undefined);
   };
 
+  onCleanup(() => {
+    setSelectedEntities([]);
+  });
   onCleanup(registerClearSelection(clearSelection));
 
   const toggleSelect = (id: string, shiftKey: boolean) => {
@@ -843,13 +911,18 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
     focusedRow: DriveDisplayRow | undefined
   ) => {
     if (!focusedRow) return;
+    const nestedControl = (event.target as HTMLElement | null)?.closest(
+      'button, a, [role="checkbox"], [role="radio"], [role="menuitem"]'
+    );
     if (event.key === ' ') {
+      if (nestedControl) return;
       event.preventDefault();
       setInspectedEntity(focusedRow.entity);
       inspector.toggle();
       return;
     }
     if (event.key === 'Enter') {
+      if (nestedControl) return;
       event.preventDefault();
       activateEntity(focusedRow.entity, undefined, event.shiftKey);
       return;
@@ -898,7 +971,11 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
 
   // Keyboard navigation handler (Finder + Notion ergonomics).
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (inlineEdit.isEditing() || isEditableInput(event.target as Element)) {
+    if (
+      event.defaultPrevented ||
+      inlineEdit.isEditing() ||
+      isEditableInput(event.target as Element)
+    ) {
       return;
     }
     const list = rows();
@@ -987,6 +1064,8 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
         sort={state.value().sort}
         focused={focusedId() === row.id}
         selected={selectedIds().has(row.id)}
+        selectedEntities={selectedRowEntities}
+        onClearSelection={clearSelection}
         onFocus={(entity) => {
           setFocusedId(entity.id);
           setInspectedEntity(entity);
@@ -1091,32 +1170,45 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
             <DriveContentSkeleton mode="list" />
           </Match>
           <Match when={rows().length === 0 && !isCreatingInlineHere()}>
-            <DriveRedesignEmptyState
-              reason={emptyReason()}
-              isInFolder={Boolean(state.projectId())}
-              onCreateDocument={() => host.createNewItem('md')}
-              onCreateFolder={props.onStartInlineFolder}
-              onClearFilters={state.clearFilters}
-              onClearSearch={() => state.setSearch('')}
-              onSearchAllDrive={() => {
-                const query = state.value().search;
-                state.selectTab('owned');
-                state.setSearch(query);
-              }}
-              onBackToDrive={() => state.selectTab('owned')}
-              onRetry={() =>
-                fireAndForget(
-                  (async () => {
-                    try {
-                      await source.refresh();
-                    } catch {
-                      toast.failure(t('drive.trashLoadFailed'));
-                    }
-                  })(),
-                  'drive-list-retry'
-                )
-              }
-            />
+            <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+              <DriveRedesignEmptyState
+                reason={emptyReason()}
+                isInFolder={Boolean(state.projectId())}
+                onCreateDocument={() => host.createNewItem('md')}
+                onCreateFolder={props.onStartInlineFolder}
+                onClearFilters={state.clearFilters}
+                onClearSearch={() => state.setSearch('')}
+                onSearchAllDrive={() => {
+                  const query = state.value().search;
+                  state.selectTab('owned');
+                  state.setSearch(query);
+                }}
+                onBackToDrive={() => state.selectTab('owned')}
+                onRetry={() =>
+                  fireAndForget(
+                    (async () => {
+                      try {
+                        await source.refresh();
+                      } catch {
+                        toast.failure(t('drive.loadFailed'));
+                      }
+                    })(),
+                    'drive-list-retry'
+                  )
+                }
+              />
+              <Show when={source.hasMore() && !source.isLoadingMore()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    fireAndForget(source.loadMore(), 'drive-list-empty-more')
+                  }
+                >
+                  {t('drive.loadMore')}
+                </Button>
+              </Show>
+            </div>
           </Match>
           <Match when={true}>
             <div

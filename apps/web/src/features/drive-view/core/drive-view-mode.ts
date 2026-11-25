@@ -1,10 +1,37 @@
 import { match } from 'ts-pattern';
+import type { DriveLocation } from './types';
 
 export type DriveViewMode = 'list' | 'grid' | 'columns';
 
 export type DriveRootBrowseMode = 'browse' | 'all';
 
 export type DriveSortDirection = 'asc' | 'desc';
+
+export function supportsColumnsView(options: {
+  location: DriveLocation;
+  rootMode: DriveRootBrowseMode;
+  isSearching: boolean;
+  hasFilters: boolean;
+}): boolean {
+  if (options.isSearching || options.hasFilters) return false;
+  if (options.location.kind === 'folder') return true;
+  return options.location.tab === 'owned' && options.rootMode === 'browse';
+}
+
+export function effectiveDesktopViewMode(
+  savedMode: DriveViewMode,
+  options: {
+    location: DriveLocation;
+    rootMode: DriveRootBrowseMode;
+    isSearching: boolean;
+    hasFilters: boolean;
+  }
+): DriveViewMode {
+  if (savedMode === 'columns' && !supportsColumnsView(options)) {
+    return 'list';
+  }
+  return savedMode;
+}
 
 export type GridMoveDirection =
   | 'left'

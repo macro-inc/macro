@@ -30,7 +30,7 @@ import UsersIcon from '@icon/system/regular/users.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn, Scroll } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { InlineNameInput } from '../../components/redesign/inline-name-input';
 import { RedesignFolderTree } from '../../components/redesign/redesign-folder-tree';
 import { useDriveView } from '../../context/drive-context';
@@ -44,7 +44,7 @@ import { buildFolderTree, filterFolderTree } from '../../core/folder-tree';
 import type { DriveTab } from '../../core/types';
 import { DriveLocationMenu } from '../../drive-location-menu';
 import { DriveRedesignCreateMenu } from '../../drive-redesign-create-menu';
-import { folderToProjectEntity } from './use-drive-display-items';
+import { folderToProjectEntity } from '../shared/use-drive-display-items';
 
 const DATABASE_SCROLL_THRESHOLD = 10;
 
@@ -115,23 +115,29 @@ function DriveSidebarFavorite(props: {
 function TrashNavDropItem(props: { active: boolean; onClick: () => void }) {
   const { host } = useDriveRedesign();
   const dragContext = useDragDropContext();
+  const droppableId = `drive-sidebar-trash-drop-${createUniqueId()}`;
+
+  const trashableEntities = (data: unknown) => {
+    if (!isEntityDragData(data) || data.operation() !== 'move') return [];
+    const dragged = data.selection?.entities() ?? [data];
+    return dragged.filter((entity) => host.canMutateEntity(entity));
+  };
 
   const droppable = dragContext
-    ? createDroppable('drive-sidebar-trash-drop')
+    ? createDroppable(droppableId, {
+        isDropTargetDisabled: () =>
+          trashableEntities(dragContext[0].active.draggable?.data).length === 0,
+      })
     : undefined;
 
   if (dragContext) {
     const [, { onDragEnd }] = dragContext;
     onDragEnd(({ draggable, droppable: target }) => {
-      if (target?.id !== 'drive-sidebar-trash-drop') return;
+      if (target?.id !== droppableId) return;
       const data = draggable.data;
-      if (!isEntityDragData(data)) return;
-      const dragged = data.selection?.entities() ?? [data];
-      const trashable = dragged.filter((entity) =>
-        host.canMutateEntity(entity)
-      );
+      const trashable = trashableEntities(data);
       if (trashable.length === 0) return;
-      data.selection?.clear();
+      if (isEntityDragData(data)) data.selection?.clear();
       fireAndForget(
         host.trashEntitiesWithUndo(trashable),
         'drive-sidebar-trash-drop'
@@ -141,11 +147,7 @@ function TrashNavDropItem(props: { active: boolean; onClick: () => void }) {
 
   const isDragOverTrash = () => {
     if (!droppable?.isActiveDroppable || !dragContext) return false;
-    const [dragState] = dragContext;
-    const data = dragState.active.draggable?.data;
-    if (!isEntityDragData(data)) return false;
-    const dragged = data.selection?.entities() ?? [data];
-    return dragged.some((entity) => host.canMutateEntity(entity));
+    return trashableEntities(dragContext[0].active.draggable?.data).length > 0;
   };
 
   return (
@@ -176,7 +178,9 @@ export function DriveRedesignSidebarContent(props: {
   const { inlineEdit, host } = useDriveRedesign();
   const panel = useSplitPanel();
 
-  const createDropTarget = createFolderDropTargets();
+  const createDropTarget = createFolderDropTargets({
+    onMove: host.moveEntitiesWithUndo,
+  });
   const rootDropTarget = createDropTarget?.(() => null);
 
   const [folderSearch, setFolderSearch] = createSignal('');
@@ -411,7 +415,7 @@ export function DriveRedesignSidebarContent(props: {
                 when={!sidebar.foldersError()}
                 fallback={
                   <div class="flex flex-col items-start gap-1.5 p-3 text-xs text-ink-muted">
-                    <span>{t('drive.trashLoadFailed')}</span>
+                    <span>{t('drive.loadFailed')}</span>
                     <Button
                       variant="ghost"
                       size="xs"

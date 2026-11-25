@@ -32,7 +32,11 @@ import {
 } from '../../components/redesign/redesign-breadcrumbs';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
-import type { DriveRootBrowseMode } from '../../core/drive-view-mode';
+import {
+  type DriveRootBrowseMode,
+  effectiveDesktopViewMode,
+  supportsColumnsView,
+} from '../../core/drive-view-mode';
 import { folderAncestors } from '../../core/folder-tree';
 import { DRIVE_SORT_OPTIONS, type DriveSort } from '../../core/types';
 import { DriveRedesignCreateMenu } from '../../drive-redesign-create-menu';
@@ -40,7 +44,7 @@ import { DriveFilterMenu } from '../drive-filter-menu';
 import {
   folderToProjectEntity,
   useDriveDisplayItems,
-} from './use-drive-display-items';
+} from '../shared/use-drive-display-items';
 
 export function DriveRedesignHeader(props: {
   onStartInlineFolder: () => void;
@@ -50,7 +54,9 @@ export function DriveRedesignHeader(props: {
     useDriveRedesign();
   const display = useDriveDisplayItems();
   const panel = useSplitPanelOrThrow();
-  const createDropTarget = createFolderDropTargets();
+  const createDropTarget = createFolderDropTargets({
+    onMove: host.moveEntitiesWithUndo,
+  });
 
   let focusSearchFn: (() => void) | undefined;
 
@@ -76,6 +82,25 @@ export function DriveRedesignHeader(props: {
     const loc = location();
     return loc.kind === 'tab' && loc.tab === 'recent';
   };
+
+  const showColumnsToggle = () =>
+    !isStarred() &&
+    !isRecent() &&
+    !isTrash() &&
+    supportsColumnsView({
+      location: location(),
+      rootMode: preferences.rootMode(),
+      isSearching: display.isSearching(),
+      hasFilters: display.hasFilters(),
+    });
+
+  const activeViewMode = () =>
+    effectiveDesktopViewMode(preferences.viewMode(), {
+      location: location(),
+      rootMode: preferences.rootMode(),
+      isSearching: display.isSearching(),
+      hasFilters: display.hasFilters(),
+    });
 
   const activeFolderId = () => state.projectId();
 
@@ -328,7 +353,7 @@ export function DriveRedesignHeader(props: {
               size="icon-md"
               aria-label={t('drive.viewList')}
               tooltip={t('drive.viewList')}
-              aria-pressed={preferences.viewMode() === 'list'}
+              aria-pressed={activeViewMode() === 'list'}
               onClick={() => preferences.setViewMode('list')}
             >
               <ListIcon class="size-4" aria-hidden="true" />
@@ -337,17 +362,17 @@ export function DriveRedesignHeader(props: {
               size="icon-md"
               aria-label={t('drive.viewGrid')}
               tooltip={t('drive.viewGrid')}
-              aria-pressed={preferences.viewMode() === 'grid'}
+              aria-pressed={activeViewMode() === 'grid'}
               onClick={() => preferences.setViewMode('grid')}
             >
               <SquaresFourIcon class="size-4" aria-hidden="true" />
             </ButtonGroup.Button>
-            <Show when={!isStarred() && !isRecent()}>
+            <Show when={showColumnsToggle()}>
               <ButtonGroup.Button
                 size="icon-md"
                 aria-label={t('drive.viewColumns')}
                 tooltip={t('drive.viewColumns')}
-                aria-pressed={preferences.viewMode() === 'columns'}
+                aria-pressed={activeViewMode() === 'columns'}
                 onClick={() => preferences.setViewMode('columns')}
               >
                 <ColumnsIcon class="size-4" aria-hidden="true" />
@@ -451,9 +476,12 @@ export function DriveRedesignHeader(props: {
 
       <Show when={display.isSearching() ? activeFolder() : undefined}>
         {(folder) => (
-          <div class="flex shrink-0 items-center justify-between gap-2 border-b border-edge-muted bg-panel/60 px-4 py-1.5 text-xs text-ink-muted">
+          <div class="flex shrink-0 items-center gap-2 border-b border-edge-muted bg-panel/60 px-4 py-1.5 text-xs text-ink-muted">
             <span class="truncate">
               {t('drive.searchingInFolder', { name: folder().name })}
+            </span>
+            <span aria-hidden="true" class="text-ink-subtle">
+              ·
             </span>
             <Button
               variant="ghost"

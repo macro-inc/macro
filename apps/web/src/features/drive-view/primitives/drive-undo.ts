@@ -8,19 +8,36 @@ import {
   type UndoableEntityRef,
 } from '../core/drive-undo';
 
+export type DriveMoveUndoOutcome =
+  | boolean
+  | { failedItems: MoveUndoItem[]; skipped?: boolean };
+
+export type DriveTrashUndoOutcome =
+  | boolean
+  | { failedItems: UndoableEntityRef[] };
+
+export type DriveRenameUndoOutcome = boolean | 'skipped';
+
 export type DriveUndoExecutors = {
-  undoMove: (items: readonly MoveUndoItem[]) => Promise<boolean>;
-  undoTrash: (items: readonly UndoableEntityRef[]) => Promise<boolean>;
+  undoMove: (
+    items: readonly MoveUndoItem[],
+    destinationFolderId: string | null
+  ) => Promise<DriveMoveUndoOutcome>;
+  undoTrash: (
+    items: readonly UndoableEntityRef[]
+  ) => Promise<DriveTrashUndoOutcome>;
   undoRename: (
     entity: UndoableEntityRef,
-    previousName: string
-  ) => Promise<boolean>;
+    previousName: string,
+    expectedCurrentName: string
+  ) => Promise<DriveRenameUndoOutcome>;
 };
 
 export type DriveUndoResult =
   | { status: 'empty' }
   | { status: 'busy' }
   | { status: 'undone'; action: DriveUndoAction }
+  | { status: 'skipped'; action: DriveUndoAction }
   | { status: 'failed'; action: DriveUndoAction };
 
 export type DriveUndoManager = {
@@ -61,25 +78,107 @@ export function createDriveUndoManager(
   const [stack, setStack] = createSignal<DriveUndoAction[]>([]);
   const [isUndoing, setIsUndoing] = createSignal(false);
 
-  const executeUndo = async (
-    action: DriveUndoAction
+  const hasNewerActionForEntity = (
+    laterActions: readonly DriveUndoAction[],
+    kind: 'move' | 'rename',
+    entityId: string
+  ): boolean =>
+    laterActions.some((entry) => {
+      if (entry.kind !== kind) return false;
+      if (entry.kind === 'rename') return entry.entity.id === entityId;
+      return entry.items.some((item) => item.entity.id === entityId);
+    });
+
+  const executeMoveUndo = async (
+    action: Extract<DriveUndoAction, { kind: 'move' }>,
+    laterActions: readonly DriveUndoAction[]
   ): Promise<DriveUndoResult> => {
-    setIsUndoing(true);
-    try {
-      let ok = false;
-      if (action.kind === 'move') {
-        ok = await executors.undoMove(action.items);
-      } else if (action.kind === 'trash') {
-        ok = await executors.undoTrash(action.items);
-      } else {
-        ok = await executors.undoRename(action.entity, action.previousName);
-      }
-      if (!ok) {
-        // Put the entry back on top so the user can retry.
+    const eligibleItems = action.items.filter(
+      (item) => !hasNewerActionForEntity(laterActions, 'move', item.entity.id)
+    );
+    if (eligibleItems.length === 0) {
+      return { status: 'skipped', action };
+    }
+    const outcome = await executors.undoMove(
+      eligibleItems,
+      action.destinationFolderId
+    );
+    if (typeof outcome === 'boolean') {
+      if (!outcome) {
         setStack((current) => pushUndoAction(current, action));
         return { status: 'failed', action };
       }
       return { status: 'undone', action };
+    }
+    if (outcome.skipped && outcome.failedItems.length === 0) {
+      return { status: 'skipped', action };
+    }
+    if (outcome.failedItems.length > 0) {
+      const retryAction: DriveUndoAction = {
+        ...action,
+        items: outcome.failedItems,
+      };
+      setStack((current) => pushUndoAction(current, retryAction));
+      return { status: 'failed', action: retryAction };
+    }
+    return { status: 'undone', action };
+  };
+
+  const executeTrashUndo = async (
+    action: Extract<DriveUndoAction, { kind: 'trash' }>
+  ): Promise<DriveUndoResult> => {
+    const outcome = await executors.undoTrash(action.items);
+    if (typeof outcome === 'boolean') {
+      if (!outcome) {
+        setStack((current) => pushUndoAction(current, action));
+        return { status: 'failed', action };
+      }
+      return { status: 'undone', action };
+    }
+    if (outcome.failedItems.length > 0) {
+      const retryAction: DriveUndoAction = {
+        ...action,
+        items: outcome.failedItems,
+      };
+      setStack((current) => pushUndoAction(current, retryAction));
+      return { status: 'failed', action: retryAction };
+    }
+    return { status: 'undone', action };
+  };
+
+  const executeRenameUndo = async (
+    action: Extract<DriveUndoAction, { kind: 'rename' }>,
+    laterActions: readonly DriveUndoAction[]
+  ): Promise<DriveUndoResult> => {
+    if (hasNewerActionForEntity(laterActions, 'rename', action.entity.id)) {
+      return { status: 'skipped', action };
+    }
+    const outcome = await executors.undoRename(
+      action.entity,
+      action.previousName,
+      action.nextName
+    );
+    if (outcome === 'skipped') {
+      return { status: 'skipped', action };
+    }
+    if (!outcome) {
+      setStack((current) => pushUndoAction(current, action));
+      return { status: 'failed', action };
+    }
+    return { status: 'undone', action };
+  };
+
+  const executeUndo = async (
+    action: DriveUndoAction,
+    laterActions: readonly DriveUndoAction[]
+  ): Promise<DriveUndoResult> => {
+    setIsUndoing(true);
+    try {
+      if (action.kind === 'move') {
+        return await executeMoveUndo(action, laterActions);
+      }
+      if (action.kind === 'trash') return await executeTrashUndo(action);
+      return await executeRenameUndo(action, laterActions);
     } catch {
       setStack((current) => pushUndoAction(current, action));
       return { status: 'failed', action };
@@ -135,17 +234,22 @@ export function createDriveUndoManager(
       const { action, rest } = popLatestUndoAction(stack());
       if (!action) return { status: 'empty' };
       setStack(rest);
-      return executeUndo(action);
+      return executeUndo(action, []);
     },
 
     undoById: async (id) => {
       if (isUndoing()) return { status: 'busy' };
-      const { action, rest } = takeUndoActionById(stack(), id);
+      const current = stack();
+      const index = current.findIndex((entry) => entry.id === id);
+      const { action, rest } = takeUndoActionById(current, id);
       if (!action) return { status: 'empty' };
+      const laterActions = index >= 0 ? current.slice(index + 1) : [];
       setStack(rest);
-      return executeUndo(action);
+      return executeUndo(action, laterActions);
     },
 
-    clear: () => setStack([]),
+    clear: () => {
+      setStack([]);
+    },
   };
 }

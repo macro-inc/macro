@@ -1,4 +1,10 @@
 import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
+import { useQueryAccount } from '@queries/auth/use-query-account';
+import {
   invalidateDeletedItems,
   useDeletedItemsInfiniteQuery,
 } from '@queries/storage/deleted';
@@ -62,20 +68,23 @@ export type DriveTrashSource = {
   loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
   restoreItems: (
-    items: readonly { id: string; itemType: DriveTrashItemType }[]
+    items: readonly { id: string; itemType: DriveTrashItemType }[],
+    expectedAccount?: QueryAccount
   ) => Promise<{ restored: number; failed: number }>;
   permanentlyDeleteItems: (
-    items: readonly { id: string; itemType: DriveTrashItemType }[]
+    items: readonly { id: string; itemType: DriveTrashItemType }[],
+    expectedAccount?: QueryAccount
   ) => Promise<{ deleted: number; failed: number }>;
 };
 
 export function createDriveTrashSource(
   enabled: Accessor<boolean>
 ): DriveTrashSource {
+  const account = useQueryAccount();
   const query = useDeletedItemsInfiniteQuery(enabled);
 
   const items = createMemo(() => {
-    if (query.isPending) return [];
+    if (!account() || query.isPending) return [];
     const seen = new Set<string>();
     const rows: DriveTrashItem[] = [];
     for (const page of query.data?.pages ?? []) {
@@ -100,19 +109,24 @@ export function createDriveTrashSource(
 
   return {
     items,
-    isLoading: () => query.isPending && items().length === 0,
+    isLoading: () => (!account() || query.isPending) && items().length === 0,
     isFetching: () => query.isFetching,
     isLoadingMore: () => query.isFetchingNextPage,
-    hasMore: () => Boolean(query.hasNextPage),
-    error: () => query.error ?? undefined,
+    hasMore: () => Boolean(account() && query.hasNextPage),
+    error: () => (account() ? (query.error ?? undefined) : undefined),
     loadMore: async () => {
-      if (!query.hasNextPage || query.isFetchingNextPage) return;
+      if (!account() || !query.hasNextPage || query.isFetchingNextPage) return;
       await query.fetchNextPage();
     },
     refresh: async () => {
+      if (!account()) return;
       await query.refetch();
     },
-    restoreItems: async (targets) => {
+    restoreItems: async (targets, expectedAccount) => {
+      const captured = expectedAccount ?? currentQueryAccount();
+      if (!captured || !isCurrentQueryAccount(captured)) {
+        return { restored: 0, failed: targets.length };
+      }
       const outcomes = await Promise.allSettled(
         targets.map((target) =>
           restoreEntity({
@@ -123,14 +137,18 @@ export function createDriveTrashSource(
       );
       const restored = outcomes.filter((o) => o.status === 'fulfilled').length;
       const failed = outcomes.length - restored;
-      if (restored > 0) {
+      if (restored > 0 && isCurrentQueryAccount(captured)) {
         await refreshAfterMutation(
           targets.some((target) => target.itemType === 'project')
         );
       }
       return { restored, failed };
     },
-    permanentlyDeleteItems: async (targets) => {
+    permanentlyDeleteItems: async (targets, expectedAccount) => {
+      const captured = expectedAccount ?? currentQueryAccount();
+      if (!captured || !isCurrentQueryAccount(captured)) {
+        return { deleted: 0, failed: targets.length };
+      }
       const outcomes = await Promise.allSettled(
         targets.map((target) =>
           permanentlyDeleteEntity({
@@ -141,7 +159,7 @@ export function createDriveTrashSource(
       );
       const deleted = outcomes.filter((o) => o.status === 'fulfilled').length;
       const failed = outcomes.length - deleted;
-      if (deleted > 0) {
+      if (deleted > 0 && isCurrentQueryAccount(captured)) {
         await refreshAfterMutation(
           targets.some((target) => target.itemType === 'project')
         );

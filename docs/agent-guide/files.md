@@ -448,3 +448,42 @@ end toast, and the uploaded tree in Drive. To check resuming, reload during
 **Processing**, open a second tab of the same account, and keep a tab of that
 account open while another sends a folder. Delete the uploaded folders
 afterwards.
+
+## Redesigned Drive workspace (`enable-drive-redesign`)
+
+When the `enable-drive-redesign` feature flag is active (defaults on in local
+development, off in deployed environments), Drive mounts a rebuilt desktop and
+touch workspace via `drive-redesign-entry.tsx` (FE-70) while leaving the
+existing workspace intact when the flag is off.
+
+- **Unified browsing**: **My Drive** defaults to **Browse** mode (top-level
+  owned folders alongside unfiled files, with **Folders first** ordering) and
+  offers a one-click **All files** flat view. **Shared with me** surfaces
+  shared folders alongside shared files, and the sidebar splits **My folders**
+  from **Shared folders** with drag-and-drop spring-loaded auto-expand and
+  hover `+` subfolder creation.
+- **View modes & navigation**: Desktop switches between **List** (with inline
+  folder disclosure up to 3 levels deep and **Recent** time buckets), two-band
+  **Grid** (**Folders** + **Files** cards), and Finder-style **Miller Columns**
+  with a right-hand file preview column. Drop-target breadcrumbs collapse deep
+  trails with an overflow menu and keep **Search** and **Filters** available
+  inside folders, with a **Search all of Drive** escape hatch and dismissible
+  active filter chips.
+- **Quick Look, inline editing, Trash, & Undo**: Press `Space` on any item to
+  toggle the **Quick Look / Details** inspector pane (`Preview` + `Details`).
+  `Cmd/Ctrl+Shift+N` creates folders inline, `F2` renames inline (selecting
+  only the filename stem before the extension), and **Move**, **Rename**, and
+  **Move to Trash** record entries in an undo stack (`Cmd/Ctrl+Z` or toast
+  **Undo**). Dedicated **Starred** (`/app/drive/starred`) and **Trash**
+  (`/app/drive/trash`) views support one-click **Restore**, **Delete forever**,
+  and **Empty Trash**, plus a sidebar Trash drop target.
+- **Touch / mobile**: Phone and tablet devices get a dedicated floating header
+  with location title, expandable folder-scoped search, List/Grid toggle,
+  universal Sort & Filter drawer (available inside folders), scrollable touch
+  breadcrumbs, 44px+ rows/cards, and bottom item action sheets with inline
+  rename.
+
+Verification: run the backend-free Playwright regression suite with
+`bunx playwright test --config src/features/drive-view/browser-test/playwright.config.ts`
+from `apps/web`, and verify live persistence on a seeded local stack with
+`enable-drive-redesign` on and off.

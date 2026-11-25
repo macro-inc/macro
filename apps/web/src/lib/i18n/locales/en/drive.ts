@@ -155,6 +155,17 @@ export default {
     other:
       'Permanently delete {{count}} items in Trash? This cannot be undone.',
   },
+  emptyTrashLoadedLabel: 'Delete loaded items',
+  emptyTrashLoadedConfirmTitle: 'Delete loaded Trash items?',
+  emptyTrashLoadedConfirmDescription: {
+    one: 'Permanently delete the {{count}} loaded item? Unloaded Trash items outside this selection will remain.',
+    other:
+      'Permanently delete the {{count}} loaded items? Unloaded Trash items outside these folders will remain.',
+  },
+  trashFolderCascadeWarning:
+    'Deleting a folder permanently removes all files and subfolders inside it, including any unloaded descendants.',
+  loadMoreTrashMatches: 'Load more from Trash',
+  toastUndoSkipped: 'Item changed since this action; nothing was overwritten.',
   openFullView: 'Open',
   openInNewSplit: 'Open in split',
   openFolder: 'Open folder',
@@ -238,6 +249,7 @@ export default {
   emptyFilterDescription: 'Try clearing or broadening your active filters.',
   loadingTrash: 'Loading Trash…',
   loadingMore: 'Loading more…',
+  loadFailed: 'Drive items couldn’t be loaded.',
   trashLoadFailed: 'Trash couldn’t be loaded.',
   tryAgain: 'Try again',
   loadMore: 'Load more',
