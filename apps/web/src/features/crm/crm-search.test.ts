@@ -19,8 +19,10 @@ vi.mock('@tanstack/solid-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/solid-query')>()),
   useInfiniteQuery: (options: () => { enabled?: boolean }) => {
     queries.enabled.push(options().enabled ?? true);
+    // A page from before, still cached whatever access is now.
     return {
-      data: undefined,
+      data: [{ id: 'kept', name: 'Kept Co', domains: [], teamId: 'team-1' }],
+      isPending: false,
       isLoading: false,
       hasNextPage: false,
       isFetchNextPageError: false,
@@ -34,17 +36,19 @@ beforeEach(() => {
   queries.enabled = [];
 });
 
-it('searches companies only once CRM access is proven, not while it is pending', () => {
-  for (const [state, enabled] of [
+it('searches and lists companies only while CRM access is proven', () => {
+  for (const [state, proven] of [
     ['pending', false],
     ['allowed', true],
   ] as const) {
     access.state = state;
     queries.enabled = [];
     createRoot((dispose) => {
-      useCrmCompanyPickerSearch(() => 'kept');
+      const search = useCrmCompanyPickerSearch(() => 'kept');
+      expect(queries.enabled, state).toEqual([proven]);
+      expect(search.companies().length, state).toBe(proven ? 1 : 0);
+      expect(search.isLoading(), state).toBe(!proven);
       dispose();
     });
-    expect(queries.enabled, state).toEqual([enabled]);
   }
 });

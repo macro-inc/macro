@@ -126,13 +126,12 @@ export function useCrmContactSearch(search: Accessor<string>) {
     () => search().trim(),
     CONTACT_SEARCH_DEBOUNCE_MS
   );
-  // Records, not an entry point: read only once access is proven.
+  // Records, not an entry point: fetch and list them only while access is
+  // proven, so cached pages don't outlive a lapse in it.
+  const allowed = () => crmAccessAuthority.allowed();
   const server = useCrmContactsQuery(
     { client: useQueryClient() },
-    () =>
-      crmAccessAuthority.allowed() &&
-      !contactSearchDisabled().enabled &&
-      query().length > 0,
+    () => allowed() && !contactSearchDisabled().enabled && query().length > 0,
     query
   );
   // Until typing settles, the pages answer an earlier search: list none of
@@ -140,14 +139,14 @@ export function useCrmContactSearch(search: Accessor<string>) {
   const settling = () => search().trim() !== query();
   return {
     contacts: () =>
-      !settling() && queryReadyGate(server)
+      allowed() && !settling() && queryReadyGate(server)
         ? server.data.pages.flatMap((page) =>
             page.contacts.map(toCrmContactEntity)
           )
         : [],
     isLoading: () =>
       search().trim().length > 0 &&
-      (settling() || (query().length > 0 && server.isLoading)),
+      (!allowed() || settling() || (query().length > 0 && server.isLoading)),
     hasMore: () => !!server.hasNextPage && !server.isFetchNextPageError,
     isLoadingMore: () => server.isFetchingNextPage,
     loadMore: async () => {

@@ -57,20 +57,20 @@ export function useCrmCompanyPickerSearch(search: Accessor<string>) {
     () => search().trim(),
     COMPANY_PICKER_SEARCH_DEBOUNCE_MS
   );
-  // Records, not an entry point: read only once access is proven.
+  // Records, not an entry point: fetch and list them only while access is
+  // proven, so cached pages don't outlive a lapse in it.
+  const allowed = () => crmAccessAuthority.allowed();
   const enabled = () =>
-    crmAccessAuthority.allowed() &&
-    query().length > 0 &&
-    validateSearchServiceText(query());
+    allowed() && query().length > 0 && validateSearchServiceText(query());
   const source = useCrmCompanySearchSource(query, enabled);
   // Until typing settles, the pages answer an earlier search: list none of
   // them, and count the wait as loading.
   const settling = () => search().trim() !== query();
   return {
-    companies: () => (settling() ? [] : source.companies()),
+    companies: () => (!allowed() || settling() ? [] : source.companies()),
     isLoading: () =>
       search().trim().length > 0 &&
-      (settling() || (enabled() && source.isLoading())),
+      (!allowed() || settling() || (enabled() && source.isLoading())),
     hasMore: source.hasMore,
     isLoadingMore: source.isLoadingMore,
     loadMore: source.loadMore,
