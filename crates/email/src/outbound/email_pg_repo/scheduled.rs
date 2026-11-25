@@ -42,7 +42,7 @@ async fn change_schedule(
     expected_generation: i32,
 ) -> Result<Option<Uuid>, EmailErr> {
     let mut tx = super::begin(pool).await.map_err(anyhow::Error::from)?;
-    let outlook = sqlx::query!(
+    let mailbox_draft = sqlx::query!(
         r#"
         SELECT
             (macro_id = $2
@@ -67,7 +67,7 @@ async fn change_schedule(
     .fetch_optional(&mut *tx)
     .await
     .map_err(anyhow::Error::from)?;
-    if outlook.as_ref().is_some_and(|link| !link.authorized) {
+    if mailbox_draft.as_ref().is_some_and(|link| !link.authorized) {
         return Err(EmailErr::Unauthorized);
     }
     // Every mutator locks message before schedule; no locks cross provider work.
@@ -155,7 +155,7 @@ async fn change_schedule(
             super::send_attempt::cancel_revoked_attempts(&mut tx, &[message_id], link_id)
                 .await
                 .map_err(anyhow::Error::from)?;
-            if outlook.is_some() {
+            if mailbox_draft.is_some() {
                 // A definitive rejection has already rewound the Outlook checkpoint
                 // to Ready. Let the draft worker settle it without a delivery schedule.
                 sqlx::query!(
@@ -173,7 +173,7 @@ async fn change_schedule(
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
         }
     }
-    if outlook.is_some() && matches!(change, ScheduleChange::Set(_)) {
+    if mailbox_draft.is_some() && matches!(change, ScheduleChange::Set(_)) {
         super::draft::snapshot_outlook_draft(&mut tx, message_id, link_id, actor.as_ref())
             .await
             .map_err(anyhow::Error::from)?;

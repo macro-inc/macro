@@ -37,7 +37,7 @@ async fn an_owner_lost_during_sync_queue_never_starts_provider_work() {
                 released: tokio::sync::Semaphore::new(1),
             })),
         });
-        let engine = Engine::new(
+        let engine = Engine::new_for_test(
             crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key")
                 .unwrap(),
             repository.clone(),
@@ -100,7 +100,7 @@ async fn queued_actor_renews_ownership_before_the_lease_can_expire() {
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -172,7 +172,7 @@ async fn failed_heartbeat_keeps_inflight_work_alive_until_its_lease_is_released(
         refusal: None,
         provider_work: Some(control.clone()),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -240,7 +240,7 @@ async fn real_owner_loss_aborts_provider_work_and_releases_the_command_lease() {
             released: tokio::sync::Semaphore::new(0),
         })),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -301,7 +301,7 @@ async fn ownership_loss_drains_acquisition_before_releasing_without_provider_wor
             released: tokio::sync::Semaphore::new(0),
         })),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -363,7 +363,7 @@ async fn a_stalled_heartbeat_does_not_suspend_the_round_or_its_cleanup() {
         refusal: None,
         provider_work: Some(control.clone()),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),

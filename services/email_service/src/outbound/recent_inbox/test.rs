@@ -275,8 +275,10 @@ async fn unsupported_imap_context_never_calls_the_provider() {
             "internal-test-key".into(),
         )
         .unwrap(),
-        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-            .with_provider(email::domain::models::UserProvider::Imap),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(
+            db,
+            email::domain::models::UserProvider::Imap,
+        ),
     };
     let mailbox = MailboxKey {
         link_id: Uuid::now_v7(),

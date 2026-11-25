@@ -385,7 +385,7 @@ async fn submission_after_smtp_data(pool: sqlx::PgPool, during_data: DuringSmtpD
             .await
             .unwrap();
         repository
-            .connect(binding, owner, vec![1], id)
+            .connect(binding, owner, Some(vec![1]), id)
             .await
             .unwrap();
     }
@@ -398,7 +398,7 @@ async fn submission_after_smtp_data(pool: sqlx::PgPool, during_data: DuringSmtpD
     }
 
     let engine = Arc::new(
-        Engine::new(
+        Engine::new_for_test(
             VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
             repository.clone(),
             Arc::new(TestCipher),

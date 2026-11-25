@@ -320,7 +320,7 @@ fn indexed_engine(transport: Arc<ProtocolTransport>) -> Arc<crate::domain::servi
         owner_gate: std::sync::Mutex::new(None),
         acquire_gate: None,
     });
-    Arc::new(crate::domain::service::Engine::new(
+    Arc::new(crate::domain::service::Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(PeerCipher),

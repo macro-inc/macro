@@ -205,6 +205,47 @@ async fn reservation_serializes_provider_collisions_and_abandons_only_inactive_p
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reservation_rejects_a_reused_request_id_without_leaving_a_link(db: PgPool) {
+    let actor = owner(&db).await;
+    let repo = PgImapConnections(db.clone());
+    let input = input(2);
+    let verification = Verification {
+        id: Uuid::from_u128(3),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
+    };
+    let previous_link = Uuid::from_u128(4);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_imap_connection_attempts
+            (id, user_id, credential_owner, email, link_id, verification_id,
+             sync_generation, grant_generation, completed)
+        VALUES ($1, $2, 'owner', $3, $4, $5, 1, 1, true)
+        "#,
+        input.request_id,
+        actor.as_ref(),
+        actor.email_str(),
+        previous_link,
+        verification.id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        repo.reserve(&actor, "owner", &input, &verification).await,
+        Err(ImapConnectionError::Changed)
+    ));
+    let links = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM email_links WHERE macro_id = $1"#,
+        actor.as_ref(),
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(links, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgPool) {
     let actor = owner(&db).await;
     let repo = PgImapConnections(db.clone());
@@ -442,7 +483,7 @@ async fn reconnect_during_unknown_submission_reconciles_without_another_submit(d
         .unwrap()
         .unwrap();
 
-    let sync = PgMailboxSync::new(db.clone()).with_provider(UserProvider::Imap);
+    let sync = PgMailboxSync::new(db.clone(), UserProvider::Imap);
     let lease = sync
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await

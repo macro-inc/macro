@@ -45,7 +45,8 @@ async fn a_failed_post_commit_wake_does_not_fail_a_committed_finish(db: PgPool) 
             .connect_with(options)
             .await
             .unwrap();
-        let finisher = PgMailboxSync::new(pool.clone());
+        let finisher =
+            PgMailboxSync::new(pool.clone(), crate::domain::models::UserProvider::Outlook);
         let result = finisher.finish_projection(&head, retry).await;
         let retained = sqlx::query_scalar!(
             "SELECT count(*) FROM email_projection_outbox WHERE id=$1",
@@ -109,7 +110,10 @@ async fn a_projection_inserted_after_the_first_wake_is_woken_after_commit(db: Pg
         .connect_with(options)
         .await
         .unwrap();
-    let finisher = PgMailboxSync::new(finish_pool.clone());
+    let finisher = PgMailboxSync::new(
+        finish_pool.clone(),
+        crate::domain::models::UserProvider::Outlook,
+    );
     let mut gate = db.begin().await.unwrap();
     sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(91,6)")
         .fetch_one(&mut *gate)
@@ -206,7 +210,6 @@ async fn a_cancelled_projection_probe_retains_its_attempt_fields(db: PgPool) {
     let span = spans.last().expect("the cancelled probe span must close");
     assert_eq!(span["mailbox.unpark_attempts"], "1");
     assert_eq!(span["mailbox.unpark_limit"], "64");
-    assert_eq!(span["mailbox.discovery_skipped"], "false");
 }
 
 async fn leased_head_and_new_successor(db: &PgPool) -> (PgMailboxSync, Box<ProjectionLease>, Uuid) {
@@ -412,7 +415,7 @@ async fn projection_finishes_serialize_before_taking_any_child_row_lock(db: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn parked_work_recovery_can_skip_a_discovery_timeout(db: PgPool) {
+async fn parked_work_recovery_retries_discovery_from_the_same_cursor(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     sqlx::query!(
         "INSERT INTO email_projection_outbox (id,link_id,generation,payload,parked_at) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}',now())",
@@ -425,23 +428,17 @@ async fn parked_work_recovery_can_skip_a_discovery_timeout(db: PgPool) {
         .unwrap();
     let result = repo.recover_page(1).await;
     blocker.rollback().await.unwrap();
-    let page = result
-        .expect("discovery timeout must advance the cursor instead of failing the sweep")
-        .expect("the sweep must own its cursor");
-    assert_eq!(page.failed_probes, 1);
+    assert!(matches!(
+        result,
+        Err(MailboxError::Database(
+            crate::domain::mailbox::DatabaseFailure::DeadlineExceeded
+        ))
+    ));
     let cursor = sqlx::query_scalar!("SELECT link_after FROM email_projection_unpark_sweep")
         .fetch_one(&db)
         .await
         .unwrap();
-    assert_eq!(cursor, link);
-    // The skipped link is retried on the next wrap after the lock disappears.
-    sqlx::query!(
-        "UPDATE email_projection_unpark_sweep SET link_after=$1,available_at=now()",
-        Uuid::nil()
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    assert_eq!(cursor, Uuid::nil());
     assert_eq!(
         repo.recover_page(64).await.unwrap().unwrap().rows_unparked,
         1

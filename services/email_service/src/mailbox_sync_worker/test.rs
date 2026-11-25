@@ -47,7 +47,7 @@ impl email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository 
 }
 
 #[tokio::test(start_paused = true)]
-async fn parked_work_recovery_restores_its_budget_and_stops_during_progress() {
+async fn parked_work_recovery_retries_a_fixed_page_and_stops_during_progress() {
     let cancellation = CancellationToken::new();
     let limits = Arc::new(Mutex::new(Vec::new()));
     let service =
@@ -57,10 +57,7 @@ async fn parked_work_recovery_restores_its_budget_and_stops_during_progress() {
         });
     let before = tokio::time::Instant::now();
     run_parked_work_recovery(service, cancellation).await;
-    assert_eq!(
-        *limits.lock().unwrap(),
-        vec![64, 32, 16, 8, 4, 2, 1, 2, 4, 8, 16, 32, 64]
-    );
+    assert_eq!(*limits.lock().unwrap(), vec![64; 13]);
     assert_eq!(
         before.elapsed(),
         Duration::from_secs(30),
@@ -167,7 +164,7 @@ async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_
     .execute(&db)
     .await
     .unwrap();
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), email::domain::models::UserProvider::Outlook);
     let provider = Provider::default();
     let service = MailboxSyncService::new(repo.clone(), provider.clone(), provider.clone(), repo);
     let cancellation = CancellationToken::new();

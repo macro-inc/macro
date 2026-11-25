@@ -27,6 +27,7 @@ pub mod parked_work_recovery;
 mod progress;
 mod projection;
 mod purge;
+mod quarantine;
 mod reimport;
 mod settings;
 #[cfg(test)]
@@ -43,11 +44,11 @@ pub struct PgMailboxSync {
 }
 
 impl PgMailboxSync {
-    pub fn new(db: PgPool) -> Self {
+    pub fn new(db: PgPool, provider: crate::domain::models::UserProvider) -> Self {
         Self {
             db,
             imports_paused: false,
-            provider: crate::domain::models::UserProvider::Outlook,
+            provider,
             recovery_page_budget: std::time::Duration::from_secs(2),
         }
     }
@@ -55,12 +56,6 @@ impl PgMailboxSync {
     #[cfg(test)]
     pub(crate) fn with_recovery_page_budget(mut self, budget: std::time::Duration) -> Self {
         self.recovery_page_budget = budget;
-        self
-    }
-
-    /// Bind every claim to one provider so workers never send another provider's work to this gateway.
-    pub fn with_provider(mut self, provider: crate::domain::models::UserProvider) -> Self {
-        self.provider = provider;
         self
     }
 
@@ -194,7 +189,8 @@ impl MailboxSyncRepository for PgMailboxSync {
         lease: &CatalogLease,
         retry: SyncRetry,
     ) -> Result<(), MailboxError> {
-        self.release_catalog_lease(lease, retry).await
+        self.release_sync_stream(lease.id, lease.lease_id, lease.fence, retry)
+            .await
     }
     async fn mark_no_mailbox(&self, lease: &CatalogLease) -> Result<u32, MailboxError> {
         self.mark_catalog_without_mailbox(lease).await
@@ -450,42 +446,8 @@ impl MailboxSyncRepository for PgMailboxSync {
         lease: &StreamLease,
         retry: SyncRetry,
     ) -> Result<(), MailboxError> {
-        sqlx::query!(
-            r#"
-            UPDATE
-                email_sync_streams
-            SET
-                lease_id = NULL,
-                lease_until = NULL,
-                provider_retry_at = CASE
-                    WHEN provider = 'IMAP' AND $5 THEN GREATEST(provider_retry_at, now() + make_interval(secs => $4))
-                    ELSE provider_retry_at
-                END,
-                next_run_at = CASE
-                    WHEN provider = 'IMAP' THEN GREATEST(
-                        CASE
-                            WHEN NOT $5 AND notification_revision > leased_notification_revision THEN clock_timestamp()
-                            ELSE now() + make_interval(secs => $4)
-                        END,
-                        provider_retry_at
-                    )
-                    ELSE now() + make_interval(secs => $4)
-                END
-            WHERE
-                id = $1
-                AND lease_id = $2
-                AND fence = $3
-            "#,
-            lease.id,
-            lease.lease_id,
-            lease.fence,
-            f64::from(retry.seconds()),
-            retry.is_provider(),
-        )
-        .execute(&self.db)
-        .await
-        .map_err(db_error)?;
-        Ok(())
+        self.release_sync_stream(lease.id, lease.lease_id, lease.fence, retry)
+            .await
     }
 
     async fn pace_import(
@@ -684,7 +646,8 @@ impl PgMailboxSync {
             // Rechecks read current state and claim uploads, so their relative order is immaterial.
             sqlx::query!(r#"
                 INSERT INTO email_projection_outbox(id,link_id,generation,payload)
-                SELECT gen_random_uuid(),m.link_id,$2,jsonb_build_object('kind','attachment_recheck','message_id',m.id)
+                SELECT gen_random_uuid(),m.link_id,$2,jsonb_build_object(
+                    'kind','attachment_recheck','message_id',m.id,'thread_id',m.thread_id)
                 FROM email_messages m WHERE m.link_id=$1 AND m.provider_id IS NOT NULL AND NOT m.is_draft
                     AND EXISTS(SELECT 1 FROM email_attachments a WHERE a.message_id=m.id AND a.reference_url IS NULL)
             "#,mailbox.link_id,mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;

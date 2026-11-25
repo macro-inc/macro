@@ -29,7 +29,7 @@ fn seed() -> Seed {
 /// attempt whose client state is `secret`.
 async fn imported(db: &PgPool, emulator: &OutlookEmulator) -> (PgMailboxSync, Uuid, Uuid) {
     let link = connected(db).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let service = MailboxSyncService::new(
         repo.clone(),
         gateway(emulator),

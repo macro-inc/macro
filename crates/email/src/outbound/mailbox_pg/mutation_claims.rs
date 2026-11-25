@@ -1,4 +1,5 @@
 //! Bounded dependency wakes for draft and overlapping-target command claims.
+use super::quarantine::QuarantineReason;
 use super::*;
 use std::{future::Future, time::Duration};
 use tracing::Instrument;
@@ -10,7 +11,7 @@ pub(super) const MUTATION_PROBE_BUDGET: i64 = 128;
 const MUTATION_CLAIM_TIMEOUT: Duration = Duration::from_secs(2);
 pub(super) const MUTATION_STATEMENT_TIMEOUT: &str = "1s";
 
-fn claim_sql_timeout(error: MailboxError) -> MailboxError {
+pub(super) fn database_deadline(error: MailboxError) -> MailboxError {
     match error {
         MailboxError::Database(DatabaseFailure::Sqlstate(code)) if code == "57014" => {
             MailboxError::database(DatabaseFailure::DeadlineExceeded)
@@ -55,12 +56,20 @@ pub(super) trait MutationAcquirer: Sync {
         remaining: i64,
         first: bool,
     ) -> impl Future<Output = Result<Option<MutationStep<Self::Lease>>, MailboxError>> + Send;
+
+    fn quarantine(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Uuid,
+        reason: QuarantineReason,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 }
 
 #[derive(Clone)]
 pub(super) enum MutationWake {
     Draft(Uuid),
     Command(Uuid),
+    ReleasedCommand(Uuid),
     Label(String),
 }
 
@@ -68,7 +77,7 @@ impl MutationWake {
     fn as_str(&self) -> &'static str {
         match self {
             Self::Draft(_) => "drafts",
-            Self::Command(_) => "commands",
+            Self::Command(_) | Self::ReleasedCommand(_) => "commands",
             Self::Label(_) => "labels",
         }
     }
@@ -83,11 +92,11 @@ impl PgMailboxSync {
         let mut tx = tokio::time::timeout_at(deadline, self.mutation_claim_transaction())
             .await
             .map_err(|_| MailboxError::database(DatabaseFailure::DeadlineExceeded))?
-            .map_err(claim_sql_timeout)?;
+            .map_err(database_deadline)?;
         let window = tokio::time::timeout_at(deadline, acquirer.window(&mut tx))
             .await
             .map_err(|_| MailboxError::database(DatabaseFailure::DeadlineExceeded))?
-            .map_err(claim_sql_timeout)?;
+            .map_err(database_deadline)?;
         if window.ids.is_empty() {
             tx.commit().await.map_err(db_error)?;
             return Ok(SyncClaim::Idle);
@@ -102,6 +111,7 @@ impl PgMailboxSync {
             mailbox.probe_budget_used = tracing::field::Empty,
             mailbox.acquire_calls = tracing::field::Empty,
             mailbox.blocked_rows = tracing::field::Empty,
+            mailbox.quarantine = tracing::field::Empty,
             mailbox.legacy_wide = tracing::field::Empty,
             mailbox.exclusion_overflow = tracing::field::Empty,
             mailbox.exclusion_leases_at_least = tracing::field::Empty,
@@ -127,13 +137,26 @@ impl PgMailboxSync {
                         break;
                     }
                     calls += 1;
-                    let Some(step) = acquirer.acquire(&mut tx, id, remaining, !evaluated).await?
-                    else {
-                        continue;
+                    let step = match acquirer.acquire(&mut tx, id, remaining, !evaluated).await {
+                        Ok(Some(step)) => step,
+                        Ok(None) => continue,
+                        Err(error @ MailboxError::Database(DatabaseFailure::Decode)) => {
+                            let reason = QuarantineReason::Decode;
+                            acquirer.quarantine(&mut tx, id, reason).await?;
+                            span.record("mailbox.quarantine", reason.as_ref());
+                            tracing::warn!(work_id = %id, work = A::WORK, ?error, "Corrupt mailbox mutation quarantined");
+                            // A decode failure hides the actual probe count.
+                            // Commit this row and give the next row a fresh budget.
+                            break;
+                        }
+                        Err(error) => return Err(error),
                     };
                     if step.budget_exhausted {
                         if remaining == MUTATION_PROBE_BUDGET {
-                            return Err(MailboxError::Persistence);
+                            let reason = QuarantineReason::ProbeBudget;
+                            acquirer.quarantine(&mut tx, id, reason).await?;
+                            span.record("mailbox.quarantine", reason.as_ref());
+                            tracing::warn!(work_id = %id, work = A::WORK, "Mailbox mutation exceeded a fresh probe budget");
                         }
                         break;
                     }
@@ -141,7 +164,11 @@ impl PgMailboxSync {
                         || (!step.legacy_wide && step.probes > remaining)
                         || (step.legacy_wide && evaluated)
                     {
-                        return Err(MailboxError::Persistence);
+                        let reason = QuarantineReason::ProbeAccounting;
+                        acquirer.quarantine(&mut tx, id, reason).await?;
+                        span.record("mailbox.quarantine", reason.as_ref());
+                        tracing::warn!(work_id = %id, work = A::WORK, "Mailbox mutation returned invalid probe accounting");
+                        break;
                     }
                     evaluated = true;
                     remaining -= if step.legacy_wide {
@@ -159,7 +186,11 @@ impl PgMailboxSync {
                         break;
                     }
                     if !step.blocked {
-                        return Err(MailboxError::Persistence);
+                        let reason = QuarantineReason::MissingDisposition;
+                        acquirer.quarantine(&mut tx, id, reason).await?;
+                        span.record("mailbox.quarantine", reason.as_ref());
+                        tracing::warn!(work_id = %id, work = A::WORK, "Mailbox mutation returned no claim disposition");
+                        break;
                     }
                 }
                 span.record(
@@ -183,7 +214,7 @@ impl PgMailboxSync {
         )
         .await
         {
-            Ok(result) => result.map_err(claim_sql_timeout),
+            Ok(result) => result.map_err(database_deadline),
             Err(_) => Err(MailboxError::database(DatabaseFailure::DeadlineExceeded)),
         };
         // Cancelling a COMMIT can report failure after Postgres acquired the
@@ -225,13 +256,11 @@ impl PgMailboxSync {
         mailbox: MailboxKey,
         wake: MutationWake,
     ) -> Result<(), MailboxError> {
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut **tx)
-            .await
-            .map_err(db_error)?;
         let (command, draft, label) = match &wake {
             MutationWake::Draft(id) => (None, Some(*id), None),
-            MutationWake::Command(id) => (Some(*id), None, None),
+            MutationWake::Command(id) | MutationWake::ReleasedCommand(id) => {
+                (Some(*id), None, None)
+            }
             MutationWake::Label(name) => (None, None, Some(name.as_str())),
         };
         let row = sqlx::query_file!(
@@ -241,6 +270,7 @@ impl PgMailboxSync {
             command,
             draft,
             label,
+            !matches!(wake, MutationWake::ReleasedCommand(_)),
         )
         .fetch_one(&mut **tx)
         .await

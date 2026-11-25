@@ -87,7 +87,7 @@ impl Repository for MemoryRepository {
     async fn verification(&self, _: Uuid) -> Result<VerifiedAccount, Error> {
         Err(Error::NotFound)
     }
-    async fn connect(&self, _: Binding, _: &str, _: Vec<u8>, _: Uuid) -> Result<(), Error> {
+    async fn connect(&self, _: Binding, _: &str, _: Option<Vec<u8>>, _: Uuid) -> Result<(), Error> {
         Err(Error::Invalid)
     }
     async fn credentials(&self, _: Binding) -> Result<(String, Vec<u8>), Error> {
@@ -118,6 +118,20 @@ impl Repository for MemoryRepository {
         }
         self.acquire(binding).await
     }
+    async fn frozen_submission(
+        &self,
+        _: &Account,
+        draft_id: &str,
+    ) -> Result<Option<serde_json::Value>, Error> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .drafts
+            .get(draft_id)
+            .and_then(|draft| draft.frozen_content.clone()))
+    }
+
     async fn read_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
         let mut account = if self.command_leases.is_some() {
             self.view(binding, None)
@@ -161,6 +175,10 @@ impl Repository for MemoryRepository {
             .cloned()
             .collect())
     }
+    async fn save_health(&self, account: &mut Account) -> Result<(), Error> {
+        self.save(account).await
+    }
+
     async fn save(&self, account: &mut Account) -> Result<(), Error> {
         account.lease_id.ok_or(Error::Conflict)?;
         if account
@@ -300,6 +318,16 @@ pub(crate) struct UncertainTransport {
 }
 #[async_trait::async_trait]
 impl MailTransport for UncertainTransport {
+    async fn maintenance(&self) {}
+
+    async fn verify_features(
+        &self,
+        credentials: &Credentials,
+    ) -> Result<Option<crate::domain::server_features::ServerFeatures>, Error> {
+        self.verify(credentials).await?;
+        Ok(None)
+    }
+
     async fn wait_folder(
         &self,
         _: &Credentials,

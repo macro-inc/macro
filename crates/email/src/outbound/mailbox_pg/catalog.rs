@@ -365,49 +365,6 @@ impl PgMailboxSync {
         tx.commit().await.map_err(db_error)?;
         Ok(u32::try_from(marked_seconds.max(0)).unwrap_or(u32::MAX))
     }
-
-    pub(super) async fn release_catalog_lease(
-        &self,
-        lease: &CatalogLease,
-        retry: SyncRetry,
-    ) -> Result<(), MailboxError> {
-        sqlx::query!(
-            r#"
-            UPDATE
-                email_sync_streams
-            SET
-                lease_id = NULL,
-                lease_until = NULL,
-                provider_retry_at = CASE
-                    WHEN provider = 'IMAP' AND $5 THEN GREATEST(provider_retry_at, now() + make_interval(secs => $4))
-                    ELSE provider_retry_at
-                END,
-                next_run_at = CASE
-                    WHEN provider = 'IMAP' THEN GREATEST(
-                        CASE
-                            WHEN NOT $5 AND notification_revision > leased_notification_revision THEN clock_timestamp()
-                            ELSE now() + make_interval(secs => $4)
-                        END,
-                        provider_retry_at
-                    )
-                    ELSE now() + make_interval(secs => $4)
-                END
-            WHERE
-                id = $1
-                AND lease_id = $2
-                AND fence = $3
-            "#,
-            lease.id,
-            lease.lease_id,
-            lease.fence,
-            f64::from(retry.seconds()),
-            retry.is_provider(),
-        )
-        .execute(&self.db)
-        .await
-        .map_err(db_error)?;
-        Ok(())
-    }
 }
 
 fn role_name(role: FolderRole) -> &'static str {

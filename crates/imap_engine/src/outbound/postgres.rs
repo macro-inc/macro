@@ -7,6 +7,31 @@ use crate::domain::{models::*, ports::*};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+fn db_error(error: sqlx::Error) -> Error {
+    let sqlstate = error.as_database_error().and_then(|error| error.code());
+    let kind = match error {
+        sqlx::Error::PoolTimedOut => "pool_timeout",
+        sqlx::Error::Decode(_) | sqlx::Error::ColumnDecode { .. } => "decode",
+        sqlx::Error::Database(_) => "statement",
+        _ => "driver",
+    };
+    tracing::warn!(
+        db.kind = kind,
+        db.sqlstate = sqlstate.as_deref(),
+        "IMAP state database operation failed"
+    );
+    if kind == "decode" {
+        Error::Invalid
+    } else {
+        Error::ConnectionUnavailable
+    }
+}
+
+fn corrupt_state<E>(_: E) -> Error {
+    tracing::error!(db.kind = "decode", "stored IMAP state was invalid");
+    Error::Invalid
+}
+
 /// Postgres storage. Every lookup includes the link or owner binding.
 pub struct PgRepository {
     pool: PgPool,
@@ -54,11 +79,11 @@ impl Repository for PgRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         state
             .map(serde_json::from_value)
             .transpose()
-            .map_err(|_| Error::ConnectionUnavailable)
+            .map_err(corrupt_state)
     }
     async fn save_idle_state(
         &self,
@@ -80,7 +105,7 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         sqlx::query!(
             r#"
             DELETE FROM imap_idle_hosts
@@ -98,7 +123,7 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         Ok(())
     }
 
@@ -114,13 +139,11 @@ impl Repository for PgRepository {
                 now() + make_interval(secs => $5::double precision)
             FROM
                 imap_accounts a
-                JOIN email_links l ON l.id = a.link_id
+                JOIN imap_current_links l ON l.id = a.link_id
             WHERE
                 a.link_id = $1
                 AND a.sync_generation = $2
                 AND a.grant_generation = $3
-                AND l.provider = 'IMAP'
-                AND l.is_sync_active
                 AND NOT l.needs_reauth
                 AND l.sync_generation = a.sync_generation
                 AND l.grant_generation = a.grant_generation
@@ -141,16 +164,19 @@ impl Repository for PgRepository {
             b.grant_generation,
             owner,
             OWNER_LEASE_BUDGET.as_secs_f64(),
-        ).fetch_optional(&self.pool).await.map_err(|_|Error::ConnectionUnavailable)?;
+        ).fetch_optional(&self.pool).await.map_err(db_error)?;
         Ok(row.is_some())
     }
     async fn holds_owner(&self, b: Binding, owner: Uuid) -> Result<bool, Error> {
         sqlx::query_scalar!(
             r#"
             SELECT EXISTS (
-                SELECT 1 FROM imap_account_owners
-                WHERE link_id = $1 AND sync_generation = $2
-                    AND grant_generation = $3 AND owner_id = $4 AND lease_until > now()
+                SELECT 1 FROM imap_account_owners o
+                JOIN imap_current_links l ON l.id=o.link_id
+                WHERE o.link_id=$1 AND o.sync_generation=$2
+                    AND o.grant_generation=$3 AND o.owner_id=$4 AND o.lease_until>now()
+                    AND l.sync_generation=o.sync_generation AND l.grant_generation=o.grant_generation
+                    AND NOT l.needs_reauth
             ) AS "owned!"
             "#,
             b.link_id,
@@ -160,7 +186,7 @@ impl Repository for PgRepository {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)
+        .map_err(db_error)
     }
     async fn release_owner(&self, b: Binding, owner: Uuid) -> Result<(), Error> {
         sqlx::query!(
@@ -174,15 +200,11 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         Ok(())
     }
     async fn admit_verification(&self, scopes: &[(String, i32)]) -> Result<(), Error> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        let mut tx = self.pool.begin().await.map_err(db_error)?;
         for (scope, limit) in scopes {
             let admitted = sqlx::query!(
                 r#"
@@ -201,7 +223,7 @@ impl Repository for PgRepository {
             )
             .fetch_optional(&mut *tx)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+            .map_err(db_error)?;
             if admitted.is_none() {
                 return Err(Error::Throttled);
             }
@@ -224,8 +246,8 @@ impl Repository for PgRepository {
         )
         .execute(&mut *tx)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
-        tx.commit().await.map_err(|_| Error::ConnectionUnavailable)
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)
     }
     async fn put_verification(&self, v: VerifiedAccount) -> Result<(), Error> {
         sqlx::query!(
@@ -240,7 +262,7 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         sqlx::query!(
             r#"
             DELETE FROM imap_verifications
@@ -259,7 +281,7 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         Ok(())
     }
     async fn verification(&self, id: Uuid) -> Result<VerifiedAccount, Error> {
@@ -282,7 +304,7 @@ impl Repository for PgRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(db_error)?
         .ok_or(Error::NotFound)?;
         Ok(VerifiedAccount {
             verification: Verification {
@@ -298,14 +320,10 @@ impl Repository for PgRepository {
         &self,
         b: Binding,
         owner: &str,
-        ciphertext: Vec<u8>,
+        ciphertext: Option<Vec<u8>>,
         verification: Uuid,
     ) -> Result<(), Error> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        let mut tx = self.pool.begin().await.map_err(db_error)?;
         let v = sqlx::query!(
             r#"
             SELECT
@@ -325,7 +343,7 @@ impl Repository for PgRepository {
         )
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(db_error)?
         .ok_or(Error::Forbidden)?;
         if v.consumed_by.is_some_and(|link| link != b.link_id) {
             return Err(Error::Forbidden);
@@ -350,15 +368,16 @@ impl Repository for PgRepository {
             )
             .fetch_optional(&mut *tx)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+            .map_err(db_error)?;
             if current.is_none() {
                 return Err(Error::Conflict);
             }
-            tx.commit()
-                .await
-                .map_err(|_| Error::ConnectionUnavailable)?;
+            tx.commit().await.map_err(db_error)?;
             return Ok(());
         }
+        let ciphertext = ciphertext
+            .filter(|bytes| !bytes.is_empty())
+            .ok_or(Error::Invalid)?;
         let state = serde_json::to_value(AccountState::default()).map_err(|_| Error::Invalid)?;
         let changed=sqlx::query!(
             r#"
@@ -406,7 +425,7 @@ impl Repository for PgRepository {
             b.grant_generation,
             ciphertext,
             state,
-        ).execute(&mut *tx).await.map_err(|_|Error::ConnectionUnavailable)?.rows_affected();
+        ).execute(&mut *tx).await.map_err(db_error)?.rows_affected();
         if changed != 1 {
             return Err(Error::Conflict);
         }
@@ -425,8 +444,8 @@ impl Repository for PgRepository {
         )
         .execute(&mut *tx)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
-        tx.commit().await.map_err(|_| Error::ConnectionUnavailable)
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)
     }
     async fn credentials(&self, b: Binding) -> Result<(String, Vec<u8>), Error> {
         let row = sqlx::query!(
@@ -436,14 +455,12 @@ impl Repository for PgRepository {
                 a.credential_ciphertext
             FROM
                 imap_accounts a
-                JOIN email_links l ON l.id = a.link_id
+                JOIN imap_current_links l ON l.id = a.link_id
             WHERE
                 a.link_id = $1
                 AND a.sync_generation = $2
                 AND a.grant_generation = $3
                 AND l.macro_id = a.user_id
-                AND l.provider = 'IMAP'
-                AND l.is_sync_active
                 AND NOT l.needs_reauth
                 AND l.sync_generation = a.sync_generation
                 AND l.grant_generation = a.grant_generation
@@ -454,7 +471,7 @@ impl Repository for PgRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(db_error)?
         .ok_or(Error::Conflict)?;
         Ok((row.user_id, row.credential_ciphertext))
     }
@@ -507,11 +524,7 @@ impl Repository for PgRepository {
             .acquire()
             .await
             .map_err(|_| Error::ConnectionUnavailable)?;
-        let mut connection = self
-            .pool
-            .acquire()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        let mut connection = self.pool.acquire().await.map_err(db_error)?;
         let current = Self::read_account(&mut connection, account.binding).await?;
         if current.user_id != account.user_id {
             return Err(Error::Conflict);
@@ -524,6 +537,30 @@ impl Repository for PgRepository {
     async fn save(&self, a: &mut Account) -> Result<(), Error> {
         self.save_entries(a).await
     }
+    async fn frozen_submission(
+        &self,
+        account: &Account,
+        draft_id: &str,
+    ) -> Result<Option<serde_json::Value>, Error> {
+        let lease_id = account.lease_id.ok_or(Error::Conflict)?;
+        let binding = account.binding;
+        sqlx::query_scalar!(
+            r#"SELECT e.document FROM imap_state_entries e
+            JOIN imap_accounts a ON a.link_id=e.link_id
+            WHERE e.link_id=$1 AND e.kind='frozen_submission' AND e.key=$2
+                AND a.sync_generation=$3 AND a.grant_generation=$4
+                AND a.lease_id=$5 AND a.lease_until>now()"#,
+            binding.link_id,
+            draft_id,
+            binding.sync_generation,
+            binding.grant_generation,
+            lease_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(db_error)
+    }
+
     async fn save_health(&self, a: &mut Account) -> Result<(), Error> {
         self.save_small_state(a).await
     }
@@ -536,7 +573,7 @@ impl Repository for PgRepository {
             SET
                 lease_until = now() + make_interval(secs => $6::double precision)
             FROM
-                email_links l
+                imap_current_links l
             WHERE
                 a.link_id = $1
                 AND a.sync_generation = $2
@@ -546,8 +583,6 @@ impl Repository for PgRepository {
                 AND a.lease_until > now()
                 AND l.id = a.link_id
                 AND l.macro_id = a.user_id
-                AND l.provider = 'IMAP'
-                AND l.is_sync_active
                 AND NOT l.needs_reauth
                 AND l.sync_generation = a.sync_generation
                 AND l.grant_generation = a.grant_generation
@@ -561,7 +596,7 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(db_error)?
         .rows_affected();
         if renewed != 1 {
             return Err(Error::Conflict);
@@ -586,7 +621,7 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         Ok(())
     }
     async fn delete(&self, b: Binding) -> Result<(), Error> {
@@ -603,7 +638,7 @@ impl Repository for PgRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         Ok(())
     }
     async fn bindings(&self, limit: i64, retained_links: &[Uuid]) -> Result<Vec<Binding>, Error> {
@@ -618,14 +653,12 @@ impl Repository for PgRepository {
                     a.updated_at
                 FROM
                     imap_accounts a
-                    JOIN email_links l ON l.id = a.link_id
+                    JOIN imap_current_links l ON l.id = a.link_id
                 WHERE
                     a.link_id = ANY (
                         $2
             )
                     AND l.macro_id = a.user_id
-                    AND l.provider = 'IMAP'
-                    AND l.is_sync_active
                     AND NOT l.needs_reauth
                     AND (
                         (a.state ->> 'needs_reauth') IS DISTINCT FROM 'true'
@@ -646,12 +679,10 @@ impl Repository for PgRepository {
                     a.updated_at
                 FROM
                     imap_accounts a
-                    JOIN email_links l ON l.id = a.link_id
+                    JOIN imap_current_links l ON l.id = a.link_id
                 WHERE
                     NOT (a.link_id = ANY ($2))
                     AND l.macro_id = a.user_id
-                    AND l.provider = 'IMAP'
-                    AND l.is_sync_active
                     AND NOT l.needs_reauth
                     AND (
                         (a.state ->> 'needs_reauth') IS DISTINCT FROM 'true'
@@ -701,7 +732,7 @@ impl Repository for PgRepository {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         Ok(rows
             .into_iter()
             .map(|r| Binding {

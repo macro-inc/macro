@@ -9,8 +9,7 @@ async fn imap_health_without_microsoft_scopes_does_not_lock_and_rejects_retired_
         super::super::test::fixture_for_provider(&db, crate::domain::models::UserProvider::Imap)
             .await;
 
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let mailbox = MailboxAccess {
         sync_generation: 1,
         link_id: link,

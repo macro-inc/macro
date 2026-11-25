@@ -55,6 +55,7 @@ pub(crate) enum ImapConnectionErrorCode {
     ConnectionUnavailable,
     Invalid,
     Forbidden,
+    PersonRequired,
     NotFound,
     Conflict,
     CredentialsRejected,
@@ -75,18 +76,13 @@ pub(crate) struct ImapConnectionErrorResponse {
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
-pub(crate) struct ConnectionError(ImapConnectionError);
-impl From<ImapConnectionError> for ConnectionError {
-    fn from(error: ImapConnectionError) -> Self {
-        Self(error)
-    }
-}
+pub(crate) struct ConnectionError(#[from] ImapConnectionError);
 impl IntoResponse for ConnectionError {
     fn into_response(self) -> Response {
         use ImapConnectionErrorCode as Code;
         use imap_service_client::Error;
         let (status, code) = match &self.0 {
-            ImapConnectionError::PersonRequired => (StatusCode::FORBIDDEN, Code::Forbidden),
+            ImapConnectionError::PersonRequired => (StatusCode::FORBIDDEN, Code::PersonRequired),
             ImapConnectionError::Disabled => (StatusCode::FORBIDDEN, Code::Disabled),
             ImapConnectionError::AddressUnverified => {
                 (StatusCode::FORBIDDEN, Code::AddressUnverified)

@@ -1,5 +1,5 @@
 //! Generation-bound folder routing configuration and observed folder metadata.
-use super::PgRepository;
+use super::{PgRepository, corrupt_state, db_error};
 use crate::domain::{
     account_settings::{
         FolderPreferences, ObservedFolder, SettingsRepository, UpdateFolderSettings,
@@ -17,16 +17,12 @@ impl SettingsRepository for PgRepository {
                 a.credential_ciphertext
             FROM
                 imap_accounts a
-                JOIN email_links l ON l.id = a.link_id
+                JOIN imap_current_links l ON l.id = a.link_id
             WHERE
                 a.link_id = $1
                 AND a.sync_generation = $2
                 AND a.grant_generation = $3
                 AND l.macro_id = a.user_id
-                AND l.provider = 'IMAP'
-                AND l.is_sync_active
-                AND l.disconnect_requested_at IS NULL
-                AND l.deleting_at IS NULL
                 AND l.sync_generation = a.sync_generation
                 AND l.grant_generation = a.grant_generation
             "#,
@@ -36,7 +32,7 @@ impl SettingsRepository for PgRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(db_error)?
         .ok_or(Error::Conflict)?;
         Ok((row.user_id, row.credential_ciphertext))
     }
@@ -62,16 +58,16 @@ impl SettingsRepository for PgRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(db_error)?
         .ok_or(Error::NotFound)?;
         Ok(FolderPreferences {
             revision: row.folder_preferences_revision,
             role_overrides: serde_json::from_value(row.folder_role_overrides)
-                .map_err(|_| Error::ConnectionUnavailable)?,
+                .map_err(corrupt_state)?,
             excluded_folder_ids: serde_json::from_value(row.excluded_folder_ids)
-                .map_err(|_| Error::ConnectionUnavailable)?,
+                .map_err(corrupt_state)?,
             watched_folder_ids: serde_json::from_value(row.watched_folder_ids)
-                .map_err(|_| Error::ConnectionUnavailable)?,
+                .map_err(corrupt_state)?,
         })
     }
 
@@ -97,15 +93,15 @@ impl SettingsRepository for PgRepository {
             b.sync_generation,
             b.grant_generation,
             MAX_FOLDER_CATALOG as i64 + 1,
-        ).fetch_all(&self.pool).await.map_err(|_| Error::ConnectionUnavailable)?;
+        ).fetch_all(&self.pool).await.map_err(db_error)?;
         if records.len() > MAX_FOLDER_CATALOG {
             return Err(Error::Throttled);
         }
         records
             .into_iter()
             .map(|record| {
-                let folder: Folder = serde_json::from_value(record.folder)
-                    .map_err(|_| Error::ConnectionUnavailable)?;
+                let folder: Folder =
+                    serde_json::from_value(record.folder).map_err(corrupt_state)?;
                 // A Gmail physical index may still back other included labels when its own feed is off.
                 let monitored = record.monitored && folder.sync_enabled;
                 Ok(ObservedFolder { folder, monitored })
@@ -134,7 +130,7 @@ impl SettingsRepository for PgRepository {
                     state = imap_accounts.state - 'sync_retry_at',
                     updated_at = now()
                 FROM
-                    email_links l
+                    imap_current_links l
                 WHERE
                     imap_accounts.link_id = $1
                     AND imap_accounts.sync_generation = $2
@@ -142,10 +138,6 @@ impl SettingsRepository for PgRepository {
                     AND folder_preferences_revision = $4
                     AND l.id = imap_accounts.link_id
                     AND l.macro_id = imap_accounts.user_id
-                    AND l.provider = 'IMAP'
-                    AND l.is_sync_active
-                    AND l.disconnect_requested_at IS NULL
-                    AND l.deleting_at IS NULL
                     AND l.sync_generation = imap_accounts.sync_generation
                     AND l.grant_generation = imap_accounts.grant_generation
                 RETURNING
@@ -168,7 +160,7 @@ impl SettingsRepository for PgRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(db_error)?
         .ok_or(Error::Conflict)
     }
 }

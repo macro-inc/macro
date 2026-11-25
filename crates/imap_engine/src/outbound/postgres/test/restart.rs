@@ -78,7 +78,7 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         })),
     });
     for _ in 0..2 {
-        let engine = Engine::new(
+        let engine = Engine::new_for_test(
             crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key")
                 .unwrap(),
             repository.clone(),

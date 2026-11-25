@@ -30,12 +30,17 @@ pub(super) fn binding(mailbox: MailboxKey) -> models::Binding {
 }
 
 impl ImapMailboxGateway {
+    pub fn with_operation_class(mut self, class: models::OperationClass) -> Self {
+        self.client = self.client.with_operation_class(class);
+        self
+    }
+
     pub async fn record<T>(
         &self,
         mailbox: MailboxKey,
         result: Result<T, models::Error>,
     ) -> Result<T, EmailApiError> {
-        if result.is_ok() || matches!(result, Err(models::Error::CredentialsRejected)) {
+        if matches!(result, Err(models::Error::CredentialsRejected)) {
             let recorded = self
                 .health
                 .record(
@@ -44,11 +49,7 @@ impl ImapMailboxGateway {
                         sync_generation: mailbox.sync_generation,
                         grant_generation: mailbox.grant_generation,
                     },
-                    if result.is_ok() {
-                        CredentialHealth::Available(Vec::new())
-                    } else {
-                        CredentialHealth::ReauthorizationRequired
-                    },
+                    CredentialHealth::ReauthorizationRequired,
                 )
                 .await;
             if let Err(error) = recorded {

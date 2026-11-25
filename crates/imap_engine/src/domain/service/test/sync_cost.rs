@@ -4,6 +4,13 @@ use std::collections::VecDeque;
 pub(crate) struct SnapshotTransport(pub(crate) std::sync::Mutex<VecDeque<Vec<RemoteFolder>>>);
 #[async_trait::async_trait]
 impl MailTransport for SnapshotTransport {
+    async fn maintenance(&self) {}
+    async fn verify_features(
+        &self,
+        _: &Credentials,
+    ) -> Result<Option<crate::domain::server_features::ServerFeatures>, Error> {
+        Err(Error::Invalid)
+    }
     async fn snapshot(
         &self,
         _: &Credentials,
@@ -132,7 +139,7 @@ pub(super) fn fixture(snapshots: Vec<Vec<RemoteFolder>>) -> Fixture {
         saved_unknown: AtomicBool::new(false),
     });
     let notifier = Arc::new(RecordingNotifier::default());
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -224,7 +231,11 @@ async fn accepted_pending_copy(f: &Fixture, correlation: Uuid, corrupt: bool) ->
     pending.draft.is_draft = false;
     pending.submission = Some(SubmissionOutcome::Accepted);
     pending.sent_copy_pending = true;
-    pending.frozen_content = corrupt.then(|| serde_json::json!(null));
+    pending.frozen_content = Some(if corrupt {
+        serde_json::json!(null)
+    } else {
+        pending.input.content.clone()
+    });
     draft.id
 }
 

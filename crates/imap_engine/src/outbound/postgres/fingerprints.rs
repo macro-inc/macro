@@ -19,33 +19,29 @@ impl PgRepository {
             .acquire()
             .await
             .map_err(|_| Error::ConnectionUnavailable)?;
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        let mut tx = self.pool.begin().await.map_err(db_error)?;
         sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             .execute(&mut *tx)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+            .map_err(db_error)?;
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *tx)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+            .map_err(db_error)?;
         sqlx::query!("SET LOCAL lock_timeout = '1s'")
             .execute(&mut *tx)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+            .map_err(db_error)?;
         sqlx::query!("SET LOCAL idle_in_transaction_session_timeout = '10s'")
             .execute(&mut *tx)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+            .map_err(db_error)?;
         let valid = sqlx::query_scalar!(
             r#"
             SELECT EXISTS (
                 SELECT 1
                 FROM imap_accounts a
-                JOIN email_links l ON l.id = a.link_id
+                JOIN imap_current_links l ON l.id = a.link_id
                 WHERE a.link_id = $1
                     AND a.sync_generation = $2
                     AND a.grant_generation = $3
@@ -53,8 +49,6 @@ impl PgRepository {
                     AND a.lease_until > now()
                     AND a.revision = $5
                     AND l.macro_id = a.user_id
-                    AND l.provider = 'IMAP'
-                    AND l.is_sync_active
                     AND NOT l.needs_reauth
                     AND l.sync_generation = a.sync_generation
                     AND l.grant_generation = a.grant_generation
@@ -68,7 +62,7 @@ impl PgRepository {
         )
         .fetch_one(&mut *tx)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         if !valid {
             return Err(Error::Conflict);
         }
@@ -83,7 +77,7 @@ impl PgRepository {
         )
         .fetch_all(&mut *tx)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(db_error)?;
         let mut locations = Vec::with_capacity(rows.len());
         for row in rows {
             let fingerprint = MessageFingerprint::from_bytes(
@@ -97,9 +91,7 @@ impl PgRepository {
             }
             locations.push(location);
         }
-        tx.commit()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        tx.commit().await.map_err(db_error)?;
         Ok(locations)
     }
 }

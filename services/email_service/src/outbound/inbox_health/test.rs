@@ -29,8 +29,7 @@ async fn an_inbox_health_wake_preserves_imap_provider_pacing(db: sqlx::PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(email::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), email::domain::models::UserProvider::Imap);
     let lease = repo
         .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await

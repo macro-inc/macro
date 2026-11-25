@@ -9,6 +9,10 @@ CREATE TABLE imap_accounts (
     credential_ciphertext BYTEA NOT NULL,
     state JSONB NOT NULL DEFAULT '{}'::jsonb,
     revision BIGINT NOT NULL DEFAULT 0,
+    folder_preferences_revision BIGINT NOT NULL DEFAULT 0,
+    folder_role_overrides JSONB NOT NULL DEFAULT '{}'::jsonb,
+    excluded_folder_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    watched_folder_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     lease_id UUID,
     lease_until TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -22,3 +26,11 @@ CREATE TABLE imap_verifications (
     consumed_by UUID REFERENCES email_links(id) ON DELETE CASCADE
 );
 CREATE INDEX imap_verifications_expiry ON imap_verifications(expires_at);
+
+-- Settings can inspect an active link that needs reauthentication. Commands,
+-- watches and state writes add the credential-health fence.
+CREATE VIEW imap_current_links AS
+    SELECT id, macro_id, sync_generation, grant_generation, needs_reauth
+    FROM email_links
+    WHERE provider = 'IMAP' AND is_sync_active
+        AND disconnect_requested_at IS NULL AND deleting_at IS NULL;

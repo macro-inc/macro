@@ -729,6 +729,88 @@ async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_corrupt_command_does_not_roll_back_the_next_claim(db: PgPool) {
+    let (sync, repo, work, thread) = setup(&db).await;
+    let link = work.mailbox.link_id;
+    let messages = repo.mailbox_action_messages(link, thread).await.unwrap();
+    let first = MailboxAction::Read(true);
+    let next = MailboxAction::Flagged(true);
+    let corrupt = repo
+        .enqueue_mailbox_action(link, owner(), &first, &first.targets(&messages))
+        .await
+        .unwrap();
+    let healthy = repo
+        .enqueue_mailbox_action(link, owner(), &next, &next.targets(&messages))
+        .await
+        .unwrap();
+    sqlx::query!(
+        r#"UPDATE email_mailbox_commands
+        SET intent='{"kind":"read","value":"invalid"}', available_at=now()-interval '1 minute'
+        WHERE id=$1"#,
+        corrupt
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        sync.claim_command(Uuid::now_v7()).await.unwrap(),
+        SyncClaim::Progress
+    ));
+    let lease = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(lease.id, healthy);
+    let state = sqlx::query!(
+        "SELECT status, lease_id FROM email_mailbox_commands WHERE id=$1",
+        corrupt
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(state.status, "failed");
+    assert!(state.lease_id.is_none());
+
+    let mut overlay_lock = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT message_id FROM email_pending_mailbox_state WHERE command_id=$1 FOR UPDATE",
+        corrupt
+    )
+    .fetch_one(&mut *overlay_lock)
+    .await
+    .unwrap();
+    sync.cleanup_command_quarantine().await.unwrap();
+    let quarantine = sqlx::query!(
+        "SELECT reason,cleanup_at>now() AS deferred FROM email_mailbox_work_quarantine WHERE work='commands' AND work_id=$1",
+        corrupt
+    ).fetch_one(&db).await.unwrap();
+    assert_eq!(quarantine.reason, "decode");
+    assert_eq!(quarantine.deferred, Some(true));
+    overlay_lock.rollback().await.unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_work_quarantine SET cleanup_at=now() WHERE work='commands' AND work_id=$1",
+        corrupt
+    ).execute(&db).await.unwrap();
+    let (first, second) = tokio::join!(
+        sync.cleanup_command_quarantine(),
+        sync.cleanup_command_quarantine(),
+    );
+    first.unwrap();
+    second.unwrap();
+    let overlays = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM email_pending_mailbox_state WHERE command_id=$1"#,
+        corrupt,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(overlays, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
     let (sync, _) = fixture(&db).await;
 

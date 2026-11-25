@@ -87,7 +87,7 @@ impl Engine {
                     }
                 }.instrument(tracing::info_span!(parent: None, "imap.watch_folder", link_id = %binding.link_id, folder_id = %watched_id)).await;
                 match result {
-                    Ok(WaitOutcome::Restarted) => {
+                    Ok(WaitOutcome::Restarted | WaitOutcome::IdleCompleted) => {
                         failures = 0;
                     }
                     Ok(WaitOutcome::BaselineUnavailable) => {
@@ -110,7 +110,7 @@ impl Engine {
                         changed.notify_one();
                     }
                     Err(Error::CredentialsRejected | Error::Forbidden | Error::NotFound | Error::Conflict) => return,
-                    Err(_) => {
+                    Ok(WaitOutcome::IdleDisconnected { .. }) | Err(_) => {
                         failures = failures.saturating_add(1);
                         let retry = 2u64.pow(failures.min(8)).min(300);
                         tokio::select! {

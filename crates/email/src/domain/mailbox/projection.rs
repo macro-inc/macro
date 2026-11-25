@@ -30,6 +30,8 @@ pub enum ProjectionEvent {
     ImportCompleted,
     AttachmentRecheck {
         message_id: Uuid,
+        #[serde(default)]
+        thread_id: Option<Uuid>,
     },
     ReauthorizationRequired,
     ContactsChanged {
@@ -86,6 +88,19 @@ pub enum ProjectionEvent {
 }
 
 impl ProjectionEvent {
+    pub(crate) fn entity_key(&self) -> String {
+        match self {
+            Self::Message { thread_id, .. }
+            | Self::Absent { thread_id, .. }
+            | Self::Organization { thread_id, .. } => thread_id.to_string(),
+            Self::AttachmentRecheck {
+                message_id,
+                thread_id,
+            } => thread_id.unwrap_or(*message_id).to_string(),
+            event => event.kind().to_owned(),
+        }
+    }
+
     fn agent_correlation_id(&self) -> Option<Uuid> {
         match self {
             Self::Message {
@@ -595,15 +610,16 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                 let import = *is_import || !lease.from_current_generation;
                 // Persisted mail is already readable. List freshness must not
                 // wait for notification policy, CRM or attachment side effects.
-                let refresh = self
+                match self
                     .effects
                     .refresh(context.link.id, &context.viewers)
-                    .await;
-                if refresh.is_ok() {
-                    effects.refreshes += 1;
+                    .await
+                {
+                    Ok(()) => effects.refreshes += 1,
+                    Err(error) => {
+                        tracing::warn!(link_id = %context.link.id, %error, "Mailbox list refresh deferred to the next client read")
+                    }
                 }
-                // A websocket outage must not suppress independent message
-                // projections. Retain its error for the durable retry below.
                 if current.is_present {
                     if !message.is_draft {
                         if version == &current.version {
@@ -655,7 +671,7 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         .await?;
                     effects.attachment_upload_ms += elapsed_ms(started);
                 }
-                return refresh;
+                return Ok(());
             }
         }
         self.effects

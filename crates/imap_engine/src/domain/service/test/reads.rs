@@ -87,7 +87,7 @@ fn read_fixture(
         refusal: None,
         provider_work: Some(control.clone()),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -232,6 +232,48 @@ async fn recent_inbox_defers_one_busy_body_without_restarting_the_batch() {
     );
     assert!(messages.iter().all(|message| message.source_complete));
     assert_eq!(std::iter::from_fn(|| observed.try_recv().ok()).count(), 4);
+}
+
+#[tokio::test]
+async fn recent_inbox_stops_before_fetching_a_body_past_its_response_budget() {
+    let ReadFixture {
+        engine,
+        repository,
+        control,
+        mut observed,
+        binding,
+        message_id,
+    } = read_fixture(vec![b'x'; 14 * 1024 * 1024], BTreeMap::new(), None);
+    {
+        let mut state = repository.state.lock().unwrap();
+        let newest = state.messages.get_mut(&message_id).unwrap();
+        newest.size = 14 * 1024 * 1024;
+        let older = Message {
+            id: "m:2".into(),
+            received_at: newest.received_at - Duration::seconds(1),
+            ..newest.clone()
+        };
+        state.messages.insert(older.id.clone(), older);
+        let location = Location {
+            uid: 2,
+            message_id: "m:2".into(),
+            ..state.locations[0].clone()
+        };
+        state.locations.push(location);
+    }
+    control.released.add_permits(2);
+
+    let messages: Vec<Message> = serde_json::from_value(
+        engine
+            .execute(binding, Operation::RecentInbox { limit: 2 })
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].id, message_id);
+    assert_eq!(observed.try_recv().unwrap(), binding.link_id);
+    assert!(observed.try_recv().is_err());
 }
 
 #[tokio::test]

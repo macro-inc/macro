@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            EXISTS (\n                SELECT 1\n                FROM \"RolesOnUsers\" ru\n                JOIN \"RolesOnPermissions\" rp ON rp.\"roleId\" = ru.\"roleId\"\n                WHERE ru.\"userId\" = $1\n                    AND rp.\"permissionId\" = 'read:professional_features'\n            ) AS \"professional!\",\n            (\n                SELECT count(*)\n                FROM (\n                    SELECT id FROM email_links WHERE macro_id=$1\n                    UNION\n                    SELECT link_id FROM macro_user_links WHERE primary_macro_id=$1\n                ) AS inboxes\n            ) AS \"inboxes!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "professional!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "inboxes!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "d7bbcb52de8fe2cffda188c97691a84c952a0994e216077e9d9728834b9631da"
+}

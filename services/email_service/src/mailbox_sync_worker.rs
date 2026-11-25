@@ -31,9 +31,6 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
         let cycle = async {
             let mut worked = reported(service.discover_once().await);
             for _ in 0..32 {
-                if cancellation.is_cancelled() {
-                    break;
-                }
                 let enumerated = reported(service.enumerate_once().await);
                 let reconciled = reported(service.reconcile_once().await);
                 worked |= enumerated || reconciled;
@@ -42,11 +39,6 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
                 if !reconciled {
                     break;
                 }
-            }
-            // A hot queue can maintain one bounded window after another.
-            // Yield after the cycle instead of making idle time part of progress.
-            if worked {
-                tokio::task::yield_now().await;
             }
             worked
         };
@@ -208,46 +200,21 @@ pub async fn run_parked_work_recovery<R>(
 ) where
     R: email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository,
 {
-    let mut pages = 0u8;
-    let mut limit = 64u32;
-    let mut consecutive_skips = 0u32;
-    let mut cycle_had_skips = false;
     loop {
         let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
-            result = service.tick(limit, consecutive_skips) => result,
+            result = service.tick(64) => result,
         };
         let progressing = match result {
-            Ok(Some(page)) => {
-                if page.failed_probes > 0 {
-                    consecutive_skips = consecutive_skips.saturating_add(page.failed_probes);
-                    cycle_had_skips = true;
-                }
-                if page.complete {
-                    if !cycle_had_skips {
-                        consecutive_skips = 0;
-                    }
-                    cycle_had_skips = false;
-                }
-                limit = (limit * 2).min(64);
-                !page.complete
-            }
+            Ok(Some(page)) => !page.complete,
             Ok(None) => false,
             Err(error) => {
-                limit = (limit / 2).max(1);
                 tracing::warn!(?error, "parked mailbox work recovery page deferred");
                 false
             }
         };
-        if progressing {
-            pages += 1;
-            if pages == 32 {
-                pages = 0;
-                tokio::task::yield_now().await;
-            }
-        } else {
-            pages = 0;
+        if !progressing {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => return,
@@ -266,27 +233,16 @@ pub async fn run_projections<R, E>(
     E: email::domain::mailbox::projection::MailboxProjectionEffects,
 {
     use email::domain::mailbox::projection::ProjectionTick;
-    let mut progress_polls = 0u8;
     loop {
         let tick = tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
             result = service.project_once() => result,
         };
-        let progress = matches!(&tick, Ok(ProjectionTick::Progress));
         let worked = reported(tick.map(|tick| match tick {
             ProjectionTick::Projected | ProjectionTick::Progress => true,
             ProjectionTick::Idle => false,
         }));
-        if progress {
-            progress_polls += 1;
-            if progress_polls == 32 {
-                progress_polls = 0;
-                tokio::task::yield_now().await;
-            }
-        } else {
-            progress_polls = 0;
-        }
         if !worked {
             tokio::select! {
                 biased;

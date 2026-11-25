@@ -80,7 +80,7 @@ fn fixture(failure: Error) -> Fixture {
             released: tokio::sync::Semaphore::new(1),
         })),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         cipher.clone(),

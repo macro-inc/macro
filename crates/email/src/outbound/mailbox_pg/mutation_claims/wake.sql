@@ -23,6 +23,7 @@ WITH targets AS MATERIALIZED (
             WHERE c.id=indexed.command_id LIMIT 1
         ) parent
         WHERE indexed.message_id=t.message_id
+            AND $6::bool
             AND indexed.parent_link_id=$1 AND indexed.parent_generation=$2
             AND indexed.parent_unfinished
             AND parent.link_id=$1 AND parent.generation=$2
@@ -35,7 +36,7 @@ WITH targets AS MATERIALIZED (
     SELECT id FROM heads ORDER BY id
 ), locked_commands AS MATERIALIZED (
     SELECT c.* FROM ordered_heads h CROSS JOIN LATERAL (
-        SELECT id,blocked_until FROM email_mailbox_commands WHERE id=h.id
+        SELECT id,blocked_until FROM email_mailbox_commands WHERE id=h.id AND blocked_until IS NOT NULL
         LIMIT 1 FOR UPDATE SKIP LOCKED
     ) c
 ), commands AS (
@@ -47,7 +48,9 @@ WITH targets AS MATERIALIZED (
 ), locked_drafts AS MATERIALIZED (
     SELECT d.* FROM ordered_targets t CROSS JOIN LATERAL (
         SELECT message_id,link_id,generation,blocked_until
-        FROM email_mailbox_drafts WHERE message_id=t.message_id LIMIT 1 FOR UPDATE SKIP LOCKED
+        FROM email_mailbox_drafts WHERE message_id=t.message_id
+            AND link_id=$1 AND generation=$2 AND blocked_until IS NOT NULL
+        LIMIT 1 FOR UPDATE SKIP LOCKED
     ) d
 ), drafts AS (
     UPDATE email_mailbox_drafts d SET blocked_until=NULL

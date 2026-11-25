@@ -502,7 +502,10 @@ pub(super) fn merge_snapshot(
     state.folders.retain(|id, _| folder_ids.contains(id));
     // Keep app-sent fallback snapshots even when a server has no Sent folder.
     for (id, message) in &state.messages {
-        if message.draft_correlation.is_some() && !next_messages.contains_key(id) {
+        if message.source_complete
+            && message.draft_correlation.is_some()
+            && !next_messages.contains_key(id)
+        {
             next_messages.insert(id.clone(), message.clone());
         }
     }
@@ -510,10 +513,22 @@ pub(super) fn merge_snapshot(
         if message.draft_correlation.is_some()
             && let Some(draft) = state.drafts.get_mut(id)
         {
-            changed.state_changed |=
-                draft.submission != Some(SubmissionOutcome::Accepted) || draft.draft.is_draft;
+            let newly_accepted = draft.submission != Some(SubmissionOutcome::Accepted);
+            changed.state_changed |= newly_accepted || draft.draft.is_draft;
             draft.submission = Some(SubmissionOutcome::Accepted);
             draft.draft.is_draft = false;
+            if newly_accepted {
+                draft.answered_pending = draft.input.reply_to.is_some();
+            }
+            // The real Sent entry supersedes any fallback. The exact
+            // Message-ID is enough for future snapshot association.
+            if !message.source_complete
+                && (newly_accepted || draft.sent_copy_pending || draft.frozen_content.is_some())
+            {
+                changed.state_changed = true;
+                draft.sent_copy_pending = false;
+                super::send::retain_sent_identity(draft);
+            }
         }
     }
     changed.state_changed |= changed.mailbox_changed

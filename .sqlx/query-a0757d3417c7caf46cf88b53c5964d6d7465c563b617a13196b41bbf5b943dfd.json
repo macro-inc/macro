@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_mailbox_work_quarantine\n            SET cleanup_at=CASE WHEN $2 THEN now()+interval '30 seconds'\n                WHEN $3 THEN now() END\n            WHERE work='commands' AND work_id=$1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a0757d3417c7caf46cf88b53c5964d6d7465c563b617a13196b41bbf5b943dfd"
+}

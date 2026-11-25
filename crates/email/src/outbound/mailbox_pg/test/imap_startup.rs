@@ -53,8 +53,7 @@ async fn imap_startup_catchup_wakes_current_cursors_without_stealing_leases(db: 
         &generations,
         held,
     ).execute(&db).await.unwrap();
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let catchup = PgImapCatchup(db.clone());
     let mut woken = 0;
     loop {
@@ -153,8 +152,7 @@ async fn successful_imap_commits_preserve_hints_even_when_their_timestamps_prece
 ) {
     let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
 
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     sqlx::query!(
         r#"
         INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)

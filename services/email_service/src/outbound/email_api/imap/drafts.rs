@@ -215,8 +215,8 @@ impl DraftGateway for ImapMailboxGateway {
         id: &ProviderId,
     ) -> Result<SubmissionOutcome, EmailApiError> {
         let result = self.client.submit(binding(mailbox), id.as_str()).await;
-        // Older engines could lose a finalization fence or fail to parse
-        // Sent-copy state after SMTP accepted the message.
+        // Once Submit is issued, a generic failure cannot establish that
+        // SMTP did not accept the message.
         if matches!(
             result,
             Err(models::Error::Conflict | models::Error::NotFound | models::Error::Invalid)

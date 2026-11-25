@@ -952,6 +952,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                                 .ingest
                                 .sender_blocked(lease.mailbox, &sender.email)
                                 .await?
+                            && !self.ingest.stored(lease).await?
                         {
                             if folders.iter().any(|folder| {
                                 folder.role == email_api_client::domain::models::FolderRole::Junk

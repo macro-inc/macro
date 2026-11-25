@@ -70,6 +70,10 @@ pub enum StateEntryKind {
     Draft,
     /// Folder metadata.
     Folder,
+    /// Exact send content, kept out of synchronization metadata hydration.
+    FrozenSubmission,
+    /// Complete MIME for a sent message awaiting a readable provider copy.
+    SentSource,
     /// Remote message location.
     Location,
     /// Logical message metadata.
@@ -156,7 +160,7 @@ pub trait Repository: Send + Sync {
         &self,
         binding: Binding,
         user_id: &str,
-        ciphertext: Vec<u8>,
+        ciphertext: Option<Vec<u8>>,
         verification: Uuid,
     ) -> Result<(), Error>;
     /// Read only encrypted credentials for an already fenced connection owner.
@@ -167,10 +171,8 @@ pub trait Repository: Send + Sync {
     async fn acquire_scoped(
         &self,
         binding: Binding,
-        _selection: StateSelection,
-    ) -> Result<Account, Error> {
-        self.acquire(binding).await
-    }
+        selection: StateSelection,
+    ) -> Result<Account, Error>;
     /// Read one consistent snapshot without taking a command lease. Release the
     /// database transaction before returning; remote content IO happens later.
     async fn read_scoped(
@@ -187,12 +189,16 @@ pub trait Repository: Send + Sync {
         account: &Account,
         fingerprints: &[MessageFingerprint],
     ) -> Result<Vec<Location>, Error>;
+    /// Read one pending send's frozen content under the existing account lease.
+    async fn frozen_submission(
+        &self,
+        account: &Account,
+        draft_id: &str,
+    ) -> Result<Option<serde_json::Value>, Error>;
     /// Persist under the lease and increment the expected revision.
     async fn save(&self, account: &mut Account) -> Result<(), Error>;
     /// Persist only health and admission scalars, without revisiting the loaded index.
-    async fn save_health(&self, account: &mut Account) -> Result<(), Error> {
-        self.save(account).await
-    }
+    async fn save_health(&self, account: &mut Account) -> Result<(), Error>;
     /// Renew a long-running remote operation without rewriting mailbox state.
     async fn renew(&self, account: &Account) -> Result<(), Error>;
     /// Release this exact lease without overwriting a successor's work.
@@ -309,14 +315,23 @@ pub enum RemoteAction {
     Move(String),
 }
 
-/// Why a bounded folder watch ended successfully.
+/// Why a bounded folder watch ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum WaitOutcome {
     /// The selected status or an unsolicited response differs from the committed snapshot.
     Changed,
-    /// The absolute liveness interval elapsed; this is not a provider failure.
+    /// A quiet watch ended without completing an active IDLE interval.
     Restarted,
+    /// The server stayed connected for the full planned IDLE interval.
+    IdleCompleted,
+    /// An established connection closed while the server was in IDLE.
+    IdleDisconnected {
+        /// Elapsed time in IDLE, excluding setup and authentication.
+        quiet_ms: u64,
+        /// Elapsed time since the authenticated session was established.
+        age_ms: u64,
+    },
     /// A physical baseline cannot be established; retry synchronization with backoff.
     BaselineUnavailable,
 }
@@ -325,7 +340,7 @@ pub enum WaitOutcome {
 #[async_trait::async_trait]
 pub trait MailTransport: Send + Sync {
     /// Reclaim expired spare sockets during the scheduler's bounded maintenance interval.
-    async fn maintenance(&self) {}
+    async fn maintenance(&self);
     /// Close cached authenticated sockets for a retired binding.
     async fn disconnect(&self, binding: Binding) -> Result<(), Error>;
     /// Verify both endpoints without saving credentials or sending a message.
@@ -334,10 +349,7 @@ pub trait MailTransport: Send + Sync {
     async fn verify_features(
         &self,
         credentials: &Credentials,
-    ) -> Result<Option<super::server_features::ServerFeatures>, Error> {
-        self.verify(credentials).await?;
-        Ok(None)
-    }
+    ) -> Result<Option<super::server_features::ServerFeatures>, Error>;
     /// Read a complete, bounded set of remote folders and UID facts.
     async fn snapshot(
         &self,

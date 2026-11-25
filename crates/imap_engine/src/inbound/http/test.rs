@@ -37,7 +37,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             refusal: None,
             provider_work: None,
         });
-        let engine = Arc::new(Engine::new(
+        let engine = Arc::new(Engine::new_for_test(
             crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key")
                 .unwrap(),
             repository,

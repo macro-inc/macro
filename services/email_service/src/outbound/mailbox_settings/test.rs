@@ -93,7 +93,7 @@ async fn keyword_deletion_reads_organization_even_when_the_full_message_is_too_l
         .await;
     let gateway = super::super::email_api::imap::ImapMailboxGateway {
         client: ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap(),
-        health: PgMailboxSync::new(db).with_provider(email::domain::models::UserProvider::Imap),
+        health: PgMailboxSync::new(db, email::domain::models::UserProvider::Imap),
     };
     let result = imap_category_messages(
         &gateway,

@@ -61,7 +61,7 @@ async fn stream(
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn inbox_and_sent_restart_alone_and_the_rest_waits_for_their_import(db: PgPool) {
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let mailbox = imported_link(&db).await;
     assert_eq!(
         repo.link_reimport(mailbox.link_id, REVISION).await.unwrap(),
@@ -216,7 +216,7 @@ async fn paused_imports_leave_import_rows_and_keep_live_changes_flowing(db: PgPo
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_restart_rechecks_the_mail_its_folders_already_hold(db: PgPool) {
     use email_api_client::domain::models::MailboxState;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let mailbox = imported_link(&db).await;
     for message in ["inbox-message", "archive-message"] {
         sqlx::query!(
@@ -272,7 +272,7 @@ async fn a_restart_rechecks_the_mail_its_folders_already_hold(db: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_link_without_a_folder_catalog_is_not_restarted(db: PgPool) {
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let mailbox = imported_link(&db).await;
     sqlx::query!(
         "DELETE FROM email_sync_streams WHERE link_id = $1 AND kind = 'folder_catalog'",
@@ -298,7 +298,7 @@ async fn a_link_without_a_folder_catalog_is_not_restarted(db: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_restarted_folder_drops_its_live_pass(db: PgPool) {
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let mailbox = imported_link(&db).await;
     sqlx::query!(
         "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,position) VALUES ($1,$2,1,'mail_folder_live','inbox-id',true,'live-delta'),($3,$2,1,'mail_folder_live','archive-id',true,'live-delta')",

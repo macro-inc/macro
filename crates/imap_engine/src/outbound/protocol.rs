@@ -355,6 +355,7 @@ impl MailTransport for ProtocolTransport {
         };
         let result = timeout(Duration::from_secs(300), async {
             let mut session = self.imap(&c.imap).await?;
+            let connected = tokio::time::Instant::now();
             let capabilities = session
                 .limit_response(ResponseLimit::Metadata)
                 .capabilities()
@@ -399,6 +400,7 @@ impl MailTransport for ProtocolTransport {
             session.get_mut().begin_response(ResponseLimit::Metadata);
             let mut handle = session.idle();
             handle.init().await.map_err(|e| imap_error(e, false))?;
+            let idle_started = tokio::time::Instant::now();
             // async-imap queues data received before the IDLE continuation.
             // Its later wait reads only the socket; consume that queue first.
             while let Ok(response) = unsolicited.try_recv() {
@@ -412,15 +414,31 @@ impl MailTransport for ProtocolTransport {
                 // The library's timer measures inactivity and is reset by
                 // keepalives. This outer deadline is absolute and planned.
                 match timeout(duration, wait).await {
-                    Err(_) => WaitOutcome::Restarted,
-                    Ok(Ok(
-                        async_imap::extensions::idle::IdleResponse::Timeout
-                        | async_imap::extensions::idle::IdleResponse::ManualInterrupt,
-                    )) => WaitOutcome::Restarted,
+                    Err(_) | Ok(Ok(async_imap::extensions::idle::IdleResponse::Timeout)) => {
+                        WaitOutcome::IdleCompleted
+                    }
+                    Ok(Ok(async_imap::extensions::idle::IdleResponse::ManualInterrupt)) => {
+                        WaitOutcome::Restarted
+                    }
                     Ok(Ok(async_imap::extensions::idle::IdleResponse::NewData(_))) => {
                         WaitOutcome::Changed
                     }
-                    Ok(Err(error)) => return Err(imap_error(error, false)),
+                    Ok(Err(error)) => {
+                        let closed = matches!(
+                            &error,
+                            async_imap::error::Error::ConnectionLost
+                                | async_imap::error::Error::Io(_)
+                        );
+                        let error = imap_error(error, false);
+                        if closed && error == Error::ConnectionUnavailable {
+                            let quiet_ms = u64::try_from(idle_started.elapsed().as_millis())
+                                .map_err(|_| Error::Invalid)?;
+                            let age_ms = u64::try_from(connected.elapsed().as_millis())
+                                .map_err(|_| Error::Invalid)?;
+                            return Ok((WaitOutcome::IdleDisconnected { quiet_ms, age_ms }, false));
+                        }
+                        return Err(error);
+                    }
                 }
             };
             let mut session = timeout(Duration::from_secs(10), handle.done())

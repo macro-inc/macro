@@ -11,6 +11,8 @@ enum Arrival {
     EpochOnly,
     ModseqOnly,
     BeforeContinuation,
+    CloseBeforeContinuation,
+    CloseAfterContinuation,
     Keepalives,
     NoIdleUidNext,
     NoIdleModseq,
@@ -76,7 +78,8 @@ async fn peer(arrival: Arrival) -> IdlePeer {
                         }
                         let (exists, next, modseq) = match arrival {
                             Arrival::BeforeSelect => (2, 3, 2),
-                            Arrival::BeforeContinuation | Arrival::Keepalives => (1, 2, 1),
+                            Arrival::BeforeContinuation | Arrival::Keepalives
+                                | Arrival::CloseBeforeContinuation | Arrival::CloseAfterContinuation => (1, 2, 1),
                             Arrival::UidNextOnly | Arrival::NoIdleUidNext => (1, 3, 1),
                             Arrival::ExistsOnly => (2, 2, 1),
                             Arrival::EpochOnly => (1, 2, 1),
@@ -88,11 +91,17 @@ async fn peer(arrival: Arrival) -> IdlePeer {
                             "* FLAGS (\\Seen)\r\n* {exists} EXISTS\r\n* OK [UIDVALIDITY {epoch}] epoch\r\n* OK [UIDNEXT {next}] next\r\n* OK [HIGHESTMODSEQ {modseq}] version\r\n"
                         ).as_bytes()).await.unwrap();
                     } else if command == "IDLE" {
+                        if matches!(arrival, Arrival::CloseBeforeContinuation) {
+                            return;
+                        }
                         if matches!(arrival, Arrival::BeforeContinuation) {
                             write.write_all(b"* 2 EXISTS\r\n").await.unwrap();
                         }
                         write.write_all(b"+ idling\r\n").await.unwrap();
                         write.flush().await.unwrap();
+                        if matches!(arrival, Arrival::CloseAfterContinuation) {
+                            return;
+                        }
                         let _ = idling.send(());
                         let mut done = Vec::new();
                         let mut keepalives = tokio::time::interval_at(
@@ -155,6 +164,26 @@ async fn peer(arrival: Arrival) -> IdlePeer {
 }
 
 #[tokio::test]
+async fn only_a_disconnect_after_the_continuation_is_an_idle_observation() {
+    let setup = peer(Arrival::CloseBeforeContinuation).await;
+    let result = setup
+        .transport
+        .wait_change(&setup.credentials, &[committed_inbox()], 10)
+        .await;
+    assert_eq!(result, Err(Error::ConnectionUnavailable));
+
+    let armed = peer(Arrival::CloseAfterContinuation).await;
+    let result = armed
+        .transport
+        .wait_change(&armed.credentials, &[committed_inbox()], 10)
+        .await;
+    assert!(
+        matches!(result, Ok(WaitOutcome::IdleDisconnected { .. })),
+        "{result:?}"
+    );
+}
+
+#[tokio::test]
 async fn mail_present_at_select_returns_before_entering_idle() {
     let peer = peer(Arrival::BeforeSelect).await;
     tokio::time::timeout(
@@ -206,7 +235,7 @@ async fn keepalives_do_not_extend_the_planned_idle_deadline() {
             .unwrap()
             .unwrap()
             .expect("a planned IDLE restart is a normal round"),
-        WaitOutcome::Restarted
+        WaitOutcome::IdleCompleted
     );
     assert!(
         started.elapsed() >= Duration::from_secs(9),
@@ -414,7 +443,7 @@ async fn real_tls_mail_after_snapshot_commit_is_indexed_without_an_idle_timeout(
     });
     // The repository and cipher are test adapters; all mailbox commands and
     // headers below cross verified TLS to the real Dovecot lab.
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(LabCipher(credentials.clone())),

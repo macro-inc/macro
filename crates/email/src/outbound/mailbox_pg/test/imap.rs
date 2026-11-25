@@ -24,8 +24,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
     .execute(&db)
     .await
     .unwrap();
-    let imap =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let imap = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let immediate = imap
         .claim_stream(Uuid::from_u128(44), StreamClaim::LongestDue)
         .await
@@ -84,8 +83,7 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
     use email_api_client::domain::models::MailboxState;
     let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
 
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let stream = repo
         .claim_stream(Uuid::from_u128(100), StreamClaim::LongestDue)
         .await
@@ -181,8 +179,7 @@ async fn imap_notification_does_not_wait_for_a_foreign_key_reader(db: PgPool) {
 
     let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
 
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let mut foreign_key_reader = db.begin().await.unwrap();
     sqlx::query!(
         "SELECT id FROM email_links WHERE id = $1 FOR KEY SHARE",
@@ -254,9 +251,10 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
     .execute(&db)
     .await
     .unwrap();
-    let service = ImapNotificationService(
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap),
-    );
+    let service = ImapNotificationService(PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Imap,
+    ));
     service
         .receive(Notification {
             binding: Binding {
@@ -413,8 +411,7 @@ async fn malformed_imap_mail_does_not_hold_later_messages_behind_it(db: PgPool) 
     .execute(&db)
     .await
     .unwrap();
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let service =
         MailboxSyncService::new(repo.clone(), MalformedThenValid, MalformedThenValid, repo);
     assert!(matches!(
@@ -448,8 +445,7 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
     use email_api_client::domain::models::{FolderRole, MailboxState};
     let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
 
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     sqlx::query!(
         r#"
         INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)
@@ -627,9 +623,10 @@ async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgP
     .execute(&db)
     .await
     .unwrap();
-    let service = ImapNotificationService(
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap),
-    );
+    let service = ImapNotificationService(PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Imap,
+    ));
     let binding = Binding {
         link_id: link,
         sync_generation: 2,
@@ -789,9 +786,10 @@ async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_re
     .execute(&db)
     .await
     .unwrap();
-    let service = ImapNotificationService(
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap),
-    );
+    let service = ImapNotificationService(PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Imap,
+    ));
     let binding = Binding {
         link_id: link,
         sync_generation: 2,
@@ -869,7 +867,7 @@ async fn reordered_host_hints_cannot_clear_newer_mailbox_health(db: PgPool) {
     let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
 
     let service = crate::domain::mailbox::imap_notifications::ImapNotificationService(
-        PgMailboxSync::new(db.clone()),
+        PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook),
     );
     let binding = Binding {
         link_id: link,
@@ -1071,7 +1069,7 @@ async fn imap_discovery_skips_a_mailbox_that_needs_reauth_while_outlook_probes_i
     .execute(&db)
     .await
     .unwrap();
-    let outlook = PgMailboxSync::new(db.clone()).with_provider(UserProvider::Outlook);
+    let outlook = PgMailboxSync::new(db.clone(), UserProvider::Outlook);
 
     // A rejected IMAP login is not retried: its catalog is parked, never leased.
     let mut claims = 0;

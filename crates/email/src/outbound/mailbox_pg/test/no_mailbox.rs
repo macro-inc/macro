@@ -34,7 +34,7 @@ fn seed() -> Seed {
 }
 
 fn service(db: &PgPool, emulator: &OutlookEmulator) -> (PgMailboxSync, Sync) {
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let service = MailboxSyncService::new(
         repo.clone(),
         gateway(emulator),
@@ -392,7 +392,7 @@ async fn a_server_error_at_the_inbox_leaves_the_link_unmarked(db: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_discovery_that_lost_its_lease_does_not_mark_the_link(db: PgPool) {
     let link = connected(&db).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let lease = repo
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await
@@ -418,7 +418,7 @@ async fn a_discovery_that_lost_its_lease_does_not_mark_the_link(db: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_mark_behind_a_share_locked_link_fails_fast_then_marks(db: PgPool) {
     let link = connected(&db).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let lease = repo
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await

@@ -43,7 +43,8 @@ accepts bearer access to a remote mail server.
 - Every sent draft id retains a readable fallback until the remote Sent copy
   is associated with it. Commit `sent_copy_attempted` before an APPEND-capable call;
   later reconciliation searches without another APPEND after an uncertain result.
-  Keep Sent and Answered effects pending until their provider writes succeed.
+  Keep frozen submission content separate from Sync metadata. Retire it once
+  the Sent copy is confirmed, retaining the Message-ID for correlation.
 - Resolve, block private addresses, pin the numeric socket, then validate the
   original TLS hostname. Local endpoint maps are composition-only and forbidden
   outside the local environment.
@@ -82,7 +83,8 @@ accepts bearer access to a remote mail server.
 - Pass committed physical folder state into every IDLE watch. Compare SELECT's
   UIDVALIDITY, UIDNEXT, EXISTS and CONDSTORE watermark; consume unsolicited changes
   queued before the IDLE continuation. Use an absolute deadline independent of
-  keepalives, and return WaitOutcome::Restarted for its normal completion.
+  keepalives. Learn only from a completed IDLE interval or a disconnect
+  after the server arms IDLE.
   Re-arm quiet watches without a full scan; use the thirty-minute full walk for
   unobserved changes. See the [watch cadence and fallback trade-offs](../../docs/architecture/imap-engine.md).
   Retry BaselineUnavailable with growing backoff under the owner heartbeat,
@@ -114,139 +116,11 @@ accepts bearer access to a remote mail server.
   credentials, temporary failures and transport closes never imply bad passwords.
   Trace closed stage/error fields only; never emit login commands or provider text.
 
-Discovery and verification identities deserialize as the existing EmailStr;
-borrow its validated Email through catalog, DNS and XML discovery. Keep raw
-provider logins and SMTP envelope/MIME addresses as protocol strings: Macro's
-ASCII sign-in parser cannot represent every SMTPUTF8 sender. Never normalize
-case or plus suffixes when deriving a protocol username.
-
-The engine accepts authenticated, lifecycle-fenced bindings without rollout
-switches. The email host owns the existing user-scoped enrollment flag; sync,
-send and organization operations never depend on a PostHog response.
-
-Record final SMTP attempt/outcome span fields once after settlement; expected pooled-session probe failures log at WARN. An expired admission wait cannot establish a prior send outcome.
-
-Passive provider hints use only the catalog and bounded domain-only MX lookup.
-Never run identity-bearing HTTP autoconfig for a first-visit suggestion; unknown,
-failed or ambiguous MX evidence leaves provider choice to the user.
-
-Admission has separate user (16), live ingestion (4), import (2) and sync pools.
-Worker read jobs use ingestion/import classes; API settings, user commands,
-draft materialization and sends keep the interactive client. Keep one awaited
-round per actor and FIFO sync admission; never lower account coverage to reduce
-queue length. `SyncConcurrency::DEFAULT` is a typed code-level limit of 2;
-tuning is a follow-up with no new environment setting.
-Renew ownership every 60 seconds while queued and recheck it after admission.
-Include state loading in the 240-second work budget, leaving cleanup headroom in
-the five-minute command lease. Admission spans record final wait/outcome;
-scheduler ticks also emit aggregate saturation spans before queued waits finish.
-Cancelled waiters must release their count and permit.
-
-Transient owner-heartbeat errors leave the current round running and retry at
-the next heartbeat. Confirmed ownership loss cancels provider work cooperatively
-and drains command-lease cleanup; acquisition completes before that cancellation
-is observed so its returned lease can be released.
-
-Keep command claims uncommitted through state hydration, with local statement
-and idle-transaction deadlines. Use FOR NO KEY UPDATE NOWAIT so peers fail fast
-without blocking first-owner foreign-key checks. Full sync idle time follows the
-round budget; small read snapshots keep a short idle limit. Reserve the listener's
-one connection before admitting loads (pool max minus three), leaving two shared
-non-loading slots without claiming dedicated heartbeat capacity.
-
-Read Changes, Message, Organization, Attachment, Folders and RecentInbox through
-read_scoped without a command lease. Keep scalar state and selected rows in one
-REPEATABLE READ READ ONLY transaction, commit before provider/MIME IO, then
-validate the original owner, active state, reauth and both generations again.
-A read Account has no lease_id; save, save_health, renew and release must reject
-it. Draft reads remain leased because they may reconcile an uncertain send.
-
-Limit pooled command sessions to three per endpoint/login per replica; keep
-socket reuse generation-fenced and retain the permit through publication/drop.
-Return AccountBusy promptly at saturation. Retry eligible reads and pre-write
-Apply operations once after one second outside global admission and without a
-DB snapshot; never queue account waiters while retaining user slots. Scan, IDLE setup and leased Sent reconciliation use
-independent sessions. The quota is not distributed and excludes those owner/Sent
-sockets. Give read transactions local statement/idle deadlines and gate post-IO
-validation with other loads.
-
-Retry only typed AccountBusy once outside global admission. Apply may expose
-that signal only before its first provider write; map busy follow-up work to
-reconciliation/unavailability so it cannot replay the mutation. Never retry
-Submit through this mechanism. Keep MessageTooLarge distinct (HTTP413), reject
-known oversized sources before fetching, and defer busy/oversized RecentInbox
-items individually rather than restarting the batch or returning partial MIME.
-
-Organization writes return ApplyError::NotStarted only before command-session
-admission; every failure afterward is Uncertain. Never promote a post-write busy
-error into a retry. RecentInbox retries only deferred bodies once outside global
-admission and reports AccountBusy when the whole requested batch remains busy.
-
-Arm transport response budgets explicitly at every command: metadata 16 MiB,
-catalog/SMTP reply 4 MiB, full source/header batch 26 MiB. Pooled command
-sockets retain per-response limits; fresh sync, IDLE and verify sockets retain
-a 512 MiB connection ceiling. Synchronization shares a 512 MiB wire budget
-across reconnects and bounds retained metadata to 256 MiB and each folder to
-250,000 UIDs. Target header batches at 4 MiB, shrinking on overflow down to one.
-Keep the independent 25 MiB literal and 32 MiB line guards. IMAP borrowing commands use limit_response; IDLE arms before moving the
-session, and plaintext STARTTLS exchanges arm each reply. Never infer boundaries
-by inspecting outgoing login or authentication payloads.
-
-Abort an oversized snapshot without publishing a partial index. Preserve the
-last complete account view, publish the separate size issue, and persist an
-exponential retry deadline from one hour to twenty-four hours. Check it before
-provider work across wakeups/restarts; successful sync or manual reconnect clears
-it. Fenced folder-preference changes clear only the deadline, allowing one fresh
-attempt without forgetting repeated failures. Folder parking belongs to the stacked paging work and must budget old indexes.
-
-Treat IncorrectKey, missing/disabled/configured-key errors, service failures and
-unparseable decrypted documents as transient. InvalidCiphertext qualifies as
-CredentialsUnreadable only with this process's recent same-context known-good
-ciphertext, still decryptable through the current alias to the same key ARN.
-Exclude verification-only ids from the account sample. Keep proof and distinct-account observations bounded to 2048 accounts/ten
-minutes. Auto-parking requires at most five percent verified unreadable accounts;
-fewer than twenty observed accounts therefore never auto-park. Emit the bounded
-classification counter and fleet-guard error; never log credentials/key/context.
-Confirm qualified failures across thirty seconds before parking with the separate
-mailbox issue. Re-admit parked pending notifications after restart and deliver
-before credential/provider work; completed parking remains excluded.
-
-A very large first import can exceed the account snapshot bounds and never finish
-until the owner excludes large folders. Keep the last complete index and expose
-the typed size issue with durable backoff. `enable-imap-connections` defaults off;
-resumable paging and incremental scans belong to stacked follow-up
-`mac-imap-smtp.23`, not this initial bounded-snapshot implementation.
-
-Pass the service TaskTracker, shutdown token and VerificationScopeKey explicitly to Engine::new.
-Keep Submit tracked after an HTTP request disappears. Reject unadmitted sends
-when shutdown starts, preserving a prior sticky outcome instead of claiming
-non-delivery. Persist Unknown before provider work; renew concurrently after
-sixty seconds with a ten-second bound, so database waits cannot stop SMTP or its
-deadline. Count and log renewal failures without dropping the submission. A stale final
-save cannot overwrite another lease; the Unknown fence forbids sending it again.
-Connect/envelope have sixty seconds; DATA and its final reply share the absolute
-six-minute admission-to-completion deadline. Expiry after DATA remains Unknown.
-
-Report row-lock and command-lease contention as AccountBusy so a due send never
-inherits provider-throttle pacing. A pre-body refusal returns a typed command
-phase and recipient position, never an address or raw reply; abandon the whole
-recipient envelope before DATA. Clear the Unknown fence before returning a
-definite refusal, and never persist the new rejected response outcome.
-
-Retry durable host notifications independently of provider scans and IDLE. Retain
-no command lease or database connection during the bounded callback; clear pending
-only after an ACK for the observed revision. Drain the fenced save on shutdown.
-A callback outage must never freeze provider synchronization.
-
-Skip full-state saves and new host hints for unchanged sync snapshots. Persist
-UIDNEXT, MODSEQ and other physical baselines without a callback when mailbox
-metadata and journals are unchanged. Keep Sent reconciliation on quiet rounds;
-leave earlier pending hints to the independent retry worker without resetting
-their revision, age or callback backoff. Health-only recovery uses save_health.
-
-Derive VerificationScopeKey once at startup from INTERNAL_AUTH_KEY with the
-macro/imap/verification-scope/v1 HMAC context. Retain only zeroized derived
-bytes; domain-separate owner and login HMACs and preserve exact usernames
-with lower-case hosts. Keep the 15-minute owner (10), host (1000) and shared login (10) caps.
-The first keyed rollout or auth-key rotation resets owner and login buckets once;
-host buckets remain unchanged. Old rows use the existing bounded cleanup.
+- Keep discovery hints domain-only. Use validated email identities for discovery
+  without rewriting user-supplied protocol usernames.
+- Preserve owner and command lease fences through admission, reads and shutdown.
+  Deliver durable host callbacks after releasing the command lease and acknowledge
+  only the observed notification revision.
+- Pass the service task tracker, shutdown token and verification scope key explicitly.
+  See the [engine architecture](../../docs/architecture/imap-engine.md) for
+  admission, response budgets, credential recovery and verification quotas.

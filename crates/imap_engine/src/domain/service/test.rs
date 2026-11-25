@@ -326,7 +326,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -384,7 +384,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
     )
     .unwrap();
     assert_eq!(first, SubmissionOutcome::Unknown);
-    let restarted = Engine::new(
+    let restarted = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
@@ -482,7 +482,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -737,6 +737,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
     draft.sent_copy_pending = true;
     draft.draft.is_draft = false;
     let send: SendRequest = serde_json::from_value(draft.input.content.clone()).unwrap();
+    draft.frozen_content = Some(serde_json::to_value(&send).unwrap());
     let mime = send.build_mime().unwrap();
     let fallback = Message {
         id: id.clone(),
@@ -758,7 +759,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         state.drafts.insert(id.clone(), draft);
         state.messages.insert(id.clone(), fallback.clone());
     }
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -779,7 +780,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
             state.messages.insert(later.id.clone(), later);
         }
     }
-    let restarted = Engine::new(
+    let restarted = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -792,6 +793,15 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
     assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
     assert!(account.state.drafts[&id].sent_copy_attempted);
     assert!(account.state.drafts[&id].sent_copy_pending);
+    transport
+        .sent_found
+        .lock()
+        .unwrap()
+        .insert("sent-once@example.net".into());
+    restarted.reconcile_sent(&mut account).await.unwrap();
+    assert!(!account.state.drafts[&id].sent_copy_pending);
+    assert!(account.state.drafts[&id].frozen_content.is_none());
+    assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
     let readable: Option<Message> = serde_json::from_value(
         restarted
             .execute(binding, Operation::Message { id })
@@ -830,7 +840,7 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
@@ -890,7 +900,7 @@ async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outc
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),

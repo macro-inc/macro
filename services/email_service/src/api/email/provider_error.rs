@@ -55,3 +55,9 @@ impl Default for ContentTooLargeResponse {
         }
     }
 }
+
+impl axum::response::IntoResponse for ContentTooLargeResponse {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::PAYLOAD_TOO_LARGE, axum::Json(self)).into_response()
+    }
+}

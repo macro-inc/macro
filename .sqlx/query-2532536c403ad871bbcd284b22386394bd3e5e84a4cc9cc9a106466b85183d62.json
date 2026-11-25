@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH batch AS MATERIALIZED (\n                    SELECT message_id,attribute FROM email_pending_mailbox_state\n                    WHERE command_id=$1 LIMIT $2\n                )\n                DELETE FROM email_pending_mailbox_state p USING batch b\n                WHERE p.command_id=$1 AND p.message_id=b.message_id AND p.attribute=b.attribute\n                RETURNING p.message_id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2532536c403ad871bbcd284b22386394bd3e5e84a4cc9cc9a106466b85183d62"
+}

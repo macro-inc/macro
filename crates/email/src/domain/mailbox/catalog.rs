@@ -74,29 +74,43 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
                 {
                     sync_status = EmailSyncStatus::Error;
                 }
-                let has_calendar = match facts.link.provider {
-                    UserProvider::Gmail => {
-                        calendar_events::domain::models::GoogleScopeSet::from_scopes(
-                            facts.granted_scopes.clone(),
-                        )
-                        .has_calendar_capability()
-                    }
-                    UserProvider::Imap => false,
-                    UserProvider::Outlook => facts.granted_scopes.iter().any(|scope| {
-                        scope
-                            .rsplit('/')
-                            .next()
-                            .is_some_and(|scope| scope.eq_ignore_ascii_case("Calendars.ReadWrite"))
-                    }),
-                };
                 InboxCatalogEntry {
-                    needs_calendar_permission: facts.link.provider != UserProvider::Imap
-                        && (facts.calendar_disabled || !has_calendar),
+                    needs_calendar_permission: calendar_permission_required(
+                        facts.link.provider,
+                        &facts.granted_scopes,
+                        facts.calendar_disabled,
+                    ),
                     sync_status,
                     facts,
                 }
             })
             .collect())
+    }
+}
+
+pub(crate) fn calendar_permission_required(
+    provider: UserProvider,
+    granted_scopes: &[String],
+    disabled: bool,
+) -> bool {
+    match provider {
+        UserProvider::Gmail => {
+            disabled
+                || !calendar_events::domain::models::GoogleScopeSet::from_scopes(
+                    granted_scopes.iter().cloned(),
+                )
+                .has_calendar_capability()
+        }
+        UserProvider::Outlook => {
+            disabled
+                || !granted_scopes.iter().any(|scope| {
+                    scope
+                        .rsplit('/')
+                        .next()
+                        .is_some_and(|scope| scope.eq_ignore_ascii_case("Calendars.ReadWrite"))
+                })
+        }
+        UserProvider::Imap => false,
     }
 }
 

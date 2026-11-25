@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH changed AS (\n                UPDATE\n                    imap_accounts\n                SET\n                    folder_preferences_revision = folder_preferences_revision + 1,\n                    folder_role_overrides = $5,\n                    excluded_folder_ids = $6,\n                    watched_folder_ids = $7,\n                    state = imap_accounts.state - 'sync_retry_at',\n                    updated_at = now()\n                FROM\n                    imap_current_links l\n                WHERE\n                    imap_accounts.link_id = $1\n                    AND imap_accounts.sync_generation = $2\n                    AND imap_accounts.grant_generation = $3\n                    AND folder_preferences_revision = $4\n                    AND l.id = imap_accounts.link_id\n                    AND l.macro_id = imap_accounts.user_id\n                    AND l.sync_generation = imap_accounts.sync_generation\n                    AND l.grant_generation = imap_accounts.grant_generation\n                RETURNING\n                    imap_accounts.link_id,\n                    folder_preferences_revision\n            )\n            SELECT\n                c.folder_preferences_revision AS \"revision!\"\n            FROM\n                changed c\n                CROSS JOIN LATERAL pg_notify('imap_config_changed', c.link_id::text)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "130fa1c10244f552bf975368586aa37b25e823f9c26cb1cd4b3542290194e2e3"
+}

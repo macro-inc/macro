@@ -12,7 +12,6 @@ const DEFAULT_SECONDS: u64 = 180;
 const MAX_SECONDS: u64 = 240;
 const SAME_EVENT_WINDOW: u64 = 10_000;
 const PENDING_WINDOW: u64 = 3_600_000;
-const STABLE_SESSION: u64 = 30 * 60_000;
 const CAP_COOLDOWN: u64 = 24 * PENDING_WINDOW;
 
 /// Observation of a primary connection that closed independently of the caller.
@@ -29,7 +28,7 @@ pub enum Outcome {
         /// Whether the connection was idling at close.
         idling: bool,
     },
-    /// A long-lived connection closed.
+    /// A planned IDLE interval completed.
     Stable {
         /// Time since connection establishment.
         age_ms: u64,
@@ -137,7 +136,9 @@ impl IdleState {
             Outcome::Stable {
                 age_ms,
                 ran_interval_ms,
-            } if age_ms >= STABLE_SESSION => self.stable_session(ran_interval_ms),
+            } if ran_interval_ms.is_some_and(|interval| age_ms >= interval) => {
+                self.stable_session(ran_interval_ms);
+            }
             Outcome::Drop {
                 quiet_ms,
                 age_ms,

@@ -130,7 +130,7 @@ async fn a_legacy_null_provider_is_relabelled_before_the_correct_gateway_claims_
     .fetch_one(&mut *held)
     .await
     .unwrap();
-    let outlook = PgMailboxSync::new(db.clone());
+    let outlook = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     assert!(matches!(
         outlook
             .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
@@ -313,7 +313,7 @@ async fn a_healthy_window_allows_parent_writes_but_stale_routing_cannot_claim(db
             .unwrap(),
         SyncClaim::Progress
     ));
-    let imap = PgMailboxSync::new(db).with_provider(crate::domain::models::UserProvider::Imap);
+    let imap = PgMailboxSync::new(db, crate::domain::models::UserProvider::Imap);
     assert_eq!(
         imap.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await

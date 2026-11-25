@@ -25,7 +25,7 @@ async fn an_expired_submit_lease_allows_other_mail_but_never_resends_the_unknown
     sqlx::query!("INSERT INTO imap_accounts(link_id,user_id,sync_generation,grant_generation,credential_ciphertext,state) VALUES($1,'owner',1,1,decode('01','hex'),$2)", binding.link_id, serde_json::to_value(AccountState::default()).unwrap())
         .execute(&pool).await.unwrap();
     let first_repository = Arc::new(PgRepository::new(pool.clone()));
-    let first = Arc::new(Engine::new(
+    let first = Arc::new(Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         first_repository.clone(),
         Arc::new(TestCipher),
@@ -93,7 +93,7 @@ async fn an_expired_submit_lease_allows_other_mail_but_never_resends_the_unknown
         provider_work: None,
     });
     let second_repository = Arc::new(PgRepository::new(pool.clone()));
-    let second = Engine::new(
+    let second = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         second_repository.clone(),
         Arc::new(TestCipher),

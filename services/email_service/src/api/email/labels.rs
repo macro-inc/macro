@@ -33,11 +33,7 @@ pub(crate) fn settings_error(
             email_api_client::domain::models::EmailApiError::ContentTooLarge
         )
     ) {
-        return (
-            axum::http::StatusCode::PAYLOAD_TOO_LARGE,
-            axum::Json(super::provider_error::ContentTooLargeResponse::default()),
-        )
-            .into_response();
+        return super::provider_error::ContentTooLargeResponse::default().into_response();
     }
     let (status, headers) = match &error {
         email::domain::mailbox::MailboxError::InvalidInput(_) => {

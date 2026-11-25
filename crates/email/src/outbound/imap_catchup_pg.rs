@@ -11,6 +11,13 @@ const PAGE_STATEMENT_TIMEOUT: &str = "15s";
 
 pub struct PgImapCatchup(pub PgPool);
 
+enum StreamWake {
+    Woken,
+    Ineligible,
+    Locked,
+    Missing,
+}
+
 #[cfg(test)]
 mod test;
 
@@ -213,15 +220,15 @@ impl ImapCatchupRepository for PgImapCatchup {
         let mut settled = Vec::new();
         for id in ids {
             match self.wake_one(lease, id).await {
-                Ok((Some(true), _)) => {
+                Ok(StreamWake::Woken) => {
                     page.woken += 1;
                     settled.push(id);
                 }
-                Ok((Some(false), _) | (None, false)) => {
+                Ok(StreamWake::Ineligible | StreamWake::Missing) => {
                     page.deferred += 1;
                     settled.push(id);
                 }
-                Ok((None, true)) => {
+                Ok(StreamWake::Locked) => {
                     page.deferred += 1;
                     retry.push(id);
                 }
@@ -363,7 +370,7 @@ impl PgImapCatchup {
         &self,
         lease: &CatchupLease,
         stream: Uuid,
-    ) -> Result<(Option<bool>, bool), MailboxError> {
+    ) -> Result<StreamWake, MailboxError> {
         let mut tx = self.transaction("1s").await?;
         let result = sqlx::query!(
             r#"
@@ -463,6 +470,11 @@ impl PgImapCatchup {
         .await
         .map_err(db_error)?;
         tx.commit().await.map_err(db_error)?;
-        Ok((result.woken, result.exists))
+        Ok(match (result.woken, result.exists) {
+            (Some(true), _) => StreamWake::Woken,
+            (Some(false), _) => StreamWake::Ineligible,
+            (None, true) => StreamWake::Locked,
+            (None, false) => StreamWake::Missing,
+        })
     }
 }

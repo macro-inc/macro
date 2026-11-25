@@ -33,7 +33,7 @@ pub fn imap_gateway(
             url.to_string(),
             internal_key.to_owned(),
         )?,
-        health: PgMailboxSync::new(db).with_provider(email::domain::models::UserProvider::Imap),
+        health: PgMailboxSync::new(db, email::domain::models::UserProvider::Imap),
     })
 }
 
@@ -80,7 +80,7 @@ pub fn inbox_lifecycle(
     gateway: connection_gateway_client::client::ConnectionGatewayClient,
 ) -> InboxLifecycle {
     email::domain::mailbox::lifecycle::InboxLifecycleService::new(
-        PgMailboxSync::new(db),
+        PgMailboxSync::new(db, email::domain::models::UserProvider::Outlook),
         crate::outbound::inbox_lifecycle::InboxLifecycleClients {
             imap,
             outlook,
@@ -117,7 +117,7 @@ pub fn inbox_health(
             imap,
             gmail,
             outlook: MicrosoftTokens::new(
-                PgMailboxSync::new(db.clone()),
+                PgMailboxSync::new(db.clone(), email::domain::models::UserProvider::Outlook),
                 MicrosoftCredentialsClient(auth),
             ),
             db,

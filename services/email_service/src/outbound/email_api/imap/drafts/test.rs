@@ -84,8 +84,7 @@ async fn submit_engine_response(
     db.close().await;
     let gateway = ImapMailboxGateway {
         client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
-        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-            .with_provider(UserProvider::Imap),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
     };
     let result = gateway
         .submit_draft(mailbox, &ProviderId::new("draft").unwrap())
@@ -129,8 +128,7 @@ async fn smtp_recipient_refusal_reaches_the_gateway_without_a_recipient_address(
     ).execute(&db).await.unwrap();
     let gateway = ImapMailboxGateway {
         client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
-        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-            .with_provider(UserProvider::Imap),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
     };
     let result = gateway
         .submit_draft(mailbox, &ProviderId::new("draft").unwrap())
@@ -222,8 +220,7 @@ async fn mailbox_gateway_preserves_the_engine_retry_hint_and_the_short_local_bus
         db.close().await;
         let gateway = ImapMailboxGateway {
             client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
-            health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-                .with_provider(UserProvider::Imap),
+            health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
         };
         let error = gateway.folders(mailbox).await.unwrap_err();
         assert!(

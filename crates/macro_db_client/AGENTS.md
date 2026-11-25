@@ -58,10 +58,12 @@ foreign key: the contacts worker removes them on account deletion.
 Per-list paging uses partial indexes for the literal list key; migration
 `20261124231124` adds the IMAP member-page index before the contacts route uses it.
 
-Keep `email_imap_connection_attempts` lease fields nullable for older writers and
-its due index identical to the effective-deadline claim expression. Migrations
-20261123181252–181254 add the lease fields and concurrently replace the index;
-preserve the original 20261119060030 checksum for databases that applied it.
+`email_imap_connection_attempts` keeps recovery leases and the effective-deadline
+index in its initial migration. While the migrations are unreleased, edit them in
+place and reset only disposable local databases that applied the previous versions.
+
+Keep `email_mailbox_work_quarantine` free of message content and provider
+responses. Its partial index serves pending command-overlay cleanup only.
 
 Mailbox mutation claims use forward migrations 20261123181255–181268. The
 command live-lease index narrows by link, generation and lease expiry before

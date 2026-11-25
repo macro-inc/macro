@@ -171,7 +171,6 @@ impl Engine {
                     }
                     policy.restart_seconds(&host)
                 };
-                let started = tokio::time::Instant::now();
                 let result = tokio::select! {
                     biased;
                     _ = round_stop.cancelled() => return Err(Error::Conflict),
@@ -180,36 +179,32 @@ impl Engine {
                     result = self.transport.wait_change(&credentials, &committed, interval) => result,
                 };
                 drop(credentials);
-                let elapsed =
-                    u64::try_from(started.elapsed().as_millis()).map_err(|_| Error::Invalid)?;
                 let observed = match result {
-                    Err(
-                        Error::ConnectionUnavailable
-                        | Error::DnsUnavailable
-                        | Error::TcpUnavailable
-                        | Error::TlsUnavailable
-                        | Error::ConnectionTimedOut,
-                    ) => super::super::adaptive_idle::Outcome::Drop {
-                        quiet_ms: elapsed,
-                        age_ms: elapsed,
+                    Ok(WaitOutcome::IdleDisconnected { quiet_ms, age_ms }) => Some(super::super::adaptive_idle::Outcome::Drop {
+                        quiet_ms,
+                        age_ms,
                         ran_interval_ms: Some(interval * 1000),
                         idling: true,
-                    },
-                    _ => super::super::adaptive_idle::Outcome::Stable {
-                        age_ms: elapsed,
+                    }),
+                    Ok(WaitOutcome::IdleCompleted) => Some(super::super::adaptive_idle::Outcome::Stable {
+                        age_ms: interval * 1000,
                         ran_interval_ms: Some(interval * 1000),
-                    },
+                    }),
+                    _ => None,
                 };
-                let state = {
-                    let mut policy = self
-                        .idle_policy
-                        .lock()
-                        .map_err(|_| Error::ConnectionUnavailable)?;
-                    policy.observe(&host, &observed);
-                    policy.state(&host).cloned()
-                };
-                if let Some(state) = state {
-                    self.repository.save_idle_state(&host_hash, &state).await?;
+                if let Some(observed) = observed {
+                    let state = {
+                        let mut policy = self
+                            .idle_policy
+                            .lock()
+                            .map_err(|_| Error::ConnectionUnavailable)?;
+                        let before = policy.state(&host).cloned();
+                        policy.observe(&host, &observed);
+                        policy.state(&host).filter(|after| Some(*after) != before.as_ref()).cloned()
+                    };
+                    if let Some(state) = state {
+                        self.repository.save_idle_state(&host_hash, &state).await?;
+                    }
                 }
                 result
             }
@@ -261,7 +256,10 @@ impl Engine {
                 unreadable_since = None;
                 unreadable_attempts = 0;
             }
-            scan_required = !matches!(&outcome, Ok(WaitOutcome::Restarted));
+            scan_required = !matches!(
+                &outcome,
+                Ok(WaitOutcome::Restarted | WaitOutcome::IdleCompleted)
+            );
             match outcome {
                 Ok(WaitOutcome::BaselineUnavailable) => {
                     baseline_failures = baseline_failures.saturating_add(1);
@@ -272,7 +270,7 @@ impl Engine {
                     credential_refusals = 0;
                     continue;
                 }
-                Ok(WaitOutcome::Changed | WaitOutcome::Restarted) => {
+                Ok(WaitOutcome::Changed | WaitOutcome::Restarted | WaitOutcome::IdleCompleted) => {
                     baseline_failures = 0;
                     credential_refusals = 0;
                     if healthy_since.elapsed() >= Duration::from_secs(300) {
@@ -304,17 +302,14 @@ impl Engine {
                 Err(Error::CredentialsRejected) => {
                     credential_refusals = credential_refusals.saturating_add(1);
                     if credential_refusals >= 2 {
-                        if let Ok(mut account) = self
-                            .repository
-                            .acquire_scoped(binding, StateSelection::Catalog)
+                        return match self
+                            .deliver_reconnect(binding, owner, None, cancellation)
                             .await
                         {
-                            let saved = self.record_reconnect(&mut account, None).await;
-                            let released = self.repository.release(&account).await;
-                            saved?;
-                            released?;
-                        }
-                        return Err(Error::CredentialsRejected);
+                            Ok(()) => Err(Error::CredentialsRejected),
+                            Err(Error::Conflict | Error::Forbidden | Error::NotFound) => Ok(()),
+                            Err(error) => Err(error),
+                        };
                     }
                     failures = failures.saturating_add(1);
                     healthy_since = tokio::time::Instant::now();
@@ -323,7 +318,9 @@ impl Engine {
                     let first = unreadable_since.get_or_insert_with(tokio::time::Instant::now);
                     unreadable_attempts = unreadable_attempts.saturating_add(1);
                     if unreadable_attempts >= 2 && first.elapsed() >= UNREADABLE_CONFIRMATION {
-                        return match self.deliver_unreadable(binding, owner, cancellation).await {
+                        return match self.deliver_reconnect(
+                            binding, owner, Some(models_email::service::link::MailboxIssue::CredentialsUnreadable), cancellation
+                        ).await {
                             Ok(()) => Err(Error::CredentialsUnreadable),
                             Err(Error::Conflict | Error::Forbidden | Error::NotFound) => Ok(()),
                             Err(error) => Err(error),
@@ -332,12 +329,16 @@ impl Engine {
                     failures = failures.saturating_add(1);
                     healthy_since = tokio::time::Instant::now();
                 }
+                Err(Error::Conflict) if self.repository.holds_owner(binding, owner).await? => {
+                    // A preference write can fence this snapshot without retiring its owner.
+                    continue;
+                }
                 Err(Error::Conflict | Error::Forbidden | Error::NotFound) => return Ok(()),
-                Err(error) => {
+                outcome @ (Err(_) | Ok(WaitOutcome::IdleDisconnected { .. })) => {
                     failures = failures.saturating_add(1);
                     healthy_since = tokio::time::Instant::now();
                     tracing::warn!(
-                        ?error,
+                        ?outcome,
                         link_id = %binding.link_id,
                         attempt = i64::from(failures),
                         "IMAP reconnect scheduled"
@@ -358,12 +359,13 @@ impl Engine {
         }
     }
 
-    /// Parking is separate from a provider rejection. Keep notification delivery
-    /// retryable when the email host is still starting, without reopening mail sockets.
-    async fn deliver_unreadable(
+    /// Record the health transition even if another operation holds the command lease.
+    /// Release the lease before calling the email host.
+    async fn deliver_reconnect(
         &self,
         binding: Binding,
         owner: Uuid,
+        issue: Option<models_email::service::link::MailboxIssue>,
         cancellation: &CancellationToken,
     ) -> Result<(), Error> {
         let mut attempts = 0u32;
@@ -374,18 +376,13 @@ impl Engine {
                 }
                 let mut account = self
                     .repository
-                    .acquire_scoped(binding, StateSelection::Catalog)
+                    .acquire_scoped(binding, StateSelection::Health)
                     .await?;
-                let result = self
-                    .record_reconnect(
-                        &mut account,
-                        Some(models_email::service::link::MailboxIssue::CredentialsUnreadable),
-                    )
-                    .await;
+                let result = self.record_reconnect(&mut account, issue).await;
                 let released = self.repository.release(&account).await;
-                let delivered = result?;
+                result?;
                 released?;
-                Ok(delivered)
+                self.notify_after_release(&account).await
             }
             .instrument(tracing::info_span!("imap.credentials.reconnect", link_id = %binding.link_id, retry_count = attempts))
             .await;
@@ -411,7 +408,7 @@ impl Engine {
         &self,
         account: &mut Account,
         issue: Option<models_email::service::link::MailboxIssue>,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         if !account.state.needs_reauth || account.state.mailbox_issue != issue {
             account.state.needs_reauth = true;
             account.state.mailbox_issue = issue;
@@ -419,7 +416,6 @@ impl Engine {
             account.state.mark_notification_pending();
             self.repository.save_health(account).await?;
         }
-        self.notify(account).await?;
-        Ok(!account.state.notification_pending || self.notifier.is_none())
+        Ok(())
     }
 }

@@ -1,6 +1,7 @@
 use super::mutation_claims::{
     MUTATION_PROBE_BUDGET, MutationAcquirer, MutationStep, MutationWindow,
 };
+use super::quarantine::{QuarantineReason, QuarantinedWork, record_quarantine};
 use super::*;
 use crate::domain::mailbox::drafts::{models::*, ports::DraftRepository};
 use email_api_client::domain::models::ProviderDraft;
@@ -167,23 +168,27 @@ impl MutationAcquirer for DraftClaim {
                     .cloned()
                     .map(serde_json::from_value)
                     .transpose()
-                    .map_err(|_| MailboxError::Persistence)?
+                    .map_err(|_| MailboxError::database(DatabaseFailure::Decode))?
                     .unwrap_or_default(),
                 input: serde_json::from_value(row.desired_content)
-                    .map_err(|_| MailboxError::Persistence)?,
-                provider_id: row.provider_id.map(ProviderId::new).transpose()?,
+                    .map_err(|_| MailboxError::database(DatabaseFailure::Decode))?,
+                provider_id: row
+                    .provider_id
+                    .map(ProviderId::new)
+                    .transpose()
+                    .map_err(|_| MailboxError::database(DatabaseFailure::Decode))?,
                 base_version: row.base_version,
                 base_content: row
                     .base_content
                     .map(serde_json::from_value)
                     .transpose()
-                    .map_err(|_| MailboxError::Persistence)?,
+                    .map_err(|_| MailboxError::database(DatabaseFailure::Decode))?,
                 delete_requested: row.delete_requested,
                 checkpoint: row
                     .checkpoint
                     .map(serde_json::from_value)
                     .transpose()
-                    .map_err(|_| MailboxError::Persistence)?,
+                    .map_err(|_| MailboxError::database(DatabaseFailure::Decode))?,
             })
         } else {
             None
@@ -197,6 +202,21 @@ impl MutationAcquirer for DraftClaim {
             exclusion_leases_at_least: row.scope_leases,
             lease,
         }))
+    }
+
+    async fn quarantine(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        id: Uuid,
+        reason: QuarantineReason,
+    ) -> Result<(), MailboxError> {
+        // A corrupt checkpoint cannot establish that SMTP never submitted.
+        // Keep the checkpoint and schedule intact for confirmation.
+        let link_id = sqlx::query_scalar!(
+            "UPDATE email_mailbox_drafts SET state='unknown',error_code='send_unknown',lease_id=NULL,lease_until=NULL WHERE message_id=$1 RETURNING link_id",
+            id
+        ).fetch_one(&mut **tx).await.map_err(db_error)?;
+        record_quarantine(tx, QuarantinedWork::Drafts, id, link_id, reason).await
     }
 }
 

@@ -75,30 +75,9 @@ async fn check_new_connection_entitlement(
     connection: &mut sqlx::PgConnection,
     actor: &MacroUserIdStr<'_>,
 ) -> Result<(), ImapConnectionError> {
-    // The policy needs at most the free limit from each lane. Probe distinct
-    // delegated IDs in index order so a large share list needs no aggregate scan.
+    // Count owned and delegated inboxes once, using the actor index for each lane.
     let facts = sqlx::query!(
         r#"
-        WITH RECURSIVE owned AS MATERIALIZED (
-            SELECT id
-            FROM email_links
-            WHERE macro_id = $1
-            LIMIT $2
-        ), delegated (id, seen) AS (
-            SELECT NULL::uuid, ARRAY[]::uuid[]
-            UNION ALL
-            SELECT candidate.id, array_append(delegated.seen, candidate.id)
-            FROM delegated
-            CROSS JOIN LATERAL (
-                SELECT link_id AS id
-                FROM macro_user_links
-                WHERE primary_macro_id = $1
-                    AND link_id <> ALL (delegated.seen)
-                ORDER BY child_macro_id, link_id
-                LIMIT 1
-            ) candidate
-            WHERE cardinality(delegated.seen) < $2
-        )
         SELECT
             EXISTS (
                 SELECT 1
@@ -110,14 +89,13 @@ async fn check_new_connection_entitlement(
             (
                 SELECT count(*)
                 FROM (
-                    SELECT id FROM owned
+                    SELECT id FROM email_links WHERE macro_id=$1
                     UNION
-                    SELECT id FROM delegated WHERE id IS NOT NULL
+                    SELECT link_id FROM macro_user_links WHERE primary_macro_id=$1
                 ) AS inboxes
             ) AS "inboxes!"
         "#,
         actor.as_ref(),
-        email::domain::inbox_entitlement::FREE_INBOX_LIMIT,
     )
     .fetch_one(connection)
     .await
@@ -390,7 +368,7 @@ impl ImapConnectionRepository for PgImapConnections {
         if pending.is_some_and(|id| id != input.request_id) {
             return Err(ImapConnectionError::Changed);
         }
-        sqlx::query!(
+        let inserted = sqlx::query!(
             r#"
             INSERT INTO email_imap_connection_attempts (id, user_id, credential_owner, email, link_id, verification_id, expected_generation, sync_generation, grant_generation)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -407,6 +385,16 @@ impl ImapConnectionRepository for PgImapConnections {
             sync,
             grant,
         ).execute(&mut *tx).await.map_err(failure)?;
+        if inserted.rows_affected() == 0 {
+            // The global request ID can belong to an unrelated reservation.
+            // A provisional link created above must roll back with this one.
+            tx.rollback().await.map_err(failure)?;
+            return self
+                .attempt(actor, input.request_id)
+                .await?
+                .filter(|attempt| attempt.binding.link_id == link)
+                .ok_or(ImapConnectionError::Changed);
+        }
         tx.commit().await.map_err(failure)?;
         self.attempt(actor, input.request_id)
             .await?
@@ -445,18 +433,6 @@ impl ImapConnectionRepository for PgImapConnections {
             "#,
         )
         .execute(&mut *tx)
-        .await
-        .map_err(failure)?;
-        sqlx::query!(
-            r#"
-            SELECT
-                1 AS locked
-            FROM
-                pg_advisory_xact_lock(hashtextextended($1, 0))
-            "#,
-            format!("inbox-entitlement:{}", attempt.owner),
-        )
-        .fetch_one(&mut *tx)
         .await
         .map_err(failure)?;
         sqlx::query!(

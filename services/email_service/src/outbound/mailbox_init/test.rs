@@ -394,7 +394,10 @@ async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool)
         )
         .await
         .unwrap();
-    let sync = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let sync = email::outbound::mailbox_pg::PgMailboxSync::new(
+        db.clone(),
+        email::domain::models::UserProvider::Outlook,
+    );
     let SyncClaim::Acquired(lease) = sync.claim_command(Uuid::now_v7()).await.unwrap() else {
         panic!("expected the queued command to be claimed");
     };

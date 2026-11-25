@@ -151,7 +151,6 @@ impl Engine {
                 let version = a.state.messages.get(&id).map(|m| m.version.clone());
                 a.state.mark_notification_pending();
                 self.repository.save(a).await?;
-                self.notify(a).await?;
                 return value(WriteReceipt { id, version });
             }
             let mut message = previous;
@@ -219,7 +218,6 @@ impl Engine {
                         let version = a.state.messages.get(&id).map(|m| m.version.clone());
                         a.state.mark_notification_pending();
                         self.repository.save(a).await?;
-                        self.notify(a).await?;
                         return value(WriteReceipt { id, version });
                     }
                     observed_version = Some(message.version.clone());
@@ -264,7 +262,6 @@ impl Engine {
             a.state.messages.insert(id.clone(), message);
             a.state.mark_notification_pending();
             self.repository.save(a).await?;
-            self.notify(a).await?;
             value(WriteReceipt {
                 id,
                 version: observed_version,

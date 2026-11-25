@@ -33,7 +33,7 @@ async fn moved_message_uses_persisted_fingerprint_without_a_json_copy(pool: PgPo
     moved[0].messages[0] = initial[0].messages[0].clone();
     moved[0].messages[0].uid = 99;
     let repository = Arc::new(PgRepository::new(pool.clone()));
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -151,7 +151,7 @@ async fn mixed_utf8_location_keys_match_rust_order_through_the_indexed_lookup(po
     moved[0].messages[0].native_message_id = None;
     moved[0].messages[0].native_thread_id = None;
     let repository = Arc::new(PgRepository::new(pool));
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
@@ -224,7 +224,7 @@ async fn fingerprint_binding(pool: &PgPool) -> Binding {
     }
 }
 fn fingerprint_engine(repository: Arc<PgRepository>, transport: Arc<dyn MailTransport>) -> Engine {
-    Engine::new(
+    Engine::new_for_test(
         VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
@@ -404,6 +404,16 @@ struct MoveWithoutCopyUidTransport {
 }
 #[async_trait::async_trait]
 impl MailTransport for MoveWithoutCopyUidTransport {
+    async fn maintenance(&self) {}
+
+    async fn verify_features(
+        &self,
+        credentials: &Credentials,
+    ) -> Result<Option<crate::domain::server_features::ServerFeatures>, Error> {
+        self.verify(credentials).await?;
+        Ok(None)
+    }
+
     async fn snapshot(
         &self,
         _: &Credentials,

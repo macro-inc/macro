@@ -846,9 +846,9 @@ tools — hexagonal, heavily feature-gated.
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
-- Keep projection claims provider-neutral and enforce FIFO over unfinished
-  predecessors. Preserve real retry deadlines and the second successor wake
-  after commit. See the [projection claim protocol](../../docs/architecture/email-backend.md#imap-integration)
+- Keep projection claims provider-neutral and order unfinished predecessors
+  within each entity or link-level event kind. Preserve real retry deadlines and
+  the second successor wake after commit. See the [projection claim protocol](../../docs/architecture/email-backend.md#imap-integration)
   and the [query rehearsal](../../docs/runbooks/email-provider-routing.md#projection-and-sync-claim-rehearsal).
 - A projection event that keeps failing is given up as a message read is:
   `MailboxProjectionService::project_leased` decides with `message_retry`
@@ -967,8 +967,8 @@ tools — hexagonal, heavily feature-gated.
 - Keep paused folders in the full role catalog with `sync_enabled = false` so
   existing Trash descendants keep their treatment.
 - Persist `ImportCompleted` with the generation's completion marker, including
-  empty imports. Attempt list refresh before slower projection effects, and
-  retry a failed refresh independently.
+  empty imports. Treat message list refresh as best-effort and continue the
+  other projection effects if refresh fails.
 - Follow the [mailbox worker architecture](../../docs/architecture/email-backend.md#imap-integration)
   when changing bounded claims, rollback compatibility, or parking. For plan
   fixtures and cutover checks, see the

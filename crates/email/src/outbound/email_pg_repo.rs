@@ -35,7 +35,7 @@ mod email_filter;
 mod followup;
 mod label;
 mod link;
-mod mailbox_action;
+pub(super) mod mailbox_action;
 mod message;
 #[cfg(feature = "mailbox")]
 mod message_source;
@@ -198,7 +198,7 @@ impl EmailUserRepo for EmailPgRepo {
     ) -> Result<Vec<EmailInboxDetails>, EmailErr> {
         link::inbox_details_for_macro_id(&self.pool, &macro_id)
             .await
-            .map_err(|error| EmailErr::RepoErr(error.into()))
+            .map_err(EmailErr::RepoErr)
     }
 }
 

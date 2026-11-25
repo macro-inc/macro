@@ -71,7 +71,7 @@ async fn a_subscription_graph_keeps_refusing_waits_longer_and_shows_in_the_mailb
         error: Some(FaultError::ExtensionForbidden),
         ..Fault::default()
     });
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let service = MailboxWatchService::new(
         repo.clone(),
         gateway(&emulator),

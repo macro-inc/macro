@@ -36,8 +36,12 @@ pub(super) fn parse(
                 .trim_end_matches('>')
                 .to_owned()
         });
-        let is_attachment =
-            filename.is_some() || disposition.disposition == mailparse::DispositionType::Attachment;
+        let is_text = matches!(part.ctype.mimetype.as_str(), "text/plain" | "text/html");
+        let is_attachment = !part.ctype.mimetype.starts_with("multipart/")
+            && (filename.is_some()
+                || disposition.disposition == mailparse::DispositionType::Attachment
+                || (!is_text && content_id.is_some())
+                || part.ctype.mimetype.eq_ignore_ascii_case("message/rfc822"));
         if part.ctype.mimetype.eq_ignore_ascii_case("text/calendar") {
             calendar_parts.push(CalendarPart {
                 part_id: Some(path.clone()),
@@ -47,10 +51,7 @@ pub(super) fn parse(
                 provider_attachment_id: None,
             });
         }
-        if is_attachment
-            || content_id.is_some()
-            || part.ctype.mimetype.eq_ignore_ascii_case("message/rfc822")
-        {
+        if is_attachment {
             attachments.push(Attachment {
                 db_id: macro_uuid::generate_uuid_v7(),
                 provider_id: Some(path.clone()),

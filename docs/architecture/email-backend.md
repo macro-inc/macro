@@ -61,38 +61,30 @@ ignores stale generations, wakes folder work, and records reconnect state once.
 Periodic polling recovers lost hints.
 
 The projection claim locks at most 64 due rows, then checks unfinished heads in
-a fresh READ COMMITTED statement. This preserves FIFO per serialized producer
-without losing a concurrent finish's successor wake. Order by
-`(seq NULLS FIRST, id)` and keep locked and delayed predecessors eligible to
-block. Sequence allocation does not define the order of independent producer
+a fresh READ COMMITTED statement. Within a link it orders events by thread, or
+by message when the event has no thread. Link-level event kinds have independent
+order. An event in backoff therefore preserves order for its own entity while
+other events, including reauthorization notices, can proceed. Within each
+entity, order by `(seq NULLS FIRST, id)`; locked and delayed predecessors block.
+Sequence allocation does not define the order of independent producer
 commits. The draining NULL-sequence cohort has only v7 IDs, which do not order
 different producers within a millisecond. Keep local blocking in
 `blocked_until` and real retry times in `available_at`. Finishes serialize
-per link and wake one successor
+per link and wake one successor for their entity
 in their transaction and again after commit to catch a concurrent insert. The
 post-commit wake is best effort: its failure is logged while the committed
 finish stays successful. Wakes write only when clearing a deferral. The
 one-to-two-hour jittered backstop covers an interruption between those
-transactions and old binaries. A maintenance-only claim continues immediately
-and yields after at most 32 progress turns.
+transactions and old binaries. A maintenance-only claim polls for more work immediately.
 Inactive work parks outside the due index. Catalog, folder/live streams and
 reconciliation use bounded 64-row due windows followed by a fresh-snapshot claim;
 independent folders and messages have no per-mailbox FIFO floor. Exact indexed
 eligibility includes the lease deadline, real due time and provider retry floor.
-A bounded maintenance step relabels legacy reconciliation routing to the link's
-provider in the claim itself, without a background repair or completion gate. A legacy mislabelled due prefix
-can delay Outlook reconciliation once after deploy: the local synthetic
-measurement is about 17–18 seconds per 100k rows. Hosted dev has zero such rows;
-production is unmeasured and requires explicit authorization to count. Fresh renewals
-read the lease fence without rewriting its indexed expiry. Sync claims take
-no fleet-wide advisory lock: live work is first per claimer, with a momentary
-inversion across claimers. A locked 64-row live window can divert concurrent
-claims to imports for its short transaction, more readily than main's one-row
-lock. Mutation claims serialize per provider,
-with Outlook alone retaining the old key first for rolling compatibility
-until the rollback baseline is retired (`mac-imap-smtp.89`). Initially
-ineligible due rows also require a one-time bounded parking drain; hosted dev
-has zero in all five work classes. Production counts remain unmeasured.
+Claim maintenance relabels legacy stream and reconciliation routing to match
+the link's provider. Sync claims take no fleet-wide advisory lock. Mutation
+claims serialize per provider. Outlook also takes the legacy advisory lock
+first so rolling binaries share the same serialization. Both take short
+parent locks only before parking candidates.
 
 Draft and command claims use provider-scoped indexed windows, never one probe
 per link. Drafts inspect at most 32 native and 32 legacy NULL-provider keys;
@@ -113,7 +105,11 @@ Mutation dependency checks run lazily over ordered locked IDs with a shared
 budget of 128 reserved probes per claim; the first eligible row stops the walk.
 Commands charge their target count, drafts charge their candidate scope's live
 lease count; early EXISTS exits may execute fewer probes than reserved. One
-loop owns the transaction and its 15-second evaluation deadline. Commit is
+loop bounds evaluation to two seconds, with a one-second database statement
+limit. A corrupt mutation is marked terminal within its claim transaction. The
+quarantine records only its work identity and a closed reason. Command overlay
+cleanup runs in the parked-work worker, in separate bounded, retryable pages.
+Commit is
 awaited separately so the evaluation timer cannot report a committed lease
 as an evaluation timeout; transport failures at commit can still be ambiguous. A 65-row count
 prefix identifies wide old-format commands, an explicit exception to the probe
@@ -131,9 +127,8 @@ the single-command policy. An unrecognized terminal status fails decoding
 instead of reading as success. A terminal chunk from an older generation still
 contributes after reconnect. Email-service API and message-label writers share
 one snapshot of the default-off `enable-mailbox-action-chunks` flag; GraphQL
-polls the same `email-mailbox-actions` context. Agent-harness and ai_tools still
-write the legacy shape and block retiring the wide-command allowance under
-`mac-imap-smtp.116`. Authorization remains in the action service.
+polls the same `email-mailbox-actions` context. Agent-harness and ai_tools still write the legacy shape. Authorization remains
+in the action service.
 
 Overlapping-target command predecessors are found through a partial target index
 on copied parent link, generation and accepted order where the parent is
@@ -164,7 +159,7 @@ bounded target successors only after commit, in key order with SKIP LOCKED. A fa
 wake leaves the committed result successful and the local deadline as backstop.
 A command with more than 64 targets can leave later targets to that backstop.
 The temporary NULL lanes/indexes retire only after an authorized zero check and
-old-writer review (`mac-imap-smtp.114`).
+old-writer review.
 
 An IMAP reconnect rebinds unresolved message commands to the new generation.
 The worker reads fresh provider flags, keywords and folder state before
@@ -179,9 +174,10 @@ page shares quota among projection, streams, reconciliation, drafts and commands
 then borrows unused room once; this guarantees room for each family with at most
 ten bounded updates.
 New activation and recovery paths clear bounded pages immediately. If a
-probe runs past the two-second page budget, its savepoint rolls back and the
-next attempt halves the link's row limit. A link that exceeds the budget with
-one row waits for the next sweep. The cursor commits after each link probe.
+probe exceeds its statement limit, its savepoint rolls back and the next
+attempt halves the link's row limit. A link that fails with a one-row quota
+waits for the next sweep. The cursor commits after each link probe. The
+two-second page deadline rolls back the outstanding probe only.
 Old-binary link changes converge through the five-minute sweep.
 
 The public IMAP API derives the mail address and owner from the authenticated

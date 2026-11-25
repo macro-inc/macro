@@ -25,7 +25,7 @@ impl ProtocolTransport {
         for (folder, _) in &mut catalog {
             folder.role = preferences.role(folder);
         }
-        let mut copied = allow_append;
+        let mut copied = false;
         if let Some((_, path)) = catalog
             .into_iter()
             .find(|(f, _)| f.role == FolderRole::Sent)
@@ -101,25 +101,24 @@ impl ProtocolTransport {
                 }
             }
             if found.len() > 1 {
-                return Err(Error::ConnectionUnavailable);
+                tracing::warn!(copies = found.len(), "Multiple exact Sent copies found");
             }
-            if found.len() == 1 {
-                copied = true;
-            }
-            let server_saves_copy = session
-                .limit_response(ResponseLimit::Metadata)
-                .capabilities()
-                .await
-                .map_err(|e| imap_error(e, false))?
-                .has_str("X-GM-EXT-1");
-            if found.is_empty() && !server_saves_copy && allow_append {
-                session
+            copied = !found.is_empty();
+            if !copied && allow_append {
+                let server_saves_copy = session
                     .limit_response(ResponseLimit::Metadata)
-                    .append(&path, Some("(\\Seen)"), None, mime)
+                    .capabilities()
                     .await
-                    .map_err(|e| imap_error(e, false))?;
-            } else if found.is_empty() {
-                copied = false;
+                    .map_err(|e| imap_error(e, false))?
+                    .has_str("X-GM-EXT-1");
+                if !server_saves_copy {
+                    session
+                        .limit_response(ResponseLimit::Metadata)
+                        .append(&path, Some("(\\Seen)"), None, mime)
+                        .await
+                        .map_err(|e| imap_error(e, false))?;
+                    copied = true;
+                }
             }
         }
         drop(session);

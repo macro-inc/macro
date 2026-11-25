@@ -71,12 +71,6 @@ pub(crate) async fn schema(pool: &PgPool) {
     .await
     .unwrap();
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20261119063611_imap_account_folder_preferences.sql"
-    ))
-    .execute(pool)
-    .await
-    .unwrap();
-    sqlx::raw_sql(include_str!(
         "../../../../macro_db_client/migrations/20261119063901_normalize_imap_account_state.sql"
     ))
     .execute(pool)
@@ -127,7 +121,7 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
         .connect(
             binding,
             "macro|owner@example.net",
-            vec![4, 5, 6],
+            Some(vec![4, 5, 6]),
             verification,
         )
         .await
@@ -137,7 +131,7 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
         second.acquire(binding).await,
         Err(Error::AccountBusy)
     ));
-    let reader = crate::domain::service::Engine::new(
+    let reader = crate::domain::service::Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         std::sync::Arc::new(PgRepository::new(pool.clone())),
         std::sync::Arc::new(crate::domain::service::test::TestCipher),
@@ -166,6 +160,30 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
     let visible = second.acquire(binding).await.unwrap();
     assert!(matches!(first.renew(&command).await, Err(Error::Conflict)));
     assert_eq!(visible.state.sends_today, 7);
+    // A disconnect request fences provider work even before the link goes inactive.
+    sqlx::query!(
+        "UPDATE email_links SET disconnect_requested_at = now() WHERE id = $1",
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(second.renew(&visible).await, Err(Error::Conflict)));
+    assert!(matches!(
+        second.read_scoped(binding, StateSelection::Health).await,
+        Err(Error::Conflict)
+    ));
+    assert!(matches!(
+        second.credentials(binding).await,
+        Err(Error::Conflict)
+    ));
+    sqlx::query!(
+        "UPDATE email_links SET disconnect_requested_at = NULL WHERE id = $1",
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     second.release(&visible).await.unwrap();
     assert!(matches!(
         second
@@ -219,7 +237,7 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
                     grant_generation: 1
                 },
                 "macro|other@example.net",
-                vec![1],
+                Some(vec![1]),
                 other_verification
             )
             .await
@@ -262,7 +280,7 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     })
     .await
     .unwrap();
-    repo.connect(binding, "owner", vec![2], verification)
+    repo.connect(binding, "owner", Some(vec![2]), verification)
         .await
         .unwrap();
     let mut size_limited = repo.acquire(binding).await.unwrap();
@@ -304,7 +322,7 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     .execute(&pool)
     .await
     .unwrap();
-    repo.connect(binding, "owner", vec![3], reconnect)
+    repo.connect(binding, "owner", Some(vec![3]), reconnect)
         .await
         .unwrap();
     let reconnected = repo.acquire(binding).await.unwrap();
@@ -440,7 +458,7 @@ async fn consumed_verification_is_scrubbed_and_same_binding_can_replay_after_exp
     })
     .await
     .unwrap();
-    repo.connect(binding, "owner", vec![9, 8, 7], verification)
+    repo.connect(binding, "owner", Some(vec![9, 8, 7]), verification)
         .await
         .unwrap();
     sqlx::query!(
@@ -460,7 +478,7 @@ async fn consumed_verification_is_scrubbed_and_same_binding_can_replay_after_exp
     let receipt = repo.verification(verification).await.unwrap();
     assert!(receipt.ciphertext.is_empty());
     assert_eq!(receipt.consumed_by, Some(link));
-    repo.connect(binding, "owner", Vec::new(), verification)
+    repo.connect(binding, "owner", None, verification)
         .await
         .unwrap();
     assert_eq!(repo.credentials(binding).await.unwrap().1, vec![9, 8, 7]);
@@ -471,7 +489,7 @@ async fn consumed_verification_is_scrubbed_and_same_binding_can_replay_after_exp
                 ..binding
             },
             "owner",
-            Vec::new(),
+            None,
             verification
         )
         .await
@@ -766,6 +784,139 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
 }
 
 #[sqlx::test(migrations = false)]
+async fn sync_loads_draft_metadata_and_retires_only_the_confirmed_frozen_submission(pool: PgPool) {
+    schema(&pool).await;
+    let link = Uuid::now_v7();
+    sqlx::query!("INSERT INTO email_links (id,macro_id,provider) VALUES ($1,'macro|owner@example.net','IMAP')",link)
+        .execute(&pool).await.unwrap();
+    let health = serde_json::to_value(AccountState::default()).unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO imap_accounts (link_id, user_id, sync_generation, grant_generation, credential_ciphertext, state)
+            VALUES ($1, 'macro|owner@example.net', 1, 1, decode('01', 'hex'), $2)
+        "#,
+        link,
+        health,
+    ).execute(&pool).await.unwrap();
+    let binding = Binding {
+        link_id: link,
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    let repository = PgRepository::new(pool.clone());
+    let mut draft_account = repository.acquire(binding).await.unwrap();
+    let bytes =
+        serde_json::json!({"message_id":"one@example.net","attachments":[vec![1_u8; 256 * 1024]]});
+    for id in ["m:one", "m:other"] {
+        draft_account.state.drafts.insert(
+            id.into(),
+            DraftState {
+                draft: Draft {
+                    id: id.into(),
+                    conversation_id: "t:one".into(),
+                    version: "v1".into(),
+                    is_draft: false,
+                    app_revision: 1,
+                    content_fingerprint: "fixture".into(),
+                },
+                input: DraftInput {
+                    correlation: Uuid::now_v7(),
+                    revision: 1,
+                    reply_to: None,
+                    content: serde_json::json!({"message_id":"one@example.net"}),
+                },
+                attachments: Default::default(),
+                submission: Some(SubmissionOutcome::Accepted),
+                sent_copy_pending: true,
+                sent_copy_attempted: false,
+                frozen_content: Some(bytes.clone()),
+                answered_pending: false,
+            },
+        );
+    }
+    let raw_mime = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        vec![b'x'; 256 * 1024],
+    );
+    draft_account.state.messages.insert(
+        "m:one".into(),
+        Message {
+            id: "m:one".into(),
+            thread_id: "t:one".into(),
+            folder_id: "virtual:sent".into(),
+            flags: vec![],
+            tags: vec![],
+            version: "v1".into(),
+            mime_base64: raw_mime.clone(),
+            source_complete: true,
+            size: 256 * 1024,
+            received_at: Utc::now(),
+            is_sent: true,
+            draft_correlation: Some(Uuid::now_v7()),
+            classification: None,
+        },
+    );
+    repository.save(&mut draft_account).await.unwrap();
+    repository.release(&draft_account).await.unwrap();
+    let read = repository
+        .read_scoped(binding, StateSelection::Message("m:one".into()))
+        .await
+        .unwrap();
+    assert_eq!(read.state.messages["m:one"].mime_base64, raw_mime);
+
+    let mut sync = repository
+        .acquire_scoped(binding, StateSelection::Sync)
+        .await
+        .unwrap();
+    assert_eq!(sync.state.drafts.len(), 2);
+    assert!(sync.state.messages["m:one"].mime_base64.is_empty());
+    assert!(sync.state.messages["m:one"].source_complete);
+    assert!(
+        sync.state
+            .drafts
+            .values()
+            .all(|draft| draft.frozen_content.is_none())
+    );
+    assert_eq!(
+        repository.frozen_submission(&sync, "m:one").await.unwrap(),
+        Some(bytes.clone())
+    );
+    sync.state
+        .drafts
+        .get_mut("m:one")
+        .unwrap()
+        .sent_copy_pending = false;
+    let sent = sync.state.messages.get_mut("m:one").unwrap();
+    sent.source_complete = false;
+    sent.mime_base64 = "aGVhZGVy".into();
+    repository.save(&mut sync).await.unwrap();
+    assert!(
+        repository
+            .frozen_submission(&sync, "m:one")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        repository
+            .frozen_submission(&sync, "m:other")
+            .await
+            .unwrap(),
+        Some(bytes)
+    );
+    repository.release(&sync).await.unwrap();
+    let source_count = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM imap_state_entries
+           WHERE link_id = $1 AND kind = 'sent_source'"#,
+        link,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(source_count, 0);
+}
+
+#[sqlx::test(migrations = false)]
 async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: PgPool) {
     use crate::domain::account_settings::{SettingsRepository, UpdateFolderSettings};
     schema(&pool).await;
@@ -799,7 +950,9 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
         })
         .await
         .unwrap();
-        repo.connect(b, "settings-owner", vec![3], v).await.unwrap();
+        repo.connect(b, "settings-owner", Some(vec![3]), v)
+            .await
+            .unwrap();
     }
     promote(&repo, binding).await;
     let mut limited = repo.acquire(binding).await.unwrap();

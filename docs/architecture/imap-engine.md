@@ -120,6 +120,10 @@ reconciles them within a separate budget after committing and notifying the
 snapshot. A durable cursor selects the next pending draft on each round,
 including after a timeout or an unreadable record. A failure there leaves
 the settled submission and sync result intact.
+The engine stores frozen submission content and complete fallback Sent source in
+separate rows. Synchronization loads their metadata, while a point read loads the
+one source it needs. A confirmed provider Sent copy retires the frozen payload
+and supersedes any local fallback. The draft retains its exact Message-ID.
 HTTP and tracked-work shutdown
 share thirty seconds, below the ECS stop timeout; a process cut-off retains
 Unknown. Exhausted pre-body connection failures return the closed
@@ -361,7 +365,10 @@ closing both delivery windows around IDLE setup.
 
 Planned primary and extra-folder IDLE renewals re-arm the cheap SELECT/watch
 without a full scan. An actual change, configuration wake or thirty-minute
-periodic walk requests synchronization. Watcher setup reads only the scoped
+periodic walk requests synchronization. Host interval learning observes only
+completed IDLE intervals and disconnects after the server arms IDLE. Connection
+setup failures leave it unchanged. Three completed intervals can relax a
+learned short interval. Watcher setup reads only the scoped
 catalog, without a command lease or a second discovery/login session. Without
 IDLE, SELECT comparison runs every thirty seconds and uses HIGHESTMODSEQ when
 CONDSTORE is advertised. UIDNEXT still detects new Spam and Trash arrivals.
@@ -409,9 +416,10 @@ email gateway preserves it as a local refusal without provider cooldown.
 MessageTooLarge is a separate permanent content failure (private HTTP413),
 matching the existing 25 MiB full-source limit. Known oversized sources are
 rejected from indexed RFC822.SIZE before any download; actual response length
-is checked too. RecentInbox handles busy and oversized messages independently,
-keeps successful complete bodies, and records deferred/oversized counts. It does
-not refetch the entire batch or pass header-only MIME off as complete content.
+is checked too. RecentInbox budgets the aggregate base64 bodies to the
+encoded size of one maximum-size source. Known sizes skip bodies that cannot
+fit, and actual sizes are charged after each read and deferred retry.
+Successful bodies remain complete.
 
 Organization-write ports distinguish NotStarted admission refusal from Uncertain
 provider work. Only the former can expose retryable AccountBusy. A recent-inbox
@@ -615,40 +623,8 @@ from the repository configuration are:
 
 The API and worker pools connect eagerly and retain their existing SQLx defaults
 (600-second idle timeout and 1,800-second maximum lifetime). The engine connects
-lazily with a ten-second idle timeout. The subtotal is 390 connections at desired
-replicas or 530 at the API scaling maximum, compared with main's 380/520 before
-the engine. Other Macro services are outside this subtotal.
-
-The MacroDB configuration specifies `db.m9g.8xlarge` without a `max_connections`
-override. Applying the [AWS PostgreSQL default](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html),
-`LEAST(DBInstanceClassMemory/9531392, 5000)`, yields 5,000. This is computed from
-repo configuration and the AWS default, not observed; a custom parameter group
-set outside the repository could change it. No production database was queried.
-
-CI has a much smaller limit of 600. A real native browser-stack measurement
-with no IMAP links, no warm spare stacks and the same 150-second window gave:
-
-| Process | Main | Earlier PR | Shared catch-up pool |
-| --- | --- | --- | --- |
-| Document storage | 30 | 30 | 30 |
-| Pubsub worker | 10 | 13 | 12 |
-| Email API | 1 | 1 | 1 |
-| Test harness | 1 | 1 | 1 |
-| IMAP engine (not started in this generic stack) | 0 | 0 | 0 |
-| Total | 42 | 45 | 44 |
-
-Twelve active and warm stacks put main near 504 before migration and test
-clients. The earlier PR's additional 36 can cross that threshold. Sharing the
-catch-up pool removes its one permanent connection per worker, but the two extra
-connections from shared-pool high-water remain: this is not parity with main.
-The exact-head browser run must compare connection refusals with main before
-attributing the shard failures or deciding whether to cap IMAP poll concurrency.
-These idle native counts are not a multi-replica throughput measurement. A
-separate empty-engine run confirmed zero engine connections immediately before
-the next poll. Healthy-account idle connections have not been measured.
-Unreadable persisted-state classification and owner recovery are tracked in
-`mac-imap-smtp.108`; a synthetic malformed state must not be mistaken for a KMS
-failure when interpreting connection counts.
+lazily with a ten-second idle timeout. The subtotal is 390 connections at desired replicas or 530 at the API scaling
+maximum. Other Macro services use the same database and are outside this subtotal.
 
 Claims capture the current notification revision. Successful commits and local
 error releases cannot consume a newer wake. Startup catch-up always bumps the

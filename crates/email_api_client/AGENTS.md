@@ -230,10 +230,9 @@ Outlook (Microsoft Graph) outbound adapters.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.
+- Keep `ContentTooLarge` distinct from transient provider faults and expose a
+  coded 413 at public download boundaries.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
-
-Keep ContentTooLarge distinct from transient provider faults. A supported-content
-limit is permanent and must project to a coded 413 at public download boundaries.

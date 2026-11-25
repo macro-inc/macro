@@ -218,7 +218,7 @@ impl PgMailboxSync {
                         l.needs_reauth, l.mailbox_unavailable_at
                     FROM email_links l WHERE l.id = s.link_id AND (
                         NOT l.is_sync_active
-                        OR (l.needs_reauth AND NOT ($2 = 'folder_catalog' AND s.provider = 'OUTLOOK'))
+                        OR (l.needs_reauth AND NOT ($2 = 'folder_catalog' AND l.provider = 'OUTLOOK'))
                         OR ($2 <> 'folder_catalog' AND l.mailbox_unavailable_at IS NOT NULL)
                         OR l.sync_generation <> s.generation)
                     FOR SHARE OF l SKIP LOCKED
@@ -226,13 +226,14 @@ impl PgMailboxSync {
                 ORDER BY l.id
             ), maintained AS (
                 UPDATE email_sync_streams s
-                SET parked_at = now()
+                SET provider = l.provider,
+                    parked_at = CASE WHEN i.id IS NOT NULL THEN now() ELSE s.parked_at END
                 FROM due d, email_links l LEFT JOIN inactive i ON i.id = l.id
                 WHERE s.id = d.id AND l.id = s.link_id
                     AND (s.provider IS DISTINCT FROM l.provider OR (
                         i.id IS NOT NULL AND (
                         NOT i.is_sync_active
-                        OR (i.needs_reauth AND NOT ($2 = 'folder_catalog' AND s.provider = 'OUTLOOK'))
+                        OR (i.needs_reauth AND NOT ($2 = 'folder_catalog' AND l.provider = 'OUTLOOK'))
                         OR ($2 <> 'folder_catalog' AND i.mailbox_unavailable_at IS NOT NULL)
                         OR i.sync_generation <> s.generation)))
                 RETURNING s.id

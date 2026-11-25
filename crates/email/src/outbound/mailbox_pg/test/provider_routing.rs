@@ -31,8 +31,7 @@ async fn legacy_writers_derive_the_provider_and_deletion_keeps_existing_ownershi
     .execute(&db)
     .await
     .unwrap();
-    let imap =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let imap = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let stream = imap
         .claim_stream(Uuid::from_u128(901), StreamClaim::LongestDue)
         .await

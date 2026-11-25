@@ -5,23 +5,6 @@ use crate::domain::mailbox::parked_work_recovery::{
 use sqlx::Acquire;
 use std::time::Duration;
 
-/// Retain the current attempt even when an absolute deadline drops the future.
-struct ParkedWorkProbeObservation {
-    span: tracing::Span,
-    attempts: u32,
-    limit: u32,
-    discovery_skipped: bool,
-}
-
-impl Drop for ParkedWorkProbeObservation {
-    fn drop(&mut self) {
-        self.span.record("mailbox.unpark_attempts", self.attempts);
-        self.span.record("mailbox.unpark_limit", self.limit);
-        self.span
-            .record("mailbox.discovery_skipped", self.discovery_skipped);
-    }
-}
-
 /// Only local parking is cleared: provider not-before times and leases survive.
 /// Call after the parent activation UPDATE while that transaction holds its lock.
 async fn unpark_projection_page(
@@ -82,56 +65,38 @@ pub async fn unpark_link_page(
     if limit == 0 {
         return Ok(0);
     }
-    let families = [
+    const FAMILY_COUNT: usize = 5;
+    const FAMILIES: [ParkedWork; FAMILY_COUNT] = [
         ParkedWork::Projection,
         ParkedWork::Streams,
         ParkedWork::Messages,
         ParkedWork::Drafts,
         ParkedWork::Commands,
     ];
-    let family_count = u32::try_from(families.len()).map_err(|_| {
-        sqlx::Error::Protocol("mailbox recovery family count exceeded its bound".into())
-    })?;
-    let extra = usize::try_from(limit % family_count)
-        .map_err(|_| sqlx::Error::Protocol("mailbox recovery quota exceeded its bound".into()))?;
-    let mut saturated = [false; 5];
+    let extra = (limit % FAMILY_COUNT as u32) as usize;
+    let mut saturated = [false; FAMILY_COUNT];
     let mut remaining = limit;
-    for (index, family) in families.iter().enumerate() {
-        let quota = limit / family_count + u32::from(index < extra);
+    for (index, family) in FAMILIES.iter().enumerate() {
+        let quota = limit / FAMILY_COUNT as u32 + u32::from(index < extra);
         if quota == 0 {
             // Small or halved pages must still try this family when another
             // family leaves room; otherwise the sweep can falsely see an end.
             saturated[index] = true;
             continue;
         }
-        let changed = unpark_work_page(connection, link, quota, *family).await?;
-        let changed = u32::try_from(changed).map_err(|_| {
-            sqlx::Error::Protocol("mailbox recovery count exceeded its bound".into())
-        })?;
-        if changed > quota {
-            return Err(sqlx::Error::Protocol(
-                "mailbox recovery count exceeded its bound".into(),
-            ));
-        }
+        // Each family updates at most its SQL LIMIT, which is at most 64.
+        let changed = unpark_work_page(connection, link, quota, *family).await? as u32;
         saturated[index] = changed == quota;
         remaining -= changed;
     }
-    for (index, family) in families.iter().enumerate() {
+    for (index, family) in FAMILIES.iter().enumerate() {
         if remaining == 0 {
             break;
         }
         if !saturated[index] {
             continue;
         }
-        let changed = unpark_work_page(connection, link, remaining, *family).await?;
-        let changed = u32::try_from(changed).map_err(|_| {
-            sqlx::Error::Protocol("mailbox recovery count exceeded its bound".into())
-        })?;
-        if changed > remaining {
-            return Err(sqlx::Error::Protocol(
-                "mailbox recovery count exceeded its bound".into(),
-            ));
-        }
+        let changed = unpark_work_page(connection, link, remaining, *family).await? as u32;
         remaining -= changed;
     }
     Ok(u64::from(limit - remaining))
@@ -155,9 +120,7 @@ async fn unpark_work_page(
         ParkedWork::Drafts => unpark_draft_page(connection, link, limit).await,
         ParkedWork::Commands => unpark_command_page(connection, link, limit).await,
     }?;
-    let count = i64::try_from(rows)
-        .map_err(|_| sqlx::Error::Protocol("mailbox recovery count exceeded its bound".into()))?;
-    tracing::Span::current().record("mailbox.rows_unparked", count);
+    tracing::Span::current().record("mailbox.rows_unparked", rows);
     Ok(rows)
 }
 
@@ -328,18 +291,14 @@ impl PgMailboxSync {
         mailbox.link_id = tracing::field::Empty,
         mailbox.unpark_attempts = tracing::field::Empty,
         mailbox.unpark_limit = tracing::field::Empty,
-        mailbox.discovery_skipped = tracing::field::Empty,
     ), err)]
     async fn parked_work_recovery_probe(
         &self,
         row_limit: u32,
     ) -> Result<Option<ParkedWorkRecoveryPage>, MailboxError> {
-        let mut observation = ParkedWorkProbeObservation {
-            span: tracing::Span::current(),
-            attempts: 0,
-            limit: row_limit,
-            discovery_skipped: false,
-        };
+        let span = tracing::Span::current();
+        span.record("mailbox.unpark_attempts", 0u32);
+        span.record("mailbox.unpark_limit", row_limit);
         let mut tx = self.begin().await.map_err(db_error)?;
         sqlx::query!("SET LOCAL statement_timeout = '250ms'")
             .execute(&mut *tx)
@@ -365,7 +324,6 @@ impl PgMailboxSync {
         let mut complete = false;
         // The index prefix skips a whole dead mailbox's backlog in one
         // descent. No row lock here: a locked prefix must still advance.
-        let mut discovery = tx.begin().await.map_err(db_error)?;
         let next = sqlx::query_scalar!(
             r#"
                 SELECT link_id AS "link_id!" FROM (
@@ -392,36 +350,9 @@ impl PgMailboxSync {
                 "#,
             cursor
         )
-        .fetch_optional(&mut *discovery)
-        .await;
-        let (next, discovery_skipped) = match next {
-            Ok(next) => {
-                discovery.commit().await.map_err(db_error)?;
-                (next, false)
-            }
-            Err(error) => {
-                discovery.rollback().await.map_err(db_error)?;
-                if error
-                    .as_database_error()
-                    .and_then(|error| error.code())
-                    .as_deref()
-                    != Some("57014")
-                {
-                    return Err(db_error(error));
-                }
-                // A bloated parked index must not pin the singleton. Advance
-                // by one cheap parent-key probe, then retry skipped work at wrap.
-                observation.discovery_skipped = true;
-                let next = sqlx::query_scalar!(
-                    "SELECT id FROM email_links WHERE id>$1 ORDER BY id LIMIT 1",
-                    cursor
-                )
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(db_error)?;
-                (next, true)
-            }
-        };
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?;
         let Some(link) = next else {
             complete = true;
             cursor = Uuid::nil();
@@ -433,7 +364,7 @@ impl PgMailboxSync {
             return Ok(Some(ParkedWorkRecoveryPage {
                 links_scanned: 0,
                 rows_unparked: 0,
-                failed_probes: u32::from(discovery_skipped),
+                failed_probes: 0,
                 complete,
             }));
         };
@@ -441,49 +372,44 @@ impl PgMailboxSync {
         tracing::Span::current().record("mailbox.link_id", link.to_string());
         // Savepoint failure cannot poison the singleton transaction. Once
         // the link is known, a timed-out probe advances past it until wrap.
-        if discovery_skipped {
-            cursor = link;
-            failed_probes = 1;
-        } else {
-            let mut attempt_limit = row_limit;
-            loop {
-                observation.attempts += 1;
-                observation.limit = attempt_limit;
-                let mut work = tx.begin().await.map_err(db_error)?;
-                let result = async {
-                    let active = sqlx::query_scalar!(
-                        "SELECT is_sync_active FROM email_links WHERE id=$1",
-                        link
-                    )
-                    .fetch_optional(&mut *work)
-                    .await?
-                    .unwrap_or(false);
-                    if active {
-                        unpark_link_page(&mut work, link, attempt_limit).await
-                    } else {
-                        Ok(0)
-                    }
+        let mut attempt_limit = row_limit;
+        let mut attempts = 0u32;
+        loop {
+            attempts += 1;
+            span.record("mailbox.unpark_attempts", attempts);
+            span.record("mailbox.unpark_limit", attempt_limit);
+            let mut work = tx.begin().await.map_err(db_error)?;
+            let result = async {
+                let active =
+                    sqlx::query_scalar!("SELECT is_sync_active FROM email_links WHERE id=$1", link)
+                        .fetch_optional(&mut *work)
+                        .await?
+                        .unwrap_or(false);
+                if active {
+                    unpark_link_page(&mut work, link, attempt_limit).await
+                } else {
+                    Ok(0)
                 }
-                .await;
-                match result {
-                    Ok(changed) => {
-                        work.commit().await.map_err(db_error)?;
-                        unparked = u32::try_from(changed).map_err(|_| MailboxError::Persistence)?;
-                        if unparked < attempt_limit {
-                            cursor = link;
-                        }
-                        break;
-                    }
-                    Err(_) => {
-                        work.rollback().await.map_err(db_error)?;
-                        if attempt_limit > 1 {
-                            attempt_limit = (attempt_limit / 2).max(1);
-                            continue;
-                        }
+            }
+            .await;
+            match result {
+                Ok(changed) => {
+                    work.commit().await.map_err(db_error)?;
+                    unparked = changed as u32;
+                    if unparked < attempt_limit {
                         cursor = link;
-                        failed_probes = 1;
-                        break;
                     }
+                    break;
+                }
+                Err(_) => {
+                    work.rollback().await.map_err(db_error)?;
+                    if attempt_limit > 1 {
+                        attempt_limit = (attempt_limit / 2).max(1);
+                        continue;
+                    }
+                    cursor = link;
+                    failed_probes = 1;
+                    break;
                 }
             }
         }
@@ -520,12 +446,21 @@ impl ParkedWorkRecoveryRepository for PgMailboxSync {
         &self,
         limit: u32,
     ) -> Result<Option<ParkedWorkRecoveryPage>, MailboxError> {
+        match tokio::time::timeout(Duration::from_secs(1), self.cleanup_command_quarantine()).await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(?error, "Quarantined mailbox command cleanup unavailable")
+            }
+            Err(_) => tracing::warn!("Quarantined mailbox command cleanup deadline exceeded"),
+        }
         // This is an absolute page budget, not a fresh timeout for each probe.
         tokio::time::timeout(
             self.recovery_page_budget,
             self.advance_parked_work_recovery(limit),
         )
         .await
-        .map_err(|_| MailboxError::Persistence)?
+        .map_err(|_| MailboxError::database(DatabaseFailure::DeadlineExceeded))?
+        .map_err(super::mutation_claims::database_deadline)
     }
 }

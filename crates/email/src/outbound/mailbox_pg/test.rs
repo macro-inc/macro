@@ -52,7 +52,7 @@ pub(super) async fn fixture_for_provider(
     .execute(db)
     .await
     .unwrap();
-    (PgMailboxSync::new(db.clone()).with_provider(provider), link)
+    (PgMailboxSync::new(db.clone(), provider), link)
 }
 
 pub(super) fn page() -> MailboxChangePage {

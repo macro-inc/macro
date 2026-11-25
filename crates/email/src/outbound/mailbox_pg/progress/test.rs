@@ -663,7 +663,7 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_folder_line_counts_what_a_claim_could_take_with_the_longest_wait(db: PgPool) {
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let active = outlook_link(&db, "active@example.com", true, false).await;
     let paused = outlook_link(&db, "paused@example.com", true, true).await;
     sqlx::query!(

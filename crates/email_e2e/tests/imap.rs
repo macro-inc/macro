@@ -76,7 +76,7 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
         )
         .await?;
     assert_eq!(internal_caller.status, 403, "{}", internal_caller.text);
-    assert_eq!(internal_caller.json["code"], "forbidden");
+    assert_eq!(internal_caller.json["code"], "person_required");
     let alice_link = alice.link_imap().await?;
     let bob_link = bob.link_imap().await?;
     let incoming = preview(&alice, alice_link, "inbox", &received_subject).await?;

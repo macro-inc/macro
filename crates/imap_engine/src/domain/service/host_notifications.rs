@@ -25,6 +25,43 @@ pub(super) fn notification(account: &Account) -> Notification {
 }
 
 impl Engine {
+    pub(super) async fn notify_after_release(&self, observed: &Account) -> Result<bool, Error> {
+        if !observed.state.notification_pending {
+            return Ok(true);
+        }
+        let Some(notifier) = &self.notifier else {
+            return Ok(true);
+        };
+        notifier.notify(notification(observed)).await?;
+        Ok(matches!(
+            self.acknowledge_hint(observed).await?,
+            HintOutcome::Acknowledged
+        ))
+    }
+
+    async fn acknowledge_hint(&self, observed: &Account) -> Result<HintOutcome, Error> {
+        let mut current = self
+            .repository
+            .acquire_scoped(observed.binding, StateSelection::Health)
+            .await?;
+        let (outcome, saved) = if !current.state.notification_pending {
+            (HintOutcome::Acknowledged, Ok(()))
+        } else if current.revision == observed.revision {
+            current.state.clear_notification_pending();
+            (
+                HintOutcome::Acknowledged,
+                self.repository.save_health(&mut current).await,
+            )
+        } else {
+            // An ACK for an older state must not clear a newer snapshot's hint.
+            (HintOutcome::Pending, Ok(()))
+        };
+        let released = self.repository.release(&current).await;
+        saved?;
+        released?;
+        Ok(outcome)
+    }
+
     pub(super) async fn retry_host_hints(
         &self,
         binding: Binding,
@@ -140,26 +177,7 @@ impl Engine {
                 notifier.notify(notification(&observed)).await?;
                 *acked_revision = Some(observed.revision);
             }
-            let mut current = self
-                .repository
-                .acquire_scoped(binding, StateSelection::Health)
-                .await?;
-            let mut outcome = HintOutcome::Pending;
-            let saved = if !current.state.notification_pending {
-                outcome = HintOutcome::Acknowledged;
-                Ok(())
-            } else if current.revision == observed.revision {
-                current.state.clear_notification_pending();
-                outcome = HintOutcome::Acknowledged;
-                self.repository.save_health(&mut current).await
-            } else {
-                // An ACK for an older state must not clear a newer snapshot's hint.
-                Ok(())
-            };
-            let released = self.repository.release(&current).await;
-            saved?;
-            released?;
-            Ok(outcome)
+            self.acknowledge_hint(&observed).await
         }
         .await;
         let outcome = match &result {

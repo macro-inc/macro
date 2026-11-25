@@ -1,3 +1,4 @@
+use super::quarantine::{QuarantineReason, QuarantinedWork, record_quarantine};
 use super::*;
 use crate::domain::mailbox::projection::*;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,6 +17,10 @@ impl MailboxProjectionRepository for PgMailboxSync {
         }
         Ok(())
     }
+    #[tracing::instrument(skip_all, name = "email.projection.claim", fields(
+        projection.outcome = tracing::field::Empty,
+        projection.quarantine = tracing::field::Empty,
+    ), err)]
     async fn claim_projection(&self, lease_id: Uuid) -> Result<ProjectionClaim, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         sqlx::query!(
@@ -60,7 +65,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
         }
         let message_id = match &lease.event {
             ProjectionEvent::Message { message_id, .. }
-            | ProjectionEvent::AttachmentRecheck { message_id } => Some(*message_id),
+            | ProjectionEvent::AttachmentRecheck { message_id, .. } => Some(*message_id),
             _ => None,
         };
         let message = if let Some(id) = message_id {
@@ -83,6 +88,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
         let mut tx = self.begin().await.map_err(db_error)?;
         self.lock_projection_finish(&mut tx, lease.mailbox.link_id)
             .await?;
+        let entity = lease.event.entity_key();
         let changed = match retry {
             None | Some(MessageRetry::Abandon) => {
                 let deleted = sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
@@ -111,10 +117,10 @@ impl MailboxProjectionRepository for PgMailboxSync {
             }
         };
         if changed == 1 {
-            // Wake exactly the successor, atomically with the fenced outcome.
+            // Wake exactly this entity's successor with the fenced outcome.
             // Its own retry floor stays intact. A released head still blocks it
             // through the unfinished-sibling check until that head completes.
-            self.wake_projection_successor(&mut tx, lease.mailbox.link_id, lease.id)
+            self.wake_projection_successor(&mut tx, lease.mailbox.link_id, &entity, lease.id)
                 .await?;
         }
         tx.commit().await.map_err(db_error)?;
@@ -123,7 +129,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
             // but before commit. A fresh transaction waits for any claim on it
             // and clears that claim's deferral. A crash here needs the backstop.
             if let Err(error) = self
-                .wake_projection_after_commit(lease.mailbox.link_id, lease.id)
+                .wake_projection_after_commit(lease.mailbox.link_id, &entity, lease.id)
                 .await
             {
                 tracing::warn!(
@@ -155,6 +161,7 @@ impl PgMailboxSync {
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         link: Uuid,
+        entity: &str,
         exclude: Uuid,
     ) -> Result<(), MailboxError> {
         sqlx::query!(
@@ -162,13 +169,15 @@ impl PgMailboxSync {
                 WITH successor AS MATERIALIZED (
                     SELECT id, blocked_until FROM email_projection_outbox
                     WHERE link_id=$1 AND id<>$2
+                        AND COALESCE(payload->>'thread_id', payload->>'message_id', payload->>'kind')=$3
                     ORDER BY seq NULLS FIRST,id LIMIT 1 FOR UPDATE
                 )
                 UPDATE email_projection_outbox o SET blocked_until=NULL
                 FROM successor s WHERE o.id=s.id AND s.blocked_until IS NOT NULL
                 "#,
             link,
-            exclude
+            exclude,
+            entity
         )
         .execute(&mut **tx)
         .await
@@ -182,12 +191,13 @@ impl PgMailboxSync {
     async fn wake_projection_after_commit(
         &self,
         link: Uuid,
+        entity: &str,
         exclude: Uuid,
     ) -> Result<(), MailboxError> {
         tracing::Span::current().record("projection.link_id", link.to_string());
         let mut tx = self.begin().await.map_err(db_error)?;
         self.lock_projection_finish(&mut tx, link).await?;
-        self.wake_projection_successor(&mut tx, link, exclude)
+        self.wake_projection_successor(&mut tx, link, entity, exclude)
             .await?;
         tx.commit().await.map_err(db_error)?;
         Ok(())
@@ -220,7 +230,7 @@ impl PgMailboxSync {
     ) -> Result<ProjectionClaim, MailboxError> {
         // The expression index serves both the due range and its order; the
         // legacy available_at-only index cannot provide this ordering.
-        // New events use FIFO per serialized producer. Legacy UUIDv7 ids have no defined
+        // New events use FIFO per entity. Legacy UUIDv7 ids have no defined
         // inter-process order within a millisecond; that window ends when the
         // NULL sequence cohort drains. Order-independent legacy rechecks may be v4.
         // Each claim inspects at most 64 rows; an unfinished predecessor blocks
@@ -229,19 +239,21 @@ impl PgMailboxSync {
             r#"
             WITH due AS MATERIALIZED (
                 SELECT o.id, o.link_id, o.available_at, o.lease_until,
+                    COALESCE(o.payload->>'thread_id', o.payload->>'message_id', o.payload->>'kind') AS entity,
                     GREATEST(o.available_at, COALESCE(o.blocked_until, '-infinity'::timestamptz)) AS eligible_at
                 FROM email_projection_outbox o
                 WHERE o.id=ANY($2::uuid[])
             ), ordered AS MATERIALIZED (
                 SELECT d.*, first.id AS first_id
                 FROM due d
-                CROSS JOIN LATERAL (
+                LEFT JOIN LATERAL (
                     SELECT earlier.id
                     FROM email_projection_outbox earlier
                     WHERE earlier.link_id = d.link_id
+                        AND COALESCE(earlier.payload->>'thread_id', earlier.payload->>'message_id', earlier.payload->>'kind')=d.entity
                     ORDER BY earlier.seq NULLS FIRST, earlier.id
                     LIMIT 1
-                ) first
+                ) first ON true
             ), links AS MATERIALIZED (
                 SELECT l.id, l.is_sync_active
                 FROM email_links l
@@ -268,7 +280,7 @@ impl PgMailboxSync {
                 FROM ordered d JOIN links l ON l.id = d.link_id
                 WHERE l.is_sync_active
                     AND (d.lease_until IS NULL OR d.lease_until <= now())
-                    AND d.id = d.first_id
+                    AND (d.id = d.first_id OR d.entity IS NULL)
                 ORDER BY d.eligible_at, d.id
                 LIMIT 1
             )
@@ -347,6 +359,26 @@ impl PgMailboxSync {
         else {
             return Err(MailboxError::Persistence);
         };
+        let event = match serde_json::from_value(payload) {
+            Ok(event) => event,
+            Err(_) => {
+                sqlx::query!(
+                    "DELETE FROM email_projection_outbox WHERE id=$1 AND lease_id=$2",
+                    id,
+                    lease_id
+                )
+                .execute(&mut **tx)
+                .await
+                .map_err(db_error)?;
+                let reason = QuarantineReason::Decode;
+                record_quarantine(tx, QuarantinedWork::Projection, id, link_id, reason).await?;
+                let span = tracing::Span::current();
+                span.record("projection.outcome", "quarantined");
+                span.record("projection.quarantine", reason.as_ref());
+                tracing::warn!(projection_id = %id, %link_id, reason = reason.as_ref(), "Malformed mailbox projection quarantined");
+                return Ok(ProjectionClaim::Progress);
+            }
+        };
         Ok(ProjectionClaim::Acquired(Box::new(ProjectionLease {
             id,
             lease_id,
@@ -355,7 +387,7 @@ impl PgMailboxSync {
                 sync_generation,
                 grant_generation,
             },
-            event: serde_json::from_value(payload).map_err(|_| MailboxError::Persistence)?,
+            event,
             from_current_generation: generation == sync_generation,
             attempts,
             unfinished_claims,

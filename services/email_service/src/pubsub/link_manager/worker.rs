@@ -134,7 +134,10 @@ pub(crate) async fn context(
             broker: macro_event_broker.clone(),
             deletion: email::domain::mailbox::link_manager::deletion::LinkDeletionService {
                 purge: email::domain::mailbox::link_manager::purge::LinkPurgeService {
-                    repository: email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                    repository: email::outbound::mailbox_pg::PgMailboxSync::new(
+                        db.clone(),
+                        email::domain::models::UserProvider::Outlook,
+                    ),
                 },
                 repository: crate::outbound::link_manager::PgLinkDeletion(db),
                 gmail: crate::outbound::link_manager::DeletionGmail {

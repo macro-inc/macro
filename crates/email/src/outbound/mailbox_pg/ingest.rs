@@ -387,36 +387,15 @@ impl PgMailboxSync {
                 message_id,
             ).fetch_optional(&mut *tx).await.map_err(db_error)?;
             if let Some(command) = command {
-                sqlx::query!(
-                    r#"
-                    INSERT INTO email_mailbox_command_targets (command_id, message_id, provider_id, pending)
-                        VALUES ($1, $2, $3, $4)
-                    "#,
+                crate::outbound::email_pg_repo::mailbox_action::insert_pending_target(
+                    &mut tx,
                     command,
                     message_id,
-                    lease.provider_id.as_str(),
-                    pending,
-                ).execute(&mut *tx).await.map_err(db_error)?;
-                sqlx::query!(
-                    r#"
-                    INSERT INTO email_pending_mailbox_state (message_id, attribute, command_id, desired)
-                    SELECT
-                        $1,
-                        key,
-                        $2,
-                        value
-                    FROM
-                        jsonb_each($3)
-                    ON CONFLICT (message_id,
-                        attribute)
-                        DO UPDATE SET
-                            command_id = EXCLUDED.command_id,
-                            desired = EXCLUDED.desired
-                    "#,
-                    message_id,
-                    command,
-                    pending,
-                ).execute(&mut *tx).await.map_err(db_error)?;
+                    Some(lease.provider_id.as_str()),
+                    &pending,
+                )
+                .await
+                .map_err(db_error)?;
                 email_db_client::threads::update::recompute_thread_metadata(
                     &mut tx,
                     thread_id,

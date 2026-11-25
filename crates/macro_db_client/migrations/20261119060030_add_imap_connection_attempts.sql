@@ -14,10 +14,19 @@ CREATE TABLE email_imap_connection_attempts (
     sync_generation BIGINT NOT NULL CHECK (sync_generation > 0),
     grant_generation BIGINT NOT NULL CHECK (grant_generation > 0),
     completed BOOLEAN NOT NULL DEFAULT false,
+    lease_id UUID,
+    lease_until TIMESTAMPTZ,
+    recovery_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '2 minutes'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX email_imap_connection_attempts_pending_link
     ON email_imap_connection_attempts(link_id) WHERE NOT completed;
-CREATE INDEX email_imap_connection_attempts_pending
-    ON email_imap_connection_attempts(created_at, id) WHERE NOT completed;
+CREATE INDEX email_imap_connection_attempts_due
+    ON email_imap_connection_attempts (
+        (CASE WHEN completed THEN 'infinity'::timestamptz
+            ELSE GREATEST(recovery_at, COALESCE(lease_until, '-infinity'::timestamptz))
+        END), id
+    ) WHERE (CASE WHEN completed THEN 'infinity'::timestamptz
+        ELSE GREATEST(recovery_at, COALESCE(lease_until, '-infinity'::timestamptz))
+    END) < 'infinity'::timestamptz;

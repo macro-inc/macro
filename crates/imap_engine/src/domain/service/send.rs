@@ -89,17 +89,18 @@ impl Engine {
             .decrypt(a.binding.link_id, &a.user_id, &a.ciphertext)
             .await?;
         let draft = a.state.drafts.get(&id).ok_or(Error::NotFound)?;
-        let send: SendRequest = serde_json::from_value(
-            draft
-                .frozen_content
-                .as_ref()
-                .unwrap_or(&draft.input.content)
-                .clone(),
-        )
-        .map_err(|_| Error::Invalid)?;
-        let message_id = send.message_id.as_ref().ok_or(Error::Invalid)?;
-        let mime = send.build_mime().map_err(|_| Error::Invalid)?;
         if draft.sent_copy_pending {
+            let frozen = match &draft.frozen_content {
+                Some(content) => content.clone(),
+                None => self
+                    .repository
+                    .frozen_submission(a, &id)
+                    .await?
+                    .ok_or(Error::Invalid)?,
+            };
+            let send: SendRequest = serde_json::from_value(frozen).map_err(|_| Error::Invalid)?;
+            let message_id = send.message_id.as_ref().ok_or(Error::Invalid)?;
+            let mime = send.build_mime().map_err(|_| Error::Invalid)?;
             let allow_append = !draft.sent_copy_attempted;
             if allow_append {
                 a.state
@@ -117,6 +118,7 @@ impl Engine {
                 Ok(true) => {
                     if let Some(draft) = a.state.drafts.get_mut(&id) {
                         draft.sent_copy_pending = false;
+                        retain_sent_identity(draft);
                     }
                     self.repository.save(a).await?;
                 }
@@ -255,6 +257,7 @@ impl Engine {
             return self.submission_during_shutdown(a.binding, id).await;
         }
         let draft = a.state.drafts.get_mut(id).ok_or(Error::NotFound)?;
+        draft.input.content["message_id"] = Value::String(message_id.clone());
         draft.frozen_content = Some(frozen_input);
         // This sticky tombstone is committed under the distributed fence BEFORE any SMTP delivery bytes.
         // A crash can conservatively lose a send, but it cannot cause an automatic duplicate.
@@ -347,6 +350,9 @@ fn accept_submission(
     draft.draft.is_draft = false;
     draft.sent_copy_pending = copy_pending;
     draft.answered_pending = draft.input.reply_to.is_some();
+    if !copy_pending {
+        retain_sent_identity(draft);
+    }
     let conversation = draft.draft.conversation_id.clone();
     let correlation = draft.input.correlation;
     let folder = a
@@ -375,6 +381,15 @@ fn accept_submission(
         },
     );
     Ok(())
+}
+
+pub(super) fn retain_sent_identity(draft: &mut DraftState) {
+    let frozen = draft.frozen_content.take();
+    let message_id = frozen
+        .as_ref()
+        .unwrap_or(&draft.input.content)
+        .get("message_id");
+    draft.input.content = serde_json::json!({"message_id": message_id});
 }
 
 async fn renew_during_submission(

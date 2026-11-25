@@ -1,5 +1,5 @@
 use imap_engine::{
-    domain::service::{Engine, VerificationScopeKey},
+    domain::service::{Engine, RuntimePorts, VerificationScopeKey},
     inbound::http::{ApiState, router},
     outbound::{
         crypto::KmsCipher,
@@ -66,24 +66,26 @@ async fn main() -> Result<(), rootcause::Report> {
     let repository = Arc::new(PgRepository::new(pool.clone()));
     let tasks = TaskTracker::new();
     let cancel = CancellationToken::new();
-    let engine = Arc::new(
-        Engine::new(
-            VerificationScopeKey::derive(config.internal_auth_key.as_ref())?,
-            repository.clone(),
-            Arc::new(KmsCipher::new(
-                aws_sdk_kms::Client::new(&aws),
-                config.imap_credential_kms_key_id.to_string(),
+    let engine = Arc::new(Engine::new(
+        VerificationScopeKey::derive(config.internal_auth_key.as_ref())?,
+        repository.clone(),
+        Arc::new(KmsCipher::new(
+            aws_sdk_kms::Client::new(&aws),
+            config.imap_credential_kms_key_id.to_string(),
+        )),
+        Arc::new(ProtocolTransport::new(connector).with_settings(repository.clone())),
+        tasks.clone(),
+        cancel.clone(),
+        RuntimePorts {
+            settings: repository,
+            notifier: Arc::new(notifier),
+            discovery: Arc::new(MailDiscovery::new(
+                macro_service_urls::ThunderbirdAutoconfigUrl::new_for_environment(
+                    config.environment,
+                )?,
             )),
-            Arc::new(ProtocolTransport::new(connector).with_settings(repository.clone())),
-            tasks.clone(),
-            cancel.clone(),
-        )
-        .with_settings(repository)
-        .with_notifier(Arc::new(notifier))
-        .with_discovery(Arc::new(MailDiscovery::new(
-            macro_service_urls::ThunderbirdAutoconfigUrl::new_for_environment(config.environment)?,
-        ))),
-    );
+        },
+    ));
     let (first_binding, first_binding_seen) = tokio::sync::oneshot::channel();
     tasks.spawn(scheduler::configuration_notifications(
         pool,

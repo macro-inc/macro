@@ -296,7 +296,7 @@ where
                 present: request.add,
             };
             return self
-                .queue_outlook_category(link.id, request.caller, action, &db_messages, missing_ids)
+                .queue_mailbox_category(link.id, request.caller, action, &db_messages, missing_ids)
                 .await;
         }
         let message_db_ids: Vec<Uuid> = db_messages.iter().map(|m| m.db_id).collect();
@@ -410,7 +410,7 @@ where
     /// labels do, never through the Gmail label worker: one action for
     /// exactly the requested messages the inbox still holds. The command's
     /// projection publishes the threads' changes, so none are published here.
-    async fn queue_outlook_category(
+    async fn queue_mailbox_category(
         &self,
         link_id: Uuid,
         actor: MacroUserIdStr<'static>,

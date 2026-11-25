@@ -58,7 +58,7 @@ async fn a_planned_idle_restart_stays_stable_and_rearms_without_rescanning() {
         entries: Default::default(),
         started: Default::default(),
         released: tokio::sync::Semaphore::new(0),
-        outcome: WaitOutcome::Restarted,
+        outcome: WaitOutcome::IdleCompleted,
     });
     let (started, mut rounds) = tokio::sync::mpsc::unbounded_channel();
     let control = Arc::new(ProviderWorkControl {
@@ -79,7 +79,7 @@ async fn a_planned_idle_restart_stays_stable_and_rearms_without_rescanning() {
         sent_found: Default::default(),
         provider_work: Some(control.clone()),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
@@ -188,7 +188,7 @@ async fn an_unavailable_baseline_backs_off_full_scans_to_the_periodic_walk() {
             released: tokio::sync::Semaphore::new(20),
         })),
     });
-    let engine = Engine::new(
+    let engine = Engine::new_for_test(
         crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),

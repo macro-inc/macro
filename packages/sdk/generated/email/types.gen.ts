@@ -1469,7 +1469,7 @@ export type ImapConnectResponse = {
 /**
  * Machine-readable reason an IMAP connection or settings request was refused.
  */
-export type ImapConnectionErrorCode = 'disabled' | 'address_unverified' | 'provider_conflict' | 'connection_changed' | 'payment_required' | 'connection_unavailable' | 'invalid' | 'forbidden' | 'not_found' | 'conflict' | 'credentials_rejected' | 'credentials_unreadable' | 'credentials_unavailable' | 'throttled' | 'dns_unavailable' | 'tcp_unavailable' | 'tls_unavailable' | 'connection_timed_out';
+export type ImapConnectionErrorCode = 'disabled' | 'address_unverified' | 'provider_conflict' | 'connection_changed' | 'payment_required' | 'connection_unavailable' | 'invalid' | 'forbidden' | 'person_required' | 'not_found' | 'conflict' | 'credentials_rejected' | 'credentials_unreadable' | 'credentials_unavailable' | 'throttled' | 'dns_unavailable' | 'tcp_unavailable' | 'tls_unavailable' | 'connection_timed_out';
 
 export type ImapConnectionErrorResponse = {
     code: ImapConnectionErrorCode;

@@ -102,6 +102,8 @@ impl ProtocolTransport {
                 .and_then(Vec::pop)
         };
         if let Some(mut previous) = previous {
+            // Old unsolicited responses belong to the previous command.
+            while previous.unsolicited_responses.try_recv().is_ok() {}
             // A failed liveness check has not emitted a user command and can safely reconnect.
             if timeout(
                 Duration::from_secs(10),

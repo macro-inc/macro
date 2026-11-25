@@ -63,7 +63,7 @@ impl PgRepository {
                 lease_id = $4,
                 lease_until = now() + make_interval(secs => $5::double precision)
             FROM
-                email_links l
+                imap_current_links l
             WHERE
                 a.link_id = $1
                 AND a.sync_generation = $2
@@ -72,8 +72,6 @@ impl PgRepository {
                     OR a.lease_until < now())
                 AND l.id = a.link_id
                 AND l.macro_id = a.user_id
-                AND l.provider = 'IMAP'
-                AND l.is_sync_active
                 AND NOT l.needs_reauth
                 AND l.sync_generation = a.sync_generation
                 AND l.grant_generation = a.grant_generation
@@ -104,14 +102,12 @@ impl PgRepository {
                                 1
                             FROM
                                 imap_accounts a
-                                JOIN email_links l ON l.id = a.link_id
+                                JOIN imap_current_links l ON l.id = a.link_id
                             WHERE
                                 a.link_id = $1
                                 AND a.sync_generation = $2
                                 AND a.grant_generation = $3
                                 AND l.macro_id = a.user_id
-                                AND l.provider = 'IMAP'
-                                AND l.is_sync_active
                                 AND NOT l.needs_reauth
                                 AND l.sync_generation = a.sync_generation
                                 AND l.grant_generation = a.grant_generation) AS "current!"
@@ -137,9 +133,9 @@ impl PgRepository {
             binding: b,
             user_id: r.user_id,
             ciphertext: r.credential_ciphertext,
-            state: serde_json::from_value(r.state).map_err(|_| {
+            state: serde_json::from_value(r.state).map_err(|error| {
                 record_outcome(AcquireOutcome::InvalidState);
-                Error::ConnectionUnavailable
+                corrupt_state(error)
             })?,
             revision: r.revision,
             folder_preferences_revision: r.folder_preferences_revision,
@@ -175,5 +171,5 @@ pub(super) fn load_error(error: sqlx::Error) -> Error {
         _ => AcquireOutcome::Unavailable,
     };
     record_outcome(outcome);
-    Error::ConnectionUnavailable
+    db_error(error)
 }

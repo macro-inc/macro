@@ -156,23 +156,14 @@ pub(super) async fn enqueue(
                 .await?;
                 absent.extend(missing.into_iter().map(|label| (message.thread_id, label)));
             }
-            sqlx::query!(
-                r#"
-            INSERT INTO email_mailbox_command_targets (command_id,message_id,provider_id,pending)
-            VALUES ($1,$2,$3,$4)
-        "#,
+            insert_pending_target(
+                &mut tx,
                 command_id,
                 message.id,
-                message.provider_id,
-                pending
+                message.provider_id.as_deref(),
+                &pending,
             )
-            .execute(&mut *tx)
             .await?;
-            sqlx::query!(r#"
-            INSERT INTO email_pending_mailbox_state (message_id,attribute,command_id,desired)
-            SELECT $1,key,$2,value FROM jsonb_each($3)
-            ON CONFLICT (message_id,attribute) DO UPDATE SET command_id = EXCLUDED.command_id,desired = EXCLUDED.desired
-        "#,message.id,command_id,pending).execute(&mut *tx).await?;
             sqlx::query!(r#"
             UPDATE email_messages SET is_read = COALESCE($2,is_read), is_starred = COALESCE($3,is_starred)
             WHERE id = $1
@@ -219,6 +210,41 @@ pub(super) async fn enqueue(
     }
     tx.commit().await?;
     Ok(action_id)
+}
+
+/// Store an already-validated command target and its optimistic overlay.
+pub(in crate::outbound) async fn insert_pending_target(
+    tx: &mut sqlx::PgConnection,
+    command_id: Uuid,
+    message_id: Uuid,
+    provider_id: Option<&str>,
+    pending: &serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+            INSERT INTO email_mailbox_command_targets (command_id,message_id,provider_id,pending)
+            VALUES ($1,$2,$3,$4)
+        "#,
+        command_id,
+        message_id,
+        provider_id,
+        pending
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        r#"
+            INSERT INTO email_pending_mailbox_state (message_id,attribute,command_id,desired)
+            SELECT $1,key,$2,value FROM jsonb_each($3)
+            ON CONFLICT (message_id,attribute) DO UPDATE SET command_id = EXCLUDED.command_id,desired = EXCLUDED.desired
+        "#,
+        message_id,
+        command_id,
+        pending
+    )
+    .execute(&mut *tx)
+    .await?;
+    Ok(())
 }
 
 #[tracing::instrument(name = "email.mailbox.action_receipts", skip_all, fields(

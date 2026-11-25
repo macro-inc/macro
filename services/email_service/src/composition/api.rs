@@ -219,7 +219,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
                 ),
             ))?,
             crate::api::context::MicrosoftTokens::new(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Outlook,
+                ),
                 crate::outbound::email_api::MicrosoftCredentialsClient(
                     auth_service_client.as_ref().clone(),
                 ),
@@ -300,8 +303,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     Ok(ApiContext {
         imap_notifications: Arc::new(
             email::domain::mailbox::imap_notifications::ImapNotificationService(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
-                    .with_provider(email::domain::models::UserProvider::Imap),
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Imap,
+                ),
             ),
         ),
         imap_connections,
@@ -389,7 +394,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         )),
         mailbox_settings: Arc::new(
             email::domain::mailbox::settings::MailboxSettingsService::new(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Outlook,
+                ),
                 crate::outbound::mailbox_settings::ProviderMailboxSettings {
                     db: db.clone(),
                     imap: imap_gateway.clone(),
@@ -400,7 +408,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         ),
         mailbox_notifications: Arc::new(
             email::domain::mailbox::watches::MailboxWatchNotifications::new(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Outlook,
+                ),
             )
             .with_message_reads(notified_message_reads),
         ),

@@ -35,8 +35,7 @@ async fn an_imap_catalog_not_found_is_an_error_not_a_graph_mailbox_absence() {
     db.close().await;
     let gateway = ImapMailboxGateway {
         client: ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap(),
-        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-            .with_provider(UserProvider::Imap),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
     };
     assert!(matches!(
         gateway.folders(mailbox).await,
@@ -64,8 +63,7 @@ async fn an_empty_imap_catalog_is_success_without_graph_mailbox_classification(d
         .await;
     let gateway = ImapMailboxGateway {
         client: ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap(),
-        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-            .with_provider(UserProvider::Imap),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
     };
     let catalog = gateway
         .folders(MailboxKey {
@@ -96,8 +94,7 @@ async fn typed_busy_and_size_failures_survive_the_private_client_without_health_
         db.close().await;
         let gateway = ImapMailboxGateway {
             client: ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap(),
-            health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-                .with_provider(UserProvider::Imap),
+            health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
         };
         let error = gateway
             .mime(
@@ -150,8 +147,7 @@ async fn conditional_command_reads_live_organization_instead_of_the_catalog_cach
     db.close().await;
     let gateway = ImapMailboxGateway {
         client: ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap(),
-        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-            .with_provider(UserProvider::Imap),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
     };
     assert!(matches!(
         gateway
@@ -206,8 +202,7 @@ async fn a_corrupt_imap_source_does_not_hide_the_other_recent_messages() {
     db.close().await;
     let gateway = ImapMailboxGateway {
         client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
-        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
-            .with_provider(UserProvider::Imap),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db, UserProvider::Imap),
     };
 
     let recent = gateway.recent(mailbox, 2).await.unwrap();

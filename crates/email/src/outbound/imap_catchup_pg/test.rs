@@ -54,20 +54,23 @@ async fn a_locked_startup_stream_does_not_block_others_and_retries_once_when_als
     lock.rollback().await.unwrap();
     // A real normal hint overlaps the deferred item, but the page must handle
     // it once. The current lease/cursor is never reset by this callback.
-    ImapNotificationService(PgMailboxSync::new(db.clone()))
-        .receive(imap_engine::domain::models::Notification {
-            binding: imap_engine::domain::models::Binding {
-                link_id: link,
-                sync_generation: 1,
-                grant_generation: 1,
-            },
-            credentials_rejected: false,
-            revision: None,
-            mailbox_issue: None,
-            sync_retry_at: None,
-        })
-        .await
-        .unwrap();
+    ImapNotificationService(PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Outlook,
+    ))
+    .receive(imap_engine::domain::models::Notification {
+        binding: imap_engine::domain::models::Binding {
+            link_id: link,
+            sync_generation: 1,
+            grant_generation: 1,
+        },
+        credentials_rejected: false,
+        revision: None,
+        mailbox_issue: None,
+        sync_retry_at: None,
+    })
+    .await
+    .unwrap();
     sqlx::query!(
         "UPDATE email_imap_host_catchup_deferred SET available_at = now() WHERE stream_id = $1",
         ids[0]
@@ -193,8 +196,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
     let (link, ids, job) = seed(&db, 1).await;
     let lease = job.claim(Uuid::now_v7(), 120).await.unwrap().unwrap();
     job.advance(&lease, 16, 0).await.unwrap();
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     let first = repo
         .claim_stream(
             Uuid::now_v7(),
@@ -364,8 +366,7 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
     db: PgPool,
 ) {
     let (_, ids, job) = seed(&db, 2).await;
-    let repo =
-        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
     sqlx::query!("UPDATE email_sync_streams SET next_run_at = now() - interval '1 minute'")
         .execute(&db)
         .await

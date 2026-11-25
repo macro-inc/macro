@@ -19,7 +19,7 @@ fn learns_from_distinct_drops_and_relaxes_after_stable_sessions() {
     for now in [2_000_000, 4_000_000, 6_000_000] {
         host.observe_at(
             Outcome::Stable {
-                age_ms: STABLE_SESSION,
+                age_ms: 18_000,
                 ran_interval_ms: Some(18_000),
             },
             now,
@@ -31,6 +31,26 @@ fn learns_from_distinct_drops_and_relaxes_after_stable_sessions() {
     }
     assert_eq!(host.restart_seconds(), 18);
     assert_eq!(host.relax_limit, Some(27_000));
+}
+
+#[test]
+fn a_learned_short_interval_recovers_after_completed_watches() {
+    let mut host = IdleState::default();
+    for now in [10, 30_000] {
+        host.observe_at(dropped(15_000, 15_000, None), now);
+    }
+    assert_eq!(host.restart_seconds(), 10);
+
+    for now in [50_000, 65_000, 80_000] {
+        host.observe_at(
+            Outcome::Stable {
+                age_ms: 10_000,
+                ran_interval_ms: Some(10_000),
+            },
+            now,
+        );
+    }
+    assert_eq!(host.restart_seconds(), 15);
 }
 
 #[test]

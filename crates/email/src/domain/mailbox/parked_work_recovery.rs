@@ -28,13 +28,8 @@ impl<R: ParkedWorkRecoveryRepository> ParkedWorkRecoveryService<R> {
         mailbox.cycle_complete = tracing::field::Empty,
         mailbox.no_progress = tracing::field::Empty,
         mailbox.failed_probes = tracing::field::Empty,
-        mailbox.consecutive_skips = tracing::field::Empty,
     ), err)]
-    pub async fn tick(
-        &self,
-        limit: u32,
-        consecutive_skips: u32,
-    ) -> Result<Option<ParkedWorkRecoveryPage>, MailboxError> {
+    pub async fn tick(&self, limit: u32) -> Result<Option<ParkedWorkRecoveryPage>, MailboxError> {
         let result = self.0.recover_page(limit.clamp(1, 64)).await;
         let failed_probes = result
             .as_ref()
@@ -43,10 +38,6 @@ impl<R: ParkedWorkRecoveryRepository> ParkedWorkRecoveryService<R> {
             .map_or(0, |page| page.failed_probes);
         let span = tracing::Span::current();
         span.record("mailbox.no_progress", result.is_err() || failed_probes > 0);
-        span.record(
-            "mailbox.consecutive_skips",
-            consecutive_skips.saturating_add(failed_probes),
-        );
         let page = result?;
         if let Some(page) = page {
             let span = tracing::Span::current();

@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn mime_does_not_import_attached_message_text_or_unsanitized_html_and_part_paths_match_downloads() {
-    let raw=b"From: Sender <sender@example.com>\r\nTo: receiver@example.com\r\nSubject: Outer\r\nMessage-ID: <outer@example.com>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=outer\r\n\r\n--outer\r\nContent-Type: text/html\r\n\r\n<p>Hello</p><script>bad()</script>\r\n--outer\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=data.bin\r\nContent-Transfer-Encoding: base64\r\n\r\nAQID\r\n--outer\r\nContent-Type: message/rfc822\r\nContent-Disposition: attachment; filename=original.eml\r\n\r\nFrom: inner@example.com\r\nContent-Type: text/plain\r\n\r\nAttached message must not become outer text\r\n--outer--\r\n";
+    let raw=b"From: Sender <sender@example.com>\r\nTo: receiver@example.com\r\nSubject: Outer\r\nMessage-ID: <outer@example.com>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=outer\r\nContent-ID: <root@example.com>\r\n\r\n--outer\r\nContent-Type: text/html\r\nContent-ID: <body@example.com>\r\n\r\n<p>Hello</p><script>bad()</script>\r\n--outer\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=data.bin\r\nContent-Transfer-Encoding: base64\r\n\r\nAQID\r\n--outer\r\nContent-Type: message/rfc822\r\nContent-Disposition: attachment; filename=original.eml\r\n\r\nFrom: inner@example.com\r\nContent-Type: text/plain\r\n\r\nAttached message must not become outer text\r\n--outer--\r\n";
     let source = models::Message {
         id: "m:1".into(),
         thread_id: "t:1".into(),
@@ -28,6 +28,7 @@ fn mime_does_not_import_attached_message_text_or_unsanitized_html_and_part_paths
             .unwrap()
             .contains("<script")
     );
+    assert_eq!(message.message.attachments.len(), 2);
     assert_eq!(
         message.message.attachments[0].provider_id.as_deref(),
         Some("2")

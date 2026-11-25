@@ -312,13 +312,11 @@ async fn main() -> anyhow::Result<()> {
         email_service::composition::imap_gateway(db.clone(), config.internal_api_key.as_ref())?;
     // Live and import ingestion have separate admission. The shared gateway
     // keeps interactive admission for commands and draft materialization.
-    let mut imap_ingestion = imap_gateway.clone();
-    imap_ingestion.client = imap_ingestion
-        .client
+    let imap_ingestion = imap_gateway
+        .clone()
         .with_operation_class(imap_service_client::OperationClass::Ingestion);
-    let mut imap_import = imap_gateway.clone();
-    imap_import.client = imap_import
-        .client
+    let imap_import = imap_gateway
+        .clone()
         .with_operation_class(imap_service_client::OperationClass::Import);
     let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
         email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
@@ -327,7 +325,10 @@ async fn main() -> anyhow::Result<()> {
         ),
     ))?;
     let outlook_credentials = email::domain::mailbox::credentials::MailboxCredentials::new(
-        email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+        email::outbound::mailbox_pg::PgMailboxSync::new(
+            db.clone(),
+            email::domain::models::UserProvider::Outlook,
+        ),
         email_service::outbound::email_api::MicrosoftCredentialsClient(auth_service_client.clone()),
     );
     let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
@@ -336,8 +337,11 @@ async fn main() -> anyhow::Result<()> {
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
-    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
-        .with_imports_paused(config.outlook_imports_paused);
+    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(
+        db.clone(),
+        email::domain::models::UserProvider::Outlook,
+    )
+    .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
         let outlook_import_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
             email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
@@ -571,8 +575,10 @@ async fn main() -> anyhow::Result<()> {
         },
         worker_cancellation_token.clone(),
     ));
-    let imap_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
-        .with_provider(email::domain::models::UserProvider::Imap);
+    let imap_repository = email::outbound::mailbox_pg::PgMailboxSync::new(
+        db.clone(),
+        email::domain::models::UserProvider::Imap,
+    );
     worker_tracker.spawn(email_service::imap_runtime::catch_up(
         email::domain::mailbox::imap_catchup::ImapCatchupService(
             email::outbound::imap_catchup_pg::PgImapCatchup(db.clone()),

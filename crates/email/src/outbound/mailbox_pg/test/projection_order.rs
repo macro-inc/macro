@@ -4,6 +4,41 @@ use crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository;
 use crate::domain::mailbox::projection::MailboxProjectionRepository;
 use crate::domain::mailbox::projection::ProjectionClaim;
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn projection_discards_a_payload_without_an_entity_and_claims_the_next_notice(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let malformed = Uuid::now_v7();
+    let notice = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_projection_outbox (id,link_id,generation,payload,available_at)
+           VALUES ($1,$3,1,'{}',now()-interval '1 second'),
+                  ($2,$3,1,'{"kind":"link_changed"}',now())"#,
+        malformed,
+        notice,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(matches!(
+        repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+        ProjectionClaim::Progress
+    ));
+    let quarantined = sqlx::query_scalar!(
+        "SELECT reason FROM email_mailbox_work_quarantine WHERE work='projection' AND work_id=$1",
+        malformed,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(quarantined, "decode");
+    let ProjectionClaim::Acquired(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the valid notice must be claimable");
+    };
+    assert_eq!(lease.id, notice);
+}
+
 /// 64 parked projection rows on `link`, behind a trigger that sleeps 0.4 s
 /// on any unpark UPDATE over 10 rows and counts each attempt by size.
 async fn slow_projection_unpark(db: &PgPool, link: Uuid) {
@@ -74,12 +109,18 @@ async fn a_slow_projection_unpark_halves_within_the_wrap_until_it_fits(db: PgPoo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_recovery_page_past_its_budget_fails_as_persistence(db: PgPool) {
+async fn a_recovery_page_past_its_budget_reports_deadline_exceeded(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let repo = repo.with_recovery_page_budget(std::time::Duration::from_millis(300));
     slow_projection_unpark(&db, link).await;
     let error = repo.recover_page(64).await.unwrap_err();
-    assert!(matches!(error, MailboxError::Persistence), "{error:?}");
+    assert!(
+        matches!(
+            error,
+            MailboxError::Database(crate::domain::mailbox::DatabaseFailure::DeadlineExceeded),
+        ),
+        "{error:?}"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -436,7 +477,7 @@ async fn a_hot_active_projection_link_recovers_in_bounded_fifo_pages(db: PgPool)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn projection_backoff_holds_later_events_of_the_same_link(db: PgPool) {
+async fn projection_backoff_holds_later_events_of_the_same_entity(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);
@@ -459,6 +500,77 @@ async fn projection_backoff_holds_later_events_of_the_same_link(db: PgPool) {
         repo.claim_projection(Uuid::now_v7()).await.unwrap(),
         ProjectionClaim::Idle | ProjectionClaim::Progress
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_projection_retry_does_not_hold_a_reauthorization_warning(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let first = Uuid::from_u128(1);
+    let same_thread = Uuid::from_u128(2);
+    let other_thread = Uuid::from_u128(3);
+    let warning = Uuid::from_u128(4);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_projection_outbox (id, link_id, generation, payload)
+        VALUES ($1,$5,1,'{"kind":"organization","thread_id":"00000000-0000-0000-0000-000000000010"}'),
+            ($2,$5,1,'{"kind":"absent","thread_id":"00000000-0000-0000-0000-000000000010","message_id":"00000000-0000-0000-0000-000000000100"}'),
+            ($3,$5,1,'{"kind":"absent","thread_id":"00000000-0000-0000-0000-000000000020","message_id":"00000000-0000-0000-0000-000000000200"}'),
+            ($4,$5,1,'{"kind":"reauthorization_required"}')
+        "#,
+        first,
+        same_thread,
+        other_thread,
+        warning,
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let ProjectionClaim::Acquired(head) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the first event must be claimable")
+    };
+    assert_eq!(head.id, first);
+    repo.finish_projection(
+        &head,
+        Some(MessageRetry::After {
+            seconds: 300,
+            counted: false,
+        }),
+    )
+    .await
+    .unwrap();
+
+    for id in [other_thread, warning] {
+        let ProjectionClaim::Acquired(next) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+        else {
+            panic!("unrelated events must stay claimable during backoff")
+        };
+        assert_eq!(next.id, id);
+        repo.finish_projection(&next, None).await.unwrap();
+    }
+    assert!(!matches!(
+        repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+        ProjectionClaim::Acquired(_)
+    ));
+    sqlx::query!(
+        "UPDATE email_projection_outbox SET available_at=now() WHERE id=$1",
+        first
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let ProjectionClaim::Acquired(head) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the backing-off head must run again when due")
+    };
+    assert_eq!(head.id, first);
+    repo.finish_projection(&head, None).await.unwrap();
+    let ProjectionClaim::Acquired(delete) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the same-thread deletion must run after its predecessor")
+    };
+    assert_eq!(delete.id, same_thread);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -545,7 +657,7 @@ async fn projection_legacy_null_precedes_a_main_style_numbered_insert(db: PgPool
     let seq = sqlx::query_scalar!(
         r#"
         INSERT INTO email_projection_outbox (id, link_id, generation, payload)
-        VALUES ($1, $2, 1, '{"kind":"attachment_recheck","message_id":"00000000-0000-0000-0000-000000000001"}')
+        VALUES ($1, $2, 1, '{"kind":"link_changed"}')
         RETURNING seq
         "#,
         numbered,

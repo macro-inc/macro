@@ -363,7 +363,7 @@ async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db:
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn failed_refresh_preserves_independent_message_effects_and_durable_retry(db: PgPool) {
+async fn failed_refresh_does_not_repeat_independent_message_effects(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = fixture(&db).await;
@@ -408,21 +408,21 @@ async fn failed_refresh_preserves_independent_message_effects_and_durable_retry(
     let published = effects.published.clone();
     let service = MailboxProjectionService::new(repo, effects);
 
-    for attempt in 1..=2 {
-        assert!(matches!(
-            service.project_once().await,
-            Err(MailboxError::Effect(_))
-        ));
-        assert_eq!(attempts(&db, event.id).await, Some(attempt));
-        assert_eq!(contacts.load(Ordering::SeqCst), attempt as usize);
-        assert_eq!(attachments.load(Ordering::SeqCst), attempt as usize);
-        assert!(published.load(Ordering::SeqCst) >= attempt as usize);
-        make_due(&db, event.id).await;
-    }
+    assert!(matches!(
+        service.project_once().await.unwrap(),
+        ProjectionTick::Projected
+    ));
+    assert!(matches!(
+        service.project_once().await.unwrap(),
+        ProjectionTick::Idle
+    ));
+    assert_eq!(attempts(&db, event.id).await, None);
+    assert_eq!(contacts.load(Ordering::SeqCst), 1);
+    assert_eq!(attachments.load(Ordering::SeqCst), 1);
+    assert!(published.load(Ordering::SeqCst) >= 1);
+
     let spans = telemetry.spans("outlook.sync.project");
-    assert_eq!(spans.len(), 2);
-    for span in spans {
-        assert_eq!(span["outlook.refreshes"], "0");
-        assert_eq!(span["outlook.reindex_events"], "1");
-    }
+    assert_eq!(spans.len(), 1);
+    assert_eq!(spans[0]["outlook.refreshes"], "0");
+    assert_eq!(spans[0]["outlook.reindex_events"], "1");
 }

@@ -102,8 +102,10 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
             sqlx::query!(
                 r#"
                 UPDATE email_mailbox_drafts d
-                SET provider=d.provider
+                SET provider=l.provider
+                FROM email_links l
                 WHERE d.message_id=$1 AND d.link_id=$2 AND d.provider IS NULL
+                    AND l.id=d.link_id AND l.provider IN ('IMAP','OUTLOOK')
                     AND d.state IN ('pending', 'running', 'synced')
                     AND EXISTS (
                         SELECT 1 FROM email_scheduled_messages s

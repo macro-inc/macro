@@ -142,7 +142,7 @@ where
             .ok_or(EmailErr::ThreadNotFound)?;
         if link.provider.uses_mailbox_framework() {
             return Ok(self
-                .queue_outlook_action(&link, thread_id, actor, action)
+                .queue_mailbox_action(&link, thread_id, actor, action)
                 .await?
                 .successful_ids
                 .len());
@@ -223,7 +223,7 @@ where
 
     /// The email domain selects a bounded message set; persistence commits the
     /// accepted intent and its pending projection together.
-    pub(super) async fn queue_outlook_action(
+    pub(super) async fn queue_mailbox_action(
         &self,
         link: &Link,
         thread_id: Uuid,
@@ -278,7 +278,7 @@ where
 
         if link.provider.uses_mailbox_framework() {
             return Ok(self
-                .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(true))
+                .queue_mailbox_action(&link, thread_id, macro_id, MailboxAction::Read(true))
                 .await?
                 .successful_ids
                 .len());
@@ -330,7 +330,7 @@ where
         // inbox: multi-inbox users have a distinct UNREAD label for each link.
         if link.provider.uses_mailbox_framework() {
             return Ok(self
-                .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(false))
+                .queue_mailbox_action(&link, thread_id, macro_id, MailboxAction::Read(false))
                 .await?
                 .successful_ids
                 .len());
@@ -379,7 +379,7 @@ where
     ) -> Result<usize, EmailErr> {
         if link.provider.uses_mailbox_framework() {
             return Ok(self
-                .queue_outlook_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
+                .queue_mailbox_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
                 .await?
                 .successful_ids
                 .len());
@@ -514,7 +514,7 @@ where
 
         if link.provider.uses_mailbox_framework() {
             return self
-                .queue_outlook_action(
+                .queue_mailbox_action(
                     link,
                     thread_id,
                     actor.unwrap_or_else(|| link.macro_id.clone()),
@@ -590,7 +590,7 @@ where
                         .await?;
                 }
                 if link.provider.uses_mailbox_framework() {
-                    self.queue_outlook_action(
+                    self.queue_mailbox_action(
                         &link,
                         thread_id,
                         macro_id.clone(),

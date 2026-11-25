@@ -19,12 +19,7 @@ pub async fn recover<R, G, F>(
             result = service.recover_once() => result,
         };
         match result {
-            Ok(ConnectionRecoveryTick::Progress) => {
-                // After 32 settled attempts, let other tasks and cancellation run
-                // before another bounded cycle; no database connection is held here.
-                tokio::task::yield_now().await;
-                continue;
-            }
+            Ok(ConnectionRecoveryTick::Progress) => continue,
             Ok(ConnectionRecoveryTick::Idle) => {}
             Err(error) => tracing::warn!(error = %error, "IMAP connection recovery deferred"),
         }

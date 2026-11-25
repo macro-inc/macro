@@ -51,7 +51,7 @@ async fn an_import_first_claim_takes_rounds_ahead_of_polls_due_long_before_them(
     let polled = mailbox(&db, "polled@example.com", true, 1800.0).await;
     let first = mailbox(&db, "first@example.com", false, 10.0).await;
     let second = mailbox(&db, "second@example.com", false, 5.0).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
 
     let order = [
         claim(&repo, StreamClaim::ImportFirst).await.mailbox.link_id,
@@ -70,7 +70,7 @@ async fn a_longest_due_claim_takes_whichever_folder_came_due_first(db: PgPool) {
     let early_round = mailbox(&db, "early@example.com", false, 300.0).await;
     let polled = mailbox(&db, "polled@example.com", true, 120.0).await;
     let late_round = mailbox(&db, "late@example.com", false, 10.0).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
 
     let order = [
         claim(&repo, StreamClaim::LongestDue).await.mailbox.link_id,
@@ -107,7 +107,7 @@ async fn a_sync_loop_reads_an_import_round_first_every_other_turn(db: PgPool) {
     let importing = mailbox(&db, "importing@example.com", false, 0.0).await;
     let oldest = mailbox(&db, "oldest@example.com", true, 1800.0).await;
     let older = mailbox(&db, "older@example.com", true, 1200.0).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let service = sync(
         &repo,
         Provider::paging(vec![next_page(), checkpoint(), next_page(), checkpoint()]),
@@ -159,7 +159,7 @@ async fn a_live_pass_claim_leaves_the_import_first_turn_to_the_next_folder_claim
     .unwrap();
     let round = folder_stream(&db, importing).await;
     let poll = folder_stream(&db, polled).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let switch = LiveImportPass::default();
     switch.set(true);
     let service = sync(
@@ -199,7 +199,7 @@ async fn a_new_import_reads_its_inbox_then_sent_before_folders_listed_ahead_of_t
     .execute(&db)
     .await
     .unwrap();
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let discovery = repo
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await

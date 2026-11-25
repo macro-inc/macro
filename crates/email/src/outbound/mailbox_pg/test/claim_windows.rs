@@ -293,8 +293,8 @@ async fn a_mutation_claim_statement_timeout_preserves_the_typed_deadline(db: PgP
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn corrupt_stream_routing_is_parked_without_relabeling(db: PgPool) {
-    let (_, link) = fixture(&db).await;
+async fn corrupt_stream_routing_is_restored_to_its_parent_provider(db: PgPool) {
+    let (outlook, link) = fixture(&db).await;
     // Unsupported corruption, not a legacy writer: all real inserts derive
     // their provider, and a link's provider cannot change.
     sqlx::query!(
@@ -316,7 +316,7 @@ async fn corrupt_stream_routing_is_parked_without_relabeling(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    let repo = PgMailboxSync::new(db.clone()).with_provider(UserProvider::Imap);
+    let repo = PgMailboxSync::new(db.clone(), UserProvider::Imap);
     assert!(matches!(
         repo.claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
             .await
@@ -331,8 +331,15 @@ async fn corrupt_stream_routing_is_parked_without_relabeling(db: PgPool) {
     ));
     let row = sqlx::query!(r#"SELECT provider::text AS "provider!", parked_at IS NOT NULL AS "parked!" FROM email_sync_streams WHERE link_id=$1"#,link)
         .fetch_one(&db).await.unwrap();
-    assert_eq!(row.provider, "IMAP");
-    assert!(row.parked);
+    assert_eq!(row.provider, "OUTLOOK");
+    assert!(!row.parked);
+    assert!(matches!(
+        outlook
+            .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
+            .await
+            .unwrap(),
+        SyncClaim::Acquired(_)
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

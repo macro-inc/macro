@@ -25,6 +25,37 @@ mod sent_view;
 const ACTOR: &str = "macro|outlook-test@example.com";
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_corrupt_draft_checkpoint_is_quarantined_without_releasing_submission(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, true).await;
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id,processing) VALUES ($1,$2,now(),$3,true)",link,input.db_id,ACTOR).execute(&db).await.unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_drafts SET checkpoint='{}' WHERE message_id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(matches!(
+        sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap(),
+        SyncClaim::Progress
+    ));
+    let row = sqlx::query!("SELECT d.state,d.error_code,d.lease_id,s.processing FROM email_mailbox_drafts d JOIN email_scheduled_messages s ON d.message_id=s.message_id WHERE d.message_id=$1",input.db_id)
+        .fetch_one(&db).await.unwrap();
+    assert_eq!(row.state, "unknown");
+    assert_eq!(row.error_code.as_deref(), Some("send_unknown"));
+    assert!(row.lease_id.is_none());
+    assert!(row.processing);
+    assert!(matches!(
+        sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap(),
+        SyncClaim::Idle
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool) {
     let (sync, _, input, link) = setup(&db, true).await;
     sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id,processing) VALUES ($1,$2,now(),$3,true)",link,input.db_id,ACTOR).execute(&db).await.unwrap();

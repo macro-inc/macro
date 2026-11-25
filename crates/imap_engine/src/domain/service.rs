@@ -33,6 +33,16 @@ enum AdmissionOutcome {
     Cancelled,
 }
 
+/// Required adapters used by the running engine.
+pub struct RuntimePorts {
+    /// Owner-scoped folder and server preferences.
+    pub settings: Arc<dyn super::account_settings::SettingsRepository>,
+    /// Delivery of durable mailbox hints to the email host.
+    pub notifier: Arc<dyn Notifier>,
+    /// Password-free discovery.
+    pub discovery: Arc<dyn super::discovery::DiscoveryProvider>,
+}
+
 /// Engine orchestrator. Authorization and state transitions live here, not in HTTP handlers.
 pub struct Engine {
     verification_key: VerificationScopeKey,
@@ -56,8 +66,50 @@ pub struct Engine {
     synchronization_waiting: std::sync::atomic::AtomicUsize,
 }
 impl Engine {
-    /// Construct with replaceable infrastructure ports.
+    /// Construct the engine with all runtime adapters.
     pub fn new(
+        verification_key: VerificationScopeKey,
+        repository: Arc<dyn Repository>,
+        cipher: Arc<dyn CredentialCipher>,
+        transport: Arc<dyn MailTransport>,
+        submission_tasks: TaskTracker,
+        shutdown: CancellationToken,
+        ports: RuntimePorts,
+    ) -> Self {
+        let mut engine = Self::build(
+            verification_key,
+            repository,
+            cipher,
+            transport,
+            submission_tasks,
+            shutdown,
+        );
+        engine.settings = Some(ports.settings);
+        engine.notifier = Some(ports.notifier);
+        engine.discovery = Some(ports.discovery);
+        engine
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(
+        verification_key: VerificationScopeKey,
+        repository: Arc<dyn Repository>,
+        cipher: Arc<dyn CredentialCipher>,
+        transport: Arc<dyn MailTransport>,
+        submission_tasks: TaskTracker,
+        shutdown: CancellationToken,
+    ) -> Self {
+        Self::build(
+            verification_key,
+            repository,
+            cipher,
+            transport,
+            submission_tasks,
+            shutdown,
+        )
+    }
+
+    fn build(
         verification_key: VerificationScopeKey,
         repository: Arc<dyn Repository>,
         cipher: Arc<dyn CredentialCipher>,
@@ -124,14 +176,6 @@ impl Engine {
         self
     }
 
-    /// Attach owner-scoped folder/server settings at the composition boundary.
-    pub fn with_settings(
-        mut self,
-        settings: Arc<dyn super::account_settings::SettingsRepository>,
-    ) -> Self {
-        self.settings = Some(settings);
-        self
-    }
     /// Read sanitized setup and routing preferences for this exact live binding.
     pub async fn account_mail_settings(
         &self,
@@ -162,20 +206,21 @@ impl Engine {
         self.account_mail_settings(binding).await
     }
 
-    /// Attach the durable-journal wakeup delivery port at the composition boundary.
-    pub fn with_notifier(mut self, notifier: Arc<dyn Notifier>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn with_settings(
+        mut self,
+        settings: Arc<dyn super::account_settings::SettingsRepository>,
+    ) -> Self {
+        self.settings = Some(settings);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_notifier(mut self, notifier: Arc<dyn Notifier>) -> Self {
         self.notifier = Some(notifier);
         self
     }
 
-    /// Attach password-free live discovery at the composition root.
-    pub fn with_discovery(
-        mut self,
-        discovery: Arc<dyn super::discovery::DiscoveryProvider>,
-    ) -> Self {
-        self.discovery = Some(discovery);
-        self
-    }
     /// Pure embedded-catalog discovery, also used when no network adapter is configured.
     pub fn discover(email: &Email<ArcCowStr<'_>>) -> Result<Discovery, Error> {
         super::discovery::discover(email)
@@ -247,7 +292,7 @@ impl Engine {
         };
         if v.consumed_by == Some(link) {
             self.repository
-                .connect(binding, &v.user_id, Vec::new(), input.verification_id)
+                .connect(binding, &v.user_id, None, input.verification_id)
                 .await?;
             return Ok(binding);
         }
@@ -258,7 +303,7 @@ impl Engine {
         credentials.binding = Some(binding);
         let ciphertext = self.cipher.encrypt(link, &v.user_id, &credentials).await?;
         self.repository
-            .connect(binding, &v.user_id, ciphertext, input.verification_id)
+            .connect(binding, &v.user_id, Some(ciphertext), input.verification_id)
             .await?;
         Ok(binding)
     }
@@ -385,6 +430,7 @@ impl Engine {
             }
         };
         let mut account = None;
+        let mut hint_pending_before = false;
         let work = async {
             // A queued actor must still own the connection immediately before
             // loading state and opening a provider session.
@@ -402,11 +448,7 @@ impl Engine {
                 self.repository.acquire_scoped(binding, selection).await?
             });
             let account = account.as_mut().ok_or(Error::ConnectionUnavailable)?;
-            if !reading && account.state.needs_reauth && account.state.notification_pending {
-                // Recovery callbacks survive process restarts. Deliver the stored
-                // health before decrypting or reopening any provider connection.
-                self.notify(account).await?;
-            }
+            hint_pending_before = account.state.notification_pending;
             if let Some(error) = account.state.credential_issue() {
                 return Err(error);
             }
@@ -438,9 +480,7 @@ impl Engine {
         }
         // Release the expensive sync slot before bounded lease cleanup; queued
         // accounts must not wait for another account's cleanup query.
-        if synchronizing {
-            drop(capacity);
-        }
+        drop(capacity);
         let Some(account) = account else {
             return result;
         };
@@ -451,6 +491,12 @@ impl Engine {
             return result;
         }
         let release = self.repository.release(&account).await;
+        if release.is_ok()
+            && !hint_pending_before
+            && let Err(error) = self.notify_after_release(&account).await
+        {
+            tracing::warn!(?error, "IMAP wakeup remains pending");
+        }
         if submitting {
             if let Err(error) = release {
                 tracing::warn!(?error, "IMAP submission lease cleanup failed");
@@ -489,7 +535,6 @@ impl Engine {
     ))]
     async fn refresh_at(&self, a: &mut Account, now: DateTime<Utc>) -> Result<(), Error> {
         if a.state.sync_retry_at.is_some_and(|retry_at| retry_at > now) {
-            self.notify(a).await?;
             return Err(Error::SnapshotTooLarge);
         }
         let c = self
@@ -508,7 +553,6 @@ impl Engine {
                 a.state.sync_retry_at = Some(now + Duration::hours(hours.min(24)));
                 a.state.mark_notification_pending();
                 self.repository.save_health(a).await?;
-                self.notify(a).await?;
                 return Err(Error::SnapshotTooLarge);
             }
             Err(error) => return Err(error),
@@ -600,9 +644,6 @@ impl Engine {
         } else if health_changed {
             self.repository.save_health(a).await?;
         }
-        if changes.mailbox_changed || health_changed {
-            self.notify(a).await?;
-        }
         // A quiet scan must not bypass the independent hint worker's retry
         // backoff or turn an earlier pending notification into a new revision.
         Ok(())
@@ -651,21 +692,6 @@ impl Engine {
             message.source_complete = true;
         }
         Ok(Some(message))
-    }
-    async fn notify(&self, a: &mut Account) -> Result<(), Error> {
-        if !a.state.notification_pending {
-            return Ok(());
-        }
-        if let Some(notifier) = &self.notifier {
-            match notifier.notify(host_notifications::notification(a)).await {
-                Ok(()) => {
-                    a.state.clear_notification_pending();
-                    self.repository.save_health(a).await?;
-                }
-                Err(error) => tracing::warn!(?error, "IMAP wakeup remains pending"),
-            }
-        }
-        Ok(())
     }
     async fn execute_leased(
         &self,
