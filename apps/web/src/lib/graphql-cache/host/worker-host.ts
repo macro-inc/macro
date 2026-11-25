@@ -1262,7 +1262,6 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    * the database. Connects again, as often as a restarted coordinator may.
    */
   function reconnectUnanswered(error: CacheRequestTimeoutError): void {
-    if (state !== 'initializing') return;
     telemetry.record({
       name: 'graphql_cache.owner',
       operationCategory: 'lifecycle',
@@ -1347,7 +1346,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       const error = new CacheRequestTimeoutError(entry.kind);
       recordRequestOutcome(entry, 'error', error);
       entry.reject(error);
-      if (isInitializationRequest(entry.kind)) reconnectUnanswered(error);
+      if (state === 'initializing' && isInitializationRequest(entry.kind))
+        reconnectUnanswered(error);
       else checkConnection(entry.startedAt);
       finishGracefulDisposeIfDrained();
     };

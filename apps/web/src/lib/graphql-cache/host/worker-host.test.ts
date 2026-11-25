@@ -1285,6 +1285,36 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('connects again when a lost connection leaves an authority read unanswered', async () => {
+    vi.useFakeTimers();
+    const adapters: FakePageAdapter[] = [];
+    configureAdapter = (fake) => adapters.push(fake);
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.currentRevision();
+    const [lost] = adapters;
+    lost.ignoredKinds.add('current-authority');
+    lost.ping.mockImplementation(() => true);
+    await vi.advanceTimersByTimeAsync(1);
+    const authority = host.authority?.current();
+
+    await vi.advanceTimersByTimeAsync(
+      COORDINATOR_CONNECT_TIMEOUT_MS + PING_TIMEOUT_MS
+    );
+
+    expect(lost.ping).toHaveBeenCalledOnce();
+    expect(lost.dispose).toHaveBeenCalledOnce();
+    expect(adapters).toHaveLength(2);
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
   it('ends an authority read a ready owner never answers', async () => {
     vi.useFakeTimers();
     const host = createWorkerCacheHost({
