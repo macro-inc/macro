@@ -214,19 +214,24 @@ export function TaskTimeSheet(
                         person={props.person}
                         row={(entry, content) => (
                           <Show when={entry.canEdit} fallback={content}>
+                            {/* At rest the row lets the sheet's glass through, as
+                                others' rows do; only a swipe fills it, over the
+                                actions it then reveals. */}
                             <SwipableRow
                               id={entry.id}
+                              class="group/entry"
+                              rowBgClass="bg-transparent group-data-swipe-interacting/entry:bg-menu"
                               swipeLeftColor="bg-failure"
                               swipeLeftRevealedComponent={
                                 <TrashIcon
-                                  class="size-6 text-surface"
+                                  class="size-6 text-surface opacity-0 group-data-swipe-interacting/entry:opacity-100"
                                   aria-label={t('timeTracking.deleteEntry')}
                                 />
                               }
                               swipeRightColor="bg-accent"
                               swipeRightRevealedComponent={
                                 <PencilIcon
-                                  class="size-6 text-surface"
+                                  class="size-6 text-surface opacity-0 group-data-swipe-interacting/entry:opacity-100"
                                   aria-label={t('timeTracking.editEntry')}
                                 />
                               }
