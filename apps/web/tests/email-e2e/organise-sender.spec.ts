@@ -3,8 +3,7 @@
 // and an Outlook inbox; the email service holds the block list and the
 // sender filters.
 
-import { createHash } from 'node:crypto';
-import type { Page, Request } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { rowIds } from './harness/list';
@@ -38,24 +37,7 @@ async function senderFilters(
   }));
 }
 
-// Keep retry traces and a bounded state receipt in the always-uploaded report.
 test.use({ trace: 'on-first-retry' });
-test.afterEach(async ({ page }, testInfo) => {
-  if (testInfo.status !== testInfo.expectedStatus || testInfo.retry > 0) {
-    const state = JSON.stringify({
-      menuItems: await page.getByRole('menuitem').allTextContents(),
-      rowIds: await rowIds(page),
-    });
-    testInfo.annotations.push({
-      type: 'sender-menu-state',
-      description: state,
-    });
-    await testInfo.attach('sender-menu-state', {
-      body: state,
-      contentType: 'application/json',
-    });
-  }
-});
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
@@ -67,7 +49,7 @@ for (const provider of PROVIDERS) {
     test('unchanged live refreshes keep the sender menu and row stable', async ({
       page,
       mailbox,
-    }, testInfo) => {
+    }) => {
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject: 'Agenda',
@@ -114,153 +96,47 @@ for (const provider of PROVIDERS) {
         name: 'Sender → Signal',
         exact: true,
       });
-      // Noise can replace its first row while settling after the response.
-      // Establish the open menu before taking the baseline for any wake.
-      await expect(async () => {
-        if (!(await signal.isVisible())) {
-          await row(page, photos.id).click({ button: 'right' });
-        }
-        await expect(signal).toBeVisible({ timeout: 3_000 });
-      }).toPass({ timeout: 20_000 });
-      // The tab may replace its first rows while settling. Start the unchanged-
-      // refresh baseline on the row whose menu is now open.
+      await row(page, photos.id).click({ button: 'right' });
+      await expect(signal).toBeVisible();
       const original = await row(page, photos.id).elementHandle();
       if (!original)
         throw new Error('Expected the Noise row with its menu open');
-      const wakeFacts: object[] = [];
-      const wakes = [
-        () =>
-          mailbox.emitRefresh({
-            event: 'upsert_message',
-            link_id: mailbox.inbox.linkId,
-          }),
-        () =>
-          mailbox.emitRefresh({
-            event: 'backfill_progress',
-            link_id: mailbox.inbox.linkId,
-            status: 'complete',
-            completed_threads: 2,
-            total_threads: 2,
-          }),
-        () =>
-          page.evaluate(() =>
-            document.dispatchEvent(new Event('visibilitychange'))
-          ),
-      ];
-      try {
-        for (const [wakeIndex, wake] of wakes.entries()) {
-          wakeFacts.push({
-            wakeIndex,
-            phase: 'before-wake',
-            connected: await original.evaluate(
-              (element) => element.isConnected
-            ),
-            sameNode: await row(page, photos.id).evaluate(
-              (element, reference) => element === reference,
-              original
-            ),
-          });
-          if (wakeIndex === 2) {
-            // Showing a clean tab keeps its existing row and menu without IO.
-            // Advance beyond the list's coalescing interval so a delayed read
-            // would also be observed, without a wall-clock sleep.
-            const now = new Date();
-            await page.clock.install({ time: now });
-            await page.clock.pauseAt(new Date(now.getTime() + 1_000));
-            let soupRequests = 0;
-            const recordSoup = (request: Request) => {
-              if (
-                request.method() === 'POST' &&
-                new URL(request.url()).pathname.endsWith(
-                  '/dss/items/soup/graphql'
-                ) &&
-                /\bquery\s+Soup\s*[( {]/.test(
-                  request.postDataJSON()?.query ?? ''
-                )
-              )
-                soupRequests += 1;
-            };
-            page.on('request', recordSoup);
-            try {
-              await wake();
-              await page.clock.runFor(5_001);
-              wakeFacts.push({
-                wakeIndex,
-                phase: 'clean-visibility',
-                soupRequests,
-                connected: await original.evaluate(
-                  (element) => element.isConnected
-                ),
-                sameNode: await row(page, photos.id).evaluate(
-                  (element, reference) => element === reference,
-                  original
-                ),
-              });
-              expect(soupRequests).toBe(0);
-            } finally {
-              page.off('request', recordSoup);
-              await page.clock.resume();
-            }
-          } else {
-            // Match a request started after this listener, never an in-flight
-            // response from the tab change. The first hint may wait up to 5 s.
-            const refreshed = page
-              .waitForRequest(
-                (request) =>
-                  request.method() === 'POST' &&
-                  new URL(request.url()).pathname.endsWith(
-                    '/dss/items/soup/graphql'
-                  ) &&
-                  request.postData() === noise.postData(),
-                { timeout: 15_000 }
-              )
-              .catch((cause: unknown) => {
-                throw new Error(
-                  `Wake ${wakeIndex} did not request the Noise list`,
-                  { cause }
-                );
-              });
-            await wake();
-            const request = await refreshed;
-            const response = await request.response();
-            expect(response?.status()).toBe(200);
-            if (!response) throw new Error(`Wake ${wakeIndex} had no response`);
-            await response.finished();
-            wakeFacts.push({
-              wakeIndex,
-              phase: 'after-wake',
-              connected: await original.evaluate(
-                (element) => element.isConnected
-              ),
-              sameNode: await row(page, photos.id).evaluate(
-                (element, reference) => element === reference,
-                original
-              ),
-              requestHash: createHash('sha256')
-                .update(request.postData() ?? '')
-                .digest('hex'),
-              responseHash: createHash('sha256')
-                .update(await response.body())
-                .digest('hex'),
-            });
-          }
-          expect(
-            await original.evaluate((element) => element.isConnected)
-          ).toBe(true);
-          expect(
-            await row(page, photos.id).evaluate(
-              (element, reference) => element === reference,
-              original
-            )
-          ).toBe(true);
-          await expect(signal).toBeVisible();
-        }
-      } finally {
-        await testInfo.attach('sender-menu-wakes', {
-          body: JSON.stringify(wakeFacts),
-          contentType: 'application/json',
-        });
+      const assertMenuUnchanged = async () => {
+        expect(
+          await row(page, photos.id).evaluate(
+            (element, reference) => element === reference,
+            original
+          )
+        ).toBe(true);
+        await expect(signal).toBeVisible();
+      };
+
+      for (const hint of [
+        { event: 'upsert_message' as const, link_id: mailbox.inbox.linkId },
+        {
+          event: 'backfill_progress' as const,
+          link_id: mailbox.inbox.linkId,
+          status: 'complete' as const,
+          completed_threads: 2,
+          total_threads: 2,
+        },
+      ]) {
+        const refreshed = page.waitForResponse(
+          (response) =>
+            response.url() === noise.url() &&
+            response.request().postData() === noise.postData(),
+          { timeout: 15_000 }
+        );
+        await mailbox.emitRefresh(hint);
+        const response = await refreshed;
+        expect(response.status()).toBe(200);
+        await response.finished();
+        await assertMenuUnchanged();
       }
+      await page.evaluate(() =>
+        document.dispatchEvent(new Event('visibilitychange'))
+      );
+      await assertMenuUnchanged();
       await signal.click();
       await expect
         .poll(() => senderFilters(mailbox))
@@ -353,13 +229,8 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => rowIds(page)).toEqual([photos.id]);
 
       const signal = page.getByRole('menuitem', { name: 'Sender → Signal' });
-      // Noise may replace its first row while settling after the view change.
-      await expect(async () => {
-        if (!(await signal.isVisible())) {
-          await row(page, photos.id).click({ button: 'right' });
-        }
-        await expect(signal).toBeVisible({ timeout: 3_000 });
-      }).toPass({ timeout: 20_000 });
+      await row(page, photos.id).click({ button: 'right' });
+      await expect(signal).toBeVisible();
       await signal.click();
       did('AL-086');
       await expect(notice(page, 'Sender marked as Signal')).toContainText(

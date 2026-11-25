@@ -46,7 +46,7 @@ test.describe('a send the provider refuses', () => {
     // The reply is still there to recover, and the thread is back in the inbox.
     await expect(
       page.getByText(
-        'Message not sent. See its conversation or Drafts for details.'
+        'Send failed before delivery. Cancel to recover this draft.'
       )
     ).toBeVisible();
     saw('STC-105');
@@ -135,7 +135,7 @@ for (const provider of PROVIDERS) {
       const sends = page.getByLabel('Queued email sends');
       const failed = sends.getByText(
         provider === 'GMAIL'
-          ? 'Message not sent. See its conversation or Drafts for details.'
+          ? 'Send failed before delivery. Cancel to recover this draft.'
           : 'Send failed before delivery. Your mail provider rejected this send. Cancel to recover this draft.'
       );
       await expect(failed).toBeVisible();

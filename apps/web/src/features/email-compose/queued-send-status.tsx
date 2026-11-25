@@ -78,9 +78,7 @@ function sendFailure(message: FailedSendMessage) {
         'Your mail provider could not save this draft. Cancel to recover it and edit the message or attachments.'
     )
     .otherwise(() => undefined);
-  return reason
-    ? `Send failed before delivery. ${reason}`
-    : 'Message not sent. See its conversation or Drafts for details.';
+  return `Send failed before delivery. ${reason ?? 'Cancel to recover this draft.'}`;
 }
 
 /** App-facing persistent send status, shared by Drafts and conversation hosts. */

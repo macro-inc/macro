@@ -9,7 +9,10 @@ export const MAX_ATTACHMENTS_BYTES_SIZE = 18_000_000;
 // 35 MB by default and Outlook.com attachments stop at 25 MB. Graph accepts
 // uploads up to 150 MB, but the mailbox bounces anything over its send size.
 export function attachmentLimitBytes(provider?: UserProvider): number {
-  return provider === 'OUTLOOK' ? 25_000_000 : MAX_ATTACHMENTS_BYTES_SIZE;
+  return match(provider)
+    .with('OUTLOOK', () => 25_000_000)
+    .with('GMAIL', 'IMAP', undefined, () => MAX_ATTACHMENTS_BYTES_SIZE)
+    .exhaustive();
 }
 
 // Exchange stores at most 255 characters of a subject. Gmail has no documented

@@ -261,7 +261,7 @@ export interface EmailDelivery {
   sendLocked?: (draftId: string | undefined) => boolean;
   /** Durable sends on their way; cancelled, failed and scheduled sends are excluded. */
   outgoing?: () => OutgoingEmail[];
-  /** Reports each change until the send is sent, fails, is cancelled, or leaves this device. */
+  /** Emits only changed progress and stops after a final outcome or when the send leaves this device. */
   watchSend?(
     sendAttemptId: string,
     changed: (progress: EmailSendProgress) => void
@@ -471,8 +471,6 @@ export interface ComposeNoticeOptions {
   stack?: boolean;
   /** Runs once the notice closes, however it closes. */
   onDismiss?: () => void;
-  /** Runs when the user explicitly dismisses a persistent failure. */
-  onUserDismiss?: () => void;
   /** `kind` picks the action's icon; actions default to undo. */
   actions?: {
     label: string;

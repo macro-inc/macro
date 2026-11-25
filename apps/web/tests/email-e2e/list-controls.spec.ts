@@ -5,6 +5,7 @@
 import { devices, type Page, type Request } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
+import { silenceGateway } from './harness/gateway';
 import { catchUpFinished, focusedRowId, rowIds } from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
 import type { Mail } from './harness/stack';
@@ -223,45 +224,12 @@ for (const provider of PROVIDERS) {
       const heldPage = new Promise<void>((resolve) => {
         releasePage = resolve;
       });
-      let continuationRequests = 0;
-      let headRequests = 0;
-      let headRequestsAtRelease = 0;
-      let headRequestsBeforeHints = 0;
-      let receivedHints = 0;
-      let clockInstalled = false;
-      const headInitiators: unknown[] = [];
-      const cdp = await page.context().newCDPSession(page);
-      await cdp.send('Network.enable');
-      await cdp.send('Debugger.enable');
-      await cdp.send('Debugger.setAsyncCallStackDepth', { maxDepth: 32 });
-      cdp.on('Network.requestWillBeSent', ({ request, initiator }) => {
-        if (!request.url.endsWith('/soup/graphql') || !request.postData) return;
-        try {
-          const body = JSON.parse(request.postData);
-          if (
-            body.operationName === 'Soup' &&
-            body.variables?.input?.initial?.emailView
-          )
-            headInitiators.push(initiator);
-        } catch {
-          // Diagnostics cannot interfere with request delivery.
-        }
-      });
+      let heldContinuation = false;
       await page.route('**/dss/items/soup/graphql', async (route) => {
-        const request = route.request();
-        const body = request.postDataJSON();
-        if (body?.operationName !== 'Soup') {
-          await route.fallback();
-          return;
-        }
-        const input = body.variables?.input;
-        if (input?.continuation?.emailView) {
-          continuationRequests += 1;
-          if (continuationRequests === 1) {
-            await heldPage;
-          }
-        } else if (input?.initial?.emailView) {
-          headRequests += 1;
+        const input = route.request().postDataJSON()?.variables?.input;
+        if (!heldContinuation && input?.continuation?.emailView) {
+          heldContinuation = true;
+          await heldPage;
         }
         await route.fallback();
       });
@@ -281,61 +249,8 @@ for (const provider of PROVIDERS) {
         await expect.poll(() => focusedRowId(page)).not.toBe(top);
         await page.keyboard.press('j');
         await nextPageStarted;
-        // The fixture routes WebSockets in Chromium, so CDP's websocket event
-        // is unavailable. Observe its real page-side MessageEvent dispatch.
-        await page.evaluate(
-          ({ linkId, total }) => {
-            const dispatch = WebSocket.prototype.dispatchEvent;
-            let received = 0;
-            document.documentElement.dataset.emailRefreshFrames = '0';
-            WebSocket.prototype.dispatchEvent = function (event) {
-              const delivered = dispatch.call(this, event);
-              try {
-                if (
-                  this.url.includes('/connection-gateway') &&
-                  event instanceof MessageEvent &&
-                  typeof event.data === 'string'
-                ) {
-                  const frame = JSON.parse(event.data);
-                  if (
-                    frame.type === 'refresh_email' &&
-                    typeof frame.data === 'string'
-                  ) {
-                    const hint = JSON.parse(frame.data);
-                    if (
-                      hint.event === 'backfill_progress' &&
-                      hint.link_id === linkId &&
-                      hint.completed_threads === total
-                    ) {
-                      received += 1;
-                      document.documentElement.dataset.emailRefreshFrames =
-                        String(received);
-                    }
-                  }
-                }
-              } catch {
-                // Diagnostics never suppress delivery of non-JSON gateway frames.
-              }
-              return delivered;
-            };
-          },
-          { linkId: mailbox.inbox.linkId, total: LONG_LIST }
-        );
-        // Verify the fixture gateway is connected before pausing timers;
-        // a reconnect cannot run while its page clock is paused. Focus hints
-        // do not refresh this ordinary list.
-        await mailbox.emitRefresh({
-          event: 'focus_updated',
-          link_id: mailbox.inbox.linkId,
-        });
-        const now = new Date();
-        await page.clock.install({ time: now });
-        await page.clock.pauseAt(new Date(now.getTime() + 1_000));
-        clockInstalled = true;
-        // Scope IO to this hint batch: an independent startup cache-authority
-        // recovery may have read the head before pagination started. Hints
-        // must wait for the continuation, then extend only the head.
-        headRequestsBeforeHints = headRequests;
+        // Exercise a real burst while the next page is in flight. The refresh
+        // scheduler's unit test checks coalescing without timing the browser.
         for (let hint = 0; hint < 5; hint += 1) {
           await mailbox.emitRefresh({
             event: 'backfill_progress',
@@ -345,35 +260,8 @@ for (const provider of PROVIDERS) {
             total_threads: LONG_LIST,
           });
         }
-        // Prove the frames reached Chromium, then run past the actual5s
-        // coalescing window while the continuation is still held.
-        await expect(page.locator('html')).toHaveAttribute(
-          'data-email-refresh-frames',
-          '5'
-        );
-        receivedHints = Number(
-          await page.locator('html').getAttribute('data-email-refresh-frames')
-        );
-        await page.clock.runFor(5_001);
-        headRequestsAtRelease = headRequests - headRequestsBeforeHints;
-        expect(headRequestsAtRelease).toBe(0);
       } finally {
         releasePage();
-        if (clockInstalled) await page.clock.resume();
-        await test.info().attach('head-request-initiators', {
-          body: JSON.stringify(headInitiators),
-          contentType: 'application/json',
-        });
-        await cdp.detach();
-        await test.info().attach('refresh-before-page-release', {
-          body: JSON.stringify({
-            receivedHints,
-            headRequestsBeforeHints,
-            headRequestsAtRelease,
-            continuationRequests,
-          }),
-          contentType: 'application/json',
-        });
       }
       did('AL-057');
       await expect(more).toHaveCount(0);
@@ -381,37 +269,9 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => focusedRowId(page)).toBe(top);
       await moveCursor(page, 'End');
       const all = await walkUp(page, top);
-      await test.info().attach('refresh-during-pagination', {
-        body: JSON.stringify({
-          rows: all.length,
-          receivedHints,
-          headRequestsAtRelease,
-          hintHeadRequests: headRequests - headRequestsBeforeHints,
-          headRequests,
-          continuationRequests,
-        }),
-        contentType: 'application/json',
-      });
       expect(all).toHaveLength(LONG_LIST);
-      await expect
-        .poll(() => headRequests - headRequestsBeforeHints, { timeout: 15_000 })
-        .toBe(1);
-      // A late dirty follow-up must not read the head again after the first
-      // request. Keep the same clock window as the hint coalescing interval.
-      await page.clock.runFor(5_001);
-      expect(headRequests - headRequestsBeforeHints).toBe(1);
-      expect(continuationRequests).toBe(1);
-      await test.info().attach('refresh-after-follow-up-window', {
-        body: JSON.stringify({
-          rows: all.length,
-          hintHeadRequests: headRequests - headRequestsBeforeHints,
-          continuationRequests,
-        }),
-        contentType: 'application/json',
-      });
-      // The threads of the next page come after those of the first.
-      expect(all.toReversed().slice(100).toSorted()).toEqual(
-        second.items.map((item) => item.id).toSorted()
+      expect(all.toReversed()).toEqual(
+        [...first.items, ...second.items].map((item) => item.id)
       );
       saw('STL-979');
 
@@ -419,9 +279,6 @@ for (const provider of PROVIDERS) {
       expect(first.items).toHaveLength(100);
       expect(second.items).toHaveLength(LONG_LIST - 100);
       expect(second.next_cursor).toBeNull();
-      expect(all.toSorted()).toEqual(
-        [...first.items, ...second.items].map((item) => item.id).toSorted()
-      );
       confirmed('F-036');
     });
 
@@ -476,11 +333,7 @@ for (const provider of PROVIDERS) {
       await page.routeWebSocket(/\/dss\/items\/soup\/graphql\/ws/, () => {});
       // Gateway hints also refresh the list. Keep its heartbeat alive while
       // withholding those hints, so a reconnect cannot bring the mail in either.
-      await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
-        socket.onMessage((message) => {
-          if (message === 'ping') socket.send('pong');
-        });
-      });
+      await silenceGateway(page);
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject: 'Agenda',

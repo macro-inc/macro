@@ -58,7 +58,7 @@ test.describe('a Google consent that withheld the mail permission', () => {
     await accessPrompt(page).getByRole('button', { name: 'Try again' }).click();
     did('AX-041');
     await expect(accessPrompt(page)).toBeHidden();
-    // b926309927a restores the sole-provider shortcut on retry as well.
+    // Try again goes straight to the only offered provider.
     await page.waitForURL(/\/o\/oauth2\/v2\/auth/);
     await expect(chooser(page)).toBeHidden();
     expect(auth.starts.map((start) => start.provider)).toEqual([

@@ -39,9 +39,6 @@ export function announceQueuedSend(options: {
   let offeringUndo = false;
   let undoRequested = false;
   let accepted = false;
-  let finished = false;
-  let lastProgress: string | undefined;
-  let lastUndoUntil: string | undefined;
   let undoDeadline: ReturnType<typeof setTimeout> | undefined;
   let stall: ReturnType<typeof setTimeout> | undefined;
 
@@ -62,13 +59,6 @@ export function announceQueuedSend(options: {
           notice = undefined;
           if (persistent) progressDismissed = true;
         },
-        onUserDismiss:
-          tone === 'failure' && persistent
-            ? () => {
-                // Record dismissal for this attempt before the toast region can remount.
-                if (shown !== undefined) notices.feedback.dismiss(shown);
-              }
-            : undefined,
       });
       notice = shown;
     } catch (error) {
@@ -141,19 +131,13 @@ export function announceQueuedSend(options: {
   if (!options.sendAttemptId) return;
   watchForStall();
   options.delivery.watchSend?.(options.sendAttemptId, (progress) => {
-    if (finished) return;
-    const changed = progress.state !== lastProgress;
-    lastProgress = progress.state;
     match(progress)
       .with({ state: 'pending' }, () => {
-        if (!changed) return;
         // After acceptance, pending means delivery or cancellation has begun.
         if (accepted) closeUndo();
         else watchForStall();
       })
       .with({ state: 'accepted' }, ({ undoUntil }) => {
-        if (!changed && undoUntil === lastUndoUntil) return;
-        lastUndoUntil = undoUntil;
         accepted = true;
         if (undoRequested) return;
         // A send that waited has just been accepted: its notice may have
@@ -171,22 +155,16 @@ export function announceQueuedSend(options: {
         clearTimeout(undoDeadline);
         undoDeadline = setTimeout(closeUndo, remaining);
       })
-      .with({ state: 'sent' }, () => {
-        finished = true;
-        finish('success', 'Email sent');
-      })
+      .with({ state: 'sent' }, () => finish('success', 'Email sent'))
       .with({ state: 'failed' }, () => {
-        finished = true;
         finish('failure', 'Email failed to send', {
           // Keep the failure visible until the reader can act on it.
-          subtext:
-            'See the conversation or Drafts for the reason and recovery options.',
+          subtext: 'Open its conversation or Drafts to recover the draft.',
           persistent: true,
         });
         options.onUndelivered?.();
       })
       .with({ state: 'cancelled' }, () => {
-        finished = true;
         withdraw();
         options.onUndelivered?.();
       })

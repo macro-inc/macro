@@ -68,7 +68,6 @@ it('keeps one failed-send toast visible across time and focus changes', async ()
   await vi.advanceTimersByTimeAsync(100_000);
   window.dispatchEvent(new Event('focus'));
   document.dispatchEvent(new Event('visibilitychange'));
-  report({ state: 'failed' });
   expect(notice?.hasAttribute('data-opened')).toBe(true);
   expect(
     screen
@@ -97,7 +96,6 @@ it('keeps a dismissed failure closed when returning to the page and shows a new 
               {
                 persistent: options?.persistent,
                 replace: options?.replace,
-                onUserDismiss: options?.onUserDismiss,
               }
             ),
           alert: toast.alert,

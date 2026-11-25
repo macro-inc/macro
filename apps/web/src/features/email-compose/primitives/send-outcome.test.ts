@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
@@ -43,7 +44,20 @@ function outbox(provider: EmailInbox['provider']) {
   }));
   const watchers = new Map<string, (progress: EmailSendProgress) => void>();
   context.delivery.watchSend = vi.fn((sendAttemptId, changed) => {
-    watchers.set(sendAttemptId, changed);
+    let last: EmailSendProgress | undefined;
+    watchers.set(sendAttemptId, (progress) => {
+      if (last && deepEqual(last, progress)) return;
+      last = progress;
+      if (
+        progress.state === 'sent' ||
+        progress.state === 'failed' ||
+        progress.state === 'cancelled' ||
+        progress.state === 'untracked'
+      ) {
+        watchers.delete(sendAttemptId);
+      }
+      changed(progress);
+    });
     return () => watchers.delete(sendAttemptId);
   });
   return {

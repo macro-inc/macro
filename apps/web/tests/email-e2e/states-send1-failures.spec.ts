@@ -7,6 +7,7 @@
 import type { Page } from '@playwright/test';
 import { composeNew, loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
+import { silenceGateway } from './harness/gateway';
 import { notice, sentMessages } from './harness/send';
 import type { Provider } from './harness/stack';
 import {
@@ -67,11 +68,7 @@ for (const provider of PROVIDERS) {
       // Keep the scheduled toast under the pointer until Undo asks the service.
       // Live updates could otherwise dismiss it as soon as the forced send lands.
       await page.routeWebSocket(/\/dss\/items\/soup\/graphql\/ws/, () => {});
-      await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
-        socket.onMessage((message) => {
-          if (message === 'ping') socket.send('pong');
-        });
-      });
+      await silenceGateway(page);
       const storage = await draftStorage(page);
       await chooseTomorrow(page, mailbox, 'Quarterly');
       const refused = await refuse(page, scheduleRequest('PUT'));

@@ -739,7 +739,7 @@ STC-101	not shown as the row says (Send cancelled (Restore draft)): its renderin
 STC-102	not shown as the row says (Cancellation pending (Cancel disabled)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
 STC-103	not shown as the row says (Delivery unconfirmed. Your email may already have been sent. Check your sent mail. We will not resend automatically. (Check status, no Cancel)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
 STC-104	The queued-sends row of a send that failed on this device reads "Send needs review. Cancel to recover this draft." instead of "Send needs attention. Cancel to recover this draft." in queued-send-status.tsx.
-STC-105	The queued-sends panel hides the FAILED state in queued-send-status.tsx instead of showing "Message not sent. See its conversation or Drafts for details." on this device and other devices.
+STC-105	The queued-sends panel hides the FAILED state in queued-send-status.tsx instead of showing "Send failed before delivery. Cancel to recover this draft." on this device and other devices.
 STC-106	not shown as the row says (Delivery unconfirmed. Check sent mail; we will not resend automatically. (Check status)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
 STC-107	not shown as the row says (alert under a row: the failure's message (else Unable to cancel the send / Unable to check send status / Could not update delivery status)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
 STC-108	not shown as the row says ((No subject) as the row title): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
@@ -820,10 +820,10 @@ STC-980	The reply editor in reply-input.tsx keeps its quote-collapsed class afte
 STC-981	The signature paywall's description in PaywallState.tsx reads "Upgrade to Pro." instead of saying it removes the Macro signature.
 STC-982	The composer's notice for a provider-rejected send (SEND_REJECTED) reads "This send needs attention." instead of "This message was not submitted. Try sending again." in message-operation.ts.
 STC-983	Main projects the outbox-reserved working copy under its client draft ID while the thread lists the sent reply under a different server ID. After reload and a send-status check, the thread shows one sent reply and the test fails because one reply editor remains open.
-STC-984	The queued-sends panel drops the reason of a send whose draft changed in the mailbox and says only "Message not sent. See its conversation or Drafts for details." in queued-send-status.tsx
-STC-985	The queued-sends panel drops the reason of a send Outlook refused and says only "Message not sent. See its conversation or Drafts for details." in queued-send-status.tsx
-STC-986	The queued-sends panel drops the reason of a send whose draft Outlook no longer lets Macro write and says only "Message not sent. See its conversation or Drafts for details." in queued-send-status.tsx
-STC-987	The queued-sends panel drops the reason of a send whose draft content Outlook refused and says only "Message not sent. See its conversation or Drafts for details." in queued-send-status.tsx
+STC-984	The queued-sends panel drops the reason of a send whose draft changed in the mailbox and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-985	The queued-sends panel drops the reason of a send Outlook refused and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-986	The queued-sends panel drops the reason of a send whose draft Outlook no longer lets Macro write and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
+STC-987	The queued-sends panel drops the reason of a send whose draft content Outlook refused and says only "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx
 STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list fallback)): its rendering is switched off or changed in src/features/email-view/email-view.tsx
 STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-003	The failed list's message "Email couldn’t be loaded." is emptied in EmailList.tsx; its Try again button stays.

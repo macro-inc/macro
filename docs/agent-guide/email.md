@@ -2170,6 +2170,8 @@ and requires a deliberate recovery. The failure toast has no automatic timeout.
 Close it or swipe it away on a phone to dismiss it for that send attempt.
 The conversation and Drafts keep the failure details and recovery actions when
 the toast is out of view, including on a phone with one visible toast slot.
+If the provider supplies no reason, the status tells the reader to select
+**Cancel** to recover the draft.
 A local queued-send timer must never say
 Delivery unconfirmed before a provider outcome. Reconnect opens the existing
 mailbox's saved endpoints and asks for passwords again. Server fields stack

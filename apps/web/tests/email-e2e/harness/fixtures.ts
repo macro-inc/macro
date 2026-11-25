@@ -18,6 +18,7 @@ import {
   type SignedInUser,
   startFront,
 } from './front';
+import { silenceGateway } from './gateway';
 import { LocalStack, localStackAddresses } from './local-stack';
 import {
   type EmailStack,
@@ -89,12 +90,8 @@ async function relayGateway(
   stop(): Promise<void>;
 }> {
   const sockets = new Set<WebSocketRoute>();
-  await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
+  await silenceGateway(page, (socket) => {
     sockets.add(socket);
-    // Match the gateway heartbeat so long tests do not create reconnect storms.
-    socket.onMessage((message) => {
-      if (message === 'ping') socket.send('pong');
-    });
     socket.onClose(() => sockets.delete(socket));
   });
   // Other sockets to services the stack does not run stay silent.

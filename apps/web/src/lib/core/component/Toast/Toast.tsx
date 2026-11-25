@@ -355,6 +355,11 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
     showDismiss() &&
     (!hasActions() || props.dismissStyle === 'icon') &&
     !isMobile();
+  const dismissByUser = () => {
+    const id = props.toastId;
+    props.onUserDismiss?.();
+    dismiss(id);
+  };
   const [height, setHeight] = createSignal<number>();
   let surface!: HTMLDivElement;
 
@@ -386,9 +391,9 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
       style={{ '--toast-height': height() ? `${height()}px` : undefined }}
       persistent={props.persistent}
       duration={props.duration ?? 4500}
-      onSwipeEnd={() => props.onUserDismiss?.()}
+      onSwipeEnd={dismissByUser}
       onEscapeKeyDown={(event) => {
-        if (!event.defaultPrevented) props.onUserDismiss?.();
+        if (!event.defaultPrevented) dismissByUser();
       }}
     >
       <div ref={surface} class="macro-toast-surface">
@@ -447,7 +452,7 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
                         actions={actions()}
                         showDismiss={showDismissAction()}
                         dismissLabel={dismissLabel()}
-                        onDismiss={props.onUserDismiss}
+                        onDismiss={dismissByUser}
                       />
                     </div>
                   </Show>
@@ -465,7 +470,7 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
                       actions={actions()}
                       showDismiss={showDismissAction()}
                       dismissLabel={dismissLabel()}
-                      onDismiss={props.onUserDismiss}
+                      onDismiss={dismissByUser}
                     />
                   </div>
                 </Show>
@@ -481,7 +486,7 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
                       actions={actions()}
                       showDismiss={showDismissAction()}
                       dismissLabel={dismissLabel()}
-                      onDismiss={props.onUserDismiss}
+                      onDismiss={dismissByUser}
                     />
                   </div>
                 </Show>
@@ -498,7 +503,7 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
                 'absolute right-2 z-10',
                 singleRow() ? 'top-1/2 -translate-y-1/2' : 'top-2'
               )}
-              onClick={() => props.onUserDismiss?.()}
+              onClick={dismissByUser}
             >
               <XIcon class="size-4" />
             </Toast.CloseButton>

@@ -10,6 +10,7 @@ import {
   type WebSocketRoute,
 } from '@playwright/test';
 import type { Mailbox } from './fixtures';
+import { silenceGateway } from './gateway';
 import { emulatorUrl } from './journeys';
 import { MAIL_SCOPE } from './ways-settings-more';
 
@@ -134,11 +135,8 @@ export async function steadyGateway(
   let passed: number | undefined;
   let connected = false;
   const sockets = new Set<WebSocketRoute>();
-  await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
+  await silenceGateway(page, (socket) => {
     sockets.add(socket);
-    socket.onMessage((message) => {
-      if (message === 'ping') socket.send('pong');
-    });
     socket.onClose(() => sockets.delete(socket));
     connected = true;
   });
