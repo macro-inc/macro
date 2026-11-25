@@ -883,3 +883,72 @@ async fn whole_thread_construction_keeps_message_order_flags_and_shared_thread_i
         }
     }
 }
+
+#[tokio::test]
+async fn an_arriving_message_reports_the_labels_it_brought_unless_spam_or_draft() {
+    use super::fakes::label;
+    let gained = Uuid::from_u128(0x99);
+    for (case, whole_thread, spam, reported) in [
+        ("into a stored thread", false, false, true),
+        ("into a new thread", true, false, true),
+        ("as spam", false, true, false),
+    ] {
+        let (svc, fake) = setup();
+        {
+            let mut s = fake.0.lock().unwrap();
+            let mut message = received_message(LINK, THREAD);
+            if spam {
+                message.labels = vec![label("SPAM").into()];
+            }
+            s.message = None;
+            s.gained_labels = vec![gained];
+            s.import.thread_exists = !whole_thread;
+            s.import.fetched = Ok(Some(MessageWithCalendarParts {
+                message: message.clone(),
+                calendar_parts: vec![],
+            }));
+            s.import.thread_messages = Ok(vec![MessageWithCalendarParts {
+                message,
+                calendar_parts: vec![],
+            }]);
+        }
+        svc.process(Ok(input(operation()))).await;
+        let calls = fake.calls();
+        let received: Vec<_> = events(&calls)
+            .into_iter()
+            .filter(|event| event["event_type"] == "email.message_received")
+            .collect();
+        assert_eq!(received.len(), 1, "{case}");
+        let labels = received[0]["metadata"].get("labels_gained").cloned();
+        if reported {
+            assert_eq!(labels, Some(serde_json::json!([gained])), "{case}");
+        } else {
+            assert_eq!(labels, None, "{case}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_resync_that_gives_its_thread_a_label_reports_it_instead_of_a_reindex() {
+    let gained = Uuid::from_u128(0x99);
+    let (svc, fake) = setup();
+    {
+        let mut s = fake.0.lock().unwrap();
+        s.labels = vec![super::fakes::label("INBOX")];
+        s.import.labels_after_insert = Some(vec![
+            super::fakes::label("INBOX"),
+            super::fakes::label("Label_1"),
+        ]);
+        s.gained_labels = vec![gained];
+    }
+    svc.process(Ok(input(operation()))).await;
+    let calls = fake.calls();
+    let published = events(&calls);
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0]["event_type"], "email.thread_labels_updated");
+    assert_eq!(
+        published[0]["metadata"]["labels_gained"],
+        serde_json::json!([gained])
+    );
+    assert_eq!(published[0]["metadata"]["origin"], "provider_sync");
+}

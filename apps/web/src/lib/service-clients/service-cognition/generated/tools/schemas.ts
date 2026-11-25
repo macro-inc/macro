@@ -5457,6 +5457,7 @@ export const CreateRoutine = z.object({
               z.any().superRefine((x, ctx) => {
                 const schemas = [
                   z.literal('email.message_received'),
+                  z.literal('email.labeled'),
                   z.literal('task.created'),
                   z.literal('task.status_changed'),
                   z.literal('task.priority_changed'),
@@ -5488,6 +5489,7 @@ export const CreateRoutine = z.object({
               })
             ),
             ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+            labels: z.union([z.array(z.string().uuid()), z.null()]).optional(),
             condition: z.union([z.string(), z.null()]).optional(),
             type: z.literal('event'),
           }),
@@ -5545,6 +5547,7 @@ export const RoutineInfo = z.object({
                   z.any().superRefine((x, ctx) => {
                     const schemas = [
                       z.literal('email.message_received'),
+                      z.literal('email.labeled'),
                       z.literal('task.created'),
                       z.literal('task.status_changed'),
                       z.literal('task.priority_changed'),
@@ -5576,6 +5579,9 @@ export const RoutineInfo = z.object({
                   })
                 ),
                 ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+                labels: z
+                  .union([z.array(z.string().uuid()), z.null()])
+                  .optional(),
                 condition: z.union([z.string(), z.null()]).optional(),
                 type: z.literal('event'),
               }),
@@ -13438,6 +13444,7 @@ export const ListCalendarsToolResponse = z.object({
       emailAddress: z.string(),
       isPrimary: z.boolean(),
       isWritable: z.boolean(),
+      isSubscription: z.boolean(),
       contributesToAvailability: z.boolean(),
     })
   ),
@@ -14612,6 +14619,7 @@ export const RoutineList = z.object({
                       z.any().superRefine((x, ctx) => {
                         const schemas = [
                           z.literal('email.message_received'),
+                          z.literal('email.labeled'),
                           z.literal('task.created'),
                           z.literal('task.status_changed'),
                           z.literal('task.priority_changed'),
@@ -14643,6 +14651,9 @@ export const RoutineList = z.object({
                       })
                     ),
                     ids: z
+                      .union([z.array(z.string().uuid()), z.null()])
+                      .optional(),
+                    labels: z
                       .union([z.array(z.string().uuid()), z.null()])
                       .optional(),
                     condition: z.union([z.string(), z.null()]).optional(),
@@ -14961,6 +14972,43 @@ export const MarkNotificationsSeen = z.object({
   notificationIds: z.array(z.string().uuid()),
 });
 
+export const MergeRecords = z.object({
+  recordType: z.literal('company'),
+  survivorId: z.string().uuid(),
+  sourceIds: z.array(z.string().uuid()),
+  revision: z.string(),
+  requestKey: z.string().uuid(),
+  sharingRules: z
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('keep'), z.literal('stop')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('keep')
+    )
+    .optional(),
+});
+
+export const MergeRecordsResponse = z.object({
+  mergeId: z.string().uuid(),
+  survivorId: z.string().uuid(),
+  mergedIds: z.array(z.string().uuid()),
+});
+
 export const MoveToProject = z.object({
   entityType: z.any().superRefine((x, ctx) => {
     const schemas = [
@@ -15231,6 +15279,17 @@ export const OpenDirectMessageResponse = z.object({
   created: z.boolean(),
   participants: z.array(z.string()),
   summary: z.string(),
+});
+
+export const PreviewMerge = z.object({
+  recordType: z.literal('company'),
+  survivorId: z.string().uuid(),
+  sourceIds: z.array(z.string().uuid()),
+});
+
+export const PreviewMergeResponse = z.object({
+  revision: z.string(),
+  review: z.any(),
 });
 
 export const QueryDatabase = z.object({
@@ -19450,6 +19509,7 @@ export const RoutineDetails = z.object({
                     z.any().superRefine((x, ctx) => {
                       const schemas = [
                         z.literal('email.message_received'),
+                        z.literal('email.labeled'),
                         z.literal('task.created'),
                         z.literal('task.status_changed'),
                         z.literal('task.priority_changed'),
@@ -19481,6 +19541,9 @@ export const RoutineDetails = z.object({
                     })
                   ),
                   ids: z
+                    .union([z.array(z.string().uuid()), z.null()])
+                    .optional(),
+                  labels: z
                     .union([z.array(z.string().uuid()), z.null()])
                     .optional(),
                   condition: z.union([z.string(), z.null()]).optional(),
@@ -21471,6 +21534,7 @@ export const UpdateRoutine = z.object({
                     z.any().superRefine((x, ctx) => {
                       const schemas = [
                         z.literal('email.message_received'),
+                        z.literal('email.labeled'),
                         z.literal('task.created'),
                         z.literal('task.status_changed'),
                         z.literal('task.priority_changed'),
@@ -21502,6 +21566,9 @@ export const UpdateRoutine = z.object({
                     })
                   ),
                   ids: z
+                    .union([z.array(z.string().uuid()), z.null()])
+                    .optional(),
+                  labels: z
                     .union([z.array(z.string().uuid()), z.null()])
                     .optional(),
                   condition: z.union([z.string(), z.null()]).optional(),

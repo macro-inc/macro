@@ -751,6 +751,52 @@ impl NotificationTitle for InboxReauthRequiredMetadata {
     }
 }
 
+/// Why someone's CRM email sharing rules changed without them.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CrmEmailSharingChangeReason {
+    /// Companies their rules named were merged into another.
+    CompaniesMerged,
+}
+
+/// Metadata for a notice that the recipient's CRM email sharing rules
+/// changed because of a teammate's action. It names no company, count or
+/// person: the recipient may not be able to see them, and their rules show
+/// what changed.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CrmEmailSharingChangedMetadata {
+    /// The team whose CRM the rules share mail with.
+    pub team_id: Uuid,
+    /// Why they changed.
+    pub reason: CrmEmailSharingChangeReason,
+}
+
+impl notification::domain::models::Notification for CrmEmailSharingChangedMetadata {
+    const TYPE_NAME: &'static str = "crm_email_sharing_changed";
+}
+
+impl NotificationTitle for CrmEmailSharingChangedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok("Your CRM email sharing changed".to_string())
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.reason {
+            CrmEmailSharingChangeReason::CompaniesMerged => {
+                "Companies your sharing rules named were merged, so your rules were updated. Review them in CRM settings."
+            }
+        }
+        .to_string())
+    }
+}
+
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 }

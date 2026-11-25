@@ -31,6 +31,8 @@ export default {
     'Agents can also create Saved Views. Just tell the agent what you want, and they will set it up for you.',
   people: 'People',
   peoplePlaceholder: 'Add people, companies, or domains',
+  labels: 'Labels',
+  labelsPlaceholder: 'Filter by label...',
   addEntry: 'Add “{{entry}}”',
   removeEntry: 'Remove {{entry}}',
   domainContacts: {

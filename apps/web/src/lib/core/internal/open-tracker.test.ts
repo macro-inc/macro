@@ -1,12 +1,17 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import type { BlockName } from '../block';
 
 const mocks = vi.hoisted(() => ({
   trackOpen: vi.fn(),
-  blockId: undefined as string | undefined,
+  blockName: undefined as string | undefined,
+  nested: false,
 }));
 vi.mock('./track-open', () => ({ trackOpen: mocks.trackOpen }));
-vi.mock('../block', () => ({ useMaybeBlockId: () => mocks.blockId }));
+vi.mock('../block', () => ({
+  useMaybeBlockName: () => mocks.blockName,
+  useIsNestedBlock: () => mocks.nested,
+}));
 vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
 
 import { createOpenTracker } from './open-tracker';
@@ -16,14 +21,19 @@ afterEach(() => {
   dispose?.();
   dispose = undefined;
   mocks.trackOpen.mockReset();
-  mocks.blockId = undefined;
+  mocks.blockName = undefined;
+  mocks.nested = false;
 });
 
-function track(initial: string | undefined) {
+function track(
+  initial: string | undefined,
+  blockName: BlockName = 'initiative',
+  options?: { ownBlock?: boolean }
+) {
   const [item, setItem] = createSignal(initial);
   createRoot((disposeRoot) => {
     dispose = disposeRoot;
-    createOpenTracker('initiative', item);
+    createOpenTracker(blockName, item, options);
   });
   return setItem;
 }
@@ -53,7 +63,28 @@ it('records an item once it has loaded, and each later open of an item', () => {
 });
 
 it('records nothing inside a block, which BlockLoader records', () => {
-  mocks.blockId = 'project-1';
+  mocks.blockName = 'initiative';
   track('project-1');
+  expect(mocks.trackOpen).not.toHaveBeenCalled();
+});
+
+it("records an item's open in its own block when the view owns it", () => {
+  mocks.blockName = 'contact';
+  track('contact-1', 'contact', { ownBlock: true });
+  expect(mocks.trackOpen).toHaveBeenCalledExactlyOnceWith(
+    'contact-1',
+    'contact',
+    expect.any(Function)
+  );
+});
+
+it("records nothing in another item's block or in an embed", () => {
+  mocks.blockName = 'md';
+  track('contact-1', 'contact', { ownBlock: true });
+  dispose?.();
+
+  mocks.blockName = 'contact';
+  mocks.nested = true;
+  track('contact-1', 'contact', { ownBlock: true });
   expect(mocks.trackOpen).not.toHaveBeenCalled();
 });

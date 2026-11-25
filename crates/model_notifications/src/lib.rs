@@ -18,17 +18,18 @@ pub use metadata::{
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
     ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata, ComputerSetupAgent,
     ComputerSetupMetadata, ComputerSetupOutcome, CrmDiscussionMetadata, CrmDiscussionReason,
-    DocumentMentionMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
-    ExternalChatMessageMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
-    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
-    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InitiativeDiscussionMetadata, InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan,
-    ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
-    NotificationDocumentSubType, NotificationTitle, PasswordAccessRequestedMetadata, PingAgent,
-    PingMessage, PingMetadata, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome,
-    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
+    CrmEmailSharingChangeReason, CrmEmailSharingChangedMetadata, DocumentMentionMetadata,
+    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, ExternalChatMessageMetadata,
+    GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
+    GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
+    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
+    GithubReviewRequested, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata,
+    InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
+    NotificationTitle, PasswordAccessRequestedMetadata, PingAgent, PingMessage, PingMetadata,
+    ReminderMetadata, RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel,
+    RoutineRunFinishedMetadata, RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent,
+    TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -235,6 +236,9 @@ define_notif_event!(
         /// A linked inbox's grant died and must be reconnected.
         InboxReauthRequired(InboxReauthRequiredMetadata),
 
+        /// A teammate's action changed the user's CRM email sharing rules.
+        CrmEmailSharingChanged(CrmEmailSharingChangedMetadata),
+
         /// A user was invited to a team.
         InviteToTeam(InviteToTeamMetadata),
 
@@ -351,6 +355,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_title(sender_id),
             NotifEvent::InboxReauthRequired(m) => m.format_title(sender_id),
+            NotifEvent::CrmEmailSharingChanged(m) => m.format_title(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_title(sender_id)
@@ -428,6 +433,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_body(sender_id),
             NotifEvent::InboxReauthRequired(m) => m.format_body(sender_id),
+            NotifEvent::CrmEmailSharingChanged(m) => m.format_body(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_body(sender_id)

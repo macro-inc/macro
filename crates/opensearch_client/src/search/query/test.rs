@@ -187,3 +187,104 @@ fn a_field_prefix_expands_in_full_only_for_one_word_of_three_or_more_characters(
         serde_json::json!({"match_bool_prefix": {"name": {"query": "conveyor"}}})
     );
 }
+
+/// A term matches a link by the words of its URL, whatever punctuation joins
+/// them, with the rules message text has for words; `http`, `https` and
+/// `www`, which nearly every link holds, are left out, and a host ending
+/// alone matches no link.
+#[test]
+fn a_link_term_matches_every_word_of_its_url() {
+    let prefix = |query: &str| {
+        Some(
+            serde_json::json!({"match_phrase_prefix": {"links": {"query": query, "max_expansions": 256}}}),
+        )
+    };
+    let cases = [
+        (
+            QueryKey::MatchPhrasePrefix,
+            "sketchpad",
+            Some(serde_json::json!({"match_bool_prefix": {"links": {"query": "sketchpad"}}})),
+        ),
+        (
+            QueryKey::MatchPhrasePrefix,
+            "sketchpad.example",
+            prefix("sketchpad example"),
+        ),
+        (
+            QueryKey::MatchPhrasePrefix,
+            "HTTPS://www.Sketchpad.example/Files",
+            prefix("Sketchpad example Files"),
+        ),
+        (
+            QueryKey::MatchPhrasePrefix,
+            "example.com",
+            prefix("example com"),
+        ),
+        (
+            QueryKey::MatchPhrasePrefix,
+            "https://docs.example.com/http/guide",
+            prefix("docs example com http guide"),
+        ),
+        (QueryKey::MatchPhrasePrefix, "io", prefix("io")),
+        (
+            QueryKey::MatchPhrase,
+            "www.sketchpad.example",
+            Some(serde_json::json!({"match_phrase": {"links": "sketchpad example"}})),
+        ),
+        (QueryKey::MatchPhrasePrefix, "com", None),
+        (QueryKey::MatchPhrasePrefix, "co", None),
+        (QueryKey::MatchPhrasePrefix, "htt", None),
+        (QueryKey::MatchPhrasePrefix, "WW", None),
+        (
+            QueryKey::MatchPhrasePrefix,
+            "comp",
+            Some(serde_json::json!({"match_bool_prefix": {"links": {"query": "comp"}}})),
+        ),
+        (QueryKey::MatchPhrasePrefix, "über", None),
+        (QueryKey::MatchPhrasePrefix, "café.example", None),
+        (QueryKey::MatchPhrasePrefix, "www.Org", None),
+        (QueryKey::MatchPhrasePrefix, "https", None),
+        (QueryKey::MatchPhrasePrefix, "https://www.", None),
+        (QueryKey::MatchPhrase, "www", None),
+        (QueryKey::MatchPhrasePrefix, "→", None),
+        (QueryKey::Regexp, "sketch.*", None),
+    ];
+    for (query_key, term, expected) in cases {
+        assert_eq!(
+            link_query(query_key, "links", term).map(|query| query.to_json()),
+            expected,
+            "{term}"
+        );
+    }
+}
+
+/// The link field is one more place a term may match, beside the content
+/// fields, and a search of fields without links is unchanged.
+#[test]
+fn a_term_matches_its_fields_or_a_link() {
+    let with_links = generate_terms_must_query_for_fields(
+        QueryKey::MatchPhrasePrefix,
+        &["content"],
+        Some("links"),
+        vec!["sketchpad"],
+        TermCombine::And,
+    );
+    assert_eq!(
+        with_links.to_json(),
+        serde_json::json!({"bool": {"minimum_should_match": 1, "should": [
+            {"match_bool_prefix": {"content": {"query": "sketchpad"}}},
+            {"match_bool_prefix": {"links": {"query": "sketchpad"}}}
+        ]}})
+    );
+    let only_boilerplate = generate_terms_must_query_for_fields(
+        QueryKey::MatchPhrasePrefix,
+        &["content"],
+        Some("links"),
+        vec!["https"],
+        TermCombine::And,
+    );
+    assert_eq!(
+        only_boilerplate.to_json(),
+        serde_json::json!({"match_bool_prefix": {"content": {"query": "https"}}})
+    );
+}

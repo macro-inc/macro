@@ -2,12 +2,16 @@
   "name": "@macro-inc/captcha-vision-lab",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "lab:smoke": "bun src/cli.ts",
     "lab:kimi-stand-in": "bun src/stand-in-cli.ts",
     "typecheck": "tsc --noEmit -p .",
     "test": "bun test --timeout 60000",
-    "check": "bun run typecheck && bun run test"
+    "check": "bun run typecheck && bun run test",
+    "check:gate": "bun run typecheck && bun run test test/capability.test.ts test/isolation.test.ts test/server.test.ts"
   },
   "dependencies": {
     "playwright": "1.62.0",

@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH old AS MATERIALIZED (\n               SELECT id, values FROM entity_properties\n               WHERE id = ANY($1) AND jsonb_typeof(values->'value') = 'array'\n               ORDER BY id\n               FOR UPDATE\n           ), updated AS (\n               UPDATE entity_properties ep\n               SET values = jsonb_set(ep.values, '{value}', (\n                       SELECT COALESCE(jsonb_agg(element ORDER BY first_seen), '[]'::jsonb)\n                       FROM (\n                           SELECT CASE\n                                      WHEN reference->>'entity_type' = $2 AND lower(reference->>'entity_id') = ANY($3)\n                                      THEN jsonb_set(reference, '{entity_id}', to_jsonb($4::text))\n                                      ELSE reference\n                                  END AS element,\n                                  MIN(position) AS first_seen\n                           FROM jsonb_array_elements(old.values->'value') WITH ORDINALITY AS r(reference, position)\n                           GROUP BY 1\n                       ) elements\n                   )),\n                   updated_at = NOW()\n               FROM old WHERE ep.id = old.id\n               RETURNING ep.id, ep.entity_id, ep.entity_type, ep.property_definition_id, ep.values, ep.updated_at\n           )\n           SELECT updated.id, updated.entity_id, updated.entity_type AS \"entity_type: EntityType\",\n                  updated.property_definition_id, old.values AS \"previous!\", updated.values AS \"values!\",\n                  updated.updated_at\n           FROM updated JOIN old ON old.id = updated.id\n           ORDER BY updated.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "previous!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "values!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "23e14ac72b2b680f6c0043bc94cb4cbcef7e824a8991b24b556f9f4e21713b61"
+}

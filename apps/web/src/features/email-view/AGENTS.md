@@ -66,6 +66,10 @@ the Soup-backed thread list, and saved email views.
 - `filters/use-email-filters.tsx`: the Filters model shared by the desktop menu
   and the mobile drawer; each group is a field read from and written into the
   list's filters, active once it differs from what Clear returns to.
+  `filters/use-label-filter-group.tsx` is its Labels group (the labels people
+  made, by whole name, each inbox's together, with the inbox's avatar when
+  there are several), stored under the `labels` facet that
+  `filters/email-label-facet.ts` turns into the `Label` condition.
 - `components/EmailFilterFields.tsx`: the builder's People and Subject
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
@@ -83,14 +87,20 @@ the Soup-backed thread list, and saved email views.
 - Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.
 - Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
-  sidebar; filter changes stay on the current tab.
+  sidebar; filter changes stay on the current tab. Labels sit after Tags in
+  both, except on Reminders, whose read has no label filter.
+- A search narrows by a selected label's stored name (`include_labels`), as
+  `label:` does: hits carry no labels to check on the client, and a same-named
+  label in another of the viewer's inboxes matches too. It waits for the label
+  list while labels are ticked; a label it cannot name matches nothing, as its
+  id matches no row of the list.
 - A saveable tab is a built-in view: it starts from its own restrictions
   (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query
   while those restrictions stand; otherwise the list queries as a view. Write
   filters through `setFilters`/`clearFilters`, never by emptying facets.
-- A saved view opens on All. Its Read status, Done, attachment, calendar, tag and
-  inbox filters live in the normal state so the Filters menu, inbox picker,
+- A saved view opens on All. Its Read status, Done, attachment, calendar, tag,
+  label and inbox filters live in the normal state so the Filters menu, inbox picker,
   and read admission keep working; its other conditions live in
   `state.conditions`.
 - Never query while a selected view is loading or unavailable: that lists all
@@ -124,12 +134,25 @@ the Soup-backed thread list, and saved email views.
   the typed text (narrowing a search, suggestions) parses that instead.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
+- `buildEmailQuery` sends the Attachments kinds to the server for the Inbox and
+  All mail tabs (Archived, Calendar, Favorites and Shared included) and saved
+  views, so pages come back full. Sent, Drafts, Spam and Trash, whose pages the
+  attachment flags are not indexed for, and the Focus, Reminders and CRM email
+  lists only refine the rows they loaded with the facet's own predicate, which
+  applies the same MIME prefixes as the flags. A list with that clause is server
+  membership, so it refetches when a pushed thread carries attachments and
+  after the Soup socket reconnects (`mail-list-revalidation.ts`).
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - The data source keeps the previous rows while a search loads only when
   asked (`keepRowsWhileSearching`) and reports it as `showsPreviousRows`; they
   never cross a tab change, and `isLoading` stays false while they show, so
   gate "loading" UI on both.
+- A list page can arrive without a row but with a cursor (a label read that
+  walked old mail). `emptyListPages` reads on from the server's own rows
+  (`rawEntities`, so a page the client's filters empty doesn't count) until a
+  row shows or the list ends, at most 50 pages a load, and the list reads as
+  loading meanwhile: never show the empty state for such a page.
 - Unread dots are presence in a small first unread page per view, never a count.
 - The search field also says it was left (`setFocused(false)`) as it
   unmounts, inside the teardown of the view leaving Mail. Reading the list's

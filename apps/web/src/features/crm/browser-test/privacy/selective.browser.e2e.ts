@@ -247,6 +247,65 @@ test('limit refusals stay inline and do not save', async ({ page }) => {
   await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
 });
 
+test('a long blacklist domain wraps beside Remove, lined up with short rows', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&long-domain&admin');
+  const long = 'regional-sales-office.north-america.example.com';
+  for (const [title, short] of [
+    ['Team blacklist', 'team.example.com'],
+    ['My blacklist', 'personal.example.com'],
+  ]) {
+    const section = page
+      .getByRole('heading', { name: title, exact: true })
+      .locator('xpath=ancestor::section');
+    await expect(
+      section.getByRole('button', { name: `Remove ${short}`, exact: true })
+    ).toBeVisible();
+    // Both rows in one frame, so the phone sheet's opening animation moves
+    // them together.
+    const rows = () =>
+      section.evaluate(
+        (node, domains) =>
+          domains.map((domain) => {
+            const label = [...node.querySelectorAll('*')].find(
+              (element) =>
+                element.childElementCount === 0 &&
+                element.textContent?.trim() === domain
+            );
+            const remove = node.querySelector(
+              `button[aria-label="Remove ${domain}"]`
+            );
+            if (!label || !remove) return undefined;
+            const l = label.getBoundingClientRect();
+            const r = remove.getBoundingClientRect();
+            return {
+              labelRight: l.right,
+              labelBottom: l.bottom,
+              x: r.x,
+              y: r.y,
+            };
+          }),
+        [long, short]
+      );
+    await expect
+      .poll(async () => {
+        const [a, b] = await rows();
+        return (
+          !!a &&
+          !!b &&
+          // Beside the domain, not on a line of its own below it.
+          a.x >= a.labelRight &&
+          a.y < a.labelBottom &&
+          b.x >= b.labelRight &&
+          b.y < b.labelBottom &&
+          Math.abs(a.x - b.x) < 1
+        );
+      })
+      .toBe(true);
+  }
+});
+
 test('gate off retains selected rules, history and single-action withdrawal', async ({
   page,
 }) => {

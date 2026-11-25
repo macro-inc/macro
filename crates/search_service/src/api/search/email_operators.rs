@@ -123,7 +123,7 @@ enum Operator {
 }
 
 /// `name:value`, with a name of letters and underscores and any value.
-fn name_and_value(term: &str) -> IResult<&str, &str> {
+pub(in crate::api::search) fn name_and_value(term: &str) -> IResult<&str, &str> {
     let (value, (name, _)) = (
         take_while1(|c: char| c.is_ascii_alphabetic() || c == '_'),
         char(':'),
