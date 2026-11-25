@@ -209,6 +209,13 @@ test('Max checkout returns with a licensed account and no trial', async ({
   });
   await page.reload();
   await page.getByRole('button', { name: 'Continue with Max' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Choose billing cycle for Max' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('radio', { name: /Billed annually/ })
+  ).toBeChecked();
+  await page.getByRole('button', { name: 'Continue to checkout' }).click();
   await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer).toMatchObject({
     tutorialComplete: true,
