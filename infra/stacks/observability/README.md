@@ -1029,15 +1029,19 @@ hand from `services/analytics-proxy`; it mirrors only once it has both the
 endpoint and the token:
 
 ```sh
-bun install --frozen-lockfile
-aws secretsmanager get-secret-value --region us-east-1 \
-  --secret-id observability/dev-ingest --query SecretString --output text |
-  bunx wrangler secret put GRAFANA_OTLP_TOKEN --env prod
-bun run deploy-prod
+bun install --frozen-lockfile &&
+  token=$(aws secretsmanager get-secret-value --region us-east-1 \
+    --secret-id observability/dev-ingest --query SecretString --output text) &&
+  [ -n "$token" ] &&
+  printf '%s' "$token" | bunx wrangler secret put GRAFANA_OTLP_TOKEN --env prod &&
+  bun run deploy-prod
+unset token
 ```
 
-To stop the prod copy, run
-`bunx wrangler secret delete GRAFANA_OTLP_TOKEN --env prod`. Do not rotate the
+`secret put` and `secret delete` each deploy the running Worker at once. To stop
+the prod copy, run `bunx wrangler secret delete GRAFANA_OTLP_TOKEN --env prod`;
+putting the token back starts it again while the deployed Worker has the
+endpoint. Do not rotate the
 shared token for that: ECS tasks, CI and the database collector use it too.
 
 The manually dispatched `export-datadog-observability.yml` reads live dashboard/monitor definitions into a
