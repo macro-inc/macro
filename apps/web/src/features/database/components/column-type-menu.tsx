@@ -44,7 +44,7 @@ export type DatabaseColumnConversionChoice = Omit<
   cast: Extract<DatabaseColumnCast, { verdict: 'checked' }>;
 };
 
-export function ColumnTypeMenu(props: {
+export type ColumnTypeMenuProps = {
   column: DatabaseViewColumn;
   tables?: DatabaseRelationTargets;
   /** The dry run, read while the submenu is open. */
@@ -59,8 +59,17 @@ export function ColumnTypeMenu(props: {
   onConvertToNewColumn?: (choice: DatabaseColumnConversionChoice) => void;
   /** Offer a formula; the host decides where the formula column goes. */
   onFormula?: () => void;
-}) {
-  const [open, setOpen] = createSignal(false);
+};
+
+/**
+ * The types a column can change to and what choosing one does: the state
+ * behind the Change type list, whichever menu draws it.
+ */
+export function createColumnTypeChoices(
+  props: ColumnTypeMenuProps,
+  /** Whether the list is on screen, which starts the dry run. */
+  open: Accessor<boolean>
+) {
   const protectedType = () =>
     props.column.protections?.includes('change_type') ?? false;
   const casts = props.loadCasts?.(open);
@@ -126,18 +135,6 @@ export function ColumnTypeMenu(props: {
         tables: offeredTables(database.tables),
       }))
       .filter((database) => database.tables.length > 0);
-  const relationItem = (table: DatabaseRelationTable) => {
-    const to = relationTo(table);
-    return (
-      <TypeItem
-        label={table.name}
-        cast={castOf(to)}
-        icon={<PropertyIcon type="ENTITY" relation />}
-        selected={selected(to)}
-        onSelect={() => choose(table.name, to)}
-      />
-    );
-  };
   const choose = (label: string, to: DatabaseColumnKind) => {
     if (protectedType() || selected(to)) return;
     const cast = castOf(to);
@@ -150,6 +147,60 @@ export function ColumnTypeMenu(props: {
       to,
       baseVersion: read?.status === 'ready' ? read.version : undefined,
     });
+  };
+
+  return {
+    protectedType,
+    checking,
+    castOf,
+    selected,
+    relationTo,
+    choose,
+    /** The types on offer, the column's own among them. */
+    types: () => menuTypes().filter((type) => offered(type.to)),
+    /** Tables of this database a relation can point at. */
+    tablesHere: () =>
+      props.column.formula ? [] : offeredTables(props.tables?.here ?? []),
+    /** Other databases with a table a relation can point at. */
+    databases: () => (props.column.formula ? [] : offeredDatabases()),
+    /** The column's type as the list names it; undefined for one it does not list. */
+    currentLabel: () =>
+      menuTypes().find((type) => selected(type.to))?.label ??
+      [
+        ...(props.tables?.here ?? []),
+        ...(props.tables?.elsewhere ?? []).flatMap(
+          (database) => database.tables
+        ),
+      ].find((table) => selected(relationTo(table)))?.name,
+  };
+}
+
+/** What a type's row says under its name when some values do not fit it. */
+export function castDescription(
+  cast: DatabaseColumnCast | undefined
+): string | undefined {
+  if (!misfits(cast)) return undefined;
+
+  return [cast.summary, 'Converts into a new column']
+    .filter((part) => !!part)
+    .join(' · ');
+}
+
+export function ColumnTypeMenu(props: ColumnTypeMenuProps) {
+  const [open, setOpen] = createSignal(false);
+  const choices = createColumnTypeChoices(props, open);
+  const { protectedType, checking, castOf, selected, choose } = choices;
+  const relationItem = (table: DatabaseRelationTable) => {
+    const to = choices.relationTo(table);
+    return (
+      <TypeItem
+        label={table.name}
+        cast={castOf(to)}
+        icon={<PropertyIcon type="ENTITY" relation />}
+        selected={selected(to)}
+        onSelect={() => choose(table.name, to)}
+      />
+    );
   };
   return (
     <Dropdown.Sub open={open()} onOpenChange={setOpen}>
@@ -174,7 +225,7 @@ export function ColumnTypeMenu(props: {
         </Show>
         <Show when={!checking()}>
           <Dropdown.Group>
-            <For each={menuTypes().filter((type) => offered(type.to))}>
+            <For each={choices.types()}>
               {(type) => (
                 <TypeItem
                   label={type.label}
@@ -207,23 +258,16 @@ export function ColumnTypeMenu(props: {
               </Dropdown.Group>
             )}
           </Show>
-          <Show
-            when={
-              offeredTables(props.tables?.here ?? []).length &&
-              !props.column.formula
-            }
-          >
+          <Show when={choices.tablesHere().length}>
             <Dropdown.Group>
               <Dropdown.GroupLabel>Related table</Dropdown.GroupLabel>
-              <For each={offeredTables(props.tables?.here ?? [])}>
-                {relationItem}
-              </For>
+              <For each={choices.tablesHere()}>{relationItem}</For>
             </Dropdown.Group>
           </Show>
-          <Show when={offeredDatabases().length && !props.column.formula}>
+          <Show when={choices.databases().length}>
             <Dropdown.Group>
               <Dropdown.GroupLabel>Other databases</Dropdown.GroupLabel>
-              <For each={offeredDatabases()}>
+              <For each={choices.databases()}>
                 {(database) => (
                   <Dropdown.Sub>
                     <Dropdown.SubTrigger>
@@ -260,13 +304,7 @@ function TypeItem(props: {
   selected: boolean;
   onSelect: () => void;
 }) {
-  const description = () => {
-    const cast = props.cast;
-    if (!misfits(cast)) return undefined;
-    return [cast.summary, 'Converts into a new column']
-      .filter((part) => !!part)
-      .join(' · ');
-  };
+  const description = () => castDescription(props.cast);
   return (
     <Dropdown.Item
       aria-current={props.selected ? 'true' : undefined}

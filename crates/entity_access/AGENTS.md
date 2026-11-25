@@ -97,5 +97,10 @@ the entity-access domain service.
   · Skill: `cloud-storage-hexagonal-architecture`
 
 - CRM company/contact receipts and audiences require current `team_user.crm_access` or an admin/owner role. Single, list and batched pipeline reads resolve fresh sharing sources so CRM denial removes only team grants; direct and channel grants remain. The email thread requester check is separate from contributor consent.
+- A merged CRM company's old id lives in `crm_company_aliases`. Access checks
+  are for exactly the id they are given and never follow it. A boundary that
+  accepts old ids calls `EntityAccessService::current_entity_id` (or the batched
+  `merged_crm_company_ids`) first, then authorizes, reads and writes the returned
+  id, so a receipt can't authorize one company while the write names another.
 - Source and grant lookups used by live activity checks have a local 15-second statement timeout. Keep team-bot company/contact lookups fenced by record ID before filtering team ownership; stale statistics otherwise favor team-wide scans.
 - Keep fresh pipeline channel-source lookups parameterized through the fenced viewer row; stale statistics can otherwise choose a scan of all channel memberships.

@@ -90,6 +90,8 @@ pub(crate) struct World {
         Vec<std::collections::HashMap<TableId, databases::domain::models::TableVersion>>,
     /// The filter of every Soup read, in order.
     pub(crate) soup_reads: Vec<EntityFilterAst>,
+    /// Companies merged away, and the companies they were merged into.
+    pub(crate) merged_companies: std::collections::HashMap<Uuid, Uuid>,
 }
 
 /// One table row, its cells keyed by property definition.
@@ -474,6 +476,17 @@ impl EntityAccessService for FakeAccess {
         _: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         unimplemented!("SQL never touches teams")
+    }
+
+    async fn merged_crm_company_ids(
+        &self,
+        company_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        let world = self.0.lock().unwrap();
+        Ok(company_ids
+            .iter()
+            .filter_map(|id| world.merged_companies.get(id).map(|into| (*id, *into)))
+            .collect())
     }
 }
 

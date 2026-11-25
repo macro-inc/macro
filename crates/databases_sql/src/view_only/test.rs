@@ -65,3 +65,19 @@ async fn an_owner_gets_a_view_receipt_and_no_edit_receipt() {
         "{user_edit:?}"
     );
 }
+
+#[tokio::test]
+async fn a_merged_company_id_names_the_company_it_was_merged_into() {
+    let (retired, survivor) = (Uuid::now_v7(), Uuid::now_v7());
+    let access = ViewOnlyAccess(FakeAccess(Arc::new(Mutex::new(World {
+        merged_companies: [(retired, survivor)].into(),
+        ..World::default()
+    }))));
+
+    let current = access
+        .current_entity_id(&retired.to_string(), EntityType::CrmCompany)
+        .await
+        .expect("an id resolves");
+
+    assert_eq!(current, survivor.to_string());
+}

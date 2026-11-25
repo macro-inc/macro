@@ -8,12 +8,15 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import type { TaskLabelParts } from '../components/time-key-label';
 import type { TimeSummaryKey } from '../components/time-summary-types';
 import { WeekGrid, type WeekGridRow } from '../components/week-grid';
 import { WeekStepper } from '../components/week-stepper';
 import { useTimeTracking } from '../context/time-tracking-context';
 import { weekDays, weekRows } from '../core/week';
+import { createSheetTask } from '../primitives/create-sheet-task';
 import { createWeekTime, type WeekTime } from '../primitives/create-week-time';
+import type { SummaryTask } from '../queries/report-task';
 import { BreakdownSkeleton, SummaryFailed } from './shared/project-time-parts';
 import type {
   PickedTask,
@@ -28,6 +31,46 @@ const NO_EXTRA_ROWS: readonly TimeSummaryKey[] = [];
 /** A picked task has no summary of its own yet; its row shows the picked name. */
 function taskKey(task: PickedTask): TimeSummaryKey {
   return { by: 'TASK', userId: null, taskId: task.id, date: null, task: null };
+}
+
+/** A task with no values yet, to hold the lead's place while it is read. */
+function unreadTask(id: string): SummaryTask {
+  return {
+    __typename: 'GraphqlSoupDocument',
+    id,
+    name: '',
+    subType: null,
+    properties: [],
+  };
+}
+
+/**
+ * A row's priority and status, before the task has time as well as after,
+ * so a task just added lines up with the rest and stays put once logged.
+ * Until the task is read its lead keeps its place unseen, so the name does
+ * not move over when the icons arrive.
+ */
+function SheetTaskLead(props: {
+  taskId: string;
+  inSummary: SummaryTask | undefined;
+  lead: TaskLabelParts['Lead'];
+}): JSX.Element {
+  const task = createSheetTask(
+    () => props.taskId,
+    () => props.inSummary
+  );
+  return (
+    <Show
+      when={task()}
+      fallback={
+        <span class="invisible flex shrink-0" aria-hidden="true">
+          <props.lead task={unreadTask(props.taskId)} />
+        </span>
+      }
+    >
+      {(task) => <props.lead task={task()} />}
+    </Show>
+  );
 }
 
 /** A button that opens the host's task search beside it. */
@@ -178,9 +221,11 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
               class="flex min-w-0 items-center gap-2"
               onClick={(event) => props.onOpenTask(taskId, { event })}
             >
-              <Show when={taskOf(taskId)}>
-                {(task) => <props.task.Lead task={task()} />}
-              </Show>
+              <SheetTaskLead
+                taskId={taskId}
+                inSummary={taskOf(taskId)}
+                lead={props.task.Lead}
+              />
               <span class="flex min-w-0 items-center gap-1">
                 <button
                   type="button"
@@ -199,7 +244,7 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
               day={day}
               today={props.clock.today()}
               minutes={minutes()}
-              person={props.person}
+              person={props.entryPerson}
               editAccess={props.editAccess}
               onWritten={() => written(taskId)}
             />

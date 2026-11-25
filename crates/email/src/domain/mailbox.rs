@@ -8,6 +8,7 @@ use email_api_client::domain::models::{
 use live_pass::{FolderPass, LiveImportPass, StreamKind};
 use progress::{ImportCompleted, ImportTally};
 use retry::{message_retry, retry_seconds};
+use schedule::{POLL_INTERVALS, PollIntervals};
 use std::future::Future;
 use std::time::Instant;
 use telemetry::{
@@ -38,6 +39,7 @@ pub mod progress;
 pub mod projection;
 pub mod reimport;
 mod retry;
+pub mod schedule;
 pub mod settings;
 pub mod telemetry;
 pub mod watches;
@@ -202,6 +204,8 @@ pub struct StreamLease {
     pub initial_complete: bool,
     pub lease_id: Uuid,
     pub fence: i64,
+    /// When the stream came due: the claim's wait in line runs from here.
+    pub due_at: chrono::DateTime<chrono::Utc>,
     /// The stream's pending notification: the newest one that no delta
     /// checkpoint has read past yet, so a deferred or multi-page read keeps
     /// carrying it.
@@ -251,6 +255,10 @@ pub struct CommittedPage {
     pub queued: u64,
     /// Set when this page finished the mailbox's import run.
     pub import_completed: Option<ImportCompleted>,
+    /// Seconds until the stream's next poll, when the page was a checkpoint
+    /// that scheduled one; none while the stream stays due (more pages to
+    /// read, or a notification that arrived during the read).
+    pub next_poll_seconds: Option<u32>,
 }
 
 pub enum SyncLease<'a> {
@@ -297,10 +305,13 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<StreamLease>, MailboxError>> + Send;
     /// Atomically records every changed/removed ID and advances the opaque
     /// cursor only while this generation and lease fence are still current.
+    /// A checkpoint schedules the next poll by `polls`, unless a notification
+    /// arrived during the read, which leaves the stream due.
     fn commit_page(
         &self,
         lease: &StreamLease,
         page: &MailboxChangePage,
+        polls: PollIntervals,
     ) -> impl Future<Output = Result<CommittedPage, MailboxError>> + Send;
     /// Reset only this expired stream; this operation never removes messages.
     /// Its folder's live pass goes with the round it ran beside.
@@ -665,12 +676,15 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     span_int(page.changed.len() + page.removed.len()),
                 );
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
-                let committed = self.repo.commit_page(lease, &page).await;
+                let committed = self.repo.commit_page(lease, &page, POLL_INTERVALS).await;
                 if committed.is_ok() && live_pass::opens(lease, checkpoint, &self.live_pass) {
                     self.open_live_pass(lease).await;
                 }
                 committed.map(|committed| {
                     span.record("outlook.rows_queued", span_int(committed.queued));
+                    if let Some(seconds) = committed.next_poll_seconds {
+                        span.record("outlook.poll_interval_seconds", i64::from(seconds));
+                    }
                     delta_advanced = true;
                     folder_initial_complete |= checkpoint;
                     committed.import_completed

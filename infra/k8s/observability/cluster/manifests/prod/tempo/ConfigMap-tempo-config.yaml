@@ -13,7 +13,7 @@ data:
         compaction_cycle: 30s
         compaction_window: 1h
         max_block_bytes: 107374182400
-        max_compaction_objects: 6000000
+        max_compaction_objects: 1000000
         max_time_per_tenant: 5m
         retention_concurrency: 10
         v2_in_buffer_bytes: 5242880

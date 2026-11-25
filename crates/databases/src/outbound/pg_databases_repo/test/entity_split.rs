@@ -257,6 +257,7 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     // The owner remains and can immediately create and write a fresh app database.
     let database = repo
         .create_database(
+            models_databases::DatabaseId::new(),
             &CreateDatabase {
                 name: "Fresh start".into(),
                 owner_id: user(),
@@ -264,6 +265,7 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
                 first_table: None,
             },
             FirstTable {
+                ids: None,
                 name: "Contacts".into(),
                 title_column: "Name",
             },
