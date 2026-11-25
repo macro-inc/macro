@@ -1,6 +1,7 @@
 import {
   currentQueryAccount,
   isCurrentQueryAccount,
+  type QueryAccount,
 } from '@queries/auth/account-scope';
 import { useQueryAccount } from '@queries/auth/use-query-account';
 import {
@@ -67,10 +68,12 @@ export type DriveTrashSource = {
   loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
   restoreItems: (
-    items: readonly { id: string; itemType: DriveTrashItemType }[]
+    items: readonly { id: string; itemType: DriveTrashItemType }[],
+    expectedAccount?: QueryAccount
   ) => Promise<{ restored: number; failed: number }>;
   permanentlyDeleteItems: (
-    items: readonly { id: string; itemType: DriveTrashItemType }[]
+    items: readonly { id: string; itemType: DriveTrashItemType }[],
+    expectedAccount?: QueryAccount
   ) => Promise<{ deleted: number; failed: number }>;
 };
 
@@ -119,9 +122,11 @@ export function createDriveTrashSource(
       if (!account()) return;
       await query.refetch();
     },
-    restoreItems: async (targets) => {
-      const captured = currentQueryAccount();
-      if (!captured) return { restored: 0, failed: targets.length };
+    restoreItems: async (targets, expectedAccount) => {
+      const captured = expectedAccount ?? currentQueryAccount();
+      if (!captured || !isCurrentQueryAccount(captured)) {
+        return { restored: 0, failed: targets.length };
+      }
       const outcomes = await Promise.allSettled(
         targets.map((target) =>
           restoreEntity({
@@ -139,9 +144,11 @@ export function createDriveTrashSource(
       }
       return { restored, failed };
     },
-    permanentlyDeleteItems: async (targets) => {
-      const captured = currentQueryAccount();
-      if (!captured) return { deleted: 0, failed: targets.length };
+    permanentlyDeleteItems: async (targets, expectedAccount) => {
+      const captured = expectedAccount ?? currentQueryAccount();
+      if (!captured || !isCurrentQueryAccount(captured)) {
+        return { deleted: 0, failed: targets.length };
+      }
       const outcomes = await Promise.allSettled(
         targets.map((target) =>
           permanentlyDeleteEntity({

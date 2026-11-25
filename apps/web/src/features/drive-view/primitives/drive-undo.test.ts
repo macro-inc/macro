@@ -169,4 +169,57 @@ describe('drive-undo manager', () => {
       dispose();
     });
   });
+
+  it('skips an older out-of-order move or rename toast when a newer change exists for that entity', async () => {
+    await createRoot(async (dispose) => {
+      const undoMove = vi.fn().mockResolvedValue(true);
+      const undoTrash = vi.fn().mockResolvedValue(true);
+      const undoRename = vi.fn().mockResolvedValue(true);
+
+      const manager = createDriveUndoManager({
+        undoMove,
+        undoTrash,
+        undoRename,
+      });
+
+      const firstMoveId = manager.recordMove({
+        items: [
+          {
+            entity: { id: 'd1', type: 'document', name: 'Doc.md' },
+            previousProjectId: 'folder-a',
+          },
+        ],
+        destinationFolderId: 'folder-b',
+        destinationName: 'B',
+      });
+      manager.recordMove({
+        items: [
+          {
+            entity: { id: 'd1', type: 'document', name: 'Doc.md' },
+            previousProjectId: 'folder-b',
+          },
+        ],
+        destinationFolderId: 'folder-c',
+        destinationName: 'C',
+      });
+
+      const firstRenameId = manager.recordRename({
+        entity: { id: 'd2', type: 'document', name: 'B.md' },
+        previousName: 'A.md',
+        nextName: 'B.md',
+      });
+      manager.recordRename({
+        entity: { id: 'd2', type: 'document', name: 'C.md' },
+        previousName: 'B.md',
+        nextName: 'C.md',
+      });
+
+      expect((await manager.undoById(firstMoveId)).status).toBe('skipped');
+      expect((await manager.undoById(firstRenameId)).status).toBe('skipped');
+      expect(undoMove).not.toHaveBeenCalled();
+      expect(undoRename).not.toHaveBeenCalled();
+
+      dispose();
+    });
+  });
 });

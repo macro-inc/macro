@@ -6,6 +6,10 @@ import { formatRelativeTimestamp, MultiSelectCheckbox } from '@entity';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+} from '@queries/auth/account-scope';
 import { Button, cn, confirmDialog, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import {
@@ -67,11 +71,14 @@ export function DriveRedesignTrash() {
 
   const restore = async (targets: readonly DriveTrashItem[]) => {
     if (targets.length === 0 || busy()) return;
+    const captured = currentQueryAccount();
     setBusy(true);
     try {
       const { restored, failed } = await trash.restoreItems(
-        targets.map((item) => ({ id: item.id, itemType: item.itemType }))
+        targets.map((item) => ({ id: item.id, itemType: item.itemType })),
+        captured
       );
+      if (captured && !isCurrentQueryAccount(captured)) return;
       if (restored > 0) {
         clearSelection();
         toast.success(t('drive.toastRestored', { count: restored }));
@@ -86,19 +93,22 @@ export function DriveRedesignTrash() {
 
   const deleteForever = async (targets: readonly DriveTrashItem[]) => {
     if (targets.length === 0 || busy()) return;
+    const captured = currentQueryAccount();
     const confirmed = await confirmDialog({
       title: t('drive.deleteForeverConfirmTitle', { count: targets.length }),
       body: t('drive.deleteForeverConfirmDescription'),
       confirmLabel: t('drive.deleteForever'),
       tone: 'danger',
     });
-    if (!confirmed) return;
+    if (!confirmed || (captured && !isCurrentQueryAccount(captured))) return;
 
     setBusy(true);
     try {
       const { deleted, failed } = await trash.permanentlyDeleteItems(
-        targets.map((item) => ({ id: item.id, itemType: item.itemType }))
+        targets.map((item) => ({ id: item.id, itemType: item.itemType })),
+        captured
       );
+      if (captured && !isCurrentQueryAccount(captured)) return;
       if (deleted > 0) {
         clearSelection();
         toast.success(t('drive.toastDeletedForever', { count: deleted }));
@@ -120,6 +130,7 @@ export function DriveRedesignTrash() {
   const emptyTrash = async () => {
     const all = unfilteredHierarchy().topLevel;
     if (all.length === 0 || busy() || isSearching()) return;
+    const captured = currentQueryAccount();
     const hasMore = trash.hasMore();
     const hasFolders = all.some((item) => item.itemType === 'project');
     const baseBody = hasMore
@@ -138,13 +149,15 @@ export function DriveRedesignTrash() {
         : t('drive.emptyTrash'),
       tone: 'danger',
     });
-    if (!confirmed) return;
+    if (!confirmed || (captured && !isCurrentQueryAccount(captured))) return;
 
     setBusy(true);
     try {
       const { deleted, failed } = await trash.permanentlyDeleteItems(
-        all.map((item) => ({ id: item.id, itemType: item.itemType }))
+        all.map((item) => ({ id: item.id, itemType: item.itemType })),
+        captured
       );
+      if (captured && !isCurrentQueryAccount(captured)) return;
       if (deleted > 0) {
         clearSelection();
         toast.success(t('drive.toastDeletedForever', { count: deleted }));

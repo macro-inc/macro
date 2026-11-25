@@ -7,7 +7,9 @@ import {
   type SplitNavigateOptions,
   useNavigate,
   useParams,
+  useRouteState,
 } from '@app/lib/split-router';
+import { driveSplitRoute } from '@app/routes/routes';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { fireAndForget } from '@core/util/fireAndForget';
 import deepEqual from 'fast-deep-equal';
@@ -23,7 +25,11 @@ import {
 } from 'solid-js';
 import type { DriveLocation, DriveState } from '../core/types';
 import { driveDestination } from '../drive-route-navigation';
-import { type DriveRouteParams, driveLocationFromParams } from './drive-route';
+import {
+  type DriveRouteParams,
+  driveDocumentFromParams,
+  driveLocationFromParams,
+} from './drive-route';
 import { type DriveSearchParams, driveSearch } from './drive-search';
 
 type NavigationOptions = Pick<SplitNavigateOptions, 'replace'>;
@@ -34,6 +40,7 @@ export function createDriveRouteState(
 ) {
   const params = useParams<DriveRouteParams>();
   const navigate = useNavigate();
+  const routeState = useRouteState(driveSplitRoute);
   const [search, setSearch] = createSearchParams(driveSearch);
   const location = createMemo(() => driveLocationFromParams(params));
   const seed = normalizeFacetSelection(initialFacets());
@@ -71,6 +78,21 @@ export function createDriveRouteState(
               defaults: driveSearch.defaults,
             }),
           },
+        }),
+        'drive-view'
+      );
+    },
+    replaceLocationPreservingDetail(nextLocation: DriveLocation) {
+      const document = driveDocumentFromParams(params);
+      fireAndForget(
+        navigate(driveDestination(nextLocation, document), {
+          replace: true,
+          search: {
+            drive: driveSearch.serialize(search, {
+              defaults: driveSearch.defaults,
+            }),
+          },
+          state: routeState(),
         }),
         'drive-view'
       );

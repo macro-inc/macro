@@ -158,12 +158,12 @@ export default {
   emptyTrashLoadedLabel: 'Delete loaded items',
   emptyTrashLoadedConfirmTitle: 'Delete loaded Trash items?',
   emptyTrashLoadedConfirmDescription: {
-    one: 'Permanently delete the {{count}} loaded item? Additional unloaded Trash pages will remain.',
+    one: 'Permanently delete the {{count}} loaded item? Unloaded Trash items outside this selection will remain.',
     other:
-      'Permanently delete the {{count}} loaded items? Additional unloaded Trash pages will remain.',
+      'Permanently delete the {{count}} loaded items? Unloaded Trash items outside these folders will remain.',
   },
   trashFolderCascadeWarning:
-    'Deleting a folder permanently removes all files and subfolders inside it.',
+    'Deleting a folder permanently removes all files and subfolders inside it, including any unloaded descendants.',
   loadMoreTrashMatches: 'Load more from Trash',
   toastUndoSkipped: 'Item changed since this action; nothing was overwritten.',
   openFullView: 'Open',

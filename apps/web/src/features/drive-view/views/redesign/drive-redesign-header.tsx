@@ -32,7 +32,11 @@ import {
 } from '../../components/redesign/redesign-breadcrumbs';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
-import type { DriveRootBrowseMode } from '../../core/drive-view-mode';
+import {
+  type DriveRootBrowseMode,
+  effectiveDesktopViewMode,
+  supportsColumnsView,
+} from '../../core/drive-view-mode';
 import { folderAncestors } from '../../core/folder-tree';
 import { DRIVE_SORT_OPTIONS, type DriveSort } from '../../core/types';
 import { DriveRedesignCreateMenu } from '../../drive-redesign-create-menu';
@@ -79,13 +83,24 @@ export function DriveRedesignHeader(props: {
     return loc.kind === 'tab' && loc.tab === 'recent';
   };
 
-  const showColumnsToggle = () => {
-    if (isStarred() || isRecent() || isTrash()) return false;
-    if (display.isSearching() || display.hasFilters()) return false;
-    const loc = location();
-    if (loc.kind === 'folder') return true;
-    return loc.tab === 'owned' && preferences.rootMode() === 'browse';
-  };
+  const showColumnsToggle = () =>
+    !isStarred() &&
+    !isRecent() &&
+    !isTrash() &&
+    supportsColumnsView({
+      location: location(),
+      rootMode: preferences.rootMode(),
+      isSearching: display.isSearching(),
+      hasFilters: display.hasFilters(),
+    });
+
+  const activeViewMode = () =>
+    effectiveDesktopViewMode(preferences.viewMode(), {
+      location: location(),
+      rootMode: preferences.rootMode(),
+      isSearching: display.isSearching(),
+      hasFilters: display.hasFilters(),
+    });
 
   const activeFolderId = () => state.projectId();
 
@@ -338,7 +353,7 @@ export function DriveRedesignHeader(props: {
               size="icon-md"
               aria-label={t('drive.viewList')}
               tooltip={t('drive.viewList')}
-              aria-pressed={preferences.viewMode() === 'list'}
+              aria-pressed={activeViewMode() === 'list'}
               onClick={() => preferences.setViewMode('list')}
             >
               <ListIcon class="size-4" aria-hidden="true" />
@@ -347,7 +362,7 @@ export function DriveRedesignHeader(props: {
               size="icon-md"
               aria-label={t('drive.viewGrid')}
               tooltip={t('drive.viewGrid')}
-              aria-pressed={preferences.viewMode() === 'grid'}
+              aria-pressed={activeViewMode() === 'grid'}
               onClick={() => preferences.setViewMode('grid')}
             >
               <SquaresFourIcon class="size-4" aria-hidden="true" />
@@ -357,7 +372,7 @@ export function DriveRedesignHeader(props: {
                 size="icon-md"
                 aria-label={t('drive.viewColumns')}
                 tooltip={t('drive.viewColumns')}
-                aria-pressed={preferences.viewMode() === 'columns'}
+                aria-pressed={activeViewMode() === 'columns'}
                 onClick={() => preferences.setViewMode('columns')}
               >
                 <ColumnsIcon class="size-4" aria-hidden="true" />

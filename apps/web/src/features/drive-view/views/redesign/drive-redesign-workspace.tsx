@@ -7,6 +7,7 @@ import { DriveFileDropzone } from '../../components/drive-file-dropzone';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import { driveLocationBreadcrumbs } from '../../core/breadcrumbs';
+import { effectiveDesktopViewMode } from '../../core/drive-view-mode';
 import { useDriveDetailNavigation } from '../../drive-detail-navigation';
 import { DriveBreadcrumbs } from '../drive-breadcrumbs';
 import { DriveLoading } from '../drive-workspace';
@@ -47,28 +48,27 @@ export function DriveRedesignWorkspace(props: { tour?: JSX.Element }) {
     return loc.kind === 'tab' && loc.tab === 'starred';
   };
 
+  const effectiveViewMode = () => {
+    const current = state.value();
+    const hasFilters =
+      current.scope !== 'default' ||
+      Object.values(current.facets).some((values) => (values?.length ?? 0) > 0);
+    return effectiveDesktopViewMode(preferences.viewMode(), {
+      location: current.location,
+      rootMode: preferences.rootMode(),
+      isSearching: current.search.trim().length > 0,
+      hasFilters,
+    });
+  };
+
   const startInlineFolder = () => {
-    const mode = preferences.viewMode();
+    const mode = effectiveViewMode();
     const surface =
       mode === 'grid' ? 'grid' : mode === 'columns' ? 'columns' : 'list';
     inlineEdit.startCreateFolder({
       parentId: state.projectId() ?? null,
       surface,
     });
-  };
-
-  const isColumnsSupported = () => {
-    const current = state.value();
-    const loc = current.location;
-    if (current.search.trim().length > 0) return false;
-    if (
-      current.scope !== 'default' ||
-      Object.values(current.facets).some((values) => (values?.length ?? 0) > 0)
-    ) {
-      return false;
-    }
-    if (loc.kind === 'folder') return true;
-    return loc.tab === 'owned' && preferences.rootMode() === 'browse';
   };
 
   return (
@@ -112,15 +112,10 @@ export function DriveRedesignWorkspace(props: { tour?: JSX.Element }) {
                                 <Match when={isStarred()}>
                                   <DriveRedesignStarred />
                                 </Match>
-                                <Match
-                                  when={
-                                    preferences.viewMode() === 'columns' &&
-                                    isColumnsSupported()
-                                  }
-                                >
+                                <Match when={effectiveViewMode() === 'columns'}>
                                   <DriveRedesignColumns />
                                 </Match>
-                                <Match when={preferences.viewMode() === 'grid'}>
+                                <Match when={effectiveViewMode() === 'grid'}>
                                   <DriveRedesignGrid
                                     onStartInlineFolder={startInlineFolder}
                                   />

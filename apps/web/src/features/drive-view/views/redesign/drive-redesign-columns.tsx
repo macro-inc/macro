@@ -21,7 +21,15 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, cn, Tooltip } from '@ui';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { InlineNameInput } from '../../components/redesign/inline-name-input';
 import { driveKindLabel } from '../../components/redesign/kind-label';
 import { useDriveView } from '../../context/drive-context';
@@ -43,8 +51,11 @@ function MillerColumnPane(props: {
   selectedFileId: string | undefined;
   splitId: string;
   createDropTarget?: ReturnType<typeof createFolderDropTargets>;
+  onItemsChange: (columnKey: string, items: readonly EntityData[]) => void;
+  onCleanupColumn: (columnKey: string) => void;
   onSelectFolder: (folderId: string) => void;
   onSelectFile: (entity: EntityData) => void;
+  onPreviewEntity: (entity: EntityData) => void;
   onOpenFile: (entity: EntityData, event?: MouseEvent) => void;
 }) {
   const { state, sidebar, actions } = useDriveView();
@@ -52,6 +63,7 @@ function MillerColumnPane(props: {
     useDriveRedesign();
   const folderSource = createFolderContents(() => props.folderId);
   const columnDropTarget = props.createDropTarget?.(() => props.folderId);
+  const columnKey = () => props.folderId ?? '__root__';
 
   const columnTitle = () => {
     if (props.folderId === null) return t('drive.columnRootTitle');
@@ -87,6 +99,13 @@ function MillerColumnPane(props: {
       sort: state.value().sort,
       direction: preferences.sortDirection(),
     });
+  });
+
+  createEffect(() => {
+    props.onItemsChange(columnKey(), items());
+  });
+  onCleanup(() => {
+    props.onCleanupColumn(columnKey());
   });
 
   const isCreatingHere = () => {
@@ -258,8 +277,14 @@ function MillerColumnPane(props: {
                           onKeyDown={(event) => {
                             if (event.key === 'Enter') {
                               event.preventDefault();
+                              event.stopPropagation();
                               if (isFolder) props.onSelectFolder(entity.id);
                               else props.onOpenFile(entity);
+                            } else if (event.key === ' ') {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (!isFolder) props.onSelectFile(entity);
+                              props.onPreviewEntity(entity);
                             }
                           }}
                         >
@@ -309,33 +334,33 @@ function MillerColumnPane(props: {
                   }}
                 </For>
               </ul>
-              <Show when={folderSource.isLoadingMore()}>
-                <div
-                  role="status"
-                  class="flex items-center justify-center gap-1.5 py-2 text-xs text-ink-muted"
-                >
-                  <SpinnerIcon class="size-3 animate-spin" aria-hidden="true" />
-                  <span>{t('drive.loadingMore')}</span>
-                </div>
-              </Show>
-              <Show
-                when={folderSource.hasMore() && !folderSource.isLoadingMore()}
+            </Show>
+            <Show when={folderSource.isLoadingMore()}>
+              <div
+                role="status"
+                class="flex items-center justify-center gap-1.5 py-2 text-xs text-ink-muted"
               >
-                <div class="flex justify-center py-2">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() =>
-                      fireAndForget(
-                        folderSource.loadMore(),
-                        'drive-columns-load-more'
-                      )
-                    }
-                  >
-                    {t('drive.loadMore')}
-                  </Button>
-                </div>
-              </Show>
+                <SpinnerIcon class="size-3 animate-spin" aria-hidden="true" />
+                <span>{t('drive.loadingMore')}</span>
+              </div>
+            </Show>
+            <Show
+              when={folderSource.hasMore() && !folderSource.isLoadingMore()}
+            >
+              <div class="flex justify-center py-2">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() =>
+                    fireAndForget(
+                      folderSource.loadMore(),
+                      'drive-columns-load-more'
+                    )
+                  }
+                >
+                  {t('drive.loadMore')}
+                </Button>
+              </div>
             </Show>
           </Show>
         </Show>
@@ -363,31 +388,70 @@ export function DriveRedesignColumns() {
     onMove: host.moveEntitiesWithUndo,
   });
 
-  const [selectedFile, setSelectedFile] = createSignal<
-    EntityData | undefined
+  const [selectedFileId, setSelectedFileId] = createSignal<
+    string | undefined
   >();
+  const [columnItems, setColumnItems] = createSignal<
+    ReadonlyMap<string, readonly EntityData[]>
+  >(new Map());
   let scrollerRef: HTMLDivElement | undefined;
 
   const columnFolderIds = createMemo(() =>
     buildMillerColumnPath(sidebar.folders(), state.projectId() ?? null)
   );
 
+  // Resolve the selected file against live column rows so renames update the
+  // preview immediately and moves/deletions clear it without stale snapshots.
+  const selectedFile = createMemo<EntityData | undefined>(() => {
+    const id = selectedFileId();
+    if (!id) return undefined;
+    for (const rows of columnItems().values()) {
+      const match = rows.find((item) => item.id === id);
+      if (match) return match;
+    }
+    return undefined;
+  });
+
+  // Sync the live resolved file into the inspector when it changes or disappears.
+  createEffect(() => {
+    const id = selectedFileId();
+    const live = selectedFile();
+    if (id && !live) {
+      setSelectedFileId(undefined);
+      setInspectedEntity(undefined);
+    } else if (live) {
+      setInspectedEntity(live);
+    }
+  });
+
   // Columns operates on a single previewed file, never a stale multi-selection.
   createEffect(() => {
     setSelectedEntities([]);
   });
 
-  // Clear previewed file whenever the user navigates to a different location.
-  createEffect(() => {
-    state.value().location;
-    setSelectedFile(undefined);
-    setInspectedEntity(undefined);
-  });
+  const locationKey = () => {
+    const loc = state.value().location;
+    return loc.kind === 'folder'
+      ? `folder:${loc.id ?? 'root'}`
+      : `tab:${loc.tab}`;
+  };
+
+  // Clear previewed file only when navigating to a different location key.
+  createEffect(
+    on(
+      locationKey,
+      () => {
+        setSelectedFileId(undefined);
+        setInspectedEntity(undefined);
+      },
+      { defer: true }
+    )
+  );
 
   // Smoothly scroll newly revealed columns into view on navigation.
   createEffect(() => {
     columnFolderIds();
-    selectedFile();
+    selectedFileId();
     requestAnimationFrame(() => {
       if (scrollerRef) {
         scrollerRef.scrollTo({
@@ -419,21 +483,39 @@ export function DriveRedesignColumns() {
       const path = columnFolderIds();
       if (path.length <= 1) return;
       event.preventDefault();
-      setSelectedFile(undefined);
+      setSelectedFileId(undefined);
       const parentId = path[path.length - 2];
       if (parentId) state.selectFolder(parentId);
       else state.selectTab('owned');
       return;
     }
-    if (event.key === ' ') {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('button, a, [role="menuitem"]')) return;
+    if (event.key === ' ' && event.target === event.currentTarget) {
       const file = selectedFile();
       if (!file) return;
       event.preventDefault();
       setInspectedEntity(file);
       inspector.toggle();
     }
+  };
+
+  const handleColumnItemsChange = (
+    key: string,
+    items: readonly EntityData[]
+  ) => {
+    setColumnItems((current) => {
+      const next = new Map(current);
+      next.set(key, items);
+      return next;
+    });
+  };
+
+  const handleCleanupColumn = (key: string) => {
+    setColumnItems((current) => {
+      if (!current.has(key)) return current;
+      const next = new Map(current);
+      next.delete(key);
+      return next;
+    });
   };
 
   return (
@@ -450,18 +532,24 @@ export function DriveRedesignColumns() {
             folderId={folderId}
             columnIndex={index()}
             selectedChildFolderId={columnFolderIds()[index() + 1] ?? undefined}
-            selectedFileId={selectedFile()?.id}
+            selectedFileId={selectedFileId()}
             splitId={panel.handle.id}
             createDropTarget={createDropTarget}
+            onItemsChange={handleColumnItemsChange}
+            onCleanupColumn={handleCleanupColumn}
             onSelectFolder={(id) => {
-              setSelectedFile(undefined);
+              setSelectedFileId(undefined);
               const folder = sidebar.folders().find((f) => f.id === id);
               if (folder) setInspectedEntity(folderToProjectEntity(folder));
               state.selectFolder(id);
             }}
             onSelectFile={(entity) => {
-              setSelectedFile(entity);
+              setSelectedFileId(entity.id);
               setInspectedEntity(entity);
+            }}
+            onPreviewEntity={(entity) => {
+              setInspectedEntity(entity);
+              inspector.toggle();
             }}
             onOpenFile={(entity, event) => actions.openEntity(entity, event)}
           />
@@ -584,7 +672,7 @@ export function DriveRedesignColumns() {
                     class="text-failure-ink hover:text-failure-ink"
                     onClick={() => {
                       const target = file();
-                      setSelectedFile(undefined);
+                      setSelectedFileId(undefined);
                       fireAndForget(
                         host.trashEntitiesWithUndo([target]),
                         'drive-columns-trash'

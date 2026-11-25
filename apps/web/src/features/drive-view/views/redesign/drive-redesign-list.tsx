@@ -217,35 +217,35 @@ function InlineExpandedFolderChildren(props: {
                 />
               )}
             </For>
-            <Show when={childSource.isLoadingMore()}>
-              <div
-                role="status"
-                class="flex h-9 items-center gap-2 text-xs text-ink-muted"
-                style={{ 'padding-left': `${indentPx() + 44}px` }}
+          </Show>
+          <Show when={childSource.isLoadingMore()}>
+            <div
+              role="status"
+              class="flex h-9 items-center gap-2 text-xs text-ink-muted"
+              style={{ 'padding-left': `${indentPx() + 44}px` }}
+            >
+              <SpinnerIcon class="size-3 animate-spin" aria-hidden="true" />
+              <span>{t('drive.loadingMore')}</span>
+            </div>
+          </Show>
+          <Show when={childSource.hasMore() && !childSource.isLoadingMore()}>
+            <div
+              class="flex h-9 items-center"
+              style={{ 'padding-left': `${indentPx() + 40}px` }}
+            >
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() =>
+                  fireAndForget(
+                    childSource.loadMore(),
+                    'drive-expanded-load-more'
+                  )
+                }
               >
-                <SpinnerIcon class="size-3 animate-spin" aria-hidden="true" />
-                <span>{t('drive.loadingMore')}</span>
-              </div>
-            </Show>
-            <Show when={childSource.hasMore() && !childSource.isLoadingMore()}>
-              <div
-                class="flex h-9 items-center"
-                style={{ 'padding-left': `${indentPx() + 40}px` }}
-              >
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() =>
-                    fireAndForget(
-                      childSource.loadMore(),
-                      'drive-expanded-load-more'
-                    )
-                  }
-                >
-                  {t('drive.loadMore')}
-                </Button>
-              </div>
-            </Show>
+                {t('drive.loadMore')}
+              </Button>
+            </div>
           </Show>
         </Show>
       </Show>

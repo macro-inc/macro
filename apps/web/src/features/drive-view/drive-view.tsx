@@ -237,19 +237,13 @@ function DriveComposition(props: { route: DriveRouteState }) {
 
   // If the redesign flag is explicitly off (e.g. rollback or shared bookmark),
   // rewrite dedicated /drive/starred or /drive/trash URLs to My Files while
-  // preserving any open file detail in the split.
+  // preserving any open file detail, trail state, and search parameters.
   createEffect(() => {
     const flag = redesignFlag();
     if (flag.loading || flag.enabled) return;
     const current = view.value();
     if (!isDedicatedRedesignTab(current.location)) return;
-    view.update(
-      {
-        ...current,
-        location: { kind: 'tab', tab: 'owned' },
-      },
-      { replace: true }
-    );
+    props.route.replaceLocationPreservingDetail({ kind: 'tab', tab: 'owned' });
   });
 
   function DriveRedesignBoundary() {

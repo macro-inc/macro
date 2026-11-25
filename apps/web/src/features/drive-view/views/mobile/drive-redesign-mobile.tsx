@@ -33,6 +33,10 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+} from '@queries/auth/account-scope';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button, cn, confirmDialog, Tabs } from '@ui';
 import {
@@ -164,11 +168,14 @@ function MobileTrashView() {
 
   const restoreItem = async (item: DriveTrashItem) => {
     if (busy()) return;
+    const captured = currentQueryAccount();
     setBusy(true);
     try {
-      const { restored, failed } = await trash.restoreItems([
-        { id: item.id, itemType: item.itemType },
-      ]);
+      const { restored, failed } = await trash.restoreItems(
+        [{ id: item.id, itemType: item.itemType }],
+        captured
+      );
+      if (captured && !isCurrentQueryAccount(captured)) return;
       if (restored > 0) toast.success(t('drive.toastRestored', { count: 1 }));
       if (failed > 0) toast.failure(t('drive.toastRestoreFailed'));
     } finally {
@@ -178,18 +185,21 @@ function MobileTrashView() {
 
   const deleteForever = async (item: DriveTrashItem) => {
     if (busy()) return;
+    const captured = currentQueryAccount();
     const confirmed = await confirmDialog({
       title: t('drive.deleteForeverConfirmTitle', { count: 1 }),
       body: t('drive.deleteForeverConfirmDescription'),
       confirmLabel: t('drive.deleteForever'),
       tone: 'danger',
     });
-    if (!confirmed) return;
+    if (!confirmed || (captured && !isCurrentQueryAccount(captured))) return;
     setBusy(true);
     try {
-      const { deleted, failed } = await trash.permanentlyDeleteItems([
-        { id: item.id, itemType: item.itemType },
-      ]);
+      const { deleted, failed } = await trash.permanentlyDeleteItems(
+        [{ id: item.id, itemType: item.itemType }],
+        captured
+      );
+      if (captured && !isCurrentQueryAccount(captured)) return;
       if (deleted > 0) {
         toast.success(t('drive.toastDeletedForever', { count: deleted }));
       }
@@ -207,6 +217,7 @@ function MobileTrashView() {
   const emptyTrash = async () => {
     const all = unfilteredHierarchy().topLevel;
     if (all.length === 0 || busy() || isSearching()) return;
+    const captured = currentQueryAccount();
     const hasMore = trash.hasMore();
     const hasFolders = all.some((item) => item.itemType === 'project');
     const baseBody = hasMore
@@ -225,12 +236,14 @@ function MobileTrashView() {
         : t('drive.emptyTrash'),
       tone: 'danger',
     });
-    if (!confirmed) return;
+    if (!confirmed || (captured && !isCurrentQueryAccount(captured))) return;
     setBusy(true);
     try {
       const { deleted, failed } = await trash.permanentlyDeleteItems(
-        all.map((item) => ({ id: item.id, itemType: item.itemType }))
+        all.map((item) => ({ id: item.id, itemType: item.itemType })),
+        captured
       );
+      if (captured && !isCurrentQueryAccount(captured)) return;
       if (deleted > 0) {
         toast.success(t('drive.toastDeletedForever', { count: deleted }));
       }
@@ -791,11 +804,13 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                             aria-label={t('drive.searchDrivePlaceholder')}
                             class="island h-10 w-10 shrink-0 rounded-full bg-chrome"
                             onClick={() => {
-                              setSearchOpen(true);
+                              // Register watcher BEFORE mounting the search input so Solid's
+                              // synchronous render effect doesn't beat the observer on iOS.
                               triggerFocusNewElement(
                                 '[data-drive-mobile-search-input]',
                                 { touchOnly: false }
                               );
+                              setSearchOpen(true);
                             }}
                           >
                             <SearchIcon class="size-5" aria-hidden="true" />
@@ -1020,20 +1035,44 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                           !isCreatingInlineHere()
                         }
                       >
-                        <DriveRedesignEmptyState
-                          reason={emptyReason()}
-                          isInFolder={Boolean(activeFolderId())}
-                          onCreateDocument={() => host.createNewItem('md')}
-                          onCreateFolder={startInlineFolder}
-                          onClearFilters={state.clearFilters}
-                          onClearSearch={() => state.setSearch('')}
-                          onSearchAllDrive={() => {
-                            const query = state.value().search;
-                            state.selectTab('owned');
-                            state.setSearch(query);
-                          }}
-                          onBackToDrive={() => state.selectTab('owned')}
-                        />
+                        <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+                          <DriveRedesignEmptyState
+                            reason={emptyReason()}
+                            isInFolder={Boolean(activeFolderId())}
+                            onCreateDocument={() => host.createNewItem('md')}
+                            onCreateFolder={startInlineFolder}
+                            onClearFilters={state.clearFilters}
+                            onClearSearch={() => state.setSearch('')}
+                            onSearchAllDrive={() => {
+                              const query = state.value().search;
+                              state.selectTab('owned');
+                              state.setSearch(query);
+                            }}
+                            onBackToDrive={() => state.selectTab('owned')}
+                            onRetry={() =>
+                              fireAndForget(
+                                source.refresh(),
+                                'drive-mobile-retry'
+                              )
+                            }
+                          />
+                          <Show
+                            when={source.hasMore() && !source.isLoadingMore()}
+                          >
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() =>
+                                fireAndForget(
+                                  source.loadMore(),
+                                  'drive-mobile-empty-load-more'
+                                )
+                              }
+                            >
+                              {t('drive.loadMore')}
+                            </Button>
+                          </Show>
+                        </div>
                       </Match>
                       <Match when={isGridMode()}>
                         <div class="min-h-0 flex-1 overflow-y-auto overscroll-none px-3 pt-(--mobile-content-inset-top) pb-[calc(var(--safe-bottom,0px)+5rem)]">

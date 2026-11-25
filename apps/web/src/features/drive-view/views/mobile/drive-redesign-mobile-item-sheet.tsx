@@ -53,12 +53,12 @@ export function DriveRedesignMobileItemSheet(props: {
     const current = props.entity;
     if (!current) return;
     setDraftName(current.name);
-    setRenaming(true);
-    // Focus synchronously inside the tap gesture on iOS so the software
-    // keyboard rises cleanly, then apply extension-preserving stem selection.
+    // Register the focus watcher BEFORE mounting the rename input so Solid's
+    // synchronous render effect doesn't beat the observer on iOS.
     triggerFocusNewElement('[data-drive-mobile-rename-input]', {
       touchOnly: false,
     });
+    setRenaming(true);
     requestAnimationFrame(() => {
       if (!renameInputRef) return;
       const range = renameSelectionRange(
