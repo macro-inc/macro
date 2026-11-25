@@ -298,7 +298,6 @@ export function createSuggestionsFeed(
     view,
     topics,
     /** Whether a topic not among them is gone, not merely unread yet. */
-    reread: () => source.reread(),
     groups,
     counts,
     accept,

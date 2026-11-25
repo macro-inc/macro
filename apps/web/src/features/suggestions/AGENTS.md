@@ -146,8 +146,8 @@ only, behind `enable-suggestions`.
   Today is one flat list. The sidebar lists the same topics with how many of
   their rows wait; choosing one (`?topic=`, which replaces `?view=`) shows its
   rows alone, its name as the page's and its reason in place of the date. One
-  that groups nothing falls back to the list and, once a fresh read of
-  the feed (`reread`) says the same, leaves the URL. A reason is shown as
+  that groups nothing falls back to the list; it leaves the URL only once it
+  was shown and stopped grouping, since a cached feed may lack a new topic. A reason is shown as
   written or not at all: never build one here.
 - Where topics group rows, a topic's hue tints its rows' tiles in every list
   and its square in the sidebar, and other rows' tiles are neutral. Hues are

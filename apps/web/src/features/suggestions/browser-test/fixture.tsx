@@ -142,8 +142,6 @@ function Fixture() {
       .otherwise(() => ALL)
   );
   const [failed, setFailed] = createSignal(scenario === 'error');
-  // `cached`: a feed from before the topics, until it is read again.
-  const rereads: (() => void)[] = [];
   const [log, setLog] = createSignal<string[]>([]);
   const record = (line: string) => setLog((lines) => [...lines, line]);
   const change = (id: string, next: (suggestion: Suggestion) => Suggestion) =>
@@ -161,12 +159,6 @@ function Fixture() {
     feed: () => {
       const list = suggestions();
       return list ? served(list) : undefined;
-    },
-    reread: async () => {
-      if (scenario === 'cached') {
-        await new Promise<void>((done) => rereads.push(done));
-      }
-      return true;
     },
     failed,
     retry: () => {
@@ -389,7 +381,6 @@ function Fixture() {
   /** Answer with the feed as it is now, topics included. */
   const readFeed = () => {
     setSuggestions(IN_TOPICS.map((suggestion) => ({ ...suggestion })));
-    for (const done of rereads.splice(0)) done();
   };
   /** Reply on the opened reply suggestions' threads, as the server's next answer would show. */
   const sendReplies = () =>
@@ -432,6 +423,9 @@ function Fixture() {
           </button>
           <button type="button" onClick={readFeed}>
             Read feed
+          </button>
+          <button type="button" onClick={() => setSuggestions(ALL)}>
+            Lose topic
           </button>
           <button type="button" onClick={sendReplies}>
             Send replies

@@ -37,8 +37,6 @@ const COUNTS = { open: 0, running: 0, failed: 0, done: 1 };
 
 const server = vi.hoisted(() => ({
   feedFails: false,
-  /** How many times the feed was read. */
-  reads: 0,
   listed: undefined as WireSuggestion[] | undefined,
   /** The next feed reads, in turn, wait on these before they answer. */
   gates: [] as Promise<void>[],
@@ -54,7 +52,6 @@ vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: {
     suggestionGeneration: async () => ok({ state: 'idle' }),
     listSuggestions: async () => {
-      server.reads += 1;
       const failing = server.feedFails;
       const listed = server.listed;
       await server.gates.shift();
@@ -82,10 +79,10 @@ vi.mock('../use-suggestions-flag', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
-function mount(staleTime = 0) {
+function mount() {
   const client = new QueryClient({
     defaultOptions: {
-      queries: { refetchOnWindowFocus: false, retry: false, staleTime },
+      queries: { refetchOnWindowFocus: false, retry: false },
     },
   });
   const wrapper = (props: ParentProps) => (
@@ -105,7 +102,6 @@ function decoded(wire: WireSuggestion): Suggestion {
 
 beforeEach(() => {
   server.feedFails = false;
-  server.reads = 0;
   server.listed = undefined;
   server.gates = [];
   server.dismissFails = false;
@@ -429,32 +425,4 @@ it('drops a read of the routine ideas that was out before the dismissal', async 
   expect(client.getQueryData(routineSuggestionKeys.all.queryKey)).not.toEqual([
     'dismissed idea',
   ]);
-});
-
-it('rereads a cached feed from the server, and says whether it could', async () => {
-  // Fresh for a minute: nothing else reads the feed again.
-  const { source } = mount(60_000);
-  await waitFor(() => expect(source.feed()).toBeDefined());
-  const reads = server.reads;
-
-  expect(await source.reread()).toBe(true);
-  expect(server.reads).toBe(reads + 1);
-
-  server.feedFails = true;
-  expect(await source.reread()).toBe(false);
-  expect(source.feed()).toBeDefined();
-});
-
-it('rereads the feed even while an older read is out', async () => {
-  const { client, source } = mount(60_000);
-  await waitFor(() => expect(source.feed()).toBeDefined());
-  // A poll that asked before: what it answers may be out of date.
-  server.gates.push(new Promise<void>(() => {}));
-  const { queryKey } = suggestionsKeys.feed('user-1');
-  fireAndForget(client.invalidateQueries({ queryKey }), 'test');
-  await waitFor(() => expect(server.gates).toHaveLength(0));
-  const reads = server.reads;
-
-  expect(await source.reread()).toBe(true);
-  expect(server.reads).toBe(reads + 1);
 });

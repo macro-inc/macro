@@ -73,7 +73,6 @@ function host(suggestions: Suggestion[]) {
     });
   const source = {
     feed,
-    reread: async () => true,
     failed: () => false,
     retry: vi.fn(),
     refresh: vi.fn(async () => {}),

@@ -52,7 +52,7 @@ export function feedOptions(
   });
 }
 
-/** A feed read a write or `reread` started. */
+/** A feed read a write started. */
 interface WriteRead {
   done: Promise<unknown>;
 }
@@ -99,18 +99,15 @@ export function useSuggestionsSource(): SuggestionsSource {
   );
   const queryClient = useQueryClient();
   const key = () => feedOptions(userId() ?? '', false, false).queryKey;
-  // The feed read the latest write or `reread` started. Polls aren't counted:
-  // a write waits only on reads that replaced its own.
+  // The feed read the latest write started. Polls aren't counted: a write
+  // waits only on reads that replaced its own.
   let latestRead: WriteRead | undefined;
-  const readFeed = () => {
+  const refresh = async () => {
     const read: WriteRead = { done: feed.refetch() };
     latestRead = read;
-    return followReplacingReads(read);
-  };
-  const refresh = async () => {
     // Home's rows read their own entry: every reader follows a change.
     await Promise.all([
-      readFeed(),
+      followReplacingReads(read),
       queryClient.invalidateQueries({ queryKey: suggestionsKeys.top._def }),
     ]);
   };
@@ -205,18 +202,6 @@ export function useSuggestionsSource(): SuggestionsSource {
 
   return {
     feed: shown,
-    async reread() {
-      const asked = key();
-      const before = queryClient.getQueryState(asked)?.dataUpdateCount;
-      await readFeed();
-      const state = queryClient.getQueryState(asked);
-
-      return (
-        state?.status === 'success' &&
-        state.fetchStatus === 'idle' &&
-        state.dataUpdateCount !== before
-      );
-    },
     failed: () => feed.isError && shown() === undefined,
     retry: () => fireAndForget(refresh(), 'suggestions'),
     refresh,

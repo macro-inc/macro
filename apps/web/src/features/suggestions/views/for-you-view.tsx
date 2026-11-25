@@ -16,7 +16,6 @@ import {
   For,
   Match,
   on,
-  onCleanup,
   Show,
   Switch,
   untrack,
@@ -144,31 +143,16 @@ export function ForYouView(props: {
   const topic = () =>
     props.feed.topics().find((other) => other.key === props.topicKey);
   const shownTopicKey = createMemo(() => topic()?.key);
-  // One that groups nothing leaves the list shown, and isn't asked for any
-  // more: rows that bring it back later don't take the page over. The server
-  // is asked first, since a cached feed may be from before the topic.
-  const missing = createMemo(() => {
-    const kind = view().kind;
-    const known = kind === 'rows' || kind === 'empty';
-    return known && !shownTopicKey() ? props.topicKey : undefined;
-  });
-  let asking: string | undefined;
-  let left = false;
-  onCleanup(() => {
-    left = true;
-  });
-  const letGo = async (key: string) => {
-    if (asking === key) return;
-
-    asking = key;
-    const read = await props.feed.reread();
-    if (asking === key) asking = undefined;
-    if (read && !left && missing() === key) props.onTopicGone();
-  };
-  // Asked again with each feed that still lacks it, should the read fail.
+  // One that stops grouping rows leaves the list shown, and isn't asked for any
+  // more: rows that bring it back later don't take the page over. One never
+  // shown stays asked for, since a cached feed may be from before the topic.
   createEffect(
-    on([missing, () => props.feed.topics()], ([key]) => {
-      if (key) fireAndForget(letGo(key), 'suggestions.topic_gone');
+    on(shownTopicKey, (key, before) => {
+      const kind = view().kind;
+      const known = kind === 'rows' || kind === 'empty';
+      if (known && !key && before && props.topicKey === before) {
+        props.onTopicGone();
+      }
     })
   );
   const groups = () => props.feed.groups(props.list, topic());
