@@ -294,7 +294,7 @@ fn import_attempts_count_since_their_queue() {
 }
 
 #[test]
-fn a_loss_leaves_the_queue_before_it_in_doubt() {
+fn a_loss_leaves_the_queue_beside_it_in_doubt() {
     block_on(async {
         let mut storage = fresh();
         enqueue(&mut storage, "First").await;
@@ -302,7 +302,7 @@ fn a_loss_leaves_the_queue_before_it_in_doubt() {
         let (frame, loss) = (queue.to_frame(), SalvageFile::loss(LOSS));
         let decoded = |frames: &[&[u8]]| SalvageFile::decode(&frames.concat()).into_queue();
         let doubted = Some(queue.clone().after_loss());
-        assert_eq!(decoded(&[&loss, &frame]), Some(queue.clone()));
+        assert_eq!(decoded(&[&loss, &frame]), doubted);
         assert_eq!(decoded(&[&frame, &loss]), doubted);
         assert_eq!(decoded(&[&frame, &loss, &frame[..9]]), doubted);
         assert_eq!(decoded(&[&frame, &loss, &frame]), Some(queue));
