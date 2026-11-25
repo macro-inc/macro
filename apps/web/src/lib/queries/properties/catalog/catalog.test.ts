@@ -566,20 +566,26 @@ describe('catalog mutations', () => {
   });
 
   it.each(['ACCOUNT_CHANGED', 'SIGNED_OUT'])(
-    'leaves a write dropped as %s out of the default failure report',
+    'reports a write dropped as %s to no onError, but settles it',
     async (code) => {
       await createRoot(async (dispose) => {
         const reported = vi.fn();
         const handled = vi.fn();
+        const perCall = vi.fn();
+        const settled = vi.fn();
         const dropped = new CatalogMutationError('dropped', code);
         const mutation = createCatalogMutation(
           () => Promise.reject(dropped),
           { onError: reported },
-          { onError: handled }
+          { onError: handled, onSettled: settled }
         );
-        await expect(mutation.mutateAsync(undefined)).rejects.toBe(dropped);
+        await expect(
+          mutation.mutateAsync(undefined, { onError: perCall })
+        ).rejects.toBe(dropped);
         expect(reported).not.toHaveBeenCalled();
-        expect(handled).toHaveBeenCalledWith(dropped, undefined);
+        expect(handled).not.toHaveBeenCalled();
+        expect(perCall).not.toHaveBeenCalled();
+        expect(settled).toHaveBeenCalledWith(undefined, dropped, undefined);
         dispose();
       });
     }

@@ -76,16 +76,16 @@ export function createCatalogMutation<TVars, TData>(
         data = await run(vars);
       } catch (cause) {
         const error = asError(cause);
-        // A write dropped for another login or a sign-out did not fail; the
-        // hook's default report (its failure toast) is left out.
+        // A write dropped for another login or a sign-out did not fail, so
+        // no layer reports it (no failure toast or message from the old
+        // session); it still settles, and mutateAsync still rejects.
         const dropped =
           isCatalogErrorCode(error, 'ACCOUNT_CHANGED') ||
           isCatalogErrorCode(error, 'SIGNED_OUT');
-        await eachLayer(call, parent, (layer) =>
-          dropped && layer === defaults
-            ? undefined
-            : layer.onError?.(error, vars)
-        );
+        if (!dropped)
+          await eachLayer(call, parent, (layer) =>
+            layer.onError?.(error, vars)
+          );
         await eachLayer(call, parent, (layer) =>
           layer.onSettled?.(undefined, error, vars)
         );
