@@ -1,17 +1,50 @@
 set -euo pipefail
 
-# Builds the CEF minimal distribution named in cef-codecs.json with H.264,
-# HEVC, and AAC decoders, and publishes it as a prerelease asset. The CEF CDN
-# builds leave those codecs out, so the macOS app could not play most videos.
+# Builds the CEF minimal distribution named in cef-codecs.json for one Mac
+# architecture (CEF_ARCH: aarch64 or x86_64) with H.264, HEVC, and AAC decoders,
+# and publishes it as a prerelease asset. The CEF CDN builds leave those codecs
+# out, so the macOS app could not play most videos.
 manifest=apps/web/tauri/desktop-cef/cef-codecs.json
+case "${CEF_ARCH:?}" in
+  aarch64) automate_arch=--arm64-build gn_arch=arm64 cef_platform=macosarm64 ;;
+  # Chromium cross-compiles x64 on Apple silicon, but CEF's gn_args.py only
+  # writes the x64 configuration on an arm64 Mac when asked to.
+  x86_64)
+    automate_arch=--x64-build gn_arch=x64 cef_platform=macosx64
+    export CEF_ENABLE_AMD64=1
+    ;;
+  *)
+    echo "Unknown CEF_ARCH $CEF_ARCH" >&2
+    exit 1
+    ;;
+esac
+# Generate only the configuration this job builds.
+export GN_OUT_CONFIGS="Release_GN_$gn_arch"
 cef_version=$(jq -er .cefVersion "$manifest")
 cef_commit=$(jq -er .cefCommit "$manifest")
 chromium_branch=$(jq -er .chromiumBranch "$manifest")
 release_tag=$(jq -er .releaseTag "$manifest")
-asset=$(jq -er .asset "$manifest")
+# An architecture without an entry has no codec build yet.
+listed=$(jq -r --arg arch "$CEF_ARCH" '.assets | has($arch)' "$manifest")
+if [ "$listed" != true ]; then
+  echo "$manifest lists no $CEF_ARCH asset; nothing to build."
+  exit 0
+fi
+asset=$(jq -er --arg arch "$CEF_ARCH" '.assets[$arch].asset' "$manifest")
+# Every architecture publishes to one release, so a shared name would find the
+# other architecture's asset below and never build this one.
+shared=$(jq -r '[.assets[].asset] | group_by(.) | map(select(length > 1)[0]) | .[]' "$manifest")
+if [ -n "$shared" ]; then
+  echo "$manifest names $shared for more than one architecture" >&2
+  exit 1
+fi
 
-if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null |
-  grep -qxF "$asset"; then
+# Only a completed upload counts: a failed one can leave an empty asset in the
+# starter state, which the upload below replaces. Read the list before
+# matching: under pipefail, `grep -q` exiting early can fail the pipe and send
+# a published asset to a day-long rebuild.
+published=$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.state == "uploaded") | .name' 2>/dev/null || true)
+if grep -qxF "$asset" <<< "$published"; then
   echo "$release_tag already has $asset; nothing to build."
   exit 0
 fi
@@ -47,7 +80,7 @@ python3 "$work/automate-git.py" \
   --depot-tools-dir="$work/depot_tools" \
   --branch="$chromium_branch" \
   --checkout="$cef_commit" \
-  --arm64-build \
+  "$automate_arch" \
   --no-debug-build \
   --minimal-distrib-only \
   --no-distrib-docs \
@@ -55,14 +88,14 @@ python3 "$work/automate-git.py" \
   --build-target=cefclient
 
 distrib="$work/code/chromium/src/cef/binary_distrib"
-built="$distrib/cef_binary_${cef_version}_macosarm64_minimal.tar.bz2"
+built="$distrib/cef_binary_${cef_version}_${cef_platform}_minimal.tar.bz2"
 if [ ! -f "$built" ]; then
   echo "Expected $built; the CEF checkout produced:" >&2
   ls -la "$distrib" >&2
   exit 1
 fi
 
-gn_args="$work/code/chromium/src/out/Release_GN_arm64/args.gn"
+gn_args="$work/code/chromium/src/out/Release_GN_${gn_arch}/args.gn"
 # args.gn has no spaces around '='; tolerate either form.
 for arg in 'proprietary_codecs *= *true' 'ffmpeg_branding *= *"Chrome"'; do
   if ! grep -qE "^$arg$" "$gn_args"; then
@@ -83,20 +116,23 @@ mkdir -p "$RUNNER_TEMP/out"
 cp "$built" "$RUNNER_TEMP/out/$asset"
 sha256=$(shasum -a 256 "$RUNNER_TEMP/out/$asset" | awk '{print $1}')
 
+# Both architectures publish to one release. Whichever finishes first creates
+# it; the other finds it already there.
 if ! gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
   gh release create "$release_tag" --repo "$GITHUB_REPOSITORY" \
     --target "$TARGET_SHA" --prerelease --latest=false \
-    --title "CEF $cef_version with proprietary codecs (macOS arm64)" \
-    --notes "Minimal CEF distribution for the macOS desktop app, built with proprietary_codecs=true and ffmpeg_branding=Chrome. sha256: $sha256"
+    --title "CEF $cef_version with proprietary codecs (macOS)" \
+    --notes "Minimal CEF distributions for the macOS desktop app, built with proprietary_codecs=true and ffmpeg_branding=Chrome. Each asset's sha256 is pinned in apps/web/tauri/desktop-cef/cef-codecs.json." ||
+    gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null
 fi
-gh release upload "$release_tag" "$RUNNER_TEMP/out/$asset" --repo "$GITHUB_REPOSITORY"
+gh release upload "$release_tag" "$RUNNER_TEMP/out/$asset" --repo "$GITHUB_REPOSITORY" --clobber
 
 {
-  echo "### CEF with proprietary codecs"
+  echo "### CEF with proprietary codecs ($CEF_ARCH)"
   echo
   echo "- Release: \`$release_tag\`"
   echo "- Asset: \`$asset\`"
   echo "- sha256: \`$sha256\`"
   echo
-  echo "Set \`sha256\` in \`$manifest\` to this value."
+  echo "Set \`assets.$CEF_ARCH.sha256\` in \`$manifest\` to this value."
 } >> "$GITHUB_STEP_SUMMARY"

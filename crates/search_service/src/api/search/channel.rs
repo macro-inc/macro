@@ -349,6 +349,7 @@ pub async fn name_handler(
         &user_id,
         &filters,
         query.to_string(),
+        &[],
         req.match_type == MatchType::Exact,
         page_size,
         cursor,

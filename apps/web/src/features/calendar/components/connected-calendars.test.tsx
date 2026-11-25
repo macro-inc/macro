@@ -176,3 +176,50 @@ it('saves Busy per calendar apart from showing it, and waits for the setting bef
     ui.queryByRole('switch', { name: 'Not loaded counts as busy' })
   ).toBeNull();
 });
+
+it('marks a subscription calendar as it is marked in the sidebar', () => {
+  const ui = render(() => (
+    <ConnectedCalendars
+      accounts={[
+        {
+          id: 'work',
+          email: 'work@example.com',
+          canManage: true,
+          needsPermission: false,
+          calendars: [
+            { id: 'primary', name: 'Work', color: '#123456', isPrimary: true },
+            {
+              id: 'by-link',
+              name: 'Sports schedule',
+              color: '#654321',
+              isSubscription: true,
+            },
+          ],
+        },
+      ]}
+      loading={false}
+      error={false}
+      connecting={false}
+      canConnect={true}
+      onRetry={() => {}}
+      onConnect={() => {}}
+      onEnable={() => {}}
+      onDisconnect={() => {}}
+      isVisible={() => true}
+      onVisibilityChange={() => {}}
+      accountColor={() => undefined}
+      sourceColor={() => undefined}
+      onAccountColor={() => {}}
+      onSourceColor={() => {}}
+      countsAsBusy={() => true}
+      onCountsAsBusyChange={() => {}}
+      busyError={false}
+      onBusyRetry={() => {}}
+    />
+  ));
+  expect(
+    ui.getByRole('checkbox', { name: 'Sports schedule Subscription calendar' })
+  ).toBeTruthy();
+  expect(ui.getByRole('checkbox', { name: 'Work Primary' })).toBeTruthy();
+  expect(ui.getAllByLabelText('Subscription calendar')).toHaveLength(1);
+});

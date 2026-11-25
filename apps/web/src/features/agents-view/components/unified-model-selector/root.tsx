@@ -7,6 +7,7 @@ import type {
 } from '../../../block-agent/state/session-config';
 import type { RosterAgent } from '../../core/roster';
 
+export type SelectorActionResult = void | boolean | Promise<void | boolean>;
 export type UnifiedModelSelectorState = {
   model?: string;
   models: CatalogModelOption[];
@@ -15,28 +16,36 @@ export type UnifiedModelSelectorState = {
   suggestedDisabled?: boolean;
   suggestedSelected?: boolean;
   agent?: RosterAgent;
+  modelKept?: boolean;
+  onKeepModel?: (keep: boolean) => void;
   agents?: RosterAgent[];
   /** Model-only target editors show the override alongside the selected agent. */
   showModelLabel?: boolean;
+  recentModelIds?: readonly string[];
+  recentAgentIds?: readonly string[];
   loading?: boolean;
   disabled?: boolean;
   effort?: SelectSessionConfigOption;
   effortValue?: string;
+  /** Advertised model default, separate from the running session's current value. */
+  defaultEffortValue?: string;
   effortDisabled?: boolean;
   speeds?: readonly string[];
   /** Discovered speed tiers for each Suggested model; absent means unknown. */
   suggestedSpeeds?: Readonly<Record<string, readonly string[]>>;
   suggestedHarness?: string;
   speedValue?: string;
-  onModel: (model: string) => void;
-  onSuggestedModel?: (model: string) => void;
-  onAgent?: (agent: RosterAgent) => void;
+  onModel: (model: string) => SelectorActionResult;
+  onSuggestedModel?: (model: string) => SelectorActionResult;
+  onAgent?: (agent: RosterAgent) => SelectorActionResult;
   onConnect?: (agent: RosterAgent) => void;
   onCreate?: () => void;
   onEffort: (choice: EffortChoice) => void;
   onSpeed: (value: ModelSpeed) => void;
   onCloseAutoFocus?: (event: Event) => void;
   onOpenChange?: (open: boolean) => void;
+  /** Includes the exit transition and final focus restoration. */
+  onFocusScopeChange?: (active: boolean) => void;
 };
 
 const Context = createContext<UnifiedModelSelectorState>();

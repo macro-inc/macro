@@ -85,12 +85,17 @@ fn search_service(ctx: &SearchHandlerState) -> CrmSearchServiceImpl<CrmSearchRep
 /// `SearchHit`s tagged [`SearchEntityType::CrmCompanies`] plus the next
 /// CRM cursor. The hidden gate is enforced inside the CRM service from
 /// the receipt's role — the caller can't widen it.
-#[tracing::instrument(skip(ctx, access, filters, term), fields(term_len = term.len()), err)]
+#[tracing::instrument(
+    skip(ctx, access, filters, term, excluded_terms),
+    fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
+    err
+)]
 pub(in crate::api::search) async fn search_company_names(
     ctx: &SearchHandlerState,
     access: &CrmTeamReceipt<MemberTeamRole>,
     filters: &CrmCompanyFilters,
     term: String,
+    excluded_terms: &[String],
     limit: u32,
     cursor: SearchCursorOption,
 ) -> Result<(Vec<SearchHit>, SearchCursorOption), SearchError> {
@@ -131,6 +136,7 @@ pub(in crate::api::search) async fn search_company_names(
         .search_company_names(
             access,
             term,
+            excluded_terms,
             &company_ids,
             filters.hidden,
             fetch_limit,

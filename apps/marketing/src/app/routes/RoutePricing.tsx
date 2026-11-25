@@ -426,7 +426,7 @@ export function RoutePricing() {
         <ProductHero
           product="Pricing"
           title="One plan for all your work."
-          description="Start free. Upgrade for more AI usage and storage."
+          description="Start free with every Block included. Upgrade anytime for higher AI usage and storage."
         />
         <section class="pricing-plan-list" aria-label="Choose a plan">
           <For each={plans}>

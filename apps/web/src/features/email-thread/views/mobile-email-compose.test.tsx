@@ -15,7 +15,6 @@ import type { ThreadReplyInput } from './thread-reply-input';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/component/FloatingInputLoader', () => ({
   FloatingInputLoader: () => null,
 }));

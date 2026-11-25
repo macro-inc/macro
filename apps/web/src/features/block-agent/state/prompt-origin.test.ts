@@ -496,6 +496,29 @@ describe('promptOrigin', () => {
       routine({
         type: 'event',
         event: {
+          event: 'email_labeled',
+          labels: ['Finance/Invoices'],
+          email: {
+            thread_id: 'e-1',
+            subject: 'Invoice #42',
+            from: 'Acme Billing <billing@acme.test>',
+            to: ['julia@example.com'],
+            received_at: '2026-10-15T08:15:00Z',
+            body: 'Attached.',
+          },
+        },
+      })
+    ).toEqual({
+      lead: 'via routine',
+      place: 'Watcher',
+      tail: '· labeled email from Acme Billing',
+      destination: { kind: 'email_thread', threadId: 'e-1' },
+    });
+
+    expect(
+      routine({
+        type: 'event',
+        event: {
           event: 'channel_message_attachment_created',
           entity_type: 'document',
           entity_id: 'doc-q3',

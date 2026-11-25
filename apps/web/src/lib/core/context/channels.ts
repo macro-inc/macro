@@ -157,12 +157,17 @@ type ChannelDirectoryProviderProps = {
 /**
  * The viewer's channels for the app: one directory, read from the GraphQL
  * cache (or the network without one), shared by every reader under it.
+ * `useOptionalChannelDirectory` is undefined outside the provider, for a
+ * reader that has another way to answer (asking the server).
  */
-export const [ChannelDirectoryProvider, useChannelDirectory] =
-  createAssertedContextProvider(
-    'ChannelDirectory',
-    (props: ChannelDirectoryProviderProps): ChannelDirectory => props.directory
-  );
+export const [
+  ChannelDirectoryProvider,
+  useChannelDirectory,
+  useOptionalChannelDirectory,
+] = createAssertedContextProvider(
+  'ChannelDirectory',
+  (props: ChannelDirectoryProviderProps): ChannelDirectory => props.directory
+);
 
 /** One channel the viewer joined: `pending` while a cold directory cannot
  * tell yet, `missing` when it is not one of theirs. */

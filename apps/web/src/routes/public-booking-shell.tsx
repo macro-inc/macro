@@ -1,4 +1,3 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import { isTauri } from '@core/util/platform';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { useNavigate } from '@solidjs/router';
@@ -22,7 +21,6 @@ export function PublicBookingShell(props: ParentProps) {
             tooltip="Back to Macro"
             variant="ghost"
             size="icon-md"
-            onPointerDown={() => hapticImpact('light')}
             onClick={() => navigate('/', { replace: true })}
           >
             <ArrowLeftIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />

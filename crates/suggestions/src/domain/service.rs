@@ -7,7 +7,7 @@
 //! problems the session can read and fix. Every accepted write is logged in
 //! the change log with the values before and after and the session's reason.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -32,12 +32,14 @@ use super::ports::{
     SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
 };
 use super::prompt;
+use super::topic::{NameTopic, name_topics_from};
 use recent::Recent;
 
 mod recent;
 mod runs;
 #[cfg(test)]
 pub(crate) mod test;
+mod topics;
 
 /// The PostHog flag that turns suggestions on for a person.
 pub const SUGGESTIONS_FLAG: &str = "enable-suggestions";
@@ -403,13 +405,12 @@ where
                 problems.push(match &target.part_id {
                     Some(part) => format!(
                         "the user can't open {item} `{}`, or `{part}` isn't one of its parts \
-                         (a message of a channel or email thread); a suggestion is only about \
-                         items they can open",
+                         (a message of a channel or email thread); cite only items they can \
+                         open",
                         target.entity_id
                     ),
                     None => format!(
-                        "the user can't open {item} `{}`; a suggestion is only about items they \
-                         can open",
+                        "the user can't open {item} `{}`; cite only items they can open",
                         target.entity_id
                     ),
                 });
@@ -602,6 +603,7 @@ where
         suggestions.hidden = tracing::field::Empty,
         suggestions.unchecked = tracing::field::Empty,
         suggestions.new = tracing::field::Empty,
+        suggestions.topics = tracing::field::Empty,
         suggestions.routines_unread = tracing::field::Empty,
     ), err)]
     async fn feed(
@@ -636,8 +638,8 @@ where
                 .then(b.updated_at.cmp(&a.updated_at))
         });
         done.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
-        let open = self.viewable_all(user, open).await;
-        let done = self.viewable_all(user, done).await;
+        let mut open = self.viewable_all(user, open).await;
+        let mut done = self.viewable_all(user, done).await;
         let span = tracing::Span::current();
         let new = open
             .shown
@@ -650,6 +652,16 @@ where
         span.record("suggestions.unchecked", open.unchecked + done.unchecked);
         span.record("suggestions.new", new);
         let counts = FeedCounts::of(open.shown.iter().chain(&done.shown));
+        let topics = match limit {
+            Some(_) => None,
+            None => {
+                let topics = self.topics(user, &open.shown, &open.shown).await?;
+                name_topics_from(&topics, &mut open.shown);
+                name_topics_from(&topics, &mut done.shown);
+                span.record("suggestions.topics", topics.len());
+                Some(topics)
+            }
+        };
         // A limited read is a glance at the best open ones: no done list.
         let (mut suggestions, mut done): (Vec<Suggestion>, _) = match limit {
             Some(limit) => (open.shown.into_iter().take(limit).collect(), None),
@@ -667,6 +679,7 @@ where
         Ok(SuggestionFeed {
             suggestions,
             done,
+            topics,
             counts,
         })
     }
@@ -1007,6 +1020,7 @@ where
         suggestion.generation.id = tracing::field::Empty,
         suggestion.generation.trace_id = tracing::field::Empty,
         suggestions.count = tracing::field::Empty,
+        suggestions.topics = tracing::field::Empty,
     ), err)]
     async fn review(
         &self,
@@ -1035,9 +1049,13 @@ where
         closed.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
         let open_count = u32::try_from(open.len()).unwrap_or(u32::MAX);
         open.append(&mut closed);
+        let topics = self.topics(&session.user, &open, &[]).await?;
+        name_topics_from(&topics, &mut open);
+        tracing::Span::current().record("suggestions.topics", topics.len());
         tracing::Span::current().record("suggestions.count", open.len());
         Ok(SuggestionsReview {
             suggestions: open,
+            topics,
             open: open_count,
             open_limit: OPEN_LIMIT,
             new_left: NEW_PER_GENERATION.saturating_sub(added),
@@ -1109,6 +1127,14 @@ where
             None => None,
         };
         self.inaccessible(&user, &about, &mut problems).await?;
+        let existing = self
+            .repo
+            .by_dedup_key(&user, &dedup_key)
+            .await
+            .map_err(SuggestionError::internal)?;
+        let topic = self
+            .topic_after(&user, existing.as_ref(), request.topic, &mut problems)
+            .await?;
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
@@ -1118,17 +1144,13 @@ where
             summary,
             importance,
             categories: check::categories(request.categories),
+            topic,
             about,
             prompt,
             sends,
             waiting: None,
         };
         let now = Utc::now();
-        let existing = self
-            .repo
-            .by_dedup_key(&user, &content.dedup_key)
-            .await
-            .map_err(SuggestionError::internal)?;
         if matches!(
             kind,
             super::model::NewKind::Entity {
@@ -1324,6 +1346,9 @@ where
         if let Some(categories) = request.categories {
             content.categories = check::categories(categories);
         }
+        content.topic = self
+            .topic_after(&user, Some(&existing), request.topic, &mut problems)
+            .await?;
         if let Some(about) = request.about {
             if about.is_empty() && existing.kind.name() == KindName::Entity {
                 problems
@@ -1375,6 +1400,22 @@ where
         }
         span.record("suggestion.outcome", "rewritten");
         self.reread(&user, id).await
+    }
+
+    #[tracing::instrument(name = "suggestions.name_topic", skip_all, fields(
+        agent.session.id = tracing::field::Empty,
+        suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
+        suggestion.outcome = tracing::field::Empty,
+        suggestion.problems = tracing::field::Empty,
+    ), err)]
+    async fn name_topic(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        request: NameTopic,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        self.name(principal, correlation, request).await
     }
 
     #[tracing::instrument(name = "suggestions.retire", skip_all, fields(

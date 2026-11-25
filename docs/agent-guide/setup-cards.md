@@ -35,7 +35,10 @@ the server says its connection can be imported from (`importAvailable`),
   trackers, and lets the owner exclude objects and change sharing. On phones,
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
-  Stop affects the selected source only, and completed copies stay in Macro.
+  For Notion, items marked **Needs you** cannot be selected for automatic import.
+  The completed report shows their reasons in an open **Needs you** section
+  apart from items left out in review. Stop affects the selected source only,
+  and completed copies stay in Macro.
   For reviewed Notion, Linear and Jira imports, delete a completed copy,
   then plan and approve again: it creates a new copy rather than linking the
   deleted one or restoring trash. Verify this for the original importer, a
@@ -56,6 +59,12 @@ folder was explicitly shared, personal copies go into the matching path under
 folder stays as it is. A later shared plan uses a separate shared folder when
 reusing the old folder would expose personal contents, and the report explains
 that separation.
+
+In a Notion workspace import, links between imported pages and databases open
+the matching Macro copy once both writes have finished. Links to pages left
+out of the import, inaccessible targets, and unresolved block anchors keep
+their original URLs. Imported pages keep their Notion creation and
+last-edited dates.
 
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).

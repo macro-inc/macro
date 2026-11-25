@@ -1,3 +1,4 @@
+import type { EntityData } from '@entity';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -456,5 +457,186 @@ describe('the tags of an item whose properties have not been read', () => {
     expect(mocks.updateOptions.mock.calls[0]![0].properties).toMatchObject([
       { currentOptionIds: [], nextOptionIds: ['later'] },
     ]);
+  });
+});
+
+describe('Enter right after opening a picker', () => {
+  const TAG_DEFINITION = {
+    id: 'tags',
+    display_name: 'Tags',
+    data_type: 'TAG' as const,
+    is_multi_select: true,
+    is_metadata: false,
+    is_system: false,
+    owner: { scope: 'team' as const, team_id: 'team' },
+    specific_entity_type: null,
+    created_at: '2026-01-01',
+    updated_at: '2026-01-01',
+  };
+
+  const AREAS_ON_TASK: Property = { ...SAVED_AREAS, options: AREAS.options };
+
+  function taggedDocument(id: string, optionIds: string[]): EntityData {
+    return {
+      id,
+      name: id,
+      ownerId: 'macro|viewer@example.com',
+      type: 'document',
+      fileType: 'md',
+      properties: [
+        {
+          id: `tags-on-${id}`,
+          definition: TAG_DEFINITION,
+          value: { type: 'SelectOption', value: optionIds },
+        },
+      ],
+    };
+  }
+
+  it('leaves the values of a multi-select property alone', () => {
+    const { onSave, field } = open(
+      { targetProperty: AREAS_ON_TASK },
+      { data: [AREAS_ON_TASK] }
+    );
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('leaves the people of a property holding several alone', () => {
+    const { onSave, field } = open(
+      { targetProperty: SAVED_ASSIGNEES },
+      { data: [SAVED_ASSIGNEES] }
+    );
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('leaves the tags of several items alone', () => {
+    mocks.tagSets = [
+      {
+        scope: 'team',
+        definition: { ...TAG_DEFINITION, displayName: 'Tags' },
+        options: ['launch', 'urgent', 'later'].map((id, index) => ({
+          id,
+          propertyDefinitionId: 'tags',
+          displayOrder: index,
+          value: { type: 'string', value: id },
+        })),
+      },
+    ];
+    const { field } = open({
+      mode: 'tag',
+      targetProperty: undefined,
+      selectedEntities: [
+        taggedDocument('first', ['launch']),
+        taggedDocument('second', ['launch', 'urgent']),
+      ],
+    });
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(mocks.updateOptions).not.toHaveBeenCalled();
+  });
+
+  it('clears the values once Clear all is chosen with the arrow keys', () => {
+    const { onSave, field } = open(
+      { targetProperty: AREAS_ON_TASK },
+      { data: [AREAS_ON_TASK] }
+    );
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0]![1]).toEqual({
+      valueType: 'SELECT_STRING',
+      values: null,
+    });
+  });
+
+  it('picks the row the arrow keys reach', () => {
+    const { onSave, field } = open(
+      { targetProperty: AREAS_ON_TASK },
+      { data: [AREAS_ON_TASK] }
+    );
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0]![1]).toEqual({
+      valueType: 'SELECT_STRING',
+      values: ['docs'],
+    });
+  });
+
+  it('adds what is typed on Enter', () => {
+    const { onSave, field } = open(
+      { targetProperty: AREAS_ON_TASK },
+      { data: [AREAS_ON_TASK] }
+    );
+
+    fireEvent.input(field, { target: { value: 'release' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0]![1]).toEqual({
+      valueType: 'SELECT_STRING',
+      values: ['design', 'docs', 'release'],
+    });
+  });
+
+  const PHASES_ON_TASK: Property = {
+    ...AREAS_ON_TASK,
+    propertyId: 'phases-on-task',
+    propertyDefinitionId: 'phases',
+    displayName: 'Phases',
+  };
+
+  it.each([
+    {
+      name: 'another property',
+      retarget: (state: PropertyEditorState): PropertyEditorState => ({
+        ...state,
+        targetProperty: PHASES_ON_TASK,
+      }),
+    },
+    {
+      name: 'other items',
+      retarget: (state: PropertyEditorState): PropertyEditorState => ({
+        ...state,
+        selectedEntities: [{ ...TASK, id: 'other-task' }],
+      }),
+    },
+  ])('starts over when it is reopened on $name', ({ retarget }) => {
+    mocks.savedProperties = () => ({ data: [AREAS_ON_TASK, PHASES_ON_TASK] });
+    const [state, setState] = createSignal<PropertyEditorState>({
+      mode: 'direct',
+      selectedEntities: [TASK],
+      targetProperty: AREAS_ON_TASK,
+    });
+    const onSave = vi.fn();
+    render(() => (
+      <PropertyEditorDialog
+        isOpen
+        state={state()}
+        onModeChange={() => {}}
+        onTargetChange={() => {}}
+        onClose={() => {}}
+        onSave={onSave}
+      />
+    ));
+    const field = screen.getByRole<HTMLInputElement>('textbox');
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    setState(retarget);
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

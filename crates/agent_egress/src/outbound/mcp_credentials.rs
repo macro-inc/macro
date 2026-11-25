@@ -14,7 +14,7 @@
 
 use connectors::{
     ConnectorId, ConnectorKey, ConnectorsError, McpConnections, McpConnectionsService,
-    PermitRefused, Permitted, Selection, Upstream,
+    PermitRefused, Permitted, Selection, Sought, Upstream,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -43,31 +43,42 @@ where
         Self { connections }
     }
 
-    /// The key `destination` names among the owner's connections.
+    /// The owner's connections that can answer for `destination`, and the key
+    /// it names among them. Every MCP request asks, so only those are read.
     ///
     /// A custom server is known here only by the hash of its address, so it
-    /// is looked up among every usable connection the owner holds, in scope
-    /// or not: whether the agent may reach it is [`McpConnections::permit`]'s
-    /// to say.
-    fn key(
-        connections: &McpConnections,
+    /// is looked up among every usable server the owner added, in scope or
+    /// not: whether the agent may reach it is [`McpConnections::permit`]'s to
+    /// say.
+    async fn find(
+        &self,
+        owner: &MacroUserIdStr<'static>,
         destination: &McpDestination,
-    ) -> Result<ConnectorKey, EgressError> {
+    ) -> Result<(McpConnections, ConnectorKey), EgressError> {
         match destination {
-            McpDestination::Connected(slug) => ConnectorId::parse(slug.as_str())
-                .map(ConnectorKey::App)
-                .map_err(|_| EgressError::UnknownServer(slug.clone())),
-            McpDestination::Custom(wanted) => connections
-                .handles()
-                .map(|handle| handle.key())
-                .find(|key| match key {
-                    ConnectorKey::Server(url) => {
-                        CustomMcpServerKey::for_url(url.as_str()) == *wanted
-                    }
-                    ConnectorKey::App(_) => false,
-                })
-                .cloned()
-                .ok_or_else(|| EgressError::UnknownCustomServer(wanted.clone())),
+            McpDestination::Connected(slug) => {
+                let app = ConnectorId::parse(slug.as_str())
+                    .map_err(|_| EgressError::UnknownServer(slug.clone()))?;
+                let connections = self.read(owner, Sought::App(&app)).await?;
+
+                Ok((connections, ConnectorKey::App(app)))
+            }
+            McpDestination::Custom(wanted) => {
+                let connections = self.read(owner, Sought::Servers).await?;
+                let key = connections
+                    .handles()
+                    .map(|handle| handle.key())
+                    .find(|key| match key {
+                        ConnectorKey::Server(url) => {
+                            CustomMcpServerKey::for_url(url.as_str()) == *wanted
+                        }
+                        ConnectorKey::App(_) => false,
+                    })
+                    .cloned()
+                    .ok_or_else(|| EgressError::UnknownCustomServer(wanted.clone()))?;
+
+                Ok((connections, key))
+            }
             McpDestination::Macro | McpDestination::Preview => {
                 Err(EgressError::Internal(rootcause::report!(
                     "the connectors resolver was asked for Macro's own or a preview MCP server; \
@@ -75,6 +86,21 @@ where
                 )))
             }
         }
+    }
+
+    async fn read(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        sought: Sought<'_>,
+    ) -> Result<McpConnections, EgressError> {
+        self.connections
+            .connections_to(owner, sought)
+            .await
+            .map_err(|error| {
+                EgressError::Internal(rootcause::report!(
+                    "could not read the owner's MCP connections: {error}"
+                ))
+            })
     }
 
     /// The owner's display name for a usable connection.
@@ -157,7 +183,7 @@ impl<Connections> McpCredentials for ConnectorsMcpCredentials<Connections>
 where
     Connections: McpConnectionsService,
 {
-    #[tracing::instrument(skip_all, err, fields(%owner, ?destination))]
+    #[tracing::instrument(skip_all, err, fields(?destination))]
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -166,12 +192,7 @@ where
         selection: &Selection,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
-        let connections = self.connections.connections(owner).await.map_err(|error| {
-            EgressError::Internal(rootcause::report!(
-                "could not read the owner's MCP connections: {error}"
-            ))
-        })?;
-        let key = Self::key(&connections, destination)?;
+        let (connections, key) = self.find(owner, destination).await?;
 
         let scoped = connections.scoped(selection);
         match scoped.permit(&key) {

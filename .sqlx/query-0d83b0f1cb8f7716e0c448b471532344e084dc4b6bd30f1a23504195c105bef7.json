@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM import_entity_written\n               WHERE import_id = $1 AND kind = 'database_reservation_failure' AND starts_with(object, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d83b0f1cb8f7716e0c448b471532344e084dc4b6bd30f1a23504195c105bef7"
+}

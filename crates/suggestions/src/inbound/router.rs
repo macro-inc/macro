@@ -23,6 +23,7 @@ use crate::domain::model::{
     SuggestionCaller, SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 use crate::domain::ports::SuggestionApi;
+use crate::domain::topic::NameTopic;
 
 #[cfg(test)]
 mod test;
@@ -75,6 +76,7 @@ where
             "/suggestions/viewed",
             post(record_suggestions_viewed::<S, Auth>),
         )
+        .route("/suggestions/topics", put(name_suggestion_topic::<S, Auth>))
         .route(
             "/suggestions/{id}",
             axum::routing::patch(rewrite_suggestion::<S, Auth>),
@@ -540,6 +542,42 @@ where
         state
             .service
             .suggest(&principal, correlation, request)
+            .await?,
+    ))
+}
+
+#[utoipa::path(
+    put,
+    path = "/suggestions/topics",
+    tag = "suggestions",
+    operation_id = "name_suggestion_topic",
+    request_body = NameTopic,
+    responses(
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the topic was named, and what to fix when it wasn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a suggestions generation session may name a topic"),
+        (status = 404, body = String, description = "Suggestions are off for the user"),
+        (status = 500, body = String),
+    )
+)]
+/// Name a topic suggestions may belong to, from a suggestions generation
+/// session, or change the name and reason of the one with its key.
+pub async fn name_suggestion_topic<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    body: Result<Json<NameTopic>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .name_topic(&principal, correlation, request)
             .await?,
     ))
 }

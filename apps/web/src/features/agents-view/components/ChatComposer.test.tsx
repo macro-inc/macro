@@ -2,10 +2,10 @@ import { createSessionComposerDraft } from '@app/features/block-agent/primitives
 import type { InputAttachmentData } from '@channel/Input/types';
 import { preloadAgentFold } from '@core/agent-fold/client';
 import type { RestoreFocusDefault } from '@core/component/LexicalMarkdown/plugins/restore-focus';
-import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -18,10 +18,10 @@ import {
 import { createSignal, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { MobileModelSelector } from '../views/mobile/model-selector';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
-
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
+import { UnifiedModelSelectorRoot } from './unified-model-selector/root';
 
 vi.mock('@service-connection/websocket', () => ({
   ws: { addEventListener: vi.fn(), send: vi.fn() },
@@ -545,11 +545,9 @@ describe('Chat session input', () => {
       // Not captured, so the editor inserts a newline instead of sending.
       expect(editor.enter?.(undefined, editor.text)).toBe(false);
       expect(send).not.toHaveBeenCalled();
-      expect(hapticImpact).not.toHaveBeenCalled();
       expect(editor.clear).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(send).toHaveBeenCalledWith('first line', []);
-      expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
     });
 
     it('applies to a new conversation as well', () => {
@@ -564,7 +562,6 @@ describe('Chat session input', () => {
       ));
       expect(editor.enter?.(undefined, 'Describe this')).toBe(false);
       expect(send).not.toHaveBeenCalled();
-      expect(hapticImpact).not.toHaveBeenCalled();
     });
   });
 
@@ -972,9 +969,22 @@ it.each(['Send', 'Attach files', 'Model'])(
 
 it.each(['Repository', 'Branch'])(
   'keeps the mobile composer expanded while the portaled %s picker has focus',
-  (control) => {
+  async (control) => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
+    const computedStyle = window.getComputedStyle;
+    vi.stubGlobal('getComputedStyle', (element: Element) => {
+      const style = computedStyle(element);
+      style.transitionDuration ||= '0s';
+      style.animationName ||= 'none';
+      return style;
+    });
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
     const [controlsOpen, setControlsOpen] = createSignal(false);
+    const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
+      'https://github.com/macro-inc/macro'
+    );
     const { container } = render(() => (
       <ChatComposer
         collapseOnBlur
@@ -986,8 +996,8 @@ it.each(['Repository', 'Branch'])(
         drawerOpen
         drawer={
           <RepositoryPicker
-            onOpenChange={setControlsOpen}
-            repoUrl="https://github.com/macro-inc/macro"
+            onFocusScopeChange={setControlsOpen}
+            repoUrl={repoUrl()}
             branch="main"
             repositories={[]}
             repositoriesLoading={false}
@@ -1005,9 +1015,12 @@ it.each(['Repository', 'Branch'])(
       />
     ));
     const input = screen.getByTestId('editor');
-    fireEvent.focusIn(input);
+    input.tabIndex = -1;
+    input.focus();
     fireEvent.click(screen.getByRole('button', { name: control }));
     const search = screen.getByRole('combobox');
+    const scrollBody = search.closest<HTMLElement>('[data-drawer-scroll-body]');
+    if (scrollBody) scrollBody.scrollTo = vi.fn();
     expect(container.contains(search)).toBe(false);
     fireEvent.focusOut(input, { relatedTarget: search });
     fireEvent.pointerDown(search);
@@ -1021,10 +1034,235 @@ it.each(['Repository', 'Branch'])(
         ?.getAttribute('data-composer-compact')
     ).toBe('false');
     fireEvent.click(screen.getAllByRole('option')[0]);
-    expect(controlsOpen()).toBe(false);
+    expect(controlsOpen()).toBe(true);
+    await waitFor(() => expect(controlsOpen()).toBe(false));
     expect(screen.getByTestId('editor')).toBe(input);
+    if (control === 'Branch') {
+      input.focus();
+      fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+      expect(controlsOpen()).toBe(true);
+      setRepoUrl(undefined);
+      await waitFor(() => expect(controlsOpen()).toBe(false));
+    }
   }
 );
+
+it.each([false, true])(
+  'keeps portaled controls inside the phone composer interaction until they close (keyboard: %s)',
+  (keyboard) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    setVirtualKeyboardVisible(keyboard);
+    onTestFinished(() => {
+      setVirtualKeyboardVisible(false);
+    });
+    const [open, setOpen] = createSignal(false);
+    const { container } = render(() => (
+      <>
+        <ChatComposer
+          collapseOnBlur
+          phoneLayout
+          controlsOpen={open()}
+          draft="Unsent"
+          onDraftChange={() => {}}
+          onSend={() => {}}
+          selector={<button>Model</button>}
+        />
+        <Portal>
+          <input aria-label="Portaled control" />
+        </Portal>
+        <button aria-label="Outside composer" />
+      </>
+    ));
+    const input = screen.getByTestId('editor');
+    input.tabIndex = -1;
+    input.focus();
+    const surface = container.querySelector('[data-agent-composer]')!;
+    const blur = vi.spyOn(input, 'blur');
+    const control = screen.getByRole('textbox', { name: 'Portaled control' });
+    setOpen(true);
+    fireEvent.touchStart(control, { touches: [{ clientX: 10, clientY: 10 }] });
+    expect(blur).not.toHaveBeenCalled();
+    control.focus();
+    expect(document.activeElement).toBe(control);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+    screen.getByRole('button', { name: 'Outside composer' }).focus();
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+    setOpen(false);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
+    expect(screen.getByTestId('editor')).toBe(input);
+    input.focus();
+    setOpen(true);
+    setOpen(false);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+    // iOS can blur with no next target before the control's click opens it.
+    input.blur();
+    setOpen(true);
+    control.focus();
+    setOpen(false);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
+  }
+);
+
+it('expands again when an outside pointer left DOM focus in the editor', () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  const { container } = render(() => (
+    <ChatComposer
+      collapseOnBlur
+      phoneLayout
+      draft="Unsent"
+      onDraftChange={() => {}}
+      onSend={() => {}}
+      selector={<button>Model</button>}
+    />
+  ));
+  const input = screen.getByTestId('editor');
+  input.tabIndex = -1;
+  input.focus();
+  const surface = container.querySelector('[data-agent-composer]')!;
+  fireEvent.pointerDown(document.body);
+  expect(document.activeElement).toBe(input);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
+  fireEvent.pointerDown(input);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+});
+
+it('keeps the list composer expanded across model selection and dismisses an orphaned card', async () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  setVirtualKeyboardVisible(true);
+  const computedStyle = window.getComputedStyle;
+  vi.stubGlobal('getComputedStyle', (element: Element) => {
+    const style = computedStyle(element);
+    style.transitionDuration ||= '0s';
+    style.animationName ||= 'none';
+    return style;
+  });
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-corvu-drawer-content') ? 600 : 0;
+    }
+  );
+  onTestFinished(() => {
+    setVirtualKeyboardVisible(false);
+    vi.unstubAllGlobals();
+  });
+  const [open, setOpen] = createSignal(false);
+  const [scopeOpen, setScopeOpen] = createSignal(false);
+  const [model, setModel] = createSignal('auto');
+  const [hidden, setHidden] = createSignal(false);
+  const models = [
+    { id: 'auto', label: 'Auto' },
+    { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+    { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
+  ];
+  const { container } = render(() => (
+    <div hidden={hidden()}>
+      <ChatComposer
+        collapseOnBlur
+        phoneLayout
+        controlsOpen={scopeOpen()}
+        draft="Keep the list draft"
+        onDraftChange={() => {}}
+        onSend={() => {}}
+        selector={
+          <UnifiedModelSelectorRoot
+            state={{
+              get model() {
+                return model();
+              },
+              models,
+              suggestedModels: models,
+              onModel: (id) => {
+                setModel(id);
+              },
+              onEffort: () => {},
+              onSpeed: () => {},
+              onOpenChange: setOpen,
+              onFocusScopeChange: setScopeOpen,
+              onCloseAutoFocus: (event) => event.preventDefault(),
+            }}
+          >
+            <MobileModelSelector />
+          </UnifiedModelSelectorRoot>
+        }
+      />
+    </div>
+  ));
+  const input = screen.getByTestId('editor');
+  const surface = container.querySelector('[data-agent-composer]')!;
+  input.tabIndex = -1;
+  input.focus();
+  const trigger = screen.getByRole('button', {
+    name: 'Choose an agent or model',
+  });
+  fireEvent.click(trigger);
+  let search = await screen.findByRole('textbox');
+  const sheet = search.closest<HTMLElement>('[data-corvu-drawer-content]')!;
+  search.focus();
+  fireEvent(window, new Event('resize'));
+  expect(document.activeElement).toBe(search);
+  expect(open()).toBe(true);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  await waitFor(() => expect(sheet.style.transform).toContain('0px'));
+  const press = new MouseEvent('pointerdown', {
+    bubbles: true,
+    button: 0,
+    clientX: 100,
+    clientY: 100,
+  });
+  Object.defineProperty(press, 'pointerType', { value: 'touch' });
+  fireEvent(search, press);
+  fireEvent.touchStart(search, { touches: [{ clientX: 100, clientY: 100 }] });
+  fireEvent.touchMove(search, { touches: [{ clientX: 100, clientY: 102 }] });
+  fireEvent.touchMove(search, { touches: [{ clientX: 100, clientY: 742 }] });
+  fireEvent.touchEnd(search, { touches: [] });
+  expect(open()).toBe(true);
+  expect(document.activeElement).toBe(search);
+  fireEvent.click(sheet.querySelector('button')!);
+  // The closing sheet must retire its focus trap before a new card mounts.
+  expect(
+    document.querySelector('[role="dialog"]:not([data-corvu-drawer-content])')
+  ).toBeNull();
+  await waitFor(() =>
+    expect(
+      document.querySelector('[role="dialog"]:not([data-corvu-drawer-content])')
+    ).not.toBeNull()
+  );
+  expect(open()).toBe(true);
+  fireEvent.click(await screen.findByRole('button', { name: 'Auto' }));
+  search = await screen.findByRole('textbox');
+  fireEvent.focusOut(input, { relatedTarget: search });
+  fireEvent.pointerDown(search);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
+  expect(open()).toBe(false);
+  expect(scopeOpen()).toBe(true);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  await waitFor(() => expect(scopeOpen()).toBe(false));
+  expect(model()).toBe('anthropic/claude-sonnet-5-5');
+  await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
+  expect(screen.getByTestId('editor')).toBe(input);
+
+  input.focus();
+  fireEvent.click(trigger);
+  await screen.findByRole('dialog');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => expect(open()).toBe(false));
+
+  input.focus();
+  fireEvent.click(trigger);
+  await screen.findByRole('dialog');
+  setHidden(true);
+  await waitFor(() => expect(open()).toBe(false));
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  setHidden(false);
+
+  input.focus();
+  fireEvent.click(trigger);
+  await screen.findByRole('dialog');
+  fireEvent.click(document.querySelector('[data-model-selector-overlay]')!);
+  await waitFor(() => expect(open()).toBe(false));
+});
 
 it('blocks existing images on text-only models and preserves the draft until switching back', () => {
   const send = vi.fn();

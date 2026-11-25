@@ -27,7 +27,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: e65db8750e500c37d513919b059b04353457aa94b2add4b204f372ce614d0d35
+        checksum/config: 374336de0b98c02e5327ff9a8cec293c9538816ccd381a4453ce012c82844dd0
       labels:
         app.kubernetes.io/component: querier
         app.kubernetes.io/instance: tempo
@@ -62,7 +62,7 @@ spec:
             - -config.file=/conf/tempo.yaml
           env:
             - name: GOMEMLIMIT
-              value: 870MiB
+              value: 1305MiB
             - name: GOGC
               value: "80"
           image: docker.io/grafana/tempo:2.10.7
@@ -89,10 +89,10 @@ spec:
             timeoutSeconds: 1
           resources:
             limits:
-              memory: 1Gi
+              memory: 1536Mi
             requests:
               cpu: 50m
-              memory: 256Mi
+              memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

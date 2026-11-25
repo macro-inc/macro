@@ -52,7 +52,7 @@ impl<'a> Audience<'a> {
         if self.incoming.is_for_owner(owner) {
             return Ok(true);
         }
-        let Some((inbox_owner, link_id)) = self.incoming.received_inbox() else {
+        let Some((inbox_owner, link_id)) = self.incoming.mail_inbox() else {
             return Ok(false);
         };
         if self.delegates.is_none() {
@@ -93,6 +93,7 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates>
             revision: configuration.revision,
             event: event.clone(),
             admitted_at: Utc::now(),
+            traceparent: None,
         };
         match configuration.check_pending(&pending) {
             Ok(()) => {}

@@ -659,7 +659,9 @@ describe('grouped Soup live ownership', () => {
       lateAcknowledge = resolve;
     });
     state.executions[0].publish(page([groupedDocument('b')]), late);
-    state.generations.forEach((listener) => listener({ storage: 'reset' }));
+    state.generations.forEach((listener) =>
+      listener({ storage: 'reset', queue: 'reset' })
+    );
     lateAcknowledge('2');
     await late;
     expect(state.requests).toHaveLength(0);
@@ -672,7 +674,9 @@ describe('grouped Soup live ownership', () => {
     state.executions[1].publish(page([groupedDocument('b')], null));
     await next;
     const old = state.requests.at(-1)!;
-    state.generations.forEach((listener) => listener({ storage: 'reset' }));
+    state.generations.forEach((listener) =>
+      listener({ storage: 'reset', queue: 'reset' })
+    );
     old.resolve(update([groupedDocument('b', ['done'])]));
     await old.promise;
     expect(ids(state.query.data())?.flatMap((bin) => bin.ids)).toEqual(['a']);

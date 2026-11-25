@@ -59,6 +59,11 @@ export interface CreatedEntity {
  * - `task.property_changed`: any property on a task changes, such as its assignees, due date, project or effort, including status and priority.
  * - `email.message_received`: new mail arrives in any of your inboxes, yours or one
  *   delegated to you. Excludes spam, trash, drafts and historical imports.
+ * - `email.labeled`: a thread in one of those inboxes gains a Gmail label or
+ *   Outlook category someone made, as mail arrives with it or later. Put the
+ *   labels from `macro.email.labels()` in the filter's `labels`, alone in its
+ *   filter, or leave them out for any label. Labels a routine or an agent adds
+ *   never start a routine.
  * - `call.started`: a call you start begins. The routine gets the call and who has joined so far.
  * - `call.ended`: a call you joined ends. The routine gets the call's participants and transcript.
  */

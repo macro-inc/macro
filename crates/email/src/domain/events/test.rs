@@ -68,6 +68,7 @@ fn message_received_wire_shape() {
             attachment_count: 2,
             is_spam_or_trash: false,
             received_at: Some(timestamp()),
+            labels_gained: Vec::new(),
         }),
     );
 
@@ -280,6 +281,7 @@ fn event_type_strings_follow_dot_convention() {
                 attachment_count: 0,
                 is_spam_or_trash: false,
                 received_at: None,
+                labels_gained: Vec::new(),
             }),
             "email.message_received",
         ),
@@ -424,6 +426,9 @@ fn event_type_strings_follow_dot_convention() {
                 }],
                 removed: vec![],
                 origin: EmailEventOrigin::ProviderSync,
+                message_id: None,
+                labels_gained: Vec::new(),
+                automated: false,
             }),
             "email.thread_labels_updated",
         ),

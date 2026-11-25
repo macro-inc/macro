@@ -621,13 +621,10 @@ function BaseCard(props: {
 
 /**
  * A single truncating body line of markdown, rendered only when the text has
- * content — the standard middle/bottom line of a BaseCard.
+ * content — the standard middle/bottom line of a BaseCard. It is a preview:
+ * the card opens it, its links and mentions are inert.
  */
-function CardMarkdownLine(props: {
-  text?: string;
-  class?: string;
-  inert?: boolean;
-}) {
+function CardMarkdownLine(props: { text?: string; class?: string }) {
   return (
     <Show when={props.text?.trim()}>
       {(value) => (
@@ -636,7 +633,7 @@ function CardMarkdownLine(props: {
             markdown={value()}
             singleLine
             theme={unifiedListMarkdownTheme}
-            inert={props.inert}
+            inert
           />
         </InboxCard.Content>
       )}
@@ -646,11 +643,11 @@ function CardMarkdownLine(props: {
 
 /**
  * The two-line clamped markdown body (the channel-style message preview),
- * reserving its height so short previews keep the row rhythm.
+ * reserving its height so short previews keep the row rhythm. Its links and
+ * mentions are inert, like every card preview's.
  */
 function CardClampedMarkdown(props: {
   text?: string;
-  inert?: boolean;
   /** Inline run rendered ahead of the text (e.g. a sender label or
    * attachment paperclip); wraps and clamps as part of the same lines. */
   prefix?: JSX.Element;
@@ -664,7 +661,7 @@ function CardClampedMarkdown(props: {
             markdown={value()}
             singleLine
             theme={inlineWrappingMarkdownTheme}
-            inert={props.inert}
+            inert
           />
         )}
       </Show>
@@ -783,7 +780,6 @@ export function ChannelCardLayout(
         when={props.preview}
         fallback={
           <CardClampedMarkdown
-            inert
             text={text().content}
             prefix={
               <>
@@ -833,7 +829,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
-      <CardClampedMarkdown inert text={text().content} />
+      <CardClampedMarkdown text={text().content} />
     </BaseCard>
   );
 }
@@ -1284,6 +1280,7 @@ export function AgentSessionCardLayout(props: InboxCardLayoutProps) {
         <Show when={content()?.trim()}>
           {(text) => (
             <StaticMarkdown
+              inert
               markdown={text()}
               singleLine
               theme={unifiedListMarkdownTheme}
@@ -1666,8 +1663,6 @@ export function ReactionCardLayout(props: InboxCardLayoutProps) {
         {(content) => (
           <>
             <CardMarkdownLine
-              // The message is a preview: the card opens it, its links don't.
-              inert
               text={reactionText({
                 emoji: content().emoji,
                 messageContent: content().messageContent,

@@ -287,6 +287,11 @@ device; the retired `/mobile-signup`, `/mobile-signup-sent`, and
 `/app/mobile-email-signup` paths forward there with their query. Existing
 members and the native apps keep their existing routes. Check the flow at
 390px with touch emulation and a short (about 660px) in-app-browser height.
+In a phone browser, finishing onboarding (Free, the trial's return from
+Stripe, or the routines step) ends on **Macro is better on desktop.** with
+**Download app** (the App Store, or Google Play on Android) and **Continue in
+browser**, which enters the app where desktop would have gone. Computers and
+the native apps skip it.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
 interests and security. No account is required for these slides. The signed-out

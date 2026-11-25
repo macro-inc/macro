@@ -35,10 +35,36 @@ Moving the start date or time moves the end with it, keeping the event's length
 after that the end stays put, and a start past it shows the end-before-start
 error.
 
+With the calendar cache, `Create event` and `Save` close the composer as soon as
+the write is saved locally and queued (as property saves do), before the provider
+answers; the event is already on the grid under a local id. The composer hands
+the create the calendar it shows, so the create reads no calendar list first.
+Its details open while the reply is on its way and move to the server's copy
+the create's answer carries as soon as it arrives, before the grid's own reads
+draw it; only then does the URL name the event, and the new chip stays selected
+until the grid replaces it. A local copy, new or moved, shows no
+`Original time` line: the server keeps a time zone on the event, never on its
+occurrences. A refused save shows
+`Failed to create event` or `Failed to update event` afterwards, and a refused
+create leaves the grid. An edit that adds a new Macro call still waits for the
+call to be linked. Over REST the composer closes when the provider answers.
+
+A moved event keeps its id, but its occurrence is keyed by its start, so the
+server's answer to a drag or a time edit that changes the start replaces the
+occurrence. Details opened on it stay open while the move is answered, then
+follow the occurrence the answer names to its chip, and the URL drops a link's
+locator for the old one. A resize, and a one-occurrence move of a series, keep
+the key. When the answer cannot say
+which occurrence replaced the moved one (a whole series moved, a queued move),
+the details close as the old occurrence leaves the grid.
+
 If a permission change retires a successful create response, the composer uses
 the preserved server identity. If that identity cannot be read yet, it closes
 and refreshes the calendar without opening the event or offering a duplicate
 creation. The universal input reports **Event created** without an Open action.
+An event whose server identity the cache could not tell, as while the cache is
+paused, keeps refusing edits ("This event is still being created") until the
+cache serves again; then it moves to the server's id.
 
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
@@ -585,7 +611,7 @@ The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting li
 for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
 that selection creates the Macro call together with the event in one save, so the
 invitation attendees receive already carries the link; if the call cannot be
-created, nothing is saved and Save retries the whole create. Selecting
+created, nothing is saved and `Failed to create event` shows. Selecting
 `Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
 not create calls. There is no separate call toggle or Scheduled Call menu option.
 All-day events get an untimed call link, so setup does not display a misleading midnight time.
