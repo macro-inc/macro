@@ -24,14 +24,15 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `observability-namespace` | `observability` | The namespace the backends and Grafana run in, default-deny NetworkPolicies and the policies they share. |
 | `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Sends to Mimir and Loki. |
 | `loki` | `observability` | Loki, three single-binary replicas, logs in S3. |
-| `tempo` | `observability` | Tempo (tempo-distributed), three ingesters, traces in S3; its metrics generator writes span metrics and service graphs to Mimir. |
+| `tempo` | `observability` | Tempo (tempo-distributed), three ingesters, traces in S3; its metrics generator keeps recent blocks for TraceQL metrics. |
 | `mimir` | `observability` | Mimir, three monolithic replicas, metrics in S3, in place of the host's Prometheus. |
 | `reloader` | `observability` | Restarts a Deployment when a Secret it names in `secret.reloader.stakater.com/reload` changes (Grafana's rotated database password). |
 | `grafana` | `observability` | Grafana, two replicas on RDS Postgres with HA alerting between them, provisioned from the host's `nixos/grafana-provisioning`. Sends no notification until the switch, except the watchdog heartbeat (below). |
 | `edge` | `observability` | nginx, the only target of the ALB: Grafana and Argo CD by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
 | `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass. |
-| `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send to Loki, Tempo and Mimir. |
+| `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send logs to Loki, metrics to Mimir and traces to the sampler. |
 | `derived-metrics` | `observability` | Two Alloys that compute the metrics Datadog derives from spans and write them to Mimir ("Derived metrics"). |
+| `alloy-sampler` | `observability` | Three Alloys that each see whole traces: count span metrics and service graphs, keep or drop each trace, send the kept ones to Tempo ("Trace sampling" below). |
 
 Charts are pinned in `charts/<repo>/<chart>/default.nix` (version and hash).
 
@@ -139,9 +140,8 @@ Loki, Tempo and Mimir (`modules/backends/`) each keep three copies of recent
 data (replication 3, quorum 2), one replica per zone, and older data in their
 own S3 bucket, so a rollout, a drained node or a lost zone loses neither
 writes nor queries. Two parts keep one copy: Tempo's metrics generators and
-Loki's pattern ingester each own a share of the series or streams, so while a
-replica is down its share of span metrics, service graphs and log patterns
-is missing. Each pod keeps its WAL on a gp3 volume.
+Loki's pattern ingester each own a share of the spans or streams, so while a
+replica is down its share of TraceQL metrics and log patterns is missing. Each pod keeps its WAL on a gp3 volume.
 
 | Backend | Write | Query | Bucket |
 | --- | --- | --- | --- |
@@ -154,7 +154,7 @@ from there. No tenant headers: Loki runs without auth (tenant `fake`), Tempo
 and Mimir without multitenancy.
 
 Retention (logs 30 days, traces 7, metrics 30), limits and features (pattern
-ingestion, level detection, span metrics, service graphs) come from the
+ingestion, level detection, TraceQL metrics) come from the
 single host's `infra/stacks/observability/nixos/backend-config.nix`, so the
 two stay the same while both run; CI re-checks the render when it changes.
 
@@ -221,9 +221,51 @@ alloy-ingest ── tap: spans some metric reads, before sampling ──▶ deri
 
 ```
 ALB ─▶ edge ─┬─ grafana.* ──▶ grafana ──▶ query-gateway ──▶ Loki, Mimir, Tempo
-             ├─ /v1/{traces,logs,metrics} ──▶ alloy-ingest ──▶ Loki, Tempo, Mimir
+             ├─ /v1/{traces,logs,metrics} ──▶ alloy-ingest ─┬─ logs, metrics ──▶ Loki, Mimir
+             │                                             └─ traces ──▶ alloy-sampler ──▶ Tempo
              └─ /api/v1/write, /loki/api/v1/push (basic auth) ──▶ Mimir, Loki
 ```
+
+### Trace sampling
+
+`alloy-ingest` routes every span of a trace to one `alloy-sampler` replica by
+its trace ID, over the headless Service's DNS. Each replica:
+
+- counts `traces_spanmetrics_*` and `traces_service_graph_*` from every span,
+  before anything is dropped. Series carry the replica's name in `sampler`, so
+  sum across it;
+- holds a trace 30 seconds, then keeps it if a policy in
+  `modules/sampler/policies.nix` matches: from prod, every trace with an error,
+  every served request of 1 s or more, and a tenth of the rest; from any
+  environment, every `perf` and Outlook trace; from dev, CI and local stacks,
+  everything. An unnamed environment is sampled like prod. A span that arrives
+  later follows a kept trace; one of a dropped trace is judged again, so a late
+  error is still kept (that part of the trace only);
+- caps each service within each group of policies, in spans a second. A trace
+  is charged to the service of its root span, or to every named service in it
+  when the root never arrives. A service over its cap loses traces while the others
+  keep theirs. Services named in `policies.nix` have their own; the rest share
+  `other`. Perf and Outlook traces have one cap each, shared by all. The caps
+  bound what is stored, not what is held: spans of every service wait in the
+  same memory, so a flood far above the sized load can push others out early.
+
+Two things are approximate. When a replica starts or stops, about a third of
+trace IDs move to another one, so a trace in flight can be in two parts, each
+decided on its own; a retry after a replica dies abruptly counts and stores
+spans twice for a few seconds. A graceful stop loses up to 30 seconds of the
+replica's unflushed span metrics.
+
+TraceQL metrics and Drilldown → Traces see only the sampled traces; use the
+span metrics for rates and errors. An exemplar can point at a trace that was
+dropped.
+
+A load test of 38,000 spans a second (synthetic, about 1 KB each, on x86) took
+0.7 cores of ingest and 1.0 of sampler over three replicas, each holding 80,000
+traces in 1.8 GiB, with nothing refused or pushed out.
+
+Watch `otelcol_processor_tail_sampling_*` and `otelcol_exporter_*_failed_*`
+(`job="observability/alloy"`): a trace dropped too early means `NUM_TRACES` is
+too small, and refused spans mean the memory limit is reached.
 
 The edge and the query gateway are the full host's nginx rules, ported by
 hand; Alloy ingest runs the host stack's `nixos/ingest.alloy` with the
@@ -318,7 +360,7 @@ machine with cluster access (`../aws/README.md` "Cluster access"):
     -d '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"switch-test"}}]},"scopeLogs":[{"logRecords":[{"timeUnixNano":"'"$now"'","body":{"stringValue":"switch test"}}]}]}]}'
   curl -fsS http://localhost:8080/v1/traces -H 'Host: otlp.macro-internal.com' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-    -d '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"switch-test"}}]},"scopeSpans":[{"spans":[{"traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","name":"switch-test","kind":1,"startTimeUnixNano":"'"$now"'","endTimeUnixNano":"'"$((now + 1000000))"'"}]}]}]}'
+    -d '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"switch-test"}},{"key":"deployment.environment","value":{"stringValue":"dev"}}]},"scopeSpans":[{"spans":[{"traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","name":"switch-test","kind":1,"startTimeUnixNano":"'"$now"'","endTimeUnixNano":"'"$((now + 1000000))"'"}]}]}]}'
   ```
   In Grafana, Explore finds `{service_name="switch-test"}` in Loki and trace
   `5b8efff798038103d269b633813fc60c` in Tempo.

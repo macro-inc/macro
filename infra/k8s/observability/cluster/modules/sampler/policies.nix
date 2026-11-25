@@ -4,7 +4,8 @@
 #
 # A trace is charged to the service of its root span, so a noisy service never
 # spends the budget of one it calls. One whose root never arrived is charged to
-# every service in it.
+# every named service in it. A trace can match two groups (an error that is also
+# in the tenth) and is then kept by either.
 { lib }:
 { replicas }:
 let

@@ -20,12 +20,18 @@ otelcol.processor.memory_limiter "spans" {
   output { traces = [otelcol.processor.transform.root.input] }
 }
 
-// The root span carries its service's name, so a trace is charged to it.
+// The root span carries its service's name, so a trace is charged to it. What a
+// sender put there is dropped first.
 otelcol.processor.transform "root" {
   error_mode = "ignore"
   trace_statements {
+    context = "resource"
+    statements = [`delete_key(attributes, "macro.sampling.root")`]
+  }
+  trace_statements {
     context = "span"
     statements = [
+      `delete_key(attributes, "macro.sampling.root")`,
 @ROOT_STATEMENTS@
     ]
   }
