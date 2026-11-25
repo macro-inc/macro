@@ -373,9 +373,9 @@ the same action. Video routes also expose it in their header; channel videos
 expose it over the player on hover or keyboard focus (always visible on touch)
 and in the expanded viewer. Linked video cards also offer Download in their
 preview header without opening the file. An email attachment chip's download
-segment saves the attachment under its original name through the same action,
-without filing a Drive copy, in the browser and in the desktop, iOS and
-Android apps.
+segment saves the attachment under its original name, without filing a Drive
+copy, in the browser and in the desktop, iOS and Android apps. It hands off
+like the action below but shows no progress, Cancel or Retry.
 
 - Click Download once. The control shows preparation progress when the server
   provides a length, disables repeat clicks, and offers Cancel. Browser users

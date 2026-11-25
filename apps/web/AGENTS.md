@@ -2033,10 +2033,11 @@ instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
 Channel videos, linked video previews, and Drive video/image/code/canvas/unknown previews share
 `createFileDownload` and `FileDownloadButton`. Keep menu and visible controls
-bound to the same controller. Call recording menus, the list-row Download
-(`makeDownloadAction`) and email attachment chips use the same controller;
-the last two run it through `startFileDownload`, under a root of its own,
-because choosing a context-menu item disposes the menu's owner. An email
+bound to the same controller. Call recording menus use the same controller. The list-row Download
+(`makeDownloadAction`) and email attachment chips run a one-off download
+through `startFileDownload`, under a root of its own, because choosing a
+context-menu item disposes the menu's owner; they show no progress, Cancel or
+Retry, and a prepared Web Share file is not kept for another tap. An email
 attachment's signed URL is on the attachments CloudFront host, which the
 native HTTP scope does not list, so `emailAttachmentDownloadSource` reads it
 with `webviewFetch`; the bucket's CORS rules answer the app origins.
