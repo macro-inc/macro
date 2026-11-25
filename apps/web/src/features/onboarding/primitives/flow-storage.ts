@@ -172,8 +172,15 @@ export const saveSignupDraft = (draft: SignupDraft) =>
 
 export const clearSignupDraft = () => writeSession(KEYS.signupDraft, undefined);
 
-export const readAppHandoff = () =>
+/** This tab's handoff, including one still waiting for the old session to end. */
+export const readAnyAppHandoff = () =>
   parseAppHandoff(readSession(KEYS.appHandoff), Date.now());
+
+/** This tab's handoff, once the session the browser held has ended. */
+export function readAppHandoff(): AppHandoff | undefined {
+  const handoff = readAnyAppHandoff();
+  return handoff?.signedOut ? handoff : undefined;
+}
 
 export const saveAppHandoff = (handoff: AppHandoff) =>
   writeSession(KEYS.appHandoff, serializeAppHandoff(handoff));

@@ -14,6 +14,7 @@ import { parseOnboardingStepParam } from './core/steps';
 import { createAppOnboardingContext } from './create-app-onboarding-context';
 import {
   clearAppHandoff,
+  readAnyAppHandoff,
   readAppHandoff,
   saveAppHandoff,
 } from './primitives/flow-storage';
@@ -121,8 +122,9 @@ type OnboardingEnding =
 /**
  * Remembers the native app that sent this tab to sign up (`/signup` carries
  * its challenge), so the sign-up can end by handing the session back to it.
- * Returns whether the link carried one; a link without one leaves an earlier
- * handoff in place.
+ * It is offered to no one until {@link finishAppHandoffSignOut} records that
+ * the browser's earlier session ended. Returns whether the link carried one;
+ * a link without one leaves an earlier handoff in place.
  */
 export function rememberAppHandoff(params: Record<string, unknown>): boolean {
   const handoff = appHandoffFromParams(params, Date.now());
@@ -130,8 +132,24 @@ export function rememberAppHandoff(params: Record<string, unknown>): boolean {
   return handoff !== undefined;
 }
 
-/** This tab's sign-up no longer hands back to an app. */
-export const forgetAppHandoff = clearAppHandoff;
+/**
+ * A handoff is waiting for the browser's earlier session to end, including
+ * after a reload that cut that sign-out short.
+ */
+export function appHandoffAwaitingSignOut(): boolean {
+  return readAnyAppHandoff()?.signedOut === false;
+}
+
+/**
+ * Records how ending the earlier session went: the handoff becomes usable,
+ * or, when the session could not be ended, the tab signs up without one.
+ */
+export function finishAppHandoffSignOut(ended: boolean) {
+  const handoff = readAnyAppHandoff();
+  if (!handoff) return;
+  if (ended) saveAppHandoff({ ...handoff, signedOut: true });
+  else clearAppHandoff();
+}
 
 /** The native app this tab's sign-up hands its session back to, if any. */
 export const pendingAppHandoff = readAppHandoff;

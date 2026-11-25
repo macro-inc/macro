@@ -1,7 +1,8 @@
 import { APP_HANDOFF_PARAMS } from '@app/features/onboarding/core/app-handoff';
 import {
+  appHandoffAwaitingSignOut,
   clearSignupDraft,
-  forgetAppHandoff,
+  finishAppHandoffSignOut,
   Onboarding,
   OnboardingAppHandoff,
   OnboardingPending,
@@ -31,6 +32,7 @@ import { AuthProvider, type AuthUser } from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
 import {
   AGENT_SETUP_PATH,
+  DEFAULT_POST_AUTH_PATH,
   postAuthTarget,
   readRedirectParam,
 } from './core/post-auth-target';
@@ -52,12 +54,10 @@ export function Login(props: { signupMode?: boolean }) {
   // app whichever account signs in here, and an account this browser already
   // held was not chosen for the app that opened the link (which may not even
   // be Macro). The link's parameters go, so a reload mid-sign-up keeps the
-  // new session.
-  const startingAppSignup = webSignup() && rememberAppHandoff(params);
-  const [signedOutForApp, setSignedOutForApp] = createSignal(
-    !startingAppSignup
-  );
-  if (startingAppSignup) {
+  // new session; the handoff stays unusable until the sign-out is recorded,
+  // and a reload that cut it short runs it again.
+  const fromLink = webSignup() && rememberAppHandoff(params);
+  if (fromLink)
     setParams(
       {
         [APP_HANDOFF_PARAMS.challenge]: undefined,
@@ -65,11 +65,13 @@ export function Login(props: { signupMode?: boolean }) {
       },
       { replace: true }
     );
+  const signingOut = webSignup() && appHandoffAwaitingSignOut();
+  const [signedOutForApp, setSignedOutForApp] = createSignal(!signingOut);
+  if (signingOut)
     fireAndForget(
       startAppSignupSignedOut(() => setSignedOutForApp(true)),
       'auth'
     );
-  }
   return (
     <Show when={signedOutForApp()} fallback={<OnboardingPending />}>
       <LoginView
@@ -87,7 +89,7 @@ export function Login(props: { signupMode?: boolean }) {
  */
 async function startAppSignupSignedOut(onDone: () => void) {
   const ended = await ResultAsync.fromPromise(endSessionInPlace(), () => false);
-  if (!ended.unwrapOr(false)) forgetAppHandoff();
+  finishAppHandoffSignOut(ended.unwrapOr(false));
   onDone();
 }
 
@@ -226,7 +228,9 @@ function PostAuthGate(props: { user: AuthUser; redirect: unknown }) {
       {match(target())
         .with({ t: 'onboarding' }, ({ next }) => <Onboarding next={next} />)
         .with({ t: 'navigate' }, ({ to }) =>
-          appHandoff ? (
+          // Only in place of the ordinary landing: an invite to accept or an
+          // agent's setup comes first, as it does without the app.
+          appHandoff && to === DEFAULT_POST_AUTH_PATH ? (
             <OnboardingAppHandoff handoff={appHandoff} />
           ) : (
             <PostLoginRedirect target={to} />

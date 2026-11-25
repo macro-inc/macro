@@ -53,6 +53,9 @@ export function createAppHandoffLink(
     due = false;
     lapsesAt = undefined;
     setLink({ t: 'minting' });
+    // The code's five minutes start no later than the request, so a slow
+    // answer shortens the wait before the next one.
+    const requestedAt = now();
     const code = await context.mintAppSessionCode(handoff);
     // A newer mint started meanwhile (a retry, a return to the page).
     if (attempt !== generation) return;
@@ -60,9 +63,9 @@ export function createAppHandoffLink(
       setLink({ t: 'failed' });
       return;
     }
-    lapsesAt = now() + REMINT_AFTER_MS;
+    lapsesAt = requestedAt + REMINT_AFTER_MS;
     setLink({ t: 'ready', href: appSignInUrl(code, handoff.handoffId) });
-    schedule(REMINT_AFTER_MS);
+    schedule(Math.max(0, lapsesAt - now()));
   }
 
   const onVisibilityChange = () => {

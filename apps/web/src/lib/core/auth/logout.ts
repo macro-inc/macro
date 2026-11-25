@@ -100,15 +100,15 @@ export function clearLocalAuthSession(
 
 /**
  * Ends this browser's session without leaving the page: the auth service
- * clears its cookies and this page forgets the account. The identity
- * provider's own session stays, so signing in again can take one tap.
+ * clears its cookies, and only once it has does this page forget the
+ * account (and its local drafts). The identity provider's own session stays,
+ * so signing in again can take one tap. Resolves whether it ended.
  */
 export async function endSessionInPlace(): Promise<boolean> {
-  const [, ended] = await Promise.all([
-    clearLocalAuthSession(),
-    authServiceClient.logout(),
-  ]);
-  return ended.isOk();
+  const ended = await authServiceClient.logout();
+  if (ended.isErr()) return false;
+  await clearLocalAuthSession();
+  return true;
 }
 
 export function useLogout() {

@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   params: {} as Record<string, string>,
   setParams: vi.fn(),
   endSession: undefined as ((ended: boolean) => void) | undefined,
-  forgetAppHandoff: vi.fn(),
+  signOuts: 0,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -20,6 +20,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/auth/logout', () => ({
   endSessionInPlace: () =>
     new Promise<boolean>((resolve) => {
+      mocks.signOuts += 1;
       mocks.endSession = resolve;
     }),
 }));
@@ -29,23 +30,26 @@ vi.mock('./create-app-auth-context', async () => {
   return { createAppAuthContext: () => createFakeAuth().context };
 });
 
-// The real handoff parsing, with the views it would show stubbed.
-vi.mock('@app/features/onboarding/onboarding', async () => {
-  const { appHandoffFromParams } = await import(
-    '@app/features/onboarding/core/app-handoff'
-  );
+// The real handoff storage, with the views it would show stubbed.
+vi.mock('@app/features/onboarding/onboarding', async (original) => {
+  const actual =
+    await original<typeof import('@app/features/onboarding/onboarding')>();
   return {
     OnboardingSignup: () => <p>Sign-up slides</p>,
     OnboardingPending: () => <p>Signing out</p>,
     Onboarding: () => null,
     OnboardingAppHandoff: () => null,
     clearSignupDraft: () => {},
-    rememberAppHandoff: (params: Record<string, unknown>) =>
-      appHandoffFromParams(params, Date.now()) !== undefined,
-    forgetAppHandoff: mocks.forgetAppHandoff,
-    pendingAppHandoff: () => undefined,
+    rememberAppHandoff: actual.rememberAppHandoff,
+    appHandoffAwaitingSignOut: actual.appHandoffAwaitingSignOut,
+    finishAppHandoffSignOut: actual.finishAppHandoffSignOut,
+    pendingAppHandoff: actual.pendingAppHandoff,
   };
 });
+
+const { pendingAppHandoff } = await import(
+  '@app/features/onboarding/onboarding'
+);
 
 vi.mock('@solidjs/router', async (original) => ({
   ...(await original<typeof import('@solidjs/router')>()),
@@ -55,8 +59,10 @@ vi.mock('@solidjs/router', async (original) => ({
 
 beforeEach(() => {
   stubOnboardingBrowser();
+  sessionStorage.clear();
   vi.clearAllMocks();
   mocks.endSession = undefined;
+  mocks.signOuts = 0;
   mocks.params = { app_challenge: CHALLENGE, app_handoff: HANDOFF_ID };
 });
 afterEach(() => {
@@ -74,23 +80,44 @@ describe('a sign-up the native app opened', () => {
       { app_challenge: undefined, app_handoff: undefined },
       { replace: true }
     );
+    // Not before the old session has ended.
+    expect(pendingAppHandoff()).toBeUndefined();
 
     mocks.endSession?.(true);
     await screen.findByText('Sign-up slides');
-    expect(mocks.forgetAppHandoff).not.toHaveBeenCalled();
+    expect(pendingAppHandoff()).toMatchObject({
+      challenge: CHALLENGE,
+      handoffId: HANDOFF_ID,
+      signedOut: true,
+    });
   });
 
   it('hands nothing to the app when the old session could not be ended', async () => {
     render(() => <Login signupMode />);
     mocks.endSession?.(false);
     await screen.findByText('Sign-up slides');
-    expect(mocks.forgetAppHandoff).toHaveBeenCalledTimes(1);
+    expect(pendingAppHandoff()).toBeUndefined();
+  });
+
+  it('signs out again after a reload that cut the sign-out short', async () => {
+    const first = render(() => <Login signupMode />);
+    first.unmount();
+    // The reloaded page has no parameters left.
+    mocks.params = {};
+    render(() => <Login signupMode />);
+    expect(screen.getByText('Signing out')).toBeTruthy();
+    expect(mocks.signOuts).toBe(2);
+    expect(pendingAppHandoff()).toBeUndefined();
+
+    mocks.endSession?.(true);
+    await screen.findByText('Sign-up slides');
+    expect(pendingAppHandoff()?.signedOut).toBe(true);
   });
 
   it('is only taken from sign-up, not sign-in', async () => {
     render(() => <Login />);
     await screen.findByRole('button', { name: 'Continue with Google' });
-    expect(mocks.endSession).toBeUndefined();
+    expect(mocks.signOuts).toBe(0);
     expect(mocks.setParams).not.toHaveBeenCalled();
   });
 });

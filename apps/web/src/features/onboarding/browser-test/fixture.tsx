@@ -144,7 +144,7 @@ if (params.app !== undefined || params.view === 'app') {
 const appHandoff =
   sessionStorage.getItem(FIXTURE_KEYS.appHandoff) === null
     ? undefined
-    : { ...FIXTURE_APP_HANDOFF, savedAt: Date.now() };
+    : { ...FIXTURE_APP_HANDOFF, savedAt: Date.now(), signedOut: true };
 
 function Fixture() {
   const [handoffTarget, setHandoffTarget] = createSignal<string>();

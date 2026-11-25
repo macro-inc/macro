@@ -76,6 +76,18 @@ describe('startAppSignup', () => {
     expect(appSignupVerifier(second)).toBeUndefined();
   });
 
+  it('opens nothing when it cannot keep the verifier', async () => {
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+    expect(await startAppSignup()).toBe('failed');
+    expect(mocks.openSystemBrowser).not.toHaveBeenCalled();
+    expect(mocks.hold).not.toHaveBeenCalled();
+    setItem.mockRestore();
+  });
+
   it('holds reloads until a sign-in arrives, and not when the browser fails', async () => {
     await startAppSignup();
     expect(mocks.hold).toHaveBeenCalledTimes(1);

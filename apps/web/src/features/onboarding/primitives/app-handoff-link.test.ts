@@ -11,6 +11,7 @@ const HANDOFF: AppHandoff = {
   challenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
   handoffId: '01938f2e-7c4a-7b3e-9a51-2f6d8c0e4b17',
   savedAt: 0,
+  signedOut: true,
 };
 
 const hrefFor = (code: string) =>
@@ -43,6 +44,24 @@ describe('createAppHandoffLink', () => {
 
     await vi.advanceTimersByTimeAsync(REMINT_AFTER_MS);
     expect(handoff.link()).toEqual({ t: 'ready', href: hrefFor('two') });
+    dispose();
+  });
+
+  it("counts the code's life from the request, not the answer", async () => {
+    const mint = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 90_000));
+      return mint.mock.calls.length === 1 ? 'slow' : 'next';
+    });
+    let dispose!: () => void;
+    const handoff = createRoot((disposeRoot) => {
+      dispose = disposeRoot;
+      return createAppHandoffLink({ mintAppSessionCode: mint }, HANDOFF);
+    });
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(handoff.link()).toEqual({ t: 'ready', href: hrefFor('slow') });
+    // The renewal starts once the code is four minutes past its request.
+    await vi.advanceTimersByTimeAsync(REMINT_AFTER_MS - 90_000);
+    expect(mint).toHaveBeenCalledTimes(2);
     dispose();
   });
 

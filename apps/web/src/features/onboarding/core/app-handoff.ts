@@ -26,6 +26,12 @@ const APP_HANDOFF = z.object({
   challenge: CHALLENGE,
   handoffId: HANDOFF_ID,
   savedAt: z.number(),
+  /**
+   * The session the browser held when the link opened has ended. Until then
+   * the handoff is offered to no one: that session was not chosen for the
+   * app that opened the link.
+   */
+  signedOut: z.boolean(),
 });
 
 /** A sign-up the app is waiting on. */
@@ -43,6 +49,7 @@ export function appHandoffFromParams(
     challenge: challenge.data,
     handoffId: handoffId.data,
     savedAt: now,
+    signedOut: false,
   };
 }
 

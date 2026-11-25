@@ -18,7 +18,12 @@ describe('appHandoffFromParams', () => {
         { app_challenge: CHALLENGE, app_handoff: HANDOFF_ID },
         NOW
       )
-    ).toEqual({ challenge: CHALLENGE, handoffId: HANDOFF_ID, savedAt: NOW });
+    ).toEqual({
+      challenge: CHALLENGE,
+      handoffId: HANDOFF_ID,
+      savedAt: NOW,
+      signedOut: false,
+    });
   });
 
   it('ignores a link without a well-formed pair', () => {
@@ -39,6 +44,7 @@ describe('parseAppHandoff', () => {
     challenge: CHALLENGE,
     handoffId: HANDOFF_ID,
     savedAt: NOW,
+    signedOut: true,
   });
 
   it('keeps a handoff for a day', () => {
@@ -46,6 +52,7 @@ describe('parseAppHandoff', () => {
       challenge: CHALLENGE,
       handoffId: HANDOFF_ID,
       savedAt: NOW,
+      signedOut: true,
     });
     expect(
       parseAppHandoff(saved, NOW + APP_HANDOFF_MAX_AGE_MS + 1)

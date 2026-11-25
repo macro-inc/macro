@@ -28,12 +28,14 @@ function readPending(now: number): PendingAppSignup[] {
   }
 }
 
-function writePending(pending: readonly PendingAppSignup[]) {
+/** Reports whether the write landed. */
+function writePending(pending: readonly PendingAppSignup[]): boolean {
   try {
     if (pending.length === 0) localStorage.removeItem(STORAGE_KEY);
     else localStorage.setItem(STORAGE_KEY, JSON.stringify(pending));
+    return true;
   } catch {
-    // Unavailable storage loses the sign-up; the person can still log in.
+    return false;
   }
 }
 
@@ -78,13 +80,19 @@ export function startAppSignup(): Promise<'opened' | 'failed'> {
     const handoffId = crypto.randomUUID();
     span.setAttr('auth.app_handoff.id', handoffId);
     const now = Date.now();
-    writePending(
+    const saved = writePending(
       withPendingAppSignup(readPending(now), {
         handoffId,
         verifier,
         startedAt: now,
       })
     );
+    // Without its verifier the app could never redeem the code the browser
+    // hands back: don't send the person off to sign up for nothing.
+    if (!saved) {
+      span.setAttr('auth.app_handoff.outcome', 'storage_failed');
+      return 'failed';
+    }
     // A sign-up started earlier may still come back; keep its hold.
     const waitingAlready = releaseReloadHold !== undefined;
     holdReloadsForSignup();
