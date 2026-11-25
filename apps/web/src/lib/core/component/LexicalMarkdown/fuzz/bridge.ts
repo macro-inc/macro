@@ -36,6 +36,10 @@ export type LexFuzzApi = {
   errors: () => string[];
   /** Caret at the end of the top-level block whose text starts with `prefix`. */
   placeAtEnd: (prefix: string) => boolean;
+  /** Adds an image block before the top-level block whose text starts with `prefix`. */
+  insertImageBefore: (prefix: string, url: string) => void;
+  /** Resizes every top-level image, as dragging its handle does. */
+  scaleImages: (scale: number) => void;
   /** Internal markdown of any serialized state (the server's, say). */
   toMarkdown: (json: string) => string;
   /** Internal markdown → state → internal markdown. */
