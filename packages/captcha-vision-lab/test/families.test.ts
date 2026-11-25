@@ -161,17 +161,58 @@ for (const family of FAMILY_NAMES) {
       if (right.kind === 'text') {
         expect(withoutIds).not.toContain(right.text);
       }
+      // Every option image of a challenge has the same byte length, so file
+      // sizes say nothing about which one is right.
+      const optionSizes: number[] = [];
       for (const url of assetUrls) {
         const asset = await lab.fetch(
           new Request(`${LAB_ORIGIN}${url}`, {
             headers: { [SESSION_HEADER]: 'session-1' },
           })
         );
-        const bytes = Buffer.from(await asset.arrayBuffer()).toString('latin1');
+        const raw = Buffer.from(await asset.arrayBuffer());
+        if (!html.includes(`id="figure" src="${url}"`)) {
+          optionSizes.push(raw.length);
+        }
         expect(asset.headers.get('content-type')).toBe('image/png');
-        expect(bytes).not.toMatch(/tEXt|iTXt|zTXt|tIME/);
+        expect(raw.toString('latin1')).not.toMatch(/tEXt|iTXt|zTXt|tIME/);
       }
+      expect(new Set(optionSizes).size).toBeLessThanOrEqual(1);
     });
+
+    if (FAMILIES[family].kind === 'text') {
+      test('the server refuses text that is not five digits, without using the attempt', async () => {
+        const lab = createLab();
+        const issued = lab.issue(family, 'session-1');
+        await lab.fetch(
+          new Request(LAB_URL, {
+            headers: {
+              [CAPABILITY_HEADER]: issued.capability,
+              [SESSION_HEADER]: 'session-1',
+            },
+          })
+        );
+
+        for (const text of ['abc', '1234', '123456', '12a45']) {
+          const response = await lab.fetch(
+            new Request(`${LAB_ORIGIN}${LAB_SUBMIT_PATH}`, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                [SESSION_HEADER]: 'session-1',
+              },
+              body: JSON.stringify({
+                challengeId: issued.challengeId,
+                response: { kind: 'text', text },
+              }),
+            })
+          );
+          expect(response.status).toBe(403);
+        }
+        expect(lab.stats().submissions).toBe(0);
+        expect(lab.status(issued.runId, issued.challengeId)).toBe('pending');
+      });
+    }
 
     test('the server refuses a response of the wrong kind without using the attempt', async () => {
       const lab = createLab();
