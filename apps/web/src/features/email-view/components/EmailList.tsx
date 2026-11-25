@@ -145,6 +145,7 @@ export function EmailList(props: EmailListProps) {
     list,
     registerListActivationHandler,
     openThread,
+    recordListOpen,
     selectedThread,
     filterByTag,
     searchHasText,
@@ -228,10 +229,10 @@ export function EmailList(props: EmailListProps) {
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+    const inPlace = !newSplit && metadata?.event?.altKey !== true;
 
     if (
-      !newSplit &&
-      metadata?.event?.altKey !== true &&
+      inPlace &&
       openThread(
         { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
         { event: metadata?.event }
@@ -243,6 +244,7 @@ export function EmailList(props: EmailListProps) {
       return;
     }
 
+    if (!inPlace) recordListOpen(sourceRow.entity.id);
     openEntity(sourceRow.entity, {
       event: metadata?.event,
       openInNewSplit: newSplit,

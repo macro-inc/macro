@@ -444,6 +444,7 @@ function setupSuggestions(initial: string[]) {
   const [active, setActive] = createSignal(-1);
   const [open, setOpen] = createSignal(false);
   const picked: number[] = [];
+  const commit = vi.fn();
   let list!: HTMLDivElement;
 
   const view = render(() => (
@@ -464,6 +465,7 @@ function setupSuggestions(initial: string[]) {
             picked.push(index);
             setSearch(initial[index] ?? '');
           },
+          commit,
         }}
       />
       <div ref={list} tabIndex={0} />
@@ -479,6 +481,7 @@ function setupSuggestions(initial: string[]) {
     active,
     open,
     picked,
+    commit,
     list: () => list,
   };
 }
@@ -510,6 +513,19 @@ it('runs the active suggestion on Enter and moves to its results', () => {
   expect(picked).toEqual([0]);
   expect(search()).toBe('budget');
   expect(document.activeElement).toBe(list());
+});
+
+it('runs the typed search on Enter, and not on a suggestion picked with it', () => {
+  const { field, commit, list } = setupSuggestions(['budget']);
+
+  type(field, 'Enter');
+  expect(commit).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(list());
+
+  field.focus();
+  type(field, 'ArrowDown');
+  type(field, 'Enter');
+  expect(commit).toHaveBeenCalledOnce();
 });
 
 it('reports a wide field open, and closed once it is left empty', () => {

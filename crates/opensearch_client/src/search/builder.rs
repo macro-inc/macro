@@ -100,6 +100,9 @@ pub trait SearchQueryConfig {
     const CONTENT_KEY: &'static str = "content";
     /// Fields searched for each content term; highlights still use `CONTENT_KEY`.
     const CONTENT_FIELDS: &'static [&'static str] = &[Self::CONTENT_KEY];
+    /// A field of link URLs that each content term also matches, by the
+    /// words of a URL ([`super::query::link_query`]).
+    const LINK_FIELD: Option<&'static str> = None;
     /// The entity index for the search query
     const ENTITY_INDEX: OpenSearchEntityType;
 }
@@ -281,6 +284,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let must_array = vec![super::query::generate_terms_must_query_for_fields(
             query_key,
             T::CONTENT_FIELDS,
+            T::LINK_FIELD,
             terms,
             self.term_combine,
         )];

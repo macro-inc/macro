@@ -5,9 +5,6 @@ import { match } from 'ts-pattern';
 import { purchaseRefusalOf } from '../computers/core/purchase-refusal';
 import { PURCHASE_WAIT_MS } from '../computers/core/purchase-wait';
 
-/** Names offered while the name field is empty. */
-export const AGENT_NAME_SUGGESTIONS = ['Ada', 'Bo', 'Kim', 'Nova'] as const;
-
 /**
  * How long Add waits in its dialog. Past it, the dialog closes to the DM and
  * the agent's setup carries on there.

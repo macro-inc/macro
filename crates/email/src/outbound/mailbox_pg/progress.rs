@@ -137,8 +137,8 @@ impl MailboxProgressRepository for PgMailboxSync {
     }
 
     async fn folder_line(&self) -> Result<FolderLine, MailboxError> {
-        // The streams `claim_stream` could take for `StreamKind::MailFolder`
-        // now, with its link filters. It reads every due folder (one row per
+        // The mail folder streams `claim_stream` could take now, with its
+        // link filters. It reads every due folder (one row per
         // folder, not per message) once a minute; the timeout keeps a slow
         // read from holding a connection.
         let mut tx = self.begin().await.map_err(db_error)?;
