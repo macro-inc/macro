@@ -88,6 +88,9 @@ pub mod previews;
 /// Companies, contacts and deal pipelines another CRM's import writes.
 #[cfg(feature = "ports")]
 pub mod record_import;
+/// Merging duplicate companies or contacts into the one that stays.
+#[cfg(feature = "ports")]
+pub mod record_merge;
 
 /// Pipeline outcome and per-amount currency fields.
 #[cfg(feature = "ports")]

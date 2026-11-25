@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id AS \"id!\", c.hidden AS \"hidden!\", c.email_sync AS \"email_sync!\",\n                      COALESCE(c.custom_name, primary_domain.name, primary_domain.domain, 'Unnamed company') AS \"name!\"\n               FROM UNNEST($1::uuid[]) AS wanted(id)\n               CROSS JOIN LATERAL (\n                   SELECT id, team_id, hidden, email_sync, custom_name FROM crm_companies\n                   WHERE id = wanted.id OFFSET 0\n               ) c\n               LEFT JOIN LATERAL (\n                   SELECT pd.domain, dd.name\n                   FROM crm_domains pd\n                   LEFT JOIN crm_domain_directory dd ON LOWER(dd.domain) = LOWER(pd.domain)\n                   WHERE pd.company_id = c.id\n                   ORDER BY pd.created_at, pd.id\n                   LIMIT 1\n               ) primary_domain ON TRUE\n               WHERE c.team_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_sync!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "eda14040bec0f6351acea77eb680bd9a01f45dfe5753c4e9ef0328f1059f277d"
+}

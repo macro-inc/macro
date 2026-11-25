@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT ct.id AS \"id!\"\n                    FROM (\n                        SELECT id, team_id, company_id, hidden\n                        FROM crm_contacts\n                        WHERE id = COALESCE(\n                              (SELECT a.contact_id FROM crm_contact_aliases a WHERE a.retired_id = $2),\n                              $2\n                          )\n                        OFFSET 0\n                    ) ct\n                    LEFT JOIN crm_companies co ON co.id = ct.company_id\n                    JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')\n                    WHERE NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member'\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "da64fcda6e06cc860c8176c2f7ac1b7e8e2f45c49fb2672bd47502e2f4b9548d"
+}

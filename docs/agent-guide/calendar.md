@@ -49,10 +49,22 @@ occurrences. A refused save shows
 create leaves the grid. An edit that adds a new Macro call still waits for the
 call to be linked. Over REST the composer closes when the provider answers.
 
+A moved event keeps its id, but its occurrence is keyed by its start, so the
+server's answer to a drag or a time edit that changes the start replaces the
+occurrence. Details opened on it stay open while the move is answered, then
+follow the occurrence the answer names to its chip, and the URL drops a link's
+locator for the old one. A resize, and a one-occurrence move of a series, keep
+the key. When the answer cannot say
+which occurrence replaced the moved one (a whole series moved, a queued move),
+the details close as the old occurrence leaves the grid.
+
 If a permission change retires a successful create response, the composer uses
 the preserved server identity. If that identity cannot be read yet, it closes
 and refreshes the calendar without opening the event or offering a duplicate
 creation. The universal input reports **Event created** without an Open action.
+An event whose server identity the cache could not tell, as while the cache is
+paused, keeps refusing edits ("This event is still being created") until the
+cache serves again; then it moves to the server's id.
 
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most

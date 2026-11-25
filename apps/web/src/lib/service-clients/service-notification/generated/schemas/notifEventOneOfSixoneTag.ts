@@ -10,5 +10,5 @@ export type NotifEventOneOfSixoneTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSixoneTag = {
-  channel_message_reaction: 'channel_message_reaction',
+  agent_session_mentioned: 'agent_session_mentioned',
 } as const;

@@ -1317,7 +1317,9 @@ or spotlight.
 
 ## Routines
 
-Open **Agents → Routines** for your routines. Opening a routine updates the URL
+Open **Agents → Routines**, or **Go to Routines** in the command menu (no `g`
+letter; always the list, even from an open routine),
+for your routines. Opening a routine updates the URL
 to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
 URL restores that routine; browser Back and Forward restore the list or detail.
 Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
@@ -1538,7 +1540,7 @@ Macro activity triggers by surface:
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
-- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports. Its scope reads **Your inbox**, or **Your inboxes** once the owner reads more than one; **+ Filter** → **Inbox** narrows it (below).
+- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports. Its scope reads **Your inbox**, or **Your inboxes** once the owner reads more than one; **+ Filter** → **Inbox** narrows it (below). **Email labeled** (with the `enable-email-labeled-trigger` flag, on in dev) runs when a thread in those inboxes gets a Gmail label or Outlook category no other message in it had, as mail arrives or later; labels an agent or routine adds don't count. Its panel shows **Labels**: **Any label**, the chosen labels as pills (click one to remove it), and **Choose labels**, which opens a search box and each inbox's labels as checkboxes, nested by name for Gmail and grouped by address when there are several inboxes. The chip reads **with Any label**, the label names, or **N labels**; **+ Filter** → **Inbox** narrows it as it does new email.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
@@ -2115,7 +2117,9 @@ after opening another item, Back returns to that default view.
 Within one tab (or the whole layout when desktop tabs are off), entity content
 can be open in only one split or inline preview/detail view at a time. Desktop
 tabs each hold their own instance. Shell components may have duplicate splits
-when `allowDuplicate` is enabled.
+when `allowDuplicate` is enabled. The split header's Duplicate split copies
+only shells: it is disabled while the split's route claims an entity, including
+one shown inside a shell (a Mail thread, a task, a CRM record).
 An Agents conversation route counts as the same entity as its agent or chat block.
 Following a mention or notification reuses the existing split or inline detail,
 activates its workspace, and navigates to any specified location without a toast.

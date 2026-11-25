@@ -122,6 +122,14 @@ pub fn compile(
     } else {
         timestamp.clone()
     };
+    let owned_scope = links
+        .iter()
+        .map(|id| exact_uuid(token("mail-link-id"), id))
+        .reduce(|a, b| PredicateExpr::Or(Box::new(a), Box::new(b)))
+        .unwrap_or(PredicateExpr::None);
+    // A label matches only on a thread of an inbox the viewer owns or manages,
+    // as on the server; a shared thread can carry Gmail's system labels.
+    let label_scope = &owned_scope;
     let mut predicate = compile_expr(ast.email_filter.tree.as_deref(), |literal| {
         Ok(match literal {
             EmailLiteral::ThreadId(id) => exact_uuid(vocabulary::id(), id),
@@ -133,14 +141,13 @@ pub fn compile(
             EmailLiteral::Shared(_) => PredicateExpr::All,
             EmailLiteral::CalendarOnly(true) => boolean("mail-calendar", true),
             EmailLiteral::CalendarOnly(false) => PredicateExpr::All,
+            EmailLiteral::Label(id) => PredicateExpr::And(
+                Box::new(exact_uuid(token("mail-label-id"), id)),
+                Box::new(label_scope.clone()),
+            ),
             _ => unreachable!("Mail eligibility checked"),
         })
     })?;
-    let owned_scope = links
-        .iter()
-        .map(|id| exact_uuid(token("mail-link-id"), id))
-        .reduce(|a, b| PredicateExpr::Or(Box::new(a), Box::new(b)))
-        .unwrap_or(PredicateExpr::None);
     let shared_scope = boolean("mail-shared", true);
     let scope = if links.is_empty() {
         // Soup currently skips the entire email leg when no readable inbox exists.
@@ -250,6 +257,7 @@ fn supported(expr: Option<&Expr<EmailLiteral>>, allow_shared: bool) -> bool {
                 | EmailLiteral::Importance(_)
                 | EmailLiteral::UpdatedAt(_)
                 | EmailLiteral::CalendarOnly(_)
+                | EmailLiteral::Label(_)
         ),
     }
 }

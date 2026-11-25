@@ -264,11 +264,14 @@ port is not ordered with its page's, so a report it sent just before can be read
 too late and is then ignored. Only an engine failure
 reported by a page or seen by the coordinator **after the database open grant**
 selects `wipe-before-open`. A missed heartbeat alone is not owner loss: background tabs and their dedicated workers may be suspended while the
-SharedWorker still runs. The coordinator probes the physical owner Web Lock
-without waiting or stealing it; a held lock (or a failed probe) retries the
-heartbeat without changing epochs or touching storage. A released lock confirms
-silent worker termination and triggers the usual fenced recovery, unless the
-page's liveness lock is released too, which means the page left; the coordinator
+SharedWorker still runs. The coordinator asks the browser whether that engine, by
+the client ID it reported when ready, still holds the physical owner Web Lock: the
+engine of another build may hold a lock of the same name. A held lock (or a failed
+probe) retries the heartbeat without changing epochs or touching storage. A
+released lock confirms silent worker termination and triggers the usual fenced
+recovery, which opens the existing database if another context holds the lock by
+then, as that one judged what the dead engine left. If the
+page's liveness lock is released too, the page left; the coordinator
 looks for it after a heartbeat interval, and also before an opening deadline ends
 an owner, and looks three times when looking fails. An answer, a hidden page or a
 departure that arrives meanwhile changes nothing: the engine is gone. Read deadlines
@@ -474,8 +477,9 @@ A handshake nobody answers in its startup phase's time is treated like a lost
 connection: the same host connects again, within the same budget, and then ends
 with `request-timeout` and the database kept. `graphql_cache.owner` records each
 as `ownerEvent: startup-unanswered`. An authority read a ready owner leaves
-unanswered is asked again, twice, and then ends with `request-timeout`, so the page
-can start over on a new host.
+unanswered waits for a `ping` that is out, whose five seconds count only while the
+page is visible, and is then asked again, twice, before it ends with
+`request-timeout`, so the page can start over on a new host.
 
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS
@@ -662,12 +666,14 @@ paths remain behind the same `CacheHost` interface.
 Normalized records are serialized with `postcard` into `records.value`, behind a
 one-byte encoding tag: records of 256 bytes or more are stored deflated when that
 is smaller, and everything else stays raw. Other persisted payloads (queued
-mutations, optimistic layers, projections) remain plain postcard. A format bump
-that only changes the record encoding carries the previous database forward by
-dropping records, search projections, index facts, and calendar ranges — all
-refetchable — while keeping queued mutations, optimistic layers, and their
-projections. Native storage then compacts the migrated file with `VACUUM INTO`, so
-the upgrade reclaims the space instead of leaving freed pages behind.
+mutations, optimistic layers, projections) remain plain postcard. On native, a
+format bump that only changes the record encoding carries the previous file
+forward by dropping records, search projections, index facts, and calendar
+ranges — all refetchable — while keeping queued mutations, optimistic layers,
+and their projections; a browser opens a new database name instead, as above.
+Native storage then compacts the migrated file with `VACUUM INTO`, so the
+upgrade reclaims the space instead of leaving freed pages behind; a compaction
+that fails tries to keep the migrated file as it is.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
@@ -1716,8 +1722,8 @@ matching compact projections into a Rust heap of at most `limit + 1` documents.
 It no longer retains per-bucket text catalogs. Matching and ranking semantics,
 optimistic overlays, and indexed empty-query browsing are preserved; leading
 wildcards still scan selected buckets. Storage schema 12 makes the browse index
-covering by appending search text and source hashes. This is an incompatible
-cutover, not a migration: native caches reset, including queued mutations;
+covering by appending search text and source hashes. Native caches upgrade in
+place through the registered 11 to 12 storage step, keeping queued mutations;
 browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
 Existing cleanup safeguards for those older files remain. That streaming-search
 cutover did not change the record format or schema epoch. See

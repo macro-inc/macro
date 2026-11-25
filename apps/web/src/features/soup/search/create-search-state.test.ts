@@ -134,3 +134,33 @@ it('searches for one quoted phrase exactly, in straight or curly quotes', () => 
     expect(soupSearchMatchType(query)).toBe('partial');
   }
 });
+
+it('settles once the name text does, when operators leave it empty', () => {
+  const [text, setText] = createSignal('');
+  const [nameText, setNameText] = createSignal('');
+  const { state, dispose } = createRoot((dispose) => ({
+    state: createSearchState({
+      surface: () => 'search',
+      text,
+      nameText,
+      disableLocalSearch: () => true,
+      buildRequest: ({ query, matchType }) => ({
+        params: {},
+        body: { query, match_type: matchType },
+      }),
+    }),
+    dispose,
+  }));
+
+  setText('budget');
+  setNameText('budget');
+  vi.advanceTimersByTime(300);
+  expect(state.isLocalSearchSettling()).toBe(false);
+
+  // `tag:work` narrows past name matches, so the name text empties.
+  setText('budget tag:work');
+  setNameText('');
+  vi.advanceTimersByTime(300);
+  expect(state.isLocalSearchSettling()).toBe(false);
+  dispose();
+});

@@ -65,6 +65,18 @@ panel, which the phone's Info sheet shares. Someone a thread is shared with sees
 none of the owner's labels: the server leaves out labels of inboxes the reader
 doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
 
+Mail lists can be filtered by a Gmail label or Outlook category of the
+viewer's own or managed inboxes (the `Label` condition). A label in an inbox
+the viewer doesn't own or manage matches nothing, shared threads included. A
+big label whose mail is all old fills over several requests: a page can
+arrive empty with a cursor, and the list keeps loading (a spinner, never the
+empty state) until a row shows or the list ends. Filters (and the phone's
+filter drawer) has a Labels group after Tags on every tab but Reminders: the
+labels people made, by whole name, any of the ticked ones, each inbox's
+together and marked with the inbox's avatar when there are several. A saved
+view keeps them. To check a slow label, use one whose mail is months old in a
+large inbox.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
@@ -573,7 +585,11 @@ default All selections are not marked.
 Email Read status and Done are single choices that close the menu; Has
 (Starred, Calendar invite) and Attachments (PDFs, Images, Documents) take
 several and stay open while you tick them. Ticked Has items all apply;
-attachment kinds match any one. Tags supports search, pins selected tags first
+attachment kinds match any one. In Inbox,
+All mail, Archived, Calendar, Favorites, Shared and saved views the server selects
+matching threads first, so a page is full even when matches are rare; Sent, Drafts,
+Spam and Trash still refine the rows they loaded. An inline image counts as an
+image, and plain text and CSV files as documents. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 **Calendar invite** matches meetings carried as attachments or as calendar
 parts of a message, including Outlook invitations.
@@ -859,7 +875,8 @@ must still refresh affected lists after commit. Scroll across a retained row and
 check that the next page remains ordered; a baseline beyond 5,000 rows returns to
 the live server list instead of freezing local membership.
 Tag selections use cached property postings;
-attachment chips refine the cached rows on the client. Sender/recipient filters and
+attachment filters list from the server, which has the thread flags this local
+profile lacks. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
@@ -922,7 +939,10 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. The full subject, including
+participants stay put while only the messages scroll. A subject of more than three
+lines is cut with an ellipsis, on desktop and phones, and the **Show full subject**
+button in the title's bottom corner shows the rest (on desktop a very long one
+scrolls in place) until **Show less** or another thread. The subject shown, including
 its last word beside the title action, supports text selection. Pressing `Escape`
 in the open thread with focus outside any input returns to the originating list
 once there is nothing left to unwind (an open reply, an expanded body, or a
@@ -933,7 +953,8 @@ scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
 place, not the first row. The `⋯` email title menu
-right after the subject's last word, in place of Copy subject, holds **Ask AI**,
+right after the subject's last word (beside **Show full subject** when the subject
+is cut), in place of Copy subject, holds **Ask AI**,
 **Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate
 groups contain **Previous item** / **Next item**, icon-only **Ask Macro** / **Create
@@ -998,7 +1019,7 @@ Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. **Copy Link** on a
 thread copies `/app/mail/<thread-id>` from a row, the title menu, the Share
 dialog, or a reminder notification. The link opens the thread in Mail and
-pastes as an email mention. Click a message header to
+pastes as an email mention, which shows the subject on one line. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
 `?email_message_id=<message-id>` loads older pages as needed, expands the target,

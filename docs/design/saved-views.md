@@ -570,5 +570,6 @@ Email is the second consumer (`kind: "email"`, `version: 1`). Its definition is 
   migrations (the index builds concurrently on `email_messages`), deploy the
   backend (reorder mutation, `Subject` and `Attachment` literals),
   and run `email_service`'s `backfill_attachment_flags` before turning on the
-  flag. Only saved views send the attachment-kind filter; built-in tabs keep
-  refining attachments on the client, so they don't depend on the backfill.
+  flag. Saved views and Mail's Inbox and All mail tabs send the attachment-kind
+  filter, so both miss threads stored before the flags until the backfill has
+  run.

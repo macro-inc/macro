@@ -746,6 +746,7 @@ fn event_run() -> ClaimedEventRun {
                 revision: action.configuration_revision,
                 event,
                 admitted_at: Utc::now(),
+                traceparent: None,
             },
         },
         action,

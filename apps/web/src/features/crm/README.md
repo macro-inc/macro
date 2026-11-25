@@ -14,8 +14,8 @@ and stay until access is proven denied, with a retry row after a failed check.
 Keep individually shared pipeline navigation available after CRM denial, but
 do not open a referenced company or contact. The workspace owns the record
 detail gate and unmounts its content on denial; standalone record views retain
-their own gate. Close global company/contact creation dialogs on proven denial
-and do not navigate to a late successful creation after access has been lost.
+their own gate. Close global company/contact creation dialogs and the merge dialog on proven
+denial, and do not navigate to a late successful creation after access has been lost.
 The retired CRM/activity/pipeline rollout flags never replace this access gate.
 While sharing is off and no mailbox is linked, the privacy controls offer
 **Connect email**, which calls `CrmContext.connectMailbox` (the app's add-inbox
@@ -41,6 +41,7 @@ crm/
   crm-company.tsx / crm-contact.tsx / crm-settings.tsx
   crm-create.tsx / crm-link.tsx
   crm-actions.ts / crm-hide-action.ts / crm-action-items.ts / crm-user-action.tsx
+  crm-merge.tsx  Merge entry points; crm-merge-dialog.tsx is the dialog the app layout mounts
   crm-search.ts / crm-tool-renderers.tsx
   crm-route.ts  Route params, record and item trails, and legacy pipeline link decoding
   route-views.tsx  Authenticated route and shared-view decoding
