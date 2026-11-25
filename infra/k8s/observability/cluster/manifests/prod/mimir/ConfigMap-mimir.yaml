@@ -28,7 +28,7 @@ data:
       ingestion_rate: 50000
       max_global_exemplars_per_user: 100000
       max_global_series_per_metric: 20000
-      max_global_series_per_user: 300000
+      max_global_series_per_user: 450000
       otel_native_delta_ingestion: true
     memberlist:
       bind_port: 7946
