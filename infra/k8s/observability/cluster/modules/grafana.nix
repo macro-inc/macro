@@ -133,9 +133,11 @@ let
             };
             model = {
               refId = "A";
-              # The counter disappears while no compactor stays up long
-              # enough to be scraped; no series counts as zero.
-              expr = "sum(increase(tempodb_compaction_blocks_total[1h])) or vector(0)";
+              # The cluster's compactor only (the host's Tempo reported
+              # under job "observability"). The counter disappears while no
+              # compactor stays up long enough to be scraped; no series
+              # counts as zero.
+              expr = ''sum(increase(tempodb_compaction_blocks_total{job="observability/tempo",component="compactor"}[1h])) or vector(0)'';
               instant = true;
             };
           }

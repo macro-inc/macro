@@ -13,7 +13,7 @@ metadata:
   namespace: observability
 spec:
   minReadySeconds: 10
-  replicas: 2
+  replicas: 1
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -62,7 +62,7 @@ spec:
             - -config.file=/conf/tempo.yaml
           env:
             - name: GOMEMLIMIT
-              value: 2611MiB
+              value: 2176MiB
             - name: GOGC
               value: "80"
           image: docker.io/grafana/tempo:2.10.7
@@ -89,10 +89,10 @@ spec:
             timeoutSeconds: 1
           resources:
             limits:
-              memory: 3Gi
+              memory: 2560Mi
             requests:
               cpu: 50m
-              memory: 1Gi
+              memory: 1536Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
