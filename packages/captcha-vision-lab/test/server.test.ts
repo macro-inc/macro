@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { generateShapesQuiz, seededRandom } from '../src/quiz.ts';
+import { relation } from '../src/families.ts';
+import { seededRandom } from '../src/random.ts';
 import {
   CAPABILITY_HEADER,
   LAB_ORIGIN,
@@ -42,14 +43,17 @@ const submit = (
         'content-type': 'application/json',
         [SESSION_HEADER]: sessionNonce,
       },
-      body: JSON.stringify({ challengeId, optionId }),
+      body: JSON.stringify({
+        challengeId,
+        response: { kind: 'choice', optionId },
+      }),
     })
   );
 
 describe('quiz', () => {
   test('a seed reproduces the quiz and exactly one option is correct', () => {
-    const first = generateShapesQuiz(seededRandom(SEED));
-    const second = generateShapesQuiz(seededRandom(SEED));
+    const first = relation(seededRandom(SEED));
+    const second = relation(seededRandom(SEED));
 
     expect(second.prompt).toBe(first.prompt);
     expect(second.options.map((option) => option.correct)).toEqual(
@@ -65,7 +69,7 @@ describe('quiz', () => {
 describe('lab service', () => {
   test('the capability opens the page once, for the bound session only', async () => {
     const lab = createLab();
-    const issued = lab.issue('session-1');
+    const issued = lab.issue('relation', 'session-1');
 
     expect((await openPage(lab, issued.capability, 'session-2')).status).toBe(
       403
@@ -86,7 +90,7 @@ describe('lab service', () => {
     let now = 1_000_000;
     const lab = createLab({ now: () => now });
     const other = createLab({ now: () => now });
-    const issued = lab.issue('session-1');
+    const issued = lab.issue('relation', 'session-1');
     const [payload, signature] = issued.capability.split('.');
     const tampered = Buffer.from(payload!, 'base64url')
       .toString('utf8')
@@ -99,8 +103,13 @@ describe('lab service', () => {
     );
     // Signed by another run's secret.
     expect(
-      (await openPage(lab, other.issue('session-1').capability, 'session-1'))
-        .status
+      (
+        await openPage(
+          lab,
+          other.issue('relation', 'session-1').capability,
+          'session-1'
+        )
+      ).status
     ).toBe(403);
 
     now += 30_001;
@@ -114,7 +123,7 @@ describe('lab service', () => {
 
   test('the capability is bound to the exact origin and path', async () => {
     const lab = createLab();
-    const issued = lab.issue('session-1');
+    const issued = lab.issue('relation', 'session-1');
 
     const wrongOrigin = LAB_URL.replace('127.0.0.1', 'localhost');
     expect(
@@ -138,10 +147,10 @@ describe('lab service', () => {
   });
 
   test('a challenge takes one submission and the server alone scores it', async () => {
-    const quiz = generateShapesQuiz(seededRandom(SEED));
+    const quiz = relation(seededRandom(SEED));
     const correctIndex = quiz.options.findIndex((option) => option.correct);
     const lab = createLab({ random: seededRandom(SEED) });
-    const issued = lab.issue('session-1');
+    const issued = lab.issue('relation', 'session-1');
     const html = await (
       await openPage(lab, issued.capability, 'session-1')
     ).text();
@@ -182,7 +191,7 @@ describe('lab service', () => {
   test('an expired challenge cannot be submitted', async () => {
     let now = 1_000_000;
     const lab = createLab({ now: () => now });
-    const issued = lab.issue('session-1');
+    const issued = lab.issue('relation', 'session-1');
     const html = await (
       await openPage(lab, issued.capability, 'session-1')
     ).text();
@@ -201,7 +210,7 @@ describe('lab service', () => {
 
   test('nothing the browser receives identifies the answer or the seed', async () => {
     const lab = createLab({ random: seededRandom(SEED) });
-    const issued = lab.issue('session-1');
+    const issued = lab.issue('relation', 'session-1');
     const response = await openPage(lab, issued.capability, 'session-1');
     const html = await response.text();
     const assetUrls = [...html.matchAll(/src="([^"]+)"/g)].map(
