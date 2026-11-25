@@ -85,9 +85,11 @@ Only the immediately prior cache format version is migratable
 version is first upgraded when a chain of steps from its version is registered
 ([storage upgrades](#storage-upgrades)), and resets otherwise. Opening a
 migratable format drops records and every table derived from them — all
-refetchable — by recreating the tables, as a schema Reset does, and keeps
-queued mutations, optimistic layers, and their projections, then rewrites the
-namespace in the same transaction. An interrupted migration therefore retries on
+refetchable — by recreating the tables, as a schema Reset does. It keeps
+queued mutations, optimistic layers, and their projections, and rewrites in
+this format the identity and authority records and every record's alias,
+coalescing UUID and deletion tombstone. It then rewrites the namespace in the
+same transaction. An interrupted migration therefore retries on
 the next open. Native owners then try to `VACUUM INTO` a fresh file and swap it
 in, so an upgrade usually releases the space the dropped records occupied
 instead of leaving free pages in the old file. The swap moves the migrated file
