@@ -1,7 +1,10 @@
 //! An All Mail page of the caller's own inboxes filtered to one OR-tree of
 //! addresses: the Sales Email view and a CRM record's emails under Me (a
 //! company's domains and its contacts' addresses), or a search on senders
-//! and recipients. Newest first.
+//! and recipients. Newest first. A page filtered to one OR-tree of labels is
+//! read the same way on All Mail and on the views sorted by a thread date
+//! (Inbox, Sent, Drafts, Starred, Important, Other), whose thread restriction
+//! joins every stream's terms; the label rows are its superset.
 //!
 //! The general builder lists every thread of the inboxes that has a message
 //! from or to the addresses, probing each such message's mailbox facts,
