@@ -377,6 +377,38 @@ describe('calendar native paging', () => {
     }
   });
 
+  it.each([
+    ['timeGridDay', 1],
+    ['timeGridDay', -1],
+    ['dayGridMonth', 1],
+    ['dayGridMonth', -1],
+  ] as const)(
+    'prepares the next %s destination before each consecutive settled swipe (%i)',
+    async (view, direction) => {
+      const { pager, pages, viewport, calendar } = mountCalendar(view);
+      await vi.advanceTimersByTimeAsync(300);
+      for (let step = 1; step <= 6; step++) {
+        const destination = pager()
+          .pager.pages()
+          .find((page) => page.offset() === direction);
+        if (!destination) throw new Error('Destination page missing');
+        const expected =
+          view === 'dayGridMonth'
+            ? new Date(2026, 10 + direction * step, 1)
+            : new Date(2026, 10, 1 + direction * step);
+        expect(
+          pages.get(destination.key)?.calendar.getDate().toDateString()
+        ).toBe(expected.toDateString());
+        viewport.scrollLeft = 200 + direction * 100;
+        viewport.dispatchEvent(new Event('scrollend'));
+        expect(pager().pager.phase()).toBe('idle');
+        expect(calendar().getDate().toDateString()).toBe(
+          expected.toDateString()
+        );
+      }
+    }
+  );
+
   it('copies the active hour scroll position to neighboring time grids', async () => {
     const { pager, pages, viewport } = mountCalendar();
     const scroller = pages

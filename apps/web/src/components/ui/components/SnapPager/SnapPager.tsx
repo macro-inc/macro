@@ -61,6 +61,8 @@ export type SnapPagerOptions = {
   onNavigationCancel?: () => void;
   /** Pause caller-owned render work before native scrolling begins. */
   onScrollStart?: () => void;
+  /** Data-only lookahead when a visible page is within two slots of an edge. */
+  onNearEdge?: (position: number) => void;
   /** Discrete desktop navigation; other hosts keep native touch scrolling. */
   discrete?: Accessor<boolean>;
   /** Update host navigation metadata before a discrete wheel jump. */
@@ -155,6 +157,18 @@ export function createSnapPager(
   let releaseVelocity = 0;
   let scrollObserved = false;
   let sample = { left: 0, at: 0, velocity: 0 };
+  let lastNearEdgePosition: number | undefined;
+  const reportNearEdge = () => {
+    if (!attached?.clientWidth || !options.onNearEdge) return;
+    const distance = attached.scrollLeft / attached.clientWidth - middle;
+    // Prepare the page entering the viewport, not only the page past halfway.
+    const offset = Math.sign(distance) * Math.ceil(Math.abs(distance));
+    if (offset === 0 || middle - Math.abs(offset) > 2) return;
+    const visible = position() + Math.max(-middle, Math.min(middle, offset));
+    if (visible === lastNearEdgePosition) return;
+    lastNearEdgePosition = visible;
+    options.onNearEdge(visible);
+  };
   const beginNativeScroll = () => {
     clearNoScrollTimer();
     if (locked()) return;
@@ -173,6 +187,7 @@ export function createSnapPager(
   const reportSettle = () => {
     const moved = unreportedMovement;
     unreportedMovement = 0;
+    lastNearEdgePosition = undefined;
     options.onSettle?.(moved);
   };
   const cancelNavigation = (preserveGesture = false) => {
@@ -211,6 +226,7 @@ export function createSnapPager(
         programmaticAnimating
       )
         return;
+      reportNearEdge();
       if (element.scrollLeft !== left) {
         left = element.scrollLeft;
         stillSince = Date.now();
@@ -421,6 +437,7 @@ export function createSnapPager(
     releaseVelocity = 0;
     unlockAlignmentPending = false;
     scrollObserved = false;
+    lastNearEdgePosition = undefined;
     sample = { left: 0, at: 0, velocity: 0 };
   };
 
@@ -590,6 +607,7 @@ export function createSnapPager(
     )
       return;
     if (phase() === 'idle' && pending === 0) beginNativeScroll();
+    reportNearEdge();
     scrollObserved = true;
     if (nativeScroll && gestureHeld() && !unlockAlignmentPending) {
       const now = Date.now();

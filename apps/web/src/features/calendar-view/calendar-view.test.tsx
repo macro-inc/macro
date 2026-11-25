@@ -8,11 +8,16 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSnapPager } from '@ui/components/SnapPager/SnapPager';
-import { createSignal, type JSX } from 'solid-js';
+import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CalendarPagerContextProvider,
+  useCalendarPager,
+} from '../calendar/components/CalendarPagerContext';
 import { calendarPageRange } from '../calendar/core/page-range';
 import { createCalendarPageMounts } from '../calendar/primitives/create-calendar-page-mounts';
 import { createMobileGridAxis } from './primitives/create-mobile-grid-axis';
+import { CalendarPagePreloads } from './views/CalendarPagePreloads';
 import { MobileCalendarGridAxis } from './views/mobile/calendar-grid-axis';
 
 const mocks = vi.hoisted(() => ({
@@ -28,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   searchEventId: '',
   searchOccurrenceKey: '',
   searchStartDate: '',
+  requestedRanges: [] as string[],
+  liveRanges: new Set<string>(),
 }));
 
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
@@ -85,7 +92,19 @@ vi.mock('@notifications/notification-helpers', () => ({
   markNotificationsForEntityAsRead: mocks.markRead,
 }));
 vi.mock('@queries/calendar/occurrences', () => ({
-  useCalendarOccurrencesQuery: () => ({}),
+  useCalendarOccurrencesQuery: (
+    input: () => { range?: { start: string } },
+    options?: () => { enabled?: boolean }
+  ) => {
+    createEffect(() => {
+      const start = input().range?.start;
+      if (!start || options?.().enabled === false) return;
+      mocks.requestedRanges.push(start);
+      mocks.liveRanges.add(start);
+      onCleanup(() => mocks.liveRanges.delete(start));
+    });
+    return {};
+  },
   createCalendarOccurrenceQueryRange: (start: Date, end: Date) => ({
     start: start.toISOString(),
     end: end.toISOString(),
@@ -123,6 +142,8 @@ beforeEach(() => {
   mocks.searchEventId = '';
   mocks.searchOccurrenceKey = '';
   mocks.searchStartDate = '';
+  mocks.requestedRanges = [];
+  mocks.liveRanges.clear();
 });
 
 afterEach(() => {
@@ -308,7 +329,7 @@ describe('bounded calendar preload window', () => {
     expect(range.start).toEqual(new Date(2026, 1, 1));
     expect(range.end).toEqual(new Date(2026, 2, 8));
   });
-  it('mounts both neighbor pages without waiting for events and pauses during gestures', async () => {
+  it('prepares the ring before an immediate swipe without waiting for events', async () => {
     vi.useFakeTimers();
     const pager = createSnapPager();
     const viewport = document.createElement('div');
@@ -321,13 +342,141 @@ describe('bounded calendar preload window', () => {
     });
     expect(mounted()).toEqual([2]);
     viewport.dispatchEvent(new Event('touchstart'));
+    expect([...mounted()].sort()).toEqual([0, 1, 2, 3, 4]);
     await vi.advanceTimersByTimeAsync(120);
-    expect(mounted()).toEqual([2]);
-    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-    await vi.advanceTimersByTimeAsync(400);
     expect([...mounted()].sort()).toEqual([0, 1, 2, 3, 4]);
     detach();
   });
+
+  it.each(['reset', 'lock'] as const)(
+    'rearms the near-edge sentinel after %s',
+    async (action) => {
+      vi.useFakeTimers();
+      const nearEdge = vi.fn();
+      const pager = createSnapPager({ onNearEdge: nearEdge });
+      const viewport = document.createElement('div');
+      Object.defineProperty(viewport, 'clientWidth', { value: 100 });
+      const detach = pager.attachViewport(viewport);
+      viewport.scrollLeft = 210;
+      viewport.dispatchEvent(new Event('scroll'));
+      expect(nearEdge).toHaveBeenCalledExactlyOnceWith(1);
+      if (action === 'reset') pager.reset();
+      else {
+        pager.setLocked(true);
+        pager.setLocked(false);
+        await vi.advanceTimersByTimeAsync(160);
+      }
+      viewport.scrollLeft = 210;
+      viewport.dispatchEvent(new Event('scroll'));
+      expect(nearEdge).toHaveBeenCalledTimes(2);
+      expect(nearEdge).toHaveBeenLastCalledWith(1);
+      detach();
+    }
+  );
+
+  it.each([-1, 1])(
+    'notices silent native movement before settlement in direction %s',
+    async (direction) => {
+      vi.useFakeTimers();
+      const nearEdge = vi.fn();
+      const pager = createSnapPager({ onNearEdge: nearEdge });
+      const viewport = document.createElement('div');
+      Object.defineProperty(viewport, 'clientWidth', { value: 100 });
+      const detach = pager.attachViewport(viewport);
+      viewport.dispatchEvent(new Event('touchstart'));
+      viewport.scrollLeft = 200 + direction * 10;
+      window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+      await vi.advanceTimersByTimeAsync(20);
+      expect(nearEdge).toHaveBeenCalledExactlyOnceWith(direction);
+      expect(viewport.scrollLeft).toBe(200 + direction * 10);
+      expect(pager.position()).toBe(0);
+      detach();
+    }
+  );
+  it.each([-1, 1])(
+    'requests and mounts consecutive pages before visibility in direction %s',
+    async (direction) => {
+      vi.useFakeTimers();
+      const viewport = document.createElement('div');
+      Object.defineProperty(viewport, 'clientWidth', { value: 100 });
+      let pager!: ReturnType<typeof useCalendarPager>;
+      let mounted!: ReturnType<typeof createCalendarPageMounts>;
+      function Pages() {
+        pager = useCalendarPager();
+        mounted = createCalendarPageMounts(pager.pager);
+        return <CalendarPagePreloads />;
+      }
+      render(() => (
+        <CalendarPagerContextProvider
+          initialView="timeGridDay"
+          initialDate={new Date(2026, 10, 15)}
+          showWeekends={() => true}
+          weekStartsOn={() => 0}
+          onNavigate={() => {}}
+          onViewChange={() => {}}
+        >
+          <Pages />
+        </CalendarPagerContextProvider>
+      ));
+      const detach = pager.pager.attachViewport(viewport);
+      await vi.advanceTimersByTimeAsync(20);
+      for (let step = 0; step < 8; step++) {
+        const target = new Date(2026, 10, 15 + direction * (step + 1));
+        const destination = pager.pager
+          .pages()
+          .find((page) => page.offset() === direction);
+        expect(destination).toBeDefined();
+        expect(mounted()).toContain(destination!.key);
+        expect(mocks.requestedRanges).toContain(target.toISOString());
+        const nodes = pager.pager.pages();
+        viewport.dispatchEvent(new Event('touchstart'));
+        viewport.scrollLeft = 200 + direction * 10;
+        viewport.dispatchEvent(new Event('scroll'));
+        // The sentinel prepares beyond the forward ring edge during motion.
+        const ahead = new Date(2026, 10, 15 + direction * (step + 5));
+        expect(mocks.requestedRanges).toContain(ahead.toISOString());
+        const attempts = mocks.requestedRanges.filter(
+          (start) => start === ahead.toISOString()
+        ).length;
+        viewport.scrollLeft = 200 - direction * 10;
+        viewport.dispatchEvent(new Event('scroll'));
+        viewport.scrollLeft = 200 + direction * 10;
+        viewport.dispatchEvent(new Event('scroll'));
+        expect(
+          mocks.requestedRanges.filter((start) => start === ahead.toISOString())
+        ).toHaveLength(attempts);
+        if (step === 0) {
+          viewport.scrollLeft = 200;
+          viewport.dispatchEvent(new Event('scroll'));
+          window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+          viewport.dispatchEvent(new Event('scrollend'));
+          await vi.advanceTimersByTimeAsync(48);
+          viewport.dispatchEvent(new Event('touchstart'));
+          viewport.scrollLeft = 200 + direction * 10;
+          viewport.dispatchEvent(new Event('scroll'));
+          expect(
+            mocks.requestedRanges.filter(
+              (start) => start === ahead.toISOString()
+            )
+          ).toHaveLength(attempts);
+        }
+        viewport.scrollLeft = 200 + direction * 100;
+        viewport.dispatchEvent(new Event('scroll'));
+        window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+        viewport.dispatchEvent(new Event('scrollend'));
+        await vi.advanceTimersByTimeAsync(48);
+        expect(pager.pager.position()).toBe(direction * (step + 1));
+        expect(viewport.scrollLeft).toBe(200);
+        expect(pager.pager.pages()).toBe(nodes);
+      }
+      expect(mocks.liveRanges.size).toBeLessThanOrEqual(13);
+      const abandoned = new Date(2026, 10, 15 - direction * 4);
+      expect(mocks.liveRanges.has(abandoned.toISOString())).toBe(false);
+      pager.changeView('timeGridWeek');
+      expect(pager.preloadPositions()).toHaveLength(9);
+      detach();
+    }
+  );
 
   it.each([
     ['timeGridDay', new Date(2026, 2, 7), false, 0],

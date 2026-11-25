@@ -12,6 +12,7 @@ import {
 } from 'date-fns';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -109,9 +110,16 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   let scrollViewportSize: { width: number; height: number } | undefined;
 
   const [preloadRevision, refreshPreloadWindow] = createSignal(0);
+  const [lookahead, setLookahead] = createStore({ start: 0, end: 0 });
   const pager = createSnapPager({
     discrete: () => !isTouchDevice(),
     onWheelNavigate: (direction) => preparePeriodNavigation(direction),
+    onNearEdge(position) {
+      setLookahead({
+        start: Math.min(lookahead.start, position),
+        end: Math.max(lookahead.end, position),
+      });
+    },
     onScrollStart() {
       renderQueue.clear();
     },
@@ -162,7 +170,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const signature = (date: Date) => `${periodView()}:${date.getTime()}`;
   // Publish ranges only after a date anchor commits, never from the ring's
   // intermediate rotation coordinates during a far jump.
-  const preloadRanges = createMemo(() => {
+  const preloadWindow = createMemo(() => {
     preloadRevision();
     const view = periodView();
     const weekStartsOn: 0 | 1 = props.weekStartsOn() === 1 ? 1 : 0;
@@ -171,11 +179,38 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       showWeekends: props.showWeekends(),
       phone: isMobile(),
     };
-    return untrack(() =>
-      pager
+    return untrack(() => ({
+      date: activeDate(),
+      position: pager.position(),
+      pagePositions: pager
         .pages()
-        .map((page) => calendarPageRange(pageDate(page.key), view, options))
+        .map((page) => pager.position() + page.offset()),
+      view,
+      options,
+    }));
+  });
+  const preloadRange = (position: number) => {
+    const window = preloadWindow();
+    return calendarPageRange(
+      shiftedDateForView(window.date, window.view, position - window.position),
+      window.view,
+      window.options
     );
+  };
+  const preloadPositions = createMemo(() => {
+    const { position } = preloadWindow();
+    const middle = Math.floor(CALENDAR_PAGE_COUNT / 2);
+    // Retain approached sides until they fall behind the moving window, not
+    // merely until settlement. Short reversing swipes must reuse pending reads.
+    // Clamp both sides to keep at most thirteen query observers.
+    const approachedStart = Math.max(position - middle, lookahead.start);
+    const approachedEnd = Math.min(position + middle, lookahead.end);
+    const start = Math.min(position, approachedStart) - middle - 2;
+    const end = Math.max(position, approachedEnd) + middle + 2;
+    return Array.from(
+      { length: end - start + 1 },
+      (_, index) => start + index
+    ).sort((a, b) => Math.abs(a - position) - Math.abs(b - position));
   });
 
   const copyScrollPosition = () => {
@@ -200,34 +235,27 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     }
   };
 
-  // Recycled pages alone get new dates. Read their latest position inside each
-  // job, so another native swipe never waits on or commits an obsolete buffer.
+  // Retarget recycled handles before another settled swipe can reach them.
+  // Native momentum still defers this work until the pager returns to idle.
   function synchronizePages(force = false) {
     if (pager.phase() !== 'idle') return;
     for (const id of pageOrder()) {
-      if (!handles.has(id)) continue;
-      if (!force && rendered.get(id) === signature(pageDate(id))) continue;
-      renderQueue.enqueue(
-        `page:${id}`,
-        () => {
-          if (pager.phase() !== 'idle') return;
-          const handle = handles.get(id);
-          const api = handle?.api();
-          if (!api) return;
-          const date = pageDate(id);
-          navigateCalendar(api, periodView(), date);
-          rendered.set(id, signature(date));
-          const scroller = timeGridScroller(handle?.element());
-          if (scroller && sharedScrollTop !== undefined)
-            scroller.scrollTop = sharedScrollTop;
-          if (id === activePageId()) {
-            const requested = requestedDate();
-            if (requested && isSameLocalDate(requested, date))
-              setRequestedDate(undefined);
-          }
-        },
-        id === activePageId()
-      );
+      const handle = handles.get(id);
+      if (!handle) continue;
+      const date = pageDate(id);
+      if (!force && rendered.get(id) === signature(date)) continue;
+      const api = handle.api();
+      if (!api) continue;
+      navigateCalendar(api, periodView(), date);
+      rendered.set(id, signature(date));
+      const scroller = timeGridScroller(handle.element());
+      if (scroller && sharedScrollTop !== undefined)
+        scroller.scrollTop = sharedScrollTop;
+      if (id === activePageId()) {
+        const requested = requestedDate();
+        if (requested && isSameLocalDate(requested, date))
+          setRequestedDate(undefined);
+      }
     }
   }
 
@@ -382,9 +410,13 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     todayTarget = undefined;
     setPendingAnchor(undefined);
     renderQueue.clear();
-    pager.reset();
-    setAnchor({ date, position: 0 });
-    setRequestedDate(undefined);
+    batch(() => {
+      pager.reset();
+      setAnchor({ date, position: 0 });
+      setLookahead({ start: 0, end: 0 });
+      setRequestedDate(undefined);
+      refreshPreloadWindow((revision) => revision + 1);
+    });
     props.onNavigate();
     props.onViewChange(view);
   };
@@ -408,7 +440,10 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     activeDate,
     navigationDate,
     activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
-    pageRange: (id: CalendarPageId) => preloadRanges()[id],
+    pageRange: (id: CalendarPageId) =>
+      preloadRange(preloadWindow().pagePositions[id]),
+    preloadRange,
+    preloadPositions,
     visibleRange: () => activeData()?.range(),
     initialDateFor,
     scrollTop: () => sharedScrollTop,

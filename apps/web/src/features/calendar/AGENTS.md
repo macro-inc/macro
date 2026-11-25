@@ -49,7 +49,7 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Keep standalone composer hotkey scopes attached to their host so app shortcuts still run from text fields.
 - Preserve native momentum until scrollend or observed stillness; complete controlled 140ms slides without relying on native events.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
-- Preload five page keys independently of render jobs after date anchors commit; retain stable slots and freeze phone axis measurements during paging.
+- Prepare all five stable slots before swiping, retarget recycled grids synchronously at settlement, and prefetch two ranges past each edge plus near-edge lookahead; freeze phone axis measurements during paging.
 - Share one cache startup head start across concurrent ranges; never restart its deadline per reader.
 
 ## Checks

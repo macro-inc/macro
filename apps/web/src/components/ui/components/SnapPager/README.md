@@ -20,7 +20,7 @@ const pager = createSnapPager({ onSettle: (moved) => navigate(moved) });
 ## Contract
 
 Options: `pageCount` (odd, at least three; defaults to five), `discrete`,
-`onScrollStart`, `onWheelNavigate`, `onNavigationCancel`, and `onSettle`.
+`onScrollStart`, `onNearEdge`, `onWheelNavigate`, `onNavigationCancel`, and `onSettle`.
 
 Controller: `pages`, `pageOrder`, `activePage`, `position`, `targetPosition`,
 `origin`, `phase`, `discrete`, `canStep`, `next`, `previous`, `goTo`, `reset`,
@@ -39,6 +39,9 @@ stable `key`, `position`, and relative `offset`.
   instantly and report the aggregate after the burst.
 - Discrete desktop mode turns horizontal wheel gestures into one step.
 - `onSettle` reports total movement after recycling, including zero-move cancellation.
+- `onNearEdge` reports the logical position entering view within two slots of an edge,
+  from scroll events or the silent-movement watcher. Use it for data-only lookahead;
+  it does not recycle slots or write scroll offsets during momentum.
 - Lock paging during child drag/resize; unlocking realigns the current page after
   contact ends. Unlock alignment retains its committed target through zero width
   and ignores layout clamping until recovery finishes. It resumes on reveal, after

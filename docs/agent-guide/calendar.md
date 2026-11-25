@@ -190,11 +190,16 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
-Opening a grid view paints the visible period first, then mounts its four neighbors
-on yielding tasks without waiting for events. The same five exact date ranges begin
-loading independently of those render jobs, with two ranges on each side. Forward
-and reverse settlement extend that rolling window without prepending DOM or shifting
-the current page. On the iOS and Android apps, recently seen periods and the calendar
+Opening a grid view paints the visible period first, then prepares all five stable
+slots after the first paint or before an earlier swipe. Every settlement immediately
+retargets recycled grids, so consecutive swipes cannot cancel their preparation.
+Nine exact data ranges stay warm: the five mounted periods and two beyond each end.
+A near-edge signal from native scroll position extends the leading data window
+before settlement, up to thirteen observers after reversing direction; obsolete observers detach without
+cancelling a range still used by a grid. Forward and reverse settlement recenter
+the ring without prepending DOM or writing scrollLeft during momentum. Pending
+event reads leave the grid and its loading state navigable. On the iOS and Android
+apps, recently seen periods and the calendar
 list remain on the device for a week; fresh reads replace those restored results.
 
 Period selection updates its label and route immediately. The active grid redraws
