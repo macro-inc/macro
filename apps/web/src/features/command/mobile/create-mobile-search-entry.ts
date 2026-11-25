@@ -54,9 +54,12 @@ export function createMobileSearchEntry() {
     ? createMobileSearchSession(stored)
     : opener
       ? createMobileSearchSession({
-          query: opener.query,
+          // A space after it, as a picked operator gets, so its last token
+          // isn't read as one still being typed and offered completions.
+          query: /\s$/.test(opener.query) ? opener.query : `${opener.query} `,
           bindings: opener.bindings,
-          mode: 'name',
+          // The opener asked for this search, as desktop runs it at once.
+          mode: 'full-text',
           universalInputActive: false,
         })
       : untrack(() =>

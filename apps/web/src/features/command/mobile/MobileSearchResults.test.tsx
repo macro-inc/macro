@@ -1296,7 +1296,9 @@ it('opens on what a tag or the universal input picked, keeping its binding', () 
       <MobileSearchResults />
     </>
   ));
-  expect(SearchState.query()).toBe('tag:"🎉"');
+  // A space follows, so the token isn't read as one still being typed.
+  expect(SearchState.query()).toBe('tag:"🎉" ');
+  expect(SearchState.mode()).toBe('full-text');
   const bindings = mocks.fullText.mock.calls.at(-1)?.[2] as () => unknown;
   expect(bindings()).toEqual([binding]);
   cleanup();
@@ -1312,11 +1314,26 @@ it('opens on what a tag or the universal input picked, keeping its binding', () 
       <MobileSearchResults />
     </>
   ));
-  expect(SearchState.query()).toBe('tag:"🎉" launch');
+  expect(SearchState.query()).toBe('tag:"🎉" launch ');
   expect(SearchState.session().bindings()).toEqual([binding]);
   // Editing the token lets go of it.
   fireEvent.input(screen.getByPlaceholderText('Search…'), {
     target: { value: 'tag:"🎉x" launch' },
   });
+  expect(SearchState.session().bindings()).toEqual([]);
+});
+
+it('restores its own session over what the opener picked', () => {
+  mocks.entryState = {
+    'search.text': 'tag:"🎉"',
+    'mobileSearch.session': { query: 'teo', mode: 'name' },
+  };
+  render(() => (
+    <>
+      <MobileSearchInput />
+      <MobileSearchResults />
+    </>
+  ));
+  expect(SearchState.query()).toBe('teo');
   expect(SearchState.session().bindings()).toEqual([]);
 });

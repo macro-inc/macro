@@ -8,6 +8,7 @@ import {
   readSearchOperators,
   readsAsSearchOperator,
   type SearchOperatorBinding,
+  searchBindingsIn,
   searchOperatorIndexes,
   searchOperatorSpans,
   splitSearchTerms,
@@ -65,7 +66,7 @@ function isOperatorToken(
 ): boolean {
   const term = splitSearchTerms(token)[0] ?? token;
   return (
-    bindings.some((binding) => binding.token === token) ||
+    searchBindingsIn(token, bindings).length > 0 ||
     readsAsSearchOperator(token) ||
     readsAsEmailSearchOperator(token) ||
     isUnfinishedSearchOperator(term) ||
@@ -152,11 +153,12 @@ export function startSearchOperator(
  */
 export function searchStarterApplies(
   text: string,
-  starter: SearchStarter
+  starter: SearchStarter,
+  bindings: readonly SearchOperatorBinding[] = []
 ): boolean {
   if (starter === 'type' || starter === 'tag') return true;
   const indexes = searchOperatorIndexes(
-    readSearchOperators(splitSearchTerms(text))
+    readSearchOperators(splitSearchTerms(text), true, bindings)
   );
   if (indexes.includes('email')) return true;
   return (

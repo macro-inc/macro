@@ -51,7 +51,7 @@ export function MobileSearchStarters(props: {
     // A starter whose operator no kind left can meet is left out (Date and
     // Unread beside `type:task`), rather than written as a word.
     SEARCH_STARTERS.filter((starter) =>
-      searchStarterApplies(props.query(), starter)
+      searchStarterApplies(props.query(), starter, bindings())
     ).map((starter) => {
       const set = searchStarterValue(props.query(), starter, bindings());
       return {

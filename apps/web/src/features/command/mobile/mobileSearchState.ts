@@ -34,20 +34,21 @@ export function createMobileSearchSession(
   initial?: MobileSearchSnapshot
 ): MobileSearchSession {
   const [query, writeQuery] = createSignal(initial?.query ?? '');
+  const [bindings, setBindings] = createSignal(
+    searchBindingsIn(initial?.query ?? '', initial?.bindings ?? [])
+  );
   // A session that starts unpromoted, such as one an opener searches, stays a
   // search until the person edits it.
   const [universalInputActive, setUniversalInputActive] = createSignal(
     initial?.universalInputActive !== false &&
       shouldUseUniversalInputForSearch(
         initial?.query ?? '',
-        initial?.universalInputActive
+        initial?.universalInputActive,
+        bindings()
       )
   );
   const [mode, setMode] = createSignal<'name' | 'full-text'>(
     initial?.mode ?? 'name'
-  );
-  const [bindings, setBindings] = createSignal(
-    searchBindingsIn(initial?.query ?? '', initial?.bindings ?? [])
   );
   const setQuery = (value: string) =>
     batch(() => {
@@ -57,7 +58,7 @@ export function createMobileSearchSession(
         return next.length === kept.length ? kept : next;
       });
       setUniversalInputActive((active) =>
-        shouldUseUniversalInputForSearch(value, active)
+        shouldUseUniversalInputForSearch(value, active, bindings())
       );
       if (!value.trim()) setMode('name');
     });
