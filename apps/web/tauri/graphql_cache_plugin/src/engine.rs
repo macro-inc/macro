@@ -362,6 +362,30 @@ impl OpInterner {
         Some(id)
     }
 
+    fn remove_client(&mut self, client_id: &str) -> Vec<OpId> {
+        let prefix = format!("{client_id}:");
+        let matched: Vec<(String, OpId)> = self
+            .by_name
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, id)| (name.clone(), *id))
+            .collect();
+        let mut removed = Vec::with_capacity(matched.len());
+        for (name, id) in matched {
+            self.by_name.remove(&name);
+            self.by_id.remove(&id);
+            removed.push(id);
+        }
+        removed
+    }
+
+    fn clear(&mut self) -> Vec<OpId> {
+        let removed: Vec<OpId> = self.by_id.keys().copied().collect();
+        self.by_name.clear();
+        self.by_id.clear();
+        removed
+    }
+
     fn names(&self, ids: impl IntoIterator<Item = OpId>) -> Vec<String> {
         ids.into_iter()
             .filter_map(|id| self.by_id.get(&id).cloned())
@@ -464,6 +488,16 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     }
 }
 
+/// Default hot-tier record cap when the frontend omits `hot_capacity`.
+///
+/// Desktop retains `cache_core::engine::DEFAULT_HOT_CAPACITY` (10,000 records).
+/// Mobile matches `BROWSER_HOT_CAPACITY` (2,500 records) so decoded hot records
+/// stay bounded under iOS Jetsam limits while misses read from Turso.
+#[cfg(any(target_os = "ios", target_os = "android"))]
+const DEFAULT_NATIVE_HOT_CAPACITY: usize = 2_500;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+const DEFAULT_NATIVE_HOT_CAPACITY: usize = cache_core::engine::DEFAULT_HOT_CAPACITY;
+
 /// How long shutdown waits for an idle checkpoint that is copying.
 const SHUTDOWN_IDLE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -494,7 +528,7 @@ impl EngineHandle {
             storage,
             hot_capacity
                 .filter(|c| *c > 0)
-                .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+                .map_or(DEFAULT_NATIVE_HOT_CAPACITY, |c| c as usize),
             schema,
         )
         .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
@@ -1334,6 +1368,46 @@ impl EngineHandle {
             engine.teardown_operation(id);
         }
         Ok(())
+    }
+
+    /// Unregisters every operation belonging to `client_id` (prefix `"{client_id}:"`).
+    ///
+    /// Called when a webview document unloads or its WebContent process is
+    /// terminated so dead documents stop accumulating dependency state and
+    /// receiving `ops-affected` broadcasts.
+    pub async fn teardown_client(&self, client_id: &str) -> usize {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let ids = ops.remove_client(client_id);
+        let count = ids.len();
+        for id in ids {
+            engine.teardown_operation(id);
+        }
+        count
+    }
+
+    /// Unregisters every active operation in the engine.
+    ///
+    /// Used as a single-webview mobile fallback when a terminated WebContent
+    /// document belonged to an older OTA bundle that did not send its `clientId`.
+    pub async fn teardown_all_ops(&self) -> usize {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let ids = ops.clear();
+        let count = ids.len();
+        for id in ids {
+            engine.teardown_operation(id);
+        }
+        count
+    }
+
+    /// Evicts re-materializable in-memory caches under OS memory pressure
+    /// without altering durable data, active dependencies, or queued mutations.
+    pub async fn shrink_memory(&self) {
+        let mut state = self.inner.lock().await;
+        state.engine.shrink_memory();
+        state.engine.storage().shrink_memory();
+        state.selections.clear();
     }
 
     /// Drops all cached state (logout).

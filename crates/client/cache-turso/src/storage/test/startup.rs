@@ -396,3 +396,44 @@ fn changed_schema_takes_the_full_checks_on_reopen() {
         expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);
     });
 }
+
+#[test]
+fn shrink_memory_drops_cached_statements_and_preserves_cache_size_and_data() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        for index in 0..32 {
+            storage
+                .put_batch(vec![(
+                    key(&format!("Thing:{index}")),
+                    record(&format!("value-{index}")),
+                )])
+                .await
+                .unwrap();
+        }
+        // Run the same point lookup twice so the statement cache retains it.
+        let _ = storage.get_batch(&[key("Thing:0")]).await.unwrap();
+        let _ = storage.get_batch(&[key("Thing:1")]).await.unwrap();
+        assert!(storage.connection().cached_texts() > 0);
+
+        storage.shrink_memory();
+
+        assert_eq!(storage.connection().cached_texts(), 0);
+        let rows = driver::query(&storage.connection(), "PRAGMA cache_size", Vec::new()).unwrap();
+        assert_eq!(required_i64(&rows[0], 0).unwrap(), NATIVE_PAGE_CACHE_PAGES);
+        assert_eq!(
+            storage.get_batch(&[key("Thing:31")]).await.unwrap(),
+            vec![Some(record("value-31"))]
+        );
+        storage
+            .put_batch(vec![(key("Thing:32"), record("after-shrink"))])
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.get_batch(&[key("Thing:32")]).await.unwrap(),
+            vec![Some(record("after-shrink"))]
+        );
+        storage.try_close().unwrap();
+    });
+}

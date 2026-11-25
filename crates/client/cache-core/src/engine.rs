@@ -3555,6 +3555,18 @@ impl<S: Storage> Engine<S> {
         self.query_watches.remove(op_id);
     }
 
+    /// Evicts purely re-materializable in-memory caches under OS memory
+    /// pressure (hot decoded records, parsed GraphQL documents, retained
+    /// incremental watch bases, and transient pass reads). Durable records,
+    /// active operation dependencies, authority/identity witnesses, and queued
+    /// optimistic layers are untouched.
+    pub fn shrink_memory(&mut self) {
+        self.hot.clear();
+        self.docs.clear();
+        self.query_watches = watch_query::QueryWatches::default();
+        self.kept_reads = None;
+    }
+
     /// Handles records invalidated from outside a write, such as a push:
     /// evicts them from the hot tier so the next read hits storage, and returns
     /// the local active operations that depend on them. One engine owns a

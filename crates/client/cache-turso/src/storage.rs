@@ -792,15 +792,20 @@ fn remove_native_file(path: &Path) -> Result<(), TursoStorageError> {
     }
 }
 
-/// Pages the native connection keeps in Turso's page cache, about 31 MiB at the
-/// default 4 KiB page size.
+/// Pages the native connection keeps in Turso's page cache.
 ///
-/// Turso's native default is 2,000 pages. On a large database a typed search
-/// reads a browse index of nearly that many pages, and a Home refresh touches more, so
-/// each evicted the other's pages and read them back from the file on the next
-/// call. Clean pages past the cap are read again; dirty ones spill to the WAL,
-/// which native Turso does by default.
-#[cfg(not(target_arch = "wasm32"))]
+/// Desktop uses 8,000 pages (~31 MiB at 4 KiB pages) so typed searches and Home
+/// refreshes do not evict each other. Mobile targets (iOS/Android) stay at
+/// Turso's 2,000-page default (~8 MiB) to leave headroom under iOS Jetsam limits.
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(target_os = "ios", target_os = "android")
+))]
+const NATIVE_PAGE_CACHE_PAGES: i64 = 2_000;
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    not(any(target_os = "ios", target_os = "android"))
+))]
 const NATIVE_PAGE_CACHE_PAGES: i64 = 8_000;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -945,6 +950,16 @@ impl TursoStorage {
 
     fn connection(&self) -> Db {
         self.connection.clone()
+    }
+
+    /// Releases cached prepared statements and evicts clean pages from Turso's
+    /// page cache under OS memory pressure without affecting durable data.
+    pub fn shrink_memory(&self) {
+        if self.latched_reason().is_some() {
+            return;
+        }
+        self.connection
+            .shrink_memory(usize::try_from(NATIVE_PAGE_CACHE_PAGES).unwrap_or(2_000));
     }
 }
 

@@ -16,6 +16,7 @@
 #![deny(missing_docs)]
 
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Runtime};
 
@@ -96,6 +97,9 @@ mod test;
 struct InitializedCache {
     scope: String,
     handle: EngineHandle,
+    webview_clients: HashMap<String, HashSet<String>>,
+    /// Set when an older OTA bundle calls `graphql_cache_init` without a `client_id`.
+    any_untracked_client: bool,
 }
 
 /// Managed state holding the lazily-initialized engine handle. Register
@@ -112,6 +116,67 @@ impl CacheState {
             .map_err(|_| "graphql cache state poisoned".to_string())?
             .take();
         cache.map_or(Ok(()), |cache| cache.handle.shutdown())
+    }
+
+    /// Releases re-materializable in-memory caches in the initialized engine
+    /// (for OS memory-warning handlers). Snapshots the handle synchronously so
+    /// callers can spawn the returned `'static` future off the UI thread.
+    pub fn shrink_memory(&self) -> impl std::future::Future<Output = ()> + Send + 'static {
+        let handle = self
+            .0
+            .lock()
+            .ok()
+            .and_then(|guard| guard.as_ref().map(|cache| cache.handle.clone()));
+        async move {
+            if let Some(handle) = handle {
+                handle.shrink_memory().await;
+            }
+        }
+    }
+
+    /// Unregisters all operations owned by `webview_label` after its document
+    /// process dies.
+    ///
+    /// Snapshots and removes the dead webview's tracked client ids
+    /// synchronously so callers can immediately reload the webview without
+    /// racing against the replacement document's `graphql_cache_init`.
+    /// When `single_webview_fallback` is true (mobile single-window apps),
+    /// `webview_label` had no tracked client ids, and an older OTA bundle
+    /// initialized the cache without a `client_id`, drops all registered ops.
+    pub fn teardown_webview(
+        &self,
+        webview_label: &str,
+        single_webview_fallback: bool,
+    ) -> impl std::future::Future<Output = usize> + Send + 'static {
+        let taken = self.0.lock().ok().and_then(|mut guard| {
+            let cache = guard.as_mut()?;
+            let clients = cache
+                .webview_clients
+                .remove(webview_label)
+                .unwrap_or_default();
+            let fallback_all =
+                clients.is_empty() && single_webview_fallback && cache.any_untracked_client;
+            if fallback_all {
+                cache.any_untracked_client = false;
+            }
+            Some((cache.handle.clone(), clients, fallback_all))
+        });
+        async move {
+            let Some((handle, clients, fallback_all)) = taken else {
+                return 0;
+            };
+            if !clients.is_empty() {
+                let mut removed = 0;
+                for client_id in clients {
+                    removed += handle.teardown_client(&client_id).await;
+                }
+                return removed;
+            }
+            if fallback_all {
+                return handle.teardown_all_ops().await;
+            }
+            0
+        }
     }
 }
 

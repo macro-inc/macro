@@ -34,6 +34,11 @@ impl RecordSelectionCache {
         self.plans.put(key, Arc::clone(&selection));
         Ok(selection)
     }
+
+    /// Evicts cached parsed fragment plans under OS memory pressure.
+    pub fn clear(&mut self) {
+        self.plans.clear();
+    }
 }
 
 #[cfg(test)]
