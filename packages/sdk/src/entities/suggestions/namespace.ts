@@ -242,6 +242,17 @@ export class SuggestionNamespace {
       name: true,
       reason: true,
     });
+    if (topic.reason) {
+      rejectUnknownOptions('suggestions.nameTopic reason', topic.reason, {
+        text: true,
+        source: true,
+      });
+      rejectUnknownOptions(
+        'suggestions.nameTopic reason source',
+        topic.reason.source,
+        { entity: true, part: true },
+      );
+    }
     return outcome(
       this.client,
       unwrap(
