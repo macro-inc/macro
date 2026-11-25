@@ -983,7 +983,8 @@ Without the cache, writes read mounted Soup lists again
 into the cache. A row read while the engine is still opening is written only
 once it opens, in line with lists that loaded meanwhile, so list-sync reads the
 row again after the host's `whenReady()` (`isReady()` says whether it is
-open); a host without them is always ready, and a retired host
+open, and is false while the host is `paused`, when writes are refused); a host
+without them is always ready, and a retired host
 (`createRetirableCacheHost` after `dispose()`) is never ready, so nothing
 reads into it. The reread runs after its pass, so
 later events never wait for the engine, and gives up after 60 s. A list that never shows, filters or sorts
@@ -996,12 +997,14 @@ not look up notifications for rows it never shows.
 A list's `staleTime` works as it does in TanStack: within `staleTime` of the
 last network answer this client gave to the same query (projection and first
 page), a list that mounts again reads with `cache-first` instead of
-`cache-and-network` (`soup/graphql/network-freshness.ts`), so menus and
+`cache-and-network`, decided once, when the list first starts to fetch (`soup/graphql/network-freshness.ts`), so menus and
 pickers that open often don't read the server each time. Writes, Soup updates
 and `refreshActiveGraphqlSoupQueries` still update it while it is mounted, and
 a write (any `refreshActiveGraphqlSoupQueries` or Soup revalidation call)
 forgets every recorded answer, as invalidating the REST lists marked them
-stale, so a list that mounts after it reads the server again. A
+stale, so a list that mounts after it reads the server again. So does the cache
+serving again after an outage, since it stored none of the answers given
+meanwhile. A
 `graphqlCacheFirstEntities` lookup reads the cache only with a sort the cache
 can order (`created_at` or `updated_at`, `isLocallySortable`); any other sort
 goes to the network.
