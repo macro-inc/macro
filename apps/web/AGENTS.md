@@ -2310,20 +2310,22 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   IMAP is not offered; retain the chooser when there are multiple choices.
   Chooser capabilities omit the optional admin-consent callback and use a
   separate account/session cache variant from signed approval links.
+  Route app-level Add another inbox through the same chooser and replace it
+  with the IMAP form in one handoff.
 
-- Use the shared SecretInput with current-password autocomplete for IMAP/SMTP;
-  reconnect secrets start empty and switching off a separate outgoing secret
+- Use the shared SecretInput with autocomplete off for IMAP/SMTP and keep
+  the credential form marked ph-no-capture.
+  Reconnect secrets start empty and switching off a separate outgoing secret
   clears its typed value.
 
 - Keep confirmed IMAP server settings after verification refusal, clear secret
-  fields, and offer the catalog app-password help link. Render only whitelisted
-  error guidance; a connection failure must never imply a rejected password.
+  fields, and offer the catalog app-password help link. Match generated IMAP
+  refusal codes exhaustively for localized guidance and request ID reuse.
 
 - Exclude folders whose effective role is Drafts from sync-limit notices, label their intentional server-only handling separately, and omit their no-op sync checkbox while keeping the role picker.
 
 - Label reconnect actions Reconnect, stack server fields at full dialog width,
   and show the same labelled port/TLS choice in the menu and selected value.
-- Keep the IMAP credential form ph-no-capture and app-password fields autocomplete off.
 - Keep IMAP connect action labels mounted through verification with Button
   loading, and reserve a wrapping error area so refusal/retry does not shift
   the footer. Avoid fixed action widths or clipped error copy.

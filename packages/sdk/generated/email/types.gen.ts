@@ -1488,8 +1488,13 @@ export type ImapConnectResponse = {
     linkId: string;
 };
 
+/**
+ * Machine-readable reason an IMAP connection or settings request was refused.
+ */
+export type ImapConnectionErrorCode = 'disabled' | 'address_unverified' | 'provider_conflict' | 'connection_changed' | 'payment_required' | 'connection_unavailable' | 'invalid' | 'forbidden' | 'not_found' | 'conflict' | 'credentials_rejected' | 'credentials_unreadable' | 'credentials_unavailable' | 'throttled' | 'dns_unavailable' | 'tcp_unavailable' | 'tls_unavailable' | 'connection_timed_out';
+
 export type ImapConnectionErrorResponse = {
-    code: string;
+    code: ImapConnectionErrorCode;
     message: string;
 };
 
@@ -3372,7 +3377,9 @@ export type ImapConnectData = {
 
 export type ImapConnectErrors = {
     400: ImapConnectionErrorResponse;
+    402: ImapConnectionErrorResponse;
     403: ImapConnectionErrorResponse;
+    404: ImapConnectionErrorResponse;
     409: ImapConnectionErrorResponse;
     422: ImapConnectionErrorResponse;
     429: ImapConnectionErrorResponse;

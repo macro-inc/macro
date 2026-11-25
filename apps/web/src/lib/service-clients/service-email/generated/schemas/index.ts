@@ -280,6 +280,7 @@ export * from './getThreadMessagesHandlerParams';
 export * from './getThreadParams';
 export * from './getThreadResponse';
 export * from './guestPolicy';
+export * from './imapConnectionErrorCode';
 export * from './imapConnectionErrorResponse';
 export * from './imapConnectionOffer';
 export * from './imapConnectRequest';

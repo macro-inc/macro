@@ -2,6 +2,7 @@
 
 import { Telemetry } from '@macro-inc/observability';
 import type { Discovery } from '@service-email/generated/schemas';
+import { ImapConnectionErrorCode } from '@service-email/generated/schemas/imapConnectionErrorCode';
 import {
   cleanup,
   fireEvent,
@@ -73,10 +74,40 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('resolves a payment refusal for the paywall and clears the password', async () => {
+  mail.connect.mockResolvedValue(
+    err([
+      {
+        code: ImapConnectionErrorCode.payment_required,
+        message: 'IMAP connection refused',
+      },
+    ])
+  );
+  const onResult = vi.fn();
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={onResult}
+      emailAddress="owner@example.com"
+    />
+  ));
+
+  const password = await screen.findByLabelText('Password or app password');
+  fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+  fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+
+  await vi.waitFor(() =>
+    expect(onResult).toHaveBeenCalledWith('payment_required')
+  );
+  expect(password).toHaveProperty('value', '');
+});
+
 it('binds reconnect to its inbox, requires confirmation again when a destination changes, and erases refused credentials', async () => {
   const result = vi.fn();
   mail.connect.mockResolvedValue(
-    err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'credentials_rejected' }])
+    err([{ code: 'credentials_rejected', message: 'IMAP connection refused' }])
   );
   render(() => (
     <ImapConnectDialog
@@ -152,83 +183,94 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   expect(result).not.toHaveBeenCalled();
 });
 
-it('retains confirmed settings and provider help after a rejected login, then retries with new secrets', async () => {
-  mail.discover.mockResolvedValueOnce(
-    ok({
-      imap: {
-        host: 'imap.example.com',
-        username: 'incoming-user',
-        port: 993,
-        tls: 'implicit',
-      },
-      smtp: {
-        host: 'smtp.example.com',
-        username: 'outgoing-user',
-        port: 465,
-        tls: 'implicit',
-      },
-      helpUrl: 'https://example.com/app-password',
-      hostConfirmationRequired: true,
-    })
-  );
-  mail.connect
-    .mockResolvedValueOnce(
-      err([
-        { code: 'IMAP_CONNECTION_REFUSED', message: 'credentials_rejected' },
-      ])
-    )
-    .mockResolvedValueOnce(ok({ linkId: 'connected-inbox' }));
-  const result = vi.fn();
-  render(() => (
-    <ImapConnectDialog
-      open
-      onOpenChange={() => {}}
-      onResult={result}
-      emailAddress="owner@example.com"
-    />
-  ));
-  const password = await screen.findByLabelText('Password or app password');
-  const confirm = screen.getByRole('checkbox', { name: /I trust/ });
-  fireEvent.click(confirm);
-  fireEvent.input(password, { target: { value: 'incorrect-test-password' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
-  expect((await screen.findByRole('alert')).textContent).toContain(
-    'Sign-in was rejected. Check your username and app password.'
-  );
-  expect(password).toHaveProperty('value', '');
-  expect(confirm).toHaveProperty('checked', true);
-  expect(
-    screen
-      .getByRole('link', { name: 'Create an app password' })
-      .getAttribute('href')
-  ).toBe('https://example.com/app-password');
-  fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
-  const imap = screen.getByRole('group', { name: 'Incoming mail (IMAP)' });
-  expect(within(imap).getByLabelText('Server name')).toHaveProperty(
-    'value',
-    'imap.example.com'
-  );
-  expect(within(imap).getByLabelText('Username')).toHaveProperty(
-    'value',
-    'incoming-user'
-  );
-  fireEvent.input(password, { target: { value: 'corrected-test-password' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
-  await vi.waitFor(() =>
-    expect(result).toHaveBeenCalledWith({
-      type: 'connected',
-      linkId: 'connected-inbox',
-    })
-  );
-  expect(mail.connect).toHaveBeenCalledTimes(2);
-  expect(mail.connect.mock.calls[1][0].imap.password).toBe(
-    'corrected-test-password'
-  );
-  expect(mail.connect.mock.calls[1][0].requestId).not.toBe(
-    mail.connect.mock.calls[0][0].requestId
-  );
-  expect(password).toHaveProperty('value', '');
-});
+it.each([
+  {
+    code: 'credentials_rejected',
+    guidance: 'Sign-in was rejected. Check your username and app password.',
+    reuseId: false,
+  },
+  {
+    code: 'credentials_unreadable',
+    guidance:
+      'Could not verify the connection. Check the server settings and try again.',
+    reuseId: true,
+  },
+])(
+  'keeps confirmed settings and retries after $code',
+  async ({ code, guidance, reuseId }) => {
+    mail.discover.mockResolvedValueOnce(
+      ok({
+        imap: {
+          host: 'imap.example.com',
+          username: 'incoming-user',
+          port: 993,
+          tls: 'implicit',
+        },
+        smtp: {
+          host: 'smtp.example.com',
+          username: 'outgoing-user',
+          port: 465,
+          tls: 'implicit',
+        },
+        helpUrl: 'https://example.com/app-password',
+        hostConfirmationRequired: true,
+      })
+    );
+    mail.connect
+      .mockResolvedValueOnce(
+        err([{ code, message: 'IMAP connection refused' }])
+      )
+      .mockResolvedValueOnce(ok({ linkId: 'connected-inbox' }));
+    const result = vi.fn();
+    render(() => (
+      <ImapConnectDialog
+        open
+        onOpenChange={() => {}}
+        onResult={result}
+        emailAddress="owner@example.com"
+      />
+    ));
+    const password = await screen.findByLabelText('Password or app password');
+    const confirm = screen.getByRole('checkbox', { name: /I trust/ });
+    fireEvent.click(confirm);
+    fireEvent.input(password, { target: { value: 'incorrect-test-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(guidance);
+    expect(password).toHaveProperty('value', '');
+    expect(confirm).toHaveProperty('checked', true);
+    expect(
+      screen
+        .getByRole('link', { name: 'Create an app password' })
+        .getAttribute('href')
+    ).toBe('https://example.com/app-password');
+    fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
+    const imap = screen.getByRole('group', { name: 'Incoming mail (IMAP)' });
+    expect(within(imap).getByLabelText('Server name')).toHaveProperty(
+      'value',
+      'imap.example.com'
+    );
+    expect(within(imap).getByLabelText('Username')).toHaveProperty(
+      'value',
+      'incoming-user'
+    );
+    fireEvent.input(password, { target: { value: 'corrected-test-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+    await vi.waitFor(() =>
+      expect(result).toHaveBeenCalledWith({
+        type: 'connected',
+        linkId: 'connected-inbox',
+      })
+    );
+    expect(mail.connect).toHaveBeenCalledTimes(2);
+    expect(mail.connect.mock.calls[1][0].imap.password).toBe(
+      'corrected-test-password'
+    );
+    const firstId = mail.connect.mock.calls[0][0].requestId;
+    const retryId = mail.connect.mock.calls[1][0].requestId;
+    expect(retryId === firstId).toBe(reuseId);
+    expect(password).toHaveProperty('value', '');
+  }
+);
 
 it('discards discovery when the signed-in account changes', async () => {
   const outcome = Promise.withResolvers<Result<Discovery, never>>();
@@ -251,7 +293,7 @@ it('discards discovery when the signed-in account changes', async () => {
 
 it('keeps password entry closed when the server refuses discovery for an unverified address', async () => {
   mail.discover.mockResolvedValue(
-    err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'address_unverified' }])
+    err([{ code: 'address_unverified', message: 'IMAP connection refused' }])
   );
   render(() => (
     <ImapConnectDialog
@@ -304,7 +346,7 @@ it('keeps the same connection action and label while checking, failing and retry
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(close).not.toHaveBeenCalled();
   first.resolve(
-    err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'credentials_rejected' }])
+    err([{ code: 'credentials_rejected', message: 'IMAP connection refused' }])
   );
   await screen.findByRole('alert');
   expect(button.getAttribute('aria-busy')).toBeNull();

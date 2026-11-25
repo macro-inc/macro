@@ -1,10 +1,7 @@
 import { useAddInboxFlow } from '@core/email-link';
-import {
-  type EmailProvider,
-  EmailProviderSelectionDialog,
-} from '@core/email-link/ProviderDialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ConsentScopes } from '@service-auth/client';
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 
 type AddInboxRequest = {
   /** The permissions to ask consent for; the mailbox alone when omitted. */
@@ -13,52 +10,31 @@ type AddInboxRequest = {
 
 const [request, setRequest] = createSignal<AddInboxRequest | null>(null);
 
-/**
- * Requests the add-inbox confirmation dialog. Rendered at the app root
- * (Layout), gated on this signal, so it opens immediately and independent of
- * the settings surface.
- *
- * Entitlement is enforced by the backend: `POST /link/gmail` answers 402 when
- * the user isn't allowed another inbox, and `useAddInboxFlow` maps that to the
- * multi-inbox paywall — so callers can invoke the add-inbox flow directly
- * without a client-side gate that would have to mirror the backend's rule.
- */
-export const openAddInboxDialog = (options?: AddInboxRequest) =>
+/** Request the app-owned connection flow; the backend enforces entitlement. */
+export const openAddInboxDialog = (options?: AddInboxRequest) => {
+  if (request()) return;
   setRequest({ scopes: options?.scopes });
+};
 
 export const isAddInboxDialogOpen = () => request() !== null;
 
-/**
- * Provider selection before adding an inbox. Confirming starts the selected
- * consent flow or the IMAP/SMTP server form through `useAddInboxFlow`.
- */
+/** Keep the chooser and IMAP handoff under the stable app owner. */
 export function AddInboxDialog() {
   const addInbox = useAddInboxFlow();
-  const [pending, setPending] = createSignal(false);
-  onCleanup(() => setRequest(null));
-
-  const handleConfirm = async (provider: EmailProvider) => {
-    if (pending()) return;
-    setPending(true);
-    // On web this navigates away; on native iOS the OAuth completes in place
-    // and resolves, so the dialog dismisses itself.
+  async function connect(options: AddInboxRequest) {
     try {
-      await addInbox({ provider, scopes: request()?.scopes });
+      await addInbox({ scopes: options.scopes });
     } finally {
-      setPending(false);
-      setRequest(null);
+      if (request() === options) setRequest(null);
     }
-  };
+  }
 
-  return (
-    <EmailProviderSelectionDialog
-      open={isAddInboxDialogOpen()}
-      onOpenChange={(open) => {
-        if (!open) setRequest(null);
-      }}
-      onSelect={handleConfirm}
-      disabled={pending()}
-      mailOnly={!request()?.scopes || request()?.scopes === 'gmail'}
-    />
+  onCleanup(() => setRequest(null));
+  createEffect(
+    on(request, (options) => {
+      if (!options) return;
+      fireAndForget(connect(options), 'add-inbox');
+    })
   );
+  return null;
 }

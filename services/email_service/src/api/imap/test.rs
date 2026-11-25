@@ -1,5 +1,29 @@
 use super::*;
 use imap_service_client::Error;
+use utoipa::OpenApi;
+
+#[test]
+fn public_connection_refusals_expose_a_closed_code_schema() {
+    let spec = serde_json::to_value(crate::ApiDoc::openapi()).unwrap();
+    let schemas = &spec["components"]["schemas"];
+    assert_eq!(
+        schemas["ImapConnectionErrorResponse"]["properties"]["code"]["$ref"],
+        "#/components/schemas/ImapConnectionErrorCode"
+    );
+    let codes = schemas["ImapConnectionErrorCode"]["enum"]
+        .as_array()
+        .unwrap();
+    assert!(codes.iter().any(|code| code == "credentials_unreadable"));
+    assert!(codes.iter().any(|code| code == "not_found"));
+
+    let responses = &spec["paths"]["/email/links/imap"]["post"]["responses"];
+    for status in ["402", "404"] {
+        assert_eq!(
+            responses[status]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ImapConnectionErrorResponse"
+        );
+    }
+}
 
 #[tokio::test]
 async fn verification_errors_preserve_closed_categories_and_accurate_statuses() {
@@ -20,6 +44,12 @@ async fn verification_errors_preserve_closed_categories_and_accurate_statuses() 
             StatusCode::UNPROCESSABLE_ENTITY,
             "credentials_rejected",
         ),
+        (
+            Error::CredentialsUnreadable,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "credentials_unreadable",
+        ),
+        (Error::NotFound, StatusCode::NOT_FOUND, "not_found"),
         (
             Error::DnsUnavailable,
             StatusCode::BAD_GATEWAY,

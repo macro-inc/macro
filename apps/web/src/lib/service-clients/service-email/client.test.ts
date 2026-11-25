@@ -13,6 +13,35 @@ vi.mock('@core/util/fetchWithToken', () => ({ fetchWithToken }));
 
 import { emailClient } from './client';
 
+it.each([
+  ['credentials_unreadable', 'credentials_unreadable'],
+  ['not_found', 'not_found'],
+  ['toString', 'connection_unavailable'],
+])(
+  'surfaces IMAP refusal %s without forwarding the response message',
+  async (code, expected) => {
+    fetchWithToken.mockImplementationOnce(async (_url, init) => {
+      const failure = await init.errorResponseHandler(
+        Response.json(
+          { code, message: 'provider response details' },
+          { status: 503 }
+        )
+      );
+      return err([failure]);
+    });
+
+    const result = await emailClient.imapDiscover(
+      'account@example.net',
+      new AbortController().signal
+    );
+
+    expect(result._unsafeUnwrapErr()).toMatchObject([{ code: expected }]);
+    expect(result._unsafeUnwrapErr()[0].message).not.toContain(
+      'provider response details'
+    );
+  }
+);
+
 it('scopes settings polling to the inbox and adds the email host once', async () => {
   fetchWithToken.mockResolvedValue(ok([]));
   await emailClient.settingsOperations('inbox-1');

@@ -2545,9 +2545,19 @@ export type imapConnectResponse400 = {
   status: 400;
 };
 
+export type imapConnectResponse402 = {
+  data: ImapConnectionErrorResponse;
+  status: 402;
+};
+
 export type imapConnectResponse403 = {
   data: ImapConnectionErrorResponse;
   status: 403;
+};
+
+export type imapConnectResponse404 = {
+  data: ImapConnectionErrorResponse;
+  status: 404;
 };
 
 export type imapConnectResponse409 = {
@@ -2585,7 +2595,9 @@ export type imapConnectResponseSuccess = imapConnectResponse200 & {
 };
 export type imapConnectResponseError = (
   | imapConnectResponse400
+  | imapConnectResponse402
   | imapConnectResponse403
+  | imapConnectResponse404
   | imapConnectResponse409
   | imapConnectResponse422
   | imapConnectResponse429

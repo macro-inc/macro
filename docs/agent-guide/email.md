@@ -146,6 +146,8 @@ available. Server settings and confirmation remain; re-enter the cleared
 password and retry. DNS, TCP, TLS and timeout failures show their own guidance
 instead of guessing that a password was wrong.
 **Connect new** and **Add another inbox** open the provider chooser immediately.
+Selecting **Other email (IMAP / SMTP)** replaces the chooser with the server
+form. Cancel or close the form to return to the settings surface.
 If providers cannot load, **Try again** retries the read without starting an
 OAuth flow. Check that retry restores the offered providers and that calendar
 connections never offer IMAP.

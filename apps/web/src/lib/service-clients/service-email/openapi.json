@@ -2268,7 +2268,27 @@
               }
             }
           },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -6840,12 +6860,36 @@
           }
         }
       },
+      "ImapConnectionErrorCode": {
+        "type": "string",
+        "description": "Machine-readable reason an IMAP connection or settings request was refused.",
+        "enum": [
+          "disabled",
+          "address_unverified",
+          "provider_conflict",
+          "connection_changed",
+          "payment_required",
+          "connection_unavailable",
+          "invalid",
+          "forbidden",
+          "not_found",
+          "conflict",
+          "credentials_rejected",
+          "credentials_unreadable",
+          "credentials_unavailable",
+          "throttled",
+          "dns_unavailable",
+          "tcp_unavailable",
+          "tls_unavailable",
+          "connection_timed_out"
+        ]
+      },
       "ImapConnectionErrorResponse": {
         "type": "object",
         "required": ["code", "message"],
         "properties": {
           "code": {
-            "type": "string"
+            "$ref": "#/components/schemas/ImapConnectionErrorCode"
           },
           "message": {
             "type": "string"

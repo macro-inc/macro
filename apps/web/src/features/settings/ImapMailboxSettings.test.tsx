@@ -135,7 +135,7 @@ it('reloads the settings version on conflict before a second edit', async () => 
     .mockResolvedValueOnce(ok({ ...snapshot, revision: 4 }));
   api.update
     .mockResolvedValueOnce(
-      err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'conflict' }])
+      err([{ code: 'conflict', message: 'IMAP connection refused' }])
     )
     .mockResolvedValueOnce(ok(snapshot));
   render(() => (

@@ -4,8 +4,9 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ImapConnectionErrorCode } from './imapConnectionErrorCode';
 
 export interface ImapConnectionErrorResponse {
-  code: string;
+  code: ImapConnectionErrorCode;
   message: string;
 }

@@ -13,8 +13,13 @@ import {
   queryAccountSession,
 } from '@queries/auth/account-scope';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
-import { imapConnect, imapDiscover } from '@queries/email/imap';
+import {
+  imapConnect,
+  imapDiscover,
+  imapRefusalCode,
+} from '@queries/email/imap';
 import type { Discovery, Endpoint } from '@service-email/generated/schemas';
+import { ImapConnectionErrorCode } from '@service-email/generated/schemas/imapConnectionErrorCode';
 import {
   Button,
   Checkbox,
@@ -161,34 +166,74 @@ function EndpointFields(props: {
   );
 }
 
-function connectionError(code?: string): TranslationKey {
-  switch (code) {
-    case 'address_unverified':
-      return 'imap.addressUnverified';
-    case 'provider_conflict':
-      return 'imap.providerConflict';
-    case 'connection_changed':
-      return 'imap.connectionChanged';
-    case 'disabled':
-      return 'imap.disabled';
-    case 'credentials_rejected':
-      return 'imap.credentialsRejected';
-    case 'dns_unavailable':
-      return 'imap.dnsUnavailable';
-    case 'tcp_unavailable':
-      return 'imap.tcpUnavailable';
-    case 'tls_unavailable':
-      return 'imap.tlsUnavailable';
-    case 'connection_timed_out':
-      return 'imap.timedOut';
-    case 'invalid':
-    case 'forbidden':
-      return 'imap.invalidSettings';
-    case 'throttled':
-      return 'imap.throttled';
-    default:
-      return 'imap.connectionUnavailable';
-  }
+function connectionRefusal(code?: ImapConnectionErrorCode) {
+  return match(code)
+    .returnType<{
+      message: TranslationKey;
+      retrySameRequest?: boolean;
+      requiresPayment?: boolean;
+    }>()
+    .with(ImapConnectionErrorCode.address_unverified, () => ({
+      message: 'imap.addressUnverified',
+    }))
+    .with(ImapConnectionErrorCode.provider_conflict, () => ({
+      message: 'imap.providerConflict',
+    }))
+    .with(ImapConnectionErrorCode.connection_changed, () => ({
+      message: 'imap.connectionChanged',
+    }))
+    .with(ImapConnectionErrorCode.disabled, () => ({
+      message: 'imap.disabled',
+    }))
+    .with(ImapConnectionErrorCode.credentials_rejected, () => ({
+      message: 'imap.credentialsRejected',
+    }))
+    .with(
+      ImapConnectionErrorCode.invalid,
+      ImapConnectionErrorCode.forbidden,
+      () => ({ message: 'imap.invalidSettings' })
+    )
+    .with(ImapConnectionErrorCode.throttled, () => ({
+      message: 'imap.throttled',
+    }))
+    .with(ImapConnectionErrorCode.dns_unavailable, () => ({
+      message: 'imap.dnsUnavailable',
+      retrySameRequest: true,
+    }))
+    .with(ImapConnectionErrorCode.tcp_unavailable, () => ({
+      message: 'imap.tcpUnavailable',
+      retrySameRequest: true,
+    }))
+    .with(ImapConnectionErrorCode.tls_unavailable, () => ({
+      message: 'imap.tlsUnavailable',
+      retrySameRequest: true,
+    }))
+    .with(ImapConnectionErrorCode.connection_timed_out, () => ({
+      message: 'imap.timedOut',
+      retrySameRequest: true,
+    }))
+    .with(
+      ImapConnectionErrorCode.conflict,
+      ImapConnectionErrorCode.credentials_unavailable,
+      () => ({
+        message: 'imap.connectionUnavailable',
+      })
+    )
+    .with(ImapConnectionErrorCode.payment_required, () => ({
+      message: 'imap.connectionUnavailable',
+      requiresPayment: true,
+    }))
+    .with(
+      ImapConnectionErrorCode.connection_unavailable,
+      ImapConnectionErrorCode.credentials_unreadable,
+      ImapConnectionErrorCode.not_found,
+      undefined,
+      () => ({
+        message: 'imap.connectionUnavailable',
+        retrySameRequest: true,
+      })
+    )
+    .exhaustive();
 }
 
 type ImapConnectProps = ManagedDialogProps & {
@@ -300,12 +345,7 @@ function ConnectForm(props: ImapConnectProps) {
       if (read.signal.aborted || !isCurrentQueryAccount(viewer)) return;
       if (result.isErr()) {
         parent.error('discovery_failed');
-        setError(
-          connectionError(
-            result.error.find((e) => e.code === 'IMAP_CONNECTION_REFUSED')
-              ?.message
-          )
-        );
+        setError(connectionRefusal(imapRefusalCode(result.error)).message);
         return;
       }
       const found = result.value;
@@ -382,24 +422,13 @@ function ConnectForm(props: ImapConnectProps) {
         props.onResult({ type: 'connected', linkId: result.value.linkId });
         return;
       }
-      const code = result.error.find(
-        (e) => e.code === 'IMAP_CONNECTION_REFUSED'
-      )?.message;
-      if (code === 'payment_required') props.onResult('payment_required');
-      else setError(connectionError(code));
-      // A definitive refusal is a new verification on next submit. A lost
-      // response keeps its id so the server can return the completed link.
-      if (
-        code &&
-        ![
-          'connection_unavailable',
-          'dns_unavailable',
-          'tcp_unavailable',
-          'tls_unavailable',
-          'connection_timed_out',
-        ].includes(code)
-      )
-        requestId = crypto.randomUUID();
+      const refusal = connectionRefusal(imapRefusalCode(result.error));
+      if (refusal.requiresPayment) props.onResult('payment_required');
+      else setError(refusal.message);
+
+      // A definitive refusal starts a new verification on the next submit.
+      // Keep the id after ambiguous failures to recover a completed connect.
+      if (!refusal.retrySameRequest) requestId = crypto.randomUUID();
     } catch (cause) {
       if (!attempt.signal.aborted) throw cause;
     } finally {

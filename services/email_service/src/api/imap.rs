@@ -45,9 +45,34 @@ pub(crate) struct ImapSuggestion {
     email: String,
     offer: ImapConnectionOffer,
 }
+/// Machine-readable reason an IMAP connection or settings request was refused.
+#[derive(Clone, Copy, Serialize, ToSchema, strum_macros::IntoStaticStr)]
+#[serde(rename_all = "snake_case", into = "&'static str")]
+#[strum(serialize_all = "snake_case")]
+pub(crate) enum ImapConnectionErrorCode {
+    Disabled,
+    AddressUnverified,
+    ProviderConflict,
+    ConnectionChanged,
+    PaymentRequired,
+    ConnectionUnavailable,
+    Invalid,
+    Forbidden,
+    NotFound,
+    Conflict,
+    CredentialsRejected,
+    CredentialsUnreadable,
+    CredentialsUnavailable,
+    Throttled,
+    DnsUnavailable,
+    TcpUnavailable,
+    TlsUnavailable,
+    ConnectionTimedOut,
+}
+
 #[derive(Serialize, ToSchema)]
 pub(crate) struct ImapConnectionErrorResponse {
-    code: String,
+    code: ImapConnectionErrorCode,
     message: String,
 }
 
@@ -61,34 +86,46 @@ impl From<ImapConnectionError> for ConnectionError {
 }
 impl IntoResponse for ConnectionError {
     fn into_response(self) -> Response {
+        use ImapConnectionErrorCode as Code;
         use imap_service_client::Error;
         let (status, code) = match &self.0 {
-            ImapConnectionError::Disabled => (StatusCode::FORBIDDEN, "disabled"),
-            ImapConnectionError::AddressUnverified => (StatusCode::FORBIDDEN, "address_unverified"),
-            ImapConnectionError::ProviderConflict => (StatusCode::CONFLICT, "provider_conflict"),
-            ImapConnectionError::Changed => (StatusCode::CONFLICT, "connection_changed"),
+            ImapConnectionError::Disabled => (StatusCode::FORBIDDEN, Code::Disabled),
+            ImapConnectionError::AddressUnverified => {
+                (StatusCode::FORBIDDEN, Code::AddressUnverified)
+            }
+            ImapConnectionError::ProviderConflict => (StatusCode::CONFLICT, Code::ProviderConflict),
+            ImapConnectionError::Changed => (StatusCode::CONFLICT, Code::ConnectionChanged),
             ImapConnectionError::PaymentRequired => {
-                (StatusCode::PAYMENT_REQUIRED, "payment_required")
+                (StatusCode::PAYMENT_REQUIRED, Code::PaymentRequired)
             }
             ImapConnectionError::Unavailable => {
-                (StatusCode::SERVICE_UNAVAILABLE, "connection_unavailable")
+                (StatusCode::SERVICE_UNAVAILABLE, Code::ConnectionUnavailable)
             }
-            ImapConnectionError::Provider(Error::Invalid) => (StatusCode::BAD_REQUEST, "invalid"),
-            ImapConnectionError::Provider(Error::Forbidden) => (StatusCode::FORBIDDEN, "forbidden"),
-            ImapConnectionError::Provider(Error::NotFound) => (StatusCode::NOT_FOUND, "not_found"),
-            ImapConnectionError::Provider(Error::Conflict) => (StatusCode::CONFLICT, "conflict"),
+            ImapConnectionError::Provider(Error::Invalid) => {
+                (StatusCode::BAD_REQUEST, Code::Invalid)
+            }
+            ImapConnectionError::Provider(Error::Forbidden) => {
+                (StatusCode::FORBIDDEN, Code::Forbidden)
+            }
+            ImapConnectionError::Provider(Error::NotFound) => {
+                (StatusCode::NOT_FOUND, Code::NotFound)
+            }
+            ImapConnectionError::Provider(Error::Conflict) => {
+                (StatusCode::CONFLICT, Code::Conflict)
+            }
             ImapConnectionError::Provider(Error::CredentialsRejected) => {
-                (StatusCode::UNPROCESSABLE_ENTITY, "credentials_rejected")
+                (StatusCode::UNPROCESSABLE_ENTITY, Code::CredentialsRejected)
             }
             ImapConnectionError::Provider(Error::CredentialsUnreadable) => {
-                (StatusCode::SERVICE_UNAVAILABLE, "credentials_unreadable")
+                (StatusCode::SERVICE_UNAVAILABLE, Code::CredentialsUnreadable)
             }
-            ImapConnectionError::Provider(Error::CredentialsUnavailable) => {
-                (StatusCode::SERVICE_UNAVAILABLE, "credentials_unavailable")
-            }
+            ImapConnectionError::Provider(Error::CredentialsUnavailable) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Code::CredentialsUnavailable,
+            ),
             ImapConnectionError::Provider(
                 Error::Throttled | Error::RateLimited { .. } | Error::AccountBusy,
-            ) => (StatusCode::TOO_MANY_REQUESTS, "throttled"),
+            ) => (StatusCode::TOO_MANY_REQUESTS, Code::Throttled),
             ImapConnectionError::Provider(
                 Error::CursorOutdated
                 | Error::ConnectionUnavailable
@@ -96,24 +133,24 @@ impl IntoResponse for ConnectionError {
                 | Error::SendUnavailable
                 | Error::MessageTooLarge
                 | Error::SnapshotTooLarge,
-            ) => (StatusCode::BAD_GATEWAY, "connection_unavailable"),
+            ) => (StatusCode::BAD_GATEWAY, Code::ConnectionUnavailable),
             ImapConnectionError::Provider(Error::DnsUnavailable) => {
-                (StatusCode::BAD_GATEWAY, "dns_unavailable")
+                (StatusCode::BAD_GATEWAY, Code::DnsUnavailable)
             }
             ImapConnectionError::Provider(Error::TcpUnavailable) => {
-                (StatusCode::BAD_GATEWAY, "tcp_unavailable")
+                (StatusCode::BAD_GATEWAY, Code::TcpUnavailable)
             }
             ImapConnectionError::Provider(Error::TlsUnavailable) => {
-                (StatusCode::BAD_GATEWAY, "tls_unavailable")
+                (StatusCode::BAD_GATEWAY, Code::TlsUnavailable)
             }
             ImapConnectionError::Provider(Error::ConnectionTimedOut) => {
-                (StatusCode::GATEWAY_TIMEOUT, "connection_timed_out")
+                (StatusCode::GATEWAY_TIMEOUT, Code::ConnectionTimedOut)
             }
         };
         (
             status,
             Json(ImapConnectionErrorResponse {
-                code: code.into(),
+                code,
                 message: self.0.to_string(),
             }),
         )
@@ -175,7 +212,9 @@ pub(crate) async fn discover(
     responses(
         (status = 200, body = ImapConnectResponse),
         (status = 400, body = ImapConnectionErrorResponse),
+        (status = 402, body = ImapConnectionErrorResponse),
         (status = 403, body = ImapConnectionErrorResponse),
+        (status = 404, body = ImapConnectionErrorResponse),
         (status = 409, body = ImapConnectionErrorResponse),
         (status = 422, body = ImapConnectionErrorResponse),
         (status = 429, body = ImapConnectionErrorResponse),

@@ -75,6 +75,7 @@ import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import { ForwardCalendarEventErrorCode } from './generated/schemas/forwardCalendarEventErrorCode';
 import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCalendarEventRequest';
 import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
+import { ImapConnectionErrorCode } from './generated/schemas/imapConnectionErrorCode';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
@@ -142,37 +143,20 @@ async function forwardCalendarEventErrorHandler(response: Response) {
   };
 }
 
+const imapRefusalCodes = Object.values(ImapConnectionErrorCode);
+
 async function imapConnectionError(response: Response) {
   const body: unknown = await response.json().catch(() => null);
   const code =
     typeof body === 'object' && body !== null && 'code' in body
       ? body.code
       : undefined;
-  // Only closed, non-personal codes may reach telemetry or the UI.
-  const known = [
-    'payment_required',
-    'address_unverified',
-    'provider_conflict',
-    'connection_changed',
-    'disabled',
-    'credentials_rejected',
-    'credentials_unavailable',
-    'forbidden',
-    'invalid',
-    'throttled',
-    'connection_unavailable',
-    'dns_unavailable',
-    'tcp_unavailable',
-    'tls_unavailable',
-    'connection_timed_out',
-    'conflict',
-  ];
+
   return {
-    code: 'IMAP_CONNECTION_REFUSED' as const,
-    message:
-      typeof code === 'string' && known.includes(code)
-        ? code
-        : 'connection_unavailable',
+    code:
+      imapRefusalCodes.find((known) => known === code) ??
+      ImapConnectionErrorCode.connection_unavailable,
+    message: 'IMAP connection refused',
   };
 }
 
@@ -613,7 +597,7 @@ export const emailClient = {
   },
 
   imapDiscover(email: string, signal: AbortSignal, parentSpan?: Span) {
-    return fetchWithToken<Discovery, 'IMAP_CONNECTION_REFUSED'>(
+    return fetchWithToken<Discovery, ImapConnectionErrorCode>(
       `${emailHost}/email/links/imap/discover`,
       {
         errorResponseHandler: imapConnectionError,
@@ -630,9 +614,13 @@ export const emailClient = {
     signal: AbortSignal,
     parentSpan?: Span
   ) {
-    return emailFetch<AccountMailSettings>(
-      `/email/links/${encodeURIComponent(linkId)}/imap/settings`,
-      { signal, trace: { parentSpan } }
+    return fetchWithToken<AccountMailSettings, ImapConnectionErrorCode>(
+      `${emailHost}/email/links/${encodeURIComponent(linkId)}/imap/settings`,
+      {
+        signal,
+        trace: { parentSpan },
+        errorResponseHandler: imapConnectionError,
+      }
     );
   },
 
@@ -642,7 +630,7 @@ export const emailClient = {
     signal: AbortSignal,
     parentSpan?: Span
   ) {
-    return fetchWithToken<AccountMailSettings, 'IMAP_CONNECTION_REFUSED'>(
+    return fetchWithToken<AccountMailSettings, ImapConnectionErrorCode>(
       `${emailHost}/email/links/${encodeURIComponent(linkId)}/imap/settings`,
       {
         method: 'PATCH',
@@ -659,7 +647,7 @@ export const emailClient = {
     signal: AbortSignal,
     parentSpan?: Span
   ) {
-    return fetchWithToken<ImapConnectResponse, 'IMAP_CONNECTION_REFUSED'>(
+    return fetchWithToken<ImapConnectResponse, ImapConnectionErrorCode>(
       `${emailHost}/email/links/imap`,
       {
         method: 'POST',

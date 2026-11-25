@@ -1,5 +1,9 @@
 /** @vitest-environment jsdom */
 import { HomeEmptyState } from '@app/features/home/components/HomeEmptyState';
+import {
+  AddInboxDialog,
+  openAddInboxDialog,
+} from '@app/features/inbox/AddInboxDialog';
 import { useAddInboxFlow } from '@core/email-link';
 import { Telemetry } from '@macro-inc/observability';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
@@ -88,6 +92,7 @@ vi.mock('@app/features/home/home-view-context', () => ({
 }));
 
 beforeEach(() => {
+  vi.stubGlobal('CSS', { escape: (value: string) => value });
   mail.discover.mockResolvedValue(
     ok({
       imap: {
@@ -120,6 +125,31 @@ afterEach(() => {
   vi.resetAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it('replaces the app-level provider chooser with one IMAP modal', async () => {
+  providers.mockResolvedValue({ gmail: true, outlook: true, imap: true });
+  render(() => (
+    <>
+      <button onClick={() => openAddInboxDialog()}>Add an inbox</button>
+      <AddInboxDialog />
+      <ImperativeDialogHost />
+    </>
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add an inbox' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Other email (IMAP / SMTP)' })
+  );
+  await screen.findByLabelText('Email address');
+
+  expect(document.querySelectorAll('.scrim-glass')).toHaveLength(1);
+  expect(
+    screen.queryByRole('button', {
+      name: 'Other email (IMAP / SMTP)',
+      hidden: true,
+    })
+  ).toBeNull();
 });
 
 describe.each([

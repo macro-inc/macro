@@ -11,6 +11,7 @@ import {
 } from '@queries/auth/account-scope';
 import {
   getImapMailboxSettings,
+  imapRefusalCode,
   updateImapMailboxSettings,
 } from '@queries/email/imap';
 import type {
@@ -21,6 +22,7 @@ import type {
   ServerFeatures,
   UpdateFolderSettings,
 } from '@service-email/generated/schemas';
+import { ImapConnectionErrorCode } from '@service-email/generated/schemas/imapConnectionErrorCode';
 import { Button, Checkbox, Dialog, Panel } from '@ui';
 import {
   createEffect,
@@ -206,15 +208,18 @@ function SettingsDialog(props: {
         operation.afterPaint();
         return;
       }
-      const code = result.error.find(
-        (e) => e.code === 'IMAP_CONNECTION_REFUSED'
-      )?.message;
-      if (code === 'conflict' || code === 'connection_changed') {
+      const code = imapRefusalCode(result.error);
+      if (
+        code === ImapConnectionErrorCode.conflict ||
+        code === ImapConnectionErrorCode.connection_changed
+      ) {
         await operation.span.span('email.imap.settings.reload', read);
         if (current()) setError('imap.settingsChanged');
       } else {
         setError(
-          code === 'invalid' ? 'imap.invalidFolders' : 'imap.saveFailed'
+          code === ImapConnectionErrorCode.invalid
+            ? 'imap.invalidFolders'
+            : 'imap.saveFailed'
         );
       }
       operation.finish('error');

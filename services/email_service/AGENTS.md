@@ -448,7 +448,8 @@ Missing or failed reads preserve the single-command writer.
 
 - Preserve typed IMAP verification failures through the public boundary: rejected
   credentials use 422, DNS/TCP/TLS use 502, and a bounded timeout uses 504.
-  Return only closed domain messages, never provider authentication replies.
+  Map errors exhaustively to `ImapConnectionErrorCode` and regenerate the web
+  and SDK schemas when it changes. Return only closed domain messages.
 
 IMAP discovery/connect request identities deserialize as EmailStr before domain
 admission. Discovery forwards the validated ownership-checked address, while persisted
